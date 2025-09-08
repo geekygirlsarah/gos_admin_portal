@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}New Sliding Scale — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-8 col-xl-6">
+      <h1 class="h4">New Sliding Scale for {{ program.name }}</h1>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">{{ form.as_p }}</div>
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="{% url 'program_detail' program.id %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </form>
+    </div>
+  </div>
+{% endblock %}
