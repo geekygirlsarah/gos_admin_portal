@@ -14,6 +14,7 @@
             <th>School</th>
             <th>Grade</th>
             <th>Active</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -24,6 +25,11 @@
               <td>{{ s.grade|default:"" }}</td>
               <td>
                 <span class="badge {% if s.active %}bg-success{% else %}bg-secondary{% endif %}">{{ s.active|yesno:"Yes,No" }}</span>
+              </td>
+              <td class="text-end">
+                {% if perms.programs.change_student %}
+                  <a class="btn btn-sm btn-outline-primary" href="{% url 'student_edit' s.pk %}?next={{ request.path }}">Edit</a>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
