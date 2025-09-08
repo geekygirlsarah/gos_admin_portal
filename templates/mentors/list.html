@@ -4,6 +4,11 @@
 {% block content %}
   <div class="row mb-3">
     <div class="col"><h1 class="h3">Mentors</h1></div>
+    <div class="col text-end">
+      {% if perms.programs.add_mentor %}
+        <a class="btn btn-sm btn-success" href="{% url 'mentor_create' %}">Add Mentor</a>
+      {% endif %}
+    </div>
   </div>
   {% if mentors %}
     <div class="table-responsive">
@@ -18,7 +23,13 @@
         <tbody>
           {% for m in mentors %}
             <tr>
-              <td>{{ m.first_name }} {{ m.last_name }}</td>
+              <td>
+                {% if perms.programs.change_mentor %}
+                  <a href="{% url 'mentor_edit' m.id %}?next={% url 'mentor_list' %}">{{ m.first_name }} {{ m.last_name }}</a>
+                {% else %}
+                  {{ m.first_name }} {{ m.last_name }}
+                {% endif %}
+              </td>
               <td>{{ m.get_role_display }}</td>
               <td><span class="badge {% if m.active %}bg-success{% else %}bg-secondary{% endif %}">{{ m.active|yesno:"Yes,No" }}</span></td>
             </tr>

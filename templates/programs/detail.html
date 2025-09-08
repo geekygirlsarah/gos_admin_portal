@@ -53,7 +53,7 @@
           <div class="col-md-6">
             <div class="card">
               <div class="card-body">
-                <h3 class="h6 card-title">Quick Create and Add</h3>
+                <h3 class="h6 card-title">Quickly Create a Student</h3>
                 <form method="post" action="{% url 'program_student_quick_create' program.id %}">
                   {% csrf_token %}
                   <div class="mb-3">{{ quick_create_form.as_p }}</div>

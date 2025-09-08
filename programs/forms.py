@@ -1,5 +1,5 @@
 from django import forms
-from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School
+from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School, Mentor
 
 
 class StudentForm(forms.ModelForm):
@@ -95,3 +95,10 @@ class SchoolForm(forms.ModelForm):
     class Meta:
         model = School
         fields = ['name']
+
+
+class MentorForm(forms.ModelForm):
+    class Meta:
+        model = Mentor
+        fields = '__all__'
+        exclude = []

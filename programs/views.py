@@ -13,6 +13,7 @@ from .forms import (
     PaymentForm,
     SlidingScaleForm,
     SchoolForm,
+    MentorForm,
 )
 
 
@@ -38,6 +39,27 @@ class MentorListView(LoginRequiredMixin, ListView):
     model = Mentor
     template_name = 'mentors/list.html'
     context_object_name = 'mentors'
+
+
+class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Mentor
+    form_class = MentorForm
+    template_name = 'mentors/form.html'
+    permission_required = 'programs.add_mentor'
+
+    def get_success_url(self):
+        return reverse('mentor_list')
+
+
+class MentorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Mentor
+    form_class = MentorForm
+    template_name = 'mentors/form.html'
+    permission_required = 'programs.change_mentor'
+
+    def get_success_url(self):
+        next_url = self.request.GET.get('next')
+        return next_url or reverse('mentor_edit', args=[self.object.pk])
 
 
 # --- Schools list/create/edit ---

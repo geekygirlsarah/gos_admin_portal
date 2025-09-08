@@ -5,7 +5,7 @@ from .views import (
     ProgramStudentAddView, ProgramStudentRemoveView, ProgramStudentQuickCreateView,
     StudentUpdateView, StudentListView, StudentCreateView,
     ParentCreateView, ParentUpdateView, ParentListView,
-    MentorListView,
+    MentorListView, MentorCreateView, MentorUpdateView,
     ProgramPaymentCreateView,
     ProgramSlidingScaleCreateView,
     ProgramStudentBalanceView,
@@ -23,6 +23,8 @@ urlpatterns = [
     path('students/new/', permission_required('programs.add_student')(StudentCreateView.as_view()), name='student_create'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
+    path('mentors/new/', permission_required('programs.add_mentor')(MentorCreateView.as_view()), name='mentor_create'),
+    path('mentors/<int:pk>/edit/', permission_required('programs.change_mentor')(MentorUpdateView.as_view()), name='mentor_edit'),
     path('schools/', login_required(SchoolListView.as_view()), name='school_list'),
 
     # Program-specific student management
