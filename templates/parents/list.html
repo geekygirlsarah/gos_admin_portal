@@ -4,6 +4,11 @@
 {% block content %}
   <div class="row mb-3">
     <div class="col"><h1 class="h3">Parents</h1></div>
+    <div class="col-auto">
+      {% if perms.programs.add_parent %}
+        <a class="btn btn-primary" href="{% url 'parent_create' %}?next={% url 'parent_list' %}">Add Parent</a>
+      {% endif %}
+    </div>
   </div>
   {% if parents %}
     <div class="table-responsive">
@@ -13,6 +18,7 @@
             <th>Name</th>
             <th>Email</th>
             <th>Phone</th>
+            <th class="text-end"></th>
           </tr>
         </thead>
         <tbody>
@@ -21,6 +27,11 @@
               <td>{{ p.first_name }} {{ p.last_name }}</td>
               <td>{{ p.email|default:"" }}</td>
               <td>{{ p.phone_number|default:"" }}</td>
+              <td class="text-end">
+                {% if perms.programs.change_parent %}
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'parent_edit' p.id %}?next={% url 'parent_list' %}">Edit</a>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

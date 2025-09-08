@@ -159,7 +159,8 @@ class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     permission_required = 'programs.add_parent'
 
     def get_success_url(self):
-        return reverse('parent_edit', args=[self.object.pk])
+        # After creating a Parent, return to the Parents listing
+        return reverse('parent_list')
 
 
 class ParentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
