@@ -4,6 +4,11 @@
 {% block content %}
   <div class="row mb-3">
     <div class="col"><h1 class="h3">Students</h1></div>
+    <div class="col-auto">
+      {% if perms.programs.add_student %}
+        <a class="btn btn-primary" href="{% url 'student_create' %}?next={% url 'student_list' %}">Add Student</a>
+      {% endif %}
+    </div>
   </div>
   {% if students %}
     <div class="table-responsive">

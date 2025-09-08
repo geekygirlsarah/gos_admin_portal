@@ -109,6 +109,17 @@ class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
         return next_url or reverse('student_edit', args=[self.object.pk])
 
 
+class StudentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Student
+    form_class = StudentForm
+    template_name = 'students/form.html'
+    permission_required = 'programs.add_student'
+
+    def get_success_url(self):
+        # After creating a Student, return to the Students listing
+        return reverse('student_list')
+
+
 # --- Program student management actions ---
 class ProgramStudentAddView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'programs.change_student'
