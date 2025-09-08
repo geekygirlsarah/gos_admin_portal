@@ -10,7 +10,7 @@
   <div class="row">
     <div class="col-lg-10 col-xl-8">
       <h1 class="h3">{% if form.instance.pk %}Edit Mentor{% else %}Add Mentor{% endif %}</h1>
-      <form method="post">
+      <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         {{ form.as_p }}
         <div class="mt-3">

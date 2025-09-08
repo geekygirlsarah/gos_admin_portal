@@ -65,6 +65,7 @@ class Student(models.Model):
     last_name = models.CharField(max_length=150)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
+    photo = models.ImageField(upload_to='photos/students/', blank=True, null=True)
 
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
@@ -153,6 +154,7 @@ class Mentor(models.Model):
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     start_year = models.PositiveSmallIntegerField(blank=True, null=True)
     role = models.CharField(max_length=20, choices=MENTOR_ROLE_CHOICES, default='mentor')
+    photo = models.ImageField(upload_to='photos/mentors/', blank=True, null=True)
 
     # Contact
     cell_phone = models.CharField(max_length=30, blank=True, null=True)

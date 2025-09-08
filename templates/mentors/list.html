@@ -24,6 +24,9 @@
           {% for m in mentors %}
             <tr>
               <td>
+                {% if m.photo %}
+                  <img src="{{ m.photo.url }}" alt="{{ m.first_name }} {{ m.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                {% endif %}
                 {% if perms.programs.change_mentor %}
                   <a href="{% url 'mentor_edit' m.id %}?next={% url 'mentor_list' %}">{{ m.first_name }} {{ m.last_name }}</a>
                 {% else %}

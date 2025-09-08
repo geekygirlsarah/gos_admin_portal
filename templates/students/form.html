@@ -10,7 +10,7 @@
   <div class="row">
     <div class="col-lg-8">
       <h1 class="h3 mb-3">{% if object %}Edit Student{% else %}Add Student{% endif %}</h1>
-      <form method="post">
+      <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="mb-3">{{ form.as_p }}</div>
         <div class="alert alert-secondary">
