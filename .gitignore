@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+.env
+.env.*
+
+# Django stuff
+*.log
+local_settings.py
+.db.sqlite3-journal
+media/
+staticfiles/
+static/
+
+# SQLite database
+db.sqlite3
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.pydevproject
+
+# MyPy / Pyright / Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyright
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Mac / Windows
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+
+# dotenv (if used)
+*.env
+
+# Node (if any frontend added later)
+node_modules/
