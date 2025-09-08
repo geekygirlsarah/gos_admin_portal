@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -200,3 +200,62 @@ class ProgramSlidingScaleCreateView(LoginRequiredMixin, PermissionRequiredMixin,
         obj.save()
         messages.success(self.request, 'Sliding scale saved successfully.')
         return redirect('program_detail', pk=self.program.pk)
+
+
+class ProgramStudentBalanceView(LoginRequiredMixin, View):
+    def get(self, request, pk, student_id):
+        program = get_object_or_404(Program, pk=pk)
+        student = get_object_or_404(Student, pk=student_id)
+        # Ensure enrollment
+        if not Enrollment.objects.filter(student=student, program=program).exists():
+            messages.error(request, f"{student} is not enrolled in {program}.")
+            return redirect('program_detail', pk=program.pk)
+
+        # Gather entries: fees (program), sliding scale (if exists), and payments (student for program's fees)
+        entries = []
+        # Fees: positive amounts
+        for fee in Fee.objects.filter(program=program).order_by('created_at'):
+            entries.append({
+                'date': fee.created_at.date(),
+                'type': 'Fee',
+                'name': fee.name,
+                'amount': fee.amount,
+            })
+        # Sliding scale: negative amount (discount), include if exists
+        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+        if sliding:
+            entries.append({
+                'date': sliding.created_at.date(),
+                'type': 'Sliding Scale',
+                'name': 'Sliding scale',
+                'amount': -sliding.amount,
+            })
+        # Payments: negative amounts
+        payments = Payment.objects.filter(student=student, fee__program=program)
+        for p in payments:
+            entries.append({
+                'date': p.paid_at,
+                'type': 'Payment',
+                'name': f"Payment for {p.fee.name}",
+                'amount': -p.amount,
+            })
+
+        # Sort by date
+        entries.sort(key=lambda e: (e['date'], e['type']))
+
+        # Totals and balance
+        total_fees = sum([e['amount'] for e in entries if e['type'] == 'Fee'])
+        total_sliding = -sum([e['amount'] for e in entries if e['type'] == 'Sliding Scale'])  # positive figure
+        total_payments = -sum([e['amount'] for e in entries if e['type'] == 'Payment'])  # positive figure
+        balance = total_fees - total_sliding - total_payments
+
+        from django.shortcuts import render
+        return render(request, 'programs/balance_sheet.html', {
+            'program': program,
+            'student': student,
+            'entries': entries,
+            'total_fees': total_fees,
+            'total_sliding': total_sliding,
+            'total_payments': total_payments,
+            'balance': balance,
+        })

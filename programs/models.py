@@ -228,10 +228,21 @@ class Fee(models.Model):
 
 
 class Payment(models.Model):
+    PAID_VIA_CHOICES = [
+        ('check', 'Check'),
+        ('credit_card', 'Credit Card'),
+        ('cash', 'Cash'),
+        ('camp', 'Camp'),
+        ('other', 'Other'),
+    ]
+
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='payments')
     fee = models.ForeignKey('Fee', on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     paid_at = models.DateField()
+    paid_via = models.CharField(max_length=20, choices=PAID_VIA_CHOICES, default='cash')
+    check_number = models.PositiveIntegerField(blank=True, null=True)
+    camp_hours = models.PositiveIntegerField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

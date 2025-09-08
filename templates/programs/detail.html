@@ -19,15 +19,16 @@
           {% for s in enrolled_students %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>{{ s.first_name }} {{ s.last_name }}</div>
-              {% if can_manage_students %}
-                <div class="d-flex gap-2">
+              <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
+                {% if can_manage_students %}
                   <a class="btn btn-sm btn-outline-primary" href="{% url 'student_edit' s.id %}?next={% url 'program_detail' program.id %}">Edit</a>
                   <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0">
                     {% csrf_token %}
                     <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ s.first_name }} {{ s.last_name }} from {{ program.name }}?')">Remove</button>
                   </form>
-                </div>
-              {% endif %}
+                {% endif %}
+              </div>
             </li>
           {% endfor %}
         </ul>

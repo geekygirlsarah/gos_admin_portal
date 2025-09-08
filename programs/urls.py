@@ -8,6 +8,7 @@ from .views import (
     MentorListView,
     ProgramPaymentCreateView,
     ProgramSlidingScaleCreateView,
+    ProgramStudentBalanceView,
 )
 
 urlpatterns = [
@@ -25,6 +26,7 @@ urlpatterns = [
     path('<int:pk>/students/add/', permission_required('programs.change_student')(ProgramStudentAddView.as_view()), name='program_student_add'),
     path('<int:pk>/students/quick-create/', permission_required('programs.add_student')(ProgramStudentQuickCreateView.as_view()), name='program_student_quick_create'),
     path('<int:pk>/students/<int:student_id>/remove/', permission_required('programs.change_student')(ProgramStudentRemoveView.as_view()), name='program_student_remove'),
+    path('<int:pk>/students/<int:student_id>/balance/', login_required(ProgramStudentBalanceView.as_view()), name='program_student_balance'),
 
     # Payments
     path('<int:pk>/payments/new/', permission_required('programs.add_payment')(ProgramPaymentCreateView.as_view()), name='program_payment_create'),

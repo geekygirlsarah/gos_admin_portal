@@ -41,7 +41,7 @@ class ParentForm(forms.ModelForm):
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
-        fields = ['student', 'fee', 'amount', 'paid_at', 'notes']
+        fields = ['student', 'fee', 'amount', 'paid_at', 'paid_via', 'check_number', 'camp_hours', 'notes']
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
