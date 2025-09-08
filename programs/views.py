@@ -4,12 +4,13 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 
-from .models import Program, Student, Enrollment, Parent, Mentor
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
     QuickCreateStudentForm,
     ParentForm,
+    PaymentForm,
 )
 
 
@@ -48,6 +49,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
         ctx['enrolled_students'] = program.students.select_related('user').all().order_by('last_name', 'first_name')
         can_manage = self.request.user.has_perm('programs.change_student') or self.request.user.has_perm('programs.add_student')
         ctx['can_manage_students'] = can_manage
+        ctx['can_add_payment'] = self.request.user.has_perm('programs.add_payment')
         if can_manage:
             ctx['add_existing_form'] = AddExistingStudentToProgramForm(program=program)
             ctx['quick_create_form'] = QuickCreateStudentForm()
@@ -137,3 +139,34 @@ class ParentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     def get_success_url(self):
         next_url = self.request.GET.get('next')
         return next_url or reverse('parent_edit', args=[self.object.pk])
+
+
+# --- Payment create ---
+class ProgramPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Payment
+    form_class = PaymentForm
+    template_name = 'programs/payment_form.html'
+    permission_required = 'programs.add_payment'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['program'] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['program'] = self.program
+        return ctx
+
+    def form_valid(self, form):
+        # Optionally default amount to the fee amount if not provided
+        obj = form.save(commit=False)
+        if not obj.amount:
+            obj.amount = obj.fee.amount
+        obj.save()
+        messages.success(self.request, 'Payment recorded successfully.')
+        return redirect('program_detail', pk=self.program.pk)

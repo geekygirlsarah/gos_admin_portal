@@ -1,5 +1,5 @@
 from django import forms
-from .models import Student, Program, Parent
+from .models import Student, Program, Parent, Fee, Payment
 
 
 class StudentForm(forms.ModelForm):
@@ -36,3 +36,16 @@ class ParentForm(forms.ModelForm):
         model = Parent
         fields = '__all__'
         exclude = []
+
+
+class PaymentForm(forms.ModelForm):
+    class Meta:
+        model = Payment
+        fields = ['student', 'fee', 'amount', 'paid_at', 'notes']
+
+    def __init__(self, *args, program: Program, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Restrict student choices to those enrolled in this program
+        self.fields['student'].queryset = Student.objects.filter(programs=program)
+        # Restrict fee choices to fees for this program
+        self.fields['fee'].queryset = Fee.objects.filter(program=program)

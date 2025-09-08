@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Program, Enrollment, Student, School, Parent, Mentor
+from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment
 
 
 @admin.register(Program)
@@ -7,6 +7,21 @@ class ProgramAdmin(admin.ModelAdmin):
     list_display = ('name', 'active', 'updated_at')
     search_fields = ('name',)
     list_filter = ('active',)
+
+
+@admin.register(Fee)
+class FeeAdmin(admin.ModelAdmin):
+    list_display = ('program', 'name', 'amount', 'updated_at')
+    list_filter = ('program',)
+    search_fields = ('name', 'program__name')
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ('student', 'fee', 'amount', 'paid_at', 'created_at')
+    list_filter = ('fee__program', 'paid_at')
+    search_fields = ('student__first_name', 'student__last_name', 'fee__name', 'fee__program__name')
+    autocomplete_fields = ('student', 'fee')
 
 class EnrollmentInline(admin.TabularInline):
     model = Enrollment

@@ -210,3 +210,41 @@ class Mentor(models.Model):
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
+
+
+class Fee(models.Model):
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name='fees')
+    name = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['program__name', 'name']
+        unique_together = ('program', 'name')
+
+    def __str__(self):
+        return f"{self.program.name} — {self.name}: ${self.amount}"
+
+
+class Payment(models.Model):
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='payments')
+    fee = models.ForeignKey('Fee', on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    paid_at = models.DateField()
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-paid_at', '-created_at']
+
+    def __str__(self):
+        return f"Payment ${self.amount} by {self.student} for {self.fee.name} on {self.paid_at}"
+
+    def clean(self):
+        # Ensure the payment fee belongs to a program the student is enrolled in
+        from django.core.exceptions import ValidationError
+        program = self.fee.program if self.fee_id else None
+        if program and not Enrollment.objects.filter(student=self.student, program=program).exists():
+            raise ValidationError('Student must be enrolled in the program for the selected fee.')
