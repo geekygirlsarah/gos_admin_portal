@@ -82,7 +82,7 @@ class PaymentForm(forms.ModelForm):
 class SlidingScaleForm(forms.ModelForm):
     class Meta:
         model = SlidingScale
-        fields = ['student', 'amount', 'notes']
+        fields = ['student', 'amount', 'family_size', 'adjusted_gross_income', 'is_pending', 'notes']
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
