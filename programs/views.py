@@ -4,13 +4,14 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
     QuickCreateStudentForm,
     ParentForm,
     PaymentForm,
+    SlidingScaleForm,
 )
 
 
@@ -50,6 +51,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
         can_manage = self.request.user.has_perm('programs.change_student') or self.request.user.has_perm('programs.add_student')
         ctx['can_manage_students'] = can_manage
         ctx['can_add_payment'] = self.request.user.has_perm('programs.add_payment')
+        ctx['can_add_sliding_scale'] = self.request.user.has_perm('programs.add_slidingscale')
         if can_manage:
             ctx['add_existing_form'] = AddExistingStudentToProgramForm(program=program)
             ctx['quick_create_form'] = QuickCreateStudentForm()
@@ -169,4 +171,32 @@ class ProgramPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
             obj.amount = obj.fee.amount
         obj.save()
         messages.success(self.request, 'Payment recorded successfully.')
+        return redirect('program_detail', pk=self.program.pk)
+
+
+class ProgramSlidingScaleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = SlidingScale
+    form_class = SlidingScaleForm
+    template_name = 'programs/sliding_scale_form.html'
+    permission_required = 'programs.add_slidingscale'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['program'] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['program'] = self.program
+        return ctx
+
+    def form_valid(self, form):
+        obj = form.save(commit=False)
+        obj.program = self.program
+        obj.save()
+        messages.success(self.request, 'Sliding scale saved successfully.')
         return redirect('program_detail', pk=self.program.pk)

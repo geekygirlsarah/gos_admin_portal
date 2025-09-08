@@ -41,7 +41,7 @@
       <div class="text-center py-5">
         <h1 class="display-6">GoS Admin Portal</h1>
         <p class="lead">You must log in to continue.</p>
-        <a class="btn btn-primary btn-lg" href="{% provider_login_url 'google' %}">Login with Google</a>
+        <a class="btn btn-primary btn-lg" href="{% url 'socialaccount_login' %}?provider=google">Login with Google</a>
       </div>
     {% endif %}
 {% endblock %}

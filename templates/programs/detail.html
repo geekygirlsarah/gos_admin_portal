@@ -64,11 +64,14 @@
         </div>
       {% endif %}
 
-      {% if can_add_payment %}
-        <div class="mt-4">
+      <div class="mt-4 d-flex gap-2">
+        {% if can_add_payment %}
           <a class="btn btn-outline-secondary" href="{% url 'program_payment_create' program.id %}">Record a Payment</a>
-        </div>
-      {% endif %}
+        {% endif %}
+        {% if can_add_sliding_scale %}
+          <a class="btn btn-outline-primary" href="{% url 'program_sliding_scale_create' program.id %}">Add Sliding Scale</a>
+        {% endif %}
+      </div>
     </div>
   </div>
   {% endblock %}

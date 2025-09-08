@@ -248,3 +248,19 @@ class Payment(models.Model):
         program = self.fee.program if self.fee_id else None
         if program and not Enrollment.objects.filter(student=self.student, program=program).exists():
             raise ValidationError('Student must be enrolled in the program for the selected fee.')
+
+
+class SlidingScale(models.Model):
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='sliding_scales')
+    program = models.ForeignKey('Program', on_delete=models.CASCADE, related_name='sliding_scales')
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'program')
+        ordering = ['program__name', 'student__last_name', 'student__first_name']
+
+    def __str__(self):
+        return f"Sliding scale ${self.amount} for {self.student} in {self.program}"

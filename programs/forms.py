@@ -1,5 +1,5 @@
 from django import forms
-from .models import Student, Program, Parent, Fee, Payment
+from .models import Student, Program, Parent, Fee, Payment, SlidingScale
 
 
 class StudentForm(forms.ModelForm):
@@ -49,3 +49,14 @@ class PaymentForm(forms.ModelForm):
         self.fields['student'].queryset = Student.objects.filter(programs=program)
         # Restrict fee choices to fees for this program
         self.fields['fee'].queryset = Fee.objects.filter(program=program)
+
+
+class SlidingScaleForm(forms.ModelForm):
+    class Meta:
+        model = SlidingScale
+        fields = ['student', 'amount', 'notes']
+
+    def __init__(self, *args, program: Program, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Restrict to students in this program
+        self.fields['student'].queryset = Student.objects.filter(programs=program)

@@ -7,6 +7,7 @@ from .views import (
     ParentCreateView, ParentUpdateView, ParentListView,
     MentorListView,
     ProgramPaymentCreateView,
+    ProgramSlidingScaleCreateView,
 )
 
 urlpatterns = [
@@ -27,6 +28,9 @@ urlpatterns = [
 
     # Payments
     path('<int:pk>/payments/new/', permission_required('programs.add_payment')(ProgramPaymentCreateView.as_view()), name='program_payment_create'),
+
+    # Sliding scales
+    path('<int:pk>/sliding-scales/new/', permission_required('programs.add_slidingscale')(ProgramSlidingScaleCreateView.as_view()), name='program_sliding_scale_create'),
 
     # Student edit
     path('students/<int:pk>/edit/', permission_required('programs.change_student')(StudentUpdateView.as_view()), name='student_edit'),
