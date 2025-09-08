@@ -9,6 +9,7 @@ from .views import (
     ProgramPaymentCreateView,
     ProgramSlidingScaleCreateView,
     ProgramStudentBalanceView,
+    SchoolListView, SchoolCreateView, SchoolUpdateView,
 )
 
 urlpatterns = [
@@ -21,6 +22,7 @@ urlpatterns = [
     path('students/', login_required(StudentListView.as_view()), name='student_list'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
+    path('schools/', login_required(SchoolListView.as_view()), name='school_list'),
 
     # Program-specific student management
     path('<int:pk>/students/add/', permission_required('programs.change_student')(ProgramStudentAddView.as_view()), name='program_student_add'),
@@ -40,4 +42,8 @@ urlpatterns = [
     # Parent add/edit
     path('parents/new/', permission_required('programs.add_parent')(ParentCreateView.as_view()), name='parent_create'),
     path('parents/<int:pk>/edit/', permission_required('programs.change_parent')(ParentUpdateView.as_view()), name='parent_edit'),
+
+    # School add/edit
+    path('schools/new/', permission_required('programs.add_school')(SchoolCreateView.as_view()), name='school_create'),
+    path('schools/<int:pk>/edit/', permission_required('programs.change_school')(SchoolUpdateView.as_view()), name='school_edit'),
 ]

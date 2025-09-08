@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -12,6 +12,7 @@ from .forms import (
     ParentForm,
     PaymentForm,
     SlidingScaleForm,
+    SchoolForm,
 )
 
 
@@ -37,6 +38,35 @@ class MentorListView(LoginRequiredMixin, ListView):
     model = Mentor
     template_name = 'mentors/list.html'
     context_object_name = 'mentors'
+
+
+# --- Schools list/create/edit ---
+class SchoolListView(LoginRequiredMixin, ListView):
+    model = School
+    template_name = 'schools/list.html'
+    context_object_name = 'schools'
+
+
+class SchoolCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = School
+    form_class = SchoolForm
+    template_name = 'schools/form.html'
+    permission_required = 'programs.add_school'
+
+    def get_success_url(self):
+        # After creating a School, return to the Schools listing
+        return reverse('school_list')
+
+
+class SchoolUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = School
+    form_class = SchoolForm
+    template_name = 'schools/form.html'
+    permission_required = 'programs.change_school'
+
+    def get_success_url(self):
+        next_url = self.request.GET.get('next')
+        return next_url or reverse('school_edit', args=[self.object.pk])
 
 
 class ProgramDetailView(LoginRequiredMixin, DetailView):

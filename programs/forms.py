@@ -1,5 +1,5 @@
 from django import forms
-from .models import Student, Program, Parent, Fee, Payment, SlidingScale
+from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School
 
 
 class StudentForm(forms.ModelForm):
@@ -60,3 +60,10 @@ class SlidingScaleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Restrict to students in this program
         self.fields['student'].queryset = Student.objects.filter(programs=program)
+
+
+
+class SchoolForm(forms.ModelForm):
+    class Meta:
+        model = School
+        fields = ['name']
