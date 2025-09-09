@@ -278,9 +278,12 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         # Gather entries: fees (program), sliding scale (if exists), and payments (student for program's fees)
         entries = []
         # Fees: positive amounts
-        for fee in Fee.objects.filter(program=program).order_by('created_at'):
+        # Use the editable fee.date when provided; otherwise fall back to created_at
+        fees = Fee.objects.filter(program=program)
+        for fee in fees:
+            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
             entries.append({
-                'date': fee.created_at.date(),
+                'date': fee_date,
                 'type': 'Fee',
                 'name': fee.name,
                 'amount': fee.amount,
@@ -308,8 +311,9 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
                 'amount': -p.amount,
             })
 
-        # Sort by date
-        entries.sort(key=lambda e: (e['date'], e['type']))
+        # Sort by date (editable fee date, sliding scale created_at, payment paid_at)
+        # Ensure None dates sort last
+        entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))
 
         # Totals and balance
         total_fees = sum([e['amount'] for e in entries if e['type'] == 'Fee'])

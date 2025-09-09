@@ -11,8 +11,8 @@ class ProgramAdmin(admin.ModelAdmin):
 
 @admin.register(Fee)
 class FeeAdmin(admin.ModelAdmin):
-    list_display = ('program', 'name', 'amount', 'updated_at')
-    list_filter = ('program',)
+    list_display = ('program', 'name', 'amount', 'date', 'updated_at')
+    list_filter = ('program', 'date')
     search_fields = ('name', 'program__name')
 
 
