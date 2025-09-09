@@ -1,4 +1,5 @@
 from django import forms
+from django.utils.safestring import mark_safe
 from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School, Mentor
 
 
@@ -116,3 +117,36 @@ class MentorForm(forms.ModelForm):
         model = Mentor
         fields = '__all__'
         exclude = []
+
+
+class ProgramEmailForm(forms.Form):
+    program = forms.ModelChoiceField(queryset=Program.objects.all(), required=False, help_text='Select the program whose contacts you want to email.')
+    recipient_groups = forms.MultipleChoiceField(
+        required=True,
+        choices=[
+            ('students', 'Students'),
+            ('parents', 'Parents/Guardians'),
+            ('mentors', 'Mentors'),
+        ],
+        widget=forms.CheckboxSelectMultiple,
+        help_text=mark_safe('Choose one or more groups to email.'),
+    )
+    subject = forms.CharField(max_length=255)
+    body = forms.CharField(widget=forms.Textarea(attrs={'rows': 12}), help_text='Rich text is supported. Paste content or use the editor.')
+    test_email = forms.EmailField(required=False, help_text='Optional: send only to this address for testing.')
+
+    def __init__(self, *args, **kwargs):
+        # Allow passing a fixed program via kwarg program
+        program = kwargs.pop('program', None)
+        super().__init__(*args, **kwargs)
+        if program is not None:
+            self.fields['program'].initial = program
+            self.fields['program'].widget = forms.HiddenInput()
+            self.fields['program'].required = True
+
+    def clean(self):
+        cleaned = super().clean()
+        prog = cleaned.get('program')
+        if self.fields['program'].widget.__class__ is forms.HiddenInput and not prog:
+            raise forms.ValidationError('Program is required.')
+        return cleaned

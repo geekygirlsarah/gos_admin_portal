@@ -70,7 +70,8 @@
         </div>
       {% endif %}
 
-      <div class="mt-4 d-flex gap-2">
+      <div class="mt-4 d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
         {% if can_add_payment %}
           <a class="btn btn-outline-secondary" href="{% url 'program_payment_create' program.id %}">Record a Payment</a>
         {% endif %}

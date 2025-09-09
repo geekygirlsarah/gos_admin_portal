@@ -10,6 +10,7 @@ from .views import (
     ProgramSlidingScaleCreateView,
     ProgramStudentBalanceView,
     SchoolListView, SchoolCreateView, SchoolUpdateView,
+    ProgramEmailView,
 )
 
 urlpatterns = [
@@ -17,6 +18,8 @@ urlpatterns = [
     path('', login_required(ProgramListView.as_view()), name='program_list'),
     path('new/', permission_required('programs.add_program')(ProgramCreateView.as_view()), name='program_create'),
     path('<int:pk>/', login_required(ProgramDetailView.as_view()), name='program_detail'),
+    path('messaging/', login_required(ProgramEmailView.as_view()), name='program_messaging'),
+    path('<int:pk>/email/', login_required(ProgramEmailView.as_view()), name='program_email'),
 
     # List pages
     path('students/', login_required(StudentListView.as_view()), name='student_list'),

@@ -4,6 +4,10 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.utils.html import strip_tags
+from django.conf import settings
+
 from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School
 from .forms import (
     StudentForm,
@@ -14,6 +18,7 @@ from .forms import (
     SlidingScaleForm,
     SchoolForm,
     MentorForm,
+    ProgramEmailForm,
 )
 
 
@@ -96,6 +101,75 @@ class SchoolUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     def get_success_url(self):
         next_url = self.request.GET.get('next')
         return next_url or reverse('school_edit', args=[self.object.pk])
+
+
+class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.view_program'  # basic permission to access
+    template_name = 'programs/email_form.html'
+
+    def get(self, request, pk=None):
+        program = get_object_or_404(Program, pk=pk) if pk else None
+        form = ProgramEmailForm(program=program) if program else ProgramEmailForm()
+        return self._render(form, program)
+
+    def post(self, request, pk=None):
+        program = get_object_or_404(Program, pk=pk) if pk else None
+        form = ProgramEmailForm(request.POST, program=program) if program else ProgramEmailForm(request.POST)
+        if form.is_valid():
+            prog = program or form.cleaned_data['program']
+            groups = form.cleaned_data['recipient_groups']
+            subject = form.cleaned_data['subject']
+            html_body = form.cleaned_data['body']
+            text_body = strip_tags(html_body)
+            test_email = form.cleaned_data.get('test_email')
+
+            recipients = set()
+            if 'students' in groups:
+                for s in Student.objects.filter(programs=prog, active=True):
+                    if s.personal_email:
+                        recipients.add(s.personal_email)
+                    elif s.andrew_email:
+                        recipients.add(s.andrew_email)
+            if 'parents' in groups:
+                parent_emails = Parent.objects.filter(students__programs=prog).values_list('email', flat=True)
+                for e in parent_emails:
+                    if e:
+                        recipients.add(e)
+            if 'mentors' in groups:
+                # No explicit Program-Mentor link in models; fallback to all active mentors
+                for m in Mentor.objects.filter(active=True):
+                    if m.personal_email:
+                        recipients.add(m.personal_email)
+                    elif m.andrew_email:
+                        recipients.add(m.andrew_email)
+
+            if not recipients and not test_email:
+                messages.error(request, 'No recipients found for the selected groups.')
+                return self._render(form, prog)
+
+            to_send = [test_email] if test_email else sorted(recipients)
+            connection = get_connection(
+                backend=getattr(settings, 'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+            )
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+            email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[])
+            email.to = []  # ensure empty
+            email.bcc = to_send
+            email.attach_alternative(html_body, 'text/html')
+            email.send(fail_silently=False)
+
+            messages.success(request, f"Email sent to {len(to_send)} recipient(s){' (test only)' if test_email else ''}.")
+            # Redirect back to program detail if coming from there, otherwise stay
+            if pk:
+                return redirect('program_detail', pk=pk)
+            return redirect('program_messaging')
+
+        return self._render(form, program)
+
+    def _render(self, form, program):
+        from django.shortcuts import render
+        ctx = {'form': form, 'program': program}
+        return render(self.request, self.template_name, ctx)
 
 
 class ProgramDetailView(LoginRequiredMixin, DetailView):
