@@ -29,6 +29,13 @@ class StudentListView(LoginRequiredMixin, ListView):
     context_object_name = 'students'
 
 
+class StudentPhotoListView(LoginRequiredMixin, ListView):
+    model = Student
+    template_name = 'students/photo_grid.html'
+    context_object_name = 'students'
+    paginate_by = 48
+
+
 class ParentListView(LoginRequiredMixin, ListView):
     model = Parent
     template_name = 'parents/list.html'
