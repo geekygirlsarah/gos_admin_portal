@@ -21,6 +21,11 @@
             <label for="id_description" class="form-label">Description</label>
             {{ form.description|add_class:"form-control" }}
           </div>
+          <div class="mb-3">
+            <label for="id_year" class="form-label">Year</label>
+            {{ form.year|add_class:"form-control" }}
+            <div class="form-text">Enter 4-digit year like 2025. Leave blank if not applicable.</div>
+          </div>
           <div class="form-check mb-3">
             {{ form.active|add_class:"form-check-input" }}
             <label for="id_active" class="form-check-label">Active</label>

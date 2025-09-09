@@ -18,20 +18,24 @@
         </div>
       </div>
       {% if programs %}
+        {% regroup programs by year as grouped_by_year %}
         <div class="row">
           <div class="col">
-            <ul class="list-group">
-              {% for program in programs %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
-                    {% if not program.active %}
-                      <span class="badge bg-secondary ms-2">inactive</span>
-                    {% endif %}
-                  </div>
-                </li>
-              {% endfor %}
-            </ul>
+            {% for group in grouped_by_year %}
+              <h3 class="h5 mt-3">{{ group.grouper|default:"No Year" }}</h3>
+              <ul class="list-group mb-3">
+                {% for program in group.list %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                      {% if not program.active %}
+                        <span class="badge bg-secondary ms-2">inactive</span>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endfor %}
           </div>
         </div>
       {% else %}

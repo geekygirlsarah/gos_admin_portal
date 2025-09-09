@@ -9,7 +9,7 @@
   </div>
   <div class="row">
     <div class="col-lg-10 col-xl-8">
-      <h1 class="h3">{{ program.name }}</h1>
+      <h1 class="h3">{{ program.name }}{% if program.year %} <small class="text-muted">({{ program.year }})</small>{% endif %}</h1>
       <p><span class="fw-semibold">Active:</span> <span class="badge {% if program.active %}bg-success{% else %}bg-secondary{% endif %}">{{ program.active|yesno:"Yes,No" }}</span></p>
       <p class="text-muted">{{ program.description|default:"No description provided." }}</p>
       <hr>

@@ -27,6 +27,10 @@ class ProgramListView(ListView):
     template_name = 'home.html'  # landing page
     context_object_name = 'programs'
 
+    def get_queryset(self):
+        from django.db.models import F
+        return Program.objects.all().order_by(F('year').desc(nulls_last=True), 'name')
+
 
 class StudentListView(LoginRequiredMixin, ListView):
     model = Student
@@ -193,7 +197,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
 
 class ProgramCreateView(CreateView):
     model = Program
-    fields = ['name', 'description', 'active']
+    fields = ['name', 'description', 'year', 'active']
     template_name = 'programs/form.html'
 
     def get_success_url(self):

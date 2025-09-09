@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 RELATIONSHIP_CHOICES = [
@@ -31,6 +32,13 @@ class Program(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    year = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        validators=[MinValueValidator(1900), MaxValueValidator(2200)],
+        help_text="Calendar year the program runs (e.g., 2025).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

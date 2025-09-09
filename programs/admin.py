@@ -4,9 +4,9 @@ from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, P
 
 @admin.register(Program)
 class ProgramAdmin(admin.ModelAdmin):
-    list_display = ('name', 'active', 'updated_at')
+    list_display = ('name', 'year', 'active', 'updated_at')
     search_fields = ('name',)
-    list_filter = ('active',)
+    list_filter = ('active', 'year')
 
 
 @admin.register(Fee)

@@ -1,0 +1,1 @@
+This app replaced Sliding Scale with Adjustments. The sliding_scale_form.html template is no longer referenced. Kept for historical reference; new entry page is templates/programs/adjustment_form.html.
