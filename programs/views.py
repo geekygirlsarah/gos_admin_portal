@@ -106,7 +106,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         program = self.object
-        ctx['enrolled_students'] = program.students.select_related('user').all().order_by('last_name', 'first_name')
+        ctx['enrolled_students'] = program.students.select_related('user').all().order_by('first_name', 'last_name')
         can_manage = self.request.user.has_perm('programs.change_student') or self.request.user.has_perm('programs.add_student')
         ctx['can_manage_students'] = can_manage
         ctx['can_add_payment'] = self.request.user.has_perm('programs.add_payment')

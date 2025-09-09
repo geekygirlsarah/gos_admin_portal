@@ -98,7 +98,7 @@ class Student(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['last_name', 'first_name']
+        ordering = ['first_name', 'last_name']
 
     def __str__(self):
         full = f"{self.first_name} {self.last_name}".strip()
