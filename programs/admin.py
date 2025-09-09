@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment
+from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale
 
 
 @admin.register(Program)
@@ -155,4 +155,11 @@ class MentorAdmin(admin.ModelAdmin):
             )
         }),
     )
+
+@admin.register(SlidingScale)
+class SlidingScaleAdmin(admin.ModelAdmin):
+    list_display = ('student', 'program', 'percent', 'is_pending', 'updated_at')
+    list_filter = ('program', 'is_pending')
+    search_fields = ('student__first_name', 'student__last_name', 'program__name')
+    autocomplete_fields = ('student', 'program')
 

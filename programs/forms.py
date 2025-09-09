@@ -82,12 +82,26 @@ class PaymentForm(forms.ModelForm):
 class SlidingScaleForm(forms.ModelForm):
     class Meta:
         model = SlidingScale
-        fields = ['student', 'amount', 'family_size', 'adjusted_gross_income', 'is_pending', 'notes']
+        fields = ['student', 'percent', 'family_size', 'adjusted_gross_income', 'is_pending', 'notes']
+        labels = {
+            'percent': 'Discount percent',
+        }
+        help_texts = {
+            'percent': 'Enter a value between 0 and 100. This percent will discount the total fees for the full program year.',
+        }
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
         # Restrict to students in this program
         self.fields['student'].queryset = Student.objects.filter(programs=program)
+
+    def clean_percent(self):
+        p = self.cleaned_data.get('percent')
+        if p is None:
+            return p
+        if p < 0 or p > 100:
+            raise forms.ValidationError('Percent must be between 0 and 100.')
+        return p
 
 
 

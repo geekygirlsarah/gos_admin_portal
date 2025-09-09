@@ -287,12 +287,16 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
             })
         # Sliding scale: negative amount (discount), include if exists
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
-        if sliding:
+        # Compute total fees first to apply percent-based discount
+        from decimal import Decimal
+        total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
+        if sliding and sliding.percent is not None:
+            discount = (total_fees_for_discount * sliding.percent / Decimal('100'))
             entries.append({
                 'date': sliding.created_at.date(),
                 'type': 'Sliding Scale',
-                'name': 'Sliding scale',
-                'amount': -sliding.amount,
+                'name': f"Sliding scale ({sliding.percent}%)",
+                'amount': -discount,
             })
         # Payments: negative amounts
         payments = Payment.objects.filter(student=student, fee__program=program)

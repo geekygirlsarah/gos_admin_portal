@@ -266,7 +266,7 @@ class Payment(models.Model):
 class SlidingScale(models.Model):
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='sliding_scales')
     program = models.ForeignKey('Program', on_delete=models.CASCADE, related_name='sliding_scales')
-    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    percent = models.DecimalField(max_digits=5, decimal_places=2, help_text='Percent discount applied to total program fees (0–100).')
     family_size = models.PositiveIntegerField(blank=True, null=True)
     adjusted_gross_income = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     is_pending = models.BooleanField(default=False)
@@ -279,4 +279,4 @@ class SlidingScale(models.Model):
         ordering = ['program__name', 'student__last_name', 'student__first_name']
 
     def __str__(self):
-        return f"Sliding scale ${self.amount} for {self.student} in {self.program}"
+        return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
