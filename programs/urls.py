@@ -13,6 +13,7 @@ from .views import (
     ProgramEmailView,
     ProgramFeeSelectView,
     ProgramFeeAssignmentEditView,
+    StudentImportView, ParentImportView, MentorImportView,
 )
 
 urlpatterns = [
@@ -25,11 +26,14 @@ urlpatterns = [
 
     # List pages
     path('students/', login_required(StudentListView.as_view()), name='student_list'),
+    path('students/import/', permission_required('programs.add_student')(StudentImportView.as_view()), name='student_import'),
     path('students/photos/', login_required(StudentPhotoListView.as_view()), name='student_photos'),
     path('students/new/', permission_required('programs.add_student')(StudentCreateView.as_view()), name='student_create'),
     path('students/<int:pk>/', login_required(StudentDetailView.as_view()), name='student_detail'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
+    path('parents/import/', permission_required('programs.add_parent')(ParentImportView.as_view()), name='parent_import'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
+    path('mentors/import/', permission_required('programs.add_mentor')(MentorImportView.as_view()), name='mentor_import'),
     path('mentors/new/', permission_required('programs.add_mentor')(MentorCreateView.as_view()), name='mentor_create'),
     path('mentors/<int:pk>/edit/', permission_required('programs.change_mentor')(MentorUpdateView.as_view()), name='mentor_edit'),
     path('schools/', login_required(SchoolListView.as_view()), name='school_list'),

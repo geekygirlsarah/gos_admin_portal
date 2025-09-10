@@ -78,6 +78,239 @@ class MentorListView(LoginRequiredMixin, ListView):
     context_object_name = 'mentors'
 
 
+class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.add_student'
+    def post(self, request):
+        from django.http import HttpResponseBadRequest
+        file = request.FILES.get('file')
+        if not file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('student_list')
+        import mimetypes
+        name = file.name.lower()
+        created = 0
+        updated = 0
+        errors = 0
+        try:
+            if name.endswith('.csv'):
+                import csv, io
+                text = io.TextIOWrapper(file.file, encoding='utf-8')
+                reader = csv.DictReader(text)
+                rows = list(reader)
+            elif name.endswith('.xlsx'):
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=file, read_only=True)
+                ws = wb.active
+                headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+                rows = []
+                for r in ws.iter_rows(min_row=2, values_only=True):
+                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+            else:
+                messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
+                return redirect('student_list')
+
+            def val(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        v = str(d[k]).strip()
+                        if v != '' and v.lower() != 'none':
+                            return v
+                return None
+
+            for d in rows:
+                first = val(d, 'first_name', 'First Name', 'Preferred First Name')
+                legal_first = val(d, 'legal_first_name', 'Legal First Name') or first
+                last = val(d, 'last_name', 'Last Name')
+                if not last or not legal_first:
+                    errors += 1
+                    continue
+                email = val(d, 'personal_email', 'Email', 'Personal Email')
+                andrew_email = val(d, 'andrew_email', 'Andrew Email')
+                school_name = val(d, 'school', 'School')
+                grad = val(d, 'graduation_year', 'Graduation Year')
+                school = None
+                if school_name:
+                    school, _ = School.objects.get_or_create(name=school_name)
+                grad_year = None
+                if grad and grad.isdigit():
+                    grad_year = int(grad)
+                obj, created_flag = Student.objects.get_or_create(
+                    last_name=last,
+                    legal_first_name=legal_first,
+                    defaults={
+                        'first_name': first if first != legal_first else None,
+                        'personal_email': email,
+                        'andrew_email': andrew_email,
+                        'school': school,
+                        'graduation_year': grad_year,
+                    }
+                )
+                if created_flag:
+                    created += 1
+                else:
+                    changed = False
+                    if first and obj.first_name != first:
+                        obj.first_name = first
+                        changed = True
+                    if email and obj.personal_email != email:
+                        obj.personal_email = email
+                        changed = True
+                    if andrew_email and obj.andrew_email != andrew_email:
+                        obj.andrew_email = andrew_email
+                        changed = True
+                    if school and obj.school != school:
+                        obj.school = school
+                        changed = True
+                    if grad_year and obj.graduation_year != grad_year:
+                        obj.graduation_year = grad_year
+                        changed = True
+                    if changed:
+                        obj.save()
+                        updated += 1
+            if created or updated:
+                messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
+            else:
+                messages.info(request, 'No rows imported.')
+        except Exception as e:
+            messages.error(request, f'Import failed: {e}')
+        return redirect('student_list')
+
+
+class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.add_parent'
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('parent_list')
+        name = file.name.lower()
+        created = 0
+        updated = 0
+        errors = 0
+        try:
+            if name.endswith('.csv'):
+                import csv, io
+                text = io.TextIOWrapper(file.file, encoding='utf-8')
+                reader = csv.DictReader(text)
+                rows = list(reader)
+            elif name.endswith('.xlsx'):
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=file, read_only=True)
+                ws = wb.active
+                headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+                rows = []
+                for r in ws.iter_rows(min_row=2, values_only=True):
+                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+            else:
+                messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
+                return redirect('parent_list')
+
+            def val(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        v = str(d[k]).strip()
+                        if v != '' and v.lower() != 'none':
+                            return v
+                return None
+
+            for d in rows:
+                first = val(d, 'first_name', 'First Name')
+                last = val(d, 'last_name', 'Last Name')
+                if not first or not last:
+                    errors += 1
+                    continue
+                email = val(d, 'email', 'Email')
+                phone = val(d, 'phone_number', 'Phone', 'Phone Number')
+                obj, created_flag = Parent.objects.get_or_create(
+                    first_name=first, last_name=last,
+                    defaults={'email': email, 'phone_number': phone}
+                )
+                if created_flag:
+                    created += 1
+                else:
+                    changed = False
+                    if email and obj.email != email:
+                        obj.email = email
+                        changed = True
+                    if phone and obj.phone_number != phone:
+                        obj.phone_number = phone
+                        changed = True
+                    if changed:
+                        obj.save()
+                        updated += 1
+            messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
+        except Exception as e:
+            messages.error(request, f'Import failed: {e}')
+        return redirect('parent_list')
+
+
+class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.add_mentor'
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('mentor_list')
+        name = file.name.lower()
+        created = 0
+        updated = 0
+        errors = 0
+        try:
+            if name.endswith('.csv'):
+                import csv, io
+                text = io.TextIOWrapper(file.file, encoding='utf-8')
+                reader = csv.DictReader(text)
+                rows = list(reader)
+            elif name.endswith('.xlsx'):
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=file, read_only=True)
+                ws = wb.active
+                headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+                rows = []
+                for r in ws.iter_rows(min_row=2, values_only=True):
+                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+            else:
+                messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
+                return redirect('mentor_list')
+
+            def val(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        v = str(d[k]).strip()
+                        if v != '' and v.lower() != 'none':
+                            return v
+                return None
+
+            for d in rows:
+                first = val(d, 'first_name', 'First Name')
+                last = val(d, 'last_name', 'Last Name')
+                if not first or not last:
+                    errors += 1
+                    continue
+                email = val(d, 'personal_email', 'Email', 'Personal Email')
+                andrew_email = val(d, 'andrew_email', 'Andrew Email')
+                role = val(d, 'role', 'Role') or 'mentor'
+                obj, created_flag = Mentor.objects.get_or_create(
+                    first_name=first, last_name=last,
+                    defaults={'personal_email': email, 'andrew_email': andrew_email, 'role': role}
+                )
+                if created_flag:
+                    created += 1
+                else:
+                    changed = False
+                    for field, value in [('personal_email', email), ('andrew_email', andrew_email), ('role', role)]:
+                        if value and getattr(obj, field) != value:
+                            setattr(obj, field, value)
+                            changed = True
+                    if changed:
+                        obj.save()
+                        updated += 1
+            messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
+        except Exception as e:
+            messages.error(request, f'Import failed: {e}')
+        return redirect('mentor_list')
+
+
 class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Mentor
     form_class = MentorForm
