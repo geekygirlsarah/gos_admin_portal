@@ -62,6 +62,79 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
         ).order_by(Lower('sort_first'), Lower('last_name'))
 
 
+class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
+    model = Student
+    template_name = 'students/emergency_contacts.html'
+    context_object_name = 'students'
+
+    def get_queryset(self):
+        qs = super().get_queryset().filter(active=True)
+        return qs.select_related('school', 'primary_contact', 'secondary_contact').prefetch_related('parents').annotate(
+            sort_first=Coalesce('first_name', 'legal_first_name'),
+        ).order_by(Lower('sort_first'), Lower('last_name'))
+
+
+class StudentsByGradeView(LoginRequiredMixin, ListView):
+    model = Student
+    template_name = 'students/by_grade.html'
+    context_object_name = 'students'
+
+    def get_queryset(self):
+        qs = super().get_queryset().filter(active=True)
+        return qs.select_related('school').annotate(
+            sort_first=Coalesce('first_name', 'legal_first_name'),
+        ).order_by('graduation_year', Lower('last_name'), Lower('sort_first'))
+
+    def get_context_data(self, **kwargs):
+        from django.utils import timezone
+        ctx = super().get_context_data(**kwargs)
+        current_year = timezone.now().year
+        grouped = {
+            '12th Grade': [],
+            '11th Grade': [],
+            '10th Grade': [],
+            '9th Grade': [],
+            'Unknown Grade': [],
+        }
+        for s in ctx['students']:
+            gy = s.graduation_year
+            grade_label = 'Unknown Grade'
+            if gy:
+                # Approximate US grade level: grad this year = 12th
+                delta = gy - current_year
+                grade_num = 12 - delta
+                if 9 <= grade_num <= 12:
+                    grade_label = f"{grade_num}th Grade"
+            grouped.setdefault(grade_label, [])
+            grouped[grade_label].append(s)
+        # Order groups by typical 12->9, then unknown
+        order = ['12th Grade', '11th Grade', '10th Grade', '9th Grade', 'Unknown Grade']
+        ctx['grouped'] = [(label, grouped.get(label, [])) for label in order]
+        return ctx
+
+
+class StudentsBySchoolView(LoginRequiredMixin, ListView):
+    model = Student
+    template_name = 'students/by_school.html'
+    context_object_name = 'students'
+
+    def get_queryset(self):
+        qs = super().get_queryset().filter(active=True)
+        return qs.select_related('school').annotate(
+            sort_first=Coalesce('first_name', 'legal_first_name'),
+        ).order_by('school__name', Lower('last_name'), Lower('sort_first'))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        grouped = {}
+        for s in ctx['students']:
+            label = s.school.name if s.school_id else 'No School'
+            grouped.setdefault(label, []).append(s)
+        # Sort by school label
+        ctx['grouped'] = sorted(grouped.items(), key=lambda kv: (kv[0] == 'No School', kv[0]))
+        return ctx
+
+
 class ParentListView(LoginRequiredMixin, ListView):
     model = Parent
     template_name = 'parents/list.html'
@@ -78,6 +151,12 @@ class MentorListView(LoginRequiredMixin, ListView):
     context_object_name = 'mentors'
 
 
+class ImportDashboardView(LoginRequiredMixin, View):
+    def get(self, request):
+        from django.shortcuts import render
+        return render(request, 'imports/dashboard.html')
+
+
 class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'programs.add_student'
     def post(self, request):
@@ -85,7 +164,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get('file')
         if not file:
             messages.error(request, 'No file uploaded.')
-            return redirect('student_list')
+            return redirect('import_dashboard')
         import mimetypes
         name = file.name.lower()
         created = 0
@@ -107,7 +186,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     rows.append({headers[i]: r[i] for i in range(len(headers))})
             else:
                 messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
-                return redirect('student_list')
+                return redirect('import_dashboard')
 
             def val(d, *keys):
                 for k in keys:
@@ -173,7 +252,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 messages.info(request, 'No rows imported.')
         except Exception as e:
             messages.error(request, f'Import failed: {e}')
-        return redirect('student_list')
+        return redirect('import_dashboard')
 
 
 class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -182,7 +261,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get('file')
         if not file:
             messages.error(request, 'No file uploaded.')
-            return redirect('parent_list')
+            return redirect('import_dashboard')
         name = file.name.lower()
         created = 0
         updated = 0
@@ -203,7 +282,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     rows.append({headers[i]: r[i] for i in range(len(headers))})
             else:
                 messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
-                return redirect('parent_list')
+                return redirect('import_dashboard')
 
             def val(d, *keys):
                 for k in keys:
@@ -241,7 +320,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
         except Exception as e:
             messages.error(request, f'Import failed: {e}')
-        return redirect('parent_list')
+        return redirect('import_dashboard')
 
 
 class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -250,7 +329,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get('file')
         if not file:
             messages.error(request, 'No file uploaded.')
-            return redirect('mentor_list')
+            return redirect('import_dashboard')
         name = file.name.lower()
         created = 0
         updated = 0
@@ -271,7 +350,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     rows.append({headers[i]: r[i] for i in range(len(headers))})
             else:
                 messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
-                return redirect('mentor_list')
+                return redirect('import_dashboard')
 
             def val(d, *keys):
                 for k in keys:

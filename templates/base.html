@@ -16,20 +16,35 @@
     <div class="container">
         <a class="navbar-brand" href="/">GoS Admin Portal</a>
         {% if user.is_authenticated %}
-            <div class="collapse navbar-collapse">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item"><a class="nav-link active" aria-current="page" href="/programs/">Programs</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/programs/students/">Students</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="studentsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Students</a>
+                        <ul class="dropdown-menu" aria-labelledby="studentsDropdown">
+                            <li><a class="dropdown-item" href="/programs/students/">All Students</a></li>
+                            <li><a class="dropdown-item" href="{% url 'student_emergency_contacts' %}">Emergency Contacts</a></li>
+                            <li><a class="dropdown-item" href="{% url 'students_by_grade' %}">By Grade Level</a></li>
+                            <li><a class="dropdown-item" href="{% url 'students_by_school' %}">By School</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link" href="/programs/schools/">Schools</a></li>
                     <li class="nav-item"><a class="nav-link" href="/programs/parents/">Parents</a></li>
                     <li class="nav-item"><a class="nav-link" href="/programs/mentors/">Mentors</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/programs/imports/">Imports</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'program_messaging' %}">Messaging</a></li>
                 </ul>
+                <div class="d-lg-none">
+                    <a class="btn btn-outline-light w-100" href="/accounts/logout/">Logout</a>
+                </div>
             </div>
         {% endif %}
         <div class="d-flex">
             {% if user.is_authenticated %}
-                <a class="btn btn-outline-light" href="/accounts/logout/">Logout</a>
+                <a class="btn btn-outline-light d-none d-lg-inline-block" href="/accounts/logout/">Logout</a>
             {% endif %}
         </div>
     </div>

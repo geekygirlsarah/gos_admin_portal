@@ -7,30 +7,10 @@
     <div class="col"><h1 class="h3">Parents</h1></div>
     <div class="col-auto d-flex gap-2">
       {% if perms.programs.add_parent %}
-        <form id="parent-import-form" action="{% url 'parent_import' %}" method="post" enctype="multipart/form-data" class="d-none">
-          {% csrf_token %}
-          <input type="file" name="file" id="parent-import-file" accept=".csv,.xlsx" />
-        </form>
-        <div class="btn-group" role="group">
-          <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('parent-import-file').click();">Import</button>
-          <a class="btn btn-outline-secondary" href="{% static 'samples/parents_sample.csv' %}">Download CSV Template</a>
-        </div>
         <a class="btn btn-primary" href="{% url 'parent_create' %}?next={% url 'parent_list' %}">Add Parent</a>
       {% endif %}
     </div>
   </div>
-  <script>
-    (function(){
-      const f = document.getElementById('parent-import-file');
-      if (f) {
-        f.addEventListener('change', function(){
-          if (f.files && f.files.length) {
-            document.getElementById('parent-import-form').submit();
-          }
-        });
-      }
-    })();
-  </script>
   {% if parents %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">

@@ -7,30 +7,10 @@
     <div class="col"><h1 class="h3">Mentors</h1></div>
     <div class="col-auto d-flex gap-2 justify-content-end">
       {% if perms.programs.add_mentor %}
-        <form id="mentor-import-form" action="{% url 'mentor_import' %}" method="post" enctype="multipart/form-data" class="d-none">
-          {% csrf_token %}
-          <input type="file" name="file" id="mentor-import-file" accept=".csv,.xlsx" />
-        </form>
-        <div class="btn-group" role="group">
-          <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('mentor-import-file').click();">Import</button>
-          <a class="btn btn-outline-secondary" href="{% static 'samples/mentors_sample.csv' %}">Download CSV Template</a>
-        </div>
         <a class="btn btn-sm btn-success" href="{% url 'mentor_create' %}">Add Mentor</a>
       {% endif %}
     </div>
   </div>
-  <script>
-    (function(){
-      const f = document.getElementById('mentor-import-file');
-      if (f) {
-        f.addEventListener('change', function(){
-          if (f.files && f.files.length) {
-            document.getElementById('mentor-import-form').submit();
-          }
-        });
-      }
-    })();
-  </script>
   {% if mentors %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">

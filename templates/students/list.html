@@ -8,30 +8,10 @@
     <div class="col-auto d-flex gap-2">
       <a class="btn btn-outline-secondary" href="{% url 'student_photos' %}">Photo View</a>
       {% if perms.programs.add_student %}
-        <form id="student-import-form" action="{% url 'student_import' %}" method="post" enctype="multipart/form-data" class="d-none">
-          {% csrf_token %}
-          <input type="file" name="file" id="student-import-file" accept=".csv,.xlsx" />
-        </form>
-        <div class="btn-group" role="group">
-          <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('student-import-file').click();">Import</button>
-          <a class="btn btn-outline-secondary" href="{% static 'samples/students_sample.csv' %}">Download CSV Template</a>
-        </div>
         <a class="btn btn-primary" href="{% url 'student_create' %}?next={% url 'student_list' %}">Add Student</a>
       {% endif %}
     </div>
   </div>
-  <script>
-    (function(){
-      const f = document.getElementById('student-import-file');
-      if (f) {
-        f.addEventListener('change', function(){
-          if (f.files && f.files.length) {
-            document.getElementById('student-import-form').submit();
-          }
-        });
-      }
-    })();
-  </script>
   {% if students %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">
