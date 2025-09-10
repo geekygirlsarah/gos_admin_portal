@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from .views import (
     ProgramListView, ProgramDetailView, ProgramCreateView,
     ProgramStudentAddView, ProgramStudentRemoveView, ProgramStudentQuickCreateView,
-    StudentUpdateView, StudentListView, StudentCreateView, StudentPhotoListView,
+    StudentUpdateView, StudentListView, StudentCreateView, StudentPhotoListView, StudentDetailView,
     ParentCreateView, ParentUpdateView, ParentListView,
     MentorListView, MentorCreateView, MentorUpdateView,
     ProgramPaymentCreateView,
@@ -27,6 +27,7 @@ urlpatterns = [
     path('students/', login_required(StudentListView.as_view()), name='student_list'),
     path('students/photos/', login_required(StudentPhotoListView.as_view()), name='student_photos'),
     path('students/new/', permission_required('programs.add_student')(StudentCreateView.as_view()), name='student_create'),
+    path('students/<int:pk>/', login_required(StudentDetailView.as_view()), name='student_detail'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
     path('mentors/new/', permission_required('programs.add_mentor')(MentorCreateView.as_view()), name='mentor_create'),

@@ -1,0 +1,95 @@
+{% load form_tags %}
+{# Shared grouped fields for StudentForm using Bootstrap grid #}
+
+{# Identity #}
+<div class="card mb-4">
+  <div class="card-header">Identity</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">{% render_field form.legal_first_name %}</div>
+      <div class="col-md-4">{% render_field form.first_name %}</div>
+      <div class="col-md-4">{% render_field form.last_name %}</div>
+      <div class="col-md-4">{% render_field form.pronouns %}</div>
+      <div class="col-md-4">{% render_field form.date_of_birth %}</div>
+      <div class="col-md-4">{% render_field form.photo %}</div>
+    </div>
+  </div>
+</div>
+
+{# Contact & Address #}
+<div class="card mb-4">
+  <div class="card-header">Contact & Address</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">{% render_field form.personal_email %}</div>
+      <div class="col-md-6">{% render_field form.cell_phone_number %}</div>
+      <div class="col-md-6">{% render_field form.address %}</div>
+      <div class="col-md-3">{% render_field form.city %}</div>
+      <div class="col-md-3">{% render_field form.state %}</div>
+      <div class="col-md-3">{% render_field form.zip_code %}</div>
+    </div>
+  </div>
+</div>
+
+{# School #}
+<div class="card mb-4">
+  <div class="card-header">School</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">{% render_field form.school %}</div>
+      <div class="col-md-3">{% render_field form.grade_selector %}</div>
+      <div class="col-md-3">{% render_field form.graduation_year %}</div>
+      <div class="col-md-3">{% render_field form.tshirt_size %}</div>
+    </div>
+  </div>
+</div>
+
+{# Andrew ID (CMU) #}
+<div class="card mb-4">
+  <div class="card-header">CMU Andrew ID</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">{% render_field form.andrew_id %}</div>
+      <div class="col-md-6">{% render_field form.andrew_email %}</div>
+    </div>
+  </div>
+</div>
+
+{# Demographics & Preferences #}
+<div class="card mb-4">
+  <div class="card-header">Other Details</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">{% render_field form.race_ethnicity %}</div>
+      <div class="col-md-3">{% render_field form.seen_once %}</div>
+      <div class="col-md-3">{% render_field form.active %}</div>
+    </div>
+  </div>
+</div>
+
+{# Discord #}
+<div class="card mb-4">
+  <div class="card-header">Discord</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3">{% render_field form.on_discord %}</div>
+      <div class="col-md-9">{% render_field form.discord_handle %}</div>
+    </div>
+  </div>
+</div>
+
+{# Parents / Contacts #}
+<div class="card mb-4">
+  <div class="card-header">Parents / Emergency Contacts</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">{% render_field form.primary_contact %}</div>
+      <div class="col-md-6">{% render_field form.secondary_contact %}</div>
+      <div class="col-12">{% render_field form.parents %}</div>
+    </div>
+    <div class="alert alert-secondary mt-3">
+      Can't find a parent? Quickly add one:
+      <a class="alert-link" href="{% url 'parent_create' %}?next={{ request.path }}">Add Parent</a>
+    </div>
+  </div>
+</div>

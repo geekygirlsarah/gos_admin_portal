@@ -67,6 +67,10 @@ class ParentListView(LoginRequiredMixin, ListView):
     template_name = 'parents/list.html'
     context_object_name = 'parents'
 
+    def get_queryset(self):
+        # Prefetch related students to avoid N+1 queries and order by name
+        return Parent.objects.all().prefetch_related('students').order_by('last_name', 'first_name')
+
 
 class MentorListView(LoginRequiredMixin, ListView):
     model = Mentor
@@ -243,6 +247,12 @@ class StudentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
     def get_success_url(self):
         # After creating a Student, return to the Students listing
         return reverse('student_list')
+
+
+class StudentDetailView(LoginRequiredMixin, DetailView):
+    model = Student
+    template_name = 'students/detail.html'
+    context_object_name = 'student'
 
 
 # --- Program student management actions ---

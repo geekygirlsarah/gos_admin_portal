@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load form_tags %}
 {% block title %}{% if object %}Edit Student{% else %}Add Student{% endif %}{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
@@ -8,20 +9,48 @@
     </div>
   </div>
   <div class="row">
-    <div class="col-lg-8">
+    <div class="col-lg-9 col-xl-8">
       <h1 class="h3 mb-3">{% if object %}Edit Student{% else %}Add Student{% endif %}</h1>
-      <form method="post" enctype="multipart/form-data">
+      <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
-        <div class="mb-3">{{ form.as_p }}</div>
-        <div class="alert alert-secondary">
-          Can't find a parent? Quickly add one:
-          <a class="alert-link" href="{% url 'parent_create' %}?next={{ request.path }}">Add Parent</a>
-        </div>
+        {% include 'students/_form_fields.html' %}
         <div class="d-flex gap-2">
           <button class="btn btn-primary" type="submit">Save</button>
           <a class="btn btn-secondary" href="{{ request.GET.next|default:'/' }}">Cancel</a>
         </div>
       </form>
+      <script>
+        (function(){
+          function calcGraduationYearFromGrade(grade){
+            if(grade === '' || grade === null || grade === undefined) return '';
+            var g = parseInt(grade, 10);
+            if(isNaN(g) || g < 0 || g > 12) return '';
+            var today = new Date();
+            var endYear = today.getFullYear() + (today.getMonth() + 1 >= 7 ? 1 : 0);
+            if(g === 0){
+              return endYear + 13;
+            } else {
+              var remaining = Math.max(0, 12 - g);
+              return endYear + remaining;
+            }
+          }
+          function hook(){
+            var gradeSel = document.querySelector('select[name="grade_selector"]');
+            var gradYearInput = document.querySelector('input[name="graduation_year"]');
+            if(!gradeSel || !gradYearInput) return;
+            gradeSel.addEventListener('change', function(){
+              var val = gradeSel.value;
+              var gy = calcGraduationYearFromGrade(val);
+              if(gy !== ''){
+                gradYearInput.value = gy;
+              }
+            });
+          }
+          if(document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', hook);
+          } else { hook(); }
+        })();
+      </script>
     </div>
   </div>
-  {% endblock %}
+{% endblock %}

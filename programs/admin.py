@@ -37,10 +37,10 @@ class SchoolAdmin(admin.ModelAdmin):
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = (
-        'first_name', 'legal_first_name', 'last_name', 'pronouns', 'grade',
+        'first_name', 'legal_first_name', 'last_name', 'pronouns', 'graduation_year',
         'andrew_id', 'on_discord', 'active', 'updated_at'
     )
-    list_filter = ('active', 'on_discord', 'seen_once', 'grade')
+    list_filter = ('active', 'on_discord', 'seen_once', 'graduation_year')
     search_fields = (
         'first_name', 'legal_first_name', 'last_name', 'pronouns', 'user__username', 'user__email',
         'personal_email', 'andrew_id', 'andrew_email', 'discord_handle', 'school__name', 'city', 'state'
@@ -64,7 +64,7 @@ class StudentAdmin(admin.ModelAdmin):
         }),
         ('School', {
             'fields': (
-                'school', 'grade',
+                'school', 'graduation_year',
             )
         }),
         ('Other', {

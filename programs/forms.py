@@ -10,6 +10,13 @@ class StudentForm(forms.ModelForm):
         required=False,
         help_text='Select the parents/guardians for this student.'
     )
+    # Non-model field used to pick K–12 and auto-calc graduation year
+    GRADE_CHOICES = [(0, 'K')] + [(i, str(i)) for i in range(1, 13)]
+    grade_selector = forms.ChoiceField(
+        choices=[('', '—')] + [(str(v), label) for v, label in GRADE_CHOICES],
+        required=False,
+        label='Grade (K–12)'
+    )
 
     class Meta:
         model = Student
@@ -23,8 +30,50 @@ class StudentForm(forms.ModelForm):
         instance = getattr(self, 'instance', None)
         if instance and instance.pk:
             self.fields['parents'].initial = instance.parents.all()
+        # Initialize grade_selector from graduation_year if available
+        gy = self.instance.graduation_year if instance else None
+        if gy:
+            # infer grade from graduation year based on current academic year
+            import datetime
+            today = datetime.date.today()
+            end_year = today.year + (1 if today.month >= 7 else 0)
+            # years remaining from current school year end to graduation
+            years_remaining = gy - end_year
+            # Map back to grade: 12 - years_remaining; for K we consider 13 remaining
+            if years_remaining == 13:
+                grade_str = '0'
+            else:
+                grade = 12 - years_remaining
+                if 0 <= grade <= 12:
+                    grade_str = str(grade)
+                else:
+                    grade_str = ''
+            if grade_str:
+                self.fields['grade_selector'].initial = grade_str
+        # Add help text to graduation_year
+        if 'graduation_year' in self.fields:
+            self.fields['graduation_year'].help_text = 'Auto-calculated from Grade, but you may override if needed.'
 
     def save(self, commit=True):
+        # Compute graduation_year from grade_selector when provided
+        grade_val = self.cleaned_data.get('grade_selector') if hasattr(self, 'cleaned_data') else None
+        if grade_val not in (None, '', 'None'):
+            try:
+                g = int(grade_val)
+            except (TypeError, ValueError):
+                g = None
+            if g is not None and 0 <= g <= 12:
+                import datetime
+                today = datetime.date.today()
+                end_year = today.year + (1 if today.month >= 7 else 0)
+                if g == 0:
+                    grad_year = end_year + 13
+                else:
+                    grad_year = end_year + max(0, 12 - g)
+                # assign to instance via cleaned_data for model save
+                self.cleaned_data['graduation_year'] = grad_year
+                if 'graduation_year' in self.fields:
+                    self.instance.graduation_year = grad_year
         # Save base fields first
         instance = super().save(commit=False)
         if commit:

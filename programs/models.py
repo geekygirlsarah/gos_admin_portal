@@ -87,7 +87,7 @@ class Student(models.Model):
     andrew_email = models.EmailField(blank=True, null=True)
 
     school = models.ForeignKey('School', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
-    grade = models.PositiveSmallIntegerField(blank=True, null=True)
+    graduation_year = models.PositiveSmallIntegerField(blank=True, null=True, help_text='Expected high school graduation year')
 
     race_ethnicity = models.CharField(max_length=100, blank=True, null=True)
     tshirt_size = models.CharField(max_length=10, blank=True, null=True)

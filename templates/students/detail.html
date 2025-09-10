@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}Student: {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
+{% block nav_students_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/' }}">← Back</a>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      {% if perms.programs.change_student %}
+        <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={{ request.path }}">Edit</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-9 col-xl-8">
+      <h1 class="h3 mb-4">{{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</h1>
+
+      <div class="card mb-4">
+        <div class="card-header">Identity</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-center">
+            <div class="col-md-3 text-center">
+              {% if student.photo %}
+                <img src="{{ student.photo.url }}" alt="{{ student }}" class="img-thumbnail" style="max-width: 160px;">
+              {% else %}
+                <div class="text-muted">No photo</div>
+              {% endif %}
+            </div>
+            <div class="col-md-9">
+              <div class="row g-2">
+                <div class="col-md-4"><div class="fw-semibold">Legal first name</div><div>{{ student.legal_first_name }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ student.first_name|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ student.last_name }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ student.pronouns|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Date of birth</div><div>{{ student.date_of_birth|date:'M j, Y'|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Active</div><div><span class="badge {% if student.active %}bg-success{% else %}bg-secondary{% endif %}">{{ student.active|yesno:"Yes,No" }}</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">Contact & Address</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6"><div class="fw-semibold">Email</div><div>{{ student.personal_email|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Cell phone</div><div>{{ student.cell_phone_number|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Address</div><div>{{ student.address|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ student.city|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ student.state|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">Zip</div><div>{{ student.zip_code|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">School</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6"><div class="fw-semibold">School</div><div>{{ student.school|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">Graduation Year</div><div>{{ student.graduation_year|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">T‑shirt size</div><div>{{ student.tshirt_size|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">CMU Andrew ID</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-4"><div class="fw-semibold">Andrew ID</div><div>{{ student.andrew_id|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Andrew email</div><div>{{ student.andrew_email|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">Discord</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-3"><div class="fw-semibold">On Discord</div><div>{{ student.on_discord|yesno:"Yes,No" }}</div></div>
+            <div class="col-md-9"><div class="fw-semibold">Discord handle</div><div>{{ student.discord_handle|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">Parents / Emergency Contacts</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6"><div class="fw-semibold">Primary contact</div><div>{{ student.primary_contact|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Secondary contact</div><div>{{ student.secondary_contact|default:'—' }}</div></div>
+            <div class="col-12"><div class="fw-semibold">Parents/guardians</div>
+              {% if student.parents.all %}
+                <ul class="mb-0">
+                {% for p in student.parents.all %}
+                  <li>{{ p }}</li>
+                {% empty %}
+                  <li class="text-muted">—</li>
+                {% endfor %}
+                </ul>
+              {% else %}
+                <div class="text-muted">—</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">Other Details</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6"><div class="fw-semibold">Race / Ethnicity</div><div>{{ student.race_ethnicity|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">Seen once</div><div>{{ student.seen_once|yesno:"Yes,No" }}</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+{% endblock %}
