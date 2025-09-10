@@ -292,7 +292,7 @@ class SlidingScale(models.Model):
 
     class Meta:
         unique_together = ('student', 'program')
-        ordering = ['program__name', 'student__last_name', 'student__legal_first_name']
+        ordering = ['program__name', 'student__last_name', 'student__first_name']
 
     def __str__(self):
         return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
@@ -314,7 +314,7 @@ class FeeAssignment(models.Model):
 
     class Meta:
         unique_together = ('fee', 'student')
-        ordering = ['fee__program__name', 'fee__name', 'student__last_name', 'student__legal_first_name']
+        ordering = ['fee__program__name', 'fee__name', 'student__last_name', 'student__first_name']
 
     def __str__(self):
         return f"{self.fee.name} → {self.student}"
