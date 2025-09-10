@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Students by Grade{% endblock %}
+{% block content %}
+<div class="row mb-3">
+  <div class="col"><h1 class="h3">Students by Grade Level</h1></div>
+  <div class="col-auto d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'student_list' %}">All Students</a>
+  </div>
+</div>
+
+{% if grouped %}
+  {% for label, items in grouped %}
+    <h2 class="h5 mt-4">{{ label }} <span class="badge bg-secondary">{{ items|length }}</span></h2>
+    {% if items %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>School</th>
+              <th>Graduation Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in items %}
+              <tr>
+                <td><a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a></td>
+                <td>{{ s.school|default:"" }}</td>
+                <td>{{ s.graduation_year|default:"" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-muted">No students in this group.</div>
+    {% endif %}
+  {% endfor %}
+{% else %}
+  <div class="alert alert-info">No students found.</div>
+{% endif %}
+{% endblock %}
