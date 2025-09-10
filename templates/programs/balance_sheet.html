@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Balance — {{ student.first_name }} {{ student.last_name }} — {{ program.name }}{% endblock %}
+{% block title %}Balance — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }} — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
   <div class="row mb-3">
@@ -11,7 +11,7 @@
     <div class="col-lg-10 col-xl-8">
       <h1 class="h4">Balance Sheet</h1>
       <p class="mb-1"><span class="fw-semibold">Program:</span> {{ program.name }}</p>
-      <p class="mb-3"><span class="fw-semibold">Student:</span> {{ student.first_name }} {{ student.last_name }}</p>
+      <p class="mb-3"><span class="fw-semibold">Student:</span> {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</p>
 
       {% if entries %}
         <div class="table-responsive">

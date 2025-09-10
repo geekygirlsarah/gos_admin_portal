@@ -11,6 +11,8 @@ from .views import (
     ProgramStudentBalanceView,
     SchoolListView, SchoolCreateView, SchoolUpdateView,
     ProgramEmailView,
+    ProgramFeeSelectView,
+    ProgramFeeAssignmentEditView,
 )
 
 urlpatterns = [
@@ -42,6 +44,10 @@ urlpatterns = [
 
     # Sliding scales
     path('<int:pk>/sliding-scales/new/', permission_required('programs.add_slidingscale')(ProgramSlidingScaleCreateView.as_view()), name='program_sliding_scale_create'),
+
+    # Fee applicability management
+    path('<int:pk>/fees/manage/', permission_required('programs.change_fee')(ProgramFeeSelectView.as_view()), name='program_fee_select'),
+    path('<int:pk>/fees/<int:fee_id>/assignments/', permission_required('programs.change_fee')(ProgramFeeAssignmentEditView.as_view()), name='program_fee_assignments'),
 
     # Student edit
     path('students/<int:pk>/edit/', permission_required('programs.change_student')(StudentUpdateView.as_view()), name='student_edit'),

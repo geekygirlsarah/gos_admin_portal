@@ -68,8 +68,8 @@ class Student(models.Model):
         blank=True,
         related_name='student_profile',
     )
-    first_name = models.CharField(max_length=150)
-    preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
+    legal_first_name = models.CharField(max_length=150, verbose_name='Legal first name')
+    first_name = models.CharField(max_length=150, blank=True, null=True, verbose_name='First name')
     last_name = models.CharField(max_length=150)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
@@ -109,7 +109,8 @@ class Student(models.Model):
         ordering = ['first_name', 'last_name']
 
     def __str__(self):
-        full = f"{self.first_name} {self.last_name}".strip()
+        pref = self.first_name or self.legal_first_name
+        full = f"{pref} {self.last_name}".strip()
         return full or f"Student #{self.pk}"
 
 
@@ -272,6 +273,11 @@ class Payment(models.Model):
         if program and not Enrollment.objects.filter(student=self.student, program=program).exists():
             raise ValidationError('Student must be enrolled in the program for the selected fee.')
 
+        # If the fee has explicit assignments, the student must be among them
+        if self.fee_id and self.fee.assignments.exists():
+            if not self.fee.assignments.filter(student=self.student).exists():
+                raise ValidationError('This fee is only assigned to specific students, and this student is not assigned.')
+
 
 class SlidingScale(models.Model):
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='sliding_scales')
@@ -286,7 +292,36 @@ class SlidingScale(models.Model):
 
     class Meta:
         unique_together = ('student', 'program')
-        ordering = ['program__name', 'student__last_name', 'student__first_name']
+        ordering = ['program__name', 'student__last_name', 'student__legal_first_name']
 
     def __str__(self):
         return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
+
+
+class FeeAssignment(models.Model):
+    """
+    Links a Fee to specific students (within the Fee's program).
+    If a Fee has any assignments, it applies ONLY to those students.
+    """
+    fee = models.ForeignKey('Fee', on_delete=models.CASCADE, related_name='assignments')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='fee_assignments')
+
+    # Optional note
+    notes = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('fee', 'student')
+        ordering = ['fee__program__name', 'fee__name', 'student__last_name', 'student__legal_first_name']
+
+    def __str__(self):
+        return f"{self.fee.name} → {self.student}"
+
+    def clean(self):
+        # Ensure the student is enrolled in the same program as the fee
+        from django.core.exceptions import ValidationError
+        program = self.fee.program if self.fee_id else None
+        if program and not Enrollment.objects.filter(student=self.student, program=program).exists():
+            raise ValidationError('Assigned student must be enrolled in the fee’s program.')

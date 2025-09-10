@@ -14,17 +14,14 @@
         <div class="col">
           <div class="card h-100 text-center">
             {% if s.photo %}
-              <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
+              <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
             {% else %}
               <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
                 <span class="text-muted">No Photo</span>
               </div>
             {% endif %}
             <div class="card-body p-2">
-              <div class="small fw-semibold">{{ s.first_name }} {{ s.last_name }}</div>
-              {% if s.preferred_first_name %}
-                <div class="small text-muted">Preferred: {{ s.preferred_first_name }}</div>
-              {% endif %}
+              <div class="small fw-semibold">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</div>
             </div>
             <div class="card-footer bg-white border-0 pb-3 pt-0">
               {% if perms.programs.change_student %}

@@ -28,9 +28,9 @@
             <tr>
               <td>
                 {% if s.photo %}
-                  <img src="{{ s.photo.url }}" alt="{{ s.first_name }} {{ s.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                  <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
                 {% endif %}
-                <span>{{ s.first_name }} {{ s.last_name }}</span>
+                <span>{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</span>
               </td>
               <td>{{ s.school|default:"" }}</td>
               <td>{{ s.grade|default:"" }}</td>

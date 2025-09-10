@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Manage Fee Applicability — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-8 col-xl-6">
+      <h1 class="h4">Manage Fee Applicability</h1>
+      <p class="text-muted">Choose a fee to specify which students it applies to. If you select no students on the next page, the fee will apply to every student in this program.</p>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          {{ form.fee.label_tag }} {{ form.fee }}
+          {% if form.fee.help_text %}<div class="form-text">{{ form.fee.help_text }}</div>{% endif %}
+          {% for e in form.fee.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        <button class="btn btn-primary" type="submit">Continue</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

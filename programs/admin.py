@@ -37,19 +37,19 @@ class SchoolAdmin(admin.ModelAdmin):
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = (
-        'first_name', 'preferred_first_name', 'last_name', 'pronouns', 'grade',
+        'first_name', 'legal_first_name', 'last_name', 'pronouns', 'grade',
         'andrew_id', 'on_discord', 'active', 'updated_at'
     )
     list_filter = ('active', 'on_discord', 'seen_once', 'grade')
     search_fields = (
-        'first_name', 'preferred_first_name', 'last_name', 'pronouns', 'user__username', 'user__email',
+        'first_name', 'legal_first_name', 'last_name', 'pronouns', 'user__username', 'user__email',
         'personal_email', 'andrew_id', 'andrew_email', 'discord_handle', 'school__name', 'city', 'state'
     )
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
         ('Identity', {
             'fields': (
-                'first_name', 'preferred_first_name', 'last_name', 'pronouns', 'date_of_birth',
+                'first_name', 'legal_first_name', 'last_name', 'pronouns', 'date_of_birth',
             )
         }),
         ('Contact', {

@@ -20,9 +20,9 @@
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {% if s.photo %}
-                  <img src="{{ s.photo.url }}" alt="{{ s.first_name }} {{ s.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                  <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
                 {% endif %}
-                {{ s.first_name }} {{ s.last_name }}
+                {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}
               </div>
               <div class="d-flex gap-2">
                 <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
@@ -30,7 +30,7 @@
                   <a class="btn btn-sm btn-outline-primary" href="{% url 'student_edit' s.id %}?next={% url 'program_detail' program.id %}">Edit</a>
                   <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0">
                     {% csrf_token %}
-                    <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ s.first_name }} {{ s.last_name }} from {{ program.name }}?')">Remove</button>
+                    <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }} from {{ program.name }}?')">Remove</button>
                   </form>
                 {% endif %}
               </div>
@@ -72,6 +72,9 @@
 
       <div class="mt-4 d-flex flex-wrap gap-2">
         <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
+        {% if can_manage_fees %}
+          <a class="btn btn-outline-dark" href="{% url 'program_fee_select' program.id %}">Manage Fee Applicability</a>
+        {% endif %}
         {% if can_add_payment %}
           <a class="btn btn-outline-secondary" href="{% url 'program_payment_create' program.id %}">Record a Payment</a>
         {% endif %}

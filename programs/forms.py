@@ -150,3 +150,47 @@ class ProgramEmailForm(forms.Form):
         if self.fields['program'].widget.__class__ is forms.HiddenInput and not prog:
             raise forms.ValidationError('Program is required.')
         return cleaned
+
+
+class ProgramFeeSelectForm(forms.Form):
+    fee = forms.ModelChoiceField(queryset=Fee.objects.none(), required=True, label='Select fee to manage')
+
+    def __init__(self, *args, program: Program, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.program = program
+        self.fields['fee'].queryset = Fee.objects.filter(program=program).order_by('name')
+
+    def clean_fee(self):
+        fee = self.cleaned_data['fee']
+        if fee.program_id != self.program.id:
+            raise forms.ValidationError('Selected fee does not belong to this program.')
+        return fee
+
+
+class FeeAssignmentEditForm(forms.Form):
+    students = forms.ModelMultipleChoiceField(
+        queryset=Student.objects.none(),
+        required=False,
+        help_text='Choose which students this fee applies to. Leave empty to apply to every student in the program.',
+        widget=forms.SelectMultiple(attrs={'size': 15})
+    )
+
+    def __init__(self, *args, program: Program, fee: Fee, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.program = program
+        self.fee = fee
+        # Limit to students enrolled in the program
+        self.fields['students'].queryset = Student.objects.filter(programs=program).order_by('first_name', 'last_name')
+        # Preselect currently assigned students (if any)
+        self.fields['students'].initial = fee.assignments.values_list('student_id', flat=True)
+
+    def save(self):
+        selected_students = list(self.cleaned_data.get('students', []))
+        # Clearing assignments means fee applies to everyone
+        from .models import FeeAssignment
+        # Delete assignments not in selection
+        FeeAssignment.objects.filter(fee=self.fee).exclude(student__in=selected_students).delete()
+        # Ensure assignments exist for selected
+        for s in selected_students:
+            FeeAssignment.objects.get_or_create(fee=self.fee, student=s)
+        return self.fee

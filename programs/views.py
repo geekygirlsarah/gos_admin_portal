@@ -7,6 +7,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, V
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.utils.html import strip_tags
 from django.conf import settings
+from django.db.models.functions import Coalesce, Lower
 
 from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School
 from .forms import (
@@ -19,6 +20,8 @@ from .forms import (
     SchoolForm,
     MentorForm,
     ProgramEmailForm,
+    ProgramFeeSelectForm,
+    FeeAssignmentEditForm,
 )
 
 
@@ -37,12 +40,26 @@ class StudentListView(LoginRequiredMixin, ListView):
     template_name = 'students/list.html'
     context_object_name = 'students'
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
+        return qs.annotate(
+            sort_first=Coalesce('first_name', 'legal_first_name'),
+        ).order_by(Lower('sort_first'), Lower('last_name'))
+
 
 class StudentPhotoListView(LoginRequiredMixin, ListView):
     model = Student
     template_name = 'students/photo_grid.html'
     context_object_name = 'students'
     paginate_by = 48
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
+        return qs.annotate(
+            sort_first=Coalesce('first_name', 'legal_first_name'),
+        ).order_by(Lower('sort_first'), Lower('last_name'))
 
 
 class ParentListView(LoginRequiredMixin, ListView):
@@ -189,6 +206,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
         ctx['can_manage_students'] = can_manage
         ctx['can_add_payment'] = self.request.user.has_perm('programs.add_payment')
         ctx['can_add_sliding_scale'] = self.request.user.has_perm('programs.add_slidingscale')
+        ctx['can_manage_fees'] = self.request.user.has_perm('programs.change_fee')
         if can_manage:
             ctx['add_existing_form'] = AddExistingStudentToProgramForm(program=program)
             ctx['quick_create_form'] = QuickCreateStudentForm()
@@ -366,6 +384,9 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         # Use the editable fee.date when provided; otherwise fall back to created_at
         fees = Fee.objects.filter(program=program)
         for fee in fees:
+            # If this fee has explicit assignments, include only if this student is assigned
+            if fee.assignments.exists() and not fee.assignments.filter(student=student).exists():
+                continue
             fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
             entries.append({
                 'date': fee_date,
@@ -416,3 +437,49 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
             'total_payments': total_payments,
             'balance': balance,
         })
+
+
+class ProgramFeeSelectView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.change_fee'
+    template_name = 'programs/fee_select.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        form = ProgramFeeSelectForm(program=self.program)
+        from django.shortcuts import render
+        return render(request, self.template_name, {'program': self.program, 'form': form})
+
+    def post(self, request, pk):
+        form = ProgramFeeSelectForm(request.POST, program=self.program)
+        if form.is_valid():
+            fee = form.cleaned_data['fee']
+            return redirect('program_fee_assignments', pk=self.program.pk, fee_id=fee.pk)
+        from django.shortcuts import render
+        return render(request, self.template_name, {'program': self.program, 'form': form})
+
+
+class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.change_fee'
+    template_name = 'programs/fee_assignment_form.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        self.fee = get_object_or_404(Fee, pk=kwargs['fee_id'], program=self.program)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk, fee_id):
+        form = FeeAssignmentEditForm(program=self.program, fee=self.fee)
+        from django.shortcuts import render
+        return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
+
+    def post(self, request, pk, fee_id):
+        form = FeeAssignmentEditForm(request.POST, program=self.program, fee=self.fee)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Fee applicability saved.')
+            return redirect('program_fee_assignments', pk=self.program.pk, fee_id=self.fee.pk)
+        from django.shortcuts import render
+        return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
