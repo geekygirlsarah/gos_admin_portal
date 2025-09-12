@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Alumni{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col"><h1 class="h3">Alumni</h1></div>
+  </div>
+  {% if alumni %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>College</th>
+            <th>Employer</th>
+            <th>OK to Contact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in alumni %}
+            <tr>
+              <td>{{ a.student.first_name|default:a.student.legal_first_name }} {{ a.student.last_name }}</td>
+              <td>{{ a.alumni_email|default:a.student.personal_email|default:a.student.andrew_email }}</td>
+              <td>{{ a.phone_number|default:'' }}</td>
+              <td>{{ a.college|default:'' }}</td>
+              <td>{{ a.employer|default:'' }}</td>
+              <td><span class="badge {% if a.ok_to_contact %}bg-success{% else %}bg-secondary{% endif %}">{{ a.ok_to_contact|yesno:"Yes,No" }}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-info">No alumni found.</div>
+  {% endif %}
+{% endblock %}

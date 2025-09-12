@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Preview Conversion — Alumni{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col"><h1 class="h3">Preview: Convert Students to Alumni</h1></div>
+  </div>
+
+  <div class="alert alert-warning">
+    Please review the changes below. No updates have been made yet. When you confirm, Alumni records will be created for students who don't have one, and selected active students will be deactivated.
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-auto"><span class="badge bg-primary">{{ students|length }}</span> selected</div>
+    <div class="col-auto"><span class="badge bg-success">{{ will_create|length }}</span> will create Alumni</div>
+    <div class="col-auto"><span class="badge bg-secondary">{{ already_alumni|length }}</span> already have Alumni</div>
+    <div class="col-auto"><span class="badge bg-warning text-dark">{{ will_deactivate|length }}</span> will be deactivated</div>
+  </div>
+
+  <div class="table-responsive mb-3">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>School</th>
+          <th>Graduation Year</th>
+          <th>Alumni Status</th>
+          <th>Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+          <tr>
+            <td>
+              {% if s.photo %}
+                <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="width:28px;height:28px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+              {% endif %}
+              {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}
+            </td>
+            <td>{{ s.school|default:"" }}</td>
+            <td>{{ s.graduation_year|default:"" }}</td>
+            <td>
+              {% if s in already_alumni %}
+                <span class="badge bg-secondary">Already Alumni</span>
+              {% else %}
+                <span class="badge bg-success">Will Create</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if s in will_deactivate %}
+                <span class="badge bg-warning text-dark">Will Deactivate</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="">
+    {% csrf_token %}
+    <input type="hidden" name="year" value="{{ year }}">
+    {% for id in ids %}
+      <input type="hidden" name="student_ids" value="{{ id }}">
+    {% endfor %}
+    <div class="d-flex justify-content-between">
+      <a class="btn btn-outline-secondary" href="{% url 'student_bulk_convert_select' %}?year={{ year }}">Back</a>
+      <button type="submit" name="action" value="convert" class="btn btn-primary">Confirm and Convert</button>
+    </div>
+  </form>
+{% endblock %}

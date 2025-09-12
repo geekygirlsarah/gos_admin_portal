@@ -48,6 +48,11 @@
         </tbody>
       </table>
     </div>
+    {% if perms.programs.change_student %}
+      <div class="mt-3 d-flex justify-content-end">
+        <a class="btn btn-secondary" href="{% url 'student_bulk_convert_select' %}">Convert Students to Alumni</a>
+      </div>
+    {% endif %}
   {% else %}
     <div class="alert alert-info">No students found.</div>
   {% endif %}

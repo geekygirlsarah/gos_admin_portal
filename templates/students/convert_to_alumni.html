@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Convert Students to Alumni{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col"><h1 class="h3">Convert Students to Alumni</h1></div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form class="row g-2" method="get" action="">
+        <div class="col-auto">
+          <label for="year" class="col-form-label">Graduation Year</label>
+        </div>
+        <div class="col-auto">
+          <input type="number" class="form-control" id="year" name="year" value="{{ year }}" min="1900" max="2200">
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-outline-secondary">Apply</button>
+        </div>
+      </form>
+      <small class="text-muted d-block mt-2">Defaults to the current year (seniors).</small>
+    </div>
+  </div>
+
+  {% if students %}
+    <form method="post" action="">
+      {% csrf_token %}
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead>
+            <tr>
+              <th style="width:36px;"><input type="checkbox" id="selectAll"></th>
+              <th>Name</th>
+              <th>School</th>
+              <th>Graduation Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students %}
+              <tr>
+                <td><input type="checkbox" class="student-checkbox" name="student_ids" value="{{ s.pk }}"></td>
+                <td>
+                  {% if s.photo %}
+                    <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="width:28px;height:28px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                  {% endif %}
+                  {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}
+                </td>
+                <td>{{ s.school|default:"" }}</td>
+                <td>{{ s.graduation_year|default:"" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="text-muted small">Selected students will be deactivated and have Alumni records created (if missing). You can preview the changes before confirming.</div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary" href="{% url 'student_list' %}">Cancel</a>
+          <button type="submit" name="action" value="preview" class="btn btn-primary">Preview Conversion</button>
+        </div>
+      </div>
+    </form>
+  {% else %}
+    <div class="alert alert-info">No active students found with graduation year {{ year }}.</div>
+  {% endif %}
+
+  {% block extra_scripts %}
+    <script>
+      (function(){
+        const selectAll = document.getElementById('selectAll');
+        if (selectAll) {
+          selectAll.addEventListener('change', function(){
+            document.querySelectorAll('.student-checkbox').forEach(cb => { cb.checked = selectAll.checked; });
+          });
+        }
+      })();
+    </script>
+  {% endblock %}
+{% endblock %}

@@ -41,6 +41,11 @@
       {% else %}
         <div class="alert alert-info">No programs yet. <a class="alert-link" href="/programs/new/">Create the first program</a>.</div>
       {% endif %}
+
+      <!-- Bottom button: Dues Owed -->
+      <div class="mt-4 d-flex justify-content-end">
+        <a class="btn btn-outline-dark" href="{% url 'students_dues_owed' %}">Dues Owed</a>
+      </div>
     {% else %}
       <div class="text-center py-5">
         <h1 class="display-6">GoS Admin Portal</h1>

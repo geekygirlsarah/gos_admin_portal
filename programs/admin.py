@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale
+from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni
 
 
 @admin.register(Program)
@@ -79,6 +79,40 @@ class StudentAdmin(admin.ModelAdmin):
         }),
     )
     inlines = [EnrollmentInline]
+
+    actions = ['convert_to_alumni', 'remove_alumni_record']
+
+    def convert_to_alumni(self, request, queryset):
+        """Create Alumni records for selected students if missing, and deactivate them."""
+        from django.utils import timezone
+        from .models import Alumni
+        created = 0
+        updated = 0
+        for student in queryset:
+            alumni, was_created = Alumni.objects.get_or_create(student=student)
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+            # Deactivate student as part of conversion convention
+            if student.active:
+                student.active = False
+                student.save(update_fields=['active', 'updated_at'])
+        self.message_user(request, f"Alumni created: {created}, existing left unchanged: {updated}. Selected students deactivated.")
+    convert_to_alumni.short_description = "Convert to Alumni (create Alumni record and deactivate)"
+
+    def remove_alumni_record(self, request, queryset):
+        """Delete Alumni records for selected students (undo), without changing Student.active."""
+        from .models import Alumni
+        removed = 0
+        for student in queryset:
+            try:
+                student.alumni_profile.delete()
+                removed += 1
+            except Alumni.DoesNotExist:
+                pass
+        self.message_user(request, f"Alumni records removed: {removed}.")
+    remove_alumni_record.short_description = "Remove Alumni record (undo)"
 
 
 @admin.register(Parent)
@@ -162,4 +196,17 @@ class SlidingScaleAdmin(admin.ModelAdmin):
     list_filter = ('program', 'is_pending')
     search_fields = ('student__first_name', 'student__last_name', 'program__name')
     autocomplete_fields = ('student', 'program')
+
+
+@admin.register(Alumni)
+class AlumniAdmin(admin.ModelAdmin):
+    list_display = (
+        'student', 'alumni_email', 'phone_number', 'college', 'field_of_study', 'employer', 'job_title', 'ok_to_contact', 'updated_at'
+    )
+    list_filter = ('ok_to_contact',)
+    search_fields = (
+        'student__first_name', 'student__last_name', 'alumni_email', 'college', 'employer', 'job_title'
+    )
+    autocomplete_fields = ('student',)
+    readonly_fields = ('created_at', 'updated_at')
 

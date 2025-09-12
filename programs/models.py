@@ -325,3 +325,33 @@ class FeeAssignment(models.Model):
         program = self.fee.program if self.fee_id else None
         if program and not Enrollment.objects.filter(student=self.student, program=program).exists():
             raise ValidationError('Assigned student must be enrolled in the fee’s program.')
+
+
+class Alumni(models.Model):
+    """Alumni profile linked to a Student, storing post-graduation details."""
+    student = models.OneToOneField('Student', on_delete=models.CASCADE, related_name='alumni_profile')
+
+    # Contact after graduation
+    alumni_email = models.EmailField(blank=True, null=True, help_text='Preferred contact email after graduation')
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+
+    # Optional post-grad info
+    college = models.CharField(max_length=200, blank=True, null=True)
+    field_of_study = models.CharField(max_length=200, blank=True, null=True)
+    employer = models.CharField(max_length=200, blank=True, null=True)
+    job_title = models.CharField(max_length=200, blank=True, null=True)
+
+    # Consent/preferences
+    ok_to_contact = models.BooleanField(default=True, help_text='Alumni consents to be contacted about news/opportunities')
+
+    notes = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['student__last_name', 'student__first_name']
+        verbose_name_plural = 'Alumni'
+
+    def __str__(self):
+        return f"Alumni: {self.student}" 

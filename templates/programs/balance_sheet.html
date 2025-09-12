@@ -9,7 +9,10 @@
   </div>
   <div class="row">
     <div class="col-lg-10 col-xl-8">
-      <h1 class="h4">Balance Sheet</h1>
+      <div class="d-flex justify-content-between align-items-center">
+        <h1 class="h4 mb-0">Balance Sheet</h1>
+        <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="{% url 'program_student_receipt' program.id student.id %}">Printable Receipt</a>
+      </div>
       <p class="mb-1"><span class="fw-semibold">Program:</span> {{ program.name }}</p>
       <p class="mb-3"><span class="fw-semibold">Student:</span> {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</p>
 

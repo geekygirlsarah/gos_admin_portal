@@ -9,7 +9,7 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -149,6 +149,102 @@ class MentorListView(LoginRequiredMixin, ListView):
     model = Mentor
     template_name = 'mentors/list.html'
     context_object_name = 'mentors'
+
+
+class AlumniListView(LoginRequiredMixin, ListView):
+    model = Alumni
+    template_name = 'alumni/list.html'
+    context_object_name = 'alumni'
+
+    def get_queryset(self):
+        # Include related student to avoid N+1 and sort by student name
+        return Alumni.objects.select_related('student').order_by('student__last_name', 'student__first_name')
+
+
+class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.change_student'
+
+    def post(self, request, pk):
+        from django.contrib import messages
+        from django.shortcuts import redirect, get_object_or_404
+        student = get_object_or_404(Student, pk=pk)
+        alumni, created = Alumni.objects.get_or_create(student=student)
+        # Deactivate student as part of conversion convention
+        if student.active:
+            student.active = False
+            student.save(update_fields=['active', 'updated_at'])
+        if created:
+            messages.success(request, f"Converted {student} to Alumni and deactivated the student.")
+        else:
+            messages.info(request, f"{student} already has an Alumni record. Student has been deactivated.")
+        # Redirect back to list or provided next
+        next_url = request.GET.get('next') or request.POST.get('next')
+        return redirect(next_url or 'student_list')
+
+
+class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.change_student'
+    template_name = 'students/convert_to_alumni.html'
+
+    def get(self, request):
+        from django.utils import timezone
+        from django.shortcuts import render
+        year = request.GET.get('year')
+        try:
+            year = int(year) if year else timezone.now().year
+        except ValueError:
+            year = timezone.now().year
+        # Default to seniors: graduation_year equals the selected year, and active
+        students = Student.objects.filter(graduation_year=year, active=True).order_by('last_name', 'first_name')
+        return render(request, self.template_name, {
+            'year': year,
+            'students': students,
+        })
+
+    def post(self, request):
+        from django.shortcuts import redirect, render
+        action = request.POST.get('action', 'convert')
+        ids = request.POST.getlist('student_ids')
+        year = request.POST.get('year')
+        if not ids:
+            messages.info(request, 'No students selected.')
+            if year:
+                return redirect(f"{reverse('student_bulk_convert_select')}?year={year}")
+            return redirect('student_bulk_convert_select')
+
+        qs = Student.objects.filter(pk__in=ids).order_by('last_name', 'first_name')
+
+        if action == 'preview':
+            # Build preview info without writing changes
+            existing_alumni_ids = set(Alumni.objects.filter(student_id__in=ids).values_list('student_id', flat=True))
+            will_create = [s for s in qs if s.pk not in existing_alumni_ids]
+            already_alumni = [s for s in qs if s.pk in existing_alumni_ids]
+            will_deactivate = [s for s in qs if s.active]
+            return render(request, 'students/convert_to_alumni_preview.html', {
+                'year': year,
+                'students': qs,
+                'will_create': will_create,
+                'already_alumni': already_alumni,
+                'will_deactivate': will_deactivate,
+                'ids': ids,
+            })
+
+        # Default: perform conversion
+        created = 0
+        existed = 0
+        deactivated = 0
+        for student in qs:
+            alumni, was_created = Alumni.objects.get_or_create(student=student)
+            if was_created:
+                created += 1
+            else:
+                existed += 1
+            if student.active:
+                student.active = False
+                student.save(update_fields=['active', 'updated_at'])
+                deactivated += 1
+        messages.success(request, f"Converted {created} new alumni, {existed} already existed. Deactivated {deactivated} student(s).")
+        return redirect('alumni_list')
 
 
 class ImportDashboardView(LoginRequiredMixin, View):
@@ -761,6 +857,67 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         })
 
 
+class ProgramStudentReceiptView(LoginRequiredMixin, View):
+    def get(self, request, pk, student_id):
+        program = get_object_or_404(Program, pk=pk)
+        student = get_object_or_404(Student, pk=student_id)
+        # Ensure enrollment
+        if not Enrollment.objects.filter(student=student, program=program).exists():
+            messages.error(request, f"{student} is not enrolled in {program}.")
+            return redirect('program_detail', pk=program.pk)
+
+        # Gather entries similar to balance sheet
+        entries = []
+        fees = Fee.objects.filter(program=program)
+        for fee in fees:
+            if fee.assignments.exists() and not fee.assignments.filter(student=student).exists():
+                continue
+            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            entries.append({
+                'date': fee_date,
+                'type': 'Fee',
+                'name': fee.name,
+                'amount': fee.amount,
+            })
+        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+        from decimal import Decimal
+        total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
+        if sliding and sliding.percent is not None:
+            discount = (total_fees_for_discount * sliding.percent / Decimal('100'))
+            entries.append({
+                'date': sliding.created_at.date(),
+                'type': 'Sliding Scale',
+                'name': f"Sliding scale ({sliding.percent}%)",
+                'amount': -discount,
+            })
+        payments = Payment.objects.filter(student=student, fee__program=program)
+        for p in payments:
+            entries.append({
+                'date': p.paid_at,
+                'type': 'Payment',
+                'name': f"Payment for {p.fee.name}",
+                'amount': -p.amount,
+            })
+
+        entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))
+
+        total_fees = sum([e['amount'] for e in entries if e['type'] == 'Fee'])
+        total_sliding = -sum([e['amount'] for e in entries if e['type'] == 'Sliding Scale'])
+        total_payments = -sum([e['amount'] for e in entries if e['type'] == 'Payment'])
+        balance = total_fees - total_sliding - total_payments
+
+        from django.shortcuts import render
+        return render(request, 'programs/receipt.html', {
+            'program': program,
+            'student': student,
+            'entries': entries,
+            'total_fees': total_fees,
+            'total_sliding': total_sliding,
+            'total_payments': total_payments,
+            'balance': balance,
+        })
+
+
 class ProgramFeeSelectView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'programs.change_fee'
     template_name = 'programs/fee_select.html'
@@ -805,3 +962,61 @@ class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, 
             return redirect('program_fee_assignments', pk=self.program.pk, fee_id=self.fee.pk)
         from django.shortcuts import render
         return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
+
+
+class StudentsDuesOwedView(LoginRequiredMixin, View):
+    """
+    Lists all students and the total amount they currently owe across all programs,
+    using the exact same balance computation as the per-program balance sheet.
+    """
+    template_name = 'students/dues_owed.html'
+
+    def _program_balance_for_student(self, student, program):
+        # Reproduce ProgramStudentBalanceView totals for a given student+program
+        from decimal import Decimal
+        # Fees applicable to the student (respect fee assignments)
+        applicable_fees = []
+        for fee in Fee.objects.filter(program=program):
+            if fee.assignments.exists() and not fee.assignments.filter(student=student).exists():
+                continue
+            applicable_fees.append(fee.amount)
+        total_fees = sum(applicable_fees, start=Decimal('0'))
+
+        # Sliding scale percent discount based on total program fees (per balance sheet logic)
+        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+        total_fees_for_discount = sum([f.amount for f in Fee.objects.filter(program=program)], start=Decimal('0'))
+        total_sliding = Decimal('0')
+        if sliding and sliding.percent is not None:
+            total_sliding = (total_fees_for_discount * sliding.percent / Decimal('100'))
+
+        # Payments made by student for fees in this program
+        total_payments = sum([p.amount for p in Payment.objects.filter(student=student, fee__program=program)], start=Decimal('0'))
+
+        balance = total_fees - total_sliding - total_payments
+        return balance
+
+    def get(self, request):
+        from django.shortcuts import render
+        # All students (active first); include inactive too per requirement "every Student"
+        students = Student.objects.all().select_related('school').order_by(Lower('first_name'), Lower('last_name'))
+
+        rows = []
+        grand_total = 0
+        for s in students:
+            # Sum across all programs the student is enrolled in
+            balance_sum = 0
+            for prog in Program.objects.filter(enrollment__student=s).distinct():
+                balance_sum += self._program_balance_for_student(s, prog)
+            rows.append({
+                'student': s,
+                'amount_owed': balance_sum,
+            })
+            grand_total += balance_sum
+
+        # Sort by amount owed descending
+        rows.sort(key=lambda r: r['amount_owed'], reverse=True)
+
+        return render(request, self.template_name, {
+            'rows': rows,
+            'grand_total': grand_total,
+        })

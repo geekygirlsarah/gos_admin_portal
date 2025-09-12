@@ -16,6 +16,9 @@ from .views import (
     ImportDashboardView,
     StudentImportView, ParentImportView, MentorImportView,
     StudentEmergencyContactsView, StudentsByGradeView, StudentsBySchoolView,
+    AlumniListView, StudentConvertToAlumniView, StudentBulkConvertToAlumniView,
+    ProgramStudentReceiptView,
+    StudentsDuesOwedView,
 )
 
 urlpatterns = [
@@ -32,13 +35,16 @@ urlpatterns = [
     path('students/emergency-contacts/', login_required(StudentEmergencyContactsView.as_view()), name='student_emergency_contacts'),
     path('students/by-grade/', login_required(StudentsByGradeView.as_view()), name='students_by_grade'),
     path('students/by-school/', login_required(StudentsBySchoolView.as_view()), name='students_by_school'),
+    path('students/dues/', login_required(StudentsDuesOwedView.as_view()), name='students_dues_owed'),
     path('students/import/', permission_required('programs.add_student')(StudentImportView.as_view()), name='student_import'),
     path('students/photos/', login_required(StudentPhotoListView.as_view()), name='student_photos'),
     path('students/new/', permission_required('programs.add_student')(StudentCreateView.as_view()), name='student_create'),
+    path('students/convert-to-alumni/', permission_required('programs.change_student')(StudentBulkConvertToAlumniView.as_view()), name='student_bulk_convert_select'),
     path('students/<int:pk>/', login_required(StudentDetailView.as_view()), name='student_detail'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
     path('parents/import/', permission_required('programs.add_parent')(ParentImportView.as_view()), name='parent_import'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
+    path('alumni/', login_required(AlumniListView.as_view()), name='alumni_list'),
     path('mentors/import/', permission_required('programs.add_mentor')(MentorImportView.as_view()), name='mentor_import'),
     path('mentors/new/', permission_required('programs.add_mentor')(MentorCreateView.as_view()), name='mentor_create'),
     path('mentors/<int:pk>/edit/', permission_required('programs.change_mentor')(MentorUpdateView.as_view()), name='mentor_edit'),
@@ -49,6 +55,7 @@ urlpatterns = [
     path('<int:pk>/students/quick-create/', permission_required('programs.add_student')(ProgramStudentQuickCreateView.as_view()), name='program_student_quick_create'),
     path('<int:pk>/students/<int:student_id>/remove/', permission_required('programs.change_student')(ProgramStudentRemoveView.as_view()), name='program_student_remove'),
     path('<int:pk>/students/<int:student_id>/balance/', login_required(ProgramStudentBalanceView.as_view()), name='program_student_balance'),
+    path('<int:pk>/students/<int:student_id>/receipt/', login_required(ProgramStudentReceiptView.as_view()), name='program_student_receipt'),
 
     # Payments
     path('<int:pk>/payments/new/', permission_required('programs.add_payment')(ProgramPaymentCreateView.as_view()), name='program_payment_create'),
@@ -62,6 +69,7 @@ urlpatterns = [
 
     # Student edit
     path('students/<int:pk>/edit/', permission_required('programs.change_student')(StudentUpdateView.as_view()), name='student_edit'),
+    path('students/<int:pk>/convert-to-alumni/', permission_required('programs.change_student')(StudentConvertToAlumniView.as_view()), name='student_convert_to_alumni'),
 
     # Parent add/edit
     path('parents/new/', permission_required('programs.add_parent')(ParentCreateView.as_view()), name='parent_create'),
