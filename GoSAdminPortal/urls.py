@@ -20,11 +20,16 @@ from django.views.generic import RedirectView
 from django.urls import reverse_lazy
 from django.conf import settings
 from django.conf.urls.static import static
+from programs.views import ApplyProgramSelectView, ApplyStudentView, ApplyThanksView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('programs/', include('programs.urls')),
+    # Public application flow
+    path('apply/', ApplyProgramSelectView.as_view(), name='apply_start'),
+    path('apply/<int:program_id>/', ApplyStudentView.as_view(), name='apply_program'),
+    path('apply/thanks/', ApplyThanksView.as_view(), name='apply_thanks'),
     # Root redirects to the programs list (home)
     path('', RedirectView.as_view(url=reverse_lazy('program_list'), permanent=False), name='home'),
 ]

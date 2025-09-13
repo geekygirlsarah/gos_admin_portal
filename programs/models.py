@@ -39,6 +39,8 @@ class Program(models.Model):
         validators=[MinValueValidator(1900), MaxValueValidator(2200)],
         help_text="Calendar year the program runs (e.g., 2025).",
     )
+    start_date = models.DateField(null=True, blank=True, db_index=True, help_text="Program start date")
+    end_date = models.DateField(null=True, blank=True, db_index=True, help_text="Program end date")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -354,4 +356,95 @@ class Alumni(models.Model):
         verbose_name_plural = 'Alumni'
 
     def __str__(self):
-        return f"Alumni: {self.student}" 
+        return f"Alumni: {self.student}"
+
+
+class StudentApplication(models.Model):
+    """Public application submitted by a prospective student to a Program."""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    ]
+
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name='applications')
+
+    # Mirror key Student fields (omit internal/user/parents/media)
+    legal_first_name = models.CharField(max_length=150)
+    first_name = models.CharField(max_length=150, blank=True, null=True)
+    last_name = models.CharField(max_length=150)
+    pronouns = models.CharField(max_length=50, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+
+    address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
+
+    cell_phone_number = models.CharField(max_length=30, blank=True, null=True)
+    personal_email = models.EmailField(blank=True, null=True)
+
+    andrew_id = models.CharField(max_length=50, blank=True, null=True)
+    andrew_email = models.EmailField(blank=True, null=True)
+
+    school = models.ForeignKey('School', on_delete=models.SET_NULL, null=True, blank=True, related_name='applications')
+    graduation_year = models.PositiveSmallIntegerField(blank=True, null=True)
+
+    race_ethnicity = models.CharField(max_length=100, blank=True, null=True)
+    tshirt_size = models.CharField(max_length=10, blank=True, null=True)
+
+    on_discord = models.BooleanField(default=False)
+    discord_handle = models.CharField(max_length=100, blank=True, null=True)
+
+    # Simple parent/guardian contact captured as text for application
+    parent_name = models.CharField(max_length=200, blank=True, null=True)
+    parent_email = models.EmailField(blank=True, null=True)
+    parent_phone = models.CharField(max_length=30, blank=True, null=True)
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', db_index=True)
+    notes = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Application: {self.first_name or self.legal_first_name} {self.last_name} → {self.program} ({self.status})"
+
+    def approve(self) -> Student:
+        """Create (or find) a Student from this application and enroll them in the program."""
+        # Try to find existing student by name and email
+        student = None
+        if self.personal_email:
+            student = Student.objects.filter(personal_email__iexact=self.personal_email).first()
+        if not student:
+            student = Student.objects.create(
+                legal_first_name=self.legal_first_name,
+                first_name=self.first_name,
+                last_name=self.last_name,
+                pronouns=self.pronouns,
+                date_of_birth=self.date_of_birth,
+                address=self.address,
+                city=self.city,
+                state=self.state,
+                zip_code=self.zip_code,
+                cell_phone_number=self.cell_phone_number,
+                personal_email=self.personal_email,
+                andrew_id=self.andrew_id,
+                andrew_email=self.andrew_email,
+                school=self.school,
+                graduation_year=self.graduation_year,
+                race_ethnicity=self.race_ethnicity,
+                tshirt_size=self.tshirt_size,
+                on_discord=self.on_discord,
+                discord_handle=self.discord_handle,
+            )
+        # Enroll in program
+        Enrollment.objects.get_or_create(student=student, program=self.program)
+        # Update status
+        if self.status != 'accepted':
+            self.status = 'accepted'
+            self.save(update_fields=['status', 'updated_at'])
+        return student

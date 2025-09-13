@@ -9,7 +9,7 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -22,6 +22,8 @@ from .forms import (
     ProgramEmailForm,
     ProgramFeeSelectForm,
     FeeAssignmentEditForm,
+    ProgramApplySelectForm,
+    StudentApplicationForm,
 )
 
 
@@ -31,8 +33,42 @@ class ProgramListView(ListView):
     context_object_name = 'programs'
 
     def get_queryset(self):
-        from django.db.models import F
-        return Program.objects.all().order_by(F('year').desc(nulls_last=True), 'name')
+        # Keep a base queryset; ordering will be handled in context via grouping
+        return Program.objects.all()
+
+    def get_context_data(self, **kwargs):
+        from django.utils import timezone
+        from operator import attrgetter
+        ctx = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        programs = list(ctx['programs'])
+
+        def status(prog):
+            sd = prog.start_date
+            ed = prog.end_date
+            if sd and sd > today:
+                return 'future'
+            if ed and ed < today:
+                return 'past'
+            # If only start or only end or none: treat as current if not clearly future/past
+            return 'current'
+
+        def sort_key(prog):
+            # Sort by start_date (None last), then by name
+            sd = prog.start_date
+            # Use a tuple where None sorts after real dates
+            return (sd is None, sd or today, prog.name or '')
+
+        future = sorted([p for p in programs if status(p) == 'future'], key=sort_key)
+        current = sorted([p for p in programs if status(p) == 'current'], key=sort_key)
+        past = sorted([p for p in programs if status(p) == 'past'], key=sort_key)
+
+        ctx.update({
+            'future_programs': future,
+            'current_programs': current,
+            'past_programs': past,
+        })
+        return ctx
 
 
 class StudentListView(LoginRequiredMixin, ListView):
@@ -627,7 +663,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
 
 class ProgramCreateView(CreateView):
     model = Program
-    fields = ['name', 'description', 'year', 'active']
+    fields = ['name', 'description', 'year', 'start_date', 'end_date', 'active']
     template_name = 'programs/form.html'
 
     def get_success_url(self):
@@ -964,12 +1000,110 @@ class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, 
         return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
 
 
-class StudentsDuesOwedView(LoginRequiredMixin, View):
+class ApplyProgramSelectView(View):
+    template_name = 'apply/select_program.html'
+
+    def get(self, request):
+        from django.shortcuts import render
+        from django.utils import timezone
+        # Show active programs grouped by timing (future/current/past)
+        today = timezone.localdate()
+        programs = list(Program.objects.filter(active=True))
+
+        def status(prog):
+            sd = prog.start_date
+            ed = prog.end_date
+            if sd and sd > today:
+                return 'future'
+            if ed and ed < today:
+                return 'past'
+            # If only start or only end or none: treat as current if not clearly future/past
+            return 'current'
+
+        def sort_key(prog):
+            sd = prog.start_date
+            return (sd is None, sd or today, prog.name or '')
+
+        future_programs = sorted([p for p in programs if status(p) == 'future'], key=sort_key)
+        current_programs = sorted([p for p in programs if status(p) == 'current'], key=sort_key)
+        past_programs = sorted([p for p in programs if status(p) == 'past'], key=sort_key)
+        # Keep form in context for possible fallback
+        form = ProgramApplySelectForm()
+        return render(request, self.template_name, {
+            'form': form,
+            'future_programs': future_programs,
+            'current_programs': current_programs,
+            'past_programs': past_programs,
+        })
+
+    def post(self, request):
+        from django.shortcuts import redirect, render
+        form = ProgramApplySelectForm(request.POST)
+        if form.is_valid():
+            program = form.cleaned_data['program']
+            return redirect('apply_program', program_id=program.pk)
+        return render(request, self.template_name, {'form': form})
+
+
+class ApplyStudentView(View):
+    template_name = 'apply/form.html'
+
+    def _program_status(self, program):
+        from django.utils import timezone
+        today = timezone.localdate()
+        sd = program.start_date
+        ed = program.end_date
+        if sd and sd > today:
+            return 'future'
+        if ed and ed < today:
+            return 'past'
+        return 'current'
+
+    def get(self, request, program_id):
+        from django.shortcuts import render, get_object_or_404, redirect
+        program = get_object_or_404(Program, pk=program_id)
+        status = self._program_status(program)
+        if status != 'future':
+            if status == 'current':
+                messages.info(request, 'Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.')
+            else:
+                messages.error(request, 'Applications are closed for this program.')
+            return redirect('apply_start')
+        form = StudentApplicationForm(initial={'program': program})
+        return render(request, self.template_name, {'form': form, 'program': program})
+
+    def post(self, request, program_id):
+        from django.shortcuts import render, get_object_or_404, redirect
+        program = get_object_or_404(Program, pk=program_id)
+        status = self._program_status(program)
+        if status != 'future':
+            if status == 'current':
+                messages.info(request, 'Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.')
+            else:
+                messages.error(request, 'Applications are closed for this program.')
+            return redirect('apply_start')
+        form = StudentApplicationForm(request.POST)
+        if form.is_valid():
+            app = form.save()
+            messages.success(request, 'Application submitted! We will be in touch soon.')
+            return redirect('apply_thanks')
+        return render(request, self.template_name, {'form': form, 'program': program})
+
+
+class ApplyThanksView(View):
+    template_name = 'apply/thanks.html'
+
+    def get(self, request):
+        from django.shortcuts import render
+        return render(request, self.template_name)
+
+
+class ProgramDuesOwedView(LoginRequiredMixin, View):
     """
-    Lists all students and the total amount they currently owe across all programs,
-    using the exact same balance computation as the per-program balance sheet.
+    Lists all students enrolled in a specific program and the total amount each currently owes
+    for that program, using the same balance computation as the per-program balance sheet.
     """
-    template_name = 'students/dues_owed.html'
+    template_name = 'programs/dues_owed.html'
 
     def _program_balance_for_student(self, student, program):
         # Reproduce ProgramStudentBalanceView totals for a given student+program
@@ -995,28 +1129,29 @@ class StudentsDuesOwedView(LoginRequiredMixin, View):
         balance = total_fees - total_sliding - total_payments
         return balance
 
-    def get(self, request):
+    def get(self, request, pk):
         from django.shortcuts import render
-        # All students (active first); include inactive too per requirement "every Student"
-        students = Student.objects.all().select_related('school').order_by(Lower('first_name'), Lower('last_name'))
+        program = get_object_or_404(Program, pk=pk)
+        # Only students enrolled in this program
+        students = (
+            Student.objects.filter(enrollment__program=program)
+            .select_related('school')
+            .order_by(Lower(Coalesce('first_name', 'legal_first_name')), Lower('last_name'))
+        )
 
         rows = []
         grand_total = 0
         for s in students:
-            # Sum across all programs the student is enrolled in
-            balance_sum = 0
-            for prog in Program.objects.filter(enrollment__student=s).distinct():
-                balance_sum += self._program_balance_for_student(s, prog)
+            balance_sum = self._program_balance_for_student(s, program)
             rows.append({
                 'student': s,
                 'amount_owed': balance_sum,
             })
             grand_total += balance_sum
 
-        # Sort by amount owed descending
-        rows.sort(key=lambda r: r['amount_owed'], reverse=True)
 
         return render(request, self.template_name, {
+            'program': program,
             'rows': rows,
             'grand_total': grand_total,
         })

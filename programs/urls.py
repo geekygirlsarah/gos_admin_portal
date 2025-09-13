@@ -18,7 +18,7 @@ from .views import (
     StudentEmergencyContactsView, StudentsByGradeView, StudentsBySchoolView,
     AlumniListView, StudentConvertToAlumniView, StudentBulkConvertToAlumniView,
     ProgramStudentReceiptView,
-    StudentsDuesOwedView,
+    ProgramDuesOwedView,
 )
 
 urlpatterns = [
@@ -28,6 +28,7 @@ urlpatterns = [
     path('<int:pk>/', login_required(ProgramDetailView.as_view()), name='program_detail'),
     path('messaging/', login_required(ProgramEmailView.as_view()), name='program_messaging'),
     path('<int:pk>/email/', login_required(ProgramEmailView.as_view()), name='program_email'),
+    path('<int:pk>/dues/', login_required(ProgramDuesOwedView.as_view()), name='program_dues_owed'),
 
     # List pages
     path('imports/', login_required(ImportDashboardView.as_view()), name='import_dashboard'),
@@ -35,7 +36,6 @@ urlpatterns = [
     path('students/emergency-contacts/', login_required(StudentEmergencyContactsView.as_view()), name='student_emergency_contacts'),
     path('students/by-grade/', login_required(StudentsByGradeView.as_view()), name='students_by_grade'),
     path('students/by-school/', login_required(StudentsBySchoolView.as_view()), name='students_by_school'),
-    path('students/dues/', login_required(StudentsDuesOwedView.as_view()), name='students_dues_owed'),
     path('students/import/', permission_required('programs.add_student')(StudentImportView.as_view()), name='student_import'),
     path('students/photos/', login_required(StudentPhotoListView.as_view()), name='student_photos'),
     path('students/new/', permission_required('programs.add_student')(StudentCreateView.as_view()), name='student_create'),
