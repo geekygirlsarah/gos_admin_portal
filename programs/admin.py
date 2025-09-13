@@ -1,12 +1,12 @@
 from django.contrib import admin
-from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni
+from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication
 
 
 @admin.register(Program)
 class ProgramAdmin(admin.ModelAdmin):
-    list_display = ('name', 'year', 'active', 'updated_at')
+    list_display = ('name', 'year', 'start_date', 'end_date', 'active', 'updated_at')
     search_fields = ('name',)
-    list_filter = ('active', 'year')
+    list_filter = ('active', 'year', 'start_date', 'end_date')
 
 
 @admin.register(Fee)
@@ -196,6 +196,30 @@ class SlidingScaleAdmin(admin.ModelAdmin):
     list_filter = ('program', 'is_pending')
     search_fields = ('student__first_name', 'student__last_name', 'program__name')
     autocomplete_fields = ('student', 'program')
+
+
+@admin.register(StudentApplication)
+class StudentApplicationAdmin(admin.ModelAdmin):
+    list_display = ('last_name', 'first_name', 'program', 'personal_email', 'status', 'created_at')
+    list_filter = ('program', 'status')
+    search_fields = ('first_name', 'legal_first_name', 'last_name', 'personal_email', 'andrew_email')
+    readonly_fields = ('created_at', 'updated_at')
+    actions = ['approve_applications', 'mark_rejected']
+
+    def approve_applications(self, request, queryset):
+        created = 0
+        enrolled = 0
+        for app in queryset:
+            student = app.approve()
+            if student:
+                enrolled += 1
+        self.message_user(request, f"Approved {queryset.count()} application(s). Enrolled {enrolled} student(s).")
+    approve_applications.short_description = "Approve selected applications (create Student and enroll)"
+
+    def mark_rejected(self, request, queryset):
+        updated = queryset.update(status='rejected')
+        self.message_user(request, f"Marked {updated} application(s) as rejected.")
+    mark_rejected.short_description = "Mark selected applications as rejected"
 
 
 @admin.register(Alumni)

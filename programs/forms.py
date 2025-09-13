@@ -1,6 +1,6 @@
 from django import forms
 from django.utils.safestring import mark_safe
-from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School, Mentor
+from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School, Mentor, StudentApplication
 
 
 class StudentForm(forms.ModelForm):
@@ -243,3 +243,82 @@ class FeeAssignmentEditForm(forms.Form):
         for s in selected_students:
             FeeAssignment.objects.get_or_create(fee=self.fee, student=s)
         return self.fee
+
+
+class ProgramApplySelectForm(forms.Form):
+    program = forms.ModelChoiceField(queryset=Program.objects.all(), required=True, label='Select a program')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['program'].queryset = Program.objects.filter(active=True).order_by('name')
+
+
+class StudentApplicationForm(forms.ModelForm):
+    # grade selector to compute graduation_year like StudentForm
+    GRADE_CHOICES = [(0, 'K')] + [(i, str(i)) for i in range(1, 13)]
+    grade_selector = forms.ChoiceField(
+        choices=[('', '—')] + [(str(v), label) for v, label in GRADE_CHOICES],
+        required=False,
+        label='Grade (K–12)'
+    )
+
+    class Meta:
+        model = StudentApplication
+        fields = [
+            'program',
+            'legal_first_name', 'first_name', 'last_name', 'pronouns', 'date_of_birth',
+            'address', 'city', 'state', 'zip_code',
+            'cell_phone_number', 'personal_email',
+            'andrew_id', 'andrew_email',
+            'school', 'graduation_year',
+            'race_ethnicity', 'tshirt_size',
+            'on_discord', 'discord_handle',
+            'parent_name', 'parent_email', 'parent_phone',
+        ]
+        widgets = {
+            'program': forms.HiddenInput(),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Prefill grade_selector from grad year
+        gy = self.instance.graduation_year if getattr(self, 'instance', None) else None
+        if gy:
+            import datetime
+            today = datetime.date.today()
+            end_year = today.year + (1 if today.month >= 7 else 0)
+            years_remaining = gy - end_year
+            if years_remaining == 13:
+                grade_str = '0'
+            else:
+                grade = 12 - years_remaining
+                grade_str = str(grade) if 0 <= grade <= 12 else ''
+            if grade_str:
+                self.fields['grade_selector'].initial = grade_str
+        if 'graduation_year' in self.fields:
+            self.fields['graduation_year'].help_text = 'Auto-calculated from Grade, but you may override if needed.'
+
+    def clean(self):
+        cleaned = super().clean()
+        # Basic validation to ensure contact info present
+        if not cleaned.get('personal_email') and not cleaned.get('cell_phone_number'):
+            raise forms.ValidationError('Please provide at least an email or a phone number.')
+        return cleaned
+
+    def save(self, commit=True):
+        grade_val = self.cleaned_data.get('grade_selector') if hasattr(self, 'cleaned_data') else None
+        if grade_val not in (None, '', 'None'):
+            try:
+                g = int(grade_val)
+            except (TypeError, ValueError):
+                g = None
+            if g is not None and 0 <= g <= 12:
+                import datetime
+                today = datetime.date.today()
+                end_year = today.year + (1 if today.month >= 7 else 0)
+                grad_year = end_year + (13 if g == 0 else max(0, 12 - g))
+                self.cleaned_data['graduation_year'] = grad_year
+                if 'graduation_year' in self.fields:
+                    self.instance.graduation_year = grad_year
+        return super().save(commit=commit)

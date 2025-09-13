@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Dues Owed — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+
+{% block content %}
+  <div class="row mb-3 align-items-center">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    </div>
+  </div>
+
+  <div class="row mb-3 align-items-center">
+    <div class="col"><h1 class="h3 mb-0">Dues Owed — {{ program.name }}</h1></div>
+  </div>
+
+  {% if rows %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>School</th>
+            <th class="text-end">Amount Owed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>
+                {% if r.student.photo %}
+                  <img src="{{ r.student.photo.url }}" alt="{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                {% endif %}
+                <a class="text-decoration-none" href="{% url 'program_student_balance' program.id r.student.pk %}">{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}</a>
+              </td>
+              <td>{{ r.student.school|default:'' }}</td>
+              <td class="text-end">${{ r.amount_owed|floatformat:2 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="2" class="text-end">Total Owed</th>
+            <th class="text-end">${{ grand_total|floatformat:2 }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-info">No enrolled students found for this program.</div>
+  {% endif %}
+{% endblock %}

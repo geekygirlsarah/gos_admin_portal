@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Apply – Select Program{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h1>Apply to a Program</h1>
+  <p>Please choose a future program to apply to. For programs that are currently running, please contact us at <a href="mailto:info@girlsofsteelrobotics.org">info@girlsofsteelrobotics.org</a>.</p>
+
+  {% if future_programs %}
+    <h2 class="h5 mt-3">Upcoming Programs (Accepting Applications)</h2>
+    <div class="list-group mb-4">
+      {% for program in future_programs %}
+        <a class="list-group-item list-group-item-action" href="{% url 'apply_program' program.id %}">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">{{ program.name }}</h5>
+            {% if program.year %}
+              <small class="text-muted">{{ program.year }}</small>
+            {% endif %}
+          </div>
+          {% if program.description %}
+            <p class="mb-1">{{ program.description }}</p>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if current_programs %}
+    <h2 class="h5 mt-3">Current Programs (Applications Closed)</h2>
+    <div class="list-group mb-4">
+      {% for program in current_programs %}
+        <div class="list-group-item">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">{{ program.name }}</h5>
+            {% if program.year %}
+              <small class="text-muted">{{ program.year }}</small>
+            {% endif %}
+          </div>
+          {% if program.description %}
+            <p class="mb-1">{{ program.description }}</p>
+          {% endif %}
+          <small class="text-muted">Applications are closed. For current programs, please contact <a href="mailto:info@girlsofsteelrobotics.org">info@girlsofsteelrobotics.org</a>.</small>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not future_programs and not current_programs %}
+    <div class="alert alert-info mt-3">No active programs are currently accepting applications.</div>
+  {% endif %}
+
+  {% if past_programs %}
+    <h2 class="h5 mt-3">Past Programs</h2>
+    <div class="list-group mb-4">
+      {% for program in past_programs %}
+        <div class="list-group-item">
+          <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">{{ program.name }}</h5>
+            {% if program.year %}
+              <small class="text-muted">{{ program.year }}</small>
+            {% endif %}
+          </div>
+          {% if program.description %}
+            <p class="mb-1">{{ program.description }}</p>
+          {% endif %}
+          <small class="text-muted">Applications are closed.</small>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <hr class="my-4" />
+  <p class="text-muted">If you were expecting to see a program here and do not, the application may not be open yet. Please check back later.</p>
+
+</div>
+{% endblock %}

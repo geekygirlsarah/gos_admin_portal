@@ -26,6 +26,20 @@
             {{ form.year|add_class:"form-control" }}
             <div class="form-text">Enter 4-digit year like 2025. Leave blank if not applicable.</div>
           </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="id_start_date" class="form-label">Start date</label>
+                {{ form.start_date|add_class:"form-control" }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="id_end_date" class="form-label">End date</label>
+                {{ form.end_date|add_class:"form-control" }}
+              </div>
+            </div>
+          </div>
           <div class="form-check mb-3">
             {{ form.active|add_class:"form-check-input" }}
             <label for="id_active" class="form-check-label">Active</label>

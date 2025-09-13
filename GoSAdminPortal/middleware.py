@@ -9,6 +9,10 @@ EXEMPT_URL_NAMES = {
     'account_confirm_email',
     'home',  # home requires login via decorator, but keep to avoid loops
     'admin:login',
+    # Public application flow
+    'apply_start',
+    'apply_program',
+    'apply_thanks',
 }
 
 EXEMPT_PATH_PREFIXES = (

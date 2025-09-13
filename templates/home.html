@@ -17,17 +17,19 @@
           {% endif %}
         </div>
       </div>
-      {% if programs %}
-        {% regroup programs by year as grouped_by_year %}
+      {% if future_programs or current_programs or past_programs %}
         <div class="row">
           <div class="col">
-            {% for group in grouped_by_year %}
-              <h3 class="h5 mt-3">{{ group.grouper|default:"No Year" }}</h3>
+            {% if future_programs %}
+              <h3 class="h5 mt-3">Upcoming Programs</h3>
               <ul class="list-group mb-3">
-                {% for program in group.list %}
+                {% for program in future_programs %}
                   <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
                       <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                      {% if program.start_date %}
+                        <small class="text-muted ms-2">starts {{ program.start_date }}</small>
+                      {% endif %}
                       {% if not program.active %}
                         <span class="badge bg-secondary ms-2">inactive</span>
                       {% endif %}
@@ -35,22 +37,62 @@
                   </li>
                 {% endfor %}
               </ul>
-            {% endfor %}
+            {% endif %}
+
+            {% if current_programs %}
+              <h3 class="h5 mt-3">Current Programs</h3>
+              <ul class="list-group mb-3">
+                {% for program in current_programs %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                      {% if program.start_date or program.end_date %}
+                        <small class="text-muted ms-2">
+                          {% if program.start_date %}{{ program.start_date }}{% endif %}
+                          {% if program.end_date %} – {{ program.end_date }}{% endif %}
+                        </small>
+                      {% endif %}
+                      {% if not program.active %}
+                        <span class="badge bg-secondary ms-2">inactive</span>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+
+            {% if past_programs %}
+              <h3 class="h5 mt-3">Past Programs</h3>
+              <ul class="list-group mb-3">
+                {% for program in past_programs %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                      {% if program.end_date %}
+                        <small class="text-muted ms-2">ended {{ program.end_date }}</small>
+                      {% endif %}
+                      {% if not program.active %}
+                        <span class="badge bg-secondary ms-2">inactive</span>
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
           </div>
         </div>
       {% else %}
         <div class="alert alert-info">No programs yet. <a class="alert-link" href="/programs/new/">Create the first program</a>.</div>
       {% endif %}
 
-      <!-- Bottom button: Dues Owed -->
-      <div class="mt-4 d-flex justify-content-end">
-        <a class="btn btn-outline-dark" href="{% url 'students_dues_owed' %}">Dues Owed</a>
-      </div>
     {% else %}
       <div class="text-center py-5">
         <h1 class="display-6">GoS Admin Portal</h1>
-        <p class="lead">You must log in to continue.</p>
-        <a class="btn btn-primary btn-lg" href="{% url 'socialaccount_login' %}?provider=google">Login with Google</a>
+        <p class="lead">Students can apply without logging in.</p>
+        <p>
+          <a class="btn btn-success btn-lg me-2" href="{% url 'apply_start' %}">Apply to a Program</a>
+          <a class="btn btn-primary btn-lg" href="{% url 'socialaccount_login' %}?provider=google">Admin/Mentor Login</a>
+        </p>
       </div>
     {% endif %}
 {% endblock %}
