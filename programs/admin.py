@@ -30,8 +30,8 @@ class EnrollmentInline(admin.TabularInline):
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ('name',)
-    search_fields = ('name',)
+    list_display = ('name', 'district', 'street_address', 'city', 'state', 'zip_code')
+    search_fields = ('name', 'district', 'street_address', 'city', 'state', 'zip_code')
 
 
 @admin.register(Student)
