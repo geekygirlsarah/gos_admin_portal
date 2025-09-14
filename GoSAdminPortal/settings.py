@@ -100,7 +100,7 @@ DATABASES = {
         'DEFAULT_AUTO_FIELD': 'django.db.models.AutoField'
     }
 }
-if os.getenv('DATABASE_URL'):
+if os.getenv('DATABASE_URL', None):
     DATABASES['default'] = dj_database_url.config(conn_max_age=600)
 
 
