@@ -53,6 +53,11 @@ class Program(models.Model):
 
 class School(models.Model):
     name = models.CharField(max_length=150, unique=True)
+    district = models.CharField(max_length=150, blank=True, null=True, verbose_name='School district')
+    street_address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
 
     class Meta:
         ordering = ['name']

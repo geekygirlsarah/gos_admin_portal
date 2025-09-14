@@ -158,7 +158,7 @@ class SlidingScaleForm(forms.ModelForm):
 class SchoolForm(forms.ModelForm):
     class Meta:
         model = School
-        fields = ['name']
+        fields = ['name', 'district', 'street_address', 'city', 'state', 'zip_code']
 
 
 class MentorForm(forms.ModelForm):
