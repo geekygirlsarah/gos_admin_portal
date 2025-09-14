@@ -201,3 +201,68 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() in ['1', 'true', 'yes
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+
+# Administrators who get error emails
+# Provide comma-separated emails via ADMIN_EMAILS env var, e.g., "admin1@example.com,admin2@example.com"
+ADMIN_EMAILS = [e.strip() for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
+ADMINS = tuple((f'Admin {i+1}', email) for i, email in enumerate(ADMIN_EMAILS))
+MANAGERS = ADMINS
+
+# Logging configuration: verbose console + email admins on server errors when DEBUG=False
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+DJANGO_LOG_LEVEL = os.getenv('DJANGO_LOG_LEVEL', LOG_LEVEL)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        },
+    },
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': LOG_LEVEL,
+            'formatter': 'verbose',
+        },
+        'mail_admins': {
+            'class': 'django.utils.log.AdminEmailHandler',
+            'level': 'ERROR',
+            'filters': ['require_debug_false'],
+            'include_html': True,
+        },
+    },
+    'loggers': {
+        # Root logger: everything -> console
+        '': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+        },
+        # Core Django logs
+        'django': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': True,
+        },
+        # Server errors (HTTP 500 etc.) -> email admins and console
+        'django.request': {
+            'handlers': ['mail_admins', 'console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['mail_admins', 'console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
