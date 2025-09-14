@@ -21,10 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() in ['1', 'true', 'yes']
 
 ALLOWED_HOSTS = []
 
@@ -51,6 +51,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -86,12 +87,45 @@ WSGI_APPLICATION = 'GoSAdminPortal.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Prefer MySQL in production; gracefully fall back to SQLite if MySQL driver is unavailable.
+USE_MYSQL = True
+try:
+    import MySQLdb  # noqa: F401
+except Exception:
+    try:
+        import pymysql  # type: ignore
+        pymysql.install_as_MySQLdb()
+    except Exception:
+        USE_MYSQL = False
+
+if USE_MYSQL:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('MYSQL_DATABASE', 'gos_admin_portal'),
+            'USER': os.getenv('MYSQL_USER', 'root'),
+            'PASSWORD': os.getenv('MYSQL_PASSWORD', ''),
+            'HOST': os.getenv('MYSQL_HOST', 'localhost'),
+            'PORT': os.getenv('MYSQL_PORT', '3306'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+
+# DATABASES = {
+
+# else:
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 
 # Password validation
@@ -129,7 +163,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+# This production code might break development mode, so we check whether we're in DEBUG mode
+if not DEBUG:
+    # Tell Django to copy static assets into a path called `staticfiles` (this is specific to Render)
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+    # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
+    # and renames the files with unique names for each version to support long-term caching
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+else:
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files (user uploads)
 MEDIA_URL = '/media/'
@@ -174,11 +217,11 @@ SOCIALACCOUNT_PROVIDERS = {
 # Email (SMTP) configuration via environment variables
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.fastmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '465'))
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', ''))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False').lower() in ['1', 'true', 'yes']
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() in ['1', 'true', 'yes']
-EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', ''))
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
