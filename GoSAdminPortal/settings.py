@@ -148,11 +148,11 @@ if not DEBUG:
     # and renames the files with unique names for each version to support long-term caching
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 else:
-    STATIC_ROOT = BASE_DIR / 'staticfiles'
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media files (user uploads)
 MEDIA_URL = '/media/'
-MEDIA_ROOT = STATIC_ROOT / '/media'
+MEDIA_ROOT = os.path.join(STATIC_ROOT, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
