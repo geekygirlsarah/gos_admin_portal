@@ -519,7 +519,87 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
         except Exception as e:
             messages.error(request, f'Import failed: {e}')
-        return redirect('mentor_list')
+        return redirect('import_dashboard')
+
+
+class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.add_school'
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('import_dashboard')
+        name = file.name.lower()
+        created = 0
+        updated = 0
+        errors = 0
+        try:
+            if name.endswith('.csv'):
+                import csv, io
+                text = io.TextIOWrapper(file.file, encoding='utf-8')
+                reader = csv.DictReader(text)
+                rows = list(reader)
+            elif name.endswith('.xlsx'):
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=file, read_only=True)
+                ws = wb.active
+                headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+                rows = []
+                for r in ws.iter_rows(min_row=2, values_only=True):
+                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+            else:
+                messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
+                return redirect('import_dashboard')
+
+            def val(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        v = str(d[k]).strip()
+                        if v != '' and v.lower() != 'none':
+                            return v
+                return None
+
+            for d in rows:
+                school_name = val(d, 'name', 'Name', 'School')
+                if not school_name:
+                    errors += 1
+                    continue
+                district = val(d, 'district', 'District', 'School District')
+                street = val(d, 'street_address', 'Street', 'Street Address', 'Address')
+                city = val(d, 'city', 'City')
+                state = val(d, 'state', 'State')
+                zip_code = val(d, 'zip', 'ZIP', 'Zip', 'zip_code', 'Zip Code', 'Postal Code')
+                obj, created_flag = School.objects.get_or_create(
+                    name=school_name,
+                    defaults={
+                        'district': district,
+                        'street_address': street,
+                        'city': city,
+                        'state': state,
+                        'zip_code': zip_code,
+                    }
+                )
+                if created_flag:
+                    created += 1
+                else:
+                    changed = False
+                    for field, value in [
+                        ('district', district),
+                        ('street_address', street),
+                        ('city', city),
+                        ('state', state),
+                        ('zip_code', zip_code),
+                    ]:
+                        if value and getattr(obj, field) != value:
+                            setattr(obj, field, value)
+                            changed = True
+                    if changed:
+                        obj.save()
+                        updated += 1
+            messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
+        except Exception as e:
+            messages.error(request, f'Import failed: {e}')
+        return redirect('import_dashboard')
 
 
 class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):

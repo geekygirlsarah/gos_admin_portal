@@ -10,7 +10,7 @@
 
   <div class="row g-4">
     {% if perms.programs.add_student %}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-6">
       <div class="card h-100">
         <div class="card-body d-flex flex-column">
           <h5 class="card-title">Students</h5>
@@ -29,7 +29,7 @@
     {% endif %}
 
     {% if perms.programs.add_parent %}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-6">
       <div class="card h-100">
         <div class="card-body d-flex flex-column">
           <h5 class="card-title">Parents</h5>
@@ -48,7 +48,7 @@
     {% endif %}
 
     {% if perms.programs.add_mentor %}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-6">
       <div class="card h-100">
         <div class="card-body d-flex flex-column">
           <h5 class="card-title">Mentors</h5>
@@ -61,6 +61,25 @@
             </div>
           </form>
           <div class="mt-2"><a href="{% static 'samples/mentors_sample.csv' %}">Download CSV Template</a></div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if perms.programs.add_school %}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title">Schools</h5>
+          <p class="card-text">Import schools with district and address details.</p>
+          <form id="school-import-form" action="{% url 'school_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+            {% csrf_token %}
+            <div class="d-flex gap-2">
+              <input type="file" name="file" id="school-import-file" class="form-control" accept=".csv,.xlsx" />
+              <button type="submit" class="btn btn-primary">Import</button>
+            </div>
+          </form>
+          <div class="mt-2"><a href="{% static 'samples/schools_sample.csv' %}">Download CSV Template</a></div>
         </div>
       </div>
     </div>
