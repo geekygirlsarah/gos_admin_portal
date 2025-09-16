@@ -292,12 +292,10 @@ class ImportDashboardView(LoginRequiredMixin, View):
 class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'programs.add_student'
     def post(self, request):
-        from django.http import HttpResponseBadRequest
         file = request.FILES.get('file')
         if not file:
             messages.error(request, 'No file uploaded.')
             return redirect('import_dashboard')
-        import mimetypes
         name = file.name.lower()
         created = 0
         updated = 0
@@ -310,7 +308,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 rows = list(reader)
             elif name.endswith('.xlsx'):
                 from openpyxl import load_workbook
-                wb = load_workbook(filename=file, read_only=True)
+                wb = load_workbook(filename=file, read_only=True, data_only=True)
                 ws = wb.active
                 headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 rows = []
@@ -320,12 +318,47 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
                 return redirect('import_dashboard')
 
+            # Helpers
+            from datetime import datetime, date
+
+            def raw(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        return d[k]
+                return None
+
             def val(d, *keys):
                 for k in keys:
                     if k in d and d[k] is not None:
                         v = str(d[k]).strip()
                         if v != '' and v.lower() != 'none':
                             return v
+                return None
+
+            def val_bool(d, *keys):
+                v = val(d, *keys)
+                if v is None:
+                    return None
+                s = v.strip().lower()
+                if s in ('y', 'yes', 'true', 't', '1'): return True
+                if s in ('n', 'no', 'false', 'f', '0'): return False
+                return None
+
+            def val_date(d, *keys):
+                # Accept date objects from XLSX or parse common string formats
+                rv = raw(d, *keys)
+                if isinstance(rv, datetime):
+                    return rv.date()
+                if isinstance(rv, date):
+                    return rv
+                v = val(d, *keys)
+                if not v:
+                    return None
+                for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y'):
+                    try:
+                        return datetime.strptime(v, fmt).date()
+                    except Exception:
+                        pass
                 return None
 
             for d in rows:
@@ -335,45 +368,103 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if not last or not legal_first:
                     errors += 1
                     continue
-                email = val(d, 'personal_email', 'Email', 'Personal Email')
+
+                # Simple strings
+                pronouns = val(d, 'pronouns', 'Pronouns')
+                address = val(d, 'address', 'Address', 'Street Address')
+                city = val(d, 'city', 'City')
+                state = val(d, 'state', 'State')
+                zip_code = val(d, 'zip_code', 'Zip Code', 'ZIP', 'Zip')
+                cell_phone = val(d, 'cell_phone_number', 'Cell Phone Number', 'Cell Phone', 'Phone', 'Phone Number')
+                personal_email = val(d, 'personal_email', 'Email', 'Personal Email')
+                andrew_id = val(d, 'andrew_id', 'Andrew ID', 'AndrewID')
                 andrew_email = val(d, 'andrew_email', 'Andrew Email')
+                race_ethnicity = val(d, 'race_ethnicity', 'Race/Ethnicity', 'Race', 'Ethnicity')
+                tshirt_size = val(d, 'tshirt_size', 'T-Shirt Size', 'Shirt Size')
+                discord_handle = val(d, 'discord_handle', 'Discord Handle', 'Discord', 'Discord Username')
+
+                # Dates and booleans
+                dob = val_date(d, 'date_of_birth', 'Date of Birth', 'DOB', 'Birthdate')
+                seen_once = val_bool(d, 'seen_once', 'Seen Once')
+                on_discord = val_bool(d, 'on_discord', 'On Discord')
+                active = val_bool(d, 'active', 'Active')
+
+                # School/year
                 school_name = val(d, 'school', 'School')
                 grad = val(d, 'graduation_year', 'Graduation Year')
                 school = None
                 if school_name:
                     school, _ = School.objects.get_or_create(name=school_name)
                 grad_year = None
-                if grad and grad.isdigit():
-                    grad_year = int(grad)
+                if grad and str(grad).isdigit():
+                    grad_year = int(str(grad))
+
                 obj, created_flag = Student.objects.get_or_create(
                     last_name=last,
                     legal_first_name=legal_first,
                     defaults={
                         'first_name': first if first != legal_first else None,
-                        'personal_email': email,
+                        'pronouns': pronouns,
+                        'date_of_birth': dob,
+                        'address': address,
+                        'city': city,
+                        'state': state,
+                        'zip_code': zip_code,
+                        'cell_phone_number': cell_phone,
+                        'personal_email': personal_email,
+                        'andrew_id': andrew_id,
                         'andrew_email': andrew_email,
+                        'race_ethnicity': race_ethnicity,
+                        'tshirt_size': tshirt_size,
+                        'seen_once': seen_once if seen_once is not None else False,
+                        'on_discord': on_discord if on_discord is not None else False,
+                        'discord_handle': discord_handle,
                         'school': school,
                         'graduation_year': grad_year,
+                        'active': active if active is not None else True,
                     }
                 )
                 if created_flag:
                     created += 1
                 else:
                     changed = False
-                    if first and obj.first_name != first:
-                        obj.first_name = first
-                        changed = True
-                    if email and obj.personal_email != email:
-                        obj.personal_email = email
-                        changed = True
-                    if andrew_email and obj.andrew_email != andrew_email:
-                        obj.andrew_email = andrew_email
+                    # Strings and relations
+                    for field, value in [
+                        ('first_name', first),
+                        ('pronouns', pronouns),
+                        ('address', address),
+                        ('city', city),
+                        ('state', state),
+                        ('zip_code', zip_code),
+                        ('cell_phone_number', cell_phone),
+                        ('personal_email', personal_email),
+                        ('andrew_id', andrew_id),
+                        ('andrew_email', andrew_email),
+                        ('race_ethnicity', race_ethnicity),
+                        ('tshirt_size', tshirt_size),
+                        ('discord_handle', discord_handle),
+                    ]:
+                        if value and getattr(obj, field) != value:
+                            setattr(obj, field, value)
+                            changed = True
+                    if dob and obj.date_of_birth != dob:
+                        obj.date_of_birth = dob
                         changed = True
                     if school and obj.school != school:
                         obj.school = school
                         changed = True
                     if grad_year and obj.graduation_year != grad_year:
                         obj.graduation_year = grad_year
+                        changed = True
+                    # Booleans (allow False updates)
+                    if seen_once is not None and obj.seen_once != seen_once:
+                        obj.seen_once = seen_once
+                        changed = True
+                    if on_discord is not None and obj.on_discord != on_discord:
+                        obj.on_discord = on_discord
+                        changed = True
+                    if active is not None and obj.active != active:
+                        obj.active = active
                         changed = True
                     if changed:
                         obj.save()
