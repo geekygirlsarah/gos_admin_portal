@@ -109,6 +109,12 @@ class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
             sort_first=Coalesce('first_name', 'legal_first_name'),
         ).order_by(Lower('sort_first'), Lower('last_name'))
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Backwards compatibility: some templates expect 'plist'
+        ctx.setdefault('plist', ctx.get('students') or ctx.get('object_list'))
+        return ctx
+
 
 class StudentsByGradeView(LoginRequiredMixin, ListView):
     model = Student
