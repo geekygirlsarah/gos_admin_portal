@@ -178,7 +178,7 @@ class ParentListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         # Prefetch related students to avoid N+1 queries and order by name
-        return Parent.objects.all().prefetch_related('students').order_by('last_name', 'first_name')
+        return Parent.objects.all().prefetch_related('students').order_by('first_name', 'last_name')
 
 
 class MentorListView(LoginRequiredMixin, ListView):
