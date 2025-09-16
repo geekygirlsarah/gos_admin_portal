@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication
+from .forms import StudentForm
 
 
 @admin.register(Program)
@@ -36,6 +37,7 @@ class SchoolAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
+    form = StudentForm
     list_display = (
         'first_name', 'legal_first_name', 'last_name', 'pronouns', 'graduation_year',
         'andrew_id', 'on_discord', 'active', 'updated_at'
