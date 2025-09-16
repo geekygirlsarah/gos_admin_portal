@@ -34,8 +34,8 @@
                   
                 {% endfor %}
               </td>
-              <td>{{ p.email|default:"" }}</td>
-              <td>{{ p.phone_number|default:"" }}</td>
+              <td>{% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</td>
+              <td>{% if p.phone_number %}<a href="tel:{{ p.phone_number }}">{{ p.phone_number }}</a>{% endif %}</td>
               <td class="text-end">
                 {% if perms.programs.change_parent %}
                   <a class="btn btn-sm btn-outline-secondary" href="{% url 'parent_edit' p.id %}?next={% url 'parent_list' %}">Edit</a>
