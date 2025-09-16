@@ -29,7 +29,14 @@ class StudentForm(forms.ModelForm):
         # When editing, pre-populate parents from the reverse relation
         instance = getattr(self, 'instance', None)
         if instance and instance.pk:
-            self.fields['parents'].initial = instance.parents.all()
+            # Start with existing parents
+            initial_set = set(instance.parents.all())
+            # ALSO include primary/secondary in the initial parents
+            if instance.primary_contact:
+                initial_set.add(instance.primary_contact)
+            if instance.secondary_contact:
+                initial_set.add(instance.secondary_contact)
+            self.fields['parents'].initial = list(initial_set)
         # Initialize grade_selector from graduation_year if available
         gy = self.instance.graduation_year if instance else None
         if gy:
@@ -53,6 +60,14 @@ class StudentForm(forms.ModelForm):
         # Add help text to graduation_year
         if 'graduation_year' in self.fields:
             self.fields['graduation_year'].help_text = 'Auto-calculated from Grade, but you may override if needed.'
+
+    def clean(self):
+        cleaned = super().clean()
+        p = cleaned.get('primary_contact')
+        s = cleaned.get('secondary_contact')
+        if p and s and p == s:
+            self.add_error('secondary_contact', 'Secondary contact must be different from Primary contact.')
+        return cleaned
 
     def save(self, commit=True):
         # Compute graduation_year from grade_selector when provided
@@ -78,12 +93,16 @@ class StudentForm(forms.ModelForm):
         instance = super().save(commit=False)
         if commit:
             instance.save()
-        # After instance exists, sync the reverse M2M to Parents
-        if 'parents' in self.cleaned_data:
+        # After instance exists, sync the reverse M2M to Parents ensuring Primary/Secondary are included
+        if hasattr(self, 'cleaned_data') and 'parents' in self.cleaned_data:
+            selected = set(self.cleaned_data.get('parents', []))
+            for p in (instance.primary_contact, instance.secondary_contact):
+                if p:
+                    selected.add(p)
             # Ensure instance has a PK in case commit=False was used
             if not instance.pk:
                 instance.save()
-            instance.parents.set(self.cleaned_data['parents'])
+            instance.parents.set(selected)
         # Return the instance
         return instance
 
