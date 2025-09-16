@@ -146,7 +146,7 @@ class Parent(models.Model):
     students = models.ManyToManyField(Student, related_name='parents', blank=True)
 
     class Meta:
-        ordering = ['last_name', 'first_name']
+        ordering = ['first_name', 'last_name']
 
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
