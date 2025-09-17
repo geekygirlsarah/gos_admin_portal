@@ -32,7 +32,13 @@
                 <tr>
                   <td>{{ e.date }}</td>
                   <td>{{ e.type }}</td>
-                  <td>{{ e.name }}</td>
+                  <td>
+                    {% if e.type == 'Payment' and e.payment_id %}
+                      <a href="{% url 'program_payment_detail' program.id e.payment_id %}">{{ e.name }}</a>
+                    {% else %}
+                      {{ e.name }}
+                    {% endif %}
+                  </td>
                   <td class="text-end">${{ e.amount|floatformat:2 }}</td>
                 </tr>
               {% endfor %}

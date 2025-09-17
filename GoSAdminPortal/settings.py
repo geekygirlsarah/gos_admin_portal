@@ -100,8 +100,18 @@ DATABASES = {
         'DEFAULT_AUTO_FIELD': 'django.db.models.AutoField'
     }
 }
-if os.getenv('DATABASE_URL', None):
-    DATABASES['default'] = dj_database_url.config(conn_max_age=600)
+# if os.getenv('DATABASE_URL', None):
+#     DATABASES['default'] = dj_database_url.config(conn_max_age=600)
+
+# DO NOT COMMIT THIS
+# postgresql://gos_admin_portal_db_user:2R1tq5QhhSHQajUK4TbT2pmMHsnop5FE@dpg-d33i66buibrs73aldq9g-a.oregon-postgres.render.com/gos_admin_portal_db
+DATABASES['default']['NAME'] = 'gos_admin_portal_db'
+DATABASES['default']['USER'] = 'gos_admin_portal_db_user'
+DATABASES['default']['PASSWORD'] = '2R1tq5QhhSHQajUK4TbT2pmMHsnop5FE'
+DATABASES['default']['HOST'] = 'dpg-d33i66buibrs73aldq9g-a.oregon-postgres.render.com'
+DATABASES['default']['PORT'] = '5432'
+DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
+
 
 
 # Password validation
