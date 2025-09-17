@@ -19,8 +19,8 @@ class FeeAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('student', 'fee', 'amount', 'paid_at', 'created_at')
-    list_filter = ('fee__program', 'paid_at')
+    list_display = ('student', 'fee', 'amount', 'paid_on', 'created_at')
+    list_filter = ('fee__program', 'paid_on')
     search_fields = ('student__first_name', 'student__last_name', 'fee__name', 'fee__program__name')
     autocomplete_fields = ('student', 'fee')
 

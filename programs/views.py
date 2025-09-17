@@ -1049,6 +1049,46 @@ class ProgramPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
         return redirect('program_detail', pk=self.program.pk)
 
 
+class ProgramPaymentDetailView(LoginRequiredMixin, View):
+    def get(self, request, pk, payment_id):
+        program = get_object_or_404(Program, pk=pk)
+        payment = get_object_or_404(Payment, pk=payment_id)
+        # Ensure payment belongs to this program
+        if payment.fee.program_id != program.id:
+            messages.error(request, "Payment does not belong to this program.")
+            return redirect('program_detail', pk=program.pk)
+        student = payment.student
+        # Ensure enrollment
+        if not Enrollment.objects.filter(student=student, program=program).exists():
+            messages.error(request, f"{student} is not enrolled in {program}.")
+            return redirect('program_detail', pk=program.pk)
+        from django.shortcuts import render
+        return render(request, 'programs/payment_detail.html', {
+            'program': program,
+            'student': student,
+            'payment': payment,
+        })
+
+
+class ProgramPaymentPrintView(LoginRequiredMixin, View):
+    def get(self, request, pk, payment_id):
+        program = get_object_or_404(Program, pk=pk)
+        payment = get_object_or_404(Payment, pk=payment_id)
+        if payment.fee.program_id != program.id:
+            messages.error(request, "Payment does not belong to this program.")
+            return redirect('program_detail', pk=program.pk)
+        student = payment.student
+        if not Enrollment.objects.filter(student=student, program=program).exists():
+            messages.error(request, f"{student} is not enrolled in {program}.")
+            return redirect('program_detail', pk=program.pk)
+        from django.shortcuts import render
+        return render(request, 'programs/payment_print.html', {
+            'program': program,
+            'student': student,
+            'payment': payment,
+        })
+
+
 class ProgramSlidingScaleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = SlidingScale
     form_class = SlidingScaleForm
@@ -1119,13 +1159,14 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         payments = Payment.objects.filter(student=student, fee__program=program)
         for p in payments:
             entries.append({
-                'date': p.paid_at,
+                'date': p.paid_on,
                 'type': 'Payment',
                 'name': f"Payment for {p.fee.name}",
                 'amount': -p.amount,
+                'payment_id': p.id,
             })
 
-        # Sort by date (editable fee date, sliding scale created_at, payment paid_at)
+        # Sort by date (editable fee date, sliding scale created_at, payment paid_on)
         # Ensure None dates sort last
         entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))
 
@@ -1183,10 +1224,11 @@ class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
         payments = Payment.objects.filter(student=student, fee__program=program)
         for p in payments:
             entries.append({
-                'date': p.paid_at,
+                'date': p.paid_on,
                 'type': 'Payment',
                 'name': f"Payment for {p.fee.name}",
                 'amount': -p.amount,
+                'payment_id': p.id,
             })
 
         entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))

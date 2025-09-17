@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Payment — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }} — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_student_balance' program.id student.id %}">← Back to Balance Sheet</a>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-10 col-xl-8">
+      <div class="d-flex justify-content-between align-items-center">
+        <h1 class="h4 mb-0">Payment Details</h1>
+        <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="{% url 'program_payment_print' program.id payment.id %}">Printable Version</a>
+      </div>
+      <p class="mb-1"><span class="fw-semibold">Program:</span> {{ program.name }}</p>
+      <p class="mb-3"><span class="fw-semibold">Student:</span> {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</p>
+
+      <div class="card">
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Fee</dt>
+            <dd class="col-sm-8">{{ payment.fee.name }}</dd>
+
+            <dt class="col-sm-4">Amount</dt>
+            <dd class="col-sm-8">${{ payment.amount|floatformat:2 }}</dd>
+
+            <dt class="col-sm-4">Date Paid</dt>
+            <dd class="col-sm-8">{{ payment.paid_on }}</dd>
+
+            <dt class="col-sm-4">Payment Method</dt>
+            <dd class="col-sm-8">{{ payment.get_paid_via_display }}</dd>
+
+            {% if payment.check_number %}
+            <dt class="col-sm-4">Check Number</dt>
+            <dd class="col-sm-8">{{ payment.check_number }}</dd>
+            {% endif %}
+
+            {% if payment.camp_hours %}
+            <dt class="col-sm-4">Camp Hours</dt>
+            <dd class="col-sm-8">{{ payment.camp_hours }}</dd>
+            {% endif %}
+
+            {% if payment.notes %}
+            <dt class="col-sm-4">Notes</dt>
+            <dd class="col-sm-8">{{ payment.notes|linebreaksbr }}</dd>
+            {% endif %}
+
+            <dt class="col-sm-4">Recorded</dt>
+            <dd class="col-sm-8">{{ payment.created_at }}{% if payment.updated_at and payment.updated_at != payment.created_at %} (updated {{ payment.updated_at }}){% endif %}</dd>
+          </dl>
+        </div>
+      </div>
+
+    </div>
+  </div>
+{% endblock %}
