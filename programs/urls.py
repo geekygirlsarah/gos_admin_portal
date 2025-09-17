@@ -4,7 +4,7 @@ from django.views.generic import TemplateView
 from .views import (
     ProgramListView, ProgramDetailView, ProgramCreateView,
     ProgramStudentAddView, ProgramStudentRemoveView, ProgramStudentQuickCreateView,
-    StudentUpdateView, StudentListView, StudentCreateView, StudentPhotoListView, StudentDetailView,
+    StudentUpdateView, StudentListView, StudentCreateView, StudentPhotoListView, ProgramStudentPhotoListView, StudentDetailView,
     ParentCreateView, ParentUpdateView, ParentListView,
     MentorListView, MentorCreateView, MentorUpdateView,
     ProgramPaymentCreateView,
@@ -30,6 +30,7 @@ urlpatterns = [
     path('messaging/', login_required(ProgramEmailView.as_view()), name='program_messaging'),
     path('<int:pk>/email/', login_required(ProgramEmailView.as_view()), name='program_email'),
     path('<int:pk>/dues/', login_required(ProgramDuesOwedView.as_view()), name='program_dues_owed'),
+    path('<int:pk>/photos/', login_required(ProgramStudentPhotoListView.as_view()), name='program_student_photos'),
 
     # List pages
     path('imports/', login_required(ImportDashboardView.as_view()), name='import_dashboard'),

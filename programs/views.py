@@ -98,6 +98,29 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
         ).order_by(Lower('sort_first'), Lower('last_name'))
 
 
+class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
+    model = Student
+    template_name = 'students/photo_grid.html'
+    context_object_name = 'students'
+    paginate_by = 48
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs.get('pk'))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        # Students enrolled in this program
+        qs = Student.objects.filter(programs=self.program)
+        return qs.annotate(
+            sort_first=Coalesce('first_name', 'legal_first_name'),
+        ).order_by(Lower('sort_first'), Lower('last_name'))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['program'] = self.program
+        return ctx
+
+
 class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
     model = Student
     template_name = 'students/emergency_contacts.html'
@@ -826,14 +849,17 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         program = self.object
-        # Active students first, then inactive; within each group sort by preferred first then last name (case-insensitive)
-        qs = program.students.select_related('user').all()
+        # Prepare annotated queryset for consistent sorting
         from django.db.models.functions import Lower, Coalesce
-        qs = qs.annotate(
+        base_qs = program.students.select_related('user').all().annotate(
             sort_first=Lower(Coalesce('first_name', 'legal_first_name')),
             sort_last=Lower('last_name'),
-        ).order_by('-active', 'sort_first', 'sort_last')
-        ctx['enrolled_students'] = qs
+        )
+        # Split into active and inactive sections
+        ctx['active_students'] = base_qs.filter(active=True).order_by('sort_first', 'sort_last')
+        ctx['inactive_students'] = base_qs.filter(active=False).order_by('sort_first', 'sort_last')
+        # Backwards compatibility (old templates may rely on a single list)
+        ctx['enrolled_students'] = list(ctx['active_students']) + list(ctx['inactive_students'])
         can_manage = self.request.user.has_perm('programs.change_student') or self.request.user.has_perm('programs.add_student')
         ctx['can_manage_students'] = can_manage
         ctx['can_add_payment'] = self.request.user.has_perm('programs.add_payment')

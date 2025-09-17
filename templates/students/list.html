@@ -6,7 +6,6 @@
   <div class="row mb-3">
     <div class="col"><h1 class="h3">Students</h1></div>
     <div class="col-auto d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="{% url 'student_photos' %}">Photo View</a>
       {% if perms.programs.add_student %}
         <a class="btn btn-primary" href="{% url 'student_create' %}?next={% url 'student_list' %}">Add Student</a>
       {% endif %}
