@@ -28,7 +28,9 @@
       </thead>
       <tbody>
         {% for s in students %}
-          {% with plist=s.parents.all p1=s.primary_contact|default:plist.0 p2=s.secondary_contact|default:plist.1 %}
+          {% with plist=s.parents.all %}
+          {% with p1_fallback=plist|first p2_fallback=plist|slice:"1:2"|first %}
+          {% with p1=s.primary_contact|default_if_none:p1_fallback p2=s.secondary_contact|default_if_none:p2_fallback %}
           <tr>
             <td>
               <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
@@ -46,6 +48,8 @@
             <td>{% if p2 and p2.phone_number %}<a href="tel:{{ p2.phone_number }}">{{ p2.phone_number }}</a>{% endif %}</td>
             <td>{% if p2 and p2.email %}<a href="mailto:{{ p2.email }}">{{ p2.email }}</a>{% endif %}</td>
           </tr>
+          {% endwith %}
+          {% endwith %}
           {% endwith %}
         {% endfor %}
       </tbody>
