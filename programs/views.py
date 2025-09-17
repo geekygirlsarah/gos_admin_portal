@@ -9,7 +9,7 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -854,6 +854,28 @@ class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
     template_name = 'students/form.html'
     permission_required = 'programs.change_student'
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['RELATIONSHIP_CHOICES'] = RELATIONSHIP_CHOICES
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Persist relationship selections for each selected parent (note: global per Parent)
+        rel_map = {k[len('parent_rel_'):]: v for k, v in self.request.POST.items() if k.startswith('parent_rel_')}
+        valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        for pid_str, rel in rel_map.items():
+            try:
+                pid = int(pid_str)
+            except (TypeError, ValueError):
+                continue
+            if rel in valid_keys:
+                p = Parent.objects.filter(pk=pid).first()
+                if p and p.relationship_to_student != rel:
+                    p.relationship_to_student = rel
+                    p.save(update_fields=['relationship_to_student'])
+        return response
+
     def get_success_url(self):
         next_url = self.request.GET.get('next')
         return next_url or reverse('student_edit', args=[self.object.pk])
@@ -864,6 +886,28 @@ class StudentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
     form_class = StudentForm
     template_name = 'students/form.html'
     permission_required = 'programs.add_student'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['RELATIONSHIP_CHOICES'] = RELATIONSHIP_CHOICES
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Persist relationship selections for each selected parent (note: global per Parent)
+        rel_map = {k[len('parent_rel_'):]: v for k, v in self.request.POST.items() if k.startswith('parent_rel_')}
+        valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        for pid_str, rel in rel_map.items():
+            try:
+                pid = int(pid_str)
+            except (TypeError, ValueError):
+                continue
+            if rel in valid_keys:
+                p = Parent.objects.filter(pk=pid).first()
+                if p and p.relationship_to_student != rel:
+                    p.relationship_to_student = rel
+                    p.save(update_fields=['relationship_to_student'])
+        return response
 
     def get_success_url(self):
         # After creating a Student, return to the Students listing

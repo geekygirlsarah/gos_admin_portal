@@ -82,14 +82,175 @@
 <div class="card mb-4">
   <div class="card-header">Parents / Emergency Contacts</div>
   <div class="card-body">
-    <div class="row g-3">
+    {# Keep original Django fields hidden so we can synchronize values before submit #}
+    <div class="d-none">
       <div class="col-md-6">{% render_field form.primary_contact %}</div>
       <div class="col-md-6">{% render_field form.secondary_contact %}</div>
       <div class="col-12">{% render_field form.parents %}</div>
     </div>
-    <div class="alert alert-secondary mt-3">
-      Can't find a parent? Quickly add one:
-      <a class="alert-link" href="{% url 'parent_create' %}?next={{ request.path }}">Add Parent</a>
+
+    <div class="mb-3">
+      <label class="form-label">Find a parent/guardian</label>
+      <div class="d-flex gap-2">
+        <select id="parent-picker" class="form-select" style="max-width:480px">
+          <option value="">— Select a parent —</option>
+          {% for val,label in form.parents.field.choices %}
+            {% if val %}<option value="{{ val }}">{{ label }}</option>{% endif %}
+          {% endfor %}
+        </select>
+        <button type="button" id="add-parent-btn" class="btn btn-outline-primary">Add</button>
+      </div>
     </div>
+
+    <div id="selected-parents">
+      <div class="mb-2 text-muted">Selected parents / contacts:</div>
+      <div id="parent-list" class="list-group mb-2">
+        {# Pre-populate from existing selection #}
+        {% with sel_parents=object.parents.all %}
+          {% for p in sel_parents %}
+            <div class="list-group-item d-flex align-items-center justify-content-between" data-parent-id="{{ p.id }}">
+              <div class="me-3">
+                <div class="fw-semibold">{{ p }}</div>
+                <div class="small text-muted">{{ p.email }}{% if p.phone_number %} • {{ p.phone_number }}{% endif %}</div>
+              </div>
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-1">
+                  <label class="form-label mb-0 small">Relationship</label>
+                  <select class="form-select form-select-sm parent-rel" data-parent-id="{{ p.id }}">
+                    {% for k,v in RELATIONSHIP_CHOICES %}
+                      <option value="{{ k }}" {% if p.relationship_to_student == k %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input parent-primary" type="radio" name="primary_choice" value="{{ p.id }}" {% if object.primary_contact_id == p.id %}checked{% endif %}>
+                  <label class="form-check-label">Primary</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input parent-secondary" type="radio" name="secondary_choice" value="{{ p.id }}" {% if object.secondary_contact_id == p.id %}checked{% endif %}>
+                  <label class="form-check-label">Secondary</label>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-parent">Remove</button>
+              </div>
+            </div>
+          {% endfor %}
+        {% endwith %}
+      </div>
+      <div class="alert alert-secondary">
+        Can't find a parent? Quickly add one:
+        <a class="alert-link" href="{% url 'parent_create' %}?next={{ request.path }}">Add Parent</a>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        // Relationship choices from server for creating new items dynamically
+        var REL_CHOICES = [
+          {% for k,v in RELATIONSHIP_CHOICES %}["{{ k }}","{{ v }}"],{% endfor %}
+        ];
+        function ensureHiddenFieldSync(){
+          // parents multi-select
+          var parentsSelect = document.querySelector('select[name="parents"]');
+          var items = document.querySelectorAll('#parent-list .list-group-item');
+          // Clear all selections first
+          if(parentsSelect){
+            for (var i=0;i<parentsSelect.options.length;i++){ parentsSelect.options[i].selected = false; }
+          }
+          items.forEach(function(it){
+            var pid = it.getAttribute('data-parent-id');
+            if(parentsSelect){
+              for (var i=0;i<parentsSelect.options.length;i++){
+                if(parentsSelect.options[i].value == pid){ parentsSelect.options[i].selected = true; break; }
+              }
+            }
+          });
+          // primary/secondary
+          var primary = document.querySelector('input[name="primary_choice"]:checked');
+          var secondary = document.querySelector('input[name="secondary_choice"]:checked');
+          var primarySel = document.querySelector('select[name="primary_contact"]');
+          var secondarySel = document.querySelector('select[name="secondary_contact"]');
+          if(primarySel){ primarySel.value = primary ? primary.value : ''; }
+          if(secondarySel){ secondarySel.value = secondary ? secondary.value : ''; }
+          // relationship hidden inputs
+          // remove existing
+          document.querySelectorAll('input[name^="parent_rel_"]').forEach(function(n){ n.remove(); });
+          items.forEach(function(it){
+            var pid = it.getAttribute('data-parent-id');
+            var sel = it.querySelector('select.parent-rel');
+            if(sel){
+              var input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'parent_rel_' + pid;
+              input.value = sel.value;
+              it.closest('form').appendChild(input);
+            }
+          });
+        }
+        function addParent(pid, label){
+          if(!pid) return;
+          // avoid duplicates
+          if(document.querySelector('#parent-list .list-group-item[data-parent-id="'+pid+'"]')) return;
+          var item = document.createElement('div');
+          item.className = 'list-group-item d-flex align-items-center justify-content-between';
+          item.setAttribute('data-parent-id', pid);
+          var nameHtml = '<div class="fw-semibold">'+label+'</div>';
+          var detailHtml = '';
+          item.innerHTML = '<div class="me-3">'+nameHtml+'</div>'+
+            '<div class="d-flex align-items-center gap-2 flex-wrap">'+
+            '  <div class="d-flex align-items-center gap-1">'+
+            '    <label class="form-label mb-0 small">Relationship</label>'+
+            '    <select class="form-select form-select-sm parent-rel" data-parent-id="'+pid+'">'+
+            REL_CHOICES.map(function(p){ return '<option value="'+p[0]+'">'+p[1]+'</option>'; }).join('')+
+            '    </select>'+
+            '  </div>'+
+            '  <div class="form-check">'+
+            '    <input class="form-check-input parent-primary" type="radio" name="primary_choice" value="'+pid+'">'+
+            '    <label class="form-check-label">Primary</label>'+
+            '  </div>'+
+            '  <div class="form-check">'+
+            '    <input class="form-check-input parent-secondary" type="radio" name="secondary_choice" value="'+pid+'">'+
+            '    <label class="form-check-label">Secondary</label>'+
+            '  </div>'+
+            '  <button type="button" class="btn btn-sm btn-outline-danger remove-parent">Remove</button>'+
+            '</div>';
+          document.getElementById('parent-list').appendChild(item);
+          ensureHiddenFieldSync();
+        }
+        function hook(){
+          var addBtn = document.getElementById('add-parent-btn');
+          var picker = document.getElementById('parent-picker');
+          var parentChoices = {};
+          if(picker){
+            // build id->label map
+            Array.prototype.forEach.call(picker.options, function(opt){ if(opt.value){ parentChoices[opt.value] = opt.text; } });
+          }
+          if(addBtn){
+            addBtn.addEventListener('click', function(){
+              var pid = picker.value;
+              if(pid){ addParent(pid, parentChoices[pid] || ('Parent #'+pid)); }
+            });
+          }
+          document.getElementById('parent-list').addEventListener('click', function(ev){
+            if(ev.target && ev.target.classList.contains('remove-parent')){
+              var item = ev.target.closest('.list-group-item');
+              if(item){ item.remove(); ensureHiddenFieldSync(); }
+            }
+          });
+          document.getElementById('parent-list').addEventListener('change', function(ev){
+            if(ev.target && (ev.target.classList.contains('parent-rel') || ev.target.classList.contains('parent-primary') || ev.target.classList.contains('parent-secondary'))){
+              ensureHiddenFieldSync();
+            }
+          });
+          // Initial sync (for pre-rendered existing parents)
+          ensureHiddenFieldSync();
+          // On form submit, final sync
+          var form = document.querySelector('form');
+          if(form){ form.addEventListener('submit', ensureHiddenFieldSync); }
+        }
+        if(document.readyState === 'loading'){
+          document.addEventListener('DOMContentLoaded', hook);
+        } else { hook(); }
+      })();
+    </script>
   </div>
 </div>
