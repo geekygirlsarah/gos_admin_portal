@@ -18,7 +18,7 @@ from .views import (
     StudentImportView, ParentImportView, MentorImportView, SchoolImportView,
     StudentEmergencyContactsView, StudentsByGradeView, StudentsBySchoolView,
     AlumniListView, StudentConvertToAlumniView, StudentBulkConvertToAlumniView,
-    ProgramStudentReceiptView,
+    ProgramStudentBalancePrintView,
     ProgramDuesOwedView,
 )
 
@@ -63,7 +63,7 @@ urlpatterns = [
     path('<int:pk>/students/quick-create/', permission_required('programs.add_student')(ProgramStudentQuickCreateView.as_view()), name='program_student_quick_create'),
     path('<int:pk>/students/<int:student_id>/remove/', permission_required('programs.change_student')(ProgramStudentRemoveView.as_view()), name='program_student_remove'),
     path('<int:pk>/students/<int:student_id>/balance/', login_required(ProgramStudentBalanceView.as_view()), name='program_student_balance'),
-    path('<int:pk>/students/<int:student_id>/receipt/', login_required(ProgramStudentReceiptView.as_view()), name='program_student_receipt'),
+    path('<int:pk>/students/<int:student_id>/balance/print/', login_required(ProgramStudentBalancePrintView.as_view()), name='program_student_balance_print'),
 
     # Payments
     path('<int:pk>/payments/new/', permission_required('programs.add_payment')(ProgramPaymentCreateView.as_view()), name='program_payment_create'),

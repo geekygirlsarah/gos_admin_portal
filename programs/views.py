@@ -1147,7 +1147,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         })
 
 
-class ProgramStudentReceiptView(LoginRequiredMixin, View):
+class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
     def get(self, request, pk, student_id):
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
@@ -1197,7 +1197,7 @@ class ProgramStudentReceiptView(LoginRequiredMixin, View):
         balance = total_fees - total_sliding - total_payments
 
         from django.shortcuts import render
-        return render(request, 'programs/receipt.html', {
+        return render(request, 'programs/balance_sheet_print.html', {
             'program': program,
             'student': student,
             'entries': entries,
