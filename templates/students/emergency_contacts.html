@@ -10,50 +10,112 @@
 </div>
 
 {% if students %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Student</th>
-          <th>School</th>
-          <th>Student Phone</th>
-          <th>Student Email</th>
-          <th>Parent/Guardian 1</th>
-          <th>Parent/Guardian 1 Phone</th>
-          <th>Parent/Guardian 1 Email</th>
-          <th>Parent/Guardian 2</th>
-          <th>Parent/Guardian 2 Phone</th>
-          <th>Parent/Guardian 2 Email</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in students %}
-          {% with plist=s.parents.all %}
-          {% with p1_fallback=plist|first p2_fallback=plist|slice:"1:2"|first %}
-          {% with p1=s.primary_contact|default_if_none:p1_fallback p2=s.secondary_contact|default_if_none:p2_fallback %}
+  <!-- Desktop/tablet view -->
+  <div class="d-none d-md-block">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
           <tr>
-            <td>
-              <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
-            </td>
-            <td>{{ s.school|default:"" }}</td>
-            <td>{% if s.cell_phone_number %}<a href="tel:{{ s.cell_phone_number }}">{{ s.cell_phone_number }}</a>{% else %}{% endif %}</td>
-            <td>
-              {% if s.personal_email %}<div><a href="mailto:{{ s.personal_email }}">{{ s.personal_email }}</a></div>{% endif %}
-              {% if s.andrew_email %}<div class="text-muted small"><a href="mailto:{{ s.andrew_email }}">{{ s.andrew_email }}</a></div>{% endif %}
-            </td>
-            <td>{% if p1 %}{{ p1 }}{% endif %}</td>
-            <td>{% if p1 and p1.phone_number %}<a href="tel:{{ p1.phone_number }}">{{ p1.phone_number }}</a>{% endif %}</td>
-            <td>{% if p1 and p1.email %}<a href="mailto:{{ p1.email }}">{{ p1.email }}</a>{% endif %}</td>
-            <td>{% if p2 %}{{ p2 }}{% endif %}</td>
-            <td>{% if p2 and p2.phone_number %}<a href="tel:{{ p2.phone_number }}">{{ p2.phone_number }}</a>{% endif %}</td>
-            <td>{% if p2 and p2.email %}<a href="mailto:{{ p2.email }}">{{ p2.email }}</a>{% endif %}</td>
+            <th>Student</th>
+            <th>School</th>
+            <th>Student Phone</th>
+            <th>Student Email</th>
+            <th>Parent/Guardian 1</th>
+            <th>Parent/Guardian 1 Phone</th>
+            <th>Parent/Guardian 1 Email</th>
+            <th>Parent/Guardian 2</th>
+            <th>Parent/Guardian 2 Phone</th>
+            <th>Parent/Guardian 2 Email</th>
           </tr>
-          {% endwith %}
-          {% endwith %}
-          {% endwith %}
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for s in students %}
+            {% with plist=s.parents.all %}
+            {% with p1_fallback=plist|first p2_fallback=plist|slice:"1:2"|first %}
+            {% with p1=s.primary_contact|default_if_none:p1_fallback p2=s.secondary_contact|default_if_none:p2_fallback %}
+            <tr>
+              <td>
+                <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+              </td>
+              <td>{{ s.school|default:"" }}</td>
+              <td>{% if s.cell_phone_number %}<a href="tel:{{ s.cell_phone_number }}">{{ s.cell_phone_number }}</a>{% else %}{% endif %}</td>
+              <td>
+                {% if s.personal_email %}<div><a href="mailto:{{ s.personal_email }}">{{ s.personal_email }}</a></div>{% endif %}
+                {% if s.andrew_email %}<div class="text-muted small"><a href="mailto:{{ s.andrew_email }}">{{ s.andrew_email }}</a></div>{% endif %}
+              </td>
+              <td>{% if p1 %}{{ p1 }}{% endif %}</td>
+              <td>{% if p1 and p1.phone_number %}<a href="tel:{{ p1.phone_number }}">{{ p1.phone_number }}</a>{% endif %}</td>
+              <td>{% if p1 and p1.email %}<a href="mailto:{{ p1.email }}">{{ p1.email }}</a>{% endif %}</td>
+              <td>{% if p2 %}{{ p2 }}{% endif %}</td>
+              <td>{% if p2 and p2.phone_number %}<a href="tel:{{ p2.phone_number }}">{{ p2.phone_number }}</a>{% endif %}</td>
+              <td>{% if p2 and p2.email %}<a href="mailto:{{ p2.email }}">{{ p2.email }}</a>{% endif %}</td>
+            </tr>
+            {% endwith %}
+            {% endwith %}
+            {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Mobile view: condensed cards -->
+  <div class="d-md-none">
+    <div class="row g-3">
+      {% for s in students %}
+        {% with plist=s.parents.all %}
+        {% with p1_fallback=plist|first p2_fallback=plist|slice:"1:2"|first %}
+        {% with p1=s.primary_contact|default_if_none:p1_fallback p2=s.secondary_contact|default_if_none:p2_fallback %}
+        <div class="col-12">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start">
+                <h5 class="card-title mb-1">
+                  <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                </h5>
+                {% if s.school %}<span class="badge text-bg-light">{{ s.school }}</span>{% endif %}
+              </div>
+
+              <div class="mt-2">
+                {% if s.cell_phone_number %}
+                  <div><span class="text-muted">Student Phone: </span><a href="tel:{{ s.cell_phone_number }}">{{ s.cell_phone_number }}</a></div>
+                {% endif %}
+                {% if s.personal_email %}
+                  <div><span class="text-muted">Student Email: </span><a href="mailto:{{ s.personal_email }}">{{ s.personal_email }}</a></div>
+                {% endif %}
+                {% if s.andrew_email %}
+                  <div class="text-muted small"><span>Andrew: </span><a href="mailto:{{ s.andrew_email }}">{{ s.andrew_email }}</a></div>
+                {% endif %}
+              </div>
+
+              {% if p1 %}
+              <hr class="my-2" />
+              <div>
+                <div class="fw-semibold">Parent/Guardian 1: {{ p1 }}</div>
+                <div class="small">
+                  {% if p1.phone_number %}<span><a href="tel:{{ p1.phone_number }}">{{ p1.phone_number }}</a></span>{% endif %}
+                  {% if p1.email %}<span class="ms-2"><a href="mailto:{{ p1.email }}">{{ p1.email }}</a></span>{% endif %}
+                </div>
+              </div>
+              {% endif %}
+
+              {% if p2 %}
+              <div class="mt-2">
+                <div class="fw-semibold">Parent/Guardian 2: {{ p2 }}</div>
+                <div class="small">
+                  {% if p2.phone_number %}<span><a href="tel:{{ p2.phone_number }}">{{ p2.phone_number }}</a></span>{% endif %}
+                  {% if p2.email %}<span class="ms-2"><a href="mailto:{{ p2.email }}">{{ p2.email }}</a></span>{% endif %}
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endwith %}
+        {% endwith %}
+        {% endwith %}
+      {% endfor %}
+    </div>
   </div>
 {% else %}
   <div class="alert alert-info">No students found.</div>
