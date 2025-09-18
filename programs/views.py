@@ -800,7 +800,7 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if 'parents' in groups:
-                parent_emails = Parent.objects.filter(students__programs=prog).values_list('email', flat=True)
+                parent_emails = Parent.objects.filter(students__programs=prog, email_updates=True).values_list('email', flat=True)
                 for e in parent_emails:
                     if e:
                         recipients.add(e)

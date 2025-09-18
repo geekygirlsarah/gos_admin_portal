@@ -67,6 +67,16 @@ class School(models.Model):
 
 
 class Student(models.Model):
+    def save(self, *args, **kwargs):
+        # Auto-opt-in primary contact for email updates if assigned
+        try:
+            parent = self.primary_contact
+        except Exception:
+            parent = None
+        if parent and parent.email_updates is False:
+            parent.email_updates = True
+            parent.save(update_fields=['email_updates'])
+        super().save(*args, **kwargs)
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -142,6 +152,7 @@ class Parent(models.Model):
     relationship_to_student = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES, default='parent')
     email = models.EmailField(blank=True, null=True)
     phone_number = models.CharField(max_length=30, blank=True, null=True)
+    email_updates = models.BooleanField(default=False, help_text='If checked, this parent/guardian will receive email updates.')
 
     students = models.ManyToManyField(Student, related_name='parents', blank=True)
 
