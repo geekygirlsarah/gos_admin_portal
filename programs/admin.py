@@ -119,7 +119,8 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(Parent)
 class ParentAdmin(admin.ModelAdmin):
-    list_display = ('first_name', 'preferred_first_name', 'last_name', 'relationship_to_student', 'email', 'phone_number')
+    list_display = ('first_name', 'preferred_first_name', 'last_name', 'relationship_to_student', 'email', 'phone_number', 'email_updates')
+    list_filter = ('email_updates',)
     search_fields = ('first_name', 'preferred_first_name', 'last_name', 'email', 'phone_number')
     filter_horizontal = ('students',)
 
