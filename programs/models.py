@@ -113,6 +113,12 @@ class Student(models.Model):
     on_discord = models.BooleanField(default=False)
     discord_handle = models.CharField(max_length=100, blank=True, null=True)
 
+    # FIRST Website
+    first_has_account = models.BooleanField(default=False, verbose_name='Has FIRST account')
+    first_attached_to_parent_account = models.BooleanField(default=False, verbose_name='Attached to parent account')
+    first_signed_cr = models.BooleanField(default=False, verbose_name='Signed FIRST Consent & Release (C&R)')
+    first_registered_teams = models.CharField(max_length=200, blank=True, null=True, verbose_name='Registered team(s)', help_text='Team numbers or names, comma-separated')
+
     # New contact fields
     primary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, null=True, blank=True, related_name='primary_for_students')
     secondary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, null=True, blank=True, related_name='secondary_for_students')
