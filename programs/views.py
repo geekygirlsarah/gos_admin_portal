@@ -391,6 +391,38 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         pass
                 return None
 
+            def get_or_create_parent(first, last, email):
+                # Try to find by email first
+                if email:
+                    p = Parent.objects.filter(email__iexact=email).first()
+                    if p:
+                        changed_parent = False
+                        if first and p.first_name != first:
+                            p.first_name = first
+                            changed_parent = True
+                        if last and p.last_name != last:
+                            p.last_name = last
+                            changed_parent = True
+                        if changed_parent:
+                            p.save()
+                        return p
+                # Next try by name match
+                if first and last:
+                    p = Parent.objects.filter(first_name__iexact=first, last_name__iexact=last).first()
+                    if p:
+                        if email and (p.email or '').lower() != (email or '').lower():
+                            p.email = email
+                            p.save()
+                        return p
+                # If we have at least one of name or email, create
+                if first or last or email:
+                    return Parent.objects.create(
+                        first_name=first or (email.split('@')[0] if email else 'Parent'),
+                        last_name=last or '(contact)',
+                        email=email or None,
+                    )
+                return None
+
             for d in rows:
                 first = val(d, 'first_name', 'First Name', 'Preferred First Name')
                 legal_first = val(d, 'legal_first_name', 'Legal First Name') or first
@@ -498,6 +530,36 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         changed = True
                     if changed:
                         obj.save()
+                        updated += 1
+
+                # Parent linkage (primary and secondary)
+                prim_first = val(d, 'primary_parent_first_name', 'Primary Parent First Name', 'Primary First Name', 'Primary First')
+                prim_last = val(d, 'primary_parent_last_name', 'Primary Parent Last Name', 'Primary Last Name', 'Primary Last')
+                prim_email = val(d, 'primary_parent_email', 'Primary Parent Email', 'Primary Email', 'Primary E-mail', 'Primary Email Address')
+                sec_first = val(d, 'secondary_parent_first_name', 'Secondary Parent First Name', 'Secondary First Name', 'Secondary First')
+                sec_last = val(d, 'secondary_parent_last_name', 'Secondary Parent Last Name', 'Secondary Last Name', 'Secondary Last')
+                sec_email = val(d, 'secondary_parent_email', 'Secondary Parent Email', 'Secondary Email', 'Secondary E-mail', 'Secondary Email Address')
+
+                contact_changed = False
+                primary = get_or_create_parent(prim_first, prim_last, prim_email)
+                secondary = get_or_create_parent(sec_first, sec_last, sec_email)
+                if primary:
+                    if obj.primary_contact_id != getattr(primary, 'id', None):
+                        obj.primary_contact = primary
+                        contact_changed = True
+                    # Ensure M2M link exists
+                    if primary.id and not obj.parents.filter(id=primary.id).exists():
+                        obj.parents.add(primary)
+                if secondary:
+                    if obj.secondary_contact_id != getattr(secondary, 'id', None):
+                        obj.secondary_contact = secondary
+                        contact_changed = True
+                    if secondary.id and not obj.parents.filter(id=secondary.id).exists():
+                        obj.parents.add(secondary)
+                if contact_changed:
+                    obj.save(update_fields=['primary_contact', 'secondary_contact', 'updated_at'])
+                    if not created_flag:
+                        # Only count as updated when not newly created and not already counted
                         updated += 1
             if created or updated:
                 messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
