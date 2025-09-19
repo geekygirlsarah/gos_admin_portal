@@ -16,6 +16,33 @@
   </div>
 </div>
 
+{% if form.instance and form.instance.pk %}
+<div class="card mb-4">
+  <div class="card-header">Background Checks</div>
+  <div class="card-body">
+      <div>The student needs background checks to participate in the following programs:</div>
+      {% if form.instance.programs.all %}
+          <ul class="mb-0">
+              {% for prog in form.instance.programs.all %}
+                  {% requires_bg form.instance prog as needs_bg %}
+                  <li>{{ prog.year }} {{ prog.name }}: <span class="badge {% if needs_bg %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ needs_bg|yesno:"Yes,No" }}</span></li>
+              {% empty %}
+                  <li class="text-muted">Not enrolled in any programs.</li>
+              {% endfor %}
+          </ul>
+      {% else %}
+          <div class="text-muted">Not enrolled in any programs.</div>
+      {% endif %}
+      <div class="form-text">This is informational; the requirement is calculated from date of birth and program dates.</div>
+    <hr/>
+      <div class="row g-3">
+          <div class="col-md-4">{% render_field form.has_passed_clearances %}</div>
+          <div class="col-md-4">{% render_field form.clearances_expiration_date %}</div>
+      </div>
+  </div>
+</div>
+{% endif %}
+
 {# Contact & Address #}
 <div class="card mb-4">
   <div class="card-header">Contact & Address</div>

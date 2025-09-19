@@ -48,3 +48,13 @@ def render_field(field):
     except Exception:
         # Fallback: default rendering
         return mark_safe(f'<div class="mb-3">{field}</div>')
+
+@register.simple_tag
+def requires_bg(student, program):
+    """Return True/False whether the student requires a background check for the program.
+    Usage: {% requires_bg student program as needs_bg %}
+    """
+    try:
+        return bool(student.requires_background_check(program))
+    except Exception:
+        return False

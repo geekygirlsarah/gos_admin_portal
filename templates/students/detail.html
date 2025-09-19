@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load form_tags %}
 {% block title %}Student: {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
@@ -73,6 +74,30 @@
           <div class="row g-3">
             <div class="col-md-4"><div class="fw-semibold">Andrew ID</div><div>{{ student.andrew_id|default:'—' }}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Andrew email</div><div>{{ student.andrew_email|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">Background Checks</div>
+        <div class="card-body">
+            <div>The student needs background checks to participate in the following programs:</div>
+            {% if student.programs.all %}
+                <ul class="mb-0">
+                    {% for prog in student.programs.all %}
+                        {% requires_bg student prog as needs_bg %}
+                        <li>{{ prog.year }} {{ prog.name }}: <span class="badge {% if needs_bg %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ needs_bg|yesno:"Yes,No" }}</span></li>
+                    {% empty %}
+                        <li class="text-muted">Not enrolled in any programs.</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="text-muted">Not enrolled in any programs.</div>
+            {% endif %}
+            <div class="form-text">A student requires background checks if they will be 18 years old at any point during a program's dates.</div>
+          <div class="row g-3 mb-2">
+            <div class="col-md-4"><div class="fw-semibold">Has passed clearances</div><div><span class="badge {% if student.has_passed_clearances %}bg-success{% else %}bg-danger{% endif %}">{{ student.has_passed_clearances|yesno:"Yes,No" }}</span></div></div>
+            <div class="col-md-4"><div class="fw-semibold">Clearances expire</div><div>{{ student.clearances_expiration_date|date:'M j, Y'|default:'—' }}</div></div>
           </div>
         </div>
       </div>
