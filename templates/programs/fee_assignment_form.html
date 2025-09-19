@@ -11,6 +11,7 @@
     <div class="col-lg-8 col-xl-6">
       <h1 class="h4">{{ fee.name }}</h1>
       <p class="text-muted">Select which students this fee applies to. Leave the selection empty and save to apply the fee to every student in {{ program.name }}.</p>
+      <p><a class="btn btn-sm btn-outline-primary" href="{% url 'program_fee_edit' program.id fee.id %}">Edit Fee Details</a></p>
       <form method="post">
         {% csrf_token %}
         <div class="mb-3">

@@ -240,19 +240,6 @@ class ProgramEmailForm(forms.Form):
         return cleaned
 
 
-class ProgramFeeSelectForm(forms.Form):
-    fee = forms.ModelChoiceField(queryset=Fee.objects.none(), required=True, label='Select fee to manage')
-
-    def __init__(self, *args, program: Program, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.program = program
-        self.fields['fee'].queryset = Fee.objects.filter(program=program).order_by('name')
-
-    def clean_fee(self):
-        fee = self.cleaned_data['fee']
-        if fee.program_id != self.program.id:
-            raise forms.ValidationError('Selected fee does not belong to this program.')
-        return fee
 
 
 class FeeAssignmentEditForm(forms.Form):
@@ -361,3 +348,19 @@ class StudentApplicationForm(forms.ModelForm):
                 if 'graduation_year' in self.fields:
                     self.instance.graduation_year = grad_year
         return super().save(commit=commit)
+
+
+class FeeForm(forms.ModelForm):
+    class Meta:
+        model = Fee
+        fields = ['program', 'name', 'amount', 'date']
+        widgets = {
+            'program': forms.HiddenInput(),
+            'date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, program: Program = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if program is not None:
+            self.fields['program'].initial = program
+            self.fields['program'].required = True

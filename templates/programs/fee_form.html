@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_create %}Add Fee{% else %}Edit Fee{% endif %} — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_fee_select' program.id %}">← Back to Manage Fees</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-8 col-xl-6">
+      <h1 class="h4">{% if is_create %}Add Fee{% else %}Edit Fee{% endif %}</h1>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          {{ form.program }}
+          <label class="form-label" for="id_name">Name</label>
+          {{ form.name }}
+          {% for e in form.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="id_amount">Amount</label>
+          {{ form.amount }}
+          {% for e in form.amount.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="id_date">Date</label>
+          {{ form.date }}
+          {% if form.date.help_text %}<div class="form-text">{{ form.date.help_text }}</div>{% endif %}
+          {% for e in form.date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Save</button>
+          {% if not is_create %}
+            <a class="btn btn-outline-secondary" href="{% url 'program_fee_assignments' program.id object.id %}">Manage Applicability</a>
+          {% endif %}
+          <a class="btn btn-outline-secondary" href="{% url 'program_fee_select' program.id %}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
