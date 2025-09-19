@@ -21,8 +21,8 @@ from .forms import (
     MentorForm,
     ProgramForm,
     ProgramEmailForm,
-    ProgramFeeSelectForm,
     FeeAssignmentEditForm,
+    FeeForm,
     ProgramApplySelectForm,
     StudentApplicationForm,
 )
@@ -1322,17 +1322,9 @@ class ProgramFeeSelectView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
-        form = ProgramFeeSelectForm(program=self.program)
         from django.shortcuts import render
-        return render(request, self.template_name, {'program': self.program, 'form': form})
-
-    def post(self, request, pk):
-        form = ProgramFeeSelectForm(request.POST, program=self.program)
-        if form.is_valid():
-            fee = form.cleaned_data['fee']
-            return redirect('program_fee_assignments', pk=self.program.pk, fee_id=fee.pk)
-        from django.shortcuts import render
-        return render(request, self.template_name, {'program': self.program, 'form': form})
+        fees = Fee.objects.filter(program=self.program).order_by('name')
+        return render(request, self.template_name, {'program': self.program, 'fees': fees})
 
 
 class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1357,6 +1349,68 @@ class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, 
             return redirect('program_fee_assignments', pk=self.program.pk, fee_id=self.fee.pk)
         from django.shortcuts import render
         return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
+
+
+class ProgramFeeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = 'programs.add_fee'
+    model = Fee
+    form_class = FeeForm
+    template_name = 'programs/fee_form.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['program'] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['program'] = self.program
+        ctx['is_create'] = True
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Fee created.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('program_fee_assignments', kwargs={'pk': self.program.pk, 'fee_id': self.object.pk})
+
+
+class ProgramFeeUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = 'programs.change_fee'
+    model = Fee
+    form_class = FeeForm
+    template_name = 'programs/fee_form.html'
+    pk_url_kwarg = 'fee_id'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(Fee, pk=self.kwargs['fee_id'], program=self.program)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['program'] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['program'] = self.program
+        ctx['is_create'] = False
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Fee updated.')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('program_fee_assignments', kwargs={'pk': self.program.pk, 'fee_id': self.object.pk})
 
 
 class ApplyProgramSelectView(View):

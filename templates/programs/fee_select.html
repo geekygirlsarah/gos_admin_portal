@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Manage Fee Applicability — {{ program.name }}{% endblock %}
+{% block title %}Manage Fees (Add/Edit) — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
   <div class="row mb-3">
@@ -8,18 +8,45 @@
     </div>
   </div>
   <div class="row">
-    <div class="col-lg-8 col-xl-6">
-      <h1 class="h4">Manage Fee Applicability</h1>
-      <p class="text-muted">Choose a fee to specify which students it applies to. If you select no students on the next page, the fee will apply to every student in this program.</p>
-      <form method="post">
-        {% csrf_token %}
-        <div class="mb-3">
-          {{ form.fee.label_tag }} {{ form.fee }}
-          {% if form.fee.help_text %}<div class="form-text">{{ form.fee.help_text }}</div>{% endif %}
-          {% for e in form.fee.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <div class="col-lg-10 col-xl-8">
+      <h1 class="h4">Manage Fees (Add/Edit)</h1>
+      <div class="mb-3">
+        <a class="btn btn-success" href="{% url 'program_fee_create' program.id %}">Add Fee</a>
+      </div>
+      <div class="card mb-4">
+        <div class="card-header">Existing Fees</div>
+        <div class="card-body">
+          {% if fees %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for f in fees %}
+                    <tr>
+                      <td>{{ f.name }}</td>
+                      <td>${{ f.amount }}</td>
+                      <td>{{ f.date|default:'—' }}</td>
+                      <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="{% url 'program_fee_edit' program.id f.id %}">Edit</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_fee_assignments' program.id f.id %}">Applicability</a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="alert alert-info m-0">No fees have been added for this program yet.</div>
+          {% endif %}
         </div>
-        <button class="btn btn-primary" type="submit">Continue</button>
-      </form>
+      </div>
     </div>
   </div>
 {% endblock %}
