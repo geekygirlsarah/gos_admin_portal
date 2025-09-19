@@ -23,6 +23,9 @@ class StudentForm(forms.ModelForm):
         # Include all model fields except system-managed ones and M2M-through
         fields = '__all__'
         exclude = ['programs', 'created_at', 'updated_at']
+        widgets = {
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -139,6 +142,9 @@ class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
         fields = ['student', 'fee', 'amount', 'paid_on', 'paid_via', 'check_number', 'camp_hours', 'notes']
+        widgets = {
+            'paid_on': forms.DateInput(attrs={'type': 'date'}),
+        }
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
@@ -185,6 +191,19 @@ class MentorForm(forms.ModelForm):
         model = Mentor
         fields = '__all__'
         exclude = []
+        widgets = {
+            'andrew_id_expiration': forms.DateInput(attrs={'type': 'date'}),
+            'pa_clearances_expiration_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+class ProgramForm(forms.ModelForm):
+    class Meta:
+        model = Program
+        fields = ['name', 'description', 'year', 'start_date', 'end_date', 'active']
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'type': 'date'}),
+        }
 
 
 class ProgramEmailForm(forms.Form):

@@ -19,6 +19,7 @@ from .forms import (
     SlidingScaleForm,
     SchoolForm,
     MentorForm,
+    ProgramForm,
     ProgramEmailForm,
     ProgramFeeSelectForm,
     FeeAssignmentEditForm,
@@ -873,7 +874,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
 
 class ProgramCreateView(CreateView):
     model = Program
-    fields = ['name', 'description', 'year', 'start_date', 'end_date', 'active']
+    form_class = ProgramForm
     template_name = 'programs/form.html'
 
     def get_success_url(self):
