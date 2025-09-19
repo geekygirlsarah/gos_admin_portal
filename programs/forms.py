@@ -25,6 +25,7 @@ class StudentForm(forms.ModelForm):
         exclude = ['programs', 'created_at', 'updated_at']
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'clearances_expiration_date': forms.DateInput(attrs={'type': 'date'}),
         }
 
     def __init__(self, *args, **kwargs):

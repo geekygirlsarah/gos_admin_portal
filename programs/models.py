@@ -77,6 +77,30 @@ class Student(models.Model):
             parent.email_updates = True
             parent.save(update_fields=['email_updates'])
         super().save(*args, **kwargs)
+
+    def eighteenth_birthday(self):
+        """Return the date this student turns 18, or None if DOB unknown."""
+        dob = self.date_of_birth
+        if not dob:
+            return None
+        try:
+            return dob.replace(year=dob.year + 18)
+        except ValueError:
+            # Handle Feb 29 on non-leap years by using Feb 28
+            return dob.replace(month=2, day=28, year=dob.year + 18)
+
+    def requires_background_check(self, program: 'Program') -> bool:
+        """Whether the student will be 18 at any point during the given program's dates.
+        Returns False if insufficient data (no DOB or no program dates).
+        """
+        if not program or not program.start_date or not program.end_date:
+            return False
+        b18 = self.eighteenth_birthday()
+        if not b18:
+            return False
+        # If the program end is on/after 18th birthday, and the start is on/before end.
+        return program.end_date >= b18 and program.start_date <= program.end_date
+
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -90,6 +114,9 @@ class Student(models.Model):
     last_name = models.CharField(max_length=150)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
+    # Background clearances (per-student, separate from mentor clearances)
+    has_passed_clearances = models.BooleanField(default=False, help_text='Check if the student has completed and passed required background clearances.')
+    clearances_expiration_date = models.DateField(blank=True, null=True, help_text='Expiration date for the student\'s background clearances (if applicable).')
     photo = models.ImageField(upload_to='photos/students/', blank=True, null=True)
 
     address = models.CharField(max_length=255, blank=True, null=True)
