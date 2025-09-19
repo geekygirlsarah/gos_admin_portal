@@ -78,6 +78,19 @@
   </div>
 </div>
 
+{# FIRST Website #}
+<div class="card mb-4">
+  <div class="card-header">FIRST Website</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">{% render_field form.first_has_account %}</div>
+      <div class="col-md-4">{% render_field form.first_attached_to_parent_account %}</div>
+      <div class="col-md-4">{% render_field form.first_signed_cr %}</div>
+      <div class="col-md-12">{% render_field form.first_registered_teams %}</div>
+    </div>
+  </div>
+</div>
+
 {# Parents / Contacts #}
 <div class="card mb-4">
   <div class="card-header">Parents / Emergency Contacts</div>

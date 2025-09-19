@@ -74,6 +74,11 @@ class StudentAdmin(admin.ModelAdmin):
                 'race_ethnicity', 'tshirt_size', 'seen_once', 'on_discord', 'discord_handle',
             )
         }),
+        ('FIRST Website', {
+            'fields': (
+                'first_has_account', 'first_attached_to_parent_account', 'first_signed_cr', 'first_registered_teams',
+            )
+        }),
         ('System', {
             'fields': (
                 'active', 'created_at', 'updated_at', 'user',

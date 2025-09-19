@@ -88,6 +88,18 @@
       </div>
 
       <div class="card mb-4">
+        <div class="card-header">FIRST Website</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-3"><div class="fw-semibold">Has FIRST account</div><div>{{ student.first_has_account|yesno:"Yes,No" }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">Attached to parent account</div><div>{{ student.first_attached_to_parent_account|yesno:"Yes,No" }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">Signed FIRST C&amp;R</div><div>{{ student.first_signed_cr|yesno:"Yes,No" }}</div></div>
+            <div class="col-md-12"><div class="fw-semibold">Registered team(s)</div><div>{{ student.first_registered_teams|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
         <div class="card-header">Parents / Emergency Contacts</div>
         <div class="card-body">
           <div class="row g-3">
