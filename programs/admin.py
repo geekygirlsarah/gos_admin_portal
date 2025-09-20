@@ -71,7 +71,7 @@ class StudentAdmin(admin.ModelAdmin):
         }),
         ('Other', {
             'fields': (
-                'race_ethnicity', 'tshirt_size', 'seen_once', 'on_discord', 'discord_handle',
+                'race_ethnicities', 'tshirt_size', 'seen_once', 'on_discord', 'discord_handle',
             )
         }),
         ('FIRST Website', {
