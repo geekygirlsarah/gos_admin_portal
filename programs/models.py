@@ -66,6 +66,62 @@ class School(models.Model):
         return self.name
 
 
+class RaceEthnicity(models.Model):
+    """Canonical race/ethnicity options for Students (multi-select)."""
+    key = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=100, unique=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'name']
+        verbose_name_plural = 'Race/Ethnicity Options'
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def match_from_text(cls, text: str):
+        """Best-effort mapping from a free-text race/ethnicity string to option queryset.
+        Matches by keyword; supports comma/semicolon-separated lists.
+        """
+        if not text:
+            return cls.objects.none()
+        import re
+        s = (text or '').lower()
+        # Split on common separators to get tokens too
+        parts = [p.strip() for p in re.split(r'[;,/\\]|\band\b', s) if p.strip()]
+        hay = ' ' + s + ' '
+        keys = set()
+        def has(substr):
+            return substr in hay
+        # American Indian or Alaska Native
+        if any('american indian' in p or 'alaska' in p or 'native american' in p for p in parts) or has('american indian') or has('alaska') or has('native american'):
+            keys.add('american-indian-or-alaska-native')
+        # Asian
+        if has(' asian'):
+            keys.add('asian')
+        # Black or African-American
+        if has('black') or has('african-american') or has('african american'):
+            keys.add('black-or-african-american')
+        # Hispanic or Latino
+        if has('hispanic') or has('latino') or has('latina') or has('latinx'):
+            keys.add('hispanic-or-latino')
+        # Middle Eastern or North African
+        if has('middle eastern') or has('north african') or has('mena'):
+            keys.add('middle-eastern-or-north-african')
+        # Native Hawaiian or Other Pacific Islander
+        if has('hawaiian') or has('pacific islander'):
+            keys.add('native-hawaiian-or-other-pacific-islander')
+        # White
+        if has(' white'):
+            keys.add('white')
+        # Other
+        if has('other') or (not keys and s.strip()):
+            # If text provided but no match, classify as other
+            keys.add('other')
+        return cls.objects.filter(key__in=keys)
+
+
 class Student(models.Model):
     def save(self, *args, **kwargs):
         # Auto-opt-in primary contact for email updates if assigned
@@ -133,7 +189,8 @@ class Student(models.Model):
     school = models.ForeignKey('School', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     graduation_year = models.PositiveSmallIntegerField(blank=True, null=True, help_text='Expected high school graduation year')
 
-    race_ethnicity = models.CharField(max_length=100, blank=True, null=True)
+    # New multi-select of canonical options
+    race_ethnicities = models.ManyToManyField('RaceEthnicity', related_name='students', blank=True, verbose_name='Race / Ethnicity')
     tshirt_size = models.CharField(max_length=10, blank=True, null=True)
 
     seen_once = models.BooleanField(default=False)
@@ -490,11 +547,17 @@ class StudentApplication(models.Model):
                 andrew_email=self.andrew_email,
                 school=self.school,
                 graduation_year=self.graduation_year,
-                race_ethnicity=self.race_ethnicity,
                 tshirt_size=self.tshirt_size,
                 on_discord=self.on_discord,
                 discord_handle=self.discord_handle,
             )
+        # Map application race text to Student multi-select
+        try:
+            options = RaceEthnicity.match_from_text(self.race_ethnicity)
+            if options.exists():
+                student.race_ethnicities.set(list(options))
+        except Exception:
+            pass
         # Enroll in program
         Enrollment.objects.get_or_create(student=student, program=self.program)
         # Update status

@@ -26,6 +26,8 @@ class StudentForm(forms.ModelForm):
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
             'clearances_expiration_date': forms.DateInput(attrs={'type': 'date'}),
+            # Render as clear, clickable checkboxes (fixes empty button appearance)
+            'race_ethnicities': forms.CheckboxSelectMultiple(),
         }
 
     def __init__(self, *args, **kwargs):

@@ -25,13 +25,19 @@ def render_field(field):
         base_classes = widget.attrs.get('class', '')
         # Determine appropriate control class
         if isinstance(widget, widgets.CheckboxInput):
-            # Checkbox style
+            # Single checkbox
             input_html = field.as_widget(attrs={'class': f"form-check-input {base_classes}".strip()})
             label_html = field.label_tag(attrs={'class': 'form-check-label'}) if field.label else ''
             content = f'<div class="form-check">{input_html}{label_html}</div>'
+        elif isinstance(widget, widgets.CheckboxSelectMultiple):
+            # Group of checkboxes — do NOT apply form-select; render label above and native checkbox list
+            label_html = field.label_tag(attrs={'class': 'form-label'}) if field.label else ''
+            # Let Django render its <ul><li><label><input>… structure; avoid forcing select styling
+            input_html = field.as_widget(attrs={'class': base_classes})
+            content = f"{label_html}{input_html}"
         else:
             # Selects get form-select, others form-control
-            if isinstance(widget, (widgets.Select, widgets.SelectMultiple)): 
+            if isinstance(widget, (widgets.Select, widgets.SelectMultiple)):
                 ctrl_class = 'form-select'
             else:
                 ctrl_class = 'form-control'
