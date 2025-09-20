@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}GoS Admin Portal{% endblock %}
+{% block title %}Girls of Steel Portal{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
     {% if user.is_authenticated %}
@@ -87,7 +87,7 @@
 
     {% else %}
       <div class="text-center py-5">
-        <h1 class="display-6">GoS Admin Portal</h1>
+        <h1 class="display-6">Girls of Steel Portal</h1>
         <p class="lead">Students can apply without logging in.</p>
         <p>
           <a class="btn btn-success btn-lg me-2" href="{% url 'apply_start' %}">Apply to a Program</a>

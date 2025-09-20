@@ -4,20 +4,23 @@
 {% block nav_parents_active %} active{% endblock %}
 {% block content %}
     <div class="row mb-3">
-        <div class="col"><h1 class="h3">Parents</h1></div>
+        <div class="col"><h1 class="h3">Parents / Emergency Contacts</h1></div>
         <div class="col-auto d-flex gap-2">
             {% if perms.programs.add_parent %}
                 <a class="btn btn-primary" href="{% url 'parent_create' %}?next={% url 'parent_list' %}">Add Parent</a>
             {% endif %}
         </div>
     </div>
-
     <div class="row mb-3">
         <div class="col-auto d-flex gap-2">
-            <span class="ms-2" title="This parent receives email updates">✔️</span> means the parent receives email updates through the messaging system.
+            <p class="text-muted">These are all parents/guardians in the system. To see them specific to a child, go through the <a href="{% url 'student_list' %}">Students</a> page.</p>
         </div>
     </div>
-
+    <div class="row mb-3">
+        <div class="col-auto d-flex gap-2">
+            <p class="text-muted"><span class="ms-2" title="This parent receives email updates">✔️</span> means the parent receives email updates through the messaging system.</p>
+        </div>
+    </div>
   {% if parents %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">
