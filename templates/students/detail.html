@@ -79,6 +79,7 @@
         </div>
       </div>
 
+      {% if 'cmu-andrew' in program_feature_keys %}
       <div class="card mb-4">
         <div class="card-header">CMU Andrew ID</div>
         <div class="card-body">
@@ -88,7 +89,9 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% if 'background-checks' in program_feature_keys %}
       <div class="card mb-4">
         <div class="card-header">Background Checks</div>
         <div class="card-body">
@@ -112,7 +115,9 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% if 'discord' in program_feature_keys %}
       <div class="card mb-4">
         <div class="card-header">Discord</div>
         <div class="card-body">
@@ -122,6 +127,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
       <div class="card mb-4">
         <div class="card-header">FIRST Website</div>
