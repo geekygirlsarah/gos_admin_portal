@@ -16,7 +16,7 @@
   </div>
 </div>
 
-{% if form.instance and form.instance.pk %}
+{% if form.instance and form.instance.pk and 'background-checks' in program_feature_keys %}
 <div class="card mb-4">
   <div class="card-header">Background Checks</div>
   <div class="card-body">
@@ -84,6 +84,7 @@
 </div>
 
 {# Andrew ID (CMU) #}
+{% if 'cmu-andrew' in program_feature_keys %}
 <div class="card mb-4">
   <div class="card-header">CMU Andrew ID</div>
   <div class="card-body">
@@ -93,6 +94,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {# Demographics & Preferences #}
 <div class="card mb-4">
@@ -107,6 +109,7 @@
 </div>
 
 {# Discord #}
+{% if 'discord' in program_feature_keys %}
 <div class="card mb-4">
   <div class="card-header">Discord</div>
   <div class="card-body">
@@ -116,6 +119,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {# FIRST Website #}
 <div class="card mb-4">

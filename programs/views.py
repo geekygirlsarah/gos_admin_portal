@@ -1000,6 +1000,12 @@ class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['RELATIONSHIP_CHOICES'] = RELATIONSHIP_CHOICES
+        student = self.object
+        # Union of enabled feature keys across all enrolled programs
+        keys = set(
+            k for k in student.programs.values_list('features__key', flat=True).distinct() if k
+        ) if student else set()
+        ctx['program_feature_keys'] = keys
         return ctx
 
     def form_valid(self, form):
@@ -1061,6 +1067,16 @@ class StudentDetailView(LoginRequiredMixin, DetailView):
     model = Student
     template_name = 'students/detail.html'
     context_object_name = 'student'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        student = self.object
+        # Union of enabled feature keys across all enrolled programs
+        keys = set(
+            k for k in student.programs.values_list('features__key', flat=True).distinct() if k
+        )
+        ctx['program_feature_keys'] = keys
+        return ctx
 
 
 # --- Program student management actions ---
