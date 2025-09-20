@@ -140,6 +140,11 @@ class Student(models.Model):
     on_discord = models.BooleanField(default=False)
     discord_handle = models.CharField(max_length=100, blank=True, null=True)
 
+    # Health & Medical
+    allergies = models.TextField(blank=True, null=True, help_text='List any food, drug, environmental, or other allergies. Include severity and typical reactions if known.')
+    dietary_restrictions = models.TextField(blank=True, null=True, help_text='Dietary needs or restrictions (e.g., vegetarian, halal, no pork, no nuts).')
+    medical_notes = models.TextField(blank=True, null=True, help_text='Other health information staff should know (e.g., asthma, seizures, physical limitations).')
+
     # FIRST Website
     first_has_account = models.BooleanField(default=False, verbose_name='Has FIRST account')
     first_attached_to_parent_account = models.BooleanField(default=False, verbose_name='Attached to parent account')

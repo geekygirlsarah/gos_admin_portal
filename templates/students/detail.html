@@ -58,6 +58,17 @@
       </div>
 
       <div class="card mb-4">
+        <div class="card-header">Health &amp; Medical</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6"><div class="fw-semibold">Allergies</div><div>{{ student.allergies|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Dietary restrictions</div><div>{{ student.dietary_restrictions|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Other medical notes</div><div>{{ student.medical_notes|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
         <div class="card-header">School</div>
         <div class="card-body">
           <div class="row g-3">
