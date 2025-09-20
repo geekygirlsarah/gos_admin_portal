@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load form_tags %}
-{% block title %}Create Program{% endblock %}
+{% block title %}{% if form.instance.pk %}Edit Program{% else %}Create Program{% endif %}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
     <div class="row mb-3">
@@ -10,7 +10,7 @@
     </div>
     <div class="row">
       <div class="col-lg-8">
-        <h1 class="h3 mb-3">Create a New Program</h1>
+        <h1 class="h3 mb-3">{% if form.instance.pk %}Edit Program Settings{% else %}Create a New Program{% endif %}</h1>
         <form method="post" class="needs-validation" novalidate>
           {% csrf_token %}
           <div class="mb-3">
@@ -40,13 +40,30 @@
               </div>
             </div>
           </div>
-          <div class="form-check mb-3">
+          <div class="form-check mb-4">
             {{ form.active|add_class:"form-check-input" }}
             <label for="id_active" class="form-check-label">Active</label>
           </div>
+
+          <div class="card mb-4">
+            <div class="card-header">Features</div>
+            <div class="card-body">
+              {% if form.features %}
+                <div class="form-text mb-2">Enable optional capabilities for this program. You can change these later.</div>
+                <div class="row">
+                  <div class="col">
+                    {{ form.features }}
+                  </div>
+                </div>
+              {% else %}
+                <div class="text-muted">No feature options are available.</div>
+              {% endif %}
+            </div>
+          </div>
+
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary">Save</button>
-            <a class="btn btn-secondary" href="/programs/">Cancel</a>
+            <a class="btn btn-secondary" href="{% if form.instance.pk %}{% url 'program_detail' form.instance.pk %}{% else %}/programs/{% endif %}">Cancel</a>
           </div>
         </form>
       </div>

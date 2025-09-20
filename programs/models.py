@@ -28,6 +28,26 @@ MENTOR_ROLE_CHOICES = [
 ]
 
 
+class ProgramFeature(models.Model):
+    """Toggleable capability that can be enabled per Program.
+
+    Keep keys stable. Suggested keys to start with:
+      - 'discord' — show/collect Discord fields and related UI
+      - 'background-checks' — show/collect background clearance fields and logic
+      - 'cmu-andrew' — show/collect CMU Andrew ID related fields
+    """
+    key = models.SlugField(max_length=50, unique=True, help_text="Stable key used in code/templates (e.g., 'discord').")
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
 class Program(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -41,6 +61,13 @@ class Program(models.Model):
     )
     start_date = models.DateField(null=True, blank=True, db_index=True, help_text="Program start date")
     end_date = models.DateField(null=True, blank=True, db_index=True, help_text="Program end date")
+    # Feature toggles
+    features = models.ManyToManyField(
+        ProgramFeature,
+        blank=True,
+        related_name='programs',
+        help_text="Enable optional features (e.g., Discord, background checks, CMU Andrew ID).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -49,6 +76,14 @@ class Program(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def feature_keys(self) -> set:
+        """Convenience set of enabled feature keys for quick checks in templates/views."""
+        return set(self.features.values_list('key', flat=True))
+
+    def has_feature(self, key: str) -> bool:
+        return key in self.feature_keys
 
 
 class School(models.Model):

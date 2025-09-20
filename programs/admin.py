@@ -1,6 +1,13 @@
 from django.contrib import admin
-from .models import Program, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication
+from .models import Program, ProgramFeature, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication
 from .forms import StudentForm
+
+
+@admin.register(ProgramFeature)
+class ProgramFeatureAdmin(admin.ModelAdmin):
+    list_display = ('name', 'key', 'display_order')
+    search_fields = ('name', 'key')
+    ordering = ('display_order', 'name')
 
 
 @admin.register(Program)
@@ -8,6 +15,20 @@ class ProgramAdmin(admin.ModelAdmin):
     list_display = ('name', 'year', 'start_date', 'end_date', 'active', 'updated_at')
     search_fields = ('name',)
     list_filter = ('active', 'year', 'start_date', 'end_date')
+    filter_horizontal = ('features',)
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'description', 'active', 'year', 'start_date', 'end_date')
+        }),
+        ('Features', {
+            'fields': ('features',),
+            'description': 'Enable optional capabilities for this program.'
+        }),
+        ('System', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+    readonly_fields = ('created_at', 'updated_at')
 
 
 @admin.register(Fee)
