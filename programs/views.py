@@ -9,7 +9,7 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -476,7 +476,6 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         'personal_email': personal_email,
                         'andrew_id': andrew_id,
                         'andrew_email': andrew_email,
-                        'race_ethnicity': race_ethnicity,
                         'tshirt_size': tshirt_size,
                         'seen_once': seen_once if seen_once is not None else False,
                         'on_discord': on_discord if on_discord is not None else False,
@@ -502,7 +501,6 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         ('personal_email', personal_email),
                         ('andrew_id', andrew_id),
                         ('andrew_email', andrew_email),
-                        ('race_ethnicity', race_ethnicity),
                         ('tshirt_size', tshirt_size),
                         ('discord_handle', discord_handle),
                     ]:
@@ -531,6 +529,14 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if changed:
                         obj.save()
                         updated += 1
+
+                # Map race/ethnicity text to multi-select options
+                try:
+                    opts = RaceEthnicity.match_from_text(race_ethnicity)
+                    if opts.exists():
+                        obj.race_ethnicities.set(list(opts))
+                except Exception:
+                    pass
 
                 # Parent linkage (primary and secondary)
                 prim_first = val(d, 'primary_parent_first_name', 'Primary Parent First Name', 'Primary First Name', 'Primary First')

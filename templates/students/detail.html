@@ -162,7 +162,7 @@
         <div class="card-header">Other Details</div>
         <div class="card-body">
           <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">Race / Ethnicity</div><div>{{ student.race_ethnicity|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Race / Ethnicity</div><div>{% with races=student.race_ethnicities.all %}{% if races %}{% for r in races %}{% if not forloop.first %}, {% endif %}{{ r.name }}{% endfor %}{% else %}—{% endif %}{% endwith %}</div></div>
             <div class="col-md-3"><div class="fw-semibold">Seen once</div><div>{{ student.seen_once|yesno:"Yes,No" }}</div></div>
           </div>
         </div>
