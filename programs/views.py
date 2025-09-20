@@ -886,11 +886,43 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return self._render(form, prog)
 
             to_send = [test_email] if test_email else sorted(recipients)
-            connection = get_connection(
-                backend=getattr(settings, 'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-            )
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
-            email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[])
+
+            # Determine sender account and SMTP credentials
+            selected = form.cleaned_data.get('from_account')
+            accounts = getattr(settings, 'EMAIL_SENDER_ACCOUNTS', []) or []
+            acc = None
+            if accounts and selected and selected != 'DEFAULT':
+                # Match by key or email value
+                for a in accounts:
+                    key = a.get('key') or a.get('email')
+                    if key == selected:
+                        acc = a
+                        break
+            # Build SMTP connection using selected account credentials if provided
+            conn_kwargs = {
+                'backend': getattr(settings, 'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend'),
+                'host': getattr(settings, 'EMAIL_HOST', ''),
+                'port': getattr(settings, 'EMAIL_PORT', 465),
+                'use_tls': getattr(settings, 'EMAIL_USE_TLS', False),
+                'use_ssl': getattr(settings, 'EMAIL_USE_SSL', True),
+                'timeout': getattr(settings, 'EMAIL_TIMEOUT', 10),
+            }
+            if acc:
+                conn_kwargs.update({
+                    'username': acc.get('username') or '',
+                    'password': acc.get('password') or '',
+                })
+                from_email = acc.get('email') or getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+            else:
+                # Fall back to global credentials and default from address
+                conn_kwargs.update({
+                    'username': getattr(settings, 'EMAIL_HOST_USER', ''),
+                    'password': getattr(settings, 'EMAIL_HOST_PASSWORD', ''),
+                })
+                from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+
+            connection = get_connection(**conn_kwargs)
+            email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[], connection=connection)
             email.to = []  # ensure empty
             email.bcc = to_send
             email.attach_alternative(html_body, 'text/html')
