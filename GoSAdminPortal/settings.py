@@ -217,6 +217,28 @@ EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
+# Multiple sender accounts for messaging UI. Each item should be a dict with keys:
+# [
+#   {
+#       'key': 'key',
+#       'display_name': 'display name for dropdown',
+#       'email': 'email',
+#       'username': 'username',
+#       'password': ''
+#   }
+# ]
+# Host/port/TLS/SSL come from the global EMAIL_* settings above.
+# You can set via code or via an env var EMAIL_SENDER_ACCOUNTS_JSON containing a JSON list.
+import json as _json
+_email_accounts_env = os.getenv('EMAIL_SENDER_ACCOUNTS_JSON', '').strip()
+EMAIL_SENDER_ACCOUNTS = []
+if _email_accounts_env:
+    try:
+        EMAIL_SENDER_ACCOUNTS = _json.loads(_email_accounts_env)
+    except Exception:
+        # Fallback: leave empty if JSON is invalid
+        EMAIL_SENDER_ACCOUNTS = []
+
 # Administrators who get error emails
 # Provide comma-separated emails via ADMIN_EMAILS env var, e.g., "admin1@example.com,admin2@example.com"
 ADMIN_EMAILS = [e.strip() for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
