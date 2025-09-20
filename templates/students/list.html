@@ -3,14 +3,18 @@
 {% block title %}Students{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
-  <div class="row mb-3">
+    <div class="row mb-3">
     <div class="col"><h1 class="h3">Students</h1></div>
-    <div class="col-auto d-flex gap-2">
+
+        <div class="col-auto d-flex gap-2">
       {% if perms.programs.add_student %}
         <a class="btn btn-primary" href="{% url 'student_create' %}?next={% url 'student_list' %}">Add Student</a>
       {% endif %}
     </div>
   </div>
+    <div class="row mb-3">
+        <p class="text-muted">These are all the students in the system. To see students specific to a program, or edit program-specific data, go through the <a href="{% url 'program_list' %}">Programs</a> page.</p>
+    </div>
   {% if students %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">
