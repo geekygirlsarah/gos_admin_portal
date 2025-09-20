@@ -37,10 +37,12 @@
                   <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
                 {% endif %}
                 {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}
+                {% if 'background-checks' in program.feature_keys %}
                 {% requires_bg s program as needs_bg %}
                   {% if needs_bg %}
                       <span class="badge bg-secondary ms-2">BG Check Needed</span>
                   {% endif %}
+                {% endif %}
               </div>
               <div class="d-flex gap-2">
                 <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>

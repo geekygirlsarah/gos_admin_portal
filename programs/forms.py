@@ -207,7 +207,7 @@ class ProgramForm(forms.ModelForm):
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
-            'features': forms.CheckboxSelectMultiple,
+            'features': forms.CheckboxSelectMultiple(),
         }
 
 
