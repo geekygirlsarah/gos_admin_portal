@@ -203,10 +203,11 @@ class MentorForm(forms.ModelForm):
 class ProgramForm(forms.ModelForm):
     class Meta:
         model = Program
-        fields = ['name', 'description', 'year', 'start_date', 'end_date', 'active']
+        fields = ['name', 'description', 'year', 'start_date', 'end_date', 'active', 'features']
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'features': forms.CheckboxSelectMultiple,
         }
 
 

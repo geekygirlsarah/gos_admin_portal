@@ -981,6 +981,15 @@ class ProgramCreateView(CreateView):
         return reverse('program_detail', args=[self.object.pk])
 
 
+class ProgramUpdateView(UpdateView):
+    model = Program
+    form_class = ProgramForm
+    template_name = 'programs/form.html'
+
+    def get_success_url(self):
+        return reverse('program_detail', args=[self.object.pk])
+
+
 # --- Student edit ---
 class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Student

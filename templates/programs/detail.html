@@ -10,9 +10,14 @@
   </div>
   <div class="row">
     <div class="col-lg-10 col-xl-8">
-      <h1 class="h3">{{ program.name }}{% if program.year %} <small class="text-muted">({{ program.year }})</small>{% endif %}</h1>
+      <div class="d-flex align-items-center justify-content-between">
+        <h1 class="h3 m-0">{{ program.name }}{% if program.year %} <small class="text-muted">({{ program.year }})</small>{% endif %}</h1>
+        {% if perms.programs.change_program %}
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'program_edit' program.id %}">Edit Settings</a>
+        {% endif %}
+      </div>
 
-      <p><span class="fw-semibold">Program Active:</span> <span class="badge {% if program.active %}bg-success{% else %}bg-secondary{% endif %}">{{ program.active|yesno:"Yes,No" }}</span></p>
+      <p class="mt-3"><span class="fw-semibold">Program Active:</span> <span class="badge {% if program.active %}bg-success{% else %}bg-secondary{% endif %}">{{ program.active|yesno:"Yes,No" }}</span></p>
       <p class="text-muted">{{ program.description|default:"No description provided." }}</p>
       <hr>
         <div class="mt-4 d-flex flex-wrap gap-2">
