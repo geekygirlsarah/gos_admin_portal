@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth.decorators import login_required, permission_required
 from django.views.generic import TemplateView
 from .views import (
-    ProgramListView, ProgramDetailView, ProgramCreateView,
+    ProgramListView, ProgramDetailView, ProgramCreateView, ProgramUpdateView,
     ProgramStudentAddView, ProgramStudentRemoveView, ProgramStudentQuickCreateView,
     StudentUpdateView, StudentListView, StudentCreateView, StudentPhotoListView, ProgramStudentPhotoListView, StudentDetailView,
     ParentCreateView, ParentUpdateView, ParentListView,
@@ -29,6 +29,7 @@ urlpatterns = [
     path('', login_required(ProgramListView.as_view()), name='program_list'),
     path('new/', permission_required('programs.add_program')(ProgramCreateView.as_view()), name='program_create'),
     path('<int:pk>/', login_required(ProgramDetailView.as_view()), name='program_detail'),
+    path('<int:pk>/edit/', permission_required('programs.change_program')(ProgramUpdateView.as_view()), name='program_edit'),
     path('messaging/', login_required(ProgramEmailView.as_view()), name='program_messaging'),
     path('<int:pk>/email/', login_required(ProgramEmailView.as_view()), name='program_email'),
     path('<int:pk>/dues/', login_required(ProgramDuesOwedView.as_view()), name='program_dues_owed'),
