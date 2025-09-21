@@ -8,6 +8,7 @@ from django.core.mail import EmailMultiAlternatives, get_connection
 from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
+from premailer import transform
 
 from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
 from .forms import (
@@ -858,7 +859,12 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
             groups = form.cleaned_data['recipient_groups']
             subject = form.cleaned_data['subject']
             html_body = form.cleaned_data['body']
-            text_body = strip_tags(html_body)
+            # Inline CSS for better email client compatibility
+            try:
+                inlined_html_body = transform(html_body)
+            except Exception:
+                inlined_html_body = html_body
+            text_body = strip_tags(inlined_html_body)
             test_email = form.cleaned_data.get('test_email')
 
             recipients = set()
@@ -925,7 +931,7 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
             email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[], connection=connection)
             email.to = []  # ensure empty
             email.bcc = to_send
-            email.attach_alternative(html_body, 'text/html')
+            email.attach_alternative(inlined_html_body, 'text/html')
             email.send(fail_silently=False)
 
             messages.success(request, f"Email sent to {len(to_send)} recipient(s){' (test only)' if test_email else ''}.")
