@@ -1631,3 +1631,24 @@ class ProgramDuesOwedView(LoginRequiredMixin, View):
             'rows': rows,
             'grand_total': grand_total,
         })
+
+
+class ProgramSignoutSheetView(LoginRequiredMixin, View):
+    template_name = 'programs/signout_sheet.html'
+
+    def get(self, request, pk):
+        from django.shortcuts import render
+        program = get_object_or_404(Program, pk=pk)
+        # Fetch students enrolled in the program, active first, then inactive
+        base_qs = program.students.select_related('user').all().annotate(
+            sort_first=Lower(Coalesce('first_name', 'legal_first_name')),
+            sort_last=Lower('last_name'),
+        )
+        active_students = list(base_qs.filter(active=True).order_by('sort_first', 'sort_last'))
+        inactive_students = list(base_qs.filter(active=False).order_by('sort_first', 'sort_last'))
+        students = active_students
+        ctx = {
+            'program': program,
+            'students': students,
+        }
+        return render(request, self.template_name, ctx)

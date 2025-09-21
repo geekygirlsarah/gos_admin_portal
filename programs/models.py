@@ -244,8 +244,32 @@ class Student(models.Model):
     first_registered_teams = models.CharField(max_length=200, blank=True, null=True, verbose_name='Registered team(s)', help_text='Team numbers or names, comma-separated')
 
     # New contact fields
-    primary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, null=True, blank=True, related_name='primary_for_students')
-    secondary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, null=True, blank=True, related_name='secondary_for_students')
+    primary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, related_name='primary_for', null=True, blank=True)
+    secondary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, related_name='secondary_for', null=True, blank=True)
+
+    @property
+    def all_parents(self):
+        """
+        Returns a list of unique Parent objects related to this student,
+        including primary, secondary, and any additional M2M parents.
+        """
+        seen_ids = set()
+        result = []
+
+        if self.primary_contact_id:
+            result.append(self.primary_contact)
+            seen_ids.add(self.primary_contact_id)
+
+        if self.secondary_contact_id and self.secondary_contact_id not in seen_ids:
+            result.append(self.secondary_contact)
+            seen_ids.add(self.secondary_contact_id)
+
+        for p in self.parents.all():
+            if p.id not in seen_ids:
+                result.append(p)
+                seen_ids.add(p.id)
+
+        return result
 
     active = models.BooleanField(default=True)
     programs = models.ManyToManyField('Program', through='Enrollment', related_name='students', blank=True)
