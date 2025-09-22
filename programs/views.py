@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from premailer import transform
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
+from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity, Adult, StudentRelationship, AdultProgramRole
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -27,6 +27,107 @@ from .forms import (
     ProgramApplySelectForm,
     StudentApplicationForm,
 )
+
+# ---- Helpers to sync legacy models to new Adult domain (Phase 5) ----
+
+def _map_parent_rel_to_student_rel(rel: str) -> str:
+    if not rel:
+        return 'other'
+    r = str(rel).strip().lower()
+    if r == 'guardian':
+        return 'guardian'
+    if r in {
+        'parent', 'mother', 'father', 'grandparent', 'grandmother', 'grandfather',
+        'pibling', 'aunt', 'uncle', 'sibling', 'sister', 'brother'
+    }:
+        return 'parent'
+    if r in {'emergency', 'emergency_contact'}:
+        return 'emergency_contact'
+    return 'other'
+
+
+def _adult_dedupe_key(first_name, last_name, email, phone):
+    email = (email or '').strip().lower()
+    if email:
+        return f"email:{email}"
+    return f"name_phone:{(first_name or '').strip().lower()}|{(last_name or '').strip().lower()}|{(phone or '').strip()}"
+
+
+def _get_or_create_adult_from_identity(*, first_name, preferred_first_name=None, last_name, pronouns=None,
+                                       email=None, phone_number=None, discord_username=None, photo=None, active=True) -> Adult:
+    key = _adult_dedupe_key(first_name, last_name, email, phone_number)
+    # Prefer email match; otherwise match by name + phone
+    qs = Adult.objects.all()
+    if email:
+        qs = qs.filter(email=email)
+    else:
+        qs = qs.filter(first_name=first_name or '', last_name=last_name or '', phone_number=phone_number)
+    adult = qs.first()
+    if not adult:
+        adult = Adult.objects.create(
+            first_name=first_name or '',
+            preferred_first_name=preferred_first_name,
+            last_name=last_name or '',
+            pronouns=pronouns,
+            email=email,
+            phone_number=phone_number,
+            discord_username=discord_username,
+            photo=photo,
+            active=active,
+        )
+        return adult
+    # Opportunistically fill missing fields
+    changed = False
+    if not adult.email and email:
+        adult.email = email; changed = True
+    if not adult.phone_number and phone_number:
+        adult.phone_number = phone_number; changed = True
+    if not adult.discord_username and discord_username:
+        adult.discord_username = discord_username; changed = True
+    if changed:
+        adult.save(update_fields=['email', 'phone_number', 'discord_username', 'updated_at'])
+    return adult
+
+
+def sync_parent_to_adult_and_links(parent: Parent):
+    """Ensure a corresponding Adult exists and StudentRelationship links mirror Parent.students.
+    Idempotent and safe to call on create/update/import.
+    """
+    adult = _get_or_create_adult_from_identity(
+        first_name=parent.first_name,
+        preferred_first_name=parent.preferred_first_name,
+        last_name=parent.last_name,
+        pronouns=None,
+        email=parent.email,
+        phone_number=parent.phone_number,
+    )
+    rel_type = _map_parent_rel_to_student_rel(parent.relationship_to_student)
+    # Create missing relationships
+    for student in parent.students.all():
+        StudentRelationship.objects.get_or_create(
+            adult=adult,
+            student=student,
+            type=rel_type,
+            defaults={'is_primary': False},
+        )
+    return adult
+
+
+def sync_mentor_to_adult(mentor: Mentor):
+    """Ensure a corresponding Adult exists for a Mentor record. Does not create program-scoped roles yet."""
+    phone = mentor.cell_phone or mentor.home_phone
+    email = mentor.personal_email or mentor.andrew_email
+    _get_or_create_adult_from_identity(
+        first_name=mentor.first_name,
+        preferred_first_name=mentor.preferred_first_name,
+        last_name=mentor.last_name,
+        pronouns=mentor.pronouns,
+        email=email,
+        phone_number=phone,
+        discord_username=mentor.discord_username,
+        photo=mentor.photo,
+        active=mentor.active,
+    )
 
 
 class ProgramListView(ListView):
@@ -639,6 +740,11 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if changed:
                         obj.save()
                         updated += 1
+                # Keep new Adult tables in sync
+                try:
+                    sync_parent_to_adult_and_links(obj)
+                except Exception:
+                    pass
             messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
         except Exception as e:
             messages.error(request, f'Import failed: {e}')
@@ -706,6 +812,11 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if changed:
                         obj.save()
                         updated += 1
+                # Keep new Adult tables in sync
+                try:
+                    sync_mentor_to_adult(obj)
+                except Exception:
+                    pass
             messages.success(request, f'Imported {created} new, updated {updated}. Skipped {errors}.')
         except Exception as e:
             messages.error(request, f'Import failed: {e}')
@@ -798,6 +909,14 @@ class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     template_name = 'mentors/form.html'
     permission_required = 'programs.add_mentor'
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        try:
+            sync_mentor_to_adult(self.object)
+        except Exception:
+            pass
+        return response
+
     def get_success_url(self):
         return reverse('mentor_list')
 
@@ -807,6 +926,14 @@ class MentorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     form_class = MentorForm
     template_name = 'mentors/form.html'
     permission_required = 'programs.change_mentor'
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        try:
+            sync_mentor_to_adult(self.object)
+        except Exception:
+            pass
+        return response
 
     def get_success_url(self):
         next_url = self.request.GET.get('next')
@@ -875,12 +1002,28 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if 'parents' in groups:
+                # Legacy Parent opt-in emails
                 parent_emails = Parent.objects.filter(students__programs=prog, email_updates=True).values_list('email', flat=True)
                 for e in parent_emails:
                     if e:
                         recipients.add(e)
+                # New Adult relationships (Parent/Guardian) tied to students in this program
+                adult_emails = (
+                    StudentRelationship.objects
+                    .filter(student__programs=prog, type__in=[StudentRelationship.PARENT, StudentRelationship.GUARDIAN])
+                    .values_list('adult__email', flat=True)
+                    .distinct()
+                )
+                for e in adult_emails:
+                    if e:
+                        recipients.add(e)
             if 'mentors' in groups:
-                # No explicit Program-Mentor link in models; fallback to all active mentors
+                # Prefer AdultProgramRole scoped to this program
+                apr_qs = AdultProgramRole.objects.filter(program=prog, active=True)
+                for e in apr_qs.values_list('adult__email', flat=True).distinct():
+                    if e:
+                        recipients.add(e)
+                # Backward compatibility: include legacy active mentors
                 for m in Mentor.objects.filter(active=True):
                     if m.personal_email:
                         recipients.add(m.personal_email)
@@ -1134,6 +1277,15 @@ class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     template_name = 'parents/form.html'
     permission_required = 'programs.add_parent'
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        try:
+            sync_parent_to_adult_and_links(self.object)
+        except Exception:
+            # Do not block legacy flow if sync fails
+            pass
+        return response
+
     def get_success_url(self):
         # After creating a Parent, return to the Parents listing
         return reverse('parent_list')
@@ -1144,6 +1296,14 @@ class ParentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     form_class = ParentForm
     template_name = 'parents/form.html'
     permission_required = 'programs.change_parent'
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        try:
+            sync_parent_to_adult_and_links(self.object)
+        except Exception:
+            pass
+        return response
 
     def get_success_url(self):
         next_url = self.request.GET.get('next')

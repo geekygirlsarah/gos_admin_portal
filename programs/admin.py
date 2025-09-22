@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Program, ProgramFeature, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication
+from .models import Program, ProgramFeature, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication, Adult, StudentRelationship, AdultProgramRole
 from .forms import StudentForm
 
 
@@ -261,5 +261,44 @@ class AlumniAdmin(admin.ModelAdmin):
         'student__first_name', 'student__last_name', 'alumni_email', 'college', 'employer', 'job_title'
     )
     autocomplete_fields = ('student',)
+    readonly_fields = ('created_at', 'updated_at')
+
+
+class StudentRelationshipInline(admin.TabularInline):
+    model = StudentRelationship
+    extra = 0
+    autocomplete_fields = ('student',)
+
+
+class AdultProgramRoleInline(admin.TabularInline):
+    model = AdultProgramRole
+    extra = 0
+    autocomplete_fields = ('program',)
+
+
+@admin.register(Adult)
+class AdultAdmin(admin.ModelAdmin):
+    list_display = ('last_name', 'first_name', 'email', 'phone_number', 'active', 'updated_at')
+    list_filter = ('active',)
+    search_fields = ('first_name', 'preferred_first_name', 'last_name', 'email', 'phone_number', 'discord_username')
+    inlines = [StudentRelationshipInline, AdultProgramRoleInline]
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(StudentRelationship)
+class StudentRelationshipAdmin(admin.ModelAdmin):
+    list_display = ('student', 'adult', 'type', 'is_primary', 'start_date', 'end_date', 'updated_at')
+    list_filter = ('type', 'is_primary')
+    search_fields = ('student__first_name', 'student__last_name', 'adult__first_name', 'adult__last_name')
+    autocomplete_fields = ('student', 'adult')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(AdultProgramRole)
+class AdultProgramRoleAdmin(admin.ModelAdmin):
+    list_display = ('program', 'adult', 'role', 'active', 'clearance_expires', 'updated_at')
+    list_filter = ('program', 'role', 'active')
+    search_fields = ('program__name', 'adult__first_name', 'adult__last_name')
+    autocomplete_fields = ('program', 'adult')
     readonly_fields = ('created_at', 'updated_at')
 

@@ -250,24 +250,39 @@ class Student(models.Model):
     @property
     def all_parents(self):
         """
-        Returns a list of unique Parent objects related to this student,
-        including primary, secondary, and any additional M2M parents.
+        Returns a list of unique parent/guardian Adult or Parent objects related to this student.
+        Combines legacy Parent (primary/secondary + M2M) with new Adult relationships (StudentRelationship)
+        of types parent/guardian. Returns objects that have name/email/phone attributes expected by templates.
         """
-        seen_ids = set()
+        # Legacy Parent objects
+        seen_parent_ids = set()
         result = []
 
         if self.primary_contact_id:
             result.append(self.primary_contact)
-            seen_ids.add(self.primary_contact_id)
+            seen_parent_ids.add(self.primary_contact_id)
 
-        if self.secondary_contact_id and self.secondary_contact_id not in seen_ids:
+        if self.secondary_contact_id and self.secondary_contact_id not in seen_parent_ids:
             result.append(self.secondary_contact)
-            seen_ids.add(self.secondary_contact_id)
+            seen_parent_ids.add(self.secondary_contact_id)
 
         for p in self.parents.all():
-            if p.id not in seen_ids:
+            if p.id not in seen_parent_ids:
                 result.append(p)
-                seen_ids.add(p.id)
+                seen_parent_ids.add(p.id)
+
+        # New Adult relationships (parent/guardian)
+        try:
+            adult_links = self.adult_links.select_related('adult').filter(type__in=['parent', 'guardian'])
+            seen_adult_ids = set()
+            for link in adult_links:
+                adult = link.adult
+                if adult and adult.id not in seen_adult_ids:
+                    result.append(adult)
+                    seen_adult_ids.add(adult.id)
+        except Exception:
+            # If the relation doesn't exist yet (older migrations), just skip
+            pass
 
         return result
 
@@ -393,6 +408,109 @@ class Mentor(models.Model):
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
+
+
+class Adult(models.Model):
+    # Identity
+    first_name = models.CharField(max_length=150)
+    preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
+    last_name = models.CharField(max_length=150)
+    pronouns = models.CharField(max_length=50, blank=True, null=True)
+
+    # Contact
+    email = models.EmailField(blank=True, null=True)
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+    address_line1 = models.CharField(max_length=200, blank=True, null=True)
+    address_line2 = models.CharField(max_length=200, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=100, blank=True, null=True)
+    postal_code = models.CharField(max_length=20, blank=True, null=True)
+
+    # Misc
+    discord_username = models.CharField(max_length=100, blank=True, null=True)
+    photo = models.ImageField(upload_to='photos/adults/', blank=True, null=True)
+    notes = models.TextField(blank=True)
+
+    # Status
+    active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['last_name', 'first_name']
+
+    def __str__(self):
+        pref = self.preferred_first_name or self.first_name
+        return f"{pref} {self.last_name}".strip()
+
+
+class StudentRelationship(models.Model):
+    PARENT = 'parent'
+    GUARDIAN = 'guardian'
+    EMERGENCY = 'emergency_contact'
+    OTHER = 'other'
+
+    REL_CHOICES = [
+        (PARENT, 'Parent'),
+        (GUARDIAN, 'Guardian'),
+        (EMERGENCY, 'Emergency contact'),
+        (OTHER, 'Other'),
+    ]
+
+    adult = models.ForeignKey('Adult', on_delete=models.CASCADE, related_name='student_links')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='adult_links')
+    type = models.CharField(max_length=32, choices=REL_CHOICES)
+
+    is_primary = models.BooleanField(default=False)
+    start_date = models.DateField(blank=True, null=True)
+    end_date = models.DateField(blank=True, null=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = (('adult', 'student', 'type'),)
+        ordering = ['student__last_name', 'adult__last_name']
+        verbose_name = 'Student Relationship'
+        verbose_name_plural = 'Student Relationships'
+
+    def __str__(self):
+        return f"{self.adult} → {self.student} ({self.get_type_display()})"
+
+
+class AdultProgramRole(models.Model):
+    MENTOR = 'mentor'
+    VOLUNTEER = 'volunteer'
+    CHAPERONE = 'chaperone'
+
+    ROLE_CHOICES = [
+        (MENTOR, 'Mentor'),
+        (VOLUNTEER, 'Volunteer'),
+        (CHAPERONE, 'Chaperone'),
+    ]
+
+    adult = models.ForeignKey('Adult', on_delete=models.CASCADE, related_name='program_roles')
+    program = models.ForeignKey('Program', on_delete=models.CASCADE, related_name='adult_roles')
+    role = models.CharField(max_length=32, choices=ROLE_CHOICES)
+
+    # Role-specific fields
+    active = models.BooleanField(default=True)
+    background_check_date = models.DateField(blank=True, null=True)
+    clearance_expires = models.DateField(blank=True, null=True)
+    training_completed = models.BooleanField(default=False)
+    access_badge_id = models.CharField(max_length=50, blank=True)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (('adult', 'program', 'role'),)
+        ordering = ['program__name', 'adult__last_name']
+        verbose_name = 'Adult Program Role'
+        verbose_name_plural = 'Adult Program Roles'
+
+    def __str__(self):
+        return f"{self.program}: {self.adult} as {self.get_role_display()}"
 
 
 class Fee(models.Model):

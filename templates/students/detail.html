@@ -148,17 +148,24 @@
             <div class="col-md-6"><div class="fw-semibold">Primary contact</div><div>{{ student.primary_contact|default:'—' }}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Secondary contact</div><div>{{ student.secondary_contact|default:'—' }}</div></div>
             <div class="col-12"><div class="fw-semibold">Parents/guardians</div>
-              {% if student.parents.all %}
-                <ul class="mb-0">
-                {% for p in student.parents.all %}
-                  <li>{{ p }}</li>
-                {% empty %}
-                  <li class="text-muted">—</li>
-                {% endfor %}
-                </ul>
-              {% else %}
-                <div class="text-muted">—</div>
-              {% endif %}
+              {% with plist=student.all_parents %}
+                {% if plist %}
+                  <ul class="mb-0">
+                  {% for p in plist %}
+                    <li>
+                      {{ p.preferred_first_name|default:p.first_name }} {{ p.last_name }}
+                      {% if p.email or p.phone_number %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                      {% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}
+                      {% if p.phone_number %}{% if p.email %} · {% endif %}<a href="tel:{{ p.phone_number }}">{{ p.phone_number }}</a>{% endif %}
+                    </li>
+                  {% endfor %}
+                  </ul>
+                {% else %}
+                  <div class="text-muted">—</div>
+                {% endif %}
+              {% endwith %}
             </div>
           </div>
         </div>
