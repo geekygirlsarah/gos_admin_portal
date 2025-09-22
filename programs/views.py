@@ -928,9 +928,14 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
 
             connection = get_connection(**conn_kwargs)
-            email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[], connection=connection)
-            email.to = []  # ensure empty
-            email.bcc = to_send
+            # For test sends, put recipient in the To field (some SMTP providers reject emails with empty To)
+            if test_email:
+                email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[test_email], connection=connection)
+                email.bcc = []
+            else:
+                email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=[], connection=connection)
+                email.to = []  # ensure empty
+                email.bcc = to_send
             email.attach_alternative(inlined_html_body, 'text/html')
             email.send(fail_silently=False)
 
