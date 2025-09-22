@@ -1,6 +1,20 @@
 from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.files.base import ContentFile
+
+from PIL import Image
+from io import BytesIO
+import os
+
+# Register HEIC opener if available so PIL can decode .heic images
+try:
+    from pillow_heif import register_heif_opener  # type: ignore
+    register_heif_opener()
+except Exception:
+    # If pillow-heif isn't installed, we simply won't be able to open HEIC files.
+    # The save() handler below will skip conversion in that case.
+    pass
 
 
 RELATIONSHIP_CHOICES = [
@@ -159,6 +173,57 @@ class RaceEthnicity(models.Model):
 
 class Student(models.Model):
     def save(self, *args, **kwargs):
+        # If a HEIC photo is uploaded, convert it to JPEG so the site can use it reliably.
+        # We do this before the main save and replace the ImageField's file.
+        if getattr(self, 'photo', None):
+            try:
+                file_obj = self.photo
+                name_lower = (file_obj.name or '').lower()
+                needs_convert_by_ext = name_lower.endswith('.heic') or name_lower.endswith('.heif')
+                # Attempt to detect format via PIL if possible
+                convert = False
+                if needs_convert_by_ext:
+                    convert = True
+                else:
+                    try:
+                        file_obj.open('rb')
+                        img_probe = Image.open(file_obj)
+                        fmt = (img_probe.format or '').upper()
+                        img_probe.close()
+                        # With pillow-heif registered, HEIC files report format as 'HEIF'
+                        if fmt in ('HEIC', 'HEIF'):  # be generous
+                            convert = True
+                    except Exception:
+                        # If we cannot probe, fall back to extension check only
+                        convert = needs_convert_by_ext
+                    finally:
+                        try:
+                            file_obj.close()
+                        except Exception:
+                            pass
+                if convert:
+                    file_obj.open('rb')
+                    img = Image.open(file_obj)
+                    # Ensure compatibility for JPEG
+                    if img.mode in ('RGBA', 'P'):
+                        img = img.convert('RGB')
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    buffer = BytesIO()
+                    img.save(buffer, format='JPEG', quality=85, optimize=True)
+                    buffer.seek(0)
+                    base, _ = os.path.splitext(self.photo.name or 'photo')
+                    new_name = f"{base}.jpg"
+                    # Replace the field file without triggering another save recursively
+                    self.photo.save(new_name, ContentFile(buffer.read()), save=False)
+                    try:
+                        file_obj.close()
+                    except Exception:
+                        pass
+            except Exception:
+                # Fail-safe: if anything goes wrong, do not block saving the model
+                pass
+
         # Auto-opt-in primary contact for email updates if assigned
         try:
             parent = self.primary_contact
