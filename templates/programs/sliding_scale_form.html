@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}New Sliding Scale — {{ program.name }}{% endblock %}
+{% block title %}{% if object %}Edit Sliding Scale{% else %}New Sliding Scale{% endif %} — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
   <div class="row mb-3">
@@ -9,7 +9,7 @@
   </div>
   <div class="row">
     <div class="col-lg-8 col-xl-6">
-      <h1 class="h4">New Sliding Scale for {{ program.name }}</h1>
+      <h1 class="h4">{% if object %}Edit{% else %}New{% endif %} Sliding Scale for {{ program.name }}</h1>
       <form method="post">
         {% csrf_token %}
         <div class="mb-3">{{ form.as_p }}</div>

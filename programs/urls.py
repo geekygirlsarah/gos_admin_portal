@@ -8,7 +8,7 @@ from .views import (
     ParentCreateView, ParentUpdateView, ParentListView,
     MentorListView, MentorCreateView, MentorUpdateView,
     ProgramPaymentCreateView, ProgramPaymentDetailView, ProgramPaymentPrintView,
-    ProgramSlidingScaleCreateView,
+    ProgramSlidingScaleCreateView, ProgramSlidingScaleUpdateView,
     ProgramStudentBalanceView,
     SchoolListView, SchoolCreateView, SchoolUpdateView,
     ProgramEmailView,
@@ -77,6 +77,7 @@ urlpatterns = [
 
     # Sliding scales
     path('<int:pk>/sliding-scales/new/', permission_required('programs.add_slidingscale')(ProgramSlidingScaleCreateView.as_view()), name='program_sliding_scale_create'),
+    path('<int:pk>/sliding-scales/<int:sliding_id>/edit/', permission_required('programs.change_slidingscale')(ProgramSlidingScaleUpdateView.as_view()), name='program_sliding_scale_edit'),
 
     # Fee management
     path('<int:pk>/fees/manage/', permission_required('programs.change_fee')(ProgramFeeSelectView.as_view()), name='program_fee_select'),
