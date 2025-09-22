@@ -1247,10 +1247,56 @@ class ProgramSlidingScaleCreateView(LoginRequiredMixin, PermissionRequiredMixin,
         return ctx
 
     def form_valid(self, form):
+        # If a sliding scale already exists for this student and program, redirect to edit
+        student = form.cleaned_data.get('student')
+        existing = SlidingScale.objects.filter(student=student, program=self.program).first() if student else None
+        if existing:
+            messages.info(self.request, 'A sliding scale already exists for this student. You can edit it below.')
+            return redirect('program_sliding_scale_edit', pk=self.program.pk, sliding_id=existing.pk)
+        # Otherwise, create normally; guard against race condition
+        obj = form.save(commit=False)
+        obj.program = self.program
+        try:
+            obj.save()
+        except Exception:
+            # In case of a late conflict (e.g., unique_together race), redirect to edit
+            existing = SlidingScale.objects.filter(student=obj.student, program=self.program).first()
+            if existing:
+                messages.info(self.request, 'A sliding scale already exists for this student. You can edit it below.')
+                return redirect('program_sliding_scale_edit', pk=self.program.pk, sliding_id=existing.pk)
+            raise
+        messages.success(self.request, 'Sliding scale saved successfully.')
+        return redirect('program_detail', pk=self.program.pk)
+
+
+class ProgramSlidingScaleUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = SlidingScale
+    form_class = SlidingScaleForm
+    template_name = 'programs/sliding_scale_form.html'
+    permission_required = 'programs.change_slidingscale'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(SlidingScale, pk=self.kwargs['sliding_id'], program=self.program)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['program'] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['program'] = self.program
+        return ctx
+
+    def form_valid(self, form):
         obj = form.save(commit=False)
         obj.program = self.program
         obj.save()
-        messages.success(self.request, 'Sliding scale saved successfully.')
+        messages.success(self.request, 'Sliding scale updated successfully.')
         return redirect('program_detail', pk=self.program.pk)
 
 
