@@ -10,24 +10,27 @@
     ul.checkboxselectmultiple {
       list-style: none;
       padding-left: 0;
-      margin: 0;
+      margin: 0 0 0.5rem 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 1rem; /* row gap, column gap */
+      align-items: center;
     }
     ul.checkboxselectmultiple li {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      margin-right: 1rem;
-      margin-bottom: 0.25rem;
-      white-space: nowrap;
+      margin: 0; /* gaps are handled by the container */
     }
     ul.checkboxselectmultiple input[type="checkbox"] {
       margin-right: 0.35rem;
-      position: relative;
-      top: 0;
+      vertical-align: middle;
+      position: static; /* avoid odd overlaps */
     }
     ul.checkboxselectmultiple label {
       margin: 0;
       display: inline-flex;
       align-items: center;
+      white-space: normal; /* allow wrapping */
     }
   </style>
 {% endblock %}
