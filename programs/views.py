@@ -1709,3 +1709,29 @@ class ProgramSignoutSheetView(LoginRequiredMixin, View):
             'students': students,
         }
         return render(request, self.template_name, ctx)
+
+
+class ProgramSchoolsView(LoginRequiredMixin, View):
+    template_name = 'programs/schools.html'
+
+    def get(self, request, pk):
+        from django.shortcuts import render
+        program = get_object_or_404(Program, pk=pk)
+        # Active students enrolled in this program, grouped by school
+        students = (
+            Student.objects.filter(enrollment__program=program, active=True)
+            .select_related('school')
+            .annotate(
+                sort_first=Coalesce('first_name', 'legal_first_name'),
+            )
+            .order_by('school__name', Lower('last_name'), Lower('sort_first'))
+        )
+        grouped = {}
+        for s in students:
+            label = s.school.name if s.school_id else 'No School'
+            grouped.setdefault(label, []).append(s)
+        grouped_items = sorted(grouped.items(), key=lambda kv: (kv[0] == 'No School', kv[0] or ''))
+        return render(request, self.template_name, {
+            'program': program,
+            'grouped': grouped_items,
+        })
