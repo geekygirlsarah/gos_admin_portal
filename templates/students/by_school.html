@@ -14,7 +14,11 @@
     <h2 class="h5 mt-4">{{ label }} <span class="badge bg-secondary">{{ items|length }}</span></h2>
     {% if items %}
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle">
+        <table class="table table-sm table-hover align-middle" style="table-layout: fixed;">
+          <colgroup>
+            <col style="width: 70%;">
+            <col style="width: 30%;">
+          </colgroup>
           <thead>
             <tr>
               <th>Name</th>

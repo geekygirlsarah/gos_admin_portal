@@ -23,6 +23,7 @@ from .views import (
     ProgramStudentBalancePrintView,
     ProgramDuesOwedView,
     ProgramSignoutSheetView,
+    ProgramSchoolsView,
 )
 
 urlpatterns = [
@@ -35,6 +36,7 @@ urlpatterns = [
     path('<int:pk>/email/', login_required(ProgramEmailView.as_view()), name='program_email'),
     path('<int:pk>/dues/', login_required(ProgramDuesOwedView.as_view()), name='program_dues_owed'),
     path('<int:pk>/photos/', login_required(ProgramStudentPhotoListView.as_view()), name='program_student_photos'),
+    path('<int:pk>/schools/', login_required(ProgramSchoolsView.as_view()), name='program_schools'),
     path('<int:pk>/signout/', login_required(ProgramSignoutSheetView.as_view()), name='program_signout_sheet'),
 
     # List pages
