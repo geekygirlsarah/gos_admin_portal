@@ -24,6 +24,7 @@
             <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
             <a class="btn btn-outline-dark" href="{% url 'program_dues_owed' program.id %}">All Dues Owed</a>
             <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
+            <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
             <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
             {% if 'signout-sheet' in program.feature_keys %}
               <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>

@@ -1735,3 +1735,33 @@ class ProgramSchoolsView(LoginRequiredMixin, View):
             'program': program,
             'grouped': grouped_items,
         })
+
+
+class ProgramStudentMapView(LoginRequiredMixin, View):
+    template_name = 'programs/map.html'
+
+    def get(self, request, pk):
+        from django.shortcuts import render
+        program = get_object_or_404(Program, pk=pk)
+        # Active students enrolled in this program with some address info
+        students = (
+            Student.objects.filter(programs=program, active=True)
+            .only('first_name', 'legal_first_name', 'last_name', 'address', 'city', 'state', 'zip_code')
+            .annotate(sort_first=Coalesce('first_name', 'legal_first_name'))
+            .order_by(Lower('last_name'), Lower('sort_first'))
+        )
+        items = []
+        for s in students:
+            parts = [s.address or '', s.city or '', s.state or '', s.zip_code or '']
+            addr = ", ".join([p for p in parts if p]).strip(', ')
+            if not addr:
+                continue
+            name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+            items.append({
+                'name': name or f"Student #{s.pk}",
+                'address': addr,
+            })
+        return render(request, self.template_name, {
+            'program': program,
+            'items': items,
+        })

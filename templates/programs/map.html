@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Map: {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to Program</a>
+  </div>
+</div>
+
+<h1 class="h4 mb-3">{{ program.name }} — Student Addresses Map</h1>
+<p class="text-muted">Plots enrolled students with a mappable address. Addresses are geocoded via OpenStreetMap Nominatim in your browser.</p>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<div id="map" style="width:100%; height: 75vh; border:1px solid #ddd; border-radius:8px;"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+{{ items|json_script:"student-items" }}
+<script>
+(function(){
+  const items = JSON.parse(document.getElementById('student-items').textContent || '[]');
+  const map = L.map('map');
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // Default view (continental US-ish)
+  map.setView([39.8283, -98.5795], 4);
+
+  if (!items.length) {
+    const empty = L.control({position:'topright'});
+    empty.onAdd = function(){
+      const div = L.DomUtil.create('div', 'alert alert-info m-2 p-2');
+      div.innerHTML = 'No student addresses available to map.';
+      return div;
+    };
+    empty.addTo(map);
+    return;
+  }
+
+  const bounds = L.latLngBounds([]);
+  const markers = [];
+
+  function addMarker(lat, lon, name, address){
+    const m = L.marker([lat, lon]).addTo(map);
+    m.bindPopup(`<strong>${name}</strong><br/>${address}`);
+    bounds.extend([lat, lon]);
+    markers.push(m);
+  }
+
+  // Respectful client-side geocoding with throttle (~1.1s per request)
+  const queue = items.slice();
+  let processed = 0;
+
+  function step(){
+    if (!queue.length) {
+      if (markers.length) {
+        map.fitBounds(bounds.pad(0.15));
+      }
+      return;
+    }
+    const {name, address} = queue.shift();
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(address);
+    fetch(url, {headers: {'Accept': 'application/json'}})
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (Array.isArray(data) && data.length) {
+          const first = data[0];
+          const lat = parseFloat(first.lat), lon = parseFloat(first.lon);
+          if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+            addMarker(lat, lon, name, address);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        processed += 1;
+        setTimeout(step, 1100); // throttle to be polite to Nominatim
+      });
+  }
+
+  step();
+})();
+</script>
+{% endblock %}
