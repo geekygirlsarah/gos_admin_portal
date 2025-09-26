@@ -3,9 +3,12 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.files.base import ContentFile
 
-from PIL import Image
+from PIL import Image, ImageOps, ImageFile
 from io import BytesIO
 import os
+
+# Make PIL more tolerant of malformed/truncated images (common after conversions/exports)
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Register HEIC opener if available so PIL can decode .heic images
 try:
@@ -173,55 +176,79 @@ class RaceEthnicity(models.Model):
 
 class Student(models.Model):
     def save(self, *args, **kwargs):
-        # If a HEIC photo is uploaded, convert it to JPEG so the site can use it reliably.
-        # We do this before the main save and replace the ImageField's file.
+        # Normalize any new upload to a real RGB JPEG in-memory so storage doesn't depend on temp files.
+        # This also fixes EXIF orientation and strips problematic metadata (handles HEIC->JPEG edge cases).
         if getattr(self, 'photo', None):
             try:
                 file_obj = self.photo
-                name_lower = (file_obj.name or '').lower()
-                needs_convert_by_ext = name_lower.endswith('.heic') or name_lower.endswith('.heif')
-                # Attempt to detect format via PIL if possible
-                convert = False
-                if needs_convert_by_ext:
-                    convert = True
-                else:
+                # Only process a newly assigned upload (uncommitted) or anything with an accessible file handle
+                if getattr(file_obj, '_committed', True) is False or hasattr(file_obj, 'file'):
                     try:
-                        file_obj.open('rb')
-                        img_probe = Image.open(file_obj)
-                        fmt = (img_probe.format or '').upper()
-                        img_probe.close()
-                        # With pillow-heif registered, HEIC files report format as 'HEIF'
-                        if fmt in ('HEIC', 'HEIF'):  # be generous
-                            convert = True
-                    except Exception:
-                        # If we cannot probe, fall back to extension check only
-                        convert = needs_convert_by_ext
-                    finally:
+                        f = getattr(file_obj, 'file', file_obj)
                         try:
-                            file_obj.close()
+                            f.seek(0)
                         except Exception:
                             pass
-                if convert:
-                    file_obj.open('rb')
-                    img = Image.open(file_obj)
-                    # Ensure compatibility for JPEG
-                    if img.mode in ('RGBA', 'P'):
-                        img = img.convert('RGB')
-                    elif img.mode != 'RGB':
-                        img = img.convert('RGB')
-                    buffer = BytesIO()
-                    img.save(buffer, format='JPEG', quality=85, optimize=True)
-                    buffer.seek(0)
-                    base, _ = os.path.splitext(self.photo.name or 'photo')
-                    new_name = f"{base}.jpg"
-                    # Replace the field file without triggering another save recursively
-                    self.photo.save(new_name, ContentFile(buffer.read()), save=False)
-                    try:
-                        file_obj.close()
+                        img = Image.open(f)
+                        # Fully load and normalize orientation
+                        img.load()
+                        try:
+                            img = ImageOps.exif_transpose(img)
+                        except Exception:
+                            pass
+                        # JPEG expects RGB
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        buffer = BytesIO()
+                        img.save(buffer, format='JPEG', quality=85, optimize=True)
+                        buffer.seek(0)
+                        base, _ = os.path.splitext(self.photo.name or 'photo')
+                        new_name = f"{base}.jpg"
+                        # Replace the field file without triggering another save recursively
+                        self.photo.save(new_name, ContentFile(buffer.read()), save=False)
                     except Exception:
-                        pass
+                        # Fallback: legacy HEIC/HEIF detection and conversion
+                        try:
+                            name_lower = (file_obj.name or '').lower()
+                            needs_convert_by_ext = name_lower.endswith('.heic') or name_lower.endswith('.heif')
+                            convert = False
+                            if needs_convert_by_ext:
+                                convert = True
+                            else:
+                                try:
+                                    file_obj.open('rb')
+                                    img_probe = Image.open(file_obj)
+                                    fmt = (img_probe.format or '').upper()
+                                    img_probe.close()
+                                    if fmt in ('HEIC', 'HEIF'):
+                                        convert = True
+                                except Exception:
+                                    convert = needs_convert_by_ext
+                                finally:
+                                    try:
+                                        file_obj.close()
+                                    except Exception:
+                                        pass
+                            if convert:
+                                file_obj.open('rb')
+                                img = Image.open(file_obj)
+                                if img.mode != 'RGB':
+                                    img = img.convert('RGB')
+                                buffer = BytesIO()
+                                img.save(buffer, format='JPEG', quality=85, optimize=True)
+                                buffer.seek(0)
+                                base, _ = os.path.splitext(self.photo.name or 'photo')
+                                new_name = f"{base}.jpg"
+                                self.photo.save(new_name, ContentFile(buffer.read()), save=False)
+                                try:
+                                    file_obj.close()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            # If normalization fails for any reason, allow save to proceed with original file.
+                            pass
             except Exception:
-                # Fail-safe: if anything goes wrong, do not block saving the model
+                # Fail-safe: never block saving on image issues
                 pass
 
         # Auto-opt-in primary contact for email updates if assigned
@@ -458,6 +485,39 @@ class Mentor(models.Model):
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
+
+    def save(self, *args, **kwargs):
+        # Normalize newly uploaded mentor photo just like students: RGB JPEG, fixed orientation, in-memory.
+        if getattr(self, 'photo', None):
+            try:
+                file_obj = self.photo
+                if getattr(file_obj, '_committed', True) is False or hasattr(file_obj, 'file'):
+                    try:
+                        f = getattr(file_obj, 'file', file_obj)
+                        try:
+                            f.seek(0)
+                        except Exception:
+                            pass
+                        img = Image.open(f)
+                        img.load()
+                        try:
+                            img = ImageOps.exif_transpose(img)
+                        except Exception:
+                            pass
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        buffer = BytesIO()
+                        img.save(buffer, format='JPEG', quality=85, optimize=True)
+                        buffer.seek(0)
+                        base, _ = os.path.splitext(self.photo.name or 'photo')
+                        new_name = f"{base}.jpg"
+                        self.photo.save(new_name, ContentFile(buffer.read()), save=False)
+                    except Exception:
+                        # If normalization fails, continue with the original file to avoid blocking saves
+                        pass
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
 
 
 class Fee(models.Model):
