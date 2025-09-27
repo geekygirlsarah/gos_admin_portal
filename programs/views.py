@@ -1224,6 +1224,16 @@ class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     template_name = 'parents/form.html'
     permission_required = 'programs.add_adult'
 
+    def form_valid(self, form):
+        # Ensure adults created via this view are flagged as parents
+        obj = form.save(commit=False)
+        obj.is_parent = True
+        obj.save()
+        # Save many-to-many after the object exists
+        form.save_m2m()
+        messages.success(self.request, 'Parent added successfully.')
+        return redirect('parent_list')
+
     def get_success_url(self):
         # After creating a Parent, return to the Parents listing
         return reverse('parent_list')

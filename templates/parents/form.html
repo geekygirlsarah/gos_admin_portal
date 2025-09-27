@@ -11,8 +11,15 @@
   <div class="row">
     <div class="col-lg-9 col-xl-8">
       <h1 class="h3 mb-3">{% if object %}Edit Parent{% else %}Add Parent{% endif %}</h1>
-      <form method="post" novalidate>
+      <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for err in form.non_field_errors %}
+              <div>{{ err }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
 
         <div class="card mb-4">
           <div class="card-header">Identity</div>
