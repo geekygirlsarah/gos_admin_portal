@@ -148,17 +148,17 @@
             <div class="col-md-6"><div class="fw-semibold">Primary contact</div><div>{{ student.primary_contact|default:'—' }}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Secondary contact</div><div>{{ student.secondary_contact|default:'—' }}</div></div>
             <div class="col-12"><div class="fw-semibold">Parents/guardians</div>
-              {% if student.parents.all %}
-                <ul class="mb-0">
-                {% for p in student.parents.all %}
-                  <li>{{ p }}</li>
-                {% empty %}
-                  <li class="text-muted">—</li>
-                {% endfor %}
-                </ul>
-              {% else %}
-                <div class="text-muted">—</div>
-              {% endif %}
+              {% with parents=student.all_parents %}
+                {% if parents %}
+                  <ul class="mb-0">
+                    {% for p in parents %}
+                      <li>{{ p }}</li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <div class="text-muted">—</div>
+                {% endif %}
+              {% endwith %}
             </div>
           </div>
         </div>
