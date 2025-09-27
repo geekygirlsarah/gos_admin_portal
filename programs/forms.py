@@ -148,8 +148,10 @@ class QuickCreateStudentForm(forms.ModelForm):
 class ParentForm(forms.ModelForm):
     class Meta:
         model = Adult
+        # Exclude mentor-specific "role" so the Parent form doesn't require it (not rendered in the UI).
+        # The model default ('mentor') is irrelevant for parents and caused validation to fail when missing.
         fields = '__all__'
-        exclude = []
+        exclude = ['role']
 
 
 class PaymentForm(forms.ModelForm):
