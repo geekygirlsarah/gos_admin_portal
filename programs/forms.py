@@ -33,6 +33,16 @@ class StudentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Ensure sorted dropdowns for adult-related fields
+        qs_adults = Adult.objects.order_by('first_name', 'last_name')
+        # Parents (multi-select used for custom picker)
+        self.fields['parents'].queryset = qs_adults
+        # Primary/Secondary contact fields (FKs)
+        if 'primary_contact' in self.fields:
+            self.fields['primary_contact'].queryset = qs_adults
+        if 'secondary_contact' in self.fields:
+            self.fields['secondary_contact'].queryset = qs_adults
+
         # When editing, pre-populate parents from the reverse relation
         instance = getattr(self, 'instance', None)
         if instance and instance.pk:
