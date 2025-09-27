@@ -45,7 +45,7 @@ urlpatterns = [
     path('imports/', login_required(ImportDashboardView.as_view()), name='import_dashboard'),
     # CSV template downloads served via templates to avoid static collection issues
     path('imports/samples/students.csv', permission_required('programs.add_student')(TemplateView.as_view(template_name='samples/students_sample.csv', content_type='text/csv')), name='students_sample_csv'),
-    path('imports/samples/parents.csv', permission_required('programs.add_parent')(TemplateView.as_view(template_name='samples/parents_sample.csv', content_type='text/csv')), name='parents_sample_csv'),
+    path('imports/samples/parents.csv', permission_required('programs.add_adult')(TemplateView.as_view(template_name='samples/parents_sample.csv', content_type='text/csv')), name='parents_sample_csv'),
     path('imports/samples/mentors.csv', permission_required('programs.add_mentor')(TemplateView.as_view(template_name='samples/mentors_sample.csv', content_type='text/csv')), name='mentors_sample_csv'),
     path('imports/samples/schools.csv', permission_required('programs.add_school')(TemplateView.as_view(template_name='samples/schools_sample.csv', content_type='text/csv')), name='schools_sample_csv'),
     path('students/', login_required(StudentListView.as_view()), name='student_list'),
@@ -58,7 +58,7 @@ urlpatterns = [
     path('students/convert-to-alumni/', permission_required('programs.change_student')(StudentBulkConvertToAlumniView.as_view()), name='student_bulk_convert_select'),
     path('students/<int:pk>/', login_required(StudentDetailView.as_view()), name='student_detail'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
-    path('parents/import/', permission_required('programs.add_parent')(ParentImportView.as_view()), name='parent_import'),
+    path('parents/import/', permission_required('programs.add_adult')(ParentImportView.as_view()), name='parent_import'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
     path('alumni/', login_required(AlumniListView.as_view()), name='alumni_list'),
     path('mentors/import/', permission_required('programs.add_mentor')(MentorImportView.as_view()), name='mentor_import'),
@@ -94,8 +94,8 @@ urlpatterns = [
     path('students/<int:pk>/convert-to-alumni/', permission_required('programs.change_student')(StudentConvertToAlumniView.as_view()), name='student_convert_to_alumni'),
 
     # Parent add/edit
-    path('parents/new/', permission_required('programs.add_parent')(ParentCreateView.as_view()), name='parent_create'),
-    path('parents/<int:pk>/edit/', permission_required('programs.change_parent')(ParentUpdateView.as_view()), name='parent_edit'),
+    path('parents/new/', permission_required('programs.add_adult')(ParentCreateView.as_view()), name='parent_create'),
+    path('parents/<int:pk>/edit/', permission_required('programs.change_adult')(ParentUpdateView.as_view()), name='parent_edit'),
 
     # School add/edit
     path('schools/new/', permission_required('programs.add_school')(SchoolCreateView.as_view()), name='school_create'),

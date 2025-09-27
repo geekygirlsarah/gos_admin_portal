@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from premailer import transform
 
-from .models import Program, Student, Enrollment, Parent, Mentor, Payment, SlidingScale, Fee, School, Alumni, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
+from .models import Program, Student, Enrollment, Adult, Mentor, Payment, SlidingScale, Fee, School, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -203,13 +203,13 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
 
 
 class ParentListView(LoginRequiredMixin, ListView):
-    model = Parent
+    model = Adult
     template_name = 'parents/list.html'
     context_object_name = 'parents'
 
     def get_queryset(self):
         # Prefetch related students to avoid N+1 queries and order by name
-        return Parent.objects.all().prefetch_related('students').order_by('first_name', 'last_name')
+        return Adult.objects.all().prefetch_related('students').order_by('first_name', 'last_name')
 
 
 class MentorListView(LoginRequiredMixin, ListView):
@@ -219,13 +219,13 @@ class MentorListView(LoginRequiredMixin, ListView):
 
 
 class AlumniListView(LoginRequiredMixin, ListView):
-    model = Alumni
+    model = Adult
     template_name = 'alumni/list.html'
     context_object_name = 'alumni'
 
     def get_queryset(self):
-        # Include related student to avoid N+1 and sort by student name
-        return Alumni.objects.select_related('student').order_by('student__last_name', 'student__first_name')
+        # List Adults flagged as alumni
+        return Adult.objects.filter(is_alumni=True).order_by('last_name', 'first_name')
 
 
 class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -235,15 +235,50 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         from django.contrib import messages
         from django.shortcuts import redirect, get_object_or_404
         student = get_object_or_404(Student, pk=pk)
-        alumni, created = Alumni.objects.get_or_create(student=student)
-        # Deactivate student as part of conversion convention
-        if student.active:
-            student.active = False
-            student.save(update_fields=['active', 'updated_at'])
-        if created:
-            messages.success(request, f"Converted {student} to Alumni and deactivated the student.")
+        # Find or create an Adult flagged as alumni from this student's info
+        def find_matching_adult(s: Student):
+            emails = [s.personal_email, s.andrew_email]
+            for e in emails:
+                if e:
+                    a = Adult.objects.filter(alumni_email__iexact=e).first()
+                    if a:
+                        return a
+                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
+                    if a:
+                        return a
+            first = (s.first_name or s.legal_first_name or '').strip()
+            last = (s.last_name or '').strip()
+            if first and last:
+                return Adult.objects.filter(first_name__iexact=first, last_name__iexact=last, is_alumni=True).first()
+            return None
+        adult = find_matching_adult(student)
+        created = False
+        if not adult:
+            adult = Adult.objects.create(
+                first_name=student.first_name or student.legal_first_name or '',
+                last_name=student.last_name or '',
+                alumni_email=student.personal_email or student.andrew_email,
+                is_alumni=True,
+            )
+            created = True
         else:
-            messages.info(request, f"{student} already has an Alumni record. Student has been deactivated.")
+            changed = False
+            if not adult.is_alumni:
+                adult.is_alumni = True
+                changed = True
+            if not adult.alumni_email and (student.personal_email or student.andrew_email):
+                adult.alumni_email = student.personal_email or student.andrew_email
+                changed = True
+            if changed:
+                adult.save(update_fields=['is_alumni', 'alumni_email', 'updated_at'])
+        # Mark student as graduated (do not change active)
+        if not student.graduated:
+            student.graduated = True
+            student.save(update_fields=['graduated', 'updated_at'])
+        if created:
+            messages.success(request, f"Converted {student} to Alumni (Adult created) and marked student as graduated.")
+        else:
+            messages.info(request, f"{student} is now marked as Alumni. Student marked as graduated.")
         # Redirect back to list or provided next
         next_url = request.GET.get('next') or request.POST.get('next')
         return redirect(next_url or 'student_list')
@@ -282,35 +317,84 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         qs = Student.objects.filter(pk__in=ids).order_by('last_name', 'first_name')
 
         if action == 'preview':
-            # Build preview info without writing changes
-            existing_alumni_ids = set(Alumni.objects.filter(student_id__in=ids).values_list('student_id', flat=True))
-            will_create = [s for s in qs if s.pk not in existing_alumni_ids]
-            already_alumni = [s for s in qs if s.pk in existing_alumni_ids]
-            will_deactivate = [s for s in qs if s.active]
+            # Build preview info without writing changes against Adults flagged as alumni
+            def find_matching_adult(s: Student):
+                emails = [s.personal_email, s.andrew_email]
+                for e in emails:
+                    if e:
+                        a = Adult.objects.filter(alumni_email__iexact=e).first()
+                        if a:
+                            return a
+                        a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
+                        if a:
+                            return a
+                first = (s.first_name or s.legal_first_name or '').strip()
+                last = (s.last_name or '').strip()
+                if first and last:
+                    return Adult.objects.filter(first_name__iexact=first, last_name__iexact=last, is_alumni=True).first()
+                return None
+            will_create = []
+            already_alumni = []
+            for s in qs:
+                if find_matching_adult(s):
+                    already_alumni.append(s)
+                else:
+                    will_create.append(s)
+            will_mark_graduated = [s for s in qs if not s.graduated]
             return render(request, 'students/convert_to_alumni_preview.html', {
                 'year': year,
                 'students': qs,
                 'will_create': will_create,
                 'already_alumni': already_alumni,
-                'will_deactivate': will_deactivate,
+                'will_mark_graduated': will_mark_graduated,
                 'ids': ids,
             })
 
         # Default: perform conversion
         created = 0
         existed = 0
-        deactivated = 0
+        marked_graduated = 0
+        def find_matching_adult(s: Student):
+            emails = [s.personal_email, s.andrew_email]
+            for e in emails:
+                if e:
+                    a = Adult.objects.filter(alumni_email__iexact=e).first()
+                    if a:
+                        return a
+                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
+                    if a:
+                        return a
+            first = (s.first_name or s.legal_first_name or '').strip()
+            last = (s.last_name or '').strip()
+            if first and last:
+                return Adult.objects.filter(first_name__iexact=first, last_name__iexact=last, is_alumni=True).first()
+            return None
         for student in qs:
-            alumni, was_created = Alumni.objects.get_or_create(student=student)
-            if was_created:
+            adult = find_matching_adult(student)
+            if not adult:
+                Adult.objects.create(
+                    first_name=student.first_name or student.legal_first_name or '',
+                    last_name=student.last_name or '',
+                    alumni_email=student.personal_email or student.andrew_email,
+                    is_alumni=True,
+                )
                 created += 1
             else:
+                changed = False
+                if not adult.is_alumni:
+                    adult.is_alumni = True
+                    changed = True
+                if not adult.alumni_email and (student.personal_email or student.andrew_email):
+                    adult.alumni_email = student.personal_email or student.andrew_email
+                    changed = True
+                if changed:
+                    adult.save(update_fields=['is_alumni', 'alumni_email', 'updated_at'])
                 existed += 1
-            if student.active:
-                student.active = False
-                student.save(update_fields=['active', 'updated_at'])
-                deactivated += 1
-        messages.success(request, f"Converted {created} new alumni, {existed} already existed. Deactivated {deactivated} student(s).")
+            if not student.graduated:
+                student.graduated = True
+                student.save(update_fields=['graduated', 'updated_at'])
+                marked_graduated += 1
+        messages.success(request, f"Converted {created} new alumni (Adults), {existed} already existed/updated. Marked {marked_graduated} student(s) as graduated.")
         return redirect('alumni_list')
 
 
@@ -395,7 +479,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             def get_or_create_parent(first, last, email):
                 # Try to find by email first
                 if email:
-                    p = Parent.objects.filter(email__iexact=email).first()
+                    p = Adult.objects.filter(email__iexact=email).first()
                     if p:
                         changed_parent = False
                         if first and p.first_name != first:
@@ -409,7 +493,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         return p
                 # Next try by name match
                 if first and last:
-                    p = Parent.objects.filter(first_name__iexact=first, last_name__iexact=last).first()
+                    p = Adult.objects.filter(first_name__iexact=first, last_name__iexact=last).first()
                     if p:
                         if email and (p.email or '').lower() != (email or '').lower():
                             p.email = email
@@ -417,10 +501,11 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         return p
                 # If we have at least one of name or email, create
                 if first or last or email:
-                    return Parent.objects.create(
+                    return Adult.objects.create(
                         first_name=first or (email.split('@')[0] if email else 'Parent'),
                         last_name=last or '(contact)',
                         email=email or None,
+                        is_parent=True,
                     )
                 return None
 
@@ -555,14 +640,14 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         obj.primary_contact = primary
                         contact_changed = True
                     # Ensure M2M link exists
-                    if primary.id and not obj.parents.filter(id=primary.id).exists():
-                        obj.parents.add(primary)
+                    if primary.id and not obj.adults.filter(id=primary.id).exists():
+                        obj.adults.add(primary)
                 if secondary:
                     if obj.secondary_contact_id != getattr(secondary, 'id', None):
                         obj.secondary_contact = secondary
                         contact_changed = True
-                    if secondary.id and not obj.parents.filter(id=secondary.id).exists():
-                        obj.parents.add(secondary)
+                    if secondary.id and not obj.adults.filter(id=secondary.id).exists():
+                        obj.adults.add(secondary)
                 if contact_changed:
                     obj.save(update_fields=['primary_contact', 'secondary_contact', 'updated_at'])
                     if not created_flag:
@@ -578,7 +663,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = 'programs.add_parent'
+    permission_required = 'programs.add_adult'
     def post(self, request):
         file = request.FILES.get('file')
         if not file:
@@ -622,7 +707,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     continue
                 email = val(d, 'email', 'Email')
                 phone = val(d, 'phone_number', 'Phone', 'Phone Number')
-                obj, created_flag = Parent.objects.get_or_create(
+                obj, created_flag = Adult.objects.get_or_create(
                     first_name=first, last_name=last,
                     defaults={'email': email, 'phone_number': phone}
                 )
@@ -875,7 +960,7 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if 'parents' in groups:
-                parent_emails = Parent.objects.filter(students__programs=prog, email_updates=True).values_list('email', flat=True)
+                parent_emails = Adult.objects.filter(students__programs=prog, email_updates=True).values_list('email', flat=True)
                 for e in parent_emails:
                     if e:
                         recipients.add(e)
@@ -1030,7 +1115,7 @@ class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                p = Parent.objects.filter(pk=pid).first()
+                p = Adult.objects.filter(pk=pid).first()
                 if p and p.relationship_to_student != rel:
                     p.relationship_to_student = rel
                     p.save(update_fields=['relationship_to_student'])
@@ -1063,7 +1148,7 @@ class StudentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView)
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                p = Parent.objects.filter(pk=pid).first()
+                p = Adult.objects.filter(pk=pid).first()
                 if p and p.relationship_to_student != rel:
                     p.relationship_to_student = rel
                     p.save(update_fields=['relationship_to_student'])
@@ -1134,10 +1219,10 @@ class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View
 
 # --- Parent create/edit ---
 class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    model = Parent
+    model = Adult
     form_class = ParentForm
     template_name = 'parents/form.html'
-    permission_required = 'programs.add_parent'
+    permission_required = 'programs.add_adult'
 
     def get_success_url(self):
         # After creating a Parent, return to the Parents listing
@@ -1145,10 +1230,10 @@ class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
 
 class ParentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    model = Parent
+    model = Adult
     form_class = ParentForm
     template_name = 'parents/form.html'
-    permission_required = 'programs.change_parent'
+    permission_required = 'programs.change_adult'
 
     def get_success_url(self):
         next_url = self.request.GET.get('next')

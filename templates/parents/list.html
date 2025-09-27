@@ -6,7 +6,7 @@
     <div class="row mb-3">
         <div class="col"><h1 class="h3">Parents / Emergency Contacts</h1></div>
         <div class="col-auto d-flex gap-2">
-            {% if perms.programs.add_parent %}
+            {% if perms.programs.add_adult %}
                 <a class="btn btn-primary" href="{% url 'parent_create' %}?next={% url 'parent_list' %}">Add Parent</a>
             {% endif %}
         </div>
@@ -52,7 +52,7 @@
               </td>
               <td>{% if p.phone_number %}<a href="tel:{{ p.phone_number }}">{{ p.phone_number }}</a>{% endif %}</td>
               <td class="text-end">
-                {% if perms.programs.change_parent %}
+                {% if perms.programs.change_adult %}
                   <a class="btn btn-sm btn-outline-secondary" href="{% url 'parent_edit' p.id %}?next={% url 'parent_list' %}">Edit</a>
                 {% endif %}
               </td>

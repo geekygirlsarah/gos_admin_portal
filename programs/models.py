@@ -251,6 +251,25 @@ class Student(models.Model):
                 # Fail-safe: never block saving on image issues
                 pass
 
+        # Proactively clear dangling parent contact FKs before save to avoid integrity errors
+        try:
+            if self.primary_contact_id:
+                try:
+                    # Adult is defined below in this module; accessible at runtime
+                    if not Adult.objects.filter(pk=self.primary_contact_id).exists():
+                        self.primary_contact_id = None
+                except Exception:
+                    # If anything goes wrong probing Adult, do not block the save
+                    pass
+            if self.secondary_contact_id:
+                try:
+                    if not Adult.objects.filter(pk=self.secondary_contact_id).exists():
+                        self.secondary_contact_id = None
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         # Auto-opt-in primary contact for email updates if assigned
         try:
             parent = self.primary_contact
@@ -336,14 +355,14 @@ class Student(models.Model):
     first_registered_teams = models.CharField(max_length=200, blank=True, null=True, verbose_name='Registered team(s)', help_text='Team numbers or names, comma-separated')
 
     # New contact fields
-    primary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, related_name='primary_for', null=True, blank=True)
-    secondary_contact = models.ForeignKey('Parent', on_delete=models.SET_NULL, related_name='secondary_for', null=True, blank=True)
+    primary_contact = models.ForeignKey('Adult', on_delete=models.SET_NULL, related_name='primary_for', null=True, blank=True)
+    secondary_contact = models.ForeignKey('Adult', on_delete=models.SET_NULL, related_name='secondary_for', null=True, blank=True)
 
     @property
     def all_parents(self):
         """
-        Returns a list of unique Parent objects related to this student,
-        including primary, secondary, and any additional M2M parents.
+        Returns a list of unique Adult objects related to this student,
+        including primary, secondary, and any additional M2M adults.
         """
         seen_ids = set()
         result = []
@@ -356,7 +375,7 @@ class Student(models.Model):
             result.append(self.secondary_contact)
             seen_ids.add(self.secondary_contact_id)
 
-        for p in self.parents.all():
+        for p in self.adults.all():
             if p.id not in seen_ids:
                 result.append(p)
                 seen_ids.add(p.id)
@@ -364,6 +383,8 @@ class Student(models.Model):
         return result
 
     active = models.BooleanField(default=True)
+    # Indicates the student has graduated from the program(s)
+    graduated = models.BooleanField(default=False, help_text='Check if this student has graduated.')
     programs = models.ManyToManyField('Program', through='Enrollment', related_name='students', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -391,23 +412,139 @@ class Enrollment(models.Model):
         return f'{self.student} → {self.program}'
 
 
-class Parent(models.Model):
+class Adult(models.Model):
+    # Role flags
+    is_parent = models.BooleanField(default=False, help_text='Check if this adult is a parent/guardian of any student.')
+    is_mentor = models.BooleanField(default=False, help_text='Check if this adult serves as a mentor/volunteer.')
+    is_alumni = models.BooleanField(default=False, help_text='Check if this adult is a program alumni.')
+
+    # Optional link to a User; allows adults (parents/mentors) to have accounts
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adult_profile',
+    )
+
+    # Identity
     first_name = models.CharField(max_length=150)
     preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
     last_name = models.CharField(max_length=150)
+    pronouns = models.CharField(max_length=50, blank=True, null=True)
+
+    # Relationship to student (for parents/guardians)
     relationship_to_student = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES, default='parent')
+
+    # Contact
     email = models.EmailField(blank=True, null=True)
     phone_number = models.CharField(max_length=30, blank=True, null=True)
-    email_updates = models.BooleanField(default=False, help_text='If checked, this parent/guardian will receive email updates.')
+    cell_phone = models.CharField(max_length=30, blank=True, null=True)
+    home_phone = models.CharField(max_length=30, blank=True, null=True)
+    personal_email = models.EmailField(blank=True, null=True)
 
-    students = models.ManyToManyField(Student, related_name='parents', blank=True)
+    # Mentor-like fields
+    start_year = models.PositiveSmallIntegerField(blank=True, null=True)
+    role = models.CharField(max_length=20, choices=MENTOR_ROLE_CHOICES, default='mentor')
+    photo = models.ImageField(upload_to='photos/adults/', blank=True, null=True)
+
+    # Andrew ID details
+    andrew_id = models.CharField(max_length=50, blank=True, null=True)
+    andrew_email = models.EmailField(blank=True, null=True)
+    andrew_id_expiration = models.DateField(blank=True, null=True)
+    andrew_id_sponsor = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sponsored_andrew_ids')
+
+    # Discord
+    on_discord = models.BooleanField(default=False)
+    discord_username = models.CharField(max_length=100, blank=True, null=True)
+
+    # CMU access
+    has_cmu_id_card = models.BooleanField(default=False)
+    has_cmu_building_access = models.BooleanField(default=False)
+
+    # Google access
+    has_google_team_drive_access = models.BooleanField(default=False)
+    has_google_mentor_drive_access = models.BooleanField(default=False)
+    has_google_admin_drive_access = models.BooleanField(default=False)
+
+    # Online platforms / memberships
+    on_first_website = models.BooleanField(default=False)
+    signed_first_consent_form = models.BooleanField(default=False)
+    on_canvas = models.BooleanField(default=False)
+    has_zoom_account = models.BooleanField(default=False)
+    in_onshape_classroom = models.BooleanField(default=False)
+    on_canva = models.BooleanField(default=False)
+    on_google_mentor_group = models.BooleanField(default=False)
+    on_google_field_crew_group = models.BooleanField(default=False)
+
+    # Clearances
+    has_paca_clearance = models.BooleanField(default=False)
+    has_patch_clearance = models.BooleanField(default=False)
+    has_fbi_clearance = models.BooleanField(default=False)
+    pa_clearances_expiration_date = models.DateField(blank=True, null=True)
+
+    # Emergency contact
+    emergency_contact_name = models.CharField(max_length=150, blank=True, null=True)
+    emergency_contact_phone = models.CharField(max_length=30, blank=True, null=True)
+
+    # Status
+    email_updates = models.BooleanField(default=False, help_text='If checked, this adult will receive email updates.')
+    active = models.BooleanField(default=True)
+
+    # Alumni information (merged from Alumni)
+    alumni_email = models.EmailField(blank=True, null=True, help_text='Preferred contact email after graduation')
+    college = models.CharField(max_length=200, blank=True, null=True)
+    field_of_study = models.CharField(max_length=200, blank=True, null=True)
+    employer = models.CharField(max_length=200, blank=True, null=True)
+    job_title = models.CharField(max_length=200, blank=True, null=True)
+    ok_to_contact = models.BooleanField(default=True, help_text='Consents to be contacted about news/opportunities')
+    notes = models.TextField(blank=True, null=True)
+
+    # Relations
+    students = models.ManyToManyField(Student, related_name='adults', blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['first_name', 'last_name']
+        ordering = ['last_name', 'first_name']
 
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
+
+    def save(self, *args, **kwargs):
+        # Normalize newly uploaded photo like students/mentors: RGB JPEG, fixed orientation, in-memory.
+        if getattr(self, 'photo', None):
+            try:
+                file_obj = self.photo
+                if getattr(file_obj, '_committed', True) is False or hasattr(file_obj, 'file'):
+                    try:
+                        f = getattr(file_obj, 'file', file_obj)
+                        try:
+                            f.seek(0)
+                        except Exception:
+                            pass
+                        img = Image.open(f)
+                        img.load()
+                        try:
+                            img = ImageOps.exif_transpose(img)
+                        except Exception:
+                            pass
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        buffer = BytesIO()
+                        img.save(buffer, format='JPEG', quality=85, optimize=True)
+                        buffer.seek(0)
+                        base, _ = os.path.splitext(self.photo.name or 'photo')
+                        new_name = f"{base}.jpg"
+                        self.photo.save(new_name, ContentFile(buffer.read()), save=False)
+                    except Exception:
+                        # If normalization fails, continue with the original file to avoid blocking saves
+                        pass
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
 
 
 class Mentor(models.Model):
@@ -624,34 +761,6 @@ class FeeAssignment(models.Model):
             raise ValidationError('Assigned student must be enrolled in the fee’s program.')
 
 
-class Alumni(models.Model):
-    """Alumni profile linked to a Student, storing post-graduation details."""
-    student = models.OneToOneField('Student', on_delete=models.CASCADE, related_name='alumni_profile')
-
-    # Contact after graduation
-    alumni_email = models.EmailField(blank=True, null=True, help_text='Preferred contact email after graduation')
-    phone_number = models.CharField(max_length=30, blank=True, null=True)
-
-    # Optional post-grad info
-    college = models.CharField(max_length=200, blank=True, null=True)
-    field_of_study = models.CharField(max_length=200, blank=True, null=True)
-    employer = models.CharField(max_length=200, blank=True, null=True)
-    job_title = models.CharField(max_length=200, blank=True, null=True)
-
-    # Consent/preferences
-    ok_to_contact = models.BooleanField(default=True, help_text='Alumni consents to be contacted about news/opportunities')
-
-    notes = models.TextField(blank=True, null=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['student__last_name', 'student__first_name']
-        verbose_name_plural = 'Alumni'
-
-    def __str__(self):
-        return f"Alumni: {self.student}"
 
 
 class StudentApplication(models.Model):

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Program, ProgramFeature, Enrollment, Student, School, Parent, Mentor, Fee, Payment, SlidingScale, Alumni, StudentApplication
+from .models import Program, ProgramFeature, Enrollment, Student, School, Adult, Mentor, Fee, Payment, SlidingScale, StudentApplication
 from .forms import StudentForm
 
 
@@ -61,9 +61,9 @@ class StudentAdmin(admin.ModelAdmin):
     form = StudentForm
     list_display = (
         'first_name', 'legal_first_name', 'last_name', 'pronouns', 'graduation_year',
-        'andrew_id', 'on_discord', 'active', 'updated_at'
+        'andrew_id', 'on_discord', 'active', 'graduated', 'updated_at'
     )
-    list_filter = ('active', 'on_discord', 'seen_once', 'graduation_year')
+    list_filter = ('active', 'graduated', 'on_discord', 'seen_once', 'graduation_year')
     search_fields = (
         'first_name', 'legal_first_name', 'last_name', 'pronouns', 'user__username', 'user__email',
         'personal_email', 'andrew_id', 'andrew_email', 'discord_handle', 'school__name', 'city', 'state'
@@ -102,51 +102,78 @@ class StudentAdmin(admin.ModelAdmin):
         }),
         ('System', {
             'fields': (
-                'active', 'created_at', 'updated_at', 'user',
+                'active', 'graduated', 'created_at', 'updated_at', 'user',
             )
         }),
     )
     inlines = [EnrollmentInline]
 
-    actions = ['convert_to_alumni', 'remove_alumni_record']
+    actions = ['convert_to_alumni', 'remove_alumni_flag']
+
+    def _find_matching_adult(self, s: Student):
+        emails = [s.personal_email, s.andrew_email]
+        for e in emails:
+            if e:
+                a = Adult.objects.filter(alumni_email__iexact=e).first()
+                if a:
+                    return a
+                a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
+                if a:
+                    return a
+        first = (s.first_name or s.legal_first_name or '').strip()
+        last = (s.last_name or '').strip()
+        if first and last:
+            return Adult.objects.filter(first_name__iexact=first, last_name__iexact=last, is_alumni=True).first()
+        return None
 
     def convert_to_alumni(self, request, queryset):
-        """Create Alumni records for selected students if missing, and deactivate them."""
-        from django.utils import timezone
-        from .models import Alumni
+        """Create or update Adult records flagged as alumni for selected students, and mark the students as graduated (no change to active)."""
         created = 0
-        updated = 0
+        existed = 0
         for student in queryset:
-            alumni, was_created = Alumni.objects.get_or_create(student=student)
-            if was_created:
+            adult = self._find_matching_adult(student)
+            if not adult:
+                Adult.objects.create(
+                    first_name=student.first_name or student.legal_first_name or '',
+                    last_name=student.last_name or '',
+                    alumni_email=student.personal_email or student.andrew_email,
+                    is_alumni=True,
+                )
                 created += 1
             else:
-                updated += 1
-            # Deactivate student as part of conversion convention
-            if student.active:
-                student.active = False
-                student.save(update_fields=['active', 'updated_at'])
-        self.message_user(request, f"Alumni created: {created}, existing left unchanged: {updated}. Selected students deactivated.")
-    convert_to_alumni.short_description = "Convert to Alumni (create Alumni record and deactivate)"
+                changed = False
+                if not adult.is_alumni:
+                    adult.is_alumni = True
+                    changed = True
+                if not adult.alumni_email and (student.personal_email or student.andrew_email):
+                    adult.alumni_email = student.personal_email or student.andrew_email
+                    changed = True
+                if changed:
+                    adult.save(update_fields=['is_alumni', 'alumni_email', 'updated_at'])
+                existed += 1
+            if not student.graduated:
+                student.graduated = True
+                student.save(update_fields=['graduated', 'updated_at'])
+        self.message_user(request, f"Adults created as Alumni: {created}, existing/updated: {existed}. Selected students marked as graduated.")
+    convert_to_alumni.short_description = "Convert to Alumni (mark/create Adult and mark students graduated)"
 
-    def remove_alumni_record(self, request, queryset):
-        """Delete Alumni records for selected students (undo), without changing Student.active."""
-        from .models import Alumni
-        removed = 0
+    def remove_alumni_flag(self, request, queryset):
+        """Unset the is_alumni flag on matching Adult records for selected students (undo)."""
+        unset = 0
         for student in queryset:
-            try:
-                student.alumni_profile.delete()
-                removed += 1
-            except Alumni.DoesNotExist:
-                pass
-        self.message_user(request, f"Alumni records removed: {removed}.")
-    remove_alumni_record.short_description = "Remove Alumni record (undo)"
+            adult = self._find_matching_adult(student)
+            if adult and adult.is_alumni:
+                adult.is_alumni = False
+                adult.save(update_fields=['is_alumni', 'updated_at'])
+                unset += 1
+        self.message_user(request, f"Adults unmarked as alumni: {unset}.")
+    remove_alumni_flag.short_description = "Unmark matching Adults as Alumni (undo)"
 
 
-@admin.register(Parent)
+@admin.register(Adult)
 class ParentAdmin(admin.ModelAdmin):
-    list_display = ('first_name', 'preferred_first_name', 'last_name', 'relationship_to_student', 'email', 'phone_number', 'email_updates')
-    list_filter = ('email_updates',)
+    list_display = ('first_name', 'preferred_first_name', 'last_name', 'relationship_to_student', 'is_parent', 'is_mentor', 'is_alumni', 'email', 'phone_number', 'email_updates')
+    list_filter = ('email_updates', 'is_parent', 'is_mentor', 'is_alumni')
     search_fields = ('first_name', 'preferred_first_name', 'last_name', 'email', 'phone_number')
     filter_horizontal = ('students',)
 
@@ -251,15 +278,4 @@ class StudentApplicationAdmin(admin.ModelAdmin):
     mark_rejected.short_description = "Mark selected applications as rejected"
 
 
-@admin.register(Alumni)
-class AlumniAdmin(admin.ModelAdmin):
-    list_display = (
-        'student', 'alumni_email', 'phone_number', 'college', 'field_of_study', 'employer', 'job_title', 'ok_to_contact', 'updated_at'
-    )
-    list_filter = ('ok_to_contact',)
-    search_fields = (
-        'student__first_name', 'student__last_name', 'alumni_email', 'college', 'employer', 'job_title'
-    )
-    autocomplete_fields = ('student',)
-    readonly_fields = ('created_at', 'updated_at')
 

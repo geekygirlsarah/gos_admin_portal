@@ -7,14 +7,15 @@
   </div>
 
   <div class="alert alert-warning">
-    Please review the changes below. No updates have been made yet. When you confirm, Alumni records will be created for students who don't have one, and selected active students will be deactivated.
+    Please review the changes below. No updates have been made yet. When you confirm, matching Adults will be created or updated and marked as Alumni for students who don't already have one, and selected students will be marked as graduated.
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-auto"><span class="badge bg-primary">{{ students|length }}</span> selected</div>
-    <div class="col-auto"><span class="badge bg-success">{{ will_create|length }}</span> will create Alumni</div>
-    <div class="col-auto"><span class="badge bg-secondary">{{ already_alumni|length }}</span> already have Alumni</div>
-    <div class="col-auto"><span class="badge bg-warning text-dark">{{ will_deactivate|length }}</span> will be deactivated</div>
+    <div class="col-auto"><span class="badge bg-success">{{ will_create|length }}</span> will create Adults (Alumni)
+    </div>
+    <div class="col-auto"><span class="badge bg-secondary">{{ already_alumni|length }}</span> already have Adults marked Alumni</div>
+    <div class="col-auto"><span class="badge bg-warning text-dark">{{ will_mark_graduated|length }}</span> will be marked as graduated</div>
   </div>
 
   <div class="table-responsive mb-3">
@@ -25,7 +26,7 @@
           <th>School</th>
           <th>Graduation Year</th>
           <th>Alumni Status</th>
-          <th>Active</th>
+          <th>Graduated</th>
         </tr>
       </thead>
       <tbody>
@@ -47,10 +48,10 @@
               {% endif %}
             </td>
             <td>
-              {% if s in will_deactivate %}
-                <span class="badge bg-warning text-dark">Will Deactivate</span>
+              {% if s in will_mark_graduated %}
+                <span class="badge bg-warning text-dark">Will Mark Graduated</span>
               {% else %}
-                <span class="badge bg-secondary">Inactive</span>
+                <span class="badge bg-secondary">Already Graduated</span>
               {% endif %}
             </td>
           </tr>

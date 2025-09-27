@@ -1,13 +1,13 @@
 from django import forms
 from django.utils.safestring import mark_safe
 from django.conf import settings
-from .models import Student, Program, Parent, Fee, Payment, SlidingScale, School, Mentor, StudentApplication
+from .models import Student, Program, Adult, Fee, Payment, SlidingScale, School, Mentor, StudentApplication
 
 
 class StudentForm(forms.ModelForm):
-    # Expose reverse M2M to Parents so edits on Student reflect on Parent.students
+    # Expose reverse M2M to Adults so edits on Student reflect on Adult.students
     parents = forms.ModelMultipleChoiceField(
-        queryset=Parent.objects.all(),
+        queryset=Adult.objects.all(),
         required=False,
         help_text='Select the parents/guardians for this student.'
     )
@@ -36,8 +36,8 @@ class StudentForm(forms.ModelForm):
         # When editing, pre-populate parents from the reverse relation
         instance = getattr(self, 'instance', None)
         if instance and instance.pk:
-            # Start with existing parents
-            initial_set = set(instance.parents.all())
+            # Start with existing adults
+            initial_set = set(instance.adults.all())
             # ALSO include primary/secondary in the initial parents
             if instance.primary_contact:
                 initial_set.add(instance.primary_contact)
@@ -109,7 +109,7 @@ class StudentForm(forms.ModelForm):
             # Ensure instance has a PK in case commit=False was used
             if not instance.pk:
                 instance.save()
-            instance.parents.set(selected)
+            instance.adults.set(selected)
         # Return the instance
         return instance
 
@@ -137,7 +137,7 @@ class QuickCreateStudentForm(forms.ModelForm):
 
 class ParentForm(forms.ModelForm):
     class Meta:
-        model = Parent
+        model = Adult
         fields = '__all__'
         exclude = []
 
