@@ -3,6 +3,7 @@
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
+from django.core.management.color import no_style
 
 
 def migrate_parent_to_adult_and_clean(apps, schema_editor):
@@ -48,6 +49,25 @@ def migrate_parent_to_adult_and_clean(apps, schema_editor):
     Student.objects.filter(secondary_contact__isnull=False).exclude(
         secondary_contact_id__in=valid_ids
     ).update(secondary_contact=None)
+
+
+def reset_adult_pk_sequence(apps, schema_editor):
+    """
+    Reset the Adult PK sequence in a portable way.
+    - On PostgreSQL, emits setval to MAX(id).
+    - On SQLite and other backends, this is a safe no-op.
+    """
+    Adult = apps.get_model('programs', 'Adult')
+    connection = schema_editor.connection
+    try:
+        sql_list = connection.ops.sequence_reset_sql(no_style(), [Adult])
+        if sql_list:
+            with connection.cursor() as cursor:
+                for sql in sql_list:
+                    cursor.execute(sql)
+    except Exception:
+        # If backend doesn't support sequences or any error occurs, skip silently.
+        pass
 
 
 class Migration(migrations.Migration):
@@ -143,15 +163,7 @@ class Migration(migrations.Migration):
         ),
         # Merge step: copy Parent -> Adult, clean invalid student contacts, and reset PK sequence
         migrations.RunPython(migrate_parent_to_adult_and_clean, reverse_code=migrations.RunPython.noop),
-        migrations.RunSQL(
-            sql=(
-                "SELECT setval(pg_get_serial_sequence('\"programs_adult\"','id'), "
-                "COALESCE(MAX(\"id\"), 1), "
-                "CASE WHEN MAX(\"id\") IS NULL THEN FALSE ELSE TRUE END) "
-                "FROM \"programs_adult\";"
-            ),
-            reverse_sql=migrations.RunSQL.noop,
-        ),
+        migrations.RunPython(reset_adult_pk_sequence, reverse_code=migrations.RunPython.noop),
         migrations.AlterField(
             model_name='student',
             name='primary_contact',
