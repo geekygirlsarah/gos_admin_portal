@@ -130,7 +130,7 @@ class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset().filter(active=True)
-        return qs.select_related('school', 'primary_contact', 'secondary_contact').prefetch_related('parents').annotate(
+        return qs.select_related('school', 'primary_contact', 'secondary_contact').prefetch_related('adults').annotate(
             sort_first=Coalesce('first_name', 'legal_first_name'),
         ).order_by(Lower('sort_first'), Lower('last_name'))
 

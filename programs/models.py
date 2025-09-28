@@ -359,6 +359,13 @@ class Student(models.Model):
     secondary_contact = models.ForeignKey('Adult', on_delete=models.SET_NULL, related_name='secondary_for', null=True, blank=True)
 
     @property
+    def parents(self):
+        """Backwards-compatible alias for the M2M 'adults' relation.
+        Allows templates to use student.parents.all just like older schema.
+        """
+        return self.adults
+
+    @property
     def all_parents(self):
         """
         Returns a list of unique Adult objects related to this student,
