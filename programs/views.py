@@ -1226,7 +1226,10 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if 'parents' in groups:
-                parent_emails = Adult.objects.filter(students__programs=prog, email_updates=True).values_list('email', flat=True)
+                parent_emails = (Adult.objects
+                                 .filter(students__programs=prog, email_updates=True, active=True)
+                                 .annotate(best_email=Coalesce('personal_email', 'email', 'andrew_email'))
+                                 .values_list('email', flat=True))
                 for e in parent_emails:
                     if e:
                         recipients.add(e)
