@@ -15,14 +15,15 @@ GoS Admin Portal is a Django 4.2 web application for managing:
 - Per-student balance sheets within a program
 
 Key features visible in the repository:
-- Authentication via Google (django-allauth). The home page requires login and shows Programs when authenticated.
+- Authentication via Google (django-allauth). The home page requires login and shows Programs when authenticated. For local development, you can log in with a Django superuser if Google OAuth isn’t configured.
 - Program detail view: enroll/remove students, quick-create a student, email program participants, manage fees, record payments, and add sliding scale.
 - Student list and a photo grid view.
-- Balance sheet per student per program compiling fees, sliding scale, and payments.
+- Balance sheet per student per program compiling fees, sliding scale, and payments. Printable views are available for balance sheets and payments.
 
 Technologies:
 - Django 4.2 (server-side MVC, Django Admin for data management)
 - django-allauth (Google OAuth login)
+- Bootstrap 5 (frontend styles/layout in templates)
 - Pillow (image handling for photos)
 - openpyxl (Excel import/export likely for roster/finance—verify views before use)
 
@@ -31,6 +32,8 @@ Technologies:
 ### Repository Structure (high-level)
 
 - .junie/guidelines.md — This file (project guidance for Junie)
+- GoSAdminPortal/ — Django project settings and URL routing
+- manage.py — Django management utility
 - programs/ — Django app containing models and admin configuration
     - models.py — Program, School, Student, Enrollment, Parent, Mentor, Fee, Payment, SlidingScale, FeeAssignment
     - admin.py — Django admin registrations and list/field configurations
@@ -39,10 +42,16 @@ Technologies:
     - programs/
         - detail.html — Program overview, enrollment management, actions
         - balance_sheet.html — Per-student program balance view
+        - payment_print.html — Printable payment receipt view
+        - balance_sheet_print.html — Printable balance sheet view
     - students/
         - list.html — Tabular student listing with search/edit
         - photo_grid.html — Student photo grid view
+- staticfiles/ — Collected static assets for development
+- media/ — Uploaded images (e.g., photos/students/, photos/mentors/)
 - requirements.txt — Python dependencies
+- build.sh — Helper script for build/deploy tasks (if used)
+- db.sqlite3 — Local development database (not for production)
 
 Other common Django files (manage.py, settings, urls) are expected in the repo but not shown above; refer to the actual tree if needed.
 
@@ -51,9 +60,9 @@ Other common Django files (manage.py, settings, urls) are expected in the repo b
 ### How to Run Locally
 
 Prerequisites:
-- Python 3.10+
+- Python 3.11+ (recommended)
 - A virtual environment tool (venv)
-- Google OAuth client credentials for django-allauth (if you want social login locally)
+- (Optional) Google OAuth client credentials for django-allauth if you want Google login locally; otherwise use a Django superuser
 
 Steps:
 1) Create and activate a virtual environment
@@ -69,6 +78,7 @@ Steps:
 5) Configure environment variables (if using Google login locally)
     - Set django-allauth social application for Google in Django Admin or via fixtures.
     - Ensure SITE domain is configured (Sites framework) to match your callback URL.
+    - Note: For local development you can skip Google and sign in with the superuser created in step 4.
 6) Start the dev server
     - python manage.py runserver
 7) Access the app
