@@ -32,9 +32,15 @@
                         </ul>
                     </li>
                     <li class="nav-item"><a class="nav-link" href="/programs/schools/">Schools</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/programs/parents/">Parents</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/programs/mentors/">Mentors</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/programs/alumni/">Alumni</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adultsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Adults</a>
+                        <ul class="dropdown-menu" aria-labelledby="adultsDropdown">
+                            <li><a class="dropdown-item" href="{% url 'adult_list' %}">All Adults</a></li>
+                            <li><a class="dropdown-item" href="{% url 'parent_list' %}">Parents</a></li>
+                            <li><a class="dropdown-item" href="{% url 'mentor_list' %}">Mentors</a></li>
+                            <li><a class="dropdown-item" href="{% url 'alumni_list' %}">Alumni</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link" href="/programs/imports/">Imports</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'program_messaging' %}">Messaging</a></li>
                 </ul>

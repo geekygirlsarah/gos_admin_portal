@@ -16,6 +16,7 @@ from .forms import (
     AddExistingStudentToProgramForm,
     QuickCreateStudentForm,
     ParentForm,
+    AdultForm,
     PaymentForm,
     SlidingScaleForm,
     SchoolForm,
@@ -2114,3 +2115,23 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
             'program': program,
             'items': items,
         })
+
+
+
+class AdultsListView(LoginRequiredMixin, ListView):
+    model = Adult
+    template_name = 'adults/list.html'
+    context_object_name = 'adults'
+
+
+class AdultUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Adult
+    form_class = AdultForm
+    template_name = 'adults/form.html'
+    permission_required = 'programs.change_adult'
+
+    def get_success_url(self):
+        nxt = self.request.GET.get('next')
+        if nxt:
+            return nxt
+        return reverse('adult_list')

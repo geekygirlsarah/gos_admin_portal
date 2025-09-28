@@ -154,6 +154,17 @@ class ParentForm(forms.ModelForm):
         exclude = ['role']
 
 
+class AdultForm(forms.ModelForm):
+    class Meta:
+        model = Adult
+        fields = [
+            'first_name', 'preferred_first_name', 'last_name', 'pronouns',
+            'email', 'personal_email', 'phone_number', 'cell_phone', 'home_phone', 'email_updates',
+            'is_parent', 'is_mentor', 'is_alumni', 'students', 'active',
+            'alumni_email', 'college', 'field_of_study', 'employer', 'job_title', 'ok_to_contact', 'notes',
+        ]
+
+
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment

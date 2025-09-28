@@ -25,6 +25,7 @@ from .views import (
     ProgramSignoutSheetView,
     ProgramSchoolsView,
     ProgramStudentMapView,
+    AdultsListView, AdultUpdateView, 
 )
 
 urlpatterns = [
@@ -63,6 +64,9 @@ urlpatterns = [
     path('relationships/import/', permission_required('programs.change_student')(RelationshipImportView.as_view()), name='relationship_import'),
     path('mentors/', login_required(MentorListView.as_view()), name='mentor_list'),
     path('alumni/', login_required(AlumniListView.as_view()), name='alumni_list'),
+    # Adults
+    path('adults/', login_required(AdultsListView.as_view()), name='adult_list'),
+    path('adults/<int:pk>/edit/', permission_required('programs.change_adult')(AdultUpdateView.as_view()), name='adult_edit'),
     path('mentors/import/', permission_required('programs.add_mentor')(MentorImportView.as_view()), name='mentor_import'),
     path('schools/import/', permission_required('programs.add_school')(SchoolImportView.as_view()), name='school_import'),
     path('mentors/new/', permission_required('programs.add_mentor')(MentorCreateView.as_view()), name='mentor_create'),
@@ -103,3 +107,5 @@ urlpatterns = [
     path('schools/new/', permission_required('programs.add_school')(SchoolCreateView.as_view()), name='school_create'),
     path('schools/<int:pk>/edit/', permission_required('programs.change_school')(SchoolUpdateView.as_view()), name='school_edit'),
 ]
+
+

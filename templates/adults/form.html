@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load form_tags %}
+{% block title %}{% if object %}Edit Adult{% else %}Edit Adult{% endif %}{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/' }}">← Back</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-9 col-xl-8">
+      <h1 class="h3 mb-3">Edit Adult</h1>
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for err in form.non_field_errors %}
+              <div>{{ err }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="card mb-4">
+          <div class="card-header">Identity</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-4">{% render_field form.first_name %}</div>
+              <div class="col-md-4">{% render_field form.preferred_first_name %}</div>
+              <div class="col-md-4">{% render_field form.last_name %}</div>
+              <div class="col-md-4">{% render_field form.pronouns %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">Contact</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">{% render_field form.email %}</div>
+              <div class="col-md-6">{% render_field form.personal_email %}</div>
+              <div class="col-md-4">{% render_field form.phone_number %}</div>
+              <div class="col-md-4">{% render_field form.cell_phone %}</div>
+              <div class="col-md-4">{% render_field form.home_phone %}</div>
+              <div class="col-12">{% render_field form.email_updates %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">Roles</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-4">{% render_field form.is_parent %}</div>
+              <div class="col-md-4">{% render_field form.is_mentor %}</div>
+              <div class="col-md-4">{% render_field form.is_alumni %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">Associated Students</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-12">{% render_field form.students %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">Alumni Details</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">{% render_field form.alumni_email %}</div>
+              <div class="col-md-6">{% render_field form.ok_to_contact %}</div>
+              <div class="col-md-6">{% render_field form.college %}</div>
+              <div class="col-md-6">{% render_field form.field_of_study %}</div>
+              <div class="col-md-6">{% render_field form.employer %}</div>
+              <div class="col-md-6">{% render_field form.job_title %}</div>
+              <div class="col-12">{% render_field form.notes %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">Status</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-3">{% render_field form.active %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Save</button>
+          <a class="btn btn-secondary" href="{{ request.GET.next|default:'/' }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
