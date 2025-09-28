@@ -162,7 +162,7 @@
       <div class="mb-2 text-muted">Selected parents / contacts:</div>
       <div id="parent-list" class="list-group mb-2">
         {# Pre-populate from existing selection #}
-        {% with sel_parents=object.parents.all %}
+        {% with sel_parents=form.instance.all_parents %}
           {% for p in sel_parents %}
             <div class="list-group-item d-flex align-items-center justify-content-between" data-parent-id="{{ p.id }}">
               <div class="me-3">
