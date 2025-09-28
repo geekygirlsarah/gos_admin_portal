@@ -47,6 +47,29 @@
     </div>
     {% endif %}
 
+    {% if perms.programs.change_student %}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title">Student-Parent Relationships</h5>
+          <p class="card-text">Link existing students to parent/guardian contacts and set relationship types. Safe to re-run; idempotent.</p>
+          <form id="relationships-import-form" action="{% url 'relationship_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+            {% csrf_token %}
+            <div class="d-flex gap-2">
+              <input type="file" name="file" id="relationships-import-file" class="form-control" accept=".csv,.xlsx" />
+              <button type="submit" class="btn btn-primary">Import</button>
+            </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
+              <label class="form-check-label" for="relationships-dry-run">Dry run (report only)</label>
+            </div>
+          </form>
+          <div class="mt-2"><a href="{% url 'relationships_sample_csv' %}">Download CSV Template</a></div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     {% if perms.programs.add_mentor %}
     <div class="col-12 col-lg-6">
       <div class="card h-100">

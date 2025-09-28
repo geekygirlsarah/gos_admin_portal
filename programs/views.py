@@ -730,6 +730,257 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return redirect('import_dashboard')
 
 
+class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """
+    Re-link existing Students to Parent/Adult records and set relationship types.
+    Safe to run multiple times (idempotent). Optionally supports dry-run.
+    """
+    permission_required = 'programs.change_student'
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            messages.error(request, 'No file uploaded.')
+            return redirect('import_dashboard')
+        name = file.name.lower()
+        dry_run = request.POST.get('dry_run') in ('1', 'on', 'true', 'True')
+        can_create_parents = request.user.has_perm('programs.add_adult')
+
+        linked = 0
+        set_primary = 0
+        set_secondary = 0
+        rel_updated = 0
+        created_parents = 0
+        would_create_parents = 0
+        missing_or_ambiguous_students = 0
+        skipped = 0
+
+        try:
+            # Parse CSV/XLSX similar to other imports
+            if name.endswith('.csv'):
+                import csv, io
+                text = io.TextIOWrapper(file.file, encoding='utf-8')
+                reader = csv.DictReader(text)
+                rows = list(reader)
+            elif name.endswith('.xlsx'):
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=file, read_only=True, data_only=True)
+                ws = wb.active
+                headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+                rows = []
+                for r in ws.iter_rows(min_row=2, values_only=True):
+                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+            else:
+                messages.error(request, 'Unsupported file type. Please upload CSV or XLSX.')
+                return redirect('import_dashboard')
+
+            # Helpers
+            from datetime import datetime, date
+
+            def raw(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        return d[k]
+                return None
+
+            def val(d, *keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        v = str(d[k]).strip()
+                        if v != '' and v.lower() != 'none':
+                            return v
+                return None
+
+            def val_date(d, *keys):
+                rv = raw(d, *keys)
+                if isinstance(rv, datetime):
+                    return rv.date()
+                if isinstance(rv, date):
+                    return rv
+                s = val(d, *keys)
+                if not s:
+                    return None
+                for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y'):
+                    try:
+                        return datetime.strptime(s, fmt).date()
+                    except Exception:
+                        pass
+                return None
+
+            def normalize_rel(s):
+                if not s:
+                    return None
+                s2 = s.strip().lower()
+                # Accept either key or display label
+                keys = {k for k, _ in RELATIONSHIP_CHOICES}
+                labels = {lbl.lower(): k for k, lbl in RELATIONSHIP_CHOICES}
+                synonyms = {
+                    'mom': 'mother',
+                    'dad': 'father',
+                    'grandma': 'grandmother',
+                    'grandpa': 'grandfather',
+                    'guardian': 'guardian',
+                    'parent': 'parent',
+                }
+                if s2 in keys:
+                    return s2
+                if s2 in labels:
+                    return labels[s2]
+                if s2 in synonyms and synonyms[s2] in keys:
+                    return synonyms[s2]
+                return None
+
+            def resolve_student(d):
+                # Priority: ID -> Andrew ID -> (First/Legal First + Last + DOB) -> (First/Legal First + Last)
+                sid = val(d, 'student_id', 'Student ID', 'ID')
+                if sid and str(sid).isdigit():
+                    st = Student.objects.filter(pk=int(str(sid))).first()
+                    if st:
+                        return st
+
+                aid = val(d, 'andrew_id', 'Andrew ID', 'AndrewID')
+                if aid:
+                    st = Student.objects.filter(andrew_id__iexact=aid).first()
+                    if st:
+                        return st
+
+                last = val(d, 'last_name', 'Last Name')
+                first = val(d, 'first_name', 'First Name', 'Preferred First Name')
+                legal_first = val(d, 'legal_first_name', 'Legal First Name') or first
+                dob = val_date(d, 'date_of_birth', 'Date of Birth', 'DOB', 'Birthdate')
+
+                if not last or not legal_first:
+                    return None
+
+                qs = Student.objects.filter(last_name__iexact=last, legal_first_name__iexact=legal_first)
+                if dob:
+                    qs = qs.filter(date_of_birth=dob)
+                count = qs.count()
+                if count == 1:
+                    return qs.first()
+                if count == 0 and first and first != legal_first:
+                    # Try match on preferred first + last (+dob)
+                    qs = Student.objects.filter(last_name__iexact=last, first_name__iexact=first)
+                    if dob:
+                        qs = qs.filter(date_of_birth=dob)
+                    if qs.count() == 1:
+                        return qs.first()
+                return None if qs.count() != 1 else qs.first()
+
+            def find_or_create_parent(first, last, email):
+                # Try resolve by email first
+                p = None
+                if email:
+                    p = Adult.objects.filter(email__iexact=email).first()
+                if not p and first and last:
+                    p = Adult.objects.filter(first_name__iexact=first, last_name__iexact=last).first()
+                created = False
+                if not p:
+                    if dry_run or not can_create_parents:
+                        return None, False, True  # would create
+                    p = Adult.objects.create(
+                        first_name=first or (email.split('@')[0] if email else 'Parent'),
+                        last_name=last or '(contact)',
+                        email=email or None,
+                        is_parent=True,
+                    )
+                    created = True
+                else:
+                    # If we found existing Adult but not flagged as parent, set it
+                    if not dry_run and not p.is_parent:
+                        p.is_parent = True
+                        p.save(update_fields=['is_parent', 'updated_at'])
+                return p, created, False
+
+            for d in rows:
+                student = resolve_student(d)
+                if not student:
+                    missing_or_ambiguous_students += 1
+                    continue
+
+                groups = [
+                    {
+                        'role': 'primary',
+                        'first': val(d, 'primary_parent_first_name', 'Primary Parent First Name', 'Primary First Name', 'Primary First'),
+                        'last': val(d, 'primary_parent_last_name', 'Primary Parent Last Name', 'Primary Last Name', 'Primary Last'),
+                        'email': val(d, 'primary_parent_email', 'Primary Parent Email', 'Primary Email'),
+                        'rel': val(d, 'primary_parent_relationship', 'Primary Parent Relationship', 'Primary Relationship'),
+                    },
+                    {
+                        'role': 'secondary',
+                        'first': val(d, 'secondary_parent_first_name', 'Secondary Parent First Name', 'Secondary First Name', 'Secondary First'),
+                        'last': val(d, 'secondary_parent_last_name', 'Secondary Parent Last Name', 'Secondary Last Name', 'Secondary Last'),
+                        'email': val(d, 'secondary_parent_email', 'Secondary Parent Email', 'Secondary Email'),
+                        'rel': val(d, 'secondary_parent_relationship', 'Secondary Parent Relationship', 'Secondary Relationship'),
+                    }
+                ]
+
+                updated_student_fields = set()
+
+                for g in groups:
+                    if not (g['first'] or g['last'] or g['email']):
+                        continue
+                    adult, created_flag, would_create = find_or_create_parent(g['first'], g['last'], g['email'])
+                    if would_create:
+                        would_create_parents += 1
+                        continue
+                    if created_flag:
+                        created_parents += 1
+                    if not adult:
+                        skipped += 1
+                        continue
+
+                    # Relationship type (global per Adult)
+                    rel_key = normalize_rel(g['rel'])
+                    if rel_key and adult.relationship_to_student != rel_key:
+                        if not dry_run:
+                            adult.relationship_to_student = rel_key
+                            adult.save(update_fields=['relationship_to_student', 'updated_at'])
+                        rel_updated += 1
+
+                    # Ensure Adult is linked to Student (M2M)
+                    if adult.id and not student.adults.filter(id=adult.id).exists():
+                        if not dry_run:
+                            student.adults.add(adult)
+                        linked += 1
+
+                    # Optionally set primary/secondary contact
+                    if g['role'] == 'primary':
+                        if student.primary_contact_id != adult.id:
+                            if not dry_run:
+                                student.primary_contact = adult
+                                updated_student_fields.add('primary_contact')
+                            set_primary += 1
+                    elif g['role'] == 'secondary':
+                        if student.secondary_contact_id != adult.id:
+                            if not dry_run:
+                                student.secondary_contact = adult
+                                updated_student_fields.add('secondary_contact')
+                            set_secondary += 1
+
+                if updated_student_fields and not dry_run:
+                    fields = list(updated_student_fields) + ['updated_at']
+                    student.save(update_fields=fields)
+
+            # Compose message
+            notes = []
+            if dry_run:
+                notes.append('DRY RUN (no changes saved)')
+            if not can_create_parents:
+                notes.append('Note: lacking permission to create parents; rows requiring new parent were skipped.')
+            extras = f" {'; '.join(notes)}" if notes else ''
+            messages.success(
+                request,
+                f"Relationships import: linked {linked} (primary set {set_primary}, secondary set {set_secondary}); "
+                f"updated relationship types {rel_updated}; "
+                f"created parents {created_parents}{(' (would create: ' + str(would_create_parents) + ')' if dry_run else '')}; "
+                f"missing/ambiguous students {missing_or_ambiguous_students}; skipped {skipped}.{extras}"
+            )
+        except Exception as e:
+            messages.error(request, f'Import failed: {e}')
+        return redirect('import_dashboard')
+
+
 class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'programs.add_mentor'
     def post(self, request):
