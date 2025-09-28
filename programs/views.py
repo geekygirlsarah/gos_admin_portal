@@ -639,15 +639,17 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if obj.primary_contact_id != getattr(primary, 'id', None):
                         obj.primary_contact = primary
                         contact_changed = True
-                    # Ensure M2M link exists
+                    # Ensure M2M link exists (both sides)
                     if primary.id and not obj.adults.filter(id=primary.id).exists():
                         obj.adults.add(primary)
+                        primary.students.add(obj)
                 if secondary:
                     if obj.secondary_contact_id != getattr(secondary, 'id', None):
                         obj.secondary_contact = secondary
                         contact_changed = True
                     if secondary.id and not obj.adults.filter(id=secondary.id).exists():
                         obj.adults.add(secondary)
+                        secondary.students.add(obj)
                 if contact_changed:
                     obj.save(update_fields=['primary_contact', 'secondary_contact', 'updated_at'])
                     if not created_flag:
@@ -942,6 +944,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if adult.id and not student.adults.filter(id=adult.id).exists():
                         if not dry_run:
                             student.adults.add(adult)
+                            adult.students.add(student)
                         linked += 1
 
                     # Optionally set primary/secondary contact
