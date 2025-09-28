@@ -6,7 +6,7 @@
   <div class="row mb-3">
     <div class="col"><h1 class="h3">Mentors</h1></div>
     <div class="col-auto d-flex gap-2 justify-content-end">
-      {% if perms.programs.add_mentor %}
+      {% if perms.programs.add_adult %}
         <a class="btn btn-sm btn-success" href="{% url 'mentor_create' %}">Add Mentor</a>
       {% endif %}
     </div>
@@ -31,7 +31,7 @@
                 {% if m.photo %}
                   <img src="{{ m.photo.url }}" alt="{{ m.first_name }} {{ m.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
                 {% endif %}
-                {% if perms.programs.change_mentor %}
+                {% if perms.programs.change_adult %}
                   <a href="{% url 'mentor_edit' m.id %}?next={% url 'mentor_list' %}">{{ m.first_name }} {{ m.last_name }}</a>
                 {% else %}
                   {{ m.first_name }} {{ m.last_name }}

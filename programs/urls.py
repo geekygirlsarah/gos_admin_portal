@@ -47,7 +47,7 @@ urlpatterns = [
     # CSV template downloads served via templates to avoid static collection issues
     path('imports/samples/students.csv', permission_required('programs.add_student')(TemplateView.as_view(template_name='samples/students_sample.csv', content_type='text/csv')), name='students_sample_csv'),
     path('imports/samples/parents.csv', permission_required('programs.add_adult')(TemplateView.as_view(template_name='samples/parents_sample.csv', content_type='text/csv')), name='parents_sample_csv'),
-    path('imports/samples/mentors.csv', permission_required('programs.add_mentor')(TemplateView.as_view(template_name='samples/mentors_sample.csv', content_type='text/csv')), name='mentors_sample_csv'),
+    path('imports/samples/mentors.csv', permission_required('programs.add_adult')(TemplateView.as_view(template_name='samples/mentors_sample.csv', content_type='text/csv')), name='mentors_sample_csv'),
     path('imports/samples/schools.csv', permission_required('programs.add_school')(TemplateView.as_view(template_name='samples/schools_sample.csv', content_type='text/csv')), name='schools_sample_csv'),
     path('imports/samples/relationships.csv', permission_required('programs.change_student')(TemplateView.as_view(template_name='samples/relationships_sample.csv', content_type='text/csv')), name='relationships_sample_csv'),
     path('students/', login_required(StudentListView.as_view()), name='student_list'),
@@ -67,10 +67,10 @@ urlpatterns = [
     # Adults
     path('adults/', login_required(AdultsListView.as_view()), name='adult_list'),
     path('adults/<int:pk>/edit/', permission_required('programs.change_adult')(AdultUpdateView.as_view()), name='adult_edit'),
-    path('mentors/import/', permission_required('programs.add_mentor')(MentorImportView.as_view()), name='mentor_import'),
+    path('mentors/import/', permission_required('programs.add_adult')(MentorImportView.as_view()), name='mentor_import'),
     path('schools/import/', permission_required('programs.add_school')(SchoolImportView.as_view()), name='school_import'),
-    path('mentors/new/', permission_required('programs.add_mentor')(MentorCreateView.as_view()), name='mentor_create'),
-    path('mentors/<int:pk>/edit/', permission_required('programs.change_mentor')(MentorUpdateView.as_view()), name='mentor_edit'),
+    path('mentors/new/', permission_required('programs.add_adult')(MentorCreateView.as_view()), name='mentor_create'),
+    path('mentors/<int:pk>/edit/', permission_required('programs.change_adult')(MentorUpdateView.as_view()), name='mentor_edit'),
     path('schools/', login_required(SchoolListView.as_view()), name='school_list'),
 
     # Program-specific student management

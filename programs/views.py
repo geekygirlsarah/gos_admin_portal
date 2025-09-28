@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from premailer import transform
 
-from .models import Program, Student, Enrollment, Adult, Mentor, Payment, SlidingScale, Fee, School, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
+from .models import Program, Student, Enrollment, Adult, Payment, SlidingScale, Fee, School, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
 from .forms import (
     StudentForm,
     AddExistingStudentToProgramForm,
@@ -20,7 +20,6 @@ from .forms import (
     PaymentForm,
     SlidingScaleForm,
     SchoolForm,
-    MentorForm,
     ProgramForm,
     ProgramEmailForm,
     FeeAssignmentEditForm,
@@ -214,9 +213,12 @@ class ParentListView(LoginRequiredMixin, ListView):
 
 
 class MentorListView(LoginRequiredMixin, ListView):
-    model = Mentor
+    model = Adult
     template_name = 'mentors/list.html'
     context_object_name = 'mentors'
+
+    def get_queryset(self):
+        return Adult.objects.filter(is_mentor=True).order_by('last_name', 'first_name')
 
 
 class AlumniListView(LoginRequiredMixin, ListView):
@@ -986,7 +988,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = 'programs.add_mentor'
+    permission_required = 'programs.add_adult'
     def post(self, request):
         file = request.FILES.get('file')
         if not file:
@@ -1031,9 +1033,9 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 email = val(d, 'personal_email', 'Email', 'Personal Email')
                 andrew_email = val(d, 'andrew_email', 'Andrew Email')
                 role = val(d, 'role', 'Role') or 'mentor'
-                obj, created_flag = Mentor.objects.get_or_create(
+                obj, created_flag = Adult.objects.get_or_create(
                     first_name=first, last_name=last,
-                    defaults={'personal_email': email, 'andrew_email': andrew_email, 'role': role}
+                    defaults={'personal_email': email, 'andrew_email': andrew_email, 'role': role, 'is_mentor': True}
                 )
                 if created_flag:
                     created += 1
@@ -1133,20 +1135,29 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    model = Mentor
-    form_class = MentorForm
-    template_name = 'mentors/form.html'
-    permission_required = 'programs.add_mentor'
+    model = Adult
+    form_class = AdultForm
+    template_name = 'adults/form.html'
+    permission_required = 'programs.add_adult'
+
+    def get_initial(self):
+        ini = super().get_initial()
+        ini['is_mentor'] = True
+        return ini
+
+    def form_valid(self, form):
+        form.instance.is_mentor = True
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse('mentor_list')
 
 
 class MentorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    model = Mentor
-    form_class = MentorForm
-    template_name = 'mentors/form.html'
-    permission_required = 'programs.change_mentor'
+    model = Adult
+    form_class = AdultForm
+    template_name = 'adults/form.html'
+    permission_required = 'programs.change_adult'
 
     def get_success_url(self):
         next_url = self.request.GET.get('next')
@@ -1220,12 +1231,14 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if e:
                         recipients.add(e)
             if 'mentors' in groups:
-                # No explicit Program-Mentor link in models; fallback to all active mentors
-                for m in Mentor.objects.filter(active=True):
+                for m in Adult.objects.filter(is_mentor=True, active=True):
+                    # Prefer personal_email, then andrew_email, then email
                     if m.personal_email:
                         recipients.add(m.personal_email)
                     elif m.andrew_email:
                         recipients.add(m.andrew_email)
+                    elif m.email:
+                        recipients.add(m.email)
 
             if not recipients and not test_email:
                 messages.error(request, 'No recipients found for the selected groups.')
@@ -2122,6 +2135,14 @@ class AdultsListView(LoginRequiredMixin, ListView):
     model = Adult
     template_name = 'adults/list.html'
     context_object_name = 'adults'
+
+    def get_queryset(self):
+        # Show all adults (parents/mentors/alumni flags may be set)
+        return Adult.objects.all().prefetch_related('students')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        return ctx
 
 
 class AdultUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):

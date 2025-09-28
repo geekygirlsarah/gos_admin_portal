@@ -79,10 +79,11 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
         pass
 
 
-@receiver(post_save, sender=lambda: apps.get_model('programs', 'Mentor'))
+@receiver(post_save, sender=lambda: apps.get_model('programs', 'Adult'))
 def ensure_user_in_mentor_group(sender, instance, created, **kwargs):
     try:
-        if instance.user_id:
+        # Only add to Mentor group if this Adult is marked as mentor
+        if instance.is_mentor and instance.user_id:
             group = ensure_group('Mentor')
             instance.user.groups.add(group)
     except Exception:

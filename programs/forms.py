@@ -1,7 +1,7 @@
 from django import forms
 from django.utils.safestring import mark_safe
 from django.conf import settings
-from .models import Student, Program, Adult, Fee, Payment, SlidingScale, School, Mentor, StudentApplication
+from .models import Student, Program, Adult, Fee, Payment, SlidingScale, School, StudentApplication
 
 
 class StudentForm(forms.ModelForm):
@@ -213,15 +213,6 @@ class SchoolForm(forms.ModelForm):
         fields = ['name', 'district', 'street_address', 'city', 'state', 'zip_code']
 
 
-class MentorForm(forms.ModelForm):
-    class Meta:
-        model = Mentor
-        fields = '__all__'
-        exclude = []
-        widgets = {
-            'andrew_id_expiration': forms.DateInput(attrs={'type': 'date'}),
-            'pa_clearances_expiration_date': forms.DateInput(attrs={'type': 'date'}),
-        }
 
 class ProgramForm(forms.ModelForm):
     class Meta:
