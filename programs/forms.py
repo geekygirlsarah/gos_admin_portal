@@ -7,7 +7,7 @@ from .models import Student, Program, Adult, Fee, Payment, SlidingScale, School,
 class StudentForm(forms.ModelForm):
     # Expose reverse M2M to Adults so edits on Student reflect on Adult.students
     parents = forms.ModelMultipleChoiceField(
-        queryset=Adult.objects.all(),
+        queryset=Adult.objects.filter(is_parent=True),
         required=False,
         help_text='Select the parents/guardians for this student.'
     )
@@ -33,8 +33,8 @@ class StudentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Ensure sorted dropdowns for adult-related fields
-        qs_adults = Adult.objects.order_by('first_name', 'last_name')
+        # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
+        qs_adults = Adult.objects.filter(is_parent=True).order_by('first_name', 'last_name')
         # Parents (multi-select used for custom picker)
         self.fields['parents'].queryset = qs_adults
         # Primary/Secondary contact fields (FKs)
