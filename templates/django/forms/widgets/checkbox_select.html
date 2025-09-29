@@ -1,0 +1,13 @@
+{# Project override of Django's checkbox_select.html to avoid accessing missing attrs.class #}
+{# This template renders a list of checkboxes without assuming a CSS class is present on widget.attrs. #}
+<ul{% if widget.attrs.id %} id="{{ widget.attrs.id }}"{% endif %}>
+  {# Grouped options (usually not grouped for this widget, but kept for completeness) #}
+  {% for group_name, group_choices, group_index in widget.optgroups %}
+    {% if group_name %}
+      <li><strong>{{ group_name }}</strong></li>
+    {% endif %}
+    {% for option in group_choices %}
+      <li>{% include option.template_name with widget=option %}</li>
+    {% endfor %}
+  {% endfor %}
+</ul>
