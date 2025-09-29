@@ -51,12 +51,13 @@
         </div>
       </form>
 
+      {% get_providers as socialaccount_providers %}
       {% if socialaccount_providers %}
         <hr>
         <div class="d-grid gap-2">
           {% providers_media_js %}
           {% for provider in socialaccount_providers %}
-            <a class="btn btn-outline-danger" href="{% provider_login_url provider.id process=process %}">
+            <a class="btn btn-outline-danger" href="{% provider_login_url provider.id process='login' %}">
               Continue with {{ provider.name }}
             </a>
           {% endfor %}
