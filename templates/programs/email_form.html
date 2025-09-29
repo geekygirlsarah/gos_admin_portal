@@ -6,32 +6,7 @@
   <link rel="stylesheet" href="https://unpkg.com/quill-better-table@1.2.10/dist/quill-better-table.min.css">
   <style>
     #editor { height: 300px; }
-    /* Fix layout for recipient_groups checkboxes */
-    ul.checkboxselectmultiple {
-      list-style: none;
-      padding-left: 0;
-      margin: 0 0 0.5rem 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.25rem 1rem; /* row gap, column gap */
-      align-items: center;
-    }
-    ul.checkboxselectmultiple li {
-      display: flex;
-      align-items: center;
-      margin: 0; /* gaps are handled by the container */
-    }
-    ul.checkboxselectmultiple input[type="checkbox"] {
-      margin-right: 0.35rem;
-      vertical-align: middle;
-      position: static; /* avoid odd overlaps */
-    }
-    ul.checkboxselectmultiple label {
-      margin: 0;
-      display: inline-flex;
-      align-items: center;
-      white-space: normal; /* allow wrapping */
-    }
+    /* Reset: remove custom recipient_groups styling to fall back to default browser/Bootstrap */
   </style>
 {% endblock %}
 {% block content %}
@@ -45,45 +20,91 @@
   </div>
 </div>
 <div class="row">
-  <div class="col-lg-10 col-xl-8">
-    <h1 class="h4">Email Messaging{% if program %} — {{ program.name }}{% endif %}</h1>
-    <div class="alert alert-info">Mentors are not linked to programs in the current data model; selecting Mentors will email all active mentors.</div>
-    <form method="post">
+  <div class="col-lg-10 col-xl-9">
+    <h1 class="h4 mb-3">Email Messaging{% if program %} — {{ program.name }}{% endif %}</h1>
+
+{#    <div class="alert alert-info d-flex align-items-start" role="alert">#}
+{#      <div>#}
+{#        <div class="fw-semibold">Heads up</div>#}
+{#        <small>Mentors are not linked to programs in the current data model; selecting Mentors will email all active mentors.</small>#}
+{#      </div>#}
+{#    </div>#}
+
+    <form method="post" class="needs-validation" novalidate>
       {% csrf_token %}
-      {% if not program %}
-        <div class="mb-3">{{ form.program.label_tag }} {{ form.program }}</div>
-      {% else %}
-        {{ form.program }}
-      {% endif %}
-      <div class="mb-3">
-        <label class="form-label">Recipient groups</label>
-        {{ form.recipient_groups }}
-        <div class="form-text">Parents/guardians will only be emailed if they are opted in to receive email updates.</div>
+
+      <!-- Audience -->
+      <div class="card mb-3">
+        <div class="card-header">Audience</div>
+        <div class="card-body">
+          {% if not program %}
+            <div class="mb-3">
+              {{ form.program.label_tag }}
+              {{ form.program }}
+              {% if form.program.help_text %}<div class="form-text">{{ form.program.help_text }}</div>{% endif %}
+            </div>
+          {% else %}
+            {{ form.program }}
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label">Recipient groups</label>
+
+              {{ form.recipient_groups }}
+
+            <div class="form-text">Parents/guardians will only be emailed if they are opted in to receive email updates.</div>
+              <div class="form-text">Mentors are not linked to programs in the current data model; selecting Mentors will email all active mentors.</div>
+          </div>
+        </div>
       </div>
 
-      <div class="mb-3">
-        {{ form.from_account.label_tag }} {{ form.from_account }}
-        <div class="form-text">Choose the sender address.</div>
+      <!-- Sender -->
+      <div class="card mb-3">
+        <div class="card-header">Sender</div>
+        <div class="card-body">
+          <div class="mb-0">
+            {{ form.from_account.label_tag }}
+            {{ form.from_account }}
+            <div class="form-text">Choose the sender address.</div>
+          </div>
+        </div>
       </div>
 
-      <div class="mb-3">
-        {{ form.subject.label_tag }} {{ form.subject }}
+      <!-- Content -->
+      <div class="card mb-3">
+        <div class="card-header">Content</div>
+        <div class="card-body">
+          <div class="mb-3">
+            {{ form.subject.label_tag }}
+            {{ form.subject }}
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label">Message body</label>
+            <div id="editor" class="form-control"></div>
+            <input type="hidden" name="body" id="id_body" value="{{ form.body.value|default:'' }}">
+            <div class="form-text">Rich text is supported. The email will be sent in HTML format with a plain-text fallback.</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Rich text editor -->
-      <div class="mb-3">
-        <label class="form-label">Message body</label>
-        <div id="editor" style="height: 300px;" class="form-control"></div>
-        <input type="hidden" name="body" id="id_body" value="{{ form.body.value|default:'' }}">
-        <div class="form-text">Rich text is supported. The email will be sent in HTML format with a plain-text fallback.</div>
+      <!-- Testing & Send -->
+      <div class="card mb-4">
+        <div class="card-header">Testing &amp; Send</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+              {{ form.test_email.label_tag }}
+              {{ form.test_email }}
+              <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
+            </div>
+            <div class="col-md-6 text-md-end mt-3 mt-md-0">
+              <button type="submit" class="btn btn-primary" onclick="beforeSubmit()">Send Email</button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="mb-3">
-        {{ form.test_email.label_tag }} {{ form.test_email }}
-        <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
-      </div>
-
-      <button type="submit" class="btn btn-primary" onclick="beforeSubmit()">Send Email</button>
     </form>
   </div>
 </div>
@@ -136,10 +157,9 @@
       }
     });
 
-    // Add a minimal Insert Table button next to the editor label
+    // Add a minimal Insert Table button above the editor
     (function() {
-      var label = document.querySelector('label.form-label[for="editor"]') || document.querySelector('label.form-label');
-      // Create a small button row below the label
+      var editorContainer = document.getElementById('editor');
       var toolbarRow = document.createElement('div');
       toolbarRow.className = 'mb-2';
       var btn = document.createElement('button');
@@ -149,9 +169,8 @@
       btn.addEventListener('click', function() {
         quill.getModule('better-table').insertTable(3, 3);
       });
-      toolbarRow.appendChild(btn);
-      var editorContainer = document.getElementById('editor');
       editorContainer.parentNode.insertBefore(toolbarRow, editorContainer);
+      toolbarRow.appendChild(btn);
     })();
 
     // Initialize editor content from hidden field value (safe for unbound forms)

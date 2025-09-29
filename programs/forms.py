@@ -234,7 +234,7 @@ class ProgramEmailForm(forms.Form):
             ('parents', 'Parents/Guardians'),
             ('mentors', 'Mentors'),
         ],
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        widget=forms.CheckboxSelectMultiple(),
         help_text=mark_safe('Choose one or more groups to email.'),
     )
     subject = forms.CharField(max_length=255)
