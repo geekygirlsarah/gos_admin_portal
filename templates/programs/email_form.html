@@ -23,6 +23,15 @@
   <div class="col-lg-10 col-xl-9">
     <h1 class="h4 mb-3">Email Messaging{% if program %} — {{ program.name }}{% endif %}</h1>
 
+      {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% for field in form %}
+          {% if field.errors %}
+              <div class="text-danger small">{{ field.label }}: {{ field.errors|join:", " }}</div>
+          {% endif %}
+      {% endfor %}
+
 {#    <div class="alert alert-info d-flex align-items-start" role="alert">#}
 {#      <div>#}
 {#        <div class="fw-semibold">Heads up</div>#}
@@ -30,7 +39,7 @@
 {#      </div>#}
 {#    </div>#}
 
-    <form method="post" class="needs-validation" novalidate>
+    <form method="post" class="needs-validation" novalidate onsubmit="beforeSubmit()">
       {% csrf_token %}
 
       <!-- Audience -->
@@ -99,7 +108,7 @@
               <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
             </div>
             <div class="col-md-6 text-md-end mt-3 mt-md-0">
-              <button type="submit" class="btn btn-primary" onclick="beforeSubmit()">Send Email</button>
+              <button type="submit" class="btn btn-primary">Send Email</button>
             </div>
           </div>
         </div>
