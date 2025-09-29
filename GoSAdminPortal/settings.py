@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Sites framework is required by allauth
     'django.contrib.sites',
+    # Security: Content Security Policy
+    'csp',
     # Allauth apps
     'allauth',
     'allauth.account',
@@ -57,6 +59,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # CSP must run early
+    'csp.middleware.CSPMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -82,6 +86,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # CSP nonce for inline scripts
+                'csp.context_processors.nonce',
             ],
         },
     },
@@ -205,6 +211,20 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() in ['1', 'true', 'yes
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+
+# Content Security Policy (django-csp)
+# Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'", 'https://cdn.jsdelivr.net')
+CSP_STYLE_SRC = ("'self'", 'https://cdn.jsdelivr.net')
+CSP_IMG_SRC = ("'self'", 'data:')
+CSP_FONT_SRC = ("'self'", 'data:')
+CSP_CONNECT_SRC = ("'self'",)
+CSP_OBJECT_SRC = ("'none'",)
+CSP_BASE_URI = ("'self'",)
+CSP_FRAME_ANCESTORS = ("'self'",)
+# Include a nonce for inline scripts we control
+CSP_INCLUDE_NONCE_IN = ('script-src',)
 
 # Multiple sender accounts for messaging UI. Each item should be a dict with keys:
 # [
