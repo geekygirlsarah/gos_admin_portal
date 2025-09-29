@@ -9,6 +9,70 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from premailer import transform
+import logging
+
+logger = logging.getLogger('programs.email')
+forms_logger = logging.getLogger('programs.forms')
+
+class LogFormSaveMixin:
+    """Mixin to log create/update actions and field changes for ModelForm-based CBVs.
+
+    Logs at INFO level using logger name 'programs.forms'.
+    """
+    def _fmt_val(self, v):
+        try:
+            if v is None:
+                return '∅'
+            s = str(v)
+            if len(s) > 200:
+                s = s[:200] + '…'
+            return s
+        except Exception:
+            return '<unrepr>'
+
+    def form_valid(self, form):
+        model = getattr(form._meta, 'model', None)
+        model_name = getattr(model, '__name__', form.__class__.__name__)
+        user = getattr(getattr(self, 'request', None), 'user', None)
+        user_repr = f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}" if getattr(user, 'is_authenticated', False) else 'anonymous'
+        is_create = not bool(getattr(form.instance, 'pk', None))
+
+        # Capture changes before saving (for updates)
+        changes = []
+        try:
+            changed_fields = list(getattr(form, 'changed_data', []) or [])
+            if not is_create and changed_fields and model:
+                # Reload from DB to ensure we have current values
+                before = model.objects.get(pk=form.instance.pk)
+                for f in changed_fields:
+                    old = getattr(before, f, None)
+                    new = form.cleaned_data.get(f, getattr(form.instance, f, None))
+                    if old != new:
+                        changes.append((f, old, new))
+            elif is_create and changed_fields:
+                for f in changed_fields:
+                    new = form.cleaned_data.get(f, getattr(form.instance, f, None))
+                    changes.append((f, None, new))
+        except Exception:
+            # Never fail the request due to logging
+            changes = []
+
+        response = super().form_valid(form)
+
+        obj_id = getattr(getattr(self, 'object', None), 'pk', getattr(form.instance, 'pk', None))
+        action = 'create' if is_create else 'update'
+        if changes:
+            for f, old, new in changes:
+                forms_logger.info(
+                    "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
+                    model_name, obj_id, action, user_repr, f, self._fmt_val(old), self._fmt_val(new)
+                )
+        else:
+            forms_logger.info(
+                "FormSave: %s[%s] %s by %s | no field-level differences detected",
+                model_name, obj_id, action, user_repr
+            )
+        return response
 
 from .models import Program, Student, Enrollment, Adult, Payment, SlidingScale, Fee, School, StudentApplication, RELATIONSHIP_CHOICES, RaceEthnicity
 from .forms import (
@@ -1134,7 +1198,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return redirect('import_dashboard')
 
 
-class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class MentorCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Adult
     form_class = AdultForm
     template_name = 'adults/form.html'
@@ -1153,7 +1217,7 @@ class MentorCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         return reverse('mentor_list')
 
 
-class MentorUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class MentorUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Adult
     form_class = AdultForm
     template_name = 'adults/form.html'
@@ -1171,7 +1235,7 @@ class SchoolListView(LoginRequiredMixin, ListView):
     context_object_name = 'schools'
 
 
-class SchoolCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class SchoolCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = School
     form_class = SchoolForm
     template_name = 'schools/form.html'
@@ -1182,7 +1246,7 @@ class SchoolCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         return reverse('school_list')
 
 
-class SchoolUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class SchoolUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = School
     form_class = SchoolForm
     template_name = 'schools/form.html'
@@ -1293,13 +1357,24 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 email.to = []  # ensure empty
                 email.bcc = to_send
             email.attach_alternative(inlined_html_body, 'text/html')
-            email.send(fail_silently=False)
 
-            messages.success(request, f"Email sent to {len(to_send)} recipient(s){' (test only)' if test_email else ''}.")
-            # Redirect back to program detail if coming from there, otherwise stay
-            if pk:
-                return redirect('program_detail', pk=pk)
-            return redirect('program_messaging')
+            # Log details about the outgoing message
+            preview_recipients = to_send[:20]
+            logger.info("ProgramEmail: preparing to send email | from=%s | to_count=%d | subject=%s | test=%s", from_email, len(to_send), subject, bool(test_email))
+            logger.debug("ProgramEmail: recipient sample (first %d): %s", len(preview_recipients), preview_recipients)
+
+            try:
+                sent_count = email.send(fail_silently=False)
+                logger.info("ProgramEmail: email sent successfully | from=%s | to_count=%d | subject=%s | sent_count=%s", from_email, len(to_send), subject, sent_count)
+                messages.success(request, f"Email sent to {len(to_send)} recipient(s){' (test only)' if test_email else ''}.")
+                # Redirect back to program detail if coming from there, otherwise stay
+                if pk:
+                    return redirect('program_detail', pk=pk)
+                return redirect('program_messaging')
+            except Exception as e:
+                logger.error("ProgramEmail: email send FAILED | from=%s | to_count=%d | subject=%s | error=%s", from_email, len(to_send), subject, e, exc_info=True)
+                messages.error(request, f"Failed to send email: {e}")
+                return self._render(form, prog)
 
         return self._render(form, program)
 
@@ -1339,7 +1414,7 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class ProgramCreateView(CreateView):
+class ProgramCreateView(LogFormSaveMixin, CreateView):
     model = Program
     form_class = ProgramForm
     template_name = 'programs/form.html'
@@ -1348,7 +1423,7 @@ class ProgramCreateView(CreateView):
         return reverse('program_detail', args=[self.object.pk])
 
 
-class ProgramUpdateView(UpdateView):
+class ProgramUpdateView(LogFormSaveMixin, UpdateView):
     model = Program
     form_class = ProgramForm
     template_name = 'programs/form.html'
@@ -1358,7 +1433,7 @@ class ProgramUpdateView(UpdateView):
 
 
 # --- Student edit ---
-class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class StudentUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Student
     form_class = StudentForm
     template_name = 'students/form.html'
@@ -1397,7 +1472,7 @@ class StudentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView)
         return next_url or reverse('student_edit', args=[self.object.pk])
 
 
-class StudentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class StudentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Student
     form_class = StudentForm
     template_name = 'students/form.html'
@@ -1489,7 +1564,7 @@ class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View
 
 
 # --- Parent create/edit ---
-class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ParentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Adult
     form_class = ParentForm
     template_name = 'parents/form.html'
@@ -1502,6 +1577,15 @@ class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         obj.save()
         # Save many-to-many after the object exists
         form.save_m2m()
+        # Logging for creation with changed fields
+        user = getattr(self.request, 'user', None)
+        user_repr = f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}" if getattr(user, 'is_authenticated', False) else 'anonymous'
+        for f in getattr(form, 'changed_data', []) or []:
+            new = form.cleaned_data.get(f, getattr(obj, f, None))
+            forms_logger.info(
+                "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
+                'Adult', obj.pk, 'create', user_repr, f, self._fmt_val(None), self._fmt_val(new)
+            )
         messages.success(self.request, 'Parent added successfully.')
         return redirect('parent_list')
 
@@ -1510,7 +1594,7 @@ class ParentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         return reverse('parent_list')
 
 
-class ParentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ParentUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Adult
     form_class = ParentForm
     template_name = 'parents/form.html'
@@ -1522,7 +1606,7 @@ class ParentUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
 
 
 # --- Payment create ---
-class ProgramPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ProgramPaymentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Payment
     form_class = PaymentForm
     template_name = 'programs/payment_form.html'
@@ -1548,6 +1632,13 @@ class ProgramPaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, Crea
         if not obj.amount:
             obj.amount = obj.fee.amount
         obj.save()
+        # Log creation with a concise summary and field values
+        user = getattr(self.request, 'user', None)
+        user_repr = f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}" if getattr(user, 'is_authenticated', False) else 'anonymous'
+        forms_logger.info(
+            "FormSave: Payment[%s] create by %s | student=%s | fee=%s | amount=%s | method=%s | paid_at=%s",
+            obj.pk, user_repr, self._fmt_val(getattr(obj, 'student', None)), self._fmt_val(getattr(obj, 'fee', None)), self._fmt_val(getattr(obj, 'amount', None)), self._fmt_val(getattr(obj, 'method', None)), self._fmt_val(getattr(obj, 'paid_at', None))
+        )
         messages.success(self.request, 'Payment recorded successfully.')
         return redirect('program_detail', pk=self.program.pk)
 
@@ -1592,7 +1683,7 @@ class ProgramPaymentPrintView(LoginRequiredMixin, View):
         })
 
 
-class ProgramSlidingScaleCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ProgramSlidingScaleCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = SlidingScale
     form_class = SlidingScaleForm
     template_name = 'programs/sliding_scale_form.html'
@@ -1631,11 +1722,18 @@ class ProgramSlidingScaleCreateView(LoginRequiredMixin, PermissionRequiredMixin,
                 messages.info(self.request, 'A sliding scale already exists for this student. You can edit it below.')
                 return redirect('program_sliding_scale_edit', pk=self.program.pk, sliding_id=existing.pk)
             raise
+        # Log creation
+        user = getattr(self.request, 'user', None)
+        user_repr = f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}" if getattr(user, 'is_authenticated', False) else 'anonymous'
+        forms_logger.info(
+            "FormSave: SlidingScale[%s] create by %s | student=%s | program=%s | percent=%s",
+            obj.pk, user_repr, self._fmt_val(getattr(obj, 'student', None)), self._fmt_val(getattr(self, 'program', None)), self._fmt_val(getattr(obj, 'percent', None))
+        )
         messages.success(self.request, 'Sliding scale saved successfully.')
         return redirect('program_detail', pk=self.program.pk)
 
 
-class ProgramSlidingScaleUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ProgramSlidingScaleUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = SlidingScale
     form_class = SlidingScaleForm
     template_name = 'programs/sliding_scale_form.html'
@@ -1661,7 +1759,22 @@ class ProgramSlidingScaleUpdateView(LoginRequiredMixin, PermissionRequiredMixin,
     def form_valid(self, form):
         obj = form.save(commit=False)
         obj.program = self.program
+        # Capture old values for changed fields before saving
+        try:
+            before = SlidingScale.objects.get(pk=obj.pk)
+        except SlidingScale.DoesNotExist:
+            before = None
         obj.save()
+        # Log update with field-level changes when possible
+        user = getattr(self.request, 'user', None)
+        user_repr = f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}" if getattr(user, 'is_authenticated', False) else 'anonymous'
+        for f in getattr(form, 'changed_data', []) or []:
+            old = getattr(before, f, None) if before is not None else None
+            new = getattr(obj, f, None)
+            forms_logger.info(
+                "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
+                'SlidingScale', obj.pk, 'update', user_repr, f, self._fmt_val(old), self._fmt_val(new)
+            )
         messages.success(self.request, 'Sliding scale updated successfully.')
         return redirect('program_detail', pk=self.program.pk)
 
@@ -1837,7 +1950,7 @@ class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, 
         return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
 
 
-class ProgramFeeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ProgramFeeCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     permission_required = 'programs.add_fee'
     model = Fee
     form_class = FeeForm
@@ -1866,7 +1979,7 @@ class ProgramFeeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVi
         return reverse('program_fee_assignments', kwargs={'pk': self.program.pk, 'fee_id': self.object.pk})
 
 
-class ProgramFeeUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ProgramFeeUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     permission_required = 'programs.change_fee'
     model = Fee
     form_class = FeeForm
@@ -2148,7 +2261,7 @@ class AdultsListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class AdultUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class AdultUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = Adult
     form_class = AdultForm
     template_name = 'adults/form.html'
