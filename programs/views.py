@@ -11,9 +11,26 @@ from django.db.models.functions import Coalesce, Lower
 from django.template.loader import render_to_string
 from premailer import transform
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger('programs.email')
 forms_logger = logging.getLogger('programs.forms')
+
+
+def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> Decimal:
+    """Compute sliding-scale discount as a positive Decimal rounded to the nearest dollar.
+
+    The discount is percent of total_fees, then rounded to whole dollars using standard rounding
+    (0.50 and above rounds up; below 0.50 rounds down). If inputs are missing, returns 0.
+    """
+    if total_fees is None or percent is None:
+        return Decimal('0')
+    try:
+        amount = (total_fees * percent) / Decimal('100')
+    except Exception:
+        return Decimal('0')
+    # Round to the nearest whole dollar (e.g., 12.49 -> 12, 12.50 -> 13)
+    return amount.quantize(Decimal('1.'), rounding=ROUND_HALF_UP)
 
 class LogFormSaveMixin:
     """Mixin to log create/update actions and field changes for ModelForm-based CBVs.
@@ -1812,7 +1829,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         from decimal import Decimal
         total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
         if sliding and sliding.percent is not None:
-            discount = (total_fees_for_discount * sliding.percent / Decimal('100'))
+            discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
             entries.append({
                 'date': sliding.created_at.date(),
                 'type': 'Sliding Scale',
@@ -1878,7 +1895,7 @@ class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
         from decimal import Decimal
         total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
         if sliding and sliding.percent is not None:
-            discount = (total_fees_for_discount * sliding.percent / Decimal('100'))
+            discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
             entries.append({
                 'date': sliding.created_at.date(),
                 'type': 'Sliding Scale',
@@ -2184,7 +2201,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
             sliding = SlidingScale.objects.filter(student=student, program=program).first()
             total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
             if sliding and sliding.percent is not None:
-                discount = (total_fees_for_discount * sliding.percent / Decimal('100'))
+                discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
                 entries.append({'date': sliding.created_at.date(), 'type': 'Sliding Scale', 'name': f"Sliding scale ({sliding.percent}%)", 'amount': -discount})
             payments = Payment.objects.filter(student=student, fee__program=program)
             for p in payments:
@@ -2328,7 +2345,7 @@ class ProgramDuesOwedView(LoginRequiredMixin, View):
         total_fees_for_discount = sum([f.amount for f in Fee.objects.filter(program=program)], start=Decimal('0'))
         total_sliding = Decimal('0')
         if sliding and sliding.percent is not None:
-            total_sliding = (total_fees_for_discount * sliding.percent / Decimal('100'))
+            total_sliding = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
 
         # Payments made by student for fees in this program
         total_payments = sum([p.amount for p in Payment.objects.filter(student=student, fee__program=program)], start=Decimal('0'))
