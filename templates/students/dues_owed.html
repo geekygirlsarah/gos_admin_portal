@@ -22,7 +22,7 @@
             <tr>
               <td>
                 {% if r.student.photo %}
-                  <img src="{{ r.student.photo.url }}" alt="{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                  <img src="{{ r.student.photo.url }}" alt="{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
                 <a class="text-decoration-none" href="{% url 'student_detail' r.student.pk %}">{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}</a>
               </td>

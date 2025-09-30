@@ -1,0 +1,22 @@
+/* Site-wide custom styles */
+
+/* Generic circular avatar base */
+.avatar {
+  display: inline-block;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+/* Common sizes */
+.avatar-28 { width: 28px; height: 28px; }
+.avatar-32 { width: 32px; height: 32px; }
+.avatar-40 { width: 40px; height: 40px; }
+
+/* Convenience spacing when placed before text */
+.avatar + .avatar-text,
+.avatar + a,
+.avatar + span,
+.avatar + strong {
+  margin-left: 8px;
+}

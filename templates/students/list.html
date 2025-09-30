@@ -32,7 +32,7 @@
             <tr>
               <td>
                 {% if s.photo %}
-                  <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                  <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
                 <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
               </td>

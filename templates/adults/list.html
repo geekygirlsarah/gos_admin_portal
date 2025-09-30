@@ -26,7 +26,7 @@
             <tr>
               <td>
                 {% if a.photo %}
-                  <img src="{{ a.photo.url }}" alt="{{ a.first_name }} {{ a.last_name }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:8px;vertical-align:middle;"/>
+                  <img src="{{ a.photo.url }}" alt="{{ a.first_name }} {{ a.last_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
                 {{ a.first_name }} {{ a.last_name }}
               </td>
