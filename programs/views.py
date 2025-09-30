@@ -8,6 +8,7 @@ from django.core.mail import EmailMultiAlternatives, get_connection
 from django.utils.html import strip_tags
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
+from django.template.loader import render_to_string
 from premailer import transform
 import logging
 
@@ -86,6 +87,7 @@ from .forms import (
     SchoolForm,
     ProgramForm,
     ProgramEmailForm,
+    ProgramEmailBalancesForm,
     FeeAssignmentEditForm,
     FeeForm,
     ProgramApplySelectForm,
@@ -2108,6 +2110,199 @@ class ApplyThanksView(View):
     def get(self, request):
         from django.shortcuts import render
         return render(request, self.template_name)
+
+
+class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'programs.view_program'
+    template_name = 'programs/email_balances_form.html'
+
+    def get(self, request, pk):
+        program = get_object_or_404(Program, pk=pk)
+        form = ProgramEmailBalancesForm(program=program)
+        return self._render(request, form, program)
+
+    def post(self, request, pk):
+        program = get_object_or_404(Program, pk=pk)
+        form = ProgramEmailBalancesForm(request.POST, program=program)
+        if not form.is_valid():
+            return self._render(request, form, program)
+
+        subject = form.cleaned_data['subject']
+        default_message = form.cleaned_data.get('default_message') or ''
+        include_zero = form.cleaned_data.get('include_zero_balances') or False
+        test_email = form.cleaned_data.get('test_email')
+
+        # Build sender connection (reuse logic from ProgramEmailView)
+        selected = form.cleaned_data.get('from_account')
+        accounts = getattr(settings, 'EMAIL_SENDER_ACCOUNTS', []) or []
+        acc = None
+        if accounts and selected and selected != 'DEFAULT':
+            for a in accounts:
+                key = a.get('key') or a.get('email')
+                if key == selected:
+                    acc = a
+                    break
+        conn_kwargs = {
+            'backend': getattr(settings, 'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend'),
+            'host': getattr(settings, 'EMAIL_HOST', ''),
+            'port': getattr(settings, 'EMAIL_PORT', 465),
+            'use_tls': getattr(settings, 'EMAIL_USE_TLS', False),
+            'use_ssl': getattr(settings, 'EMAIL_USE_SSL', True),
+            'timeout': getattr(settings, 'EMAIL_TIMEOUT', 10),
+        }
+        if acc:
+            conn_kwargs.update({
+                'username': acc.get('username') or '',
+                'password': acc.get('password') or '',
+            })
+            from_email = acc.get('email') or getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+        else:
+            conn_kwargs.update({
+                'username': getattr(settings, 'EMAIL_HOST_USER', ''),
+                'password': getattr(settings, 'EMAIL_HOST_PASSWORD', ''),
+            })
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+        connection = get_connection(**conn_kwargs)
+
+        # Collect students enrolled in program
+        students = (
+            Student.objects.filter(enrollment__program=program)
+            .select_related('school')
+            .order_by(Lower(Coalesce('first_name', 'legal_first_name')), Lower('last_name'))
+        )
+
+        # Helper to compute balance and entries like ProgramStudentBalanceView
+        from decimal import Decimal
+        def compute_entries_and_balance(student):
+            entries = []
+            fees = Fee.objects.filter(program=program)
+            for fee in fees:
+                if fee.assignments.exists() and not fee.assignments.filter(student=student).exists():
+                    continue
+                fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+                entries.append({'date': fee_date, 'type': 'Fee', 'name': fee.name, 'amount': fee.amount})
+            sliding = SlidingScale.objects.filter(student=student, program=program).first()
+            total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
+            if sliding and sliding.percent is not None:
+                discount = (total_fees_for_discount * sliding.percent / Decimal('100'))
+                entries.append({'date': sliding.created_at.date(), 'type': 'Sliding Scale', 'name': f"Sliding scale ({sliding.percent}%)", 'amount': -discount})
+            payments = Payment.objects.filter(student=student, fee__program=program)
+            for p in payments:
+                entries.append({'date': p.paid_on, 'type': 'Payment', 'name': f"Payment for {p.fee.name}", 'amount': -p.amount, 'payment_id': p.id})
+            entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))
+            total_fees = sum([e['amount'] for e in entries if e['type'] == 'Fee'])
+            total_sliding = -sum([e['amount'] for e in entries if e['type'] == 'Sliding Scale'])
+            total_payments = -sum([e['amount'] for e in entries if e['type'] == 'Payment'])
+            balance = total_fees - total_sliding - total_payments
+            return entries, total_fees, total_sliding, total_payments, balance
+
+        # Build list of targets with non-empty recipient emails
+        targets = []
+        for s in students:
+            entries, total_fees, total_sliding, total_payments, balance = compute_entries_and_balance(s)
+            if not include_zero and balance == 0:
+                continue
+            # Gather recipient emails: student + all parents/guardians
+            emails = []
+            # student preferred email
+            if s.personal_email:
+                emails.append(s.personal_email)
+            elif s.andrew_email:
+                emails.append(s.andrew_email)
+            # parents/guardians
+            for adult in s.all_parents:
+                email = adult.personal_email or adult.email or adult.andrew_email
+                if email:
+                    emails.append(email)
+            # Deduplicate while preserving order
+            seen = set()
+            deduped = []
+            for e in emails:
+                if e and e not in seen:
+                    deduped.append(e)
+                    seen.add(e)
+            if not deduped:
+                continue
+            targets.append({
+                'student': s,
+                'emails': deduped,
+                'entries': entries,
+                'total_fees': total_fees,
+                'total_sliding': total_sliding,
+                'total_payments': total_payments,
+                'balance': balance,
+            })
+
+        if not targets and not test_email:
+            messages.error(request, 'No recipients found to email.')
+            return self._render(request, form, program)
+
+        # Prepare sending: if test, pick first student's content or a generic minimal body
+        to_send = []
+        if test_email:
+            sample = targets[0] if targets else None
+            if sample is None:
+                messages.error(request, 'No sample data available to send a test email.')
+                return self._render(request, form, program)
+            to_send.append((test_email, sample))
+        else:
+            for t in targets:
+                # send one email to combined recipients per student
+                to_send.append((t['emails'], t))
+
+        sent_total = 0
+        for dest, data in to_send:
+            # Render balance sheet HTML
+            ctx = {
+                'program': program,
+                'student': data['student'],
+                'entries': data['entries'],
+                'total_fees': data['total_fees'],
+                'total_sliding': data['total_sliding'],
+                'total_payments': data['total_payments'],
+                'balance': data['balance'],
+            }
+            balance_html = render_to_string('programs/balance_sheet.html', ctx, request=None)
+            # Compose full HTML with optional message and small header showing amount owed
+            owed_str = f"${data['balance']:.2f}"
+            header_html = f"<p><strong>Amount currently owed for {data['student']} in {program.name}: {owed_str}</strong></p>"
+            message_html = f"<p>{default_message}</p>" if default_message else ''
+            full_html = header_html + message_html + balance_html
+            try:
+                inlined_html = transform(full_html)
+            except Exception:
+                inlined_html = full_html
+            text_body = strip_tags(inlined_html)
+
+            # Ensure dest is list
+            if isinstance(dest, str):
+                to_list = [dest]
+            else:
+                to_list = list(dest)
+
+            # Some providers require at least one To; use first email as To, rest BCC
+            to_addr = [to_list[0]]
+            bcc = to_list[1:]
+            email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=to_addr, bcc=bcc, connection=connection)
+            email.attach_alternative(inlined_html, 'text/html')
+            try:
+                sent = email.send(fail_silently=False)
+                sent_total += sent
+            except Exception as e:
+                logger.error('ProgramEmailBalances: send failed for %s | error=%s', data['student'], e, exc_info=True)
+
+        if test_email:
+            messages.success(request, f"Test email sent to {test_email}.")
+        else:
+            messages.success(request, f"Balance emails queued/sent for {len(to_send)} student(s).")
+        return redirect('program_dues_owed', pk=program.pk)
+
+    def _render(self, request, form, program):
+        from django.shortcuts import render
+        return render(request, self.template_name, {
+            'program': program,
+            'form': form,
+        })
 
 
 class ProgramDuesOwedView(LoginRequiredMixin, View):

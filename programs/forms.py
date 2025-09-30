@@ -280,6 +280,59 @@ class ProgramEmailForm(forms.Form):
         return cleaned
 
 
+class ProgramEmailBalancesForm(forms.Form):
+    program = forms.ModelChoiceField(queryset=Program.objects.all(), required=False)
+    subject = forms.CharField(max_length=255, help_text='Subject for the email to each family/student.')
+    default_message = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 6}),
+        help_text='Optional message that will appear above the balance sheet.'
+    )
+    include_zero_balances = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Email families with a $0.00 balance'
+    )
+    test_email = forms.EmailField(required=False, help_text='Optional: send a single sample to this address.')
+
+    def __init__(self, *args, **kwargs):
+        program = kwargs.pop('program', None)
+        super().__init__(*args, **kwargs)
+        # Sender choices from settings
+        accounts = getattr(settings, 'EMAIL_SENDER_ACCOUNTS', []) or []
+        choices = []
+        initial_value = None
+        if accounts:
+            for acc in accounts:
+                email = acc.get('email') or ''
+                display = acc.get('display_name') or email or 'Sender'
+                value = acc.get('key') or email
+                label = f"{display} <{email}>" if email else display
+                choices.append((value, label))
+            if choices:
+                initial_value = choices[0][0]
+        else:
+            default_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '')
+            choices = [('DEFAULT', f"Default ({default_email})" if default_email else 'Default configured sender')]
+            initial_value = 'DEFAULT'
+        self.fields['from_account'] = forms.ChoiceField(
+            choices=choices,
+            initial=initial_value,
+            label='Send from'
+        )
+        if program is not None:
+            self.fields['program'].initial = program
+            self.fields['program'].widget = forms.HiddenInput()
+            self.fields['program'].required = True
+
+    def clean(self):
+        cleaned = super().clean()
+        prog = cleaned.get('program')
+        if self.fields['program'].widget.__class__ is forms.HiddenInput and not prog:
+            raise forms.ValidationError('Program is required.')
+        return cleaned
+
+
 
 
 class FeeAssignmentEditForm(forms.Form):

@@ -12,6 +12,9 @@
 
   <div class="row mb-3 align-items-center">
     <div class="col"><h1 class="h3 mb-0">Dues Owed — {{ program.name }}</h1></div>
+    <div class="col-auto">
+      <a class="btn btn-outline-primary" href="{% url 'program_dues_email' program.id %}">Email balance sheets…</a>
+    </div>
   </div>
 
   {% if rows %}

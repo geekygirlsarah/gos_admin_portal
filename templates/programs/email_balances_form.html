@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Email Balances — {{ program.name }}{% endblock %}
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <a class="link-secondary" href="{% url 'program_dues_owed' program.id %}">← Back to Dues Owed</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-9 col-xl-8">
+    <h1 class="h4 mb-3">Email Balance Sheets — {{ program.name }}</h1>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" class="">
+      {% csrf_token %}
+      {{ form.program }}
+
+      <div class="card mb-3">
+        <div class="card-header">Sender</div>
+        <div class="card-body">
+          <div class="mb-0">
+            {{ form.from_account.label_tag }}
+            {{ form.from_account }}
+            <div class="form-text">Choose which configured sender address to use.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header">Content</div>
+        <div class="card-body">
+          <div class="mb-3">
+            {{ form.subject.label_tag }}
+            {{ form.subject }}
+          </div>
+          <div class="mb-0">
+            {{ form.default_message.label_tag }}
+            {{ form.default_message }}
+            <div class="form-text">Optional message that will appear above the balance sheet in the email.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header">Options</div>
+        <div class="card-body">
+          <div class="form-check mb-3">
+            {{ form.include_zero_balances }}
+            <label class="form-check-label" for="id_include_zero_balances">{{ form.include_zero_balances.label }}</label>
+          </div>
+          <div class="mb-0">
+            {{ form.test_email.label_tag }}
+            {{ form.test_email }}
+            <div class="form-text">Optional: If set, only a single sample email will be sent to this address.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mb-4">
+        <button type="submit" class="btn btn-primary">Send Emails</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
