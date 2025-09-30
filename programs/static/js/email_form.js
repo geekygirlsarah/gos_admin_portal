@@ -116,7 +116,14 @@
         // Keep hidden body synchronized on content changes
         function syncBody() {
             var isTrulyEmpty = quill.getText().trim().length === 0;
-            hiddenBody.value = isTrulyEmpty ? '' : quill.root.innerHTML;
+            var html = isTrulyEmpty ? '' : quill.root.innerHTML;
+            if (html && /<table[\s>]/i.test(html)) {
+                // Ensure basic borders/padding for tables in email clients.
+                var style = '<style>.email-table table{border-collapse:collapse;width:100%}.email-table td,.email-table th{border:1px solid #dee2e6;padding:6px}</style>';
+                // Wrap content so premailer can inline these styles reliably
+                html = style + '<div class="email-table">' + html + '</div>';
+            }
+            hiddenBody.value = html;
         }
         quill.on('text-change', syncBody);
 
