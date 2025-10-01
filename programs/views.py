@@ -2228,9 +2228,11 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 emails.append(s.andrew_email)
             # parents/guardians
             for adult in s.all_parents:
-                email = adult.personal_email or adult.email or adult.andrew_email
-                if email:
-                    emails.append(email)
+                # Only include parents/guardians who have opted into email updates and are active
+                if getattr(adult, 'email_updates', False) and getattr(adult, 'active', True):
+                    email = adult.personal_email or adult.email or adult.andrew_email
+                    if email:
+                        emails.append(email)
             # Deduplicate while preserving order
             seen = set()
             deduped = []
@@ -2279,7 +2281,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 'total_payments': data['total_payments'],
                 'balance': data['balance'],
             }
-            balance_html = render_to_string('programs/balance_sheet.html', ctx, request=None)
+            balance_html = render_to_string('programs/balance_sheet_print.html', ctx, request=None)
             # Compose full HTML with optional message and small header showing amount owed
             owed_str = f"${data['balance']:.2f}"
             header_html = f"<p><strong>Amount currently owed for {data['student']} in {program.name}: {owed_str}</strong></p>"
