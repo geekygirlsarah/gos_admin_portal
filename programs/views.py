@@ -2290,7 +2290,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
             balance_html = render_to_string('programs/balance_sheet_email.html', ctx, request=None)
             # Compose full HTML with optional message and small header showing amount owed
             owed_str = f"${data['balance']:.2f}"
-            message_html = f"<p>{default_message}</p>" if default_message else ''
+            message_html = default_message if default_message else ''
             full_html = message_html + balance_html
             try:
                 inlined_html = transform(full_html)
