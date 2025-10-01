@@ -1358,6 +1358,10 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     'password': acc.get('password') or '',
                 })
                 from_email = acc.get('email') or getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+                # Include display_name if provided
+                display_name = acc.get('display_name')
+                if display_name:
+                    from_email = f'"{display_name}" <{from_email}>'
             else:
                 # Fall back to global credentials and default from address
                 conn_kwargs.update({
@@ -1365,6 +1369,10 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     'password': getattr(settings, 'EMAIL_HOST_PASSWORD', ''),
                 })
                 from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+                # Include sender name from settings if available
+                sender_name = getattr(settings, 'DEFAULT_FROM_NAME', None)
+                if sender_name:
+                    from_email = f'"{sender_name}" <{from_email}>'
 
             connection = get_connection(**conn_kwargs)
             # For test sends, put recipient in the To field (some SMTP providers reject emails with empty To)
@@ -2173,6 +2181,10 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 'password': acc.get('password') or '',
             })
             from_email = acc.get('email') or getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com')
+            # Include display_name name if provided
+            display_name = acc.get('display_name')
+            if display_name:
+                from_email = f'"{display_name}" <{from_email}>'
         else:
             conn_kwargs.update({
                 'username': getattr(settings, 'EMAIL_HOST_USER', ''),
@@ -2284,9 +2296,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
             balance_html = render_to_string('programs/balance_sheet_email.html', ctx, request=None)
             # Compose full HTML with optional message and small header showing amount owed
             owed_str = f"${data['balance']:.2f}"
-            header_html = f"<p><strong>Amount currently owed for {data['student']} in {program.name}: {owed_str}</strong></p>"
             message_html = f"<p>{default_message}</p>" if default_message else ''
-            full_html = header_html + message_html + balance_html
+            full_html = message_html + balance_html
             try:
                 inlined_html = transform(full_html)
             except Exception:
