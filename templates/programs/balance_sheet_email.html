@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load tz %}
+{% block title %}Balance Sheet — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }} —
+    {{ program.name }}{% endblock %}
+{% block extra_head %}
+    <style>
+        /* Hide the site navbar on the receipt page (screen and print) */
+        nav, .navbar {
+            display: none !important;
+        }
+
+        @media print {
+            .no-print, .alert {
+                display: none !important;
+            }
+
+            main.container {
+                padding: 0 !important;
+            }
+
+            .card {
+                border: none;
+            }
+        }
+
+        .org-header {
+            margin-bottom: .75rem;
+        }
+
+        .receipt-header {
+            border-bottom: 2px solid #000;
+            margin-bottom: 1rem;
+            padding-bottom: .5rem;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+    <div class="row">
+    <div class="col-lg-10 col-xl-8 mb-3">
+        <div class="org-header text-end">
+            <div class="fw-bold">Girls of Steel Robotics</div>
+            <div>Carnegie Mellon University</div>
+            <div class="mb-2">EIN: 25-0969449</div>
+            <div>5000 Forbes Ave</div>
+            <div class="mb-2">Pittsburgh, PA 15213-3890</div>
+            <div>cmu.edu</div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-start receipt-header">
+            <div>
+                <h1 class="h4 mb-1">Program Registration Balance Sheet</h1>
+                <div class="text-muted small">Date issued: {% timezone "America/New_York" %}{% now 'Y-m-d H:i' %}{% endtimezone %}</div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <div><span class="fw-semibold">Program:</span> {{ program.name }} -- {{ program.year }}</div>
+            <div class="mb-2"><span
+                    class="fw-semibold">Participant's name:</span> {{ student.legal_first_name|default:student.first_name }} {{ student.last_name }}
+            </div>
+
+            {% if entries %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                        <tr>
+                            <th style="width: 120px;">Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th class="text-end" style="width: 160px;">Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for e in entries %}
+                            <tr>
+                                <td>{{ e.date }}</td>
+                                <td>{{ e.type }}</td>
+                                <td>{{ e.name }}</td>
+                                <td class="text-end">${{ e.amount|floatformat:2 }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                        <tfoot>
+                        <tr>
+                            <th colspan="3" class="text-end">Total Fees</th>
+                            <th class="text-end">${{ total_fees|floatformat:2 }}</th>
+                        </tr>
+                        <tr>
+                            <th colspan="3" class="text-end">Sliding Scale</th>
+                            <th class="text-end">-${{ total_sliding|floatformat:2 }}</th>
+                        </tr>
+                        <tr>
+                            <th colspan="3" class="text-end">Payments</th>
+                            <th class="text-end">-${{ total_payments|floatformat:2 }}</th>
+                        </tr>
+                        <tr>
+                            <th colspan="3" class="text-end">Balance Due</th>
+                            <th class="text-end">${{ balance|floatformat:2 }}</th>
+                        </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">No financial entries yet for this student and program.</div>
+            {% endif %}
+
+            <div class=""><span class="fw-semibold">Program Contacts:</span> Elizabeth Kysel, Sarah Withee</div>
+            <div class=""><span class="fw-semibold">Email address:</span> <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a></div>
+
+            <div class="">Please reply to this email or contact us at the address above if you notice any errors.</div>
+
+            <div class="mt-4 small text-muted">
+                Thank you for your support!
+            </div>
+
+        </div>
+    </div>
+{% endblock %}

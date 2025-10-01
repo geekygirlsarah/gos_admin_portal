@@ -2281,7 +2281,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 'total_payments': data['total_payments'],
                 'balance': data['balance'],
             }
-            balance_html = render_to_string('programs/balance_sheet_print.html', ctx, request=None)
+            balance_html = render_to_string('programs/balance_sheet_email.html', ctx, request=None)
             # Compose full HTML with optional message and small header showing amount owed
             owed_str = f"${data['balance']:.2f}"
             header_html = f"<p><strong>Amount currently owed for {data['student']} in {program.name}: {owed_str}</strong></p>"
