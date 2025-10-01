@@ -1848,6 +1848,8 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         for p in payments:
             via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
             details = f" (check #{p.check_number})" if (p.paid_via == 'check' and p.check_number) else ''
+            if p.paid_via == 'other' and p.notes:
+                details += f" — {p.notes}"
             entries.append({
                 'date': p.paid_on,
                 'type': 'Payment',
@@ -1915,6 +1917,8 @@ class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
         for p in payments:
             via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
             details = f" (check #{p.check_number})" if (p.paid_via == 'check' and p.check_number) else ''
+            if p.paid_via == 'other' and p.notes:
+                details += f" — {p.notes}"
             entries.append({
                 'date': p.paid_on,
                 'type': 'Payment',
@@ -2222,6 +2226,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
             for p in payments:
                 via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
                 details = f" (check #{p.check_number})" if (p.paid_via == 'check' and p.check_number) else ''
+                if p.paid_via == 'other' and p.notes:
+                    details += f" — {p.notes}"
                 entries.append({'date': p.paid_on, 'type': 'Payment', 'name': f"Payment via {via}{details}", 'amount': -p.amount, 'payment_id': p.id})
             entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))
             total_fees = sum([e['amount'] for e in entries if e['type'] == 'Fee'])
