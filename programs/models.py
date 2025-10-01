@@ -583,7 +583,8 @@ class Payment(models.Model):
     ]
 
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='payments')
-    fee = models.ForeignKey('Fee', on_delete=models.CASCADE, related_name='payments')
+    program = models.ForeignKey('Program', on_delete=models.CASCADE, related_name='payments')
+    fee = models.ForeignKey('Fee', on_delete=models.SET_NULL, related_name='payments', blank=True, null=True)
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     paid_on = models.DateField()
     paid_via = models.CharField(max_length=20, choices=PAID_VIA_CHOICES, default='cash')
@@ -597,18 +598,21 @@ class Payment(models.Model):
         ordering = ['-paid_on', '-created_at']
 
     def __str__(self):
-        return f"Payment ${self.amount} by {self.student} for {self.fee.name} on {self.paid_on}"
+        via = dict(self.PAID_VIA_CHOICES).get(self.paid_via, self.paid_via)
+        details = f" (check #{self.check_number})" if (self.paid_via == 'check' and self.check_number) else ''
+        return f"Payment ${self.amount} by {self.student} in {self.program.name} via {via}{details} on {self.paid_on}"
 
     def clean(self):
-        # Ensure the payment fee belongs to a program the student is enrolled in
+        # Ensure the student is enrolled in the payment's program
         from django.core.exceptions import ValidationError
-        program = self.fee.program if self.fee_id else None
-        if program and not Enrollment.objects.filter(student=self.student, program=program).exists():
-            raise ValidationError('Student must be enrolled in the program for the selected fee.')
+        if self.program_id and not Enrollment.objects.filter(student=self.student, program_id=self.program_id).exists():
+            raise ValidationError('Student must be enrolled in the selected program for this payment.')
 
-        # If the fee has explicit assignments, the student must be among them
-        if self.fee_id and self.fee.assignments.exists():
-            if not self.fee.assignments.filter(student=self.student).exists():
+        # If a fee is specified, ensure it belongs to the same program and, if assigned, that the student is among assignees
+        if self.fee_id:
+            if self.fee.program_id != self.program_id:
+                raise ValidationError('Selected fee does not belong to the chosen program.')
+            if self.fee.assignments.exists() and not self.fee.assignments.filter(student=self.student).exists():
                 raise ValidationError('This fee is only assigned to specific students, and this student is not assigned.')
 
 

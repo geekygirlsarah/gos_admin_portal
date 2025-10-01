@@ -168,7 +168,7 @@ class AdultForm(forms.ModelForm):
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
-        fields = ['student', 'fee', 'amount', 'paid_on', 'paid_via', 'check_number', 'camp_hours', 'notes']
+        fields = ['student', 'amount', 'paid_on', 'paid_via', 'check_number', 'camp_hours', 'notes', 'fee']
         widgets = {
             'paid_on': forms.DateInput(attrs={'type': 'date'}),
         }
@@ -177,8 +177,12 @@ class PaymentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Restrict student choices to those enrolled in this program
         self.fields['student'].queryset = Student.objects.filter(programs=program)
-        # Restrict fee choices to fees for this program
-        self.fields['fee'].queryset = Fee.objects.filter(program=program)
+        # Fee is optional; restrict choices to this program when present
+        if 'fee' in self.fields:
+            self.fields['fee'].required = False
+            self.fields['fee'].queryset = Fee.objects.filter(program=program)
+        # Store program for use in the view when saving
+        self._program = program
 
 
 class SlidingScaleForm(forms.ModelForm):

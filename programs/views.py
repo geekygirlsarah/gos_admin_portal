@@ -1654,17 +1654,16 @@ class ProgramPaymentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionR
         return ctx
 
     def form_valid(self, form):
-        # Optionally default amount to the fee amount if not provided
         obj = form.save(commit=False)
-        if not obj.amount:
-            obj.amount = obj.fee.amount
+        # Ensure program is set from the URL context
+        obj.program = self.program
         obj.save()
         # Log creation with a concise summary and field values
         user = getattr(self.request, 'user', None)
         user_repr = f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}" if getattr(user, 'is_authenticated', False) else 'anonymous'
         forms_logger.info(
-            "FormSave: Payment[%s] create by %s | student=%s | fee=%s | amount=%s | method=%s | paid_at=%s",
-            obj.pk, user_repr, self._fmt_val(getattr(obj, 'student', None)), self._fmt_val(getattr(obj, 'fee', None)), self._fmt_val(getattr(obj, 'amount', None)), self._fmt_val(getattr(obj, 'method', None)), self._fmt_val(getattr(obj, 'paid_at', None))
+            "FormSave: Payment[%s] create by %s | student=%s | program=%s | fee=%s | amount=%s | paid_via=%s | paid_on=%s",
+            obj.pk, user_repr, self._fmt_val(getattr(obj, 'student', None)), self._fmt_val(getattr(obj, 'program', None)), self._fmt_val(getattr(obj, 'fee', None)), self._fmt_val(getattr(obj, 'amount', None)), self._fmt_val(getattr(obj, 'paid_via', None)), self._fmt_val(getattr(obj, 'paid_on', None))
         )
         messages.success(self.request, 'Payment recorded successfully.')
         return redirect('program_detail', pk=self.program.pk)
@@ -1675,7 +1674,7 @@ class ProgramPaymentDetailView(LoginRequiredMixin, View):
         program = get_object_or_404(Program, pk=pk)
         payment = get_object_or_404(Payment, pk=payment_id)
         # Ensure payment belongs to this program
-        if payment.fee.program_id != program.id:
+        if payment.program_id != program.id:
             messages.error(request, "Payment does not belong to this program.")
             return redirect('program_detail', pk=program.pk)
         student = payment.student
@@ -1695,7 +1694,7 @@ class ProgramPaymentPrintView(LoginRequiredMixin, View):
     def get(self, request, pk, payment_id):
         program = get_object_or_404(Program, pk=pk)
         payment = get_object_or_404(Payment, pk=payment_id)
-        if payment.fee.program_id != program.id:
+        if payment.program_id != program.id:
             messages.error(request, "Payment does not belong to this program.")
             return redirect('program_detail', pk=program.pk)
         student = payment.student
@@ -1845,12 +1844,14 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
                 'amount': -discount,
             })
         # Payments: negative amounts
-        payments = Payment.objects.filter(student=student, fee__program=program)
+        payments = Payment.objects.filter(student=student, program=program)
         for p in payments:
+            via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
+            details = f" (check #{p.check_number})" if (p.paid_via == 'check' and p.check_number) else ''
             entries.append({
                 'date': p.paid_on,
                 'type': 'Payment',
-                'name': f"Payment for {p.fee.name}",
+                'name': f"Payment via {via}{details}",
                 'amount': -p.amount,
                 'payment_id': p.id,
             })
@@ -1910,12 +1911,14 @@ class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
                 'name': f"Sliding scale ({sliding.percent}%)",
                 'amount': -discount,
             })
-        payments = Payment.objects.filter(student=student, fee__program=program)
+        payments = Payment.objects.filter(student=student, program=program)
         for p in payments:
+            via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
+            details = f" (check #{p.check_number})" if (p.paid_via == 'check' and p.check_number) else ''
             entries.append({
                 'date': p.paid_on,
                 'type': 'Payment',
-                'name': f"Payment for {p.fee.name}",
+                'name': f"Payment via {via}{details}",
                 'amount': -p.amount,
                 'payment_id': p.id,
             })
@@ -2215,9 +2218,11 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
             if sliding and sliding.percent is not None:
                 discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
                 entries.append({'date': sliding.created_at.date(), 'type': 'Sliding Scale', 'name': f"Sliding scale ({sliding.percent}%)", 'amount': -discount})
-            payments = Payment.objects.filter(student=student, fee__program=program)
+            payments = Payment.objects.filter(student=student, program=program)
             for p in payments:
-                entries.append({'date': p.paid_on, 'type': 'Payment', 'name': f"Payment for {p.fee.name}", 'amount': -p.amount, 'payment_id': p.id})
+                via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
+                details = f" (check #{p.check_number})" if (p.paid_via == 'check' and p.check_number) else ''
+                entries.append({'date': p.paid_on, 'type': 'Payment', 'name': f"Payment via {via}{details}", 'amount': -p.amount, 'payment_id': p.id})
             entries.sort(key=lambda e: (e['date'] is None, e['date'], e['type']))
             total_fees = sum([e['amount'] for e in entries if e['type'] == 'Fee'])
             total_sliding = -sum([e['amount'] for e in entries if e['type'] == 'Sliding Scale'])
@@ -2353,8 +2358,8 @@ class ProgramDuesOwedView(LoginRequiredMixin, View):
         if sliding and sliding.percent is not None:
             total_sliding = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
 
-        # Payments made by student for fees in this program
-        total_payments = sum([p.amount for p in Payment.objects.filter(student=student, fee__program=program)], start=Decimal('0'))
+        # Payments made by student for this program
+        total_payments = sum([p.amount for p in Payment.objects.filter(student=student, program=program)], start=Decimal('0'))
 
         balance = total_fees - total_sliding - total_payments
         return balance

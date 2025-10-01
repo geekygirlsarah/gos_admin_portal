@@ -40,10 +40,10 @@ class FeeAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('student', 'fee', 'amount', 'paid_on', 'created_at')
-    list_filter = ('fee__program', 'paid_on')
-    search_fields = ('student__first_name', 'student__last_name', 'fee__name', 'fee__program__name')
-    autocomplete_fields = ('student', 'fee')
+    list_display = ('student', 'program', 'fee', 'amount', 'paid_on', 'paid_via', 'check_number', 'created_at')
+    list_filter = ('program', 'paid_on', 'paid_via')
+    search_fields = ('student__first_name', 'student__last_name', 'program__name', 'fee__name')
+    autocomplete_fields = ('student', 'fee', 'program')
 
 class EnrollmentInline(admin.TabularInline):
     model = Enrollment

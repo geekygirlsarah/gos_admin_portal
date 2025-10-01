@@ -84,7 +84,7 @@
             <div class="card-body">
               <dl class="row mb-0">
                 <dt class="col-sm-4">Fee</dt>
-                <dd class="col-sm-8">{{ payment.fee.name }}</dd>
+                <dd class="col-sm-8">{% if payment.fee %}{{ payment.fee.name }}{% else %}<span class="text-muted">N/A</span>{% endif %}</dd>
 
                 <dt class="col-sm-4">Amount Paid</dt>
                 <dd class="col-sm-8">${{ payment.amount|floatformat:2 }}</dd>
