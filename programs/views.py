@@ -2231,14 +2231,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
             entries, total_fees, total_sliding, total_payments, balance = compute_entries_and_balance(s)
             if not include_zero and balance == 0:
                 continue
-            # Gather recipient emails: student + all parents/guardians
+            # Gather recipient emails: only parents/guardians who opted in for updates
             emails = []
-            # student preferred email
-            if s.personal_email:
-                emails.append(s.personal_email)
-            elif s.andrew_email:
-                emails.append(s.andrew_email)
-            # parents/guardians
             for adult in s.all_parents:
                 # Only include parents/guardians who have opted into email updates and are active
                 if getattr(adult, 'email_updates', False) and getattr(adult, 'active', True):
