@@ -1,8 +1,46 @@
 (function() {
     function init() {
-        var hiddenBody = document.getElementById('id_body');
+        // Find one or more hidden fields we should sync HTML into.
+        // Support both the general email form (name="body") and the balances form (name="default_message").
+        var hiddenFields = [];
+        var byId = document.getElementById('id_body');
+        if (byId && (byId.tagName === 'INPUT' || byId.tagName === 'TEXTAREA')) {
+            hiddenFields.push(byId);
+        }
+        hiddenFields = hiddenFields.concat([].slice.call(document.querySelectorAll('input[type="hidden"][name="body"], input[type="hidden"][name="default_message"], textarea[name="body"], textarea[name="default_message"]')));
+        // Deduplicate
+        hiddenFields = hiddenFields.filter(function(el, idx, arr){ return arr.indexOf(el) === idx; });
+
+        var primaryHidden = hiddenFields.length ? hiddenFields[0] : null;
         var editorEl = document.getElementById('editor');
         var quill = null;
+
+                // Helpers to get/set hidden field values
+                function getFirstHiddenValue() {
+                    for (var i = 0; i < hiddenFields.length; i++) {
+                        var f = hiddenFields[i];
+                        if (f && typeof f.value === 'string' && f.value.length) {
+                            return f.value;
+                        }
+                    }
+                    return '';
+                }
+                function setAllHiddenValues(val) {
+                    hiddenFields.forEach(function(f){ if (f) f.value = val; });
+                }
+                function findForm() {
+                    if (primaryHidden && primaryHidden.form) return primaryHidden.form;
+                    if (editorEl) {
+                        // closest() may not exist on older browsers; fallback simple search
+                        if (typeof editorEl.closest === 'function') {
+                            var fm = editorEl.closest('form');
+                            if (fm) return fm;
+                        }
+                        var p = editorEl.parentElement;
+                        while (p) { if (p.tagName === 'FORM') return p; p = p.parentElement; }
+                    }
+                    return null;
+                }
 
         if (!window.Quill) {
             console.error('Quill library failed to load. Falling back to plain textarea.');
@@ -10,12 +48,12 @@
                 var ta = document.createElement('textarea');
                 ta.className = 'form-control';
                 ta.rows = 12;
-                ta.value = hiddenBody && hiddenBody.value ? hiddenBody.value : '';
+                ta.value = getFirstHiddenValue();
                 editorEl.replaceWith(ta);
                 var form = ta.form;
                 if (form) {
                     form.addEventListener('submit', function() {
-                        if (hiddenBody) hiddenBody.value = ta.value;
+                        setAllHiddenValues(ta.value);
                     }, { capture: true });
                 }
             }
@@ -78,12 +116,12 @@
             var ta2 = document.createElement('textarea');
             ta2.className = 'form-control';
             ta2.rows = 12;
-            ta2.value = hiddenBody && hiddenBody.value ? hiddenBody.value : '';
+            ta2.value = getFirstHiddenValue();
             editorEl.replaceWith(ta2);
             var form2 = ta2.form;
             if (form2) {
                 form2.addEventListener('submit', function() {
-                    if (hiddenBody) hiddenBody.value = ta2.value;
+                    setAllHiddenValues(ta2.value);
                 }, { capture: true });
             }
             return;
@@ -108,10 +146,16 @@
             }
         }
 
-        // Initialize from hidden input
-        if (hiddenBody && hiddenBody.value) {
-            quill.root.innerHTML = hiddenBody.value;
-        }
+        // Initialize from hidden field(s)
+        (function(){
+            var initial = getFirstHiddenValue();
+            if (initial && quill && quill.clipboard && typeof quill.clipboard.dangerouslyPasteHTML === 'function') {
+                try { quill.clipboard.dangerouslyPasteHTML(initial); }
+                catch (e) { try { quill.root.innerHTML = initial; } catch (e2) {} }
+            } else if (initial) {
+                try { quill.root.innerHTML = initial; } catch (e3) {}
+            }
+        })();
 
         // Keep hidden body synchronized on content changes
         function syncBody() {
@@ -123,12 +167,12 @@
                 // Wrap content so premailer can inline these styles reliably
                 html = style + '<div class="email-table">' + html + '</div>';
             }
-            hiddenBody.value = html;
+            setAllHiddenValues(html);
         }
         quill.on('text-change', syncBody);
 
         // Sync on submit
-        var form = hiddenBody.form;
+        var form = findForm();
         if (form) {
             form.addEventListener('submit', function() {
                 try { syncBody(); } catch (e) {}
