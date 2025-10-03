@@ -127,6 +127,23 @@
             return;
         }
 
+        // Ensure toolbar interactions focus the editor so actions apply
+        try {
+            var maybeToolbar = editorEl ? editorEl.previousElementSibling : null;
+            if (maybeToolbar && maybeToolbar.classList && maybeToolbar.classList.contains('ql-toolbar')) {
+                // Focus on mousedown so Quill has focus before button handlers run
+                maybeToolbar.addEventListener('mousedown', function() {
+                    try { quill.focus(); } catch (e) {}
+                });
+                // Also on click as a fallback
+                maybeToolbar.addEventListener('click', function() {
+                    try { quill.focus(); } catch (e) {}
+                });
+            }
+        } catch (e) {
+            // no-op
+        }
+
         // Insert a simple "Insert 3×3 Table" button if plugin is present
         if (betterTableAvailable) {
             try {
