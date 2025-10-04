@@ -1,141 +1,150 @@
-{% extends 'base.html' %}
-{% load static %}
 {% load tz %}
-{% block title %}Balance Sheet — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }} —
-    {{ program.name }}{% endblock %}
-{% block extra_head %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Balance Sheet — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }} — {{ program.name }}</title>
     <style>
-        /* Hide the site navbar on the receipt page (screen and print) */
-        nav, .navbar {
-            display: none !important;
+        /* Base */
+        body {
+            margin: 0;
+            padding: 16px;
+            background: #ffffff;
+            color: #212529;
+            -webkit-text-size-adjust: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .email-container {
+            max-width: 820px;
+            margin: 0 auto;
         }
 
-        @media print {
-            .no-print, .alert {
-                display: none !important;
-            }
+        /* Type + utilities (minimal subset of Bootstrap-like helpers used in this template) */
+        .h4 { font-size: 1.25rem; margin: 0; }
+        .small { font-size: 0.875rem; }
+        .text-muted { color: #6c757d !important; }
+        .text-end { text-align: right !important; }
+        .fw-bold { font-weight: 700; }
+        .fw-semibold { font-weight: 600; }
+        .mb-1 { margin-bottom: .25rem; }
+        .mb-2 { margin-bottom: .5rem; }
+        .mb-3 { margin-bottom: 1rem; }
+        .mt-4 { margin-top: 1.5rem; }
+        .d-flex { display: flex; }
+        .justify-content-between { justify-content: space-between; }
+        .align-items-start { align-items: flex-start; }
 
-            main.container {
-                padding: 0 !important;
-            }
-
-            .card {
-                border: none;
-            }
-        }
-
-        .org-header {
-            margin-bottom: .75rem;
-        }
-
+        /* Header blocks */
+        .org-header { margin-bottom: .75rem; }
         .receipt-header {
             border-bottom: 2px solid #000;
             margin-bottom: 1rem;
             padding-bottom: .5rem;
         }
 
+        /* Tables */
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { padding: .5rem .75rem; }
+        .table-sm th, .table-sm td { padding: .25rem .5rem; }
+        .align-middle th, .align-middle td { vertical-align: middle; }
+        .table-responsive { width: 100%; overflow-x: auto; }
+
         /* Add borders to the balance sheet table for better visibility in emails */
-        table.balance-table {
-            border-collapse: collapse !important;
-            width: 100%;
-        }
-        table.balance-table th,
-        table.balance-table td {
-            border: 1px solid #333 !important;
-        }
-        table.balance-table thead th {
-            background-color: #f8f9fa;
-        }
-        table.balance-table tfoot th {
-            border-top: 2px solid #333 !important;
-        }
+        table.balance-table { border-collapse: collapse !important; width: 100%; }
+        table.balance-table th, table.balance-table td { border: 1px solid #333 !important; }
+        table.balance-table thead th { background-color: #f8f9fa; }
+        table.balance-table tfoot th { border-top: 2px solid #333 !important; }
+
+        /* Alerts */
+        .alert { padding: .5rem .75rem; border-radius: 4px; margin: .5rem 0; }
+        .alert-info { color: #084298; background-color: #e7f1ff; border: 1px solid #b6d4fe; }
+
+        /* Links */
+        a { color: #0d6efd; text-decoration: underline; }
     </style>
-{% endblock %}
-{% block content %}
-    <div class="row">
-    <div class="col-lg-10 col-xl-8 mb-3">
-        <div class="org-header text-end">
-            <div class="fw-bold">Girls of Steel Robotics</div>
-            <div>Carnegie Mellon University</div>
-            <div class="mb-2">EIN: 25-0969449</div>
-            <div>5000 Forbes Ave</div>
-            <div class="mb-2">Pittsburgh, PA 15213-3890</div>
-            <div>cmu.edu</div>
-        </div>
+</head>
+<body>
+<div class="email-container">
+    <div class="org-header text-end">
+        <div class="fw-bold">Girls of Steel Robotics</div>
+        <div>Carnegie Mellon University</div>
+        <div class="mb-2">EIN: 25-0969449</div>
+        <div>5000 Forbes Ave</div>
+        <div class="mb-2">Pittsburgh, PA 15213-3890</div>
+        <div>cmu.edu</div>
+    </div>
 
-        <div class="d-flex justify-content-between align-items-start receipt-header">
-            <div>
-                <h1 class="h4 mb-1">Program Registration Balance Sheet</h1>
-                <div class="text-muted small">Date issued: {% timezone "America/New_York" %}{% now 'Y-m-d H:i' %}{% endtimezone %}</div>
+    <div class="d-flex justify-content-between align-items-start receipt-header">
+        <div>
+            <h1 class="h4 mb-1">Program Registration Balance Sheet</h1>
+            <div class="text-muted small">Date issued: {% timezone "America/New_York" %}{% now 'Y-m-d H:i' %}{% endtimezone %}</div>
+        </div>
+    </div>
+
+    {% if message_html %}
+        <div class="mb-3">{{ message_html|safe }}</div>
+        <hr />
+    {% endif %}
+
+    <div class="mb-3">
+        <div><span class="fw-semibold">Program:</span> {{ program.name }} -- {{ program.year }}</div>
+        <div class="mb-2"><span class="fw-semibold">Participant's name:</span> {{ student.legal_first_name|default:student.first_name }} {{ student.last_name }}</div>
+
+        {% if entries %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle balance-table">
+                    <thead>
+                    <tr>
+                        <th style="width: 120px;">Date</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th class="text-end" style="width: 160px;">Amount</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for e in entries %}
+                        <tr>
+                            <td>{{ e.date }}</td>
+                            <td>{{ e.type }}</td>
+                            <td>{{ e.name }}</td>
+                            <td class="text-end">${{ e.amount|floatformat:2 }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                    <tfoot>
+                    <tr>
+                        <th colspan="3" class="text-end">Total Fees</th>
+                        <th class="text-end">${{ total_fees|floatformat:2 }}</th>
+                    </tr>
+                    <tr>
+                        <th colspan="3" class="text-end">Sliding Scale</th>
+                        <th class="text-end">-${{ total_sliding|floatformat:2 }}</th>
+                    </tr>
+                    <tr>
+                        <th colspan="3" class="text-end">Payments</th>
+                        <th class="text-end">-${{ total_payments|floatformat:2 }}</th>
+                    </tr>
+                    <tr>
+                        <th colspan="3" class="text-end">Balance Due</th>
+                        <th class="text-end">${{ balance|floatformat:2 }}</th>
+                    </tr>
+                    </tfoot>
+                </table>
             </div>
-        </div>
-
-        {% if message_html %}
-            <div class="mb-3">{{ message_html|safe }}</div>
-            <hr />
+        {% else %}
+            <div class="alert alert-info">No financial entries yet for this student and program.</div>
         {% endif %}
 
-        <div class="mb-3">
-            <div><span class="fw-semibold">Program:</span> {{ program.name }} -- {{ program.year }}</div>
-            <div class="mb-2"><span
-                    class="fw-semibold">Participant's name:</span> {{ student.legal_first_name|default:student.first_name }} {{ student.last_name }}
-            </div>
+        <div><span class="fw-semibold">Program Contacts:</span> Elizabeth Kysel, Sarah Withee</div>
+        <div><span class="fw-semibold">Email address:</span> <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a></div>
 
-            {% if entries %}
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle balance-table">
-                        <thead>
-                        <tr>
-                            <th style="width: 120px;">Date</th>
-                            <th>Type</th>
-                            <th>Description</th>
-                            <th class="text-end" style="width: 160px;">Amount</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% for e in entries %}
-                            <tr>
-                                <td>{{ e.date }}</td>
-                                <td>{{ e.type }}</td>
-                                <td>{{ e.name }}</td>
-                                <td class="text-end">${{ e.amount|floatformat:2 }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                        <tfoot>
-                        <tr>
-                            <th colspan="3" class="text-end">Total Fees</th>
-                            <th class="text-end">${{ total_fees|floatformat:2 }}</th>
-                        </tr>
-                        <tr>
-                            <th colspan="3" class="text-end">Sliding Scale</th>
-                            <th class="text-end">-${{ total_sliding|floatformat:2 }}</th>
-                        </tr>
-                        <tr>
-                            <th colspan="3" class="text-end">Payments</th>
-                            <th class="text-end">-${{ total_payments|floatformat:2 }}</th>
-                        </tr>
-                        <tr>
-                            <th colspan="3" class="text-end">Balance Due</th>
-                            <th class="text-end">${{ balance|floatformat:2 }}</th>
-                        </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            {% else %}
-                <div class="alert alert-info">No financial entries yet for this student and program.</div>
-            {% endif %}
+        <div>Please reply to this email or contact us at the address above if you notice any errors.</div>
 
-            <div class=""><span class="fw-semibold">Program Contacts:</span> Elizabeth Kysel, Sarah Withee</div>
-            <div class=""><span class="fw-semibold">Email address:</span> <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a></div>
-
-            <div class="">Please reply to this email or contact us at the address above if you notice any errors.</div>
-
-            <div class="mt-4 small text-muted">
-                Thank you for your support!
-            </div>
-
-        </div>
+        <div class="mt-4 small text-muted">Thank you for your support!</div>
     </div>
-    </div>
-{% endblock %}
+</div>
+</body>
+</html>
