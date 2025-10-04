@@ -2308,16 +2308,29 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 inlined_html = full_html
             text_body = strip_tags(inlined_html)
 
-            # Ensure dest is list
+            # Ensure dest is a list of flat email strings
             if isinstance(dest, str):
                 to_list = [dest]
             else:
                 to_list = list(dest)
+            # Normalize: strip and drop empties/None
+            to_list = [str(e).strip() for e in to_list if e and str(e).strip()]
+            if not to_list:
+                logger.warning('ProgramEmailBalances: no valid recipient emails for %s; skipping', data['student'])
+                continue
 
-            # Some providers require at least one To; use first email as To, rest BCC
-            to_addr = [to_list]
+            # Place all adult emails in To; only archive address in BCC
+            to_addr = to_list
             bcc = ["swithee@andrew.cmu.edu"]
-            email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=to_addr, bcc=bcc, connection=connection)
+
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=from_email,
+                to=to_addr,
+                bcc=bcc,
+                connection=connection,
+            )
             email.attach_alternative(inlined_html, 'text/html')
             try:
                 sent = email.send(fail_silently=False)
