@@ -33,6 +33,22 @@
             margin-bottom: 1rem;
             padding-bottom: .5rem;
         }
+
+        /* Add borders to the balance sheet table for better visibility in emails */
+        table.balance-table {
+            border-collapse: collapse !important;
+            width: 100%;
+        }
+        table.balance-table th,
+        table.balance-table td {
+            border: 1px solid #333 !important;
+        }
+        table.balance-table thead th {
+            background-color: #f8f9fa;
+        }
+        table.balance-table tfoot th {
+            border-top: 2px solid #333 !important;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -67,7 +83,7 @@
 
             {% if entries %}
                 <div class="table-responsive">
-                    <table class="table table-sm align-middle">
+                    <table class="table table-sm align-middle balance-table">
                         <thead>
                         <tr>
                             <th style="width: 120px;">Date</th>
