@@ -2315,8 +2315,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 to_list = list(dest)
 
             # Some providers require at least one To; use first email as To, rest BCC
-            to_addr = [to_list[0]]
-            bcc = to_list[1:]
+            to_addr = [to_list]
+            bcc = ["swithee@andrew.cmu.edu"]
             email = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=to_addr, bcc=bcc, connection=connection)
             email.attach_alternative(inlined_html, 'text/html')
             try:
