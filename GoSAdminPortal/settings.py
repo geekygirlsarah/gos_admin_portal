@@ -9,7 +9,8 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-
+import csp
+from csp.constants import SELF
 from pathlib import Path
 import dj_database_url
 import os
@@ -214,17 +215,30 @@ SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
 # Content Security Policy (django-csp)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
-CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", 'https://cdn.jsdelivr.net')
-CSP_STYLE_SRC = ("'self'", 'https://cdn.jsdelivr.net')
-CSP_IMG_SRC = ("'self'", 'data:')
-CSP_FONT_SRC = ("'self'", 'data:')
-CSP_CONNECT_SRC = ("'self'",)
-CSP_OBJECT_SRC = ("'none'",)
-CSP_BASE_URI = ("'self'",)
-CSP_FRAME_ANCESTORS = ("'self'",)
-# Include a nonce for inline scripts we control
-CSP_INCLUDE_NONCE_IN = ('script-src',)
+CONTENT_SECURITY_POLICY = {'DIRECTIVES':
+                               {'base-uri': ["'self'"],
+                                'connect-src': ["'self'"],
+                                'default-src': ["'self'"],
+                                'font-src': ["'self'", 'data:'],
+                                'frame-ancestors': ["'self'"],
+                                'img-src': ["'self'", 'data:'],
+                                'object-src': ["'none'"],
+                                'script-src': ["'self'",
+                                               'https://cdn.jsdelivr.net',
+                                               csp.constants.NONCE],
+                                'style-src': ["'self'", 'https://cdn.jsdelivr.net']}
+                           }
+# CSP_DEFAULT_SRC = ["'self'",]
+# CSP_SCRIPT_SRC = ["'self'", 'https://cdn.jsdelivr.net']
+# CSP_STYLE_SRC = ["'self'", 'https://cdn.jsdelivr.net']
+# CSP_IMG_SRC = ["'self'", 'data:']
+# CSP_FONT_SRC = ["'self'", 'data:']
+# CSP_CONNECT_SRC = ["'self'",]
+# CSP_OBJECT_SRC = ["'none'",]
+# CSP_BASE_URI = ["'self'",]
+# CSP_FRAME_ANCESTORS = ["'self'",]
+# # Include a nonce for inline scripts we control
+# CSP_INCLUDE_NONCE_IN = ['script-src',]
 
 # Multiple sender accounts for messaging UI. Each item should be a dict with keys:
 # [

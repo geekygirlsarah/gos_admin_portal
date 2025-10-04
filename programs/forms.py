@@ -188,12 +188,15 @@ class PaymentForm(forms.ModelForm):
 class SlidingScaleForm(forms.ModelForm):
     class Meta:
         model = SlidingScale
-        fields = ['student', 'percent', 'family_size', 'adjusted_gross_income', 'is_pending', 'notes']
+        fields = ['student', 'percent', 'date', 'family_size', 'adjusted_gross_income', 'is_pending', 'notes']
         labels = {
             'percent': 'Discount percent',
         }
         help_texts = {
             'percent': 'Enter a value between 0 and 100. This percent will discount the total fees for the full program year.',
+        }
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
         }
 
     def __init__(self, *args, program: Program, **kwargs):

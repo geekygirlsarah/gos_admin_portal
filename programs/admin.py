@@ -181,7 +181,7 @@ class ParentAdmin(admin.ModelAdmin):
 
 @admin.register(SlidingScale)
 class SlidingScaleAdmin(admin.ModelAdmin):
-    list_display = ('student', 'program', 'percent', 'is_pending', 'updated_at')
+    list_display = ('student', 'program', 'percent', 'date', 'is_pending', 'updated_at')
     list_filter = ('program', 'is_pending')
     search_fields = ('student__first_name', 'student__last_name', 'program__name')
     autocomplete_fields = ('student', 'program')

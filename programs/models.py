@@ -620,6 +620,7 @@ class SlidingScale(models.Model):
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='sliding_scales')
     program = models.ForeignKey('Program', on_delete=models.CASCADE, related_name='sliding_scales')
     percent = models.DecimalField(max_digits=5, decimal_places=2, help_text='Percent discount applied to total program fees (0–100).')
+    date = models.DateField(blank=True, null=True, help_text='Date the sliding scale was set/applied.')
     family_size = models.PositiveIntegerField(blank=True, null=True)
     adjusted_gross_income = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     is_pending = models.BooleanField(default=False)
