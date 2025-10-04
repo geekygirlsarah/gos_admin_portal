@@ -57,7 +57,7 @@
         <div class="d-flex justify-content-between align-items-start receipt-header">
             <div>
                 <h1 class="h4 mb-1">Program Registration Balance Sheet</h1>
-                <div class="text-muted small">Date issued: {% now 'Y-m-d H:i' %}</div>
+                <div class="text-muted small">Date issued: {% timezone "America/New_York" %}{% now 'm/d/Y h:i A' %}{% endtimezone %}</div>
             </div>
         </div>
 
