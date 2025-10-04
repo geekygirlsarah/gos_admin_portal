@@ -1,0 +1,4 @@
+#editor { height: 550px; }
+/* Ensure tables look decent inside the editor */
+.ql-editor table { border-collapse: collapse; width: 100%; }
+.ql-editor table td, .ql-editor table th { border: 1px solid #dee2e6; padding: 6px; }

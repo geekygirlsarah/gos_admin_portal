@@ -106,7 +106,9 @@
             modulesConfig['better-table'] = {
                 operationMenu: { items: { unmergeCells: { text: 'Unmerge Cells' } } }
             };
-            modulesConfig.keyboard = { bindings: quillBetterTable.keyboardBindings };
+            // Do not override default keyboard bindings; quill-better-table augments them internally.
+            // Overriding here removes Backspace binding leading to plugin errors.
+            // modulesConfig.keyboard = { bindings: quillBetterTable.keyboardBindings };
         }
 
         try {
@@ -179,10 +181,8 @@
             var isTrulyEmpty = quill.getText().trim().length === 0;
             var html = isTrulyEmpty ? '' : quill.root.innerHTML;
             if (html && /<table[\s>]/i.test(html)) {
-                // Ensure basic borders/padding for tables in email clients.
-                var style = '<style>.email-table table{border-collapse:collapse;width:100%}.email-table td,.email-table th{border:1px solid #dee2e6;padding:6px}</style>';
-                // Wrap content so premailer can inline these styles reliably
-                html = style + '<div class="email-table">' + html + '</div>';
+                // Wrap content to allow scoping if needed; avoid inline <style> tags due to CSP.
+                html = '<div class="email-table">' + html + '</div>';
             }
             setAllHiddenValues(html);
         }
