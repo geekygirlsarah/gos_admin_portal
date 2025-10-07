@@ -233,7 +233,7 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
         qs = super().get_queryset().filter(active=True)
         return qs.select_related('school').annotate(
             sort_first=Coalesce('first_name', 'legal_first_name'),
-        ).order_by('graduation_year', Lower('last_name'), Lower('sort_first'))
+        ).order_by('graduation_year', Lower('sort_first'), Lower('last_name'))
 
     def get_context_data(self, **kwargs):
         from django.utils import timezone
@@ -272,7 +272,7 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
         qs = super().get_queryset().filter(active=True)
         return qs.select_related('school').annotate(
             sort_first=Coalesce('first_name', 'legal_first_name'),
-        ).order_by('school__name', Lower('last_name'), Lower('sort_first'))
+        ).order_by('school__name', Lower('sort_first'), Lower('last_name'))
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -383,7 +383,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         except ValueError:
             year = timezone.now().year
         # Default to seniors: graduation_year equals the selected year, and active
-        students = Student.objects.filter(graduation_year=year, active=True).order_by('last_name', 'first_name')
+        students = Student.objects.filter(graduation_year=year, active=True).annotate(sort_first=Coalesce('first_name', 'legal_first_name')).order_by(Lower('sort_first'), Lower('last_name'))
         return render(request, self.template_name, {
             'year': year,
             'students': students,
@@ -2445,7 +2445,7 @@ class ProgramSchoolsView(LoginRequiredMixin, View):
             .annotate(
                 sort_first=Coalesce('first_name', 'legal_first_name'),
             )
-            .order_by('school__name', Lower('last_name'), Lower('sort_first'))
+            .order_by('school__name', Lower('sort_first'), Lower('last_name'))
         )
         grouped = {}
         for s in students:
@@ -2469,7 +2469,7 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
             Student.objects.filter(programs=program, active=True)
             .only('first_name', 'legal_first_name', 'last_name', 'address', 'city', 'state', 'zip_code')
             .annotate(sort_first=Coalesce('first_name', 'legal_first_name'))
-            .order_by(Lower('last_name'), Lower('sort_first'))
+            .order_by(Lower('sort_first'), Lower('last_name'))
         )
         items = []
         for s in students:
