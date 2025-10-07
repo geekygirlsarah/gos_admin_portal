@@ -239,27 +239,42 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
         from django.utils import timezone
         ctx = super().get_context_data(**kwargs)
         current_year = timezone.now().year
-        grouped = {
-            '12th Grade': [],
-            '11th Grade': [],
-            '10th Grade': [],
-            '9th Grade': [],
-            'Unknown Grade': [],
-        }
+
+        def compute_grade(gy):
+            if not gy:
+                return None
+            # Approximate US grade level: graduating this year = 12th grade now
+            return 12 - (gy - current_year)
+
+        def label_for_grade(grade_num):
+            if grade_num is None:
+                return 'Unknown Grade'
+            if grade_num < 0:
+                return 'Pre-K'
+            if grade_num == 0:
+                return 'Kindergarten'
+            # Ordinal suffixes
+            n = int(grade_num)
+            if 10 <= (n % 100) <= 13:
+                suffix = 'th'
+            else:
+                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+            return f"{n}{suffix} Grade"
+
+        grouped = {}
+        grade_order = {}
         for s in ctx['students']:
-            gy = s.graduation_year
-            grade_label = 'Unknown Grade'
-            if gy:
-                # Approximate US grade level: grad this year = 12th
-                delta = gy - current_year
-                grade_num = 12 - delta
-                if 9 <= grade_num <= 12:
-                    grade_label = f"{grade_num}th Grade"
-            grouped.setdefault(grade_label, [])
-            grouped[grade_label].append(s)
-        # Order groups by typical 12->9, then unknown
-        order = ['12th Grade', '11th Grade', '10th Grade', '9th Grade', 'Unknown Grade']
-        ctx['grouped'] = [(label, grouped.get(label, [])) for label in order]
+            g = compute_grade(getattr(s, 'graduation_year', None))
+            label = label_for_grade(g)
+            grouped.setdefault(label, []).append(s)
+            if label not in grade_order:
+                grade_order[label] = (-1000 if g is None else int(g))
+        # Sort labels by grade number descending (12 -> 11 -> ... -> 1 -> 0 -> negatives), Unknown last
+        sorted_labels = sorted(grade_order.keys(), key=lambda lbl: grade_order[lbl], reverse=True)
+        # Ensure 'Unknown Grade' is at the very end
+        if 'Unknown Grade' in sorted_labels:
+            sorted_labels = [lbl for lbl in sorted_labels if lbl != 'Unknown Grade'] + ['Unknown Grade']
+        ctx['grouped'] = [(label, grouped.get(label, [])) for label in sorted_labels]
         return ctx
 
 
