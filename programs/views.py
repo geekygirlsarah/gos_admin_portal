@@ -2401,9 +2401,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, View):
     def get(self, request, pk):
         from django.shortcuts import render
         program = get_object_or_404(Program, pk=pk)
-        # Only students enrolled in this program
+        # Only active students enrolled in this program
         students = (
-            Student.objects.filter(enrollment__program=program)
+            Student.objects.filter(enrollment__program=program, active=True)
             .select_related('school')
             .order_by(Lower(Coalesce('first_name', 'legal_first_name')), Lower('last_name'))
         )
