@@ -5,7 +5,7 @@
 {% block content %}
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/' }}">← Back</a>
+      <a class="link-secondary" href="{% firstof request.GET.next '/' %}">← Back</a>
     </div>
     <div class="col-auto d-flex gap-2">
       {% if perms.programs.change_student %}
