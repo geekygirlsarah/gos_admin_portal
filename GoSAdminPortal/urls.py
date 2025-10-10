@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('programs/', include('programs.urls')),
+    path('api/v1/', include('api.urls')),
     # Public application flow
     path('apply/', ApplyProgramSelectView.as_view(), name='apply_start'),
     path('apply/<int:program_id>/', ApplyStudentView.as_view(), name='apply_program'),

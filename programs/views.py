@@ -1923,7 +1923,7 @@ class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
         if sliding and sliding.percent is not None:
             discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
             entries.append({
-                'date': sliding.created_at.date(),
+                'date': sliding.date,
                 'type': 'Sliding Scale',
                 'name': f"Sliding scale ({sliding.percent}%)",
                 'amount': -discount,

@@ -28,6 +28,7 @@ from .views import (
     ProgramStudentMapView,
     AdultsListView, AdultUpdateView, 
 )
+from attendance.views import student_attendance_view
 
 urlpatterns = [
     # Programs
@@ -61,6 +62,7 @@ urlpatterns = [
     path('students/new/', permission_required('programs.add_student')(StudentCreateView.as_view()), name='student_create'),
     path('students/convert-to-alumni/', permission_required('programs.change_student')(StudentBulkConvertToAlumniView.as_view()), name='student_bulk_convert_select'),
     path('students/<int:pk>/', login_required(StudentDetailView.as_view()), name='student_detail'),
+    path('students/<int:pk>/attendance/', login_required(student_attendance_view), name='student_attendance'),
     path('parents/', login_required(ParentListView.as_view()), name='parent_list'),
     path('parents/import/', permission_required('programs.add_adult')(ParentImportView.as_view()), name='parent_import'),
     path('relationships/import/', permission_required('programs.change_student')(RelationshipImportView.as_view()), name='relationship_import'),

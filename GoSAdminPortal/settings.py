@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.google',
     # Local apps
     'programs',
+    'attendance',
+    'api',
 ]
 
 MIDDLEWARE = [

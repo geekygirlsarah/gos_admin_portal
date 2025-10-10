@@ -8,6 +8,7 @@
       <a class="link-secondary" href="{% firstof request.GET.next '/' %}">← Back</a>
     </div>
     <div class="col-auto d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'student_attendance' student.pk %}">Attendance</a>
       {% if perms.programs.change_student %}
         <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={{ request.path }}">Edit</a>
       {% endif %}
