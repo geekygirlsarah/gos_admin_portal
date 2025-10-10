@@ -12,6 +12,14 @@ from attendance.models import AttendanceEvent, AttendanceSession
 from attendance.services import record_tap
 from programs.models import Program, Student
 
+# HTML management views for API keys
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.views.generic import ListView, CreateView, UpdateView, View
+from django.shortcuts import redirect
+from django.urls import reverse_lazy
+from .models import ApiClientKey
+from .forms import ApiClientKeyForm
+
 
 def _hours_from_sessions(sessions, start, end):
     total = 0.0
@@ -107,3 +115,37 @@ def program_weekly_hours(request, program_id):
         'week_end': (end - timedelta(seconds=1)).date().isoformat(),
         'students': sorted(data, key=lambda x: x['hours'], reverse=True),
     })
+
+
+# ---------- HTML management views (API keys) ----------
+class ApiKeyListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = ApiClientKey
+    template_name = 'api/api_keys_list.html'
+    context_object_name = 'keys'
+    permission_required = 'api.view_apiclientkey'
+
+
+class ApiKeyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = ApiClientKey
+    form_class = ApiClientKeyForm
+    template_name = 'api/api_key_form.html'
+    success_url = reverse_lazy('api_key_list')
+    permission_required = 'api.add_apiclientkey'
+
+
+class ApiKeyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = ApiClientKey
+    form_class = ApiClientKeyForm
+    template_name = 'api/api_key_form.html'
+    success_url = reverse_lazy('api_key_list')
+    permission_required = 'api.change_apiclientkey'
+
+
+class ApiKeyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'api.delete_apiclientkey'
+
+    def post(self, request, pk):
+        obj = ApiClientKey.objects.filter(pk=pk).first()
+        if obj:
+            obj.delete()
+        return redirect('api_key_list')

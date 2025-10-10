@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}{% if form.instance.pk %}Edit API Key{% else %}New API Key{% endif %}{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'api_key_list' %}">← Back to API Keys</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">{% if form.instance.pk %}Edit API Key{% else %}New API Key{% endif %}</div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Name</label>
+            {{ form.name }}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Scope</label>
+            {{ form.scope }}
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              {{ form.is_active }}
+              <label class="form-check-label">Active</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Key</label>
+            {{ form.key }}
+            <div class="form-text">{{ form.fields.key.help_text }}</div>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.generate_new_key }}
+              <label class="form-check-label" for="id_generate_new_key">{{ form.fields.generate_new_key.label }}</label>
+            </div>
+            <div class="form-text">{{ form.fields.generate_new_key.help_text }}</div>
+          </div>
+        </div>
+        <div class="mt-3 d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Save</button>
+          <a href="{% url 'api_key_list' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
