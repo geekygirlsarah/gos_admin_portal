@@ -28,7 +28,7 @@ from .views import (
     ProgramStudentMapView,
     AdultsListView, AdultUpdateView, 
 )
-from attendance.views import student_attendance_view
+from attendance.views import student_attendance_view, AttendanceImportView
 
 urlpatterns = [
     # Programs
@@ -47,12 +47,14 @@ urlpatterns = [
 
     # List pages
     path('imports/', login_required(ImportDashboardView.as_view()), name='import_dashboard'),
+    path('attendance/import/', permission_required('programs.change_student')(AttendanceImportView.as_view()), name='attendance_import'),
     # CSV template downloads served via templates to avoid static collection issues
     path('imports/samples/students.csv', permission_required('programs.add_student')(TemplateView.as_view(template_name='samples/students_sample.csv', content_type='text/csv')), name='students_sample_csv'),
     path('imports/samples/parents.csv', permission_required('programs.add_adult')(TemplateView.as_view(template_name='samples/parents_sample.csv', content_type='text/csv')), name='parents_sample_csv'),
     path('imports/samples/mentors.csv', permission_required('programs.add_adult')(TemplateView.as_view(template_name='samples/mentors_sample.csv', content_type='text/csv')), name='mentors_sample_csv'),
     path('imports/samples/schools.csv', permission_required('programs.add_school')(TemplateView.as_view(template_name='samples/schools_sample.csv', content_type='text/csv')), name='schools_sample_csv'),
     path('imports/samples/relationships.csv', permission_required('programs.change_student')(TemplateView.as_view(template_name='samples/relationships_sample.csv', content_type='text/csv')), name='relationships_sample_csv'),
+    path('imports/samples/attendance.csv', permission_required('programs.change_student')(TemplateView.as_view(template_name='samples/attendance_sample.csv', content_type='text/csv')), name='attendance_sample_csv'),
     path('students/', login_required(StudentListView.as_view()), name='student_list'),
     path('students/emergency-contacts/', login_required(StudentEmergencyContactsView.as_view()), name='student_emergency_contacts'),
     path('students/by-grade/', login_required(StudentsByGradeView.as_view()), name='students_by_grade'),

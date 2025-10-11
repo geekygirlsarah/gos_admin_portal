@@ -502,7 +502,13 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
 class ImportDashboardView(LoginRequiredMixin, View):
     def get(self, request):
         from django.shortcuts import render
-        return render(request, 'imports/dashboard.html')
+        from .models import Program
+        programs = Program.objects.all().order_by('name')
+        programs_with_attendance = [p for p in programs if p.has_feature('attendance')]
+        return render(request, 'imports/dashboard.html', {
+            'programs': programs,
+            'attendance_programs': programs_with_attendance,
+        })
 
 
 class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):

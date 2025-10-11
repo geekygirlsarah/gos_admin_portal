@@ -1,0 +1,4 @@
+first_name,last_name,rfid,time_in_utc,time_out_utc
+Alex,Kim,04A3F19C,2025-09-01T20:15:00Z,2025-09-01T22:45:00Z
+Jordan,Lee,,2025-09-02T19:00:00Z,2025-09-02T21:30:00Z
+Taylor,Patel,ABCD1234,2025-09-03T18:05:00Z,

@@ -107,5 +107,37 @@
       </div>
     </div>
     {% endif %}
+
+      {% if perms.programs.change_student %}
+          <div class="col-12 col-lg-6">
+              <div class="card h-100">
+                  <div class="card-body d-flex flex-column">
+                      <h5 class="card-title">Attendance (CSV)</h5>
+                      <p class="card-text">Import attendance sessions from legacy CSV export with columns: first_name, last_name, rfid, time_in_utc, time_out_utc. Requires selecting a Program.</p>
+                      <form id="attendance-import-form" action="{% url 'attendance_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                          {% csrf_token %}
+                          <div class="row g-2 align-items-start">
+                              <div class="col-12">
+                                  <label for="attendance-program" class="form-label">Program</label>
+                                  <select id="attendance-program" name="program_id" class="form-select" required>
+                                      <option value="">Select a program…</option>
+                                      {% for p in attendance_programs|default:programs %}
+                                          <option value="{{ p.id }}">{{ p.name }}</option>
+                                      {% endfor %}
+                                  </select>
+                              </div>
+                              <div class="col-12 d-flex gap-2">
+                                  <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" />
+                                  <button type="submit" class="btn btn-primary">Import</button>
+                              </div>
+                          </div>
+                          <div class="form-text mt-2">Times should be in UTC (e.g., 2025-09-01T20:15:00Z). If time_out is blank, an open session will be created.</div>
+                          <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>
+                      </form>
+                  </div>
+              </div>
+          </div>
+      {% endif %}
+
   </div>
 {% endblock %}
