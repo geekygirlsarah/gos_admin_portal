@@ -23,7 +23,7 @@
               <select class="form-select" id="program_id" name="program_id" required>
                 <option value="">Select program…</option>
                 {% for p in enrolled_programs %}
-                <option value="{{ p.id }}">{{ p.name }}</option>
+                <option value="{{ p.id }}">{{ p.name }}{% if p.year %} ({{ p.year }}){% endif %}</option>
                 {% endfor %}
               </select>
             </div>
@@ -45,7 +45,6 @@
         <div class="card-body">
           <p class="mb-1"><strong>Week:</strong> {{ week_start|date:'M d, Y' }} – {{ week_end|date:'M d, Y' }}</p>
           <p class="mb-1"><strong>Total hours:</strong> {{ weekly_hours }}</p>
-          <p class="mb-0 text-muted"><strong>Average hours/day:</strong> {{ weekly_avg_hours }}</p>
         </div>
       </div>
 
@@ -53,7 +52,7 @@
         <div class="card-header">Since program start</div>
         <div class="card-body">
           {% if overall_start_date %}
-            <p class="mb-1"><strong>Program{% if selected_program %} ({{ selected_program.name }}){% endif %} start:</strong> {{ overall_start_date|date:'M d, Y' }}</p>
+            <p class="mb-1"><strong>Program{% if selected_program %} ({{ selected_program.name }}{% if selected_program.year %} ({{ selected_program.year }}){% endif %}){% endif %} start:</strong> {{ overall_start_date|date:'M d, Y' }}</p>
             <p class="mb-1"><strong>Total hours:</strong> {{ overall_total_hours }}</p>
             <p class="mb-0 text-muted"><strong>Average hours/week:</strong> {{ overall_avg_hours_per_week }}</p>
           {% else %}
@@ -73,17 +72,17 @@
                 <th>Program</th>
                 <th>Check-in</th>
                 <th>Check-out</th>
-                <th>Minutes</th>
+                <th>Duration</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
             {% for s in sessions %}
               <tr>
-                <td>{{ s.program.name }}</td>
+                <td>{{ s.program.name }}{% if s.program.year %} ({{ s.program.year }}){% endif %}</td>
                 <td>{{ s.check_in|date:'Y-m-d H:i' }}</td>
                 <td>{% if s.check_out %}{{ s.check_out|date:'Y-m-d H:i' }}{% else %}<span class="badge bg-warning text-dark">Open</span>{% endif %}</td>
-                <td>{{ s.duration_minutes }}</td>
+                <td>{{ s.duration_hm }}</td>
                 <td class="text-nowrap">
                   <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">Edit</button>
                   <form method="post" class="d-inline" onsubmit="return confirm('Delete this session?');">

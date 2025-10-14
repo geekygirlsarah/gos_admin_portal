@@ -90,3 +90,11 @@ class AttendanceSession(models.Model):
             self.duration_minutes = int(delta.total_seconds() // 60)
         else:
             self.duration_minutes = 0
+
+    @property
+    def duration_hm(self) -> str:
+        """Format duration_minutes as H:MM (e.g., 2:05)."""
+        mins = int(self.duration_minutes or 0)
+        hours = mins // 60
+        rem = mins % 60
+        return f"{hours}:{rem:02d}"

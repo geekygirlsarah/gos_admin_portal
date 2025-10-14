@@ -92,7 +92,6 @@ def student_attendance_view(request, pk):
             co = week_end
         if co > ci:
             total_hours += (co - ci).total_seconds() / 3600.0
-    weekly_avg_hours = round(total_hours / 7.0, 2)
 
     # Programs the student is/was enrolled in (attendance-enabled only for creation UI)
     enrolled_programs = Program.objects.filter(enrollment__student=student, features__key='attendance').distinct()
@@ -141,7 +140,6 @@ def student_attendance_view(request, pk):
         'week_start': week_start,
         'week_end': week_end - timedelta(seconds=1),
         'weekly_hours': round(total_hours, 2),
-        'weekly_avg_hours': weekly_avg_hours,
         'enrolled_programs': enrolled_programs,
         'selected_program': program,
         'overall_start_date': overall_start_display,
@@ -213,6 +211,9 @@ class AttendanceImportView(View):
             ln = (last_name or '').strip()
             if fn and ln:
                 student = Student.objects.filter(first_name__iexact=fn, last_name__iexact=ln).first()
+                if student:
+                    return student
+                student = Student.objects.filter(legal_first_name__iexact=fn, last_name__iexact=ln).first()
                 if student:
                     return student
             return None
