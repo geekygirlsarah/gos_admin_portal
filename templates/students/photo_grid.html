@@ -13,20 +13,17 @@
       {% for s in students %}
         <div class="col">
           <div class="card h-100 text-center">
-            {% if s.photo %}
-              <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
-            {% else %}
-              <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
-                <span class="text-muted">No Photo</span>
-              </div>
-            {% endif %}
-            <div class="card-body p-2">
-              <div class="small fw-semibold">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</div>
-            </div>
-            <div class="card-footer bg-white border-0 pb-3 pt-0">
-              {% if perms.programs.change_student %}
-                <a class="btn btn-sm btn-outline-primary" href="{% url 'student_edit' s.pk %}?next={{ request.path }}">Edit</a>
+            <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+              {% if s.photo %}
+                <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
+              {% else %}
+                <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
+                  <span class="text-muted">No Photo</span>
+                </div>
               {% endif %}
+            </a>
+            <div class="card-body p-2">
+              <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
             </div>
           </div>
         </div>

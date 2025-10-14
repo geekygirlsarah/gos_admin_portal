@@ -43,9 +43,6 @@
               </td>
               <td class="text-end">
                 <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.pk %}">Attendance</a>
-                {% if perms.programs.change_student %}
-                  <a class="btn btn-sm btn-outline-primary" href="{% url 'student_edit' s.pk %}?next={{ request.path }}">Edit</a>
-                {% endif %}
               </td>
             </tr>
           {% endfor %}
