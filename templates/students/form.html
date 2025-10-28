@@ -51,6 +51,114 @@
           } else { hook(); }
         })();
       </script>
+
+      <!-- Photo Cropper Modal (moved here from the second block) -->
+      <div class="modal fade" id="photoCropModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered cropper-modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Crop Photo</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="row g-3 align-items-start">
+                <div class="col-md-8">
+                  <div class="ratio ratio-1x1 bg-light">
+                    <img id="cropperImage" alt="Crop preview" style="max-width:100%; display:block;">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-2">Circle preview</div>
+                  <div class="cropper-preview rounded-circle border mb-3"></div>
+                  <div class="cropper-preview rounded-circle border small"></div>
+                  <div class="form-text mt-2">Drag to position, use scroll/pinch to zoom. The crop is square; previews show circular display used throughout the site.</div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cropperCancel">Cancel</button>
+              <button type="button" class="btn btn-primary" id="cropperConfirm">Crop & Use</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_head %}
+  <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet" crossorigin="anonymous">
+  <style>
+    .cropper-modal .modal-body { max-height: 70vh; }
+    .cropper-preview.rounded-circle { width: 180px; height: 180px; overflow: hidden; border-radius: 50%; background: #f8f9fa; }
+    .cropper-preview.small { width: 80px; height: 80px; }
+  </style>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
+  <script nonce="{{ request.csp_nonce }}">
+    (function(){
+      var selector = 'input[type="file"][name="photo"]';
+      var modalEl = document.getElementById('photoCropModal');
+      if(!modalEl) return;
+      var bsModal = new bootstrap.Modal(modalEl);
+      var imageEl = document.getElementById('cropperImage');
+      var confirmBtn = document.getElementById('cropperConfirm');
+      var currentInput = null;
+      var cropper = null;
+
+      function openWithFile(file){
+        var reader = new FileReader();
+        reader.onload = function(e){
+          imageEl.src = e.target.result;
+          if(cropper){ try { cropper.destroy(); } catch(_){} cropper = null; }
+          bsModal.show();
+          // Defer init until modal has animated in
+          setTimeout(function(){
+            cropper = new Cropper(imageEl, {
+              aspectRatio: 1,
+              viewMode: 1,
+              autoCropArea: 1,
+              background: false,
+              movable: true,
+              zoomable: true,
+              preview: '.cropper-preview'
+            });
+          }, 200);
+        };
+        reader.readAsDataURL(file);
+      }
+
+      document.addEventListener('change', function(ev){
+        var t = ev.target;
+        if(!(t && t.matches && t.matches(selector))) return;
+        if(!t.files || !t.files[0]) return;
+        currentInput = t;
+        openWithFile(t.files[0]);
+      }, true);
+
+      confirmBtn.addEventListener('click', function(){
+        if(!cropper || !currentInput){ bsModal.hide(); return; }
+        var canvas = cropper.getCroppedCanvas({ width: 800, height: 800, imageSmoothingQuality: 'high' });
+        canvas.toBlob(function(blob){
+          if(!blob){ bsModal.hide(); return; }
+          var dt = new DataTransfer();
+          var orig = (currentInput.files && currentInput.files[0] && currentInput.files[0].name) || 'photo.jpg';
+          var base = orig.replace(/\.[^/.]+$/, '');
+          var newName = base + '.jpg';
+          var file = new File([blob], newName, { type: 'image/jpeg', lastModified: Date.now() });
+          dt.items.add(file);
+          currentInput.files = dt.files;
+          bsModal.hide();
+        }, 'image/jpeg', 0.92);
+      });
+
+      modalEl.addEventListener('hidden.bs.modal', function(){
+        if(cropper){ try { cropper.destroy(); } catch(_){} }
+        cropper = null;
+        imageEl.removeAttribute('src');
+      });
+    })();
+  </script>
 {% endblock %}
