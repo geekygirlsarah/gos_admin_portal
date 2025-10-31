@@ -1,6 +1,7 @@
 from django import forms
 from django.utils.safestring import mark_safe
 from django.conf import settings
+from django.db.models.functions import Lower, Coalesce
 from .models import Student, Program, Adult, Fee, Payment, SlidingScale, School, StudentApplication
 
 
@@ -354,8 +355,8 @@ class FeeAssignmentEditForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.program = program
         self.fee = fee
-        # Limit to students enrolled in the program
-        self.fields['students'].queryset = Student.objects.filter(programs=program).order_by('first_name', 'last_name')
+        # Limit to students enrolled in the program (sorted by displayed first name then last name, case-insensitive; use legal_first_name fallback)
+        self.fields['students'].queryset = Student.objects.filter(programs=program).order_by(Lower(Coalesce('first_name', 'legal_first_name')), Lower('last_name'))
         # Preselect currently assigned students (if any)
         self.fields['students'].initial = fee.assignments.values_list('student_id', flat=True)
 
