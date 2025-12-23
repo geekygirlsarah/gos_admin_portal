@@ -6,23 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0013_mentor_photo_student_photo'),
+        ("programs", "0013_mentor_photo_student_photo"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='slidingscale',
-            name='adjusted_gross_income',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True),
+            model_name="slidingscale",
+            name="adjusted_gross_income",
+            field=models.DecimalField(
+                blank=True, decimal_places=2, max_digits=10, null=True
+            ),
         ),
         migrations.AddField(
-            model_name='slidingscale',
-            name='family_size',
+            model_name="slidingscale",
+            name="family_size",
             field=models.PositiveIntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='slidingscale',
-            name='is_pending',
+            model_name="slidingscale",
+            name="is_pending",
             field=models.BooleanField(default=False),
         ),
     ]

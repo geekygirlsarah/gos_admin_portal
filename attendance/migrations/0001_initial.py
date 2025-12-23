@@ -9,74 +9,196 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('programs', '0002_enrollment_student_enrollment_student_and_more'),
+        ("programs", "0002_enrollment_student_enrollment_student_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='KioskDevice',
+            name="KioskDevice",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('api_key', models.CharField(max_length=64, unique=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('location', models.CharField(blank=True, max_length=120)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='programs.program')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                ("api_key", models.CharField(max_length=64, unique=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("location", models.CharField(blank=True, max_length=120)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "program",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="programs.program",
+                    ),
+                ),
             ],
-            options={'ordering': ['name']},
+            options={"ordering": ["name"]},
         ),
         migrations.CreateModel(
-            name='RFIDCard',
+            name="RFIDCard",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('uid', models.CharField(max_length=64, unique=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('assigned_at', models.DateTimeField(default=django.utils.timezone.now)),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='rfid_cards', to='programs.student')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("uid", models.CharField(max_length=64, unique=True)),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "assigned_at",
+                    models.DateTimeField(default=django.utils.timezone.now),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="rfid_cards",
+                        to="programs.student",
+                    ),
+                ),
             ],
-            options={'ordering': ['uid']},
+            options={"ordering": ["uid"]},
         ),
         migrations.CreateModel(
-            name='AttendanceEvent',
+            name="AttendanceEvent",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('visitor_name', models.CharField(blank=True, max_length=120)),
-                ('rfid_uid', models.CharField(blank=True, max_length=64)),
-                ('event_type', models.CharField(choices=[('IN', 'In'), ('OUT', 'Out'), ('AUTO', 'Auto')], max_length=4)),
-                ('occurred_at', models.DateTimeField(db_index=True, default=django.utils.timezone.now)),
-                ('source', models.CharField(default='kiosk', max_length=40)),
-                ('notes', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('kiosk', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='attendance.kioskdevice')),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='programs.program')),
-                ('student', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='programs.student')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("visitor_name", models.CharField(blank=True, max_length=120)),
+                ("rfid_uid", models.CharField(blank=True, max_length=64)),
+                (
+                    "event_type",
+                    models.CharField(
+                        choices=[("IN", "In"), ("OUT", "Out"), ("AUTO", "Auto")],
+                        max_length=4,
+                    ),
+                ),
+                (
+                    "occurred_at",
+                    models.DateTimeField(
+                        db_index=True, default=django.utils.timezone.now
+                    ),
+                ),
+                ("source", models.CharField(default="kiosk", max_length=40)),
+                ("notes", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "kiosk",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="attendance.kioskdevice",
+                    ),
+                ),
+                (
+                    "program",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="programs.program",
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="programs.student",
+                    ),
+                ),
             ],
-            options={'ordering': ['-occurred_at', '-id']},
+            options={"ordering": ["-occurred_at", "-id"]},
         ),
         migrations.AddIndex(
-            model_name='attendanceevent',
-            index=models.Index(fields=['program', 'student', 'occurred_at'], name='attendance_program_student_time_idx'),
+            model_name="attendanceevent",
+            index=models.Index(
+                fields=["program", "student", "occurred_at"],
+                name="attendance_program_student_time_idx",
+            ),
         ),
         migrations.CreateModel(
-            name='AttendanceSession',
+            name="AttendanceSession",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('visitor_name', models.CharField(blank=True, max_length=120)),
-                ('check_in', models.DateTimeField(db_index=True)),
-                ('check_out', models.DateTimeField(blank=True, db_index=True, null=True)),
-                ('duration_minutes', models.PositiveIntegerField(default=0)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('opened_by_event', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='attendance.attendanceevent')),
-                ('closed_by_event', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='attendance.attendanceevent')),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='programs.program')),
-                ('student', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='programs.student')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("visitor_name", models.CharField(blank=True, max_length=120)),
+                ("check_in", models.DateTimeField(db_index=True)),
+                (
+                    "check_out",
+                    models.DateTimeField(blank=True, db_index=True, null=True),
+                ),
+                ("duration_minutes", models.PositiveIntegerField(default=0)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "opened_by_event",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="+",
+                        to="attendance.attendanceevent",
+                    ),
+                ),
+                (
+                    "closed_by_event",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="+",
+                        to="attendance.attendanceevent",
+                    ),
+                ),
+                (
+                    "program",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="programs.program",
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="programs.student",
+                    ),
+                ),
             ],
-            options={'ordering': ['-check_in']},
+            options={"ordering": ["-check_in"]},
         ),
         migrations.AddIndex(
-            model_name='attendancesession',
-            index=models.Index(fields=['program', 'student', 'check_in'], name='attendance_program_student_in_idx'),
+            model_name="attendancesession",
+            index=models.Index(
+                fields=["program", "student", "check_in"],
+                name="attendance_program_student_in_idx",
+            ),
         ),
     ]

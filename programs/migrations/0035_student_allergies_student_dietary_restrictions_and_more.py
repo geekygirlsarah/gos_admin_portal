@@ -6,23 +6,35 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0034_student_clearances_fields'),
+        ("programs", "0034_student_clearances_fields"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='student',
-            name='allergies',
-            field=models.TextField(blank=True, help_text='List any food, drug, environmental, or other allergies. Include severity and typical reactions if known.', null=True),
+            model_name="student",
+            name="allergies",
+            field=models.TextField(
+                blank=True,
+                help_text="List any food, drug, environmental, or other allergies. Include severity and typical reactions if known.",
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='dietary_restrictions',
-            field=models.TextField(blank=True, help_text='Dietary needs or restrictions (e.g., vegetarian, halal, no pork, no nuts).', null=True),
+            model_name="student",
+            name="dietary_restrictions",
+            field=models.TextField(
+                blank=True,
+                help_text="Dietary needs or restrictions (e.g., vegetarian, halal, no pork, no nuts).",
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='medical_notes',
-            field=models.TextField(blank=True, help_text='Other health information staff should know (e.g., asthma, seizures, physical limitations).', null=True),
+            model_name="student",
+            name="medical_notes",
+            field=models.TextField(
+                blank=True,
+                help_text="Other health information staff should know (e.g., asthma, seizures, physical limitations).",
+                null=True,
+            ),
         ),
     ]

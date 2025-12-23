@@ -2,29 +2,45 @@
 from django.db import migrations, models
 import django.db.models.deletion
 
+
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0008_alter_parent_id'),
+        ("programs", "0008_alter_parent_id"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Fee',
+            name="Fee",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=200)),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=8)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='fees', to='programs.program')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=200)),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=8)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "program",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="fees",
+                        to="programs.program",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['program__name', 'name'],
+                "ordering": ["program__name", "name"],
             },
         ),
         migrations.AlterUniqueTogether(
-            name='fee',
-            unique_together={('program', 'name')},
+            name="fee",
+            unique_together={("program", "name")},
         ),
     ]

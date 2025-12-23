@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0044_merge_0032_0043'),
+        ("programs", "0044_merge_0032_0043"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='slidingscale',
-            name='date',
-            field=models.DateField(blank=True, help_text='Date the sliding scale was set/applied.', null=True),
+            model_name="slidingscale",
+            name="date",
+            field=models.DateField(
+                blank=True,
+                help_text="Date the sliding scale was set/applied.",
+                null=True,
+            ),
         ),
     ]

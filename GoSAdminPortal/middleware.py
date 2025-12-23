@@ -3,26 +3,28 @@ from django.shortcuts import redirect
 from django.urls import resolve
 
 EXEMPT_URL_NAMES = {
-    'account_login',
-    'account_logout',
-    'account_signup',
-    'account_confirm_email',
-    'home',  # home requires login via decorator, but keep to avoid loops
-    'admin:login',
+    "account_login",
+    "account_logout",
+    "account_signup",
+    "account_confirm_email",
+    "home",  # home requires login via decorator, but keep to avoid loops
+    "admin:login",
     # Public application flow
-    'apply_start',
-    'apply_program',
-    'apply_thanks',
+    "apply_start",
+    "apply_program",
+    "apply_thanks",
 }
 
 EXEMPT_PATH_PREFIXES = (
-    '/accounts/',
-    '/admin/',
+    "/accounts/",
+    "/admin/",
     settings.STATIC_URL,
 )
 
+
 class LoginRequiredMiddleware:
     """Redirect anonymous users to login for all pages except exempt ones."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -44,4 +46,4 @@ class LoginRequiredMiddleware:
         except Exception:
             pass
 
-        return redirect(settings.LOGIN_URL + f'?next={request.get_full_path()}')
+        return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")

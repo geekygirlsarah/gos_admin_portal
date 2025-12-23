@@ -6,23 +6,33 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0011_slidingscale'),
+        ("programs", "0011_slidingscale"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='payment',
-            name='camp_hours',
+            model_name="payment",
+            name="camp_hours",
             field=models.PositiveIntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='payment',
-            name='check_number',
+            model_name="payment",
+            name="check_number",
             field=models.PositiveIntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='payment',
-            name='paid_via',
-            field=models.CharField(choices=[('check', 'Check'), ('credit_card', 'Credit Card'), ('cash', 'Cash'), ('camp', 'Camp'), ('other', 'Other')], default='cash', max_length=20),
+            model_name="payment",
+            name="paid_via",
+            field=models.CharField(
+                choices=[
+                    ("check", "Check"),
+                    ("credit_card", "Credit Card"),
+                    ("cash", "Cash"),
+                    ("camp", "Camp"),
+                    ("other", "Other"),
+                ],
+                default="cash",
+                max_length=20,
+            ),
         ),
     ]

@@ -4,8 +4,8 @@ from django.db.models import Q
 
 
 def migrate_mentors_to_adults(apps, schema_editor):
-    Adult = apps.get_model('programs', 'Adult')
-    Mentor = apps.get_model('programs', 'Mentor')
+    Adult = apps.get_model("programs", "Adult")
+    Mentor = apps.get_model("programs", "Mentor")
 
     id_map = {}
 
@@ -13,16 +13,25 @@ def migrate_mentors_to_adults(apps, schema_editor):
     for m in Mentor.objects.all().iterator():
         a = None
         # Try matching by linked user
-        if getattr(m, 'user_id', None):
+        if getattr(m, "user_id", None):
             a = Adult.objects.filter(user_id=m.user_id).first()
         # Match by emails
         if not a and m.andrew_email:
-            a = Adult.objects.filter(Q(andrew_email__iexact=m.andrew_email) | Q(email__iexact=m.andrew_email) | Q(personal_email__iexact=m.andrew_email)).first()
+            a = Adult.objects.filter(
+                Q(andrew_email__iexact=m.andrew_email)
+                | Q(email__iexact=m.andrew_email)
+                | Q(personal_email__iexact=m.andrew_email)
+            ).first()
         if not a and m.personal_email:
-            a = Adult.objects.filter(Q(personal_email__iexact=m.personal_email) | Q(email__iexact=m.personal_email)).first()
+            a = Adult.objects.filter(
+                Q(personal_email__iexact=m.personal_email)
+                | Q(email__iexact=m.personal_email)
+            ).first()
         # Match by name as last resort
         if not a:
-            a = Adult.objects.filter(first_name__iexact=m.first_name, last_name__iexact=m.last_name).first()
+            a = Adult.objects.filter(
+                first_name__iexact=m.first_name, last_name__iexact=m.last_name
+            ).first()
 
         created = False
         if not a:
@@ -31,62 +40,76 @@ def migrate_mentors_to_adults(apps, schema_editor):
 
         # Helper to only overwrite empty fields on existing Adults
         def set_if_empty(obj, field, value):
-            if value in (None, ''):
+            if value in (None, ""):
                 return
-            if getattr(obj, field, None) in (None, ''):
+            if getattr(obj, field, None) in (None, ""):
                 setattr(obj, field, value)
 
         # Identity
-        set_if_empty(a, 'first_name', m.first_name)
-        set_if_empty(a, 'preferred_first_name', m.preferred_first_name)
-        set_if_empty(a, 'last_name', m.last_name)
-        set_if_empty(a, 'pronouns', m.pronouns)
+        set_if_empty(a, "first_name", m.first_name)
+        set_if_empty(a, "preferred_first_name", m.preferred_first_name)
+        set_if_empty(a, "last_name", m.last_name)
+        set_if_empty(a, "pronouns", m.pronouns)
 
         # Contact
-        set_if_empty(a, 'cell_phone', m.cell_phone)
-        set_if_empty(a, 'home_phone', m.home_phone)
-        set_if_empty(a, 'personal_email', m.personal_email)
+        set_if_empty(a, "cell_phone", m.cell_phone)
+        set_if_empty(a, "home_phone", m.home_phone)
+        set_if_empty(a, "personal_email", m.personal_email)
 
         # Andrew / CMU
-        set_if_empty(a, 'andrew_id', m.andrew_id)
-        set_if_empty(a, 'andrew_email', m.andrew_email)
-        set_if_empty(a, 'andrew_id_expiration', m.andrew_id_expiration)
+        set_if_empty(a, "andrew_id", m.andrew_id)
+        set_if_empty(a, "andrew_email", m.andrew_email)
+        set_if_empty(a, "andrew_id_expiration", m.andrew_id_expiration)
 
         # Discord / access / memberships
         a.on_discord = a.on_discord or m.on_discord
-        set_if_empty(a, 'discord_username', m.discord_username)
+        set_if_empty(a, "discord_username", m.discord_username)
         a.has_cmu_id_card = a.has_cmu_id_card or m.has_cmu_id_card
-        a.has_cmu_building_access = a.has_cmu_building_access or m.has_cmu_building_access
-        a.has_google_team_drive_access = a.has_google_team_drive_access or m.has_google_team_drive_access
-        a.has_google_mentor_drive_access = a.has_google_mentor_drive_access or m.has_google_mentor_drive_access
-        a.has_google_admin_drive_access = a.has_google_admin_drive_access or m.has_google_admin_drive_access
+        a.has_cmu_building_access = (
+            a.has_cmu_building_access or m.has_cmu_building_access
+        )
+        a.has_google_team_drive_access = (
+            a.has_google_team_drive_access or m.has_google_team_drive_access
+        )
+        a.has_google_mentor_drive_access = (
+            a.has_google_mentor_drive_access or m.has_google_mentor_drive_access
+        )
+        a.has_google_admin_drive_access = (
+            a.has_google_admin_drive_access or m.has_google_admin_drive_access
+        )
         a.on_first_website = a.on_first_website or m.on_first_website
-        a.signed_first_consent_form = a.signed_first_consent_form or m.signed_first_consent_form
+        a.signed_first_consent_form = (
+            a.signed_first_consent_form or m.signed_first_consent_form
+        )
         a.on_canvas = a.on_canvas or m.on_canvas
         a.has_zoom_account = a.has_zoom_account or m.has_zoom_account
         a.in_onshape_classroom = a.in_onshape_classroom or m.in_onshape_classroom
         a.on_canva = a.on_canva or m.on_canva
         a.on_google_mentor_group = a.on_google_mentor_group or m.on_google_mentor_group
-        a.on_google_field_crew_group = a.on_google_field_crew_group or m.on_google_field_crew_group
+        a.on_google_field_crew_group = (
+            a.on_google_field_crew_group or m.on_google_field_crew_group
+        )
 
         # Clearances
         a.has_paca_clearance = a.has_paca_clearance or m.has_paca_clearance
         a.has_patch_clearance = a.has_patch_clearance or m.has_patch_clearance
         a.has_fbi_clearance = a.has_fbi_clearance or m.has_fbi_clearance
-        set_if_empty(a, 'pa_clearances_expiration_date', m.pa_clearances_expiration_date)
+        set_if_empty(
+            a, "pa_clearances_expiration_date", m.pa_clearances_expiration_date
+        )
 
         # Emergency & status
-        set_if_empty(a, 'emergency_contact_name', m.emergency_contact_name)
-        set_if_empty(a, 'emergency_contact_phone', m.emergency_contact_phone)
+        set_if_empty(a, "emergency_contact_name", m.emergency_contact_name)
+        set_if_empty(a, "emergency_contact_phone", m.emergency_contact_phone)
         if a.active is None:
             a.active = m.active
 
         # Mentor specifics
-        set_if_empty(a, 'start_year', m.start_year)
-        set_if_empty(a, 'role', m.role)
+        set_if_empty(a, "start_year", m.start_year)
+        set_if_empty(a, "role", m.role)
 
         # Link user if not already set
-        if getattr(m, 'user_id', None) and not getattr(a, 'user_id', None):
+        if getattr(m, "user_id", None) and not getattr(a, "user_id", None):
             a.user_id = m.user_id
 
         # Flag as mentor
@@ -94,7 +117,9 @@ def migrate_mentors_to_adults(apps, schema_editor):
 
         # Copy photo reference if Adult has none
         try:
-            if (getattr(a, 'photo', None) in (None, '') or not a.photo) and getattr(m, 'photo', None):
+            if (getattr(a, "photo", None) in (None, "") or not a.photo) and getattr(
+                m, "photo", None
+            ):
                 a.photo = m.photo
         except Exception:
             pass
@@ -117,10 +142,10 @@ def reverse_noop(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0042_adult_remove_parent_students_student_graduated_and_more'),
+        ("programs", "0042_adult_remove_parent_students_student_graduated_and_more"),
     ]
 
     operations = [
         migrations.RunPython(migrate_mentors_to_adults, reverse_code=reverse_noop),
-        migrations.DeleteModel(name='Mentor'),
+        migrations.DeleteModel(name="Mentor"),
     ]

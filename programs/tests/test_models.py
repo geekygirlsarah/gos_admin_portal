@@ -5,8 +5,18 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from programs.models import (
-    Program, ProgramFeature, School, Student, Adult, Enrollment,
-    Fee, Payment, FeeAssignment, RaceEthnicity, RolePermission, StudentApplication,
+    Program,
+    ProgramFeature,
+    School,
+    Student,
+    Adult,
+    Enrollment,
+    Fee,
+    Payment,
+    FeeAssignment,
+    RaceEthnicity,
+    RolePermission,
+    StudentApplication,
 )
 
 
@@ -21,7 +31,9 @@ class ModelTests(TestCase):
         )
 
     def test_program_has_feature(self):
-        feat, _ = ProgramFeature.objects.get_or_create(key='discord', defaults={'name': 'Discord'})
+        feat, _ = ProgramFeature.objects.get_or_create(
+            key="discord", defaults={"name": "Discord"}
+        )
         self.assertFalse(self.program.has_feature("discord"))
         self.program.features.add(feat)
         self.assertTrue(self.program.has_feature("discord"))
@@ -43,7 +55,9 @@ class ModelTests(TestCase):
     def test_payment_clean_fee_program_must_match(self):
         Enrollment.objects.create(student=self.student, program=self.program)
         other_program = Program.objects.create(name="Other Program")
-        fee_other = Fee.objects.create(program=other_program, name="Dues", amount=Decimal("25.00"))
+        fee_other = Fee.objects.create(
+            program=other_program, name="Dues", amount=Decimal("25.00")
+        )
         pay = Payment(
             student=self.student,
             program=self.program,
@@ -56,7 +70,9 @@ class ModelTests(TestCase):
 
     def test_payment_clean_fee_assignments_enforced(self):
         Enrollment.objects.create(student=self.student, program=self.program)
-        fee = Fee.objects.create(program=self.program, name="Kit", amount=Decimal("100.00"))
+        fee = Fee.objects.create(
+            program=self.program, name="Kit", amount=Decimal("100.00")
+        )
         # Assign fee to a different student
         other = Student.objects.create(legal_first_name="Jamie", last_name="Lee")
         FeeAssignment.objects.create(fee=fee, student=other)
@@ -74,7 +90,9 @@ class ModelTests(TestCase):
         pay.full_clean()  # no exception
 
     def test_fee_assignment_clean_requires_enrollment(self):
-        fee = Fee.objects.create(program=self.program, name="Registration", amount=Decimal("50.00"))
+        fee = Fee.objects.create(
+            program=self.program, name="Registration", amount=Decimal("50.00")
+        )
         fa = FeeAssignment(fee=fee, student=self.student)
         # Not enrolled yet
         with self.assertRaises(ValidationError):
@@ -92,32 +110,43 @@ class ModelTests(TestCase):
             ("other", "Other"),
         ]
         for k, n in keys:
-            RaceEthnicity.objects.get_or_create(key=k, defaults={'name': n})
+            RaceEthnicity.objects.get_or_create(key=k, defaults={"name": n})
         qs = RaceEthnicity.match_from_text("Black, Hispanic and Asian")
-        self.assertSetEqual(set(qs.values_list("key", flat=True)), {
-            "black-or-african-american", "hispanic-or-latino", "asian"
-        })
+        self.assertSetEqual(
+            set(qs.values_list("key", flat=True)),
+            {"black-or-african-american", "hispanic-or-latino", "asian"},
+        )
         qs2 = RaceEthnicity.match_from_text("Something totally unknown")
         self.assertIn("other", set(qs2.values_list("key", flat=True)))
 
     def test_student_save_auto_opt_in_primary_parent(self):
-        parent = Adult.objects.create(first_name="Pat", last_name="Smith", is_parent=True, email_updates=False)
+        parent = Adult.objects.create(
+            first_name="Pat", last_name="Smith", is_parent=True, email_updates=False
+        )
         s = Student(legal_first_name="Riley", last_name="Jones", primary_contact=parent)
         s.save()
         parent.refresh_from_db()
         self.assertTrue(parent.email_updates)
 
+
 class RolePermissionTests(TestCase):
     def test_unique_role_section(self):
-        RolePermission.objects.create(role="Mentor", section="student_info", can_read=True)
-        with self.assertRaises(Exception): # unique_together
-             RolePermission.objects.create(role="Mentor", section="student_info", can_read=False)
+        RolePermission.objects.create(
+            role="Mentor", section="student_info", can_read=True
+        )
+        with self.assertRaises(Exception):  # unique_together
+            RolePermission.objects.create(
+                role="Mentor", section="student_info", can_read=False
+            )
 
     def test_str_representation(self):
-        rp = RolePermission(role="Parent", section="payments", can_read=True, can_write=True)
+        rp = RolePermission(
+            role="Parent", section="payments", can_read=True, can_write=True
+        )
         self.assertIn("Parent", str(rp))
         self.assertIn("Payments - General", str(rp))
         self.assertIn("R:True, W:True", str(rp))
+
 
 class StudentApplicationTests(TestCase):
     def setUp(self):
@@ -129,7 +158,7 @@ class StudentApplicationTests(TestCase):
             personal_email="app@example.com",
             date_of_birth=datetime.date(2010, 1, 1),
             parent_name="Parent App",
-            parent_email="parent@example.com"
+            parent_email="parent@example.com",
         )
 
     def test_approve_creates_records(self):
@@ -137,6 +166,8 @@ class StudentApplicationTests(TestCase):
         self.assertIsInstance(student, Student)
         self.assertEqual(student.legal_first_name, "App")
         self.assertEqual(student.personal_email, "app@example.com")
-        self.assertTrue(Enrollment.objects.filter(student=student, program=self.program).exists())
+        self.assertTrue(
+            Enrollment.objects.filter(student=student, program=self.program).exists()
+        )
         self.app.refresh_from_db()
-        self.assertEqual(self.app.status, 'accepted')
+        self.assertEqual(self.app.status, "accepted")

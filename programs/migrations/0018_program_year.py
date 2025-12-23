@@ -7,13 +7,22 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0017_alter_student_options'),
+        ("programs", "0017_alter_student_options"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='program',
-            name='year',
-            field=models.PositiveSmallIntegerField(blank=True, db_index=True, help_text='Calendar year the program runs (e.g., 2025).', null=True, validators=[django.core.validators.MinValueValidator(1900), django.core.validators.MaxValueValidator(2200)]),
+            model_name="program",
+            name="year",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                db_index=True,
+                help_text="Calendar year the program runs (e.g., 2025).",
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(1900),
+                    django.core.validators.MaxValueValidator(2200),
+                ],
+            ),
         ),
     ]

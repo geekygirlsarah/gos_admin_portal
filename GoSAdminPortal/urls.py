@@ -14,6 +14,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -24,24 +25,32 @@ from django.views.static import serve
 from programs.views import ApplyProgramSelectView, ApplyStudentView, ApplyThanksView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('accounts/', include('allauth.urls')),
-    path('programs/', include('programs.urls')),
-    path('api/v1/', include('api.urls')),
-    path('api-keys/', include('api.manage_urls')),
+    path("admin/", admin.site.urls),
+    path("accounts/", include("allauth.urls")),
+    path("programs/", include("programs.urls")),
+    path("api/v1/", include("api.urls")),
+    path("api-keys/", include("api.manage_urls")),
     # Public application flow
-    path('apply/', ApplyProgramSelectView.as_view(), name='apply_start'),
-    path('apply/<int:program_id>/', ApplyStudentView.as_view(), name='apply_program'),
-    path('apply/thanks/', ApplyThanksView.as_view(), name='apply_thanks'),
+    path("apply/", ApplyProgramSelectView.as_view(), name="apply_start"),
+    path("apply/<int:program_id>/", ApplyStudentView.as_view(), name="apply_program"),
+    path("apply/thanks/", ApplyThanksView.as_view(), name="apply_thanks"),
     # Root redirects to the programs list (home)
-    path('', RedirectView.as_view(url=reverse_lazy('program_list'), permanent=False), name='home'),
+    path(
+        "",
+        RedirectView.as_view(url=reverse_lazy("program_list"), permanent=False),
+        name="home",
+    ),
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 else:
     urlpatterns += [
-        re_path(r'^media/(?P<path>.*)$', serve, {
-            'document_root': settings.MEDIA_ROOT,
-        }),
+        re_path(
+            r"^media/(?P<path>.*)$",
+            serve,
+            {
+                "document_root": settings.MEDIA_ROOT,
+            },
+        ),
     ]

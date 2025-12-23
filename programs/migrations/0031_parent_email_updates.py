@@ -5,13 +5,16 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0030_alter_parent_options_alter_payment_options_and_more'),
+        ("programs", "0030_alter_parent_options_alter_payment_options_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='parent',
-            name='email_updates',
-            field=models.BooleanField(default=True, help_text='If checked, this parent/guardian will receive email updates.'),
+            model_name="parent",
+            name="email_updates",
+            field=models.BooleanField(
+                default=True,
+                help_text="If checked, this parent/guardian will receive email updates.",
+            ),
         ),
     ]

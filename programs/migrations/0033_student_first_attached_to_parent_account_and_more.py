@@ -6,28 +6,38 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0032_alter_parent_email_updates_default_false'),
+        ("programs", "0032_alter_parent_email_updates_default_false"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='student',
-            name='first_attached_to_parent_account',
-            field=models.BooleanField(default=False, verbose_name='Attached to parent account'),
+            model_name="student",
+            name="first_attached_to_parent_account",
+            field=models.BooleanField(
+                default=False, verbose_name="Attached to parent account"
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='first_has_account',
-            field=models.BooleanField(default=False, verbose_name='Has FIRST account'),
+            model_name="student",
+            name="first_has_account",
+            field=models.BooleanField(default=False, verbose_name="Has FIRST account"),
         ),
         migrations.AddField(
-            model_name='student',
-            name='first_registered_teams',
-            field=models.CharField(blank=True, help_text='Team numbers or names, comma-separated', max_length=200, null=True, verbose_name='Registered team(s)'),
+            model_name="student",
+            name="first_registered_teams",
+            field=models.CharField(
+                blank=True,
+                help_text="Team numbers or names, comma-separated",
+                max_length=200,
+                null=True,
+                verbose_name="Registered team(s)",
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='first_signed_cr',
-            field=models.BooleanField(default=False, verbose_name='Signed FIRST Consent & Release (C&R)'),
+            model_name="student",
+            name="first_signed_cr",
+            field=models.BooleanField(
+                default=False, verbose_name="Signed FIRST Consent & Release (C&R)"
+            ),
         ),
     ]

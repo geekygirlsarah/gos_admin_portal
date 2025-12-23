@@ -4,49 +4,65 @@ import django.db.models.deletion
 
 
 def forwards(apps, schema_editor):
-    Student = apps.get_model('programs', 'Student')
-    School = apps.get_model('programs', 'School')
+    Student = apps.get_model("programs", "Student")
+    School = apps.get_model("programs", "School")
     # For each distinct non-empty school_name, create/get School and assign FK
-    for student in Student.objects.exclude(school_name__isnull=True).exclude(school_name__exact=''):
+    for student in Student.objects.exclude(school_name__isnull=True).exclude(
+        school_name__exact=""
+    ):
         school_obj, _ = School.objects.get_or_create(name=student.school_name.strip())
         student.school = school_obj
-        student.save(update_fields=['school'])
+        student.save(update_fields=["school"])
 
 
 def backwards(apps, schema_editor):
-    Student = apps.get_model('programs', 'Student')
+    Student = apps.get_model("programs", "Student")
     # Populate school_name from related School if possible
-    for student in Student.objects.select_related('school').all():
-        if getattr(student, 'school_id', None):
+    for student in Student.objects.select_related("school").all():
+        if getattr(student, "school_id", None):
             student.school_name = student.school.name
-            student.save(update_fields=['school_name'])
+            student.save(update_fields=["school_name"])
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0003_student_address_student_andrew_email_and_more'),
+        ("programs", "0003_student_address_student_andrew_email_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='School',
+            name="School",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=150, unique=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=150, unique=True)),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.AddField(
-            model_name='student',
-            name='school',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='students', to='programs.school'),
+            model_name="student",
+            name="school",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="students",
+                to="programs.school",
+            ),
         ),
         migrations.RunPython(forwards, backwards),
         migrations.RemoveField(
-            model_name='student',
-            name='school_name',
+            model_name="student",
+            name="school_name",
         ),
     ]

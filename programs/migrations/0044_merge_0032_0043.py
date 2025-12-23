@@ -5,8 +5,8 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0032_payment_program_fk_and_fee_nullable'),
-        ('programs', '0043_migrate_mentors_to_adults_and_remove_mentor'),
+        ("programs", "0032_payment_program_fk_and_fee_nullable"),
+        ("programs", "0043_migrate_mentors_to_adults_and_remove_mentor"),
     ]
 
     operations = [

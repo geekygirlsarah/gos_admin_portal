@@ -16,7 +16,7 @@ def requires_bg(student, program):
 
 
 @register.simple_tag
-def yesno(value, yes='Yes', no='No'):
+def yesno(value, yes="Yes", no="No"):
     """Return Yes/No strings for a boolean value. Avoids conflict with built-in yesno filter when used in tags.
     Usage: {% yesno some_bool %}
     """

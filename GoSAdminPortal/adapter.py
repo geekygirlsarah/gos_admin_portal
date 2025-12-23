@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils.crypto import get_random_string
 
+
 class AccountAdapter(DefaultAccountAdapter):
     def is_open_for_signup(self, request):
         """

@@ -6,18 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0033_student_first_attached_to_parent_account_and_more'),
+        ("programs", "0033_student_first_attached_to_parent_account_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='student',
-            name='has_passed_clearances',
-            field=models.BooleanField(default=False, help_text='Check if the student has completed and passed required background clearances.'),
+            model_name="student",
+            name="has_passed_clearances",
+            field=models.BooleanField(
+                default=False,
+                help_text="Check if the student has completed and passed required background clearances.",
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='clearances_expiration_date',
-            field=models.DateField(blank=True, null=True, help_text="Expiration date for the student's background clearances (if applicable)."),
+            model_name="student",
+            name="clearances_expiration_date",
+            field=models.DateField(
+                blank=True,
+                null=True,
+                help_text="Expiration date for the student's background clearances (if applicable).",
+            ),
         ),
     ]

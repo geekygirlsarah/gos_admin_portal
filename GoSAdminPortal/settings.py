@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
+
 import csp
 from csp.constants import SELF
 from pathlib import Path
@@ -23,108 +24,109 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd')
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd"
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() in ['1', 'true', 'yes']
+DEBUG = os.getenv("DEBUG", "True").lower() in ["1", "true", "yes"]
 
 ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
+    "localhost",
+    "127.0.0.1",
 ]
-if os.getenv('ALLOWED_HOSTS'):
-    ALLOWED_HOSTS.extend(os.getenv('ALLOWED_HOSTS').split(','))
+if os.getenv("ALLOWED_HOSTS"):
+    ALLOWED_HOSTS.extend(os.getenv("ALLOWED_HOSTS").split(","))
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # Sites framework is required by allauth
-    'django.contrib.sites',
+    "django.contrib.sites",
     # Security: Content Security Policy
-    'csp',
+    "csp",
     # Allauth apps
-    'allauth',
-    'allauth.account',
+    "allauth",
+    "allauth.account",
     # Local apps
-    'programs',
-    'attendance',
-    'api',
+    "programs",
+    "attendance",
+    "api",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
+    "django.middleware.security.SecurityMiddleware",
     # CSP must run early
-    'csp.middleware.CSPMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
-    'GoSAdminPortal.middleware.LoginRequiredMiddleware',
+    "csp.middleware.CSPMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+    "GoSAdminPortal.middleware.LoginRequiredMiddleware",
 ]
 
-ROOT_URLCONF = 'GoSAdminPortal.urls'
+ROOT_URLCONF = "GoSAdminPortal.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
                 # CSP nonce for inline scripts
-                'csp.context_processors.nonce',
+                "csp.context_processors.nonce",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'GoSAdminPortal.wsgi.application'
+WSGI_APPLICATION = "GoSAdminPortal.wsgi.application"
 
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-        'DEFAULT_AUTO_FIELD': 'django.db.models.AutoField'
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
+        "DEFAULT_AUTO_FIELD": "django.db.models.AutoField",
     }
 }
-if os.getenv('DATABASE_URL', None):
-    DATABASES['default'] = dj_database_url.config(conn_max_age=600)
+if os.getenv("DATABASE_URL", None):
+    DATABASES["default"] = dj_database_url.config(conn_max_age=600)
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -132,9 +134,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -144,79 +146,79 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = "/static/"
 # Ensure project-level static assets are collected (e.g., static/samples/students_sample.csv)
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'programs', 'static')
-]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "programs", "static")]
 
 # This production code might break development mode, so we check whether we're in DEBUG mode
 if not DEBUG:
     # Tell Django to copy static assets into a path called `staticfiles` (this is specific to Render)
-    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
     # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
     # and renames the files with unique names for each version to support long-term caching
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 else:
-    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Media files (user uploads)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = 'media/'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = "media/"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Django-allauth configuration
 SITE_ID = 1
 
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 )
 
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/accounts/login/'
-LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+LOGIN_URL = "/accounts/login/"
 
 # Email OTP Login settings
 ACCOUNT_LOGIN_BY_CODE_ENABLED = True
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_AUTHENTICATION_METHOD = "email"
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_EMAIL_VERIFICATION = 'none'  # We don't need verification if we use OTP
-ACCOUNT_ADAPTER = 'GoSAdminPortal.adapter.AccountAdapter'
+ACCOUNT_EMAIL_VERIFICATION = "none"  # We don't need verification if we use OTP
+ACCOUNT_ADAPTER = "GoSAdminPortal.adapter.AccountAdapter"
 
 # Email (SMTP) configuration via environment variables
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.fastmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '465'))
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False').lower() in ['1', 'true', 'yes']
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() in ['1', 'true', 'yes']
-EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
-SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.fastmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() in ["1", "true", "yes"]
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() in ["1", "true", "yes"]
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "")
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 # Content Security Policy (django-csp)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
-CONTENT_SECURITY_POLICY = {'DIRECTIVES':
-                               {'base-uri': ["'self'"],
-                                'connect-src': ["'self'"],
-                                'default-src': ["'self'"],
-                                'font-src': ["'self'", 'data:'],
-                                'frame-ancestors': ["'self'"],
-                                'img-src': ["'self'", 'data:'],
-                                'object-src': ["'none'"],
-                                'script-src': ["'self'",
-                                               'https://cdn.jsdelivr.net',
-                                               csp.constants.NONCE],
-                                'style-src': ["'self'", 'https://cdn.jsdelivr.net']}
-                           }
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "base-uri": ["'self'"],
+        "connect-src": ["'self'"],
+        "default-src": ["'self'"],
+        "font-src": ["'self'", "data:"],
+        "frame-ancestors": ["'self'"],
+        "img-src": ["'self'", "data:"],
+        "object-src": ["'none'"],
+        "script-src": ["'self'", "https://cdn.jsdelivr.net", csp.constants.NONCE],
+        "style-src": ["'self'", "https://cdn.jsdelivr.net"],
+    }
+}
 # CSP_DEFAULT_SRC = ["'self'",]
 # CSP_SCRIPT_SRC = ["'self'", 'https://cdn.jsdelivr.net']
 # CSP_STYLE_SRC = ["'self'", 'https://cdn.jsdelivr.net']
@@ -242,7 +244,8 @@ CONTENT_SECURITY_POLICY = {'DIRECTIVES':
 # Host/port/TLS/SSL come from the global EMAIL_* settings above.
 # You can set via code or via an env var EMAIL_SENDER_ACCOUNTS_JSON containing a JSON list.
 import json as _json
-_email_accounts_env = os.getenv('EMAIL_SENDER_ACCOUNTS_JSON', '').strip()
+
+_email_accounts_env = os.getenv("EMAIL_SENDER_ACCOUNTS_JSON", "").strip()
 EMAIL_SENDER_ACCOUNTS = []
 if _email_accounts_env:
     try:
@@ -253,65 +256,67 @@ if _email_accounts_env:
 
 # Administrators who get error emails
 # Provide comma-separated emails via ADMIN_EMAILS env var, e.g., "admin1@example.com,admin2@example.com"
-ADMIN_EMAILS = [e.strip() for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
-ADMINS = tuple((f'Admin {i+1}', email) for i, email in enumerate(ADMIN_EMAILS))
+ADMIN_EMAILS = [
+    e.strip() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
+]
+ADMINS = tuple((f"Admin {i+1}", email) for i, email in enumerate(ADMIN_EMAILS))
 MANAGERS = ADMINS
 
 # Logging configuration: verbose console + email admins on server errors when DEBUG=False
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-DJANGO_LOG_LEVEL = os.getenv('DJANGO_LOG_LEVEL', LOG_LEVEL)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", LOG_LEVEL)
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'filters': {
-        'require_debug_false': {
-            '()': 'django.utils.log.RequireDebugFalse',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "require_debug_false": {
+            "()": "django.utils.log.RequireDebugFalse",
         },
     },
-    'formatters': {
-        'verbose': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    "formatters": {
+        "verbose": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         },
-        'simple': {
-            'format': '%(levelname)s %(message)s',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'level': LOG_LEVEL,
-            'formatter': 'verbose',
-        },
-        'mail_admins': {
-            'class': 'django.utils.log.AdminEmailHandler',
-            'level': 'ERROR',
-            'filters': ['require_debug_false'],
-            'include_html': True,
+        "simple": {
+            "format": "%(levelname)s %(message)s",
         },
     },
-    'loggers': {
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": LOG_LEVEL,
+            "formatter": "verbose",
+        },
+        "mail_admins": {
+            "class": "django.utils.log.AdminEmailHandler",
+            "level": "ERROR",
+            "filters": ["require_debug_false"],
+            "include_html": True,
+        },
+    },
+    "loggers": {
         # Root logger: everything -> console
-        '': {
-            'handlers': ['console'],
-            'level': LOG_LEVEL,
+        "": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
         },
         # Core Django logs
-        'django': {
-            'handlers': ['console'],
-            'level': DJANGO_LOG_LEVEL,
-            'propagate': True,
+        "django": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": True,
         },
         # Server errors (HTTP 500 etc.) -> email admins and console
-        'django.request': {
-            'handlers': ['mail_admins', 'console'],
-            'level': 'ERROR',
-            'propagate': False,
+        "django.request": {
+            "handlers": ["mail_admins", "console"],
+            "level": "ERROR",
+            "propagate": False,
         },
-        'django.security': {
-            'handlers': ['mail_admins', 'console'],
-            'level': 'ERROR',
-            'propagate': False,
+        "django.security": {
+            "handlers": ["mail_admins", "console"],
+            "level": "ERROR",
+            "propagate": False,
         },
     },
 }

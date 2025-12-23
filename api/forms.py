@@ -13,23 +13,23 @@ class ApiClientKeyForm(forms.ModelForm):
 
     class Meta:
         model = ApiClientKey
-        fields = ['name', 'scope', 'is_active', 'key']
+        fields = ["name", "scope", "is_active", "key"]
         widgets = {
-            'key': forms.TextInput(attrs={'maxlength': 64}),
+            "key": forms.TextInput(attrs={"maxlength": 64}),
         }
         help_texts = {
-            'key': 'Leave blank to auto-generate a secure key, or enter your own shared secret (min 16 chars recommended).',
+            "key": "Leave blank to auto-generate a secure key, or enter your own shared secret (min 16 chars recommended).",
         }
 
     def clean_key(self):
-        key = self.cleaned_data.get('key', '') or ''
-        if self.cleaned_data.get('generate_new_key'):
-            return ''  # force regen in save()
+        key = self.cleaned_data.get("key", "") or ""
+        if self.cleaned_data.get("generate_new_key"):
+            return ""  # force regen in save()
         return key
 
     def save(self, commit=True):
         obj = super().save(commit=False)
-        regen = self.cleaned_data.get('generate_new_key')
+        regen = self.cleaned_data.get("generate_new_key")
         if regen or not obj.key:
             # 32 bytes -> 64 hex chars
             obj.key = secrets.token_hex(32)

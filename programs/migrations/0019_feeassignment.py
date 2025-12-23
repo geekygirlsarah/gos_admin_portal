@@ -7,25 +7,67 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0018_program_year'),
+        ("programs", "0018_program_year"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='FeeAssignment',
+            name="FeeAssignment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('waived', models.BooleanField(default=False, help_text='If true, student is not expected to pay this fee.')),
-                ('amount_override', models.DecimalField(blank=True, decimal_places=2, help_text='Override fee amount for this student (leave blank to use fee.amount).', max_digits=8, null=True)),
-                ('notes', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('fee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignments', to='programs.fee')),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='fee_assignments', to='programs.student')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "waived",
+                    models.BooleanField(
+                        default=False,
+                        help_text="If true, student is not expected to pay this fee.",
+                    ),
+                ),
+                (
+                    "amount_override",
+                    models.DecimalField(
+                        blank=True,
+                        decimal_places=2,
+                        help_text="Override fee amount for this student (leave blank to use fee.amount).",
+                        max_digits=8,
+                        null=True,
+                    ),
+                ),
+                ("notes", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "fee",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="assignments",
+                        to="programs.fee",
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="fee_assignments",
+                        to="programs.student",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['fee__program__name', 'fee__name', 'student__last_name', 'student__first_name'],
-                'unique_together': {('fee', 'student')},
+                "ordering": [
+                    "fee__program__name",
+                    "fee__name",
+                    "student__last_name",
+                    "student__first_name",
+                ],
+                "unique_together": {("fee", "student")},
             },
         ),
     ]

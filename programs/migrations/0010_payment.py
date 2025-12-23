@@ -6,24 +6,46 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0009_fee'),
+        ("programs", "0009_fee"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Payment',
+            name="Payment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=8)),
-                ('paid_at', models.DateField()),
-                ('notes', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('fee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to='programs.fee')),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to='programs.student')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=8)),
+                ("paid_at", models.DateField()),
+                ("notes", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "fee",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payments",
+                        to="programs.fee",
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payments",
+                        to="programs.student",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-paid_at', '-created_at'],
+                "ordering": ["-paid_at", "-created_at"],
             },
         ),
     ]

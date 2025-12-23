@@ -6,23 +6,49 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0046_add_attendance_feature'),
+        ("programs", "0046_add_attendance_feature"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='RolePermission',
+            name="RolePermission",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('role', models.CharField(choices=[('Mentor', 'Mentor'), ('Parent', 'Parent')], max_length=20)),
-                ('section', models.CharField(choices=[('student_info', 'Student Info'), ('adult_info', 'Adult Info'), ('attendance', 'Attendance'), ('payments', 'Payments'), ('fees', 'Fees')], max_length=50)),
-                ('can_read', models.BooleanField(default=True)),
-                ('can_write', models.BooleanField(default=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[("Mentor", "Mentor"), ("Parent", "Parent")],
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "section",
+                    models.CharField(
+                        choices=[
+                            ("student_info", "Student Info"),
+                            ("adult_info", "Adult Info"),
+                            ("attendance", "Attendance"),
+                            ("payments", "Payments"),
+                            ("fees", "Fees"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                ("can_read", models.BooleanField(default=True)),
+                ("can_write", models.BooleanField(default=False)),
             ],
             options={
-                'verbose_name': 'Role Permission',
-                'verbose_name_plural': 'Role Permissions',
-                'unique_together': {('role', 'section')},
+                "verbose_name": "Role Permission",
+                "verbose_name_plural": "Role Permissions",
+                "unique_together": {("role", "section")},
             },
         ),
     ]

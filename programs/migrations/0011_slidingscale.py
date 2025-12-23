@@ -7,24 +7,50 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0010_payment'),
+        ("programs", "0010_payment"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='SlidingScale',
+            name="SlidingScale",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=8)),
-                ('notes', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sliding_scales', to='programs.program')),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sliding_scales', to='programs.student')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=8)),
+                ("notes", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "program",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="sliding_scales",
+                        to="programs.program",
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="sliding_scales",
+                        to="programs.student",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['program__name', 'student__last_name', 'student__first_name'],
-                'unique_together': {('student', 'program')},
+                "ordering": [
+                    "program__name",
+                    "student__last_name",
+                    "student__first_name",
+                ],
+                "unique_together": {("student", "program")},
             },
         ),
     ]

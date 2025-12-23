@@ -5,9 +5,9 @@ import django.db.models.deletion
 
 
 MENTOR_ROLE_CHOICES = [
-    ('mentor', 'Mentor'),
-    ('volunteer', 'Volunteer'),
-    ('chaperone', 'Chaperone'),
+    ("mentor", "Mentor"),
+    ("volunteer", "Volunteer"),
+    ("chaperone", "Chaperone"),
 ]
 
 
@@ -15,59 +15,108 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('programs', '0006_student_primary_secondary_contact'),
+        ("programs", "0006_student_primary_secondary_contact"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Mentor',
+            name="Mentor",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('first_name', models.CharField(max_length=150)),
-                ('preferred_first_name', models.CharField(blank=True, max_length=150, null=True)),
-                ('last_name', models.CharField(max_length=150)),
-                ('pronouns', models.CharField(blank=True, max_length=50, null=True)),
-                ('start_year', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('role', models.CharField(choices=MENTOR_ROLE_CHOICES, default='mentor', max_length=20)),
-                ('cell_phone', models.CharField(blank=True, max_length=30, null=True)),
-                ('home_phone', models.CharField(blank=True, max_length=30, null=True)),
-                ('personal_email', models.EmailField(blank=True, max_length=254, null=True)),
-                ('andrew_id', models.CharField(blank=True, max_length=50, null=True)),
-                ('andrew_email', models.EmailField(blank=True, max_length=254, null=True)),
-                ('andrew_id_expiration', models.DateField(blank=True, null=True)),
-                ('on_discord', models.BooleanField(default=False)),
-                ('discord_username', models.CharField(blank=True, max_length=100, null=True)),
-                ('has_cmu_id_card', models.BooleanField(default=False)),
-                ('has_cmu_building_access', models.BooleanField(default=False)),
-                ('has_google_team_drive_access', models.BooleanField(default=False)),
-                ('has_google_mentor_drive_access', models.BooleanField(default=False)),
-                ('has_google_admin_drive_access', models.BooleanField(default=False)),
-                ('on_first_website', models.BooleanField(default=False)),
-                ('signed_first_consent_form', models.BooleanField(default=False)),
-                ('on_canvas', models.BooleanField(default=False)),
-                ('has_zoom_account', models.BooleanField(default=False)),
-                ('in_onshape_classroom', models.BooleanField(default=False)),
-                ('on_canva', models.BooleanField(default=False)),
-                ('on_google_mentor_group', models.BooleanField(default=False)),
-                ('on_google_field_crew_group', models.BooleanField(default=False)),
-                ('has_paca_clearance', models.BooleanField(default=False)),
-                ('has_patch_clearance', models.BooleanField(default=False)),
-                ('has_fbi_clearance', models.BooleanField(default=False)),
-                ('pa_clearances_expiration_date', models.DateField(blank=True, null=True)),
-                ('emergency_contact_name', models.CharField(blank=True, max_length=150, null=True)),
-                ('emergency_contact_phone', models.CharField(blank=True, max_length=30, null=True)),
-                ('active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='mentor_profile', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("first_name", models.CharField(max_length=150)),
+                (
+                    "preferred_first_name",
+                    models.CharField(blank=True, max_length=150, null=True),
+                ),
+                ("last_name", models.CharField(max_length=150)),
+                ("pronouns", models.CharField(blank=True, max_length=50, null=True)),
+                ("start_year", models.PositiveSmallIntegerField(blank=True, null=True)),
+                (
+                    "role",
+                    models.CharField(
+                        choices=MENTOR_ROLE_CHOICES, default="mentor", max_length=20
+                    ),
+                ),
+                ("cell_phone", models.CharField(blank=True, max_length=30, null=True)),
+                ("home_phone", models.CharField(blank=True, max_length=30, null=True)),
+                (
+                    "personal_email",
+                    models.EmailField(blank=True, max_length=254, null=True),
+                ),
+                ("andrew_id", models.CharField(blank=True, max_length=50, null=True)),
+                (
+                    "andrew_email",
+                    models.EmailField(blank=True, max_length=254, null=True),
+                ),
+                ("andrew_id_expiration", models.DateField(blank=True, null=True)),
+                ("on_discord", models.BooleanField(default=False)),
+                (
+                    "discord_username",
+                    models.CharField(blank=True, max_length=100, null=True),
+                ),
+                ("has_cmu_id_card", models.BooleanField(default=False)),
+                ("has_cmu_building_access", models.BooleanField(default=False)),
+                ("has_google_team_drive_access", models.BooleanField(default=False)),
+                ("has_google_mentor_drive_access", models.BooleanField(default=False)),
+                ("has_google_admin_drive_access", models.BooleanField(default=False)),
+                ("on_first_website", models.BooleanField(default=False)),
+                ("signed_first_consent_form", models.BooleanField(default=False)),
+                ("on_canvas", models.BooleanField(default=False)),
+                ("has_zoom_account", models.BooleanField(default=False)),
+                ("in_onshape_classroom", models.BooleanField(default=False)),
+                ("on_canva", models.BooleanField(default=False)),
+                ("on_google_mentor_group", models.BooleanField(default=False)),
+                ("on_google_field_crew_group", models.BooleanField(default=False)),
+                ("has_paca_clearance", models.BooleanField(default=False)),
+                ("has_patch_clearance", models.BooleanField(default=False)),
+                ("has_fbi_clearance", models.BooleanField(default=False)),
+                (
+                    "pa_clearances_expiration_date",
+                    models.DateField(blank=True, null=True),
+                ),
+                (
+                    "emergency_contact_name",
+                    models.CharField(blank=True, max_length=150, null=True),
+                ),
+                (
+                    "emergency_contact_phone",
+                    models.CharField(blank=True, max_length=30, null=True),
+                ),
+                ("active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "user",
+                    models.OneToOneField(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="mentor_profile",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['last_name', 'first_name'],
+                "ordering": ["last_name", "first_name"],
             },
         ),
         migrations.AddField(
-            model_name='mentor',
-            name='andrew_id_sponsor',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='sponsored_andrew_ids', to='programs.mentor'),
+            model_name="mentor",
+            name="andrew_id_sponsor",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="sponsored_andrew_ids",
+                to="programs.mentor",
+            ),
         ),
     ]

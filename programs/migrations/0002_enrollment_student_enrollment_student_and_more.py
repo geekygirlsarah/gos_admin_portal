@@ -9,45 +9,86 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('programs', '0001_initial'),
+        ("programs", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Enrollment',
+            name="Enrollment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='programs.program')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "program",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="programs.program",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Enrollment',
-                'verbose_name_plural': 'Enrollments',
+                "verbose_name": "Enrollment",
+                "verbose_name_plural": "Enrollments",
             },
         ),
         migrations.CreateModel(
-            name='Student',
+            name="Student",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('first_name', models.CharField(max_length=150)),
-                ('last_name', models.CharField(max_length=150)),
-                ('active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('programs', models.ManyToManyField(blank=True, related_name='students', through='programs.Enrollment', to='programs.program')),
-                ('user', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='student_profile', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("first_name", models.CharField(max_length=150)),
+                ("last_name", models.CharField(max_length=150)),
+                ("active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "programs",
+                    models.ManyToManyField(
+                        blank=True,
+                        related_name="students",
+                        through="programs.Enrollment",
+                        to="programs.program",
+                    ),
+                ),
+                (
+                    "user",
+                    models.OneToOneField(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="student_profile",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['last_name', 'first_name'],
+                "ordering": ["last_name", "first_name"],
             },
         ),
         migrations.AddField(
-            model_name='enrollment',
-            name='student',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='programs.student'),
+            model_name="enrollment",
+            name="student",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, to="programs.student"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='enrollment',
-            unique_together={('student', 'program')},
+            name="enrollment",
+            unique_together={("student", "program")},
         ),
     ]

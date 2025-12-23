@@ -6,21 +6,21 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0029_alter_studentapplication_id'),
+        ("programs", "0029_alter_studentapplication_id"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='parent',
-            options={'ordering': ['first_name', 'last_name']},
+            name="parent",
+            options={"ordering": ["first_name", "last_name"]},
         ),
         migrations.AlterModelOptions(
-            name='payment',
-            options={'ordering': ['-paid_on', '-created_at']},
+            name="payment",
+            options={"ordering": ["-paid_on", "-created_at"]},
         ),
         migrations.RenameField(
-            model_name='payment',
-            old_name='paid_at',
-            new_name='paid_on',
+            model_name="payment",
+            old_name="paid_at",
+            new_name="paid_on",
         ),
     ]

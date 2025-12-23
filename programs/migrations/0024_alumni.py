@@ -7,29 +7,64 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0023_student_graduation_year'),
+        ("programs", "0023_student_graduation_year"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Alumni',
+            name="Alumni",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('alumni_email', models.EmailField(blank=True, help_text='Preferred contact email after graduation', max_length=254, null=True)),
-                ('phone_number', models.CharField(blank=True, max_length=30, null=True)),
-                ('college', models.CharField(blank=True, max_length=200, null=True)),
-                ('field_of_study', models.CharField(blank=True, max_length=200, null=True)),
-                ('employer', models.CharField(blank=True, max_length=200, null=True)),
-                ('job_title', models.CharField(blank=True, max_length=200, null=True)),
-                ('ok_to_contact', models.BooleanField(default=True, help_text='Alumni consents to be contacted about news/opportunities')),
-                ('notes', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('student', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='alumni_profile', to='programs.student')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "alumni_email",
+                    models.EmailField(
+                        blank=True,
+                        help_text="Preferred contact email after graduation",
+                        max_length=254,
+                        null=True,
+                    ),
+                ),
+                (
+                    "phone_number",
+                    models.CharField(blank=True, max_length=30, null=True),
+                ),
+                ("college", models.CharField(blank=True, max_length=200, null=True)),
+                (
+                    "field_of_study",
+                    models.CharField(blank=True, max_length=200, null=True),
+                ),
+                ("employer", models.CharField(blank=True, max_length=200, null=True)),
+                ("job_title", models.CharField(blank=True, max_length=200, null=True)),
+                (
+                    "ok_to_contact",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Alumni consents to be contacted about news/opportunities",
+                    ),
+                ),
+                ("notes", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "student",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="alumni_profile",
+                        to="programs.student",
+                    ),
+                ),
             ],
             options={
-                'verbose_name_plural': 'Alumni',
-                'ordering': ['student__last_name', 'student__first_name'],
+                "verbose_name_plural": "Alumni",
+                "ordering": ["student__last_name", "student__first_name"],
             },
         ),
     ]

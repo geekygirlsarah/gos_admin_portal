@@ -2,14 +2,14 @@ from django.db import migrations
 
 
 def add_signout_feature(apps, schema_editor):
-    ProgramFeature = apps.get_model('programs', 'ProgramFeature')
+    ProgramFeature = apps.get_model("programs", "ProgramFeature")
     ProgramFeature.objects.get_or_create(
-        key='signout-sheet',
+        key="signout-sheet",
         defaults={
-            'name': 'Printable Sign-out Sheet',
-            'description': 'Enable a printable sign-out sheet for parents/guardians on the Program page.',
-            'display_order': 40,
-        }
+            "name": "Printable Sign-out Sheet",
+            "description": "Enable a printable sign-out sheet for parents/guardians on the Program page.",
+            "display_order": 40,
+        },
     )
 
 
@@ -21,7 +21,7 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0040_seed_program_features'),
+        ("programs", "0040_seed_program_features"),
     ]
 
     operations = [

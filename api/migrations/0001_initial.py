@@ -11,16 +11,38 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='ApiClientKey',
+            name="ApiClientKey",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('key', models.CharField(help_text='Shared secret presented in X-API-KEY header', max_length=64, unique=True)),
-                ('scope', models.CharField(choices=[('read', 'Read-only'), ('write', 'Read/Write')], default='read', max_length=10)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(default=django.utils.timezone.now)),
-                ('last_used_at', models.DateTimeField(blank=True, null=True)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                (
+                    "key",
+                    models.CharField(
+                        help_text="Shared secret presented in X-API-KEY header",
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "scope",
+                    models.CharField(
+                        choices=[("read", "Read-only"), ("write", "Read/Write")],
+                        default="read",
+                        max_length=10,
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                ("last_used_at", models.DateTimeField(blank=True, null=True)),
             ],
-            options={'ordering': ['name']},
+            options={"ordering": ["name"]},
         ),
     ]
