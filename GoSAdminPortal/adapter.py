@@ -31,3 +31,10 @@ class AccountAdapter(DefaultAccountAdapter):
         if template_prefix == "account/email/unknown_account":
             return
         super().send_mail(template_prefix, email, context)
+
+    def format_email_subject(self, subject):
+        """
+        By default, allauth prepends the site name in brackets.
+        We want just the subject.
+        """
+        return subject
