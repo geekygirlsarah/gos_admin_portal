@@ -52,8 +52,6 @@ INSTALLED_APPS = [
     # Allauth apps
     'allauth',
     'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
     # Local apps
     'programs',
     'attendance',
@@ -184,24 +182,13 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 LOGIN_URL = '/accounts/login/'
 
-# Social account provider settings (Google)
-SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'APP': {
-            # Replace with your actual credentials or set via env vars
-            'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
-            'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
-            'key': ''
-        },
-        'SCOPE': [
-            'profile',
-            'email',
-        ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
-        }
-    }
-}
+# Email OTP Login settings
+ACCOUNT_LOGIN_BY_CODE_ENABLED = True
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_EMAIL_VERIFICATION = 'none'  # We don't need verification if we use OTP
+ACCOUNT_ADAPTER = 'GoSAdminPortal.adapter.AccountAdapter'
 
 # Email (SMTP) configuration via environment variables
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')

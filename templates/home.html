@@ -6,7 +6,6 @@
       <div class="row mb-3">
         <div class="col">
           <h1 class="h3">Welcome, {{ user.first_name|default:user.username }}!</h1>
-{#          <p class="text-muted">You are logged in with Google.</p>#}
         </div>
       </div>
       <div class="row mb-3">
@@ -91,7 +90,7 @@
         <p class="lead">Students can apply without logging in.</p>
         <p>
           <a class="btn btn-success btn-lg me-2" href="{% url 'apply_start' %}">Apply to a Program</a>
-          <a class="btn btn-primary btn-lg" href="{% url 'socialaccount_login' %}?provider=google">Admin/Mentor Login</a>
+          <a class="btn btn-primary btn-lg" href="{% url 'account_login' %}">Admin/Mentor Login</a>
         </p>
       </div>
     {% endif %}

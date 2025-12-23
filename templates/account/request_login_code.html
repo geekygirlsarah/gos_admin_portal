@@ -15,7 +15,7 @@
 {% block content %}
 <div class="login-card">
   <div class="text-center mb-4">
-    <img src="{% static 'img/gos_logo.png' %}" alt="Girls of Steel" class="img-fluid mb-2" style="max-height: 60px;">
+    <img src="{% static 'img/cmu-text-logo.png' %}" alt="Girls of Steel" class="img-fluid mb-2" style="max-height: 60px;">
     <h1 class="h3 mb-0">Girls of Steel Portal</h1>
   </div>
 
@@ -23,9 +23,6 @@
     <div class="card-body p-4">
       <h2 class="h5 mb-3 text-center">Sign In</h2>
 
-      {% if form.non_field_errors %}
-        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
-      {% endif %}
       <p class="text-muted text-center small mb-4">
         Enter your email address and we'll send you a login code.
       </p>
@@ -34,7 +31,7 @@
         {% csrf_token %}
         <div class="mb-4">
           <label class="form-label" for="id_email">Email Address</label>
-          <input type="email" name="email" id="id_email" class="form-control form-control-lg" required placeholder="name@example.com" autofocus>
+          <input type="email" name="email" id="id_email" class="form-control form-control-lg" required placeholder="rriveter@cmu.edu" autofocus>
         </div>
 
         <div class="d-grid gap-2">
@@ -49,8 +46,9 @@
       </div>
       
       <div class="text-center border-top pt-3">
-          <a href="/admin/" class="text-secondary small text-decoration-none">Staff/Admin Password Login</a>
+        Issues with your account? Please email <a href="mailto:leads@girlsofsteelrobotics.org" class="text-secondary small text-decoration-none">leads@girlsofsteelrobotics.org</a>.
       </div>
+
     </div>
   </div>
 </div>
