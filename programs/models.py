@@ -51,15 +51,28 @@ class RolePermission(models.Model):
     Lead Mentors can customize read/write access for each role to each section.
     """
     SECTION_CHOICES = [
-        ('student_info', 'Student Info'),
-        ('adult_info', 'Adult Info'),
-        ('attendance', 'Attendance'),
-        ('payments', 'Payments'),
-        ('fees', 'Fees'),
+        ('student_info', 'Student - Info (General)'),
+        ('identity', 'Student - Identity'),
+        ('contact_address', 'Student - Contact & Address'),
+        ('health_medical', 'Student - Health & Medical'),
+        ('school', 'Student - School'),
+        ('cmu_andrew', 'Student - CMU Andrew ID'),
+        ('background_checks', 'Student - Background Checks'),
+        ('discord', 'Student - Discord'),
+        ('first_website', 'Student - FIRST Website'),
+        ('parents_emergency', 'Student - Parents/Emergency Contacts'),
+        ('other_details', 'Student - Other Details'),
+        ('attendance', 'Student - Attendance'),
+        ('adult_info', 'Adult - Info'),
+        ('payments', 'Payments - General'),
+        ('sliding_scale', 'Payments - Sliding Scale'),
+        ('fees', 'Programs - Fees'),
+        ('programs', 'Programs - General'),
     ]
     ROLE_CHOICES = [
         ('Mentor', 'Mentor'),
         ('Parent', 'Parent'),
+        ('Student', 'Student'),
     ]
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
@@ -321,6 +334,16 @@ class Student(models.Model):
         except ValueError:
             # Handle Feb 29 on non-leap years by using Feb 28
             return dob.replace(month=2, day=28, year=dob.year + 18)
+
+    @property
+    def age(self):
+        """Return the student's current age in years, or None if DOB unknown."""
+        import datetime
+        dob = self.date_of_birth
+        if not dob:
+            return None
+        today = datetime.date.today()
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
     def requires_background_check(self, program: 'Program') -> bool:
         """Whether the student will be 18 at any point during the given program's dates.

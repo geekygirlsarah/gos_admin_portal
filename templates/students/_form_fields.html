@@ -3,21 +3,27 @@
 {# Shared grouped fields for StudentForm using Bootstrap grid #}
 
 {# Identity #}
+{% can_read user 'identity' as can_read_identity %}
+{% if can_read_identity %}
 <div class="card mb-4">
   <div class="card-header">Identity</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-4">{% render_field form.legal_first_name %}</div>
-      <div class="col-md-4">{% render_field form.first_name %}</div>
-      <div class="col-md-4">{% render_field form.last_name %}</div>
-      <div class="col-md-4">{% render_field form.pronouns %}</div>
-      <div class="col-md-4">{% render_field form.date_of_birth %}</div>
-      <div class="col-md-4">{% render_field form.photo %}</div>
+      {% can_write user 'identity' form.instance as can_write_identity %}
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.legal_first_name %}{% else %}{% render_field form.legal_first_name readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.first_name %}{% else %}{% render_field form.first_name readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.last_name %}{% else %}{% render_field form.last_name readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.pronouns %}{% else %}{% render_field form.pronouns readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.date_of_birth %}{% else %}{% render_field form.date_of_birth readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.photo %}{% else %}{% render_field form.photo readonly=True %}{% endif %}</div>
     </div>
   </div>
 </div>
+{% endif %}
 
 {% if form.instance and form.instance.pk and 'background-checks' in program_feature_keys %}
+{% can_read user 'background_checks' as can_read_bg %}
+{% if can_read_bg %}
 <div class="card mb-4">
   <div class="card-header">Background Checks</div>
   <div class="card-body">
@@ -37,73 +43,92 @@
       <div class="form-text">This is informational; the requirement is calculated from date of birth and program dates.</div>
     <hr/>
       <div class="row g-3">
-          <div class="col-md-4">{% render_field form.has_passed_clearances %}</div>
-          <div class="col-md-4">{% render_field form.clearances_expiration_date %}</div>
+          {% can_write user 'background_checks' form.instance as can_write_bg %}
+          <div class="col-md-4">{% if can_write_bg %}{% render_field form.has_passed_clearances %}{% else %}{% render_field form.has_passed_clearances disabled=True %}{% endif %}</div>
+          <div class="col-md-4">{% if can_write_bg %}{% render_field form.clearances_expiration_date %}{% else %}{% render_field form.clearances_expiration_date readonly=True %}{% endif %}</div>
       </div>
   </div>
 </div>
 {% endif %}
+{% endif %}
 
 {# Contact & Address #}
+{% can_read user 'contact_address' as can_read_contact %}
+{% if can_read_contact %}
 <div class="card mb-4">
   <div class="card-header">Contact & Address</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-6">{% render_field form.personal_email %}</div>
-      <div class="col-md-6">{% render_field form.cell_phone_number %}</div>
-      <div class="col-md-6">{% render_field form.address %}</div>
-      <div class="col-md-3">{% render_field form.city %}</div>
-      <div class="col-md-3">{% render_field form.state %}</div>
-      <div class="col-md-3">{% render_field form.zip_code %}</div>
+      {% can_write user 'contact_address' form.instance as can_write_contact %}
+      <div class="col-md-6">{% if can_write_contact %}{% render_field form.personal_email %}{% else %}{% render_field form.personal_email readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_contact %}{% render_field form.cell_phone_number %}{% else %}{% render_field form.cell_phone_number readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_contact %}{% render_field form.address %}{% else %}{% render_field form.address readonly=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_contact %}{% render_field form.city %}{% else %}{% render_field form.city readonly=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_contact %}{% render_field form.state %}{% else %}{% render_field form.state readonly=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_contact %}{% render_field form.zip_code %}{% else %}{% render_field form.zip_code readonly=True %}{% endif %}</div>
     </div>
 </div>
 </div>
+{% endif %}
 
 {# Health & Medical #}
+{% can_read user 'health_medical' as can_read_medical %}
+{% if can_read_medical %}
 <div class="card mb-4">
   <div class="card-header">Health &amp; Medical</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-6">{% render_field form.allergies %}</div>
-      <div class="col-md-6">{% render_field form.dietary_restrictions %}</div>
-      <div class="col-md-12">{% render_field form.medical_notes %}</div>
+      {% can_write user 'health_medical' form.instance as can_write_medical %}
+      <div class="col-md-6">{% if can_write_medical %}{% render_field form.allergies %}{% else %}{% render_field form.allergies readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_medical %}{% render_field form.dietary_restrictions %}{% else %}{% render_field form.dietary_restrictions readonly=True %}{% endif %}</div>
+      <div class="col-md-12">{% if can_write_medical %}{% render_field form.medical_notes %}{% else %}{% render_field form.medical_notes readonly=True %}{% endif %}</div>
     </div>
   </div>
 </div>
+{% endif %}
 
 {# School #}
+{% can_read user 'school' as can_read_school %}
+{% if can_read_school %}
 <div class="card mb-4">
   <div class="card-header">School</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-6">{% render_field form.school %}</div>
-      <div class="col-md-3">{% render_field form.grade_selector %}</div>
-      <div class="col-md-3">{% render_field form.graduation_year %}</div>
-      <div class="col-md-3">{% render_field form.tshirt_size %}</div>
+      {% can_write user 'school' form.instance as can_write_school %}
+      <div class="col-md-6">{% if can_write_school %}{% render_field form.school %}{% else %}{% render_field form.school disabled=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_school %}{% render_field form.grade_selector %}{% else %}{% render_field form.grade_selector disabled=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_school %}{% render_field form.graduation_year %}{% else %}{% render_field form.graduation_year readonly=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_school %}{% render_field form.tshirt_size %}{% else %}{% render_field form.tshirt_size readonly=True %}{% endif %}</div>
     </div>
   </div>
 </div>
+{% endif %}
 
 {# Andrew ID (CMU) #}
-{% if 'cmu-andrew' in program_feature_keys %}
+{% can_read user 'cmu_andrew' as can_read_cmu %}
+{% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
 <div class="card mb-4">
   <div class="card-header">CMU Andrew ID</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-4">{% render_field form.andrew_id %}</div>
-      <div class="col-md-6">{% render_field form.andrew_email %}</div>
+      {% can_write user 'cmu_andrew' form.instance as can_write_cmu %}
+      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id %}{% else %}{% render_field form.andrew_id readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_email %}{% else %}{% render_field form.andrew_email readonly=True %}{% endif %}</div>
     </div>
   </div>
 </div>
 {% endif %}
 
 {# Demographics & Preferences #}
+{% can_read user 'other_details' as can_read_other %}
+{% if can_read_other %}
 <div class="card mb-4">
   <div class="card-header">Other Details</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-6">{% render_field form.race_ethnicities %}</div>
-      <div class="col-md-3">{% render_field form.seen_once %}</div>
+      {% can_write user 'other_details' form.instance as can_write_other %}
+      <div class="col-md-6">{% if can_write_other %}{% render_field form.race_ethnicities %}{% else %}{% render_field form.race_ethnicities disabled=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_other %}{% render_field form.seen_once %}{% else %}{% render_field form.seen_once disabled=True %}{% endif %}</div>
       {% user_role user as role %}
       {% if role == 'LeadMentor' %}
         <div class="col-md-3">{% render_field form.active %}</div>
@@ -124,54 +149,64 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {# Discord #}
-{% if 'discord' in program_feature_keys %}
+{% can_read user 'discord' as can_read_discord %}
+{% if can_read_discord and 'discord' in program_feature_keys %}
 <div class="card mb-4">
   <div class="card-header">Discord</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-3">{% render_field form.on_discord %}</div>
-      <div class="col-md-9">{% render_field form.discord_handle %}</div>
+      {% can_write user 'discord' form.instance as can_write_discord %}
+      <div class="col-md-3">{% if can_write_discord %}{% render_field form.on_discord %}{% else %}{% render_field form.on_discord disabled=True %}{% endif %}</div>
+      <div class="col-md-9">{% if can_write_discord %}{% render_field form.discord_handle %}{% else %}{% render_field form.discord_handle readonly=True %}{% endif %}</div>
     </div>
   </div>
 </div>
 {% endif %}
 
 {# FIRST Website #}
+{% can_read user 'first_website' as can_read_first %}
+{% if can_read_first %}
 <div class="card mb-4">
   <div class="card-header">FIRST Website</div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-4">{% render_field form.first_has_account %}</div>
-      <div class="col-md-4">{% render_field form.first_attached_to_parent_account %}</div>
-      <div class="col-md-4">{% render_field form.first_signed_cr %}</div>
-      <div class="col-md-12">{% render_field form.first_registered_teams %}</div>
+      {% can_write user 'first_website' form.instance as can_write_first %}
+      <div class="col-md-4">{% if can_write_first %}{% render_field form.first_has_account %}{% else %}{% render_field form.first_has_account disabled=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_first %}{% render_field form.first_attached_to_parent_account %}{% else %}{% render_field form.first_attached_to_parent_account disabled=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_first %}{% render_field form.first_signed_cr %}{% else %}{% render_field form.first_signed_cr disabled=True %}{% endif %}</div>
+      <div class="col-md-12">{% if can_write_first %}{% render_field form.first_registered_teams %}{% else %}{% render_field form.first_registered_teams readonly=True %}{% endif %}</div>
     </div>
   </div>
 </div>
+{% endif %}
 
 {# Parents / Contacts #}
+{% can_read user 'parents_emergency' as can_read_parents %}
+{% if can_read_parents %}
 <div class="card mb-4">
   <div class="card-header">Parents / Emergency Contacts</div>
   <div class="card-body">
+    {% can_write user 'parents_emergency' form.instance as can_write_parents %}
     {# Keep original Django fields hidden so we can synchronize values before submit #}
     <div class="d-none">
-      <div class="col-md-6">{% render_field form.primary_contact %}</div>
-      <div class="col-md-6">{% render_field form.secondary_contact %}</div>
-      <div class="col-12">{% render_field form.parents %}</div>
+      <div class="col-md-6">{% if can_write_parents %}{% render_field form.primary_contact %}{% else %}{% render_field form.primary_contact disabled=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_parents %}{% render_field form.secondary_contact %}{% else %}{% render_field form.secondary_contact disabled=True %}{% endif %}</div>
+      <div class="col-12">{% if can_write_parents %}{% render_field form.parents %}{% else %}{% render_field form.parents disabled=True %}{% endif %}</div>
     </div>
 
     <div class="mb-3">
       <label class="form-label">Find a parent/guardian</label>
       <div class="d-flex gap-2">
-        <select id="parent-picker" class="form-select" style="max-width:480px">
+        <select id="parent-picker" class="form-select" style="max-width:480px" {% if not can_write_parents %}disabled{% endif %}>
           <option value="">— Select a parent —</option>
           {% for val,label in form.parents.field.choices %}
             {% if val %}<option value="{{ val }}">{{ label }}</option>{% endif %}
           {% endfor %}
         </select>
-        <button type="button" id="add-parent-btn" class="btn btn-outline-primary">Add</button>
+        <button type="button" id="add-parent-btn" class="btn btn-outline-primary" {% if not can_write_parents %}disabled{% endif %}>Add</button>
       </div>
     </div>
 
@@ -189,30 +224,32 @@
               <div class="d-flex align-items-center gap-2 flex-wrap">
                 <div class="d-flex align-items-center gap-1">
                   <label class="form-label mb-0 small">Relationship</label>
-                  <select class="form-select form-select-sm parent-rel" data-parent-id="{{ p.id }}">
+                  <select class="form-select form-select-sm parent-rel" data-parent-id="{{ p.id }}" {% if not can_write_parents %}disabled{% endif %}>
                     {% for k,v in RELATIONSHIP_CHOICES %}
                       <option value="{{ k }}" {% if p.relationship_to_student == k %}selected{% endif %}>{{ v }}</option>
                     {% endfor %}
                   </select>
                 </div>
                 <div class="form-check">
-                  <input class="form-check-input parent-primary" type="radio" name="primary_choice" value="{{ p.id }}" {% if object.primary_contact_id == p.id %}checked{% endif %}>
+                  <input class="form-check-input parent-primary" type="radio" name="primary_choice" value="{{ p.id }}" {% if object.primary_contact_id == p.id %}checked{% endif %} {% if not can_write_parents %}disabled{% endif %}>
                   <label class="form-check-label">Primary</label>
                 </div>
                 <div class="form-check">
-                  <input class="form-check-input parent-secondary" type="radio" name="secondary_choice" value="{{ p.id }}" {% if object.secondary_contact_id == p.id %}checked{% endif %}>
+                  <input class="form-check-input parent-secondary" type="radio" name="secondary_choice" value="{{ p.id }}" {% if object.secondary_contact_id == p.id %}checked{% endif %} {% if not can_write_parents %}disabled{% endif %}>
                   <label class="form-check-label">Secondary</label>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-danger remove-parent">Remove</button>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-parent" {% if not can_write_parents %}disabled{% endif %}>Remove</button>
               </div>
             </div>
           {% endfor %}
         {% endwith %}
       </div>
+      {% if can_write_parents %}
       <div class="alert alert-secondary">
         Can't find a parent? Quickly add one:
         <a class="alert-link" href="{% url 'parent_create' %}?next={{ request.path }}">Add Parent</a>
       </div>
+      {% endif %}
     </div>
 
     <script>
@@ -221,7 +258,9 @@
         var REL_CHOICES = [
           {% for k,v in RELATIONSHIP_CHOICES %}["{{ k }}","{{ v }}"],{% endfor %}
         ];
+        var CAN_WRITE = {% if can_write_parents %}true{% else %}false{% endif %};
         function ensureHiddenFieldSync(){
+          if(!CAN_WRITE) return; // Don't sync if we can't write
           // parents multi-select
           var parentsSelect = document.querySelector('select[name="parents"]');
           var items = document.querySelectorAll('#parent-list .list-group-item');
@@ -260,6 +299,7 @@
           });
         }
         function addParent(pid, label){
+          if(!CAN_WRITE) return;
           if(!pid) return;
           // avoid duplicates
           if(document.querySelector('#parent-list .list-group-item[data-parent-id="'+pid+'"]')) return;
@@ -290,6 +330,7 @@
           ensureHiddenFieldSync();
         }
         function hook(){
+          if(!CAN_WRITE) return;
           var addBtn = document.getElementById('add-parent-btn');
           var picker = document.getElementById('parent-picker');
           var parentChoices = {};
@@ -327,3 +368,4 @@
     </script>
   </div>
 </div>
+{% endif %}

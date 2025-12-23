@@ -134,10 +134,11 @@ from .forms import (
 )
 
 
-class ProgramListView(ListView):
+class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     model = Program
     template_name = 'home.html'  # landing page
     context_object_name = 'programs'
+    section = 'programs'
 
     def get_queryset(self):
         # Keep a base queryset; ordering will be handled in context via grouping
@@ -1468,10 +1469,11 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return render(self.request, self.template_name, ctx)
 
 
-class ProgramDetailView(LoginRequiredMixin, DetailView):
+class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailView):
     model = Program
     template_name = 'programs/detail.html'
     context_object_name = 'program'
+    section = 'programs'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1792,11 +1794,12 @@ class ProgramPaymentPrintView(LoginRequiredMixin, View):
         })
 
 
-class ProgramSlidingScaleCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ProgramSlidingScaleCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, CreateView):
     model = SlidingScale
     form_class = SlidingScaleForm
     template_name = 'programs/sliding_scale_form.html'
     permission_required = 'programs.add_slidingscale'
+    section = 'sliding_scale'
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs['pk'])
@@ -1842,11 +1845,12 @@ class ProgramSlidingScaleCreateView(LogFormSaveMixin, LoginRequiredMixin, Permis
         return redirect('program_detail', pk=self.program.pk)
 
 
-class ProgramSlidingScaleUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ProgramSlidingScaleUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, UpdateView):
     model = SlidingScale
     form_class = SlidingScaleForm
     template_name = 'programs/sliding_scale_form.html'
     permission_required = 'programs.change_slidingscale'
+    section = 'sliding_scale'
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs['pk'])
@@ -1927,12 +1931,14 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                 'name': fee.name,
                 'amount': fee.amount,
             })
-        # Sliding scale: negative amount (discount), include if exists
+        # Sliding scale: negative amount (discount), include if exists and user has permission
+        from .permission_views import can_user_read
+        can_view_sliding = can_user_read(request.user, 'sliding_scale')
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
         # Compute total fees first to apply percent-based discount
         from decimal import Decimal
         total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
-        if sliding and sliding.percent is not None:
+        if sliding and sliding.percent is not None and can_view_sliding:
             discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
             entries.append({
                 'date': sliding.created_at.date(),
@@ -2013,10 +2019,13 @@ class ProgramStudentBalancePrintView(LoginRequiredMixin, DynamicReadPermissionMi
                 'name': fee.name,
                 'amount': fee.amount,
             })
+        # Sliding scale: include if exists and user has permission
+        from .permission_views import can_user_read
+        can_view_sliding = can_user_read(request.user, 'sliding_scale')
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
         from decimal import Decimal
         total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
-        if sliding and sliding.percent is not None:
+        if sliding and sliding.percent is not None and can_view_sliding:
             discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
             entries.append({
                 'date': sliding.date,
@@ -2259,7 +2268,8 @@ class ApplyThanksView(View):
         return render(request, self.template_name)
 
 
-class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    section = 'programs'
     permission_required = 'programs.view_program'
     template_name = 'programs/email_balances_form.html'
 
@@ -2324,6 +2334,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
 
         # Helper to compute balance and entries like ProgramStudentBalanceView
         from decimal import Decimal
+        from .permission_views import can_user_read
+        can_view_sliding = can_user_read(self.request.user, 'sliding_scale')
         def compute_entries_and_balance(student):
             entries = []
             fees = Fee.objects.filter(program=program)
@@ -2334,7 +2346,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
                 entries.append({'date': fee_date, 'type': 'Fee', 'name': fee.name, 'amount': fee.amount})
             sliding = SlidingScale.objects.filter(student=student, program=program).first()
             total_fees_for_discount = sum([fee.amount for fee in Fee.objects.filter(program=program)], start=Decimal('0'))
-            if sliding and sliding.percent is not None:
+            if sliding and sliding.percent is not None and can_view_sliding:
                 discount = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
                 entries.append({'date': sliding.created_at.date(), 'type': 'Sliding Scale', 'name': f"Sliding scale ({sliding.percent}%)", 'amount': -discount})
             payments = Payment.objects.filter(student=student, program=program)
@@ -2467,12 +2479,13 @@ class ProgramEmailBalancesView(LoginRequiredMixin, PermissionRequiredMixin, View
         })
 
 
-class ProgramDuesOwedView(LoginRequiredMixin, View):
+class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     """
     Lists all students enrolled in a specific program and the total amount each currently owes
     for that program, using the same balance computation as the per-program balance sheet.
     """
     template_name = 'programs/dues_owed.html'
+    section = 'programs'
 
     def _program_balance_for_student(self, student, program):
         # Reproduce ProgramStudentBalanceView totals for a given student+program
@@ -2486,10 +2499,12 @@ class ProgramDuesOwedView(LoginRequiredMixin, View):
         total_fees = sum(applicable_fees, start=Decimal('0'))
 
         # Sliding scale percent discount based on total program fees (per balance sheet logic)
+        from .permission_views import can_user_read
+        can_view_sliding = can_user_read(self.request.user, 'sliding_scale')
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
         total_fees_for_discount = sum([f.amount for f in Fee.objects.filter(program=program)], start=Decimal('0'))
         total_sliding = Decimal('0')
-        if sliding and sliding.percent is not None:
+        if sliding and sliding.percent is not None and can_view_sliding:
             total_sliding = compute_sliding_discount_rounded(total_fees_for_discount, sliding.percent)
 
         # Payments made by student for this program
@@ -2526,8 +2541,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, View):
         })
 
 
-class ProgramSignoutSheetView(LoginRequiredMixin, View):
+class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     template_name = 'programs/signout_sheet.html'
+    section = 'programs'
 
     def get(self, request, pk):
         from django.shortcuts import render
@@ -2547,8 +2563,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, View):
         return render(request, self.template_name, ctx)
 
 
-class ProgramSchoolsView(LoginRequiredMixin, View):
+class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     template_name = 'programs/schools.html'
+    section = 'programs'
 
     def get(self, request, pk):
         from django.shortcuts import render
@@ -2573,8 +2590,9 @@ class ProgramSchoolsView(LoginRequiredMixin, View):
         })
 
 
-class ProgramStudentMapView(LoginRequiredMixin, View):
+class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     template_name = 'programs/map.html'
+    section = 'programs'
 
     def get(self, request, pk):
         from django.shortcuts import render

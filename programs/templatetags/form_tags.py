@@ -16,24 +16,29 @@ def add_class(field, css):
         return field
 
 @register.simple_tag
-def render_field(field):
+def render_field(field, **kwargs):
     """Render a Django form field with Bootstrap 5 markup, label, help, and errors.
-    Usage: {% render_field form.my_field %}
+    Usage: {% render_field form.my_field readonly=True %}
     """
     try:
         widget = field.field.widget
         base_classes = widget.attrs.get('class', '')
+        
+        # Merge kwargs into attrs, handling 'class' specially
+        attrs = {**widget.attrs, **kwargs}
+        if 'class' in kwargs:
+            attrs['class'] = f"{base_classes} {kwargs['class']}".strip()
+        
         # Determine appropriate control class
         if isinstance(widget, widgets.CheckboxInput):
             # Single checkbox
-            input_html = field.as_widget(attrs={'class': f"form-check-input {base_classes}".strip()})
+            input_html = field.as_widget(attrs={**attrs, 'class': f"form-check-input {attrs.get('class', base_classes)}".strip()})
             label_html = field.label_tag(attrs={'class': 'form-check-label'}) if field.label else ''
             content = f'<div class="form-check">{input_html}{label_html}</div>'
         elif isinstance(widget, widgets.CheckboxSelectMultiple):
-            # Group of checkboxes — do NOT apply form-select; render label above and native checkbox list
+            # Group of checkboxes
             label_html = field.label_tag(attrs={'class': 'form-label'}) if field.label else ''
-            # Let Django render its <ul><li><label><input>… structure; avoid forcing select styling
-            input_html = field.as_widget(attrs={'class': base_classes})
+            input_html = field.as_widget(attrs=attrs)
             content = f"{label_html}{input_html}"
         else:
             # Selects get form-select, others form-control
@@ -41,9 +46,12 @@ def render_field(field):
                 ctrl_class = 'form-select'
             else:
                 ctrl_class = 'form-control'
-            input_html = field.as_widget(attrs={'class': f"{ctrl_class} {base_classes}".strip()})
+            
+            final_class = f"{ctrl_class} {attrs.get('class', base_classes)}".strip()
+            input_html = field.as_widget(attrs={**attrs, 'class': final_class})
             label_html = field.label_tag(attrs={'class': 'form-label'}) if field.label else ''
             content = f"{label_html}{input_html}"
+            
         # Help text and errors
         help_html = f'<div class="form-text">{field.help_text}</div>' if field.help_text else ''
         errors_html = ''

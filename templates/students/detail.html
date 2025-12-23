@@ -24,6 +24,8 @@
     <div class="col-lg-9 col-xl-8">
       <h1 class="h3 mb-4">{{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</h1>
 
+      {% can_read user 'identity' as can_read_identity %}
+      {% if can_read_identity %}
       <div class="card mb-4">
         <div class="card-header">Identity</div>
         <div class="card-body">
@@ -41,10 +43,12 @@
                 <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ student.first_name|default:'—' }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ student.last_name }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ student.pronouns|default:'—' }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Date of birth</div>
+                <div class="col-md-2"><div class="fw-semibold">Age</div><div>{{ student.age|default:'—' }}</div></div>
+                <div class="col-md-2"><div class="fw-semibold">Date of birth</div>
                   <div>
                     {% user_role user as role %}
-                    {% if can_edit_student or role == 'LeadMentor' %}
+                    {% can_write user 'identity' student as can_edit_identity %}
+                    {% if can_edit_identity or role == 'LeadMentor' %}
                       {{ student.date_of_birth|date:'M j, Y'|default:'—' }}
                     {% else %}
                       <span class="text-muted small">Restricted</span>
@@ -57,7 +61,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% can_read user 'contact_address' as can_read_contact %}
+      {% if can_read_contact %}
       <div class="card mb-4">
         <div class="card-header">Contact & Address</div>
         <div class="card-body">
@@ -71,7 +78,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% can_read user 'health_medical' as can_read_medical %}
+      {% if can_read_medical %}
       <div class="card mb-4">
         <div class="card-header">Health &amp; Medical</div>
         <div class="card-body">
@@ -82,7 +92,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% can_read user 'school' as can_read_school %}
+      {% if can_read_school %}
       <div class="card mb-4">
         <div class="card-header">School</div>
         <div class="card-body">
@@ -93,8 +106,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
-      {% if 'cmu-andrew' in program_feature_keys %}
+      {% can_read user 'cmu_andrew' as can_read_cmu %}
+      {% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
       <div class="card mb-4">
         <div class="card-header">CMU Andrew ID</div>
         <div class="card-body">
@@ -106,7 +121,8 @@
       </div>
       {% endif %}
 
-      {% if 'background-checks' in program_feature_keys %}
+      {% can_read user 'background_checks' as can_read_bg %}
+      {% if can_read_bg and 'background-checks' in program_feature_keys %}
       <div class="card mb-4">
         <div class="card-header">Background Checks</div>
         <div class="card-body">
@@ -132,7 +148,8 @@
       </div>
       {% endif %}
 
-      {% if 'discord' in program_feature_keys %}
+      {% can_read user 'discord' as can_read_discord %}
+      {% if can_read_discord and 'discord' in program_feature_keys %}
       <div class="card mb-4">
         <div class="card-header">Discord</div>
         <div class="card-body">
@@ -144,6 +161,8 @@
       </div>
       {% endif %}
 
+      {% can_read user 'first_website' as can_read_first %}
+      {% if can_read_first %}
       <div class="card mb-4">
         <div class="card-header">FIRST Website</div>
         <div class="card-body">
@@ -155,7 +174,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% can_read user 'parents_emergency' as can_read_parents %}
+      {% if can_read_parents %}
       <div class="card mb-4">
         <div class="card-header">Parents / Emergency Contacts</div>
         <div class="card-body">
@@ -178,7 +200,10 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
+      {% can_read user 'other_details' as can_read_other %}
+      {% if can_read_other %}
       <div class="card mb-4">
         <div class="card-header">Other Details</div>
         <div class="card-body">
@@ -188,6 +213,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
     </div>
   </div>

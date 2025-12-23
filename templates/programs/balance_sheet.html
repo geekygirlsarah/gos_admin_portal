@@ -48,10 +48,13 @@
                 <th colspan="3" class="text-end">Total Fees</th>
                 <th class="text-end">${{ total_fees|floatformat:2 }}</th>
               </tr>
+              {% can_read user 'sliding_scale' as can_view_sliding %}
+              {% if can_view_sliding %}
               <tr>
                 <th colspan="3" class="text-end">Sliding Scale</th>
                 <th class="text-end">-${{ total_sliding|floatformat:2 }}</th>
               </tr>
+              {% endif %}
               <tr>
                 <th colspan="3" class="text-end">Payments</th>
                 <th class="text-end">-${{ total_payments|floatformat:2 }}</th>

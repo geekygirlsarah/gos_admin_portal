@@ -138,6 +138,7 @@
         </div>
       {% endif %}
 
+      {% can_write user 'sliding_scale' as can_add_sliding_scale %}
       {% if can_manage_fees or can_add_payment or can_add_sliding_scale %}
       <div class="mt-4">
         <div class="card">
