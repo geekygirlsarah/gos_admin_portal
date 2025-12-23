@@ -6,7 +6,7 @@ from django.test import TestCase
 
 from programs.models import (
     Program, ProgramFeature, School, Student, Adult, Enrollment,
-    Fee, Payment, FeeAssignment, RaceEthnicity,
+    Fee, Payment, FeeAssignment, RaceEthnicity, RolePermission, StudentApplication,
 )
 
 
@@ -106,3 +106,37 @@ class ModelTests(TestCase):
         s.save()
         parent.refresh_from_db()
         self.assertTrue(parent.email_updates)
+
+class RolePermissionTests(TestCase):
+    def test_unique_role_section(self):
+        RolePermission.objects.create(role="Mentor", section="student_info", can_read=True)
+        with self.assertRaises(Exception): # unique_together
+             RolePermission.objects.create(role="Mentor", section="student_info", can_read=False)
+
+    def test_str_representation(self):
+        rp = RolePermission(role="Parent", section="payments", can_read=True, can_write=True)
+        self.assertIn("Parent", str(rp))
+        self.assertIn("Payments - General", str(rp))
+        self.assertIn("R:True, W:True", str(rp))
+
+class StudentApplicationTests(TestCase):
+    def setUp(self):
+        self.program = Program.objects.create(name="App Program", year=2025)
+        self.app = StudentApplication.objects.create(
+            program=self.program,
+            legal_first_name="App",
+            last_name="Test",
+            personal_email="app@example.com",
+            date_of_birth=datetime.date(2010, 1, 1),
+            parent_name="Parent App",
+            parent_email="parent@example.com"
+        )
+
+    def test_approve_creates_records(self):
+        student = self.app.approve()
+        self.assertIsInstance(student, Student)
+        self.assertEqual(student.legal_first_name, "App")
+        self.assertEqual(student.personal_email, "app@example.com")
+        self.assertTrue(Enrollment.objects.filter(student=student, program=self.program).exists())
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, 'accepted')

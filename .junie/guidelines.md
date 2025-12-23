@@ -40,10 +40,11 @@ Technologies:
 - GoSAdminPortal/ — Django project settings and URL routing
 - manage.py — Django management utility
 - programs/ — Django app containing core models and logic
-    - models.py — Program, ProgramFeature, School, Student, Enrollment, Adult, Fee, Payment, SlidingScale, FeeAssignment, StudentApplication
+    - models.py — Program, ProgramFeature, RolePermission, School, Student, Enrollment, Adult, Fee, Payment, SlidingScale, FeeAssignment, StudentApplication
     - admin.py — Django admin registrations and list/field configurations
 - attendance/ — Django app for student check-in/out
     - models.py — KioskDevice, RFIDCard, AttendanceEvent, AttendanceSession
+    - services.py — Business logic for recording taps and resolving students
 - api/ — Django app for external API access
     - models.py — ApiClientKey
 - templates/
@@ -104,7 +105,8 @@ Media and static:
 ### Data Model Cheat Sheet
 
 - Program: name, year, dates, active → has fees, features (via ProgramFeature), and students (via Enrollment)
-- ProgramFeature: toggleable capability (e.g., 'discord', 'background-checks') linked to Program
+- ProgramFeature: toggleable capability (e.g., 'discord', 'background-checks', 'attendance') linked to Program
+- RolePermission: dynamic read/write access settings for Mentors, Parents, and Students per UI section
 - School: standalone model linked from Student
 - Student: identity (legal vs preferred), contact, school, graduation year, demographics (RaceEthnicity), Discord, photo, medical info; link to primary/secondary Adult contacts; enrollments to Programs; payments via related Fees
 - Enrollment: links Student ↔ Program
@@ -131,11 +133,10 @@ Media and static:
 
 ### Testing
 
-- No explicit tests are visible in the provided snapshot. Recommended next steps:
-    - Add unit tests for model validation rules (e.g., Payment.clean and FeeAssignment.clean logic)
-    - Add view tests for program enrollment, payment creation, and sliding-scale calculations
+- Unit tests and integration tests are located in `programs/tests/` and `attendance/tests.py`.
+- Tests cover model validation, form logic, business services (attendance), and some view logic.
 
-Running tests (once added):
+Running tests:
 - python manage.py test
 
 ---
@@ -170,6 +171,7 @@ Optional tooling suggestions (not enforced by requirements.txt):
 ### Junie-Specific Instructions
 
 - Junie should:
+    - **Always follow Test-Driven Development (TDD) when possible:** When asked to implement a new feature or fix a bug, first provide the test case that reproduces the issue or defines the new behavior. Only after the test is established should Junie provide the implementation code.
     - Respect read-only mode unless explicitly asked to modify files.
     - When asked to add/modify code, propose exact diffs or full file replacements in the response for a human to apply.
     - Prefer searching the codebase to infer structure before proposing changes.
