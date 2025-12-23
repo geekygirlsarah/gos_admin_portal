@@ -28,6 +28,7 @@ from .views import (
     ProgramStudentMapView,
     AdultsListView, AdultUpdateView, 
 )
+from .permission_views import RolePermissionSettingsView
 from attendance.views import student_attendance_view, AttendanceImportView
 
 urlpatterns = [
@@ -112,6 +113,9 @@ urlpatterns = [
     # School add/edit
     path('schools/new/', permission_required('programs.add_school')(SchoolCreateView.as_view()), name='school_create'),
     path('schools/<int:pk>/edit/', permission_required('programs.change_school')(SchoolUpdateView.as_view()), name='school_edit'),
+
+    # Permissions
+    path('settings/permissions/', RolePermissionSettingsView.as_view(), name='role_permission_settings'),
 ]
 
 

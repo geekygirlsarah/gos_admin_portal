@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load permission_tags %}
 {% block title %}Students{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
@@ -7,7 +8,8 @@
     <div class="col"><h1 class="h3">Students</h1></div>
 
         <div class="col-auto d-flex gap-2">
-      {% if perms.programs.add_student %}
+      {% can_write user 'student_info' as can_add_student %}
+      {% if can_add_student %}
         <a class="btn btn-primary" href="{% url 'student_create' %}?next={% url 'student_list' %}">Add Student</a>
       {% endif %}
     </div>
@@ -42,7 +44,10 @@
                 <span class="badge {% if s.active %}bg-success{% else %}bg-secondary{% endif %}">{{ s.active|yesno:"Yes,No" }}</span>
               </td>
               <td class="text-end">
+                {% can_read user 'attendance' as can_view_attendance %}
+                {% if can_view_attendance %}
                 <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.pk %}">Attendance</a>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}

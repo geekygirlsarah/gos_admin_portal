@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load permission_tags %}
 {% block title %}Girls of Steel Portal{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
@@ -11,9 +12,15 @@
       <div class="row mb-3">
         <div class="col d-flex align-items-center justify-content-between">
           <h2 class="h4 m-0">Programs</h2>
-          {% if perms.programs.add_program %}
-            <a class="btn btn-primary" href="/programs/new/">+ Add Program</a>
-          {% endif %}
+          <div class="d-flex gap-2">
+            {% user_role user as role %}
+            {% if role == 'LeadMentor' %}
+              <a class="btn btn-outline-secondary" href="{% url 'role_permission_settings' %}">Role Permissions</a>
+            {% endif %}
+            {% if perms.programs.add_program %}
+              <a class="btn btn-primary" href="/programs/new/">+ Add Program</a>
+            {% endif %}
+          </div>
         </div>
       </div>
       {% if future_programs or current_programs or past_programs %}

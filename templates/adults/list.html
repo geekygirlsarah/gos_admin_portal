@@ -1,9 +1,16 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load permission_tags %}
 {% block title %}Adults{% endblock %}
 {% block content %}
   <div class="row mb-3">
     <div class="col"><h1 class="h3">Adults</h1></div>
+    <div class="col-auto">
+      {% can_write user 'adult_info' as can_add_adult %}
+      {% if can_add_adult %}
+        <a class="btn btn-primary" href="{% url 'parent_create' %}?next={{ request.path }}">Add Adult</a>
+      {% endif %}
+    </div>
   </div>
   <div class="row mb-3">
     <p class="text-muted">This is a combined list of all adults in the system, including Parents/Guardians, Mentors, and Alumni.</p>
@@ -49,7 +56,8 @@
                 {% endfor %}
               </td>
               <td class="text-end">
-                {% if perms.programs.change_adult %}
+                {% can_write user 'adult_info' a as can_edit_adult %}
+                {% if can_edit_adult %}
                   <a class="btn btn-sm btn-outline-secondary" href="{% url 'adult_edit' a.id %}?next={% url 'adult_list' %}">Edit</a>
                 {% endif %}
               </td>

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Program, ProgramFeature, Enrollment, Student, School, Adult, Fee, Payment, SlidingScale, StudentApplication
+from .models import Program, ProgramFeature, Enrollment, Student, School, Adult, Fee, Payment, SlidingScale, StudentApplication, RolePermission
 from .forms import StudentForm
 
 
@@ -7,7 +7,13 @@ from .forms import StudentForm
 class ProgramFeatureAdmin(admin.ModelAdmin):
     list_display = ('name', 'key', 'display_order')
     search_fields = ('name', 'key')
-    ordering = ('display_order', 'name')
+
+
+@admin.register(RolePermission)
+class RolePermissionAdmin(admin.ModelAdmin):
+    list_display = ('role', 'section', 'can_read', 'can_write')
+    list_filter = ('role', 'section')
+    list_editable = ('can_read', 'can_write')
 
 
 @admin.register(Program)

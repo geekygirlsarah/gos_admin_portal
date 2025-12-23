@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load permission_tags %}
 {% block title %}Attendance — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
 
 {% block content %}
@@ -12,6 +13,7 @@
 
   <div class="row g-4">
     <div class="col-md-4">
+      {% if can_write_attendance %}
       <div class="card">
         <div class="card-header">Add Session</div>
         <div class="card-body">
@@ -39,6 +41,7 @@
           </form>
         </div>
       </div>
+      {% endif %}
 
       <div class="card mt-4">
         <div class="card-header">This week</div>
@@ -84,6 +87,7 @@
                 <td>{% if s.check_out %}{{ s.check_out|date:'Y-m-d H:i' }}{% else %}<span class="badge bg-warning text-dark">Open</span>{% endif %}</td>
                 <td>{{ s.duration_hm }}</td>
                 <td class="text-nowrap">
+                  {% if can_write_attendance %}
                   <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">Edit</button>
                   <form method="post" class="d-inline" onsubmit="return confirm('Delete this session?');">
                     {% csrf_token %}
@@ -91,6 +95,7 @@
                     <input type="hidden" name="session_id" value="{{ s.id }}" />
                     <button class="btn btn-sm btn-outline-danger">Delete</button>
                   </form>
+                  {% endif %}
                 </td>
               </tr>
               <tr class="collapse" id="edit{{ s.id }}">

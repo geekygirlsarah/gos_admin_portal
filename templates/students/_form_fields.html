@@ -1,4 +1,5 @@
 {% load form_tags %}
+{% load permission_tags %}
 {# Shared grouped fields for StudentForm using Bootstrap grid #}
 
 {# Identity #}
@@ -103,7 +104,23 @@
     <div class="row g-3">
       <div class="col-md-6">{% render_field form.race_ethnicities %}</div>
       <div class="col-md-3">{% render_field form.seen_once %}</div>
-      <div class="col-md-3">{% render_field form.active %}</div>
+      {% user_role user as role %}
+      {% if role == 'LeadMentor' %}
+        <div class="col-md-3">{% render_field form.active %}</div>
+      {% else %}
+        <div class="col-md-3">
+          <label class="form-label">Active</label>
+          <p class="form-control-plaintext">
+            <span class="badge {% if form.instance.active %}bg-success{% else %}bg-secondary{% endif %}">
+              {{ form.instance.active|yesno:"Yes,No" }}
+            </span>
+          </p>
+          {% if form.active.errors %}
+            <div class="invalid-feedback d-block">{{ form.active.errors|join:", " }}</div>
+          {% endif %}
+          <input type="hidden" name="active" value="{% if form.instance.active %}on{% endif %}">
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>

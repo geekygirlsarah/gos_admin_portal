@@ -1,6 +1,28 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.shortcuts import get_object_or_404, redirect
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin, UserPassesTestMixin
+from django.shortcuts import get_object_or_404, redirect, render
+from .permission_views import can_user_read, can_user_write
+
+class DynamicPermissionMixin(UserPassesTestMixin):
+    section = None
+    permission_type = 'read' # 'read' or 'write'
+
+    def test_func(self):
+        if not self.section:
+            return True
+        if self.permission_type == 'write':
+            return can_user_write(self.request.user, self.section, getattr(self, 'object', None))
+        return can_user_read(self.request.user, self.section)
+
+    def handle_no_permission(self):
+        messages.error(self.request, "You do not have permission to access this section.")
+        return redirect('home')
+
+class DynamicReadPermissionMixin(DynamicPermissionMixin):
+    permission_type = 'read'
+
+class DynamicWritePermissionMixin(DynamicPermissionMixin):
+    permission_type = 'write'
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 
@@ -125,6 +147,8 @@ class ProgramListView(ListView):
         from django.utils import timezone
         from operator import attrgetter
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         today = timezone.localdate()
         programs = list(ctx['programs'])
 
@@ -156,13 +180,23 @@ class ProgramListView(ListView):
         return ctx
 
 
-class StudentListView(LoginRequiredMixin, ListView):
+class StudentListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     model = Student
     template_name = 'students/list.html'
     context_object_name = 'students'
+    section = 'student_info'
 
     def get_queryset(self):
         qs = super().get_queryset()
+        from .permission_views import get_user_role
+        role = get_user_role(self.request.user)
+        if role == 'Parent':
+            try:
+                adult = self.request.user.adult_profile
+                qs = adult.students.all()
+            except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
             sort_first=Coalesce('first_name', 'legal_first_name'),
@@ -291,6 +325,8 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         grouped = {}
         for s in ctx['students']:
             label = s.school.name if s.school_id else 'No School'
@@ -1439,24 +1475,41 @@ class ProgramDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         program = self.object
+        from .permission_views import can_user_write, can_user_read
+        role = ctx['role']
+
         # Prepare annotated queryset for consistent sorting
         from django.db.models.functions import Lower, Coalesce
         base_qs = program.students.select_related('user').all().annotate(
             sort_first=Lower(Coalesce('first_name', 'legal_first_name')),
             sort_last=Lower('last_name'),
         )
+
+        # Parent restriction
+        if role == 'Parent':
+            try:
+                adult = self.request.user.adult_profile
+                base_qs = base_qs.filter(adults=adult)
+            except (Adult.DoesNotExist, AttributeError):
+                base_qs = Student.objects.none()
+
         # Split into active and inactive sections
         ctx['active_students'] = base_qs.filter(active=True).order_by('sort_first', 'sort_last')
         ctx['inactive_students'] = base_qs.filter(active=False).order_by('sort_first', 'sort_last')
         # Backwards compatibility (old templates may rely on a single list)
         ctx['enrolled_students'] = list(ctx['active_students']) + list(ctx['inactive_students'])
-        can_manage = self.request.user.has_perm('programs.change_student') or self.request.user.has_perm('programs.add_student')
-        ctx['can_manage_students'] = can_manage
-        ctx['can_add_payment'] = self.request.user.has_perm('programs.add_payment')
-        ctx['can_add_sliding_scale'] = self.request.user.has_perm('programs.add_slidingscale')
-        ctx['can_manage_fees'] = self.request.user.has_perm('programs.change_fee')
-        if can_manage:
+        
+        ctx['can_manage_students'] = can_user_write(self.request.user, 'student_info')
+        ctx['can_add_payment'] = can_user_write(self.request.user, 'payments')
+        ctx['can_add_sliding_scale'] = can_user_write(self.request.user, 'payments')
+        ctx['can_manage_fees'] = can_user_write(self.request.user, 'fees')
+        ctx['can_view_payments'] = can_user_read(self.request.user, 'payments')
+        ctx['can_view_attendance'] = can_user_read(self.request.user, 'attendance')
+
+        if ctx['can_manage_students']:
             ctx['add_existing_form'] = AddExistingStudentToProgramForm(program=program)
             ctx['quick_create_form'] = QuickCreateStudentForm()
         return ctx
@@ -1481,14 +1534,17 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
 
 
 # --- Student edit ---
-class StudentUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class StudentUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, UpdateView):
     model = Student
     form_class = StudentForm
     template_name = 'students/form.html'
     permission_required = 'programs.change_student'
+    section = 'student_info'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         ctx['RELATIONSHIP_CHOICES'] = RELATIONSHIP_CHOICES
         student = self.object
         # Union of enabled feature keys across all enrolled programs
@@ -1520,14 +1576,17 @@ class StudentUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequired
         return next_url or reverse('student_edit', args=[self.object.pk])
 
 
-class StudentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class StudentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, CreateView):
     model = Student
     form_class = StudentForm
     template_name = 'students/form.html'
     permission_required = 'programs.add_student'
+    section = 'student_info'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         ctx['RELATIONSHIP_CHOICES'] = RELATIONSHIP_CHOICES
         return ctx
 
@@ -1560,6 +1619,8 @@ class StudentDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         student = self.object
         # Union of enabled feature keys across all enrolled programs
         keys = set(
@@ -1654,11 +1715,12 @@ class ParentUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredM
 
 
 # --- Payment create ---
-class ProgramPaymentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ProgramPaymentCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, CreateView):
     model = Payment
     form_class = PaymentForm
     template_name = 'programs/payment_form.html'
     permission_required = 'programs.add_payment'
+    section = 'payments'
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs['pk'])
@@ -1826,10 +1888,24 @@ class ProgramSlidingScaleUpdateView(LogFormSaveMixin, LoginRequiredMixin, Permis
         return redirect('program_detail', pk=self.program.pk)
 
 
-class ProgramStudentBalanceView(LoginRequiredMixin, View):
+class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    section = 'payments'
+
     def get(self, request, pk, student_id):
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
+
+        # Object level check for Parents
+        from .permission_views import get_user_role
+        if get_user_role(request.user) == 'Parent':
+            try:
+                adult = request.user.adult_profile
+                if student not in adult.students.all():
+                    messages.error(request, "You do not have permission to view this balance sheet.")
+                    return redirect('home')
+            except Exception:
+                messages.error(request, "You do not have permission to view this balance sheet.")
+                return redirect('home')
         # Ensure enrollment
         if not Enrollment.objects.filter(student=student, program=program).exists():
             messages.error(request, f"{student} is not enrolled in {program}.")
@@ -1901,10 +1977,24 @@ class ProgramStudentBalanceView(LoginRequiredMixin, View):
         })
 
 
-class ProgramStudentBalancePrintView(LoginRequiredMixin, View):
+class ProgramStudentBalancePrintView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    section = 'payments'
+
     def get(self, request, pk, student_id):
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
+
+        # Object level check for Parents
+        from .permission_views import get_user_role
+        if get_user_role(request.user) == 'Parent':
+            try:
+                adult = request.user.adult_profile
+                if student not in adult.students.all():
+                    messages.error(request, "You do not have permission to view this balance sheet.")
+                    return redirect('home')
+            except Exception:
+                messages.error(request, "You do not have permission to view this balance sheet.")
+                return redirect('home')
         # Ensure enrollment
         if not Enrollment.objects.filter(student=student, program=program).exists():
             messages.error(request, f"{student} is not enrolled in {program}.")
@@ -2005,11 +2095,12 @@ class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, 
         return render(request, self.template_name, {'program': self.program, 'fee': self.fee, 'form': form})
 
 
-class ProgramFeeCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ProgramFeeCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, CreateView):
     permission_required = 'programs.add_fee'
     model = Fee
     form_class = FeeForm
     template_name = 'programs/fee_form.html'
+    section = 'fees'
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs['pk'])
@@ -2022,6 +2113,8 @@ class ProgramFeeCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequi
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         ctx['program'] = self.program
         ctx['is_create'] = True
         return ctx
@@ -2034,12 +2127,13 @@ class ProgramFeeCreateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequi
         return reverse('program_fee_assignments', kwargs={'pk': self.program.pk, 'fee_id': self.object.pk})
 
 
-class ProgramFeeUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ProgramFeeUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, UpdateView):
     permission_required = 'programs.change_fee'
     model = Fee
     form_class = FeeForm
     template_name = 'programs/fee_form.html'
     pk_url_kwarg = 'fee_id'
+    section = 'fees'
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs['pk'])
@@ -2510,25 +2604,36 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
 
 
 
-class AdultsListView(LoginRequiredMixin, ListView):
+class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     model = Adult
     template_name = 'adults/list.html'
     context_object_name = 'adults'
+    section = 'adult_info'
 
     def get_queryset(self):
-        # Show all adults (parents/mentors/alumni flags may be set)
+        from .permission_views import get_user_role
+        role = get_user_role(self.request.user)
+        if role == 'Parent':
+            try:
+                adult = self.request.user.adult_profile
+                return Adult.objects.filter(pk=adult.pk).prefetch_related('students')
+            except (Adult.DoesNotExist, AttributeError):
+                return Adult.objects.none()
         return Adult.objects.all().prefetch_related('students')
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+        ctx['role'] = get_user_role(self.request.user)
         return ctx
 
 
-class AdultUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class AdultUpdateView(LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, DynamicWritePermissionMixin, UpdateView):
     model = Adult
     form_class = AdultForm
     template_name = 'adults/form.html'
     permission_required = 'programs.change_adult'
+    section = 'adult_info'
 
     def get_success_url(self):
         nxt = self.request.GET.get('next')

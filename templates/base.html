@@ -1,4 +1,5 @@
 {% load static %}
+{% load permission_tags %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -28,6 +29,9 @@
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item"><a class="nav-link active" aria-current="page" href="/programs/">Programs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'program_messaging' %}">Messaging</a></li>
+                    {% can_read user 'student_info' as can_read_students %}
+                    {% if can_read_students %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="studentsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Students</a>
                         <ul class="dropdown-menu" aria-labelledby="studentsDropdown">
@@ -37,7 +41,10 @@
                             <li><a class="dropdown-item" href="{% url 'students_by_school' %}">By School</a></li>
                         </ul>
                     </li>
+                    {% endif %}
                     <li class="nav-item"><a class="nav-link" href="/programs/schools/">Schools</a></li>
+                    {% can_read user 'adult_info' as can_read_adults %}
+                    {% if can_read_adults %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="adultsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Adults</a>
                         <ul class="dropdown-menu" aria-labelledby="adultsDropdown">
@@ -47,8 +54,12 @@
                             <li><a class="dropdown-item" href="{% url 'alumni_list' %}">Alumni</a></li>
                         </ul>
                     </li>
+                    {% endif %}
+                    {% user_role user as role %}
+                    {% if role == 'LeadMentor' %}
                     <li class="nav-item"><a class="nav-link" href="/programs/imports/">Imports</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'program_messaging' %}">Messaging</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'role_permission_settings' %}">Permissions</a></li>
+                    {% endif %}
                     {% if perms.api.view_apiclientkey %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'api_key_list' %}">API Keys</a></li>
                     {% endif %}

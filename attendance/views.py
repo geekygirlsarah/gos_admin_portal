@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.views import View
 
 from programs.models import Student, Program, Enrollment
+from programs.permission_views import can_user_read, can_user_write
 from .models import AttendanceSession, AttendanceEvent, RFIDCard
 
 
@@ -21,6 +22,23 @@ def _week_bounds(now=None):
 @require_http_methods(["GET", "POST"]) 
 def student_attendance_view(request, pk):
     student = get_object_or_404(Student, pk=pk)
+
+    if not can_user_read(request.user, 'attendance'):
+        messages.error(request, "You do not have permission to view attendance.")
+        return redirect('home')
+
+    # Object level check for Parents
+    from programs.permission_views import get_user_role
+    if get_user_role(request.user) == 'Parent':
+        try:
+            adult = request.user.adult_profile
+            if student not in adult.students.all():
+                messages.error(request, "You do not have permission to view this student's attendance.")
+                return redirect('home')
+        except Exception:
+            messages.error(request, "You do not have permission to view this student's attendance.")
+            return redirect('home')
+
     # Optional program filter
     program_id = request.GET.get('program_id') or request.POST.get('program_id')
     program = Program.objects.filter(id=program_id).first() if program_id else None
@@ -28,7 +46,7 @@ def student_attendance_view(request, pk):
     # Handle create/update/delete
     if request.method == 'POST':
         action = request.POST.get('action')
-        if not request.user.has_perm('programs.change_student'):
+        if not can_user_write(request.user, 'attendance'):
             return render(request, 'students/attendance.html', {
                 'student': student,
                 'error': 'You do not have permission to modify attendance.',
@@ -134,6 +152,10 @@ def student_attendance_view(request, pk):
         overall_avg_hours_per_week = overall_total_hours / weeks_elapsed if weeks_elapsed > 0 else overall_total_hours
         overall_start_display = overall_start_date
 
+    # Pass permissions to template
+    from programs.permission_views import get_user_role
+    role = get_user_role(request.user)
+
     return render(request, 'students/attendance.html', {
         'student': student,
         'sessions': sessions[:200],
@@ -145,6 +167,8 @@ def student_attendance_view(request, pk):
         'overall_start_date': overall_start_display,
         'overall_total_hours': round(overall_total_hours, 2),
         'overall_avg_hours_per_week': round(overall_avg_hours_per_week, 2),
+        'role': role,
+        'can_write_attendance': can_user_write(request.user, 'attendance'),
     })
 
 class AttendanceImportView(View):

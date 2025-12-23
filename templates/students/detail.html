@@ -1,15 +1,20 @@
 {% extends 'base.html' %}
 {% load form_tags %}
+{% load permission_tags %}
 {% block title %}Student: {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
+  {% can_write user 'student_info' student as can_edit_student %}
   <div class="row mb-3">
     <div class="col">
       <a class="link-secondary" href="{% firstof request.GET.next '/' %}">← Back</a>
     </div>
     <div class="col-auto d-flex gap-2">
+      {% can_read user 'attendance' as can_view_attendance %}
+      {% if can_view_attendance %}
       <a class="btn btn-outline-secondary" href="{% url 'student_attendance' student.pk %}">Attendance</a>
-      {% if perms.programs.change_student %}
+      {% endif %}
+      {% if can_edit_student %}
         <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={{ request.path }}">Edit</a>
       {% endif %}
     </div>
@@ -36,7 +41,16 @@
                 <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ student.first_name|default:'—' }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ student.last_name }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ student.pronouns|default:'—' }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Date of birth</div><div>{{ student.date_of_birth|date:'M j, Y'|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Date of birth</div>
+                  <div>
+                    {% user_role user as role %}
+                    {% if can_edit_student or role == 'LeadMentor' %}
+                      {{ student.date_of_birth|date:'M j, Y'|default:'—' }}
+                    {% else %}
+                      <span class="text-muted small">Restricted</span>
+                    {% endif %}
+                  </div>
+                </div>
                 <div class="col-md-4"><div class="fw-semibold">Active</div><div><span class="badge {% if student.active %}bg-success{% else %}bg-secondary{% endif %}">{{ student.active|yesno:"Yes,No" }}</span></div></div>
               </div>
             </div>

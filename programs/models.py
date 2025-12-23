@@ -45,6 +45,37 @@ MENTOR_ROLE_CHOICES = [
 ]
 
 
+class RolePermission(models.Model):
+    """
+    Dynamic permission settings for Mentors and Parents.
+    Lead Mentors can customize read/write access for each role to each section.
+    """
+    SECTION_CHOICES = [
+        ('student_info', 'Student Info'),
+        ('adult_info', 'Adult Info'),
+        ('attendance', 'Attendance'),
+        ('payments', 'Payments'),
+        ('fees', 'Fees'),
+    ]
+    ROLE_CHOICES = [
+        ('Mentor', 'Mentor'),
+        ('Parent', 'Parent'),
+    ]
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    section = models.CharField(max_length=50, choices=SECTION_CHOICES)
+    can_read = models.BooleanField(default=True)
+    can_write = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('role', 'section')
+        verbose_name = 'Role Permission'
+        verbose_name_plural = 'Role Permissions'
+
+    def __str__(self):
+        return f"{self.role} - {self.get_section_display()} (R:{self.can_read}, W:{self.can_write})"
+
+
 class ProgramFeature(models.Model):
     """Toggleable capability that can be enabled per Program.
 
