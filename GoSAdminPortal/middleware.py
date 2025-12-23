@@ -1,6 +1,10 @@
+import logging
+
 from django.conf import settings
 from django.shortcuts import redirect
-from django.urls import resolve
+from django.urls import Resolver404, resolve
+
+logger = logging.getLogger(__name__)
 
 EXEMPT_URL_NAMES = {
     "account_login",
@@ -43,7 +47,9 @@ class LoginRequiredMiddleware:
             match = resolve(path)
             if match.view_name in EXEMPT_URL_NAMES:
                 return self.get_response(request)
-        except Exception:
+        except Resolver404:
             pass
+        except Exception:
+            logger.debug("Unexpected error resolving path %s", path, exc_info=True)
 
         return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")

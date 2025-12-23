@@ -1,5 +1,6 @@
 from django import template
 from django.forms import widgets
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 register = template.Library()
@@ -74,18 +75,28 @@ def render_field(field, **kwargs):
 
         # Help text and errors
         help_html = (
-            f'<div class="form-text">{field.help_text}</div>' if field.help_text else ""
+            format_html('<div class="form-text">{}</div>', field.help_text)
+            if field.help_text
+            else ""
         )
         errors_html = ""
         if field.errors:
-            error_items = "".join(
-                f'<div class="invalid-feedback d-block">{e}</div>' for e in field.errors
+            error_items = format_html(
+                "".join(
+                    format_html('<div class="invalid-feedback d-block">{}</div>', e)
+                    for e in field.errors
+                )
             )
             errors_html = error_items
-        return mark_safe(f'<div class="mb-3">{content}{help_html}{errors_html}</div>')
+        return format_html(
+            '<div class="mb-3">{}{}{}</div>',
+            mark_safe(content),  # nosec B308 B703
+            help_html,
+            errors_html,
+        )
     except Exception:
         # Fallback: default rendering
-        return mark_safe(f'<div class="mb-3">{field}</div>')
+        return format_html('<div class="mb-3">{}</div>', field)
 
 
 @register.simple_tag

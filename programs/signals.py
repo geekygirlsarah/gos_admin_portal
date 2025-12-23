@@ -1,8 +1,12 @@
+import logging
+
 from django.apps import apps
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
+
+logger = logging.getLogger(__name__)
 
 ROLE_GROUPS = (
     "LeadMentor",
@@ -100,7 +104,7 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
         assign_default_permissions()
     except Exception:
         # Avoid breaking migrate due to permissions wiring
-        pass
+        pass  # nosec B110
 
 
 @receiver(post_save, sender=lambda: apps.get_model("programs", "Adult"))
@@ -114,7 +118,7 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
                 group = ensure_group("Parent")
                 instance.user.groups.add(group)
     except Exception:
-        pass
+        logger.debug("Failed to add user to Adult groups", exc_info=True)
 
 
 @receiver(post_save, sender=lambda: apps.get_model("programs", "Student"))
@@ -124,4 +128,4 @@ def ensure_user_in_student_group(sender, instance, created, **kwargs):
             group = ensure_group("Student")
             instance.user.groups.add(group)
     except Exception:
-        pass
+        logger.debug("Failed to add user to Student group", exc_info=True)

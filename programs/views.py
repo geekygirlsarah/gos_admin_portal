@@ -748,8 +748,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
                     try:
                         return datetime.strptime(v, fmt).date()
-                    except Exception:
-                        pass
+                    except ValueError:
+                        continue
                 return None
 
             def get_or_create_parent(first, last, email):
@@ -912,7 +912,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if opts.exists():
                         obj.race_ethnicities.set(list(opts))
                 except Exception:
-                    pass
+                    logger.debug("Race/Ethnicity matching failed during import", exc_info=True)
 
                 # Parent linkage (primary and secondary)
                 prim_first = val(
@@ -1157,8 +1157,8 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
                     try:
                         return datetime.strptime(s, fmt).date()
-                    except Exception:
-                        pass
+                    except ValueError:
+                        continue
                 return None
 
             def normalize_rel(s):

@@ -73,7 +73,7 @@ def reset_adult_pk_sequence(apps, schema_editor):
                     cursor.execute(sql)
     except Exception:
         # If backend doesn't support sequences or any error occurs, skip silently.
-        pass
+        pass  # nosec B110
 
 
 class Migration(migrations.Migration):

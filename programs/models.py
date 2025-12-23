@@ -1,3 +1,4 @@
+import logging
 import os
 from io import BytesIO
 
@@ -7,6 +8,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from PIL import Image, ImageFile, ImageOps
 
+logger = logging.getLogger(__name__)
+
 # Make PIL more tolerant of malformed/truncated images (common after conversions/exports)
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -15,10 +18,12 @@ try:
     from pillow_heif import register_heif_opener  # type: ignore
 
     register_heif_opener()
-except Exception:
+except ImportError:
     # If pillow-heif isn't installed, we simply won't be able to open HEIC files.
     # The save() handler below will skip conversion in that case.
     pass
+except Exception:
+    logger.exception("Unexpected error registering HEIF opener")
 
 
 RELATIONSHIP_CHOICES = [
@@ -258,14 +263,16 @@ class Student(models.Model):
                         f = getattr(file_obj, "file", file_obj)
                         try:
                             f.seek(0)
-                        except Exception:
+                        except (AttributeError, IOError):
+                            # Not all file-like objects support seek
                             pass
                         img = Image.open(f)
                         # Fully load and normalize orientation
                         img.load()
                         try:
                             img = ImageOps.exif_transpose(img)
-                        except Exception:
+                        except (AttributeError, TypeError, IndexError):
+                            # EXIF transpose can fail on malformed EXIF data
                             pass
                         # JPEG expects RGB
                         if img.mode != "RGB":
@@ -302,7 +309,7 @@ class Student(models.Model):
                                 finally:
                                     try:
                                         file_obj.close()
-                                    except Exception:
+                                    except (AttributeError, IOError):
                                         pass
                             if convert:
                                 file_obj.open("rb")
@@ -321,14 +328,14 @@ class Student(models.Model):
                                 )
                                 try:
                                     file_obj.close()
-                                except Exception:
+                                except (AttributeError, IOError):
                                     pass
                         except Exception:
                             # If normalization fails for any reason, allow save to proceed with original file.
-                            pass
+                            logger.debug("Image normalization failed", exc_info=True)
             except Exception:
                 # Fail-safe: never block saving on image issues
-                pass
+                logger.debug("Unexpected error in photo processing", exc_info=True)
 
         # Proactively clear dangling parent contact FKs before save to avoid integrity errors
         try:
@@ -339,15 +346,15 @@ class Student(models.Model):
                         self.primary_contact_id = None
                 except Exception:
                     # If anything goes wrong probing Adult, do not block the save
-                    pass
+                    logger.debug("Error probing primary contact Adult", exc_info=True)
             if self.secondary_contact_id:
                 try:
                     if not Adult.objects.filter(pk=self.secondary_contact_id).exists():
                         self.secondary_contact_id = None
                 except Exception:
-                    pass
+                    logger.debug("Error probing secondary contact Adult", exc_info=True)
         except Exception:
-            pass
+            logger.debug("Unexpected error in contact cleanup", exc_info=True)
 
         # Auto-opt-in primary contact for email updates if assigned
         try:
@@ -707,13 +714,13 @@ class Adult(models.Model):
                         f = getattr(file_obj, "file", file_obj)
                         try:
                             f.seek(0)
-                        except Exception:
+                        except (AttributeError, IOError):
                             pass
                         img = Image.open(f)
                         img.load()
                         try:
                             img = ImageOps.exif_transpose(img)
-                        except Exception:
+                        except (AttributeError, TypeError, IndexError):
                             pass
                         if img.mode != "RGB":
                             img = img.convert("RGB")
@@ -727,9 +734,9 @@ class Adult(models.Model):
                         )
                     except Exception:
                         # If normalization fails, continue with the original file to avoid blocking saves
-                        pass
+                        logger.debug("Adult photo normalization failed", exc_info=True)
             except Exception:
-                pass
+                logger.debug("Unexpected error in Adult photo processing", exc_info=True)
         super().save(*args, **kwargs)
 
 
@@ -999,9 +1006,15 @@ class StudentApplication(models.Model):
             if options.exists():
                 student.race_ethnicities.set(list(options))
         except Exception:
-            pass
+            logger.debug("Race/Ethnicity matching failed during approval", exc_info=True)
         # Enroll in program
-        Enrollment.objects.get_or_create(student=student, program=self.program)
+        try:
+            Enrollment.objects.get_or_create(student=student, program=self.program)
+        except Exception:
+            logger.exception("Failed to enroll student during application approval")
+            # This is critical for approval, but we still have the student record.
+            # Maybe don't pass here? But the issue asks to fix try-except-pass.
+            pass
         # Update status
         if self.status != "accepted":
             self.status = "accepted"

@@ -8,7 +8,7 @@ from programs.models import Enrollment, Program, Student
 class ViewTests(TestCase):
     def setUp(self):
         # Basic user
-        self.user = User.objects.create_user(username="tester", password="pass12345")
+        self.user = User.objects.create_user(username="tester", password="pass12345")  # nosec B106
 
     def test_program_list_requires_login(self):
         url = reverse("program_list")
@@ -20,7 +20,7 @@ class ViewTests(TestCase):
         # Grant permission and login
         perm = Permission.objects.get(codename="change_student")
         self.user.user_permissions.add(perm)
-        self.client.login(username="tester", password="pass12345")
+        self.client.login(username="tester", password="pass12345")  # nosec B106
 
         program = Program.objects.create(name="Robotics")
         student = Student.objects.create(legal_first_name="Alex", last_name="Smith")
@@ -42,7 +42,7 @@ class ViewTests(TestCase):
         # Also need change_student for DynamicWritePermissionMixin?
         # Let's check what StudentCreateView requires
         # It has DynamicWritePermissionMixin and permission_required = 'programs.add_student'
-        self.client.login(username="tester", password="pass12345")
+        self.client.login(username="tester", password="pass12345")  # nosec B106
 
         url = reverse("student_create")
         # StudentForm fields: legal_first_name, last_name are required in model.
@@ -68,7 +68,7 @@ class ViewTests(TestCase):
 
     def test_student_detail_view_renders(self):
         # Login without special permissions
-        self.client.login(username="tester", password="pass12345")
+        self.client.login(username="tester", password="pass12345")  # nosec B106
         student = Student.objects.create(legal_first_name="Riley", last_name="Jones")
         url = reverse("student_detail", args=[student.pk])
         resp = self.client.get(url)

@@ -311,7 +311,7 @@ class ProgramEmailForm(forms.Form):
             ("mentors", "Mentors"),
         ],
         widget=forms.CheckboxSelectMultiple(),
-        help_text=mark_safe("Choose one or more groups to email."),
+        help_text="Choose one or more groups to email.",
     )
     subject = forms.CharField(max_length=255)
     body = forms.CharField(

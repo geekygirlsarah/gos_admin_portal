@@ -122,7 +122,7 @@ def migrate_mentors_to_adults(apps, schema_editor):
             ):
                 a.photo = m.photo
         except Exception:
-            pass
+            pass  # nosec B110
 
         a.save()
         id_map[m.id] = a.id
