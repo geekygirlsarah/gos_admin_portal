@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load tz %}
+{% load permission_tags %}
 {% block title %}Balance Sheet — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }} —
     {{ program.name }}{% endblock %}
 {% block extra_head %}

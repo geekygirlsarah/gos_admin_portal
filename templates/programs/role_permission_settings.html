@@ -18,16 +18,25 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Section</th>
+                                <th class="text-center">Lead Mentor R/W Access</th>
                                 <th class="text-center">Mentor Read Access</th>
                                 <th class="text-center">Mentor Write Access</th>
                                 <th class="text-center">Parent Read Access</th>
                                 <th class="text-center">Parent Write Access</th>
+                                <th class="text-center">Student Read Access</th>
+                                <th class="text-center">Student Write Access</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in grouped_permissions %}
                             <tr>
                                 <td><strong>{{ item.name }}</strong></td>
+                                <!-- Lead Mentor (can see all) -->
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input" type="checkbox" checked disabled>
+                                    </div>
+                                </td>
                                 <!-- Mentor -->
                                 <td class="text-center">
                                     <div class="form-check form-switch d-inline-block">
@@ -50,6 +59,17 @@
                                         <input class="form-check-input" type="checkbox" name="write_{{ item.parent.id }}" id="write_{{ item.parent.id }}" {% if item.parent.can_write %}checked{% endif %}>
                                     </div>
                                 </td>
+                                <!-- Student -->
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input" type="checkbox" name="read_{{ item.student.id }}" id="read_{{ item.student.id }}" {% if item.student.can_read %}checked{% endif %}>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input" type="checkbox" name="write_{{ item.student.id }}" id="write_{{ item.student.id }}" {% if item.student.can_write %}checked{% endif %}>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -68,7 +88,7 @@
             <li><strong>Lead Mentors</strong> always have full access (superuser or LeadMentor group).</li>
             <li><strong>Read Access:</strong> Allows viewing the section and its details.</li>
             <li><strong>Write Access:</strong> Allows creating, editing, and deleting items in the section.</li>
-            <li>Note: Parents are always restricted to only seeing/editing their own profile and their own students' data, even if "Write Access" is enabled globally for them.</li>
+            <li>Note: Parents and Students are always restricted to only seeing/editing their own data, even if "Write Access" is enabled globally for them.</li>
         </ul>
     </div>
 </div>

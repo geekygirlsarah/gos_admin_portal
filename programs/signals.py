@@ -80,12 +80,24 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
 
 
 @receiver(post_save, sender=lambda: apps.get_model('programs', 'Adult'))
-def ensure_user_in_mentor_group(sender, instance, created, **kwargs):
+def ensure_user_in_adult_group(sender, instance, created, **kwargs):
     try:
-        # Only add to Mentor group if this Adult is marked as mentor
-        if instance.is_mentor and instance.user_id:
-            group = ensure_group('Mentor')
+        if instance.user_id:
+            if instance.is_mentor:
+                group = ensure_group('Mentor')
+                instance.user.groups.add(group)
+            if instance.is_parent:
+                group = ensure_group('Parent')
+                instance.user.groups.add(group)
+    except Exception:
+        pass
+
+
+@receiver(post_save, sender=lambda: apps.get_model('programs', 'Student'))
+def ensure_user_in_student_group(sender, instance, created, **kwargs):
+    try:
+        if instance.user_id:
+            group = ensure_group('Student')
             instance.user.groups.add(group)
     except Exception:
-        # Avoid raising in signal handlers
         pass

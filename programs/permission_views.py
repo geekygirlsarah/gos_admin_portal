@@ -7,7 +7,7 @@ from .models import RolePermission, Adult, Student
 def get_user_role(user):
     """
     Determines the role of a user for permission purposes.
-    Returns 'LeadMentor', 'Mentor', 'Parent', or None.
+    Returns 'LeadMentor', 'Mentor', 'Parent', 'Student', or None.
     """
     if user.is_superuser or user.groups.filter(name='LeadMentor').exists():
         return 'LeadMentor'
@@ -22,11 +22,20 @@ def get_user_role(user):
     except (Adult.DoesNotExist, AttributeError):
         pass
 
-    # Check groups if adult profile link is missing or doesn't specify
+    # Check if the user is linked to a Student profile
+    try:
+        student = user.student_profile
+        return 'Student'
+    except (Student.DoesNotExist, AttributeError):
+        pass
+
+    # Check groups if profile link is missing or doesn't specify
     if user.groups.filter(name='Mentor').exists():
         return 'Mentor'
     if user.groups.filter(name='Parent').exists():
         return 'Parent'
+    if user.groups.filter(name='Student').exists():
+        return 'Student'
     
     return None
 
@@ -54,7 +63,7 @@ def can_user_write(user, section, obj=None):
     if not can_write_section:
         return False
 
-    # Object-level restriction for Parents
+    # Object-level restriction for Parents and Students
     if role == 'Parent' and obj:
         try:
             adult = user.adult_profile
@@ -63,6 +72,13 @@ def can_user_write(user, section, obj=None):
             if isinstance(obj, Adult):
                 return obj == adult
         except (Adult.DoesNotExist, AttributeError):
+            return False
+    elif role == 'Student' and obj:
+        try:
+            student = user.student_profile
+            if isinstance(obj, Student):
+                return obj == student
+        except (Student.DoesNotExist, AttributeError):
             return False
             
     return can_write_section
@@ -92,6 +108,7 @@ class RolePermissionSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, Vi
                 'name': section_name,
                 'mentor': permissions.filter(section=section_code, role='Mentor').first(),
                 'parent': permissions.filter(section=section_code, role='Parent').first(),
+                'student': permissions.filter(section=section_code, role='Student').first(),
             })
         
         context = {
