@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
-from programs.models import Program, Student, ProgramFeature
-from .models import KioskDevice, RFIDCard, AttendanceEvent, AttendanceSession
+
+from programs.models import Program, ProgramFeature, Student
+
+from .models import AttendanceEvent, AttendanceSession, KioskDevice, RFIDCard
 from .services import record_tap, resolve_student_by_uid
-from datetime import timedelta
 
 
 class AttendanceServiceTests(TestCase):

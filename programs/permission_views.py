@@ -1,8 +1,9 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.views import View
 from django.contrib import messages
-from .models import RolePermission, Adult, Student
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.shortcuts import redirect, render
+from django.views import View
+
+from .models import Adult, RolePermission, Student
 
 
 def get_user_role(user):

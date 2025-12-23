@@ -1,18 +1,19 @@
 from django.contrib import admin
+
+from .forms import StudentForm
 from .models import (
-    Program,
-    ProgramFeature,
-    Enrollment,
-    Student,
-    School,
     Adult,
+    Enrollment,
     Fee,
     Payment,
-    SlidingScale,
-    StudentApplication,
+    Program,
+    ProgramFeature,
     RolePermission,
+    School,
+    SlidingScale,
+    Student,
+    StudentApplication,
 )
-from .forms import StudentForm
 
 
 @admin.register(ProgramFeature)

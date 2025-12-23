@@ -5,17 +5,17 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from programs.models import (
-    Program,
-    ProgramFeature,
-    School,
-    Student,
     Adult,
     Enrollment,
     Fee,
-    Payment,
     FeeAssignment,
+    Payment,
+    Program,
+    ProgramFeature,
     RaceEthnicity,
     RolePermission,
+    School,
+    Student,
     StudentApplication,
 )
 

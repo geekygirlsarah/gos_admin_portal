@@ -1,7 +1,8 @@
 from datetime import timedelta
 from typing import Optional, Tuple
-from django.utils import timezone
+
 from django.db import transaction
+from django.utils import timezone
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
 

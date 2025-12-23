@@ -5,6 +5,7 @@ from django.contrib.auth.mixins import (
     UserPassesTestMixin,
 )
 from django.shortcuts import get_object_or_404, redirect, render
+
 from .permission_views import can_user_read, can_user_write
 
 
@@ -36,17 +37,17 @@ class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
 
 
-from django.urls import reverse
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
+import logging
+from decimal import ROUND_HALF_DOWN, Decimal
 
-from django.core.mail import EmailMultiAlternatives, get_connection
-from django.utils.html import strip_tags
 from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models.functions import Coalesce, Lower
 from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.html import strip_tags
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from premailer import transform
-import logging
-from decimal import Decimal, ROUND_HALF_DOWN
 
 logger = logging.getLogger("programs.email")
 forms_logger = logging.getLogger("programs.forms")
@@ -145,35 +146,35 @@ class LogFormSaveMixin:
         return response
 
 
-from .models import (
-    Program,
-    Student,
-    Enrollment,
-    Adult,
-    Payment,
-    SlidingScale,
-    Fee,
-    School,
-    StudentApplication,
-    RELATIONSHIP_CHOICES,
-    RaceEthnicity,
-)
 from .forms import (
-    StudentForm,
     AddExistingStudentToProgramForm,
-    QuickCreateStudentForm,
-    ParentForm,
     AdultForm,
-    PaymentForm,
-    SlidingScaleForm,
-    SchoolForm,
-    ProgramForm,
-    ProgramEmailForm,
-    ProgramEmailBalancesForm,
     FeeAssignmentEditForm,
     FeeForm,
+    ParentForm,
+    PaymentForm,
     ProgramApplySelectForm,
+    ProgramEmailBalancesForm,
+    ProgramEmailForm,
+    ProgramForm,
+    QuickCreateStudentForm,
+    SchoolForm,
+    SlidingScaleForm,
     StudentApplicationForm,
+    StudentForm,
+)
+from .models import (
+    RELATIONSHIP_CHOICES,
+    Adult,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    RaceEthnicity,
+    School,
+    SlidingScale,
+    Student,
+    StudentApplication,
 )
 
 
@@ -188,8 +189,9 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         return Program.objects.all()
 
     def get_context_data(self, **kwargs):
-        from django.utils import timezone
         from operator import attrgetter
+
+        from django.utils import timezone
 
         ctx = super().get_context_data(**kwargs)
         from .permission_views import get_user_role
@@ -444,7 +446,7 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
     def post(self, request, pk):
         from django.contrib import messages
-        from django.shortcuts import redirect, get_object_or_404
+        from django.shortcuts import get_object_or_404, redirect
 
         student = get_object_or_404(Student, pk=pk)
 
@@ -513,8 +515,8 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
-        from django.utils import timezone
         from django.shortcuts import render
+        from django.utils import timezone
 
         year = request.GET.get("year")
         try:
@@ -655,6 +657,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
 class ImportDashboardView(LoginRequiredMixin, View):
     def get(self, request):
         from django.shortcuts import render
+
         from .models import Program
 
         programs = Program.objects.all().order_by("name")
@@ -683,7 +686,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         errors = 0
         try:
             if name.endswith(".csv"):
-                import csv, io
+                import csv
+                import io
 
                 text = io.TextIOWrapper(file.file, encoding="utf-8")
                 reader = csv.DictReader(text)
@@ -704,7 +708,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return redirect("import_dashboard")
 
             # Helpers
-            from datetime import datetime, date
+            from datetime import date, datetime
 
             def raw(d, *keys):
                 for k in keys:
@@ -1011,7 +1015,8 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         errors = 0
         try:
             if name.endswith(".csv"):
-                import csv, io
+                import csv
+                import io
 
                 text = io.TextIOWrapper(file.file, encoding="utf-8")
                 reader = csv.DictReader(text)
@@ -1102,7 +1107,8 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         try:
             # Parse CSV/XLSX similar to other imports
             if name.endswith(".csv"):
-                import csv, io
+                import csv
+                import io
 
                 text = io.TextIOWrapper(file.file, encoding="utf-8")
                 reader = csv.DictReader(text)
@@ -1123,7 +1129,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return redirect("import_dashboard")
 
             # Helpers
-            from datetime import datetime, date
+            from datetime import date, datetime
 
             def raw(d, *keys):
                 for k in keys:
@@ -1401,7 +1407,8 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         errors = 0
         try:
             if name.endswith(".csv"):
-                import csv, io
+                import csv
+                import io
 
                 text = io.TextIOWrapper(file.file, encoding="utf-8")
                 reader = csv.DictReader(text)
@@ -1485,7 +1492,8 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         errors = 0
         try:
             if name.endswith(".csv"):
-                import csv, io
+                import csv
+                import io
 
                 text = io.TextIOWrapper(file.file, encoding="utf-8")
                 reader = csv.DictReader(text)
@@ -1834,12 +1842,12 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
 
         ctx["role"] = get_user_role(self.request.user)
         program = self.object
-        from .permission_views import can_user_write, can_user_read
+        from .permission_views import can_user_read, can_user_write
 
         role = ctx["role"]
 
         # Prepare annotated queryset for consistent sorting
-        from django.db.models.functions import Lower, Coalesce
+        from django.db.models.functions import Coalesce, Lower
 
         base_qs = (
             program.students.select_related("user")
@@ -2837,7 +2845,7 @@ class ApplyStudentView(View):
         return "current"
 
     def get(self, request, program_id):
-        from django.shortcuts import render, get_object_or_404, redirect
+        from django.shortcuts import get_object_or_404, redirect, render
 
         program = get_object_or_404(Program, pk=program_id)
         status = self._program_status(program)
@@ -2854,7 +2862,7 @@ class ApplyStudentView(View):
         return render(request, self.template_name, {"form": form, "program": program})
 
     def post(self, request, program_id):
-        from django.shortcuts import render, get_object_or_404, redirect
+        from django.shortcuts import get_object_or_404, redirect, render
 
         program = get_object_or_404(Program, pk=program_id)
         status = self._program_status(program)
@@ -2962,6 +2970,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 
         # Helper to compute balance and entries like ProgramStudentBalanceView
         from decimal import Decimal
+
         from .permission_views import can_user_read
 
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")

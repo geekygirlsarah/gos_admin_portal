@@ -1,15 +1,16 @@
 from django import forms
-from django.utils.safestring import mark_safe
 from django.conf import settings
-from django.db.models.functions import Lower, Coalesce
+from django.db.models.functions import Coalesce, Lower
+from django.utils.safestring import mark_safe
+
 from .models import (
-    Student,
-    Program,
     Adult,
     Fee,
     Payment,
-    SlidingScale,
+    Program,
     School,
+    SlidingScale,
+    Student,
     StudentApplication,
 )
 

@@ -10,11 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-import csp
-from csp.constants import SELF
-from pathlib import Path
-import dj_database_url
 import os
+from pathlib import Path
+
+import csp
+import dj_database_url
+from csp.constants import SELF
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

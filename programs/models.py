@@ -1,11 +1,11 @@
-from django.conf import settings
-from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.core.files.base import ContentFile
-
-from PIL import Image, ImageOps, ImageFile
-from io import BytesIO
 import os
+from io import BytesIO
+
+from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from PIL import Image, ImageFile, ImageOps
 
 # Make PIL more tolerant of malformed/truncated images (common after conversions/exports)
 ImageFile.LOAD_TRUNCATED_IMAGES = True

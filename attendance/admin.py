@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import KioskDevice, RFIDCard, AttendanceEvent, AttendanceSession
+
+from .models import AttendanceEvent, AttendanceSession, KioskDevice, RFIDCard
 
 
 @admin.register(KioskDevice)

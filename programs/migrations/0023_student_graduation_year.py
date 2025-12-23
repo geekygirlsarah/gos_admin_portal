@@ -1,5 +1,6 @@
-from django.db import migrations, models
 import datetime
+
+from django.db import migrations, models
 
 
 def grade_to_grad_year(apps, schema_editor):

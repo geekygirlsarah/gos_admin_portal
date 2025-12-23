@@ -1,24 +1,24 @@
 import json
 from datetime import datetime, timedelta
-from django.http import JsonResponse, HttpResponseBadRequest
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.dateparse import parse_datetime
-from django.utils import timezone
-from django.shortcuts import get_object_or_404
+
+# HTML management views for API keys
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db.models import Q
+from django.http import HttpResponseBadRequest, JsonResponse
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse_lazy
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.views.decorators.csrf import csrf_exempt
+from django.views.generic import CreateView, ListView, UpdateView, View
 
 from api.auth import require_api_key
 from attendance.models import AttendanceEvent, AttendanceSession
 from attendance.services import record_tap
 from programs.models import Program, Student
 
-# HTML management views for API keys
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.views.generic import ListView, CreateView, UpdateView, View
-from django.shortcuts import redirect
-from django.urls import reverse_lazy
-from .models import ApiClientKey
 from .forms import ApiClientKeyForm
+from .models import ApiClientKey
 
 
 def _hours_from_sessions(sessions, start, end):

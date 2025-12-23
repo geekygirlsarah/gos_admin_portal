@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from programs.models import Student, Adult
+from programs.models import Adult, Student
 
 
 class Command(BaseCommand):

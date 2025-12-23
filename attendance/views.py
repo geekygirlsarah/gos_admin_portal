@@ -1,14 +1,16 @@
 from datetime import timedelta
-from django.contrib.auth.decorators import login_required, permission_required
-from django.shortcuts import render, get_object_or_404, redirect
-from django.utils import timezone
-from django.views.decorators.http import require_http_methods
-from django.contrib import messages
-from django.views import View
 
-from programs.models import Student, Program, Enrollment
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, permission_required
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views import View
+from django.views.decorators.http import require_http_methods
+
+from programs.models import Enrollment, Program, Student
 from programs.permission_views import can_user_read, can_user_write
-from .models import AttendanceSession, AttendanceEvent, RFIDCard
+
+from .models import AttendanceEvent, AttendanceSession, RFIDCard
 
 
 def _week_bounds(now=None):
@@ -262,7 +264,8 @@ class AttendanceImportView(View):
             messages.error(request, "Unsupported file type. Please upload a CSV file.")
             return redirect("import_dashboard")
 
-        import csv, io
+        import csv
+        import io
 
         created = 0
         updated = 0
@@ -272,7 +275,7 @@ class AttendanceImportView(View):
         reader = csv.DictReader(text)
 
         from django.utils.dateparse import parse_datetime
-        from django.utils.timezone import utc, make_aware, is_naive
+        from django.utils.timezone import is_naive, make_aware, utc
 
         def parse_utc(dt_val):
             if not dt_val:

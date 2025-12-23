@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import ApiKeyListView, ApiKeyCreateView, ApiKeyUpdateView, ApiKeyDeleteView
+
+from .views import ApiKeyCreateView, ApiKeyDeleteView, ApiKeyListView, ApiKeyUpdateView
 
 urlpatterns = [
     path("", ApiKeyListView.as_view(), name="api_key_list"),

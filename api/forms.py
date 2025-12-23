@@ -1,6 +1,8 @@
-from django import forms
-from .models import ApiClientKey
 import secrets
+
+from django import forms
+
+from .models import ApiClientKey
 
 
 class ApiClientKeyForm(forms.ModelForm):

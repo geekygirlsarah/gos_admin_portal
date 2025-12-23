@@ -1,21 +1,21 @@
 import datetime
 from decimal import Decimal
 
-from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.test import TestCase, override_settings
 
+from programs.forms import PaymentForm, ProgramEmailForm, SlidingScaleForm
 from programs.models import (
-    Program,
-    Student,
-    SlidingScale,
-    Fee,
     Enrollment,
+    Fee,
+    Program,
     RaceEthnicity,
-    StudentApplication,
     School,
+    SlidingScale,
+    Student,
+    StudentApplication,
 )
-from programs.forms import PaymentForm, SlidingScaleForm, ProgramEmailForm
 from programs.views import compute_sliding_discount_rounded
 
 
