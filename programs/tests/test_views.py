@@ -8,7 +8,9 @@ from programs.models import Enrollment, Program, Student
 class ViewTests(TestCase):
     def setUp(self):
         # Basic user
-        self.user = User.objects.create_user(username="tester", password="pass12345")  # nosec B106
+        self.user = User.objects.create_user(
+            username="tester", password="pass12345"
+        )  # nosec B106
 
     def test_program_list_requires_login(self):
         url = reverse("program_list")

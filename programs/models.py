@@ -736,7 +736,9 @@ class Adult(models.Model):
                         # If normalization fails, continue with the original file to avoid blocking saves
                         logger.debug("Adult photo normalization failed", exc_info=True)
             except Exception:
-                logger.debug("Unexpected error in Adult photo processing", exc_info=True)
+                logger.debug(
+                    "Unexpected error in Adult photo processing", exc_info=True
+                )
         super().save(*args, **kwargs)
 
 
@@ -1006,7 +1008,9 @@ class StudentApplication(models.Model):
             if options.exists():
                 student.race_ethnicities.set(list(options))
         except Exception:
-            logger.debug("Race/Ethnicity matching failed during approval", exc_info=True)
+            logger.debug(
+                "Race/Ethnicity matching failed during approval", exc_info=True
+            )
         # Enroll in program
         try:
             Enrollment.objects.get_or_create(student=student, program=self.program)

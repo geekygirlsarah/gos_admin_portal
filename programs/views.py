@@ -912,7 +912,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if opts.exists():
                         obj.race_ethnicities.set(list(opts))
                 except Exception:
-                    logger.debug("Race/Ethnicity matching failed during import", exc_info=True)
+                    logger.debug(
+                        "Race/Ethnicity matching failed during import", exc_info=True
+                    )
 
                 # Parent linkage (primary and secondary)
                 prim_first = val(
