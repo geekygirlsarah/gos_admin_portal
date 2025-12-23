@@ -8,17 +8,22 @@ These guidelines help contributors (and Junie) quickly understand the project, h
 
 GoS Admin Portal is a Django 4.2 web application for managing:
 - Programs and student enrollments
-- Students (profiles, photos, school, graduation year)
-- Parents/guardians and relationships to students
+- Students (profiles, photos, school, graduation year, demographics)
+- Adults (Parents, Mentors, Volunteers, Alumni) and their relationships to students
 - Mentors/volunteers and their access/clearances
 - Program fees, payments, and sliding-scale discounts
 - Per-student balance sheets within a program
+- Student attendance tracking via kiosks and RFIDs
+- API access for external integrations
 
 Key features visible in the repository:
 - Authentication via Google (django-allauth). The home page requires login and shows Programs when authenticated. For local development, you can log in with a Django superuser if Google OAuth isn’t configured.
 - Program detail view: enroll/remove students, quick-create a student, email program participants, manage fees, record payments, and add sliding scale.
 - Student list and a photo grid view.
 - Balance sheet per student per program compiling fees, sliding scale, and payments. Printable views are available for balance sheets and payments.
+- Attendance system: Kiosk device management, RFID card assignment, and event/session tracking.
+- Online Student Applications: Workflow for approving new student applications.
+- Program Features: Dynamic feature toggles (Discord, clearances, Andrew ID) per program.
 
 Technologies:
 - Django 4.2 (server-side MVC, Django Admin for data management)
@@ -34,9 +39,13 @@ Technologies:
 - .junie/guidelines.md — This file (project guidance for Junie)
 - GoSAdminPortal/ — Django project settings and URL routing
 - manage.py — Django management utility
-- programs/ — Django app containing models and admin configuration
-    - models.py — Program, School, Student, Enrollment, Parent, Mentor, Fee, Payment, SlidingScale, FeeAssignment
+- programs/ — Django app containing core models and logic
+    - models.py — Program, ProgramFeature, School, Student, Enrollment, Adult, Fee, Payment, SlidingScale, FeeAssignment, StudentApplication
     - admin.py — Django admin registrations and list/field configurations
+- attendance/ — Django app for student check-in/out
+    - models.py — KioskDevice, RFIDCard, AttendanceEvent, AttendanceSession
+- api/ — Django app for external API access
+    - models.py — ApiClientKey
 - templates/
     - home.html — Auth-gated homepage listing programs
     - programs/
@@ -47,8 +56,10 @@ Technologies:
     - students/
         - list.html — Tabular student listing with search/edit
         - photo_grid.html — Student photo grid view
+    - attendance/
+        - student_attendance.html — View student attendance records
 - staticfiles/ — Collected static assets for development
-- media/ — Uploaded images (e.g., photos/students/, photos/mentors/)
+- media/ — Uploaded images (e.g., photos/students/, photos/adults/)
 - requirements.txt — Python dependencies
 - build.sh — Helper script for build/deploy tasks (if used)
 - db.sqlite3 — Local development database (not for production)
@@ -86,22 +97,27 @@ Steps:
     - Django Admin: http://127.0.0.1:8000/admin/
 
 Media and static:
-- Student and mentor photos are stored via ImageField (e.g., photos/students/, photos/mentors/). Configure MEDIA_ROOT and MEDIA_URL in settings for local development, and ensure your server serves media in development.
+- Student and adult photos are stored via ImageField (e.g., photos/students/, photos/adults/). Configure MEDIA_ROOT and MEDIA_URL in settings for local development, and ensure your server serves media in development.
 
 ---
 
 ### Data Model Cheat Sheet
 
-- Program: name, description, active, year → has fees and students (via Enrollment)
+- Program: name, year, dates, active → has fees, features (via ProgramFeature), and students (via Enrollment)
+- ProgramFeature: toggleable capability (e.g., 'discord', 'background-checks') linked to Program
 - School: standalone model linked from Student
-- Student: identity, contact, school, graduation year, Discord, photo; link to primary/secondary Parent; enrollments to Programs; payments via related Fees
+- Student: identity (legal vs preferred), contact, school, graduation year, demographics (RaceEthnicity), Discord, photo, medical info; link to primary/secondary Adult contacts; enrollments to Programs; payments via related Fees
 - Enrollment: links Student ↔ Program
-- Parent: identity/contact; many-to-many with Students
-- Mentor: identity/contact, role, IDs, Discord, access flags, clearances, emergency contact, status
+- Adult: unified model for Parent, Mentor, Alumni, Volunteer; identity, contact, role flags, access (CMU, Discord, Google), clearances, and student relationships
+- StudentApplication: online application for students, including an approval workflow to create Student/Adult records
 - Fee: per Program fee with name, amount, optional date
 - Payment: by Student for a Fee (which belongs to a Program); paid_at, method, optional check number/camp hours, notes; validation enforces enrollment and fee assignments
 - SlidingScale: percent discount per Student per Program; may store family size and AGI
 - FeeAssignment: optional per-student restriction for a Fee within its Program
+- AttendanceEvent: individual check-in/out event, linked to Program, Student/Visitor, and KioskDevice
+- AttendanceSession: computed session from events (check_in to check_out), tracks duration
+- RFIDCard: mapping of RFID UID to Student
+- ApiClientKey: shared secret for API authentication with read or write scope
 
 ---
 
@@ -185,7 +201,9 @@ Optional tooling suggestions (not enforced by requirements.txt):
 - Program detail: /programs/<id>/
 - Students: /students/
 - Student photo grid: /students/photos/
+- Student attendance: /attendance/students/<student_id>/
 - Program balance sheet (per student): /programs/<program_id>/students/<student_id>/balance/
+- API Key management: /api/manage/
 
 ---
 
