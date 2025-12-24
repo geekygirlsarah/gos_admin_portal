@@ -43,6 +43,7 @@ class ViewTests(TestCase):
         self.user.user_permissions.add(perm)
         # Add to LeadMentor group to satisfy DynamicWritePermissionMixin
         from django.contrib.auth.models import Group
+
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
 
