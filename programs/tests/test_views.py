@@ -41,9 +41,11 @@ class ViewTests(TestCase):
         # Grant permission and login
         perm = Permission.objects.get(codename="add_student")
         self.user.user_permissions.add(perm)
-        # Also need change_student for DynamicWritePermissionMixin?
-        # Let's check what StudentCreateView requires
-        # It has DynamicWritePermissionMixin and permission_required = 'programs.add_student'
+        # Add to LeadMentor group to satisfy DynamicWritePermissionMixin
+        from django.contrib.auth.models import Group
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+
         self.client.login(username="tester", password="pass12345")  # nosec B106
 
         url = reverse("student_create")
