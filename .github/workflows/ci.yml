@@ -44,11 +44,16 @@ jobs:
       run: |
         bandit -r . -x ./venv,./.venv
 
+      #    - name: Security Scan (safety)
+      #      run: |
+      #        # safety check compares installed packages against a database of known vulnerabilities
+      #        # We'll allow it to fail for now if there are issues, or we can use it as a blocker
+      #        safety check
+
     - name: Security Scan (safety)
-      run: |
-        # safety check compares installed packages against a database of known vulnerabilities
-        # We'll allow it to fail for now if there are issues, or we can use it as a blocker
-        safety check
+      uses: pyupio/safety-action@v1
+      with:
+        api-key: ${{ secrets.SAFETY_API_KEY }}
 
     - name: Django System Check
       run: |
