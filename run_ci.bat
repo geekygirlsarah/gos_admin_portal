@@ -9,27 +9,27 @@ pip install flake8 black isort bandit safety
 echo --- Running Linter (flake8) ---
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 if %ERRORLEVEL% neq 0 (
-    echo flake8 (critical) failed
+    echo flake8 critical failed
     exit /b %ERRORLEVEL%
 )
-flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+flake8 . --count --exit-zero --statistics
 
 echo --- Checking Formatting (black) ---
-black --check .
+black --check --exclude "(venv|venv2|\.venv)" .
 if %ERRORLEVEL% neq 0 (
     echo black formatting check failed
     exit /b %ERRORLEVEL%
 )
 
 echo --- Checking Formatting (isort) ---
-isort --check-only --profile black .
+isort --check-only --profile black --skip venv --skip venv2 --skip .venv .
 if %ERRORLEVEL% neq 0 (
     echo isort formatting check failed
     exit /b %ERRORLEVEL%
 )
 
 echo --- Security Scan (bandit) ---
-bandit -r . -x ./venv,./.venv
+bandit -r . -x ./venv,./.venv,./venv2
 if %ERRORLEVEL% neq 0 (
     echo bandit security scan failed
     exit /b %ERRORLEVEL%
