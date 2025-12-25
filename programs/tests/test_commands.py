@@ -1,12 +1,15 @@
+from datetime import date
+
 from django.core.management import call_command
 from django.test import TestCase
-from programs.models import Program, Student, Enrollment, Adult, ProgramFeature, School
-from datetime import date
+
+from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
+
 
 class SeedDbCommandTest(TestCase):
     def test_seed_db_command(self):
         """Test that the seed_db command creates the expected objects."""
-        call_command('seed_db')
+        call_command("seed_db")
 
         # Check Programs
         self.assertEqual(Program.objects.count(), 6)
@@ -41,7 +44,7 @@ class SeedDbCommandTest(TestCase):
         # Check email format
         student1 = Student.objects.get(personal_email="swithee+student1@andrew.cmu.edu")
         self.assertIn("+student1", student1.personal_email)
-        
+
         # Check mentors
         passing_mentor = Adult.objects.get(first_name="Passing")
         self.assertTrue(passing_mentor.has_paca_clearance)

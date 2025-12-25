@@ -10,9 +10,50 @@
   <div class="row">
     <div class="col-lg-8 col-xl-6">
       <h1 class="h4">{% if object %}Edit{% else %}New{% endif %} Sliding Scale for {{ program.name }}</h1>
-      <form method="post">
+      <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="mb-3">{{ form.as_p }}</div>
+        {% if object.tax_forms.exists %}
+          <div class="card mb-3 border-info">
+            <div class="card-body">
+              <h5 class="card-title h6">Uploaded Tax Forms</h5>
+              <ul class="list-group list-group-flush mb-3">
+                {% for tax_form in object.tax_forms.all %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent">
+                    <div>
+                      <a href="{{ tax_form.file.url }}" target="_blank">Form uploaded {{ tax_form.uploaded_at|date:"M j, Y H:i" }}</a>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteTaxFormModal{{ tax_form.id }}">
+                      Delete
+                    </button>
+                  </li>
+
+                  <!-- Delete Tax Form Modal for each form -->
+                  <div class="modal fade" id="deleteTaxFormModal{{ tax_form.id }}" tabindex="-1" aria-labelledby="deleteTaxFormModalLabel{{ tax_form.id }}" aria-hidden="true">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="deleteTaxFormModalLabel{{ tax_form.id }}">Delete Tax Form?</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          Are you sure you want to delete this tax form? This action cannot be undone.
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <form method="post" action="{% url 'program_sliding_scale_delete_tax_form' program.id object.id tax_form.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">Delete Form</button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        {% endif %}
         <button type="submit" class="btn btn-primary">Save</button>
         <a href="{% url 'program_detail' program.id %}" class="btn btn-outline-secondary ms-2">Cancel</a>
       </form>

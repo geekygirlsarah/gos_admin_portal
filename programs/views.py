@@ -37,11 +37,13 @@ class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
 
 
+import datetime
 import logging
 from decimal import ROUND_HALF_DOWN, Decimal
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives, get_connection, send_mail
+from django.db import models
 from django.db.models.functions import Coalesce, Lower
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -175,6 +177,7 @@ from .models import (
     SlidingScale,
     Student,
     StudentApplication,
+    TaxForm,
 )
 
 
@@ -2392,6 +2395,82 @@ class ProgramSlidingScaleUpdateView(
         return redirect("program_detail", pk=self.program.pk)
 
 
+class ProgramSlidingScaleTaxFormDeleteView(
+    LoginRequiredMixin, PermissionRequiredMixin, View
+):
+    permission_required = "programs.change_slidingscale"
+
+    def post(self, request, pk, sliding_id, form_id):
+        tax_form = get_object_or_404(
+            TaxForm,
+            pk=form_id,
+            sliding_scale_id=sliding_id,
+            sliding_scale__program_id=pk,
+        )
+        tax_form.file.delete(save=False)
+        tax_form.delete()
+        messages.success(request, "Tax form deleted.")
+        return redirect("program_sliding_scale_edit", pk=pk, sliding_id=sliding_id)
+
+
+class ProgramSlidingScaleParentUploadView(LoginRequiredMixin, View):
+    def post(self, request, pk, student_id):
+        program = get_object_or_404(Program, pk=pk)
+        student = get_object_or_404(Student, pk=student_id)
+
+        # Object level check for Parents
+        from .permission_views import get_user_role
+
+        if get_user_role(request.user) == "Parent":
+            try:
+                # Check if user has an adult profile and it's linked to this student
+                if not hasattr(request.user, "adult_profile"):
+                    messages.error(request, "Parent profile not found.")
+                    return redirect("home")
+
+                adult = request.user.adult_profile
+                if student not in adult.students.all():
+                    messages.error(
+                        request,
+                        "You do not have permission to upload for this student.",
+                    )
+                    return redirect("home")
+            except Exception as e:
+                messages.error(request, f"Error verifying permission: {str(e)}")
+                return redirect("home")
+        elif not request.user.is_superuser and not (
+            request.user.is_authenticated
+            and (
+                request.user.groups.filter(name="LeadMentor").exists()
+                or request.user.user_permissions.filter(
+                    codename="change_slidingscale"
+                ).exists()
+            )
+        ):
+            messages.error(request, "Only parents or lead mentors can use this upload.")
+            return redirect("home")
+
+        # Get or create sliding scale for this student/program
+        sliding, created = SlidingScale.objects.get_or_create(
+            student=student, program=program, defaults={"percent": 0}
+        )
+
+        files = request.FILES.getlist("tax_form")
+        if files:
+            for f in files:
+                TaxForm.objects.create(sliding_scale=sliding, file=f)
+            sliding.is_pending = True
+            sliding.save()
+            messages.success(
+                request,
+                f"{len(files)} tax form(s) uploaded successfully. A mentor will review them.",
+            )
+        else:
+            messages.error(request, "No file uploaded.")
+
+        return redirect("program_student_balance", pk=pk, student_id=student_id)
+
+
 class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "payments"
 
@@ -2514,6 +2593,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                 "total_sliding": total_sliding,
                 "total_payments": total_payments,
                 "balance": balance,
+                "sliding_scale": sliding,
             },
         )
 

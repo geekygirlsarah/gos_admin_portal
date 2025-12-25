@@ -34,6 +34,8 @@ from .views import (
     ProgramSchoolsView,
     ProgramSignoutSheetView,
     ProgramSlidingScaleCreateView,
+    ProgramSlidingScaleParentUploadView,
+    ProgramSlidingScaleTaxFormDeleteView,
     ProgramSlidingScaleUpdateView,
     ProgramStudentAddView,
     ProgramStudentBalancePrintView,
@@ -294,6 +296,16 @@ urlpatterns = [
             ProgramStudentRemoveView.as_view()
         ),
         name="program_student_remove",
+    ),
+    path(
+        "<int:pk>/sliding/<int:sliding_id>/delete_tax_form/<int:form_id>/",
+        login_required(ProgramSlidingScaleTaxFormDeleteView.as_view()),
+        name="program_sliding_scale_delete_tax_form",
+    ),
+    path(
+        "<int:pk>/students/<int:student_id>/tax-form/upload/",
+        login_required(ProgramSlidingScaleParentUploadView.as_view()),
+        name="program_sliding_scale_parent_upload",
     ),
     path(
         "<int:pk>/students/<int:student_id>/balance/",

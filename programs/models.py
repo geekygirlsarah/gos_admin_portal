@@ -1,7 +1,9 @@
+import base64
 import logging
 import os
 from io import BytesIO
 
+from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -9,6 +11,81 @@ from django.db import models
 from PIL import Image, ImageFile, ImageOps
 
 logger = logging.getLogger(__name__)
+
+
+def get_fernet():
+    key = getattr(settings, "FILE_ENCRYPTION_KEY", None)
+    if not key:
+        # Fallback to a key derived from SECRET_KEY
+        key = base64.urlsafe_b64encode(
+            settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
+        )
+    return Fernet(key)
+
+
+class EncryptedFileField(models.FileField):
+    """
+    A simple wrapper around FileField that encrypts file content on save and decrypts on read.
+    NOTE: This is a basic implementation for demonstration. In a real production
+    environment, consider using more robust libraries or dedicated storage backends.
+    """
+
+    def pre_save(self, model_instance, add):
+        file = super().pre_save(model_instance, add)
+        if file and hasattr(file, "file") and not getattr(file, "_encrypted", False):
+            fernet = get_fernet()
+            file.open("rb")
+            content = file.read()
+            file.close()
+            encrypted_content = fernet.encrypt(content)
+
+            # Use ContentFile to replace the content
+            new_file = ContentFile(encrypted_content)
+            new_file.name = file.name
+
+            # This is the tricky part in Django - we need to update the underlying file object
+            file.file = new_file
+            file._encrypted = True
+        return file
+
+    def contribute_to_class(self, cls, name, private_only=False):
+        super().contribute_to_class(cls, name)
+        # Patch the descriptor to decrypt when accessed
+        setattr(cls, self.name, EncryptedFileDescriptor(getattr(cls, self.name)))
+
+
+class EncryptedFileDescriptor:
+    def __init__(self, original_field):
+        self.original_field = original_field
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        file = self.original_field.__get__(instance, owner)
+        if file and not hasattr(file, "_decrypted_file"):
+            original_open = file.open
+
+            def decrypted_open(mode="rb"):
+                f = original_open(mode)
+                if "b" in mode:
+                    content = f.read()
+                    try:
+                        fernet = get_fernet()
+                        decrypted_content = fernet.decrypt(content)
+                        return BytesIO(decrypted_content)
+                    except Exception:
+                        # If decryption fails, return original (might be already decrypted or not encrypted)
+                        f.seek(0)
+                        return f
+                return f
+
+            file.open = decrypted_open
+            file._decrypted_file = True
+        return file
+
+    def __set__(self, instance, value):
+        self.original_field.__set__(instance, value)
+
 
 # Make PIL more tolerant of malformed/truncated images (common after conversions/exports)
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -861,6 +938,35 @@ class SlidingScale(models.Model):
 
     def __str__(self):
         return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
+
+
+class TaxForm(models.Model):
+    sliding_scale = models.ForeignKey(
+        SlidingScale, on_delete=models.CASCADE, related_name="tax_forms"
+    )
+    file = EncryptedFileField(
+        upload_to="tax_forms/",
+        help_text="Uploaded tax form for sliding scale verification. Will be deleted after review.",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Tax form for {self.sliding_scale}"
+
+    def save(self, *args, **kwargs):
+        if (
+            self.file
+            and hasattr(self.file, "file")
+            and not getattr(self.file, "_encrypted", False)
+        ):
+            fernet = get_fernet()
+            self.file.open("rb")
+            content = self.file.read()
+            self.file.close()
+            encrypted_content = fernet.encrypt(content)
+            self.file.file = ContentFile(encrypted_content, name=self.file.name)
+            self.file._encrypted = True
+        super().save(*args, **kwargs)
 
 
 class FeeAssignment(models.Model):
