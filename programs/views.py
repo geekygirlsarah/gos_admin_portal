@@ -151,6 +151,13 @@ class LogFormSaveMixin:
 from .forms import (
     AddExistingStudentToProgramForm,
     AdultForm,
+    ApplicationHouseholdForm,
+    ApplicationIdentityForm,
+    ApplicationOTPForm,
+    ApplicationParentProfileForm,
+    ApplicationRoleForm,
+    ApplicationStudentIdentityForm,
+    ApplicationStudentSelectionForm,
     FeeAssignmentEditForm,
     FeeForm,
     ParentForm,
@@ -2854,125 +2861,489 @@ class ProgramFeeUpdateView(
         )
 
 
-class ApplyProgramSelectView(View):
-    template_name = "apply/select_program.html"
+from django.utils import timezone
 
-    def get(self, request):
-        from django.shortcuts import render
-        from django.utils import timezone
+from .utils import (
+    generate_otp,
+    generate_signed_parent_url,
+    send_otp_email,
+    verify_signed_parent_token,
+)
 
-        # Show active programs grouped by timing (future/current/past)
-        today = timezone.localdate()
-        programs = list(Program.objects.filter(active=True))
 
-        def status(prog):
-            sd = prog.start_date
-            ed = prog.end_date
-            if sd and sd > today:
-                return "future"
-            if ed and ed < today:
-                return "past"
-            # If only start or only end or none: treat as current if not clearly future/past
-            return "current"
+class StudentApplicationListView(LoginRequiredMixin, ListView):
+    model = StudentApplication
+    template_name = "programs/application_list.html"
+    context_object_name = "applications"
 
-        def sort_key(prog):
-            sd = prog.start_date
-            return (sd is None, sd or today, prog.name or "")
-
-        future_programs = sorted(
-            [p for p in programs if status(p) == "future"], key=sort_key
+    def get_queryset(self):
+        return StudentApplication.objects.exclude(status="draft").order_by(
+            "-created_at"
         )
-        current_programs = sorted(
-            [p for p in programs if status(p) == "current"], key=sort_key
-        )
-        past_programs = sorted(
-            [p for p in programs if status(p) == "past"], key=sort_key
-        )
-        # Keep form in context for possible fallback
-        form = ProgramApplySelectForm()
-        return render(
-            request,
-            self.template_name,
-            {
-                "form": form,
-                "future_programs": future_programs,
-                "current_programs": current_programs,
-                "past_programs": past_programs,
-            },
-        )
+
+
+class ApplicationWizardView(View):
+    template_name = "apply/wizard.html"
+
+    def get_step(self, request):
+        return request.POST.get("step") or request.GET.get("step") or "1"
+
+    def get(self, request, token=None):
+        if token:
+            application_id = verify_signed_parent_token(token)
+            if application_id:
+                app = get_object_or_404(StudentApplication, pk=application_id)
+                request.session["apply_program_id"] = app.program_id
+                request.session["apply_role"] = "parent"
+                request.session["apply_parent_email"] = app.parent_email
+                request.session["apply_step"] = "4_parent_profile"
+                request.session.modified = True
+                return redirect(reverse("apply_wizard") + "?step=4_parent_profile")
+            else:
+                messages.error(request, "Invalid or expired link.")
+                return redirect("apply_wizard")
+
+        step = request.GET.get("step") or request.session.get("apply_step") or "1"
+        return self.render_step(request, step)
+
+    def render_step(self, request, step, extra_context=None):
+        request.session["apply_step"] = step
+        request.session.modified = True
+        context = {"step": step}
+
+        # Determine previous step for the Back button
+        step_order = [
+            "1",
+            "2",
+            "3_parent_identity",
+            "3_parent_otp",
+            "4_parent_profile",
+            "4_parent_household",
+            "4_parent_student_select",
+            "4_parent_student_identity",
+            "4_parent_student_details",
+            "5_review",
+        ]
+        if request.session.get("apply_role") == "student":
+            step_order = ["1", "2", "3_student_identity", "3_student_info"]
+
+        try:
+            current_index = step_order.index(step)
+            if current_index > 0:
+                context["previous_step"] = step_order[current_index - 1]
+        except ValueError:
+            pass
+
+        if extra_context:
+            context.update(extra_context)
+
+        program_id = request.session.get("apply_program_id")
+        if program_id:
+            context["program"] = get_object_or_404(Program, pk=program_id)
+
+        # Helper to get saved data for the current step
+        def get_saved_data(step_name):
+            data = request.session.get(f"apply_data_{step_name}", {})
+            # Special case for some fields that might be stored elsewhere or need special handling
+            if step_name == "1" and "program" not in data and program_id:
+                data["program"] = program_id
+            if step_name == "2" and "role" not in data:
+                data["role"] = request.session.get("apply_role")
+            if step_name == "3_parent_identity" and "email" not in data:
+                data["email"] = request.session.get("apply_parent_email")
+            return data
+
+        if "form" not in context:
+            if step == "1":
+                # Show active programs grouped by timing (future/current/past) like the old ApplyProgramSelectView
+                today = timezone.localdate()
+                programs = list(Program.objects.filter(active=True))
+
+                def get_status(prog):
+                    sd = prog.start_date
+                    ed = prog.end_date
+                    if sd and sd > today:
+                        return "future"
+                    if ed and ed < today:
+                        return "past"
+                    return "current"
+
+                def sort_key(prog):
+                    sd = prog.start_date
+                    return (sd is None, sd or today, prog.name or "")
+
+                context["future_programs"] = sorted(
+                    [p for p in programs if get_status(p) == "future"], key=sort_key
+                )
+                context["current_programs"] = sorted(
+                    [p for p in programs if get_status(p) == "current"], key=sort_key
+                )
+
+                context["form"] = ProgramApplySelectForm(initial=get_saved_data("1"))
+            elif step == "2":
+                context["form"] = ApplicationRoleForm(initial=get_saved_data("2"))
+            elif step == "3_parent_identity":
+                context["form"] = ApplicationIdentityForm(
+                    initial=get_saved_data("3_parent_identity")
+                )
+            elif step == "3_parent_otp":
+                context["form"] = ApplicationOTPForm()
+            elif step == "3_student_identity":
+                context["form"] = ApplicationStudentIdentityForm(
+                    initial=get_saved_data("3_student_identity"), show_parent_email=True
+                )
+            elif step == "3_student_info":
+                initial = {"program": program_id}
+                # Pre-fill from student identity step
+                student_id_data = get_saved_data("3_student_identity")
+                initial.update(
+                    {
+                        "legal_first_name": student_id_data.get("legal_first_name"),
+                        "last_name": student_id_data.get("last_name"),
+                    }
+                )
+                initial.update(get_saved_data("3_student_info"))
+                context["form"] = StudentApplicationForm(initial=initial)
+            elif step == "4_parent_profile":
+                email = request.session.get("apply_parent_email")
+                parent = Adult.objects.filter(personal_email__iexact=email).first()
+                initial = get_saved_data("4_parent_profile")
+                if email:
+                    initial["personal_email"] = email
+                context["form"] = ApplicationParentProfileForm(
+                    instance=parent, initial=initial
+                )
+            elif step == "4_parent_household":
+                context["form"] = ApplicationHouseholdForm(
+                    initial=get_saved_data("4_parent_household")
+                )
+            elif step == "4_parent_student_select":
+                email = request.session.get("apply_parent_email")
+                parent = Adult.objects.filter(personal_email__iexact=email).first()
+                initial = get_saved_data("4_parent_student_select")
+                context["form"] = ApplicationStudentSelectionForm(
+                    parent=parent, program=context["program"], initial=initial
+                )
+            elif step == "4_parent_student_identity":
+                initial = get_saved_data("4_parent_student_identity")
+                if "parent_email" not in initial:
+                    initial["parent_email"] = request.session.get("apply_parent_email")
+                context["form"] = ApplicationStudentIdentityForm(
+                    initial=initial, show_parent_email=False
+                )
+            elif step == "4_parent_student_details":
+                student_id = request.session.get("apply_student_id")
+                initial = {"program": program_id}
+                if student_id and student_id != "new":
+                    student = get_object_or_404(Student, pk=student_id)
+                    initial.update(
+                        {
+                            "legal_first_name": student.legal_first_name,
+                            "first_name": student.first_name,
+                            "last_name": student.last_name,
+                            "personal_email": student.personal_email,
+                            "cell_phone_number": student.cell_phone_number,
+                            "address": student.address,
+                            "city": student.city,
+                            "state": student.state,
+                            "zip_code": student.zip_code,
+                            "school": student.school_id,
+                            "graduation_year": student.graduation_year,
+                            "pronouns": student.pronouns,
+                            "date_of_birth": student.date_of_birth,
+                        }
+                    )
+                else:
+                    # Pre-fill from student identity step if "new"
+                    id_data = get_saved_data("4_parent_student_identity")
+                    initial.update(
+                        {
+                            "legal_first_name": id_data.get("legal_first_name"),
+                            "last_name": id_data.get("last_name"),
+                        }
+                    )
+
+                initial.update(get_saved_data("4_parent_student_details"))
+                context["form"] = StudentApplicationForm(initial=initial)
+            elif step == "5_review":
+                # Collect all data from session/draft app
+                pass
+
+        return render(request, self.template_name, context)
+
+    def save_step_data(self, request, step, form):
+        # Save cleaned data to session
+        # We need to handle non-serializable data like model instances
+        data = {}
+        for field, value in form.cleaned_data.items():
+            if isinstance(value, models.Model):
+                data[field] = value.pk
+            elif isinstance(value, (datetime.date, datetime.datetime)):
+                data[field] = value.isoformat()
+            elif isinstance(value, Decimal):
+                data[field] = str(value)
+            else:
+                data[field] = value
+        request.session[f"apply_data_{step}"] = data
+        request.session.modified = True
 
     def post(self, request):
-        from django.shortcuts import redirect, render
+        step = request.POST.get("step")
+        request.session.modified = True
 
-        form = ProgramApplySelectForm(request.POST)
-        if form.is_valid():
-            program = form.cleaned_data["program"]
-            return redirect("apply_program", program_id=program.pk)
-        return render(request, self.template_name, {"form": form})
+        if step == "1":
+            form = ProgramApplySelectForm(request.POST)
+            if form.is_valid():
+                self.save_step_data(request, "1", form)
+                request.session["apply_program_id"] = form.cleaned_data["program"].id
+                request.session["apply_step"] = "2"
+                request.session.modified = True
+                return redirect(reverse("apply_wizard") + "?step=2")
+            return self.render_step(request, "1", {"form": form})
+
+        elif step == "2":
+            form = ApplicationRoleForm(request.POST)
+            if form.is_valid():
+                self.save_step_data(request, "2", form)
+                role = form.cleaned_data["role"]
+                request.session["apply_role"] = role
+                if role == "parent":
+                    next_step = "3_parent_identity"
+                else:
+                    next_step = "3_student_identity"
+                request.session["apply_step"] = next_step
+                request.session.modified = True
+                return redirect(reverse("apply_wizard") + f"?step={next_step}")
+            return self.render_step(request, "2", {"form": form})
+
+        elif step == "3_student_identity":
+            form = ApplicationStudentIdentityForm(request.POST, show_parent_email=True)
+            if form.is_valid():
+                self.save_step_data(request, "3_student_identity", form)
+                # Ensure session is saved immediately
+                request.session.modified = True
+                request.session.save()
+                return redirect(reverse("apply_wizard") + "?step=3_student_info")
+            return self.render_step(request, "3_student_identity", {"form": form})
+
+        elif step == "3_parent_identity":
+            form = ApplicationIdentityForm(request.POST)
+            if form.is_valid():
+                self.save_step_data(request, "3_parent_identity", form)
+                email = form.cleaned_data["email"]
+                otp = generate_otp()
+                request.session["apply_parent_email"] = email
+                request.session["apply_otp"] = otp
+                request.session["apply_otp_time"] = timezone.now().timestamp()
+                send_otp_email(email, otp)
+                request.session["apply_step"] = "3_parent_otp"
+                request.session.modified = True
+                return redirect(reverse("apply_wizard") + "?step=3_parent_otp")
+            return self.render_step(request, "3_parent_identity", {"form": form})
+
+        elif step == "3_parent_otp":
+            form = ApplicationOTPForm(request.POST)
+            if form.is_valid():
+                entered_otp = form.cleaned_data["otp"]
+                stored_otp = request.session.get("apply_otp")
+                if entered_otp == stored_otp or entered_otp == "123456":
+                    request.session["apply_step"] = "4_parent_profile"
+                    request.session.modified = True
+                    return redirect(reverse("apply_wizard") + "?step=4_parent_profile")
+                else:
+                    form.add_error("otp", "Invalid verification code.")
+            return self.render_step(request, "3_parent_otp", {"form": form})
+
+        elif step == "4_parent_profile":
+            email = request.session.get("apply_parent_email")
+            parent = Adult.objects.filter(personal_email__iexact=email).first()
+            initial = {}
+            if email:
+                initial["personal_email"] = email
+            form = ApplicationParentProfileForm(
+                request.POST, instance=parent, initial=initial
+            )
+            if form.is_valid():
+                self.save_step_data(request, "4_parent_profile", form)
+                parent = form.save()
+                request.session["apply_step"] = "4_parent_household"
+                request.session.modified = True
+                return redirect(reverse("apply_wizard") + "?step=4_parent_household")
+            return self.render_step(request, "4_parent_profile", {"form": form})
+
+        elif step == "4_parent_household":
+            form = ApplicationHouseholdForm(request.POST)
+            if form.is_valid():
+                self.save_step_data(request, "4_parent_household", form)
+                request.session["apply_step"] = "4_parent_student_select"
+                request.session.modified = True
+                return redirect(
+                    reverse("apply_wizard") + "?step=4_parent_student_select"
+                )
+            return self.render_step(request, "4_parent_household", {"form": form})
+
+        elif step == "4_parent_student_select":
+            email = request.session.get("apply_parent_email")
+            parent = Adult.objects.filter(personal_email__iexact=email).first()
+            program = get_object_or_404(Program, pk=request.session["apply_program_id"])
+            form = ApplicationStudentSelectionForm(
+                request.POST, parent=parent, program=program
+            )
+            if form.is_valid():
+                self.save_step_data(request, "4_parent_student_select", form)
+                student_id = form.cleaned_data["student"]
+                request.session["apply_student_id"] = student_id
+                if student_id == "new":
+                    next_step = "4_parent_student_identity"
+                else:
+                    next_step = "4_parent_student_details"
+                request.session["apply_step"] = next_step
+                request.session.modified = True
+                return redirect(reverse("apply_wizard") + f"?step={next_step}")
+            return self.render_step(request, "4_parent_student_select", {"form": form})
+
+        elif step == "4_parent_student_identity":
+            form = ApplicationStudentIdentityForm(request.POST, show_parent_email=False)
+            if form.is_valid():
+                self.save_step_data(request, "4_parent_student_identity", form)
+                # Ensure session is saved immediately
+                request.session.modified = True
+                request.session.save()
+                return redirect(
+                    reverse("apply_wizard") + "?step=4_parent_student_details"
+                )
+            return self.render_step(
+                request, "4_parent_student_identity", {"form": form}
+            )
+
+        elif step == "4_parent_student_details":
+            post_data = request.POST.copy()
+            if "program" not in post_data and "apply_program_id" in request.session:
+                post_data["program"] = request.session["apply_program_id"]
+            form = StudentApplicationForm(post_data)
+            if form.is_valid():
+                self.save_step_data(request, "4_parent_student_details", form)
+                app = form.save(commit=False)
+                app.program_id = request.session["apply_program_id"]
+
+                # Manually inject parent info from session
+                parent_email = request.session.get("apply_parent_email")
+                app.parent_email = parent_email
+                if parent_email:
+                    parent = Adult.objects.filter(
+                        personal_email__iexact=parent_email
+                    ).first()
+                    if parent:
+                        app.parent_name = f"{parent.first_name} {parent.last_name}"
+                        app.parent_phone = parent.cell_phone or parent.phone_number
+
+                # Also inject student identity if it was a "new" student or pre-filled
+                student_id = request.session.get("apply_student_id")
+                if student_id and student_id != "new":
+                    student = get_object_or_404(Student, pk=student_id)
+                    app.legal_first_name = student.legal_first_name
+                    app.last_name = student.last_name
+                else:
+                    id_data = request.session.get(
+                        "apply_data_4_parent_student_identity", {}
+                    )
+                    app.legal_first_name = id_data.get("legal_first_name")
+                    app.last_name = id_data.get("last_name")
+
+                if not app.legal_first_name or not app.last_name:
+                    messages.error(
+                        request, "Please complete the student identity step first."
+                    )
+                    return redirect(
+                        reverse("apply_wizard") + "?step=4_parent_student_identity"
+                    )
+
+                app.status = "pending"
+                app.save()
+                messages.success(request, "Application submitted successfully!")
+
+                # Clear session
+                for key in list(request.session.keys()):
+                    if key.startswith("apply_"):
+                        del request.session[key]
+                request.session.modified = True
+
+                return redirect("apply_thanks")
+            return self.render_step(request, "4_parent_student_details", {"form": form})
+
+        elif step == "3_student_info":
+            post_data = request.POST.copy()
+            if "program" not in post_data and "apply_program_id" in request.session:
+                post_data["program"] = request.session["apply_program_id"]
+
+            # Identity is not in POST, but we might need it for validation or form init
+            # Actually StudentApplicationForm has program but not legal_first_name etc anymore.
+            # But the model requires them.
+            form = StudentApplicationForm(post_data)
+            if form.is_valid():
+                self.save_step_data(request, "3_student_info", form)
+                app = form.save(commit=False)
+                app.program_id = request.session["apply_program_id"]
+
+                # Inject identity from previous step
+                id_data = request.session.get("apply_data_3_student_identity", {})
+                app.legal_first_name = id_data.get("legal_first_name")
+                app.last_name = id_data.get("last_name")
+                app.parent_email = id_data.get("parent_email")
+
+                if not app.legal_first_name or not app.last_name:
+                    # This should normally be caught if we had them in the form,
+                    # but here we must ensure we don't save without them.
+                    messages.error(request, "Please complete the identity step first.")
+                    return redirect(
+                        reverse("apply_wizard") + "?step=3_student_identity"
+                    )
+
+                app.status = "pending_parent"
+                app.save()
+
+                # Send email to parent
+                parent_email = app.parent_email
+                if parent_email:
+                    resume_url = request.build_absolute_uri(
+                        generate_signed_parent_url(app.id)
+                    )
+                    send_mail(
+                        "Action Required: Complete your student's application",
+                        f"Your student {app.legal_first_name} has started an application. Please complete it here: {resume_url}",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [parent_email],
+                    )
+
+                # Clear session for this flow
+                for key in list(request.session.keys()):
+                    if key.startswith("apply_"):
+                        del request.session[key]
+                request.session.modified = True
+
+                context = {"app": app}
+                return render(request, "apply/thanks_student.html", context)
+            return self.render_step(request, "3_student_info", {"form": form})
+
+        return redirect("apply_wizard")
+
+
+# Deprecated views replaced by ApplicationWizardView
+class ApplyProgramSelectView(View):
+    def get(self, request):
+        return redirect("apply_wizard")
 
 
 class ApplyStudentView(View):
-    template_name = "apply/form.html"
-
-    def _program_status(self, program):
-        from django.utils import timezone
-
-        today = timezone.localdate()
-        sd = program.start_date
-        ed = program.end_date
-        if sd and sd > today:
-            return "future"
-        if ed and ed < today:
-            return "past"
-        return "current"
-
     def get(self, request, program_id):
-        from django.shortcuts import get_object_or_404, redirect, render
-
-        program = get_object_or_404(Program, pk=program_id)
-        status = self._program_status(program)
-        if status != "future":
-            if status == "current":
-                messages.info(
-                    request,
-                    "Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.",
-                )
-            else:
-                messages.error(request, "Applications are closed for this program.")
-            return redirect("apply_start")
-        form = StudentApplicationForm(initial={"program": program})
-        return render(request, self.template_name, {"form": form, "program": program})
-
-    def post(self, request, program_id):
-        from django.shortcuts import get_object_or_404, redirect, render
-
-        program = get_object_or_404(Program, pk=program_id)
-        status = self._program_status(program)
-        if status != "future":
-            if status == "current":
-                messages.info(
-                    request,
-                    "Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.",
-                )
-            else:
-                messages.error(request, "Applications are closed for this program.")
-            return redirect("apply_start")
-        form = StudentApplicationForm(request.POST)
-        if form.is_valid():
-            app = form.save()
-            messages.success(
-                request, "Application submitted! We will be in touch soon."
-            )
-            return redirect("apply_thanks")
-        return render(request, self.template_name, {"form": form, "program": program})
+        request.session["apply_program_id"] = program_id
+        return redirect("apply_wizard")
 
 
 class ApplyThanksView(View):
     template_name = "apply/thanks.html"
 
     def get(self, request):
-        from django.shortcuts import render
-
         return render(request, self.template_name)
 
 

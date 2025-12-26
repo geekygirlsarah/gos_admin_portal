@@ -1,0 +1,331 @@
+--- Upgrading Pip ---
+Requirement already satisfied: pip in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (25.3)
+--- Installing Dependencies ---
+Requirement already satisfied: asgiref==3.9.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 1)) (3.9.1)
+Requirement already satisfied: Brotli==1.2.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 2)) (1.2.0)
+Requirement already satisfied: cachetools==6.2.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 3)) (6.2.0)
+Requirement already satisfied: certifi==2025.8.3 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 4)) (2025.8.3)
+Requirement already satisfied: cffi==1.17.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 5)) (1.17.1)
+Requirement already satisfied: charset-normalizer==3.4.3 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 6)) (3.4.3)
+Requirement already satisfied: click==8.2.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 7)) (8.2.1)
+Requirement already satisfied: colorama==0.4.6 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 8)) (0.4.6)
+Requirement already satisfied: cryptography==45.0.7 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 9)) (45.0.7)
+Requirement already satisfied: cssselect==1.3.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 10)) (1.3.0)
+Requirement already satisfied: cssutils==2.11.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 11)) (2.11.1)
+Requirement already satisfied: defusedxml==0.7.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 12)) (0.7.1)
+Requirement already satisfied: dj-database-url==3.0.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 13)) (3.0.1)
+Requirement already satisfied: Django==4.2.27 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 14)) (4.2.27)
+Requirement already satisfied: django-allauth==65.13.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 15)) (65.13.0)
+Requirement already satisfied: django-csp==4.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 16)) (4.0)
+Requirement already satisfied: et_xmlfile==2.0.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 17)) (2.0.0)
+Requirement already satisfied: gunicorn==23.0.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 18)) (23.0.0)
+Requirement already satisfied: h11==0.16.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 19)) (0.16.0)
+Requirement already satisfied: idna==3.10 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 20)) (3.10)
+Requirement already satisfied: lxml==6.0.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 21)) (6.0.1)
+Requirement already satisfied: more-itertools==10.8.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 22)) (10.8.0)
+Requirement already satisfied: openpyxl==3.1.5 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 23)) (3.1.5)
+Requirement already satisfied: packaging==25.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 24)) (25.0)
+Requirement already satisfied: pillow==11.3.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 25)) (11.3.0)
+Requirement already satisfied: pillow_heif==0.18.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 26)) (0.18.0)
+Requirement already satisfied: premailer==3.10.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 27)) (3.10.0)
+Requirement already satisfied: psycopg==3.2.10 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 28)) (3.2.10)
+Requirement already satisfied: psycopg2-binary==2.9.10 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 29)) (2.9.10)
+Requirement already satisfied: pycparser==2.22 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 30)) (2.22)
+Requirement already satisfied: PyJWT==2.10.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 31)) (2.10.1)
+Requirement already satisfied: python3-openid==3.2.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 32)) (3.2.0)
+Requirement already satisfied: requests==2.32.5 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 33)) (2.32.5)
+Requirement already satisfied: setuptools==80.9.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 34)) (80.9.0)
+Requirement already satisfied: sqlparse==0.5.4 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 35)) (0.5.4)
+Requirement already satisfied: tzdata==2025.2 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 36)) (2025.2)
+Requirement already satisfied: urllib3==2.6.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 37)) (2.6.0)
+Requirement already satisfied: uvicorn==0.35.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 38)) (0.35.0)
+Requirement already satisfied: whitenoise==6.10.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from -r requirements.txt (line 39)) (6.10.0)
+Requirement already satisfied: flake8 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (7.3.0)
+Requirement already satisfied: black in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (25.12.0)
+Requirement already satisfied: isort in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (7.0.0)
+Requirement already satisfied: bandit in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (1.9.2)
+Requirement already satisfied: safety in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (3.7.0)
+Requirement already satisfied: mccabe<0.8.0,>=0.7.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from flake8) (0.7.0)
+Requirement already satisfied: pycodestyle<2.15.0,>=2.14.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from flake8) (2.14.0)
+Requirement already satisfied: pyflakes<3.5.0,>=3.4.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from flake8) (3.4.0)
+Requirement already satisfied: click>=8.0.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from black) (8.2.1)
+Requirement already satisfied: mypy-extensions>=0.4.3 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from black) (1.1.0)
+Requirement already satisfied: packaging>=22.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from black) (25.0)
+Requirement already satisfied: pathspec>=0.9.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from black) (0.12.1)
+Requirement already satisfied: platformdirs>=2 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from black) (4.5.1)
+Requirement already satisfied: pytokens>=0.3.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from black) (0.3.0)
+Requirement already satisfied: PyYAML>=5.3.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from bandit) (6.0.3)
+Requirement already satisfied: stevedore>=1.20.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from bandit) (5.6.0)
+Requirement already satisfied: rich in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from bandit) (14.2.0)
+Requirement already satisfied: colorama>=0.3.9 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from bandit) (0.4.6)
+Requirement already satisfied: authlib>=1.2.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (1.6.6)
+Requirement already satisfied: dparse>=0.6.4 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (0.6.4)
+Requirement already satisfied: filelock<4.0,>=3.16.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (3.20.1)
+Requirement already satisfied: httpx in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (0.28.1)
+Requirement already satisfied: jinja2>=3.1.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (3.1.6)
+Requirement already satisfied: marshmallow>=3.15.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (4.1.2)
+Requirement already satisfied: nltk>=3.9 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (3.9.2)
+Requirement already satisfied: pydantic>=2.6.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (2.12.5)
+Requirement already satisfied: requests in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (2.32.5)
+Requirement already satisfied: ruamel-yaml>=0.17.21 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (0.18.17)
+Requirement already satisfied: safety-schemas==0.0.16 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (0.0.16)
+Requirement already satisfied: tenacity>=8.1.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (9.1.2)
+Requirement already satisfied: tomlkit in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (0.13.3)
+Requirement already satisfied: typer>=0.16.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (0.20.1)
+Requirement already satisfied: typing-extensions>=4.7.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from safety) (4.15.0)
+Requirement already satisfied: cryptography in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from authlib>=1.2.0->safety) (45.0.7)
+Requirement already satisfied: MarkupSafe>=2.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from jinja2>=3.1.0->safety) (3.0.3)
+Requirement already satisfied: joblib in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from nltk>=3.9->safety) (1.5.3)
+Requirement already satisfied: regex>=2021.8.3 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from nltk>=3.9->safety) (2025.11.3)
+Requirement already satisfied: tqdm in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from nltk>=3.9->safety) (4.67.1)
+Requirement already satisfied: annotated-types>=0.6.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from pydantic>=2.6.0->safety) (0.7.0)
+Requirement already satisfied: pydantic-core==2.41.5 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from pydantic>=2.6.0->safety) (2.41.5)
+Requirement already satisfied: typing-inspection>=0.4.2 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from pydantic>=2.6.0->safety) (0.4.2)
+Requirement already satisfied: ruamel.yaml.clib>=0.2.15 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from ruamel-yaml>=0.17.21->safety) (0.2.15)
+Requirement already satisfied: shellingham>=1.3.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from typer>=0.16.0->safety) (1.5.4)
+Requirement already satisfied: markdown-it-py>=2.2.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from rich->bandit) (4.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from rich->bandit) (2.19.2)
+Requirement already satisfied: mdurl~=0.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from markdown-it-py>=2.2.0->rich->bandit) (0.1.2)
+Requirement already satisfied: cffi>=1.14 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from cryptography->authlib>=1.2.0->safety) (1.17.1)
+Requirement already satisfied: pycparser in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from cffi>=1.14->cryptography->authlib>=1.2.0->safety) (2.22)
+Requirement already satisfied: anyio in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from httpx->safety) (4.12.0)
+Requirement already satisfied: certifi in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from httpx->safety) (2025.8.3)
+Requirement already satisfied: httpcore==1.* in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from httpx->safety) (1.0.9)
+Requirement already satisfied: idna in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from httpx->safety) (3.10)
+Requirement already satisfied: h11>=0.16 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from httpcore==1.*->httpx->safety) (0.16.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from requests->safety) (3.4.3)
+Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\sarah\repos\gos_admin_portal\venv\lib\site-packages (from requests->safety) (2.6.0)
+--- Running Linter (flake8) ---
+0
+.\GoSAdminPortal\adapter.py:3:1: F401 'django.core.exceptions.ValidationError' imported but unused
+.\GoSAdminPortal\settings.py:18:1: F401 'csp.constants.SELF' imported but unused
+.\GoSAdminPortal\settings.py:247:1: E402 module level import not at top of file
+.\api\views.py:2:1: F401 'datetime.datetime' imported but unused
+.\api\views.py:16:1: F401 'attendance.models.AttendanceEvent' imported but unused
+.\attendance\services.py:1:1: F401 'datetime.timedelta' imported but unused
+.\attendance\views.py:4:1: F401 'django.contrib.auth.decorators.permission_required' imported but unused
+.\attendance\views.py:10:1: F401 'programs.models.Enrollment' imported but unused
+.\attendance\views.py:27:1: C901 'student_attendance_view' is too complex (27)
+.\attendance\views.py:240:5: C901 'AttendanceImportView.post' is too complex (30)
+.\attendance\views.py:443:128: E501 line too long (135 > 127 characters)
+.\programs\admin.py:239:128: E501 line too long (143 > 127 characters)
+.\programs\admin.py:348:9: F841 local variable 'created' is assigned to but never used
+.\programs\forms.py:4:1: F401 'django.utils.safestring.mark_safe' imported but unused
+.\programs\forms.py:46:5: C901 'StudentForm.__init__' is too complex (11)
+.\programs\forms.py:109:5: C901 'StudentForm.save' is too complex (12)
+.\programs\forms.py:496:128: E501 line too long (148 > 127 characters)
+.\programs\forms.py:609:17: F841 local variable 'disabled' is assigned to but never used
+.\programs\management\commands\convert_graduates.py:8:128: E501 line too long (146 > 127 characters)
+.\programs\management\commands\convert_graduates.py:38:5: C901 'Command.handle' is too complex (18)
+.\programs\management\commands\convert_graduates.py:111:128: E501 line too long (195 > 127 characters)
+.\programs\management\commands\seed_db.py:4:1: F401 'django.utils.timezone' imported but unused
+.\programs\models.py:275:5: C901 'RaceEthnicity.match_from_text' is too complex (11)
+.\programs\models.py:329:5: C901 'Student.save' is too complex (35)
+.\programs\models.py:782:5: C901 'Adult.save' is too complex (12)
+.\programs\permission_views.py:9:1: C901 'get_user_role' is too complex (11)
+.\programs\permission_views.py:29:9: F841 local variable 'student' is assigned to but never used
+.\programs\permission_views.py:56:1: C901 'can_user_write' is too complex (13)
+.\programs\tests\test_commands.py:6:1: F401 'programs.models.ProgramFeature' imported but unused
+.\programs\tests\test_forms.py:6:1: F401 'programs.models.Student' imported but unused
+.\programs\tests\test_issue_excluded_fields.py:1:1: F401 'datetime' imported but unused
+.\programs\tests\test_issue_excluded_fields.py:3:1: F401 'django.core.mail' imported but unused
+.\programs\tests\test_issue_excluded_fields.py:7:1: F401 'programs.models.Enrollment' imported but unused
+.\programs\tests\test_issue_excluded_fields.py:7:1: F401 'programs.models.Student' imported but unused
+.\programs\tests\test_issue_excluded_fields.py:108:9: F841 local variable 'parent_adult' is assigned to but never used
+.\programs\tests\test_more.py:4:1: F401 'django.core.exceptions.ValidationError' imported but unused
+.\programs\tests\test_tax_forms.py:4:1: F401 'django.test.Client' imported but unused
+.\programs\tests\test_wizard.py:5:1: F401 'programs.models.Adult' imported but unused
+.\programs\tests\test_wizard.py:5:1: F401 'programs.models.Enrollment' imported but unused
+.\programs\tests\test_wizard.py:5:1: F401 'programs.models.Student' imported but unused
+.\programs\utils.py:6:1: F401 'django.core.signing.Signer' imported but unused
+.\programs\views.py:40:1: E402 module level import not at top of file
+.\programs\views.py:41:1: E402 module level import not at top of file
+.\programs\views.py:42:1: E402 module level import not at top of file
+.\programs\views.py:44:1: E402 module level import not at top of file
+.\programs\views.py:45:1: E402 module level import not at top of file
+.\programs\views.py:46:1: E402 module level import not at top of file
+.\programs\views.py:47:1: E402 module level import not at top of file
+.\programs\views.py:48:1: E402 module level import not at top of file
+.\programs\views.py:49:1: E402 module level import not at top of file
+.\programs\views.py:50:1: E402 module level import not at top of file
+.\programs\views.py:51:1: E402 module level import not at top of file
+.\programs\views.py:52:1: E402 module level import not at top of file
+.\programs\views.py:151:1: E402 module level import not at top of file
+.\programs\views.py:175:1: E402 module level import not at top of file
+.\programs\views.py:202:9: F401 'operator.attrgetter' imported but unused
+.\programs\views.py:342:5: C901 'StudentsByGradeView.get_context_data' is too complex (11)
+.\programs\views.py:457:5: C901 'StudentConvertToAlumniView.post' is too complex (13)
+.\programs\views.py:551:5: C901 'StudentBulkConvertToAlumniView.post' is too complex (24)
+.\programs\views.py:662:128: E501 line too long (142 > 127 characters)
+.\programs\views.py:688:5: C901 'StudentImportView.post' is too complex (61)
+.\programs\views.py:1019:5: C901 'ParentImportView.post' is too complex (17)
+.\programs\views.py:1101:5: C901 'RelationshipImportView.post' is too complex (63)
+.\programs\views.py:1400:128: E501 line too long (129 > 127 characters)
+.\programs\views.py:1411:5: C901 'MentorImportView.post' is too complex (17)
+.\programs\views.py:1496:5: C901 'SchoolImportView.post' is too complex (17)
+.\programs\views.py:1659:5: C901 'ProgramEmailView.post' is too complex (27)
+.\programs\views.py:1964:33: E203 whitespace before ':'
+.\programs\views.py:2011:33: E203 whitespace before ':'
+.\programs\views.py:2484:5: C901 'ProgramStudentBalanceView.get' is too complex (11)
+.\programs\views.py:2613:5: C901 'ProgramStudentBalancePrintView.get' is too complex (11)
+.\programs\views.py:2864:1: E402 module level import not at top of file
+.\programs\views.py:2866:1: E402 module level import not at top of file
+.\programs\views.py:2909:5: C901 'ApplicationWizardView.render_step' is too complex (31)
+.\programs\views.py:3090:5: C901 'ApplicationWizardView.post' is too complex (39)
+.\programs\views.py:3313:128: E501 line too long (129 > 127 characters)
+.\programs\views.py:3360:5: C901 'ProgramEmailBalancesView.post' is too complex (33)
+.\programs\views.py:3747:9: F841 local variable 'inactive_students' is assigned to but never used
+24    C901 'student_attendance_view' is too complex (27)
+2     E203 whitespace before ':'
+17    E402 module level import not at top of file
+8     E501 line too long (135 > 127 characters)
+22    F401 'django.core.exceptions.ValidationError' imported but unused
+5     F841 local variable 'created' is assigned to but never used
+78
+--- Checking Formatting (black) ---
+All done! ✨ 🍰 ✨
+110 files would be left unchanged.
+--- Checking Formatting (isort) ---
+Skipped 2 files
+--- Security Scan (bandit) ---
+[main]  INFO    profile include tests: None
+[main]  INFO    profile exclude tests: None
+[main]  INFO    cli include tests: None
+[main]  INFO    cli exclude tests: None
+[main]  INFO    running on Python 3.13.5
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╺━━━━━━━━━━  73% 0:00:01[tester]        WARNING nosec encountered (B703), but no failed test on line 91
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+Run started:2025-12-25 22:31:07.985058+00:00
+Test results:
+        No issues identified.
+Code scanned:
+        Total lines of code: 11066
+        Total lines skipped (#nosec): 10
+Run metrics:
+        Total issues (by severity):
+                Undefined: 0
+                Low: 0
+                Medium: 0
+                High: 0
+        Total issues (by confidence):
+                Undefined: 0
+                Low: 0
+                Medium: 0
+                High: 0
+Files skipped (0):
+--- Security Scan (safety) ---
++===========================================================================================================================================================================================+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
++===========================================================================================================================================================================================+
++====================================================================================================================+
+                               /$$$$$$            /$$
+                              /$$__  $$          | $$
+           /$$$$$$$  /$$$$$$ | $$  \__//$$$$$$  /$$$$$$   /$$   /$$
+          /$$_____/ |____  $$| $$$$   /$$__  $$|_  $$_/  | $$  | $$
+         |  $$$$$$   /$$$$$$$| $$_/  | $$$$$$$$  | $$    | $$  | $$
+          \____  $$ /$$__  $$| $$    | $$_____/  | $$ /$$| $$  | $$
+          /$$$$$$$/|  $$$$$$$| $$    |  $$$$$$$  |  $$$$/|  $$$$$$$
+         |_______/  \_______/|__/     \_______/   \___/   \____  $$
+                                                          /$$  | $$
+                                                         |  $$$$$$/
+  by safetycli.com                                        \______/
++====================================================================================================================+
+ REPORT
+  Safety v3.7.0 is scanning for Vulnerabilities...
+  Scanning dependencies in your environment:
+  -> C:\Users\Sarah\Repos\gos_admin_portal\venv\Lib\site-packages
+  Using open-source vulnerability database
+  Found and scanned 83 packages
+  Timestamp 2025-12-25 17:31:10
+  0 vulnerabilities reported
+  0 vulnerabilities ignored
++====================================================================================================================+
+ No known security vulnerabilities reported.
++====================================================================================================================+
++===========================================================================================================================================================================================+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
++===========================================================================================================================================================================================+
+--- Django System Check ---
+System check identified some issues:
+WARNINGS:
+?: settings.ACCOUNT_AUTHENTICATION_METHOD is deprecated, use: settings.ACCOUNT_LOGIN_METHODS = {'email'}
+?: settings.ACCOUNT_EMAIL_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+?: settings.ACCOUNT_USERNAME_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+System check identified 3 issues (0 silenced).
+--- Running Tests ---
+Found 53 test(s).
+Creating test database for alias 'default'...
+System check identified some issues:
+WARNINGS:
+?: settings.ACCOUNT_AUTHENTICATION_METHOD is deprecated, use: settings.ACCOUNT_LOGIN_METHODS = {'email'}
+?: settings.ACCOUNT_EMAIL_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+?: settings.ACCOUNT_USERNAME_REQUIRED is deprecated, use: settings.ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+System check identified 3 issues (0 silenced).
+......Seeding database...
+Successfully seeded database
+........................................2025-12-25 17:31:19,368 [INFO] programs.forms: FormSave: Student[1] create by 1:tester | field=legal_first_name | from=∅ | to=Jamie
+2025-12-25 17:31:19,368 [INFO] programs.forms: FormSave: Student[1] create by 1:tester | field=last_name | from=∅ | to=Lee
+2025-12-25 17:31:19,368 [INFO] programs.forms: FormSave: Student[1] create by 1:tester | field=active | from=∅ | to=False
+2025-12-25 17:31:19,368 [INFO] programs.forms: FormSave: Student[1] create by 1:tester | field=grade_selector | from=∅ | to=9
+.....DEBUG CONTENT:
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Girls of Steel Portal</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png">
+    <link rel="manifest" href="/static/img/site.webmanifest">
+    <link rel="shortcut icon" href="/static/img/favicon.ico">
+    <!-- Include your CSS framework if you use one -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="/static/css/site.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="/">Girls of Steel Portal</a>
+
+        <div class="d-flex">
+
+        </div>
+    </div>
+</nav>
+<main class="container py-4">
+
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow border-success">
+                <div class="card-header bg-success text-white">
+                    <h3 class="card-title mb-0">Application Started!</h3>
+                </div>
+                <div class="card-body text-center">
+                    <p class="lead">Thank you, Student!</p>
+                    <p>We've received your basic information for <strong>Wizard Program</strong>.</p>
+                    <div class="alert alert-info">
+                        <strong>What's next?</strong>
+                        <p>We've sent an email to <strong>parent_handoff@example.com</strong> with a link to complete your application. Please ask your parent or guardian to check their email and finish the remaining steps.</p>
+                    </div>
+                    <a href="/" class="btn btn-primary">Return Home</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</main>
+</body>
+</html>
+..
+----------------------------------------------------------------------
+Ran 53 tests in 6.838s
+OK
+Destroying test database for alias 'default'...
+CI Tasks Completed Successfully!

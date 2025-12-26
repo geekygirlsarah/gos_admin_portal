@@ -1018,6 +1018,8 @@ class StudentApplication(models.Model):
     """Public application submitted by a prospective student to a Program."""
 
     STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("pending_parent", "Pending Parent"),
         ("pending", "Pending"),
         ("accepted", "Accepted"),
         ("rejected", "Rejected"),
@@ -1066,7 +1068,7 @@ class StudentApplication(models.Model):
     parent_phone = models.CharField(max_length=30, blank=True, null=True)
 
     status = models.CharField(
-        max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True
+        max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True
     )
     notes = models.TextField(blank=True, null=True)
 
@@ -1075,6 +1077,7 @@ class StudentApplication(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        unique_together = ("program", "legal_first_name", "last_name", "parent_email")
 
     def __str__(self):
         return f"Application: {self.first_name or self.legal_first_name} {self.last_name} → {self.program} ({self.status})"

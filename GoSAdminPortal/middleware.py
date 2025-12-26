@@ -14,8 +14,8 @@ EXEMPT_URL_NAMES = {
     "home",  # home requires login via decorator, but keep to avoid loops
     "admin:login",
     # Public application flow
-    "apply_start",
-    "apply_program",
+    "apply_wizard",
+    "apply_parent_resume",
     "apply_thanks",
 }
 

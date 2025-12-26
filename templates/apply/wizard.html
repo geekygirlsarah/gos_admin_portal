@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Program Application</h3>
+                </div>
+                <div class="card-body">
+                    <!-- Progress Bar -->
+                    <div class="progress mb-4" style="height: 25px;">
+                        {% if step == "1" %}
+                            <div class="progress-bar" role="progressbar" style="width: 20%;" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100">Step 1: Program</div>
+                        {% elif step == "2" %}
+                            <div class="progress-bar" role="progressbar" style="width: 40%;" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100">Step 2: Role</div>
+                        {% elif "3" in step %}
+                            <div class="progress-bar" role="progressbar" style="width: 60%;" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100">Step 3: Identity</div>
+                        {% elif "4" in step %}
+                            <div class="progress-bar" role="progressbar" style="width: 80%;" aria-valuenow="80" aria-valuemin="0" aria-valuemax="100">Step 4: Details</div>
+                        {% else %}
+                            <div class="progress-bar" role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">Step 5: Review</div>
+                        {% endif %}
+                    </div>
+
+                    {% if program %}
+                        <div class="alert alert-info">
+                            Applying for: <strong>{{ program.name }} ({{ program.year }})</strong>
+                        </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="step" value="{{ step }}">
+                        
+                        {% if step == "1" %}
+                            <h4>Select a Program</h4>
+                            <p>Please choose a program to apply to. For inquiries about programs that are currently running, please contact us at <a href="mailto:info@girlsofsteelrobotics.org">info@girlsofsteelrobotics.org</a>.</p>
+
+                            {% if future_programs %}
+                                <h5 class="mt-4">Upcoming Programs (Accepting Applications)</h5>
+                                <div class="list-group mb-4">
+                                    {% for prog in future_programs %}
+                                        <label class="list-group-item list-group-item-action d-flex align-items-start">
+                                            <input class="form-check-input me-3 mt-1" type="radio" name="program" value="{{ prog.id }}" {% if form.program.value|stringformat:"s" == prog.id|stringformat:"s" %}checked{% endif %} required>
+                                            <div class="w-100">
+                                                <div class="d-flex w-100 justify-content-between">
+                                                    <h5 class="mb-1">{{ prog.name }}</h5>
+                                                    {% if prog.year %}<small class="text-muted">{{ prog.year }}</small>{% endif %}
+                                                </div>
+                                                {% if prog.description %}<p class="mb-1">{{ prog.description|linebreaksbr }}</p>{% endif %}
+                                            </div>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+
+                            {% if current_programs %}
+                                <h5 class="mt-4">Current Programs (Applications Closed)</h5>
+                                <div class="list-group mb-4">
+                                    {% for prog in current_programs %}
+                                        <div class="list-group-item list-group-item-light">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h5 class="mb-1 text-muted">{{ prog.name }}</h5>
+                                                {% if prog.year %}<small class="text-muted">{{ prog.year }}</small>{% endif %}
+                                            </div>
+                                            {% if prog.description %}<p class="mb-1 text-muted">{{ prog.description|linebreaksbr }}</p>{% endif %}
+                                            <small class="text-muted">Applications are closed.</small>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+
+                            {% if not future_programs and not current_programs %}
+                                <div class="alert alert-info">No programs are currently available.</div>
+                            {% endif %}
+
+                            {% if form.program.errors %}
+                                <div class="alert alert-danger">{{ form.program.errors }}</div>
+                            {% endif %}
+
+                        {% elif step == "2" %}
+                            <h4>Who are you?</h4>
+                            <div class="list-group mb-4">
+                                {% for radio in form.role %}
+                                    <label class="list-group-item list-group-item-action d-flex align-items-center p-3">
+                                        {{ radio.tag }}
+                                        <span class="ms-3">{{ radio.choice_label }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.role.errors %}
+                                <div class="alert alert-danger">{{ form.role.errors }}</div>
+                            {% endif %}
+                        {% elif step == "3_parent_identity" %}
+                            <h4>Verify your Identity</h4>
+                            <p>Please enter your email address. We will send you a verification code.</p>
+                        {% elif step == "3_parent_otp" %}
+                            <h4>Enter Verification Code</h4>
+                            <p>We've sent a 6-digit code to your email. Please enter it below.</p>
+                        {% elif step == "3_student_identity" %}
+                            <h4>Student Identity</h4>
+                            <p>Please enter your legal name and your parent's email address. We will use this to contact them to complete your application.</p>
+                        {% elif step == "3_student_info" %}
+                            <h4>Student Information</h4>
+                            <p>Please provide your basic information. We will notify your parent/guardian to complete the application.</p>
+                        {% elif step == "4_parent_profile" %}
+                            <h4>Primary Adult Profile</h4>
+                            <p>Please confirm or update your contact information as the primary adult.</p>
+                        {% elif step == "4_parent_household" %}
+                            <h4>Second Adult Profile</h4>
+                            <p>Please provide information for another adult in case of emergencies (e.g., another parent or guardian).</p>
+                        {% elif step == "4_parent_student_select" %}
+                            <h4>Select Student</h4>
+                            <p>Select a student you've previously registered, or add a new one.</p>
+                            <div class="list-group mb-4">
+                                {% for radio in form.student %}
+                                    <label class="list-group-item list-group-item-action d-flex align-items-center p-3">
+                                        {{ radio.tag }}
+                                        <span class="ms-3">{{ radio.choice_label }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.student.errors %}
+                                <div class="alert alert-danger">{{ form.student.errors }}</div>
+                            {% endif %}
+                        {% elif step == "4_parent_student_details" %}
+                            <h4>Student Details</h4>
+                            <p>Please provide details for the student you are enrolling.</p>
+                        {% endif %}
+
+                        <div class="row">
+                          <div class="col-12">
+                            {% if step != "1" and step != "2" and step != "4_parent_student_select" %}
+                                {% for field in form %}
+                                    {% if field.is_hidden %}
+                                        {{ field }}
+                                    {% else %}
+                                        <div class="mb-3 {% if field.field.widget.input_type == 'checkbox' %}form-check{% endif %}">
+                                            {% if field.field.widget.input_type == 'checkbox' %}
+                                                {{ field }}
+                                                <label class="form-check-label" for="{{ field.id_for_label }}">
+                                                    {{ field.label }}
+                                                </label>
+                                                {% if field.help_text %}
+                                                    <div class="form-text">{{ field.help_text }}</div>
+                                                {% endif %}
+                                            {% else %}
+                                                {{ field.label_tag }}
+                                                {{ field }}
+                                                {% if field.help_text %}
+                                                    <div class="form-text text-muted">{{ field.help_text }}</div>
+                                                {% endif %}
+                                            {% endif %}
+                                            {% if field.errors %}
+                                                <div class="text-danger small">{{ field.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                          </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            {% if step != "1" %}
+                                <a href="?step={{ previous_step }}" class="btn btn-secondary">Back</a>
+                            {% else %}
+                                <div></div>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary">
+                                {% if step == "3_student_info" or step == "4_parent_student_details" %}Submit Application{% else %}Next{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+    (function(){
+        function calcGraduationYearFromGrade(grade){
+            if(grade === '' || grade === null || grade === undefined) return '';
+            var g = parseInt(grade, 10);
+            if(isNaN(g) || g < 0 || g > 12) return '';
+            var today = new Date();
+            var endYear = today.getFullYear() + (today.getMonth() + 1 >= 7 ? 1 : 0);
+            if(g === 0){
+                return endYear + 13;
+            } else {
+                var remaining = Math.max(0, 12 - g);
+                return endYear + remaining;
+            }
+        }
+        function hook(){
+            var gradeSel = document.querySelector('select[name="grade_selector"]');
+            var gradYearInput = document.querySelector('input[name="graduation_year"]');
+            if(!gradeSel || !gradYearInput) return;
+            gradeSel.addEventListener('change', function(){
+                var val = gradeSel.value;
+                var gy = calcGraduationYearFromGrade(val);
+                if(gy !== ''){
+                    gradYearInput.value = gy;
+                }
+            });
+        }
+        if(document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', hook);
+        } else { hook(); }
+    })();
+</script>
+{% endblock %}

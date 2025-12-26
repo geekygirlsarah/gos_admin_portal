@@ -50,25 +50,5 @@
     <div class="alert alert-info mt-3">No active programs are currently accepting applications.</div>
   {% endif %}
 
-  {% if past_programs %}
-    <h2 class="h5 mt-3">Past Programs</h2>
-    <div class="list-group mb-4">
-      {% for program in past_programs %}
-        <div class="list-group-item">
-          <div class="d-flex w-100 justify-content-between">
-            <h5 class="mb-1">{{ program.name }}</h5>
-            {% if program.year %}
-              <small class="text-muted">{{ program.year }}</small>
-            {% endif %}
-          </div>
-          {% if program.description %}
-            <p class="mb-1">{{ program.description }}</p>
-          {% endif %}
-          <small class="text-muted">Applications are closed.</small>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
 </div>
 {% endblock %}

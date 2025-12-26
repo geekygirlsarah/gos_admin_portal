@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Student Applications</h1>
+    </div>
+
+    <div class="card shadow">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Student</th>
+                        <th>Program</th>
+                        <th>Parent Email</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in applications %}
+                        <tr>
+                            <td>{{ app.created_at|date:"Y-m-d" }}</td>
+                            <td>{{ app.legal_first_name }} {{ app.last_name }}</td>
+                            <td>{{ app.program.name }}</td>
+                            <td>{{ app.parent_email }}</td>
+                            <td>
+                                <span class="badge {% if app.status == 'pending' %}bg-warning{% elif app.status == 'accepted' %}bg-success{% elif app.status == 'pending_parent' %}bg-info{% else %}bg-secondary{% endif %}">
+                                    {{ app.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{% url 'admin:programs_studentapplication_change' app.id %}" class="btn btn-sm btn-outline-primary">View/Manage</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center">No applications found.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

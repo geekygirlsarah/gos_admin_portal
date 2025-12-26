@@ -60,6 +60,7 @@
                     {% endif %}
                     {% user_role user as role %}
                     {% if role == 'LeadMentor' %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'application_list' %}">Applications</a></li>
                     <li class="nav-item"><a class="nav-link" href="/programs/imports/">Imports</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'role_permission_settings' %}">Permissions</a></li>
                     {% endif %}

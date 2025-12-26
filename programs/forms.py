@@ -5,6 +5,7 @@ from django.utils.safestring import mark_safe
 
 from .models import (
     Adult,
+    Enrollment,
     Fee,
     Payment,
     Program,
@@ -205,6 +206,56 @@ class AdultForm(forms.ModelForm):
             "ok_to_contact",
             "notes",
         ]
+
+
+class ApplicationParentProfileForm(forms.ModelForm):
+    class Meta:
+        model = Adult
+        fields = [
+            "first_name",
+            "preferred_first_name",
+            "last_name",
+            "pronouns",
+            "email",
+            "personal_email",
+            "phone_number",
+            "cell_phone",
+            "home_phone",
+            "email_updates",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if name == "email_updates":
+                field.widget.attrs.update({"class": "form-check-input"})
+            else:
+                field.widget.attrs.update({"class": "form-control"})
+
+        # Default email_updates to True for new forms
+        if not self.instance or not self.instance.pk:
+            self.fields["email_updates"].initial = True
+
+        # Disable personal_email if it's prefilled (verified)
+        if self.initial.get("personal_email") or (
+            self.instance and self.instance.personal_email
+        ):
+            self.fields["personal_email"].widget.attrs["readonly"] = True
+            self.fields["personal_email"].disabled = True
+
+    def clean_personal_email(self):
+        email = self.cleaned_data.get("personal_email")
+        if self.instance and self.instance.pk and self.instance.personal_email:
+            if email != self.instance.personal_email:
+                return self.instance.personal_email
+        return email
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.is_parent = True
+        if commit:
+            instance.save()
+        return instance
 
 
 class PaymentForm(forms.ModelForm):
@@ -470,14 +521,138 @@ class FeeAssignmentEditForm(forms.Form):
 
 class ProgramApplySelectForm(forms.Form):
     program = forms.ModelChoiceField(
-        queryset=Program.objects.all(), required=True, label="Select a program"
+        queryset=Program.objects.filter(active=True),
+        label="Select a Program",
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Show all active programs so they can be grouped by status in the template
         self.fields["program"].queryset = Program.objects.filter(active=True).order_by(
-            "name"
+            "start_date"
         )
+
+
+class ApplicationRoleForm(forms.Form):
+    ROLE_CHOICES = [
+        ("parent", "I am a Parent/Guardian applying for a student"),
+        ("student", "I am a Student applying for myself"),
+    ]
+    role = forms.ChoiceField(
+        choices=ROLE_CHOICES,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+        label="Who are you?",
+    )
+
+
+class ApplicationIdentityForm(forms.Form):
+    email = forms.EmailField(
+        label="Email Address",
+        widget=forms.EmailInput(
+            attrs={"class": "form-control", "placeholder": "Enter your email"}
+        ),
+    )
+
+
+class ApplicationStudentIdentityForm(forms.Form):
+    legal_first_name = forms.CharField(max_length=150, label="Legal First Name")
+    last_name = forms.CharField(max_length=150, label="Last Name")
+    parent_email = forms.EmailField(label="Parent Email", required=False)
+
+    def __init__(self, *args, **kwargs):
+        show_parent_email = kwargs.pop("show_parent_email", True)
+        super().__init__(*args, **kwargs)
+        if not show_parent_email:
+            self.fields["parent_email"].widget = forms.HiddenInput()
+            self.fields["parent_email"].required = False
+        else:
+            self.fields["parent_email"].required = True
+
+
+class ApplicationOTPForm(forms.Form):
+    otp = forms.CharField(
+        label="Verification Code",
+        max_length=6,
+        widget=forms.TextInput(
+            attrs={"class": "form-control", "placeholder": "6-digit code"}
+        ),
+    )
+
+
+class ApplicationStudentSelectionForm(forms.Form):
+    student = forms.ChoiceField(
+        label="Select Student",
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
+
+    def __init__(self, *args, parent=None, program=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = []
+        if parent:
+            for student in parent.students.all():
+                # Check if already applied or enrolled
+                is_enrolled = Enrollment.objects.filter(
+                    student=student, program=program
+                ).exists()
+                is_applied = (
+                    StudentApplication.objects.filter(
+                        program=program,
+                        legal_first_name=student.legal_first_name,
+                        last_name=student.last_name,
+                        parent_email=parent.email,
+                    )
+                    .exclude(status="draft")
+                    .exists()
+                )
+
+                disabled = is_enrolled or is_applied
+                label = f"{student.legal_first_name} {student.last_name}"
+                if is_enrolled:
+                    label += " (Already Enrolled)"
+                elif is_applied:
+                    label += " (Application Pending)"
+
+                choices.append((student.id, label))
+
+        choices.append(("new", "Add New Student"))
+        self.fields["student"].choices = choices
+
+
+class ApplicationHouseholdForm(forms.ModelForm):
+    class Meta:
+        model = Adult
+        fields = [
+            "first_name",
+            "preferred_first_name",
+            "last_name",
+            "pronouns",
+            "email",
+            "personal_email",
+            "phone_number",
+            "cell_phone",
+            "home_phone",
+            "email_updates",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if name == "email_updates":
+                field.widget.attrs.update({"class": "form-check-input"})
+            else:
+                field.widget.attrs.update({"class": "form-control"})
+
+        # Default email_updates to True for new forms
+        if not self.instance or not self.instance.pk:
+            self.fields["email_updates"].initial = True
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.is_parent = True
+        if commit:
+            instance.save()
+        return instance
 
 
 class StudentApplicationForm(forms.ModelForm):
@@ -493,9 +668,7 @@ class StudentApplicationForm(forms.ModelForm):
         model = StudentApplication
         fields = [
             "program",
-            "legal_first_name",
             "first_name",
-            "last_name",
             "pronouns",
             "date_of_birth",
             "address",
@@ -504,17 +677,13 @@ class StudentApplicationForm(forms.ModelForm):
             "zip_code",
             "cell_phone_number",
             "personal_email",
-            "andrew_id",
-            "andrew_email",
             "school",
+            "grade_selector",
             "graduation_year",
             "race_ethnicity",
             "tshirt_size",
             "on_discord",
             "discord_handle",
-            "parent_name",
-            "parent_email",
-            "parent_phone",
         ]
         widgets = {
             "program": forms.HiddenInput(),
@@ -522,7 +691,16 @@ class StudentApplicationForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        is_parent_flow = kwargs.pop("is_parent_flow", False)
         super().__init__(*args, **kwargs)
+
+        if is_parent_flow:
+            # In parent flow, we might be editing an existing student,
+            # so we should show legal_first_name and last_name if they are new,
+            # but maybe the user wants them gone from the form ENTIRELY.
+            # If so, I need to collect them in a step before 4_parent_student_details if "new".
+            pass
+
         # Prefill grade_selector from grad year
         gy = self.instance.graduation_year if getattr(self, "instance", None) else None
         if gy:
@@ -545,11 +723,29 @@ class StudentApplicationForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+
+        # Student email recommended for older grades but not required for younger ones
+        grade_val = cleaned.get("grade_selector")
+        personal_email = cleaned.get("personal_email")
+        if grade_val:
+            try:
+                g = int(grade_val)
+                if g >= 6 and not personal_email:
+                    # Not raising error, just note it if we had a way to show recommendations
+                    # For now, just follow "never Required for younger ones"
+                    pass
+            except ValueError:
+                pass
+
         # Basic validation to ensure contact info present
-        if not cleaned.get("personal_email") and not cleaned.get("cell_phone_number"):
-            raise forms.ValidationError(
-                "Please provide at least an email or a phone number."
-            )
+        if (
+            not cleaned.get("personal_email")
+            and not cleaned.get("cell_phone_number")
+            and not self.instance.pk
+        ):
+            # For students, we might not have these yet if they are young
+            pass
+
         return cleaned
 
     def save(self, commit=True):

@@ -50,6 +50,7 @@ from .views import (
     SchoolImportView,
     SchoolListView,
     SchoolUpdateView,
+    StudentApplicationListView,
     StudentBulkConvertToAlumniView,
     StudentConvertToAlumniView,
     StudentCreateView,
@@ -411,5 +412,10 @@ urlpatterns = [
         "settings/permissions/",
         RolePermissionSettingsView.as_view(),
         name="role_permission_settings",
+    ),
+    path(
+        "applications/",
+        login_required(StudentApplicationListView.as_view()),
+        name="application_list",
     ),
 ]

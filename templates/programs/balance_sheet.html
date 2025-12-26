@@ -71,6 +71,28 @@
         <div class="alert alert-info">No financial entries yet for this student and program.</div>
       {% endif %}
 
+      <div class="card mt-4 border-info shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title h6"><i class="bi bi-file-earmark-lock"></i> Secure Tax Form Upload</h5>
+          <p class="card-text small text-muted">
+            If you need to apply for a sliding scale discount, please upload a redacted copy of your most recent tax form (1040).
+            Lead mentors will review the form and apply the appropriate discount to the student's account, then the file will be deleted.
+          </p>
+          <form method="post" action="{% url 'program_sliding_scale_parent_upload' program.id student.id %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="input-group">
+              <input type="file" name="tax_form" class="form-control form-control-sm" id="tax_form_input" multiple required>
+              <button class="btn btn-sm btn-info text-white" type="submit">Upload & Notify Lead Mentors</button>
+            </div>
+          </form>
+          {% if sliding_scale.tax_forms.exists %}
+            <div class="mt-2 small text-success">
+              <i class="bi bi-check-circle-fill"></i> {{ sliding_scale.tax_forms.count }} tax form(s) currently uploaded. A mentor will review them soon.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
     </div>
   </div>
 {% endblock %}
