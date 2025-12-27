@@ -15,8 +15,7 @@ EXEMPT_URL_NAMES = {
     "admin:login",
     # Public application flow
     "apply_start",
-    "apply_program",
-    "apply_thanks",
+    "apply_step",
 }
 
 EXEMPT_PATH_PREFIXES = (

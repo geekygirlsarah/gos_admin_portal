@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Apply - Parent Information{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>Primary Parent/Guardian Information</h1>
+    <form method="POST">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field.label_tag }}
+                {{ field }}
+                {{ field.errors }}
+                {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Next</button>
+    </form>
+</div>
+{% endblock %}

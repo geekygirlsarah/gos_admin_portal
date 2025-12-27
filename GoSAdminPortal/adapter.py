@@ -1,6 +1,5 @@
 from allauth.account.adapter import DefaultAccountAdapter
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
 from django.utils.crypto import get_random_string
 
 

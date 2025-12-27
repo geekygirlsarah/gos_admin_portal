@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Apply - Parent Verification{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>Parent/Guardian Verification</h1>
+    <p>Please enter your email address to verify your identity. If you have applied before, we will pre-fill your information.</p>
+    
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3">
+            {{ form.email.label_tag }}
+            {{ form.email }}
+            {{ form.email.errors }}
+        </div>
+        
+        {% if otp_sent %}
+        <div class="mb-3">
+            {{ form.otp.label_tag }}
+            {{ form.otp }}
+            {{ form.otp.errors }}
+            <div class="form-text">{{ form.otp.help_text }}</div>
+        </div>
+        <button type="submit" class="btn btn-success">Verify Code</button>
+        {% else %}
+        <button type="submit" class="btn btn-primary">Send Verification Code</button>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

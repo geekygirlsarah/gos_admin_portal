@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Apply - Introduction{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>Student Application</h1>
+    <div class="card mb-4">
+        <div class="card-body">
+            <p>Welcome to the Girls of Steel application process! We're excited that you're interested in joining our programs.</p>
+            <p>The application process involves the following steps:</p>
+            <ul>
+                <li>Selecting the program you're applying to.</li>
+                <li>Verifying your identity via email.</li>
+                <li>Providing student and parent/guardian information.</li>
+                <li>Answering a few essay questions about your interest.</li>
+            </ul>
+            <p>Once submitted, our lead mentors will review your application. You'll receive an email confirmation shortly after submission.</p>
+            
+            <form method="POST">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Start Application</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Apply - Role Selection{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>Who is filling out this application?</h1>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3">
+            {% for radio in form.role %}
+                <div class="form-check">
+                    {{ radio.tag }}
+                    <label class="form-check-label" for="{{ radio.id_for_label }}">
+                        {{ radio.choice_label }}
+                    </label>
+                </div>
+            {% endfor %}
+            {{ form.role.errors }}
+        </div>
+        <button type="submit" class="btn btn-primary">Next</button>
+    </form>
+</div>
+{% endblock %}

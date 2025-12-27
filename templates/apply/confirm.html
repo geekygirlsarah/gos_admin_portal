@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Apply - Confirm and Submit{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>Confirm Your Application</h1>
+    <p>Please review your information before submitting.</p>
+    
+    <div class="card mb-4">
+        <div class="card-header">Student Information</div>
+        <div class="card-body">
+            <p><strong>Name:</strong> {{ storage.student_data.preferred_first_name }} {{ storage.student_data.last_name }}</p>
+            <p><strong>Email:</strong> {{ storage.student_data.email|default:"Not provided" }}</p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Parent/Guardian Information</div>
+        <div class="card-body">
+            <p><strong>Primary Parent:</strong> {{ storage.parent1_data.parent1_preferred_first_name }} {{ storage.parent1_data.parent1_last_name }}</p>
+            <p><strong>Email:</strong> {{ storage.parent1_data.parent1_email }}</p>
+        </div>
+    </div>
+    
+    <form method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success btn-lg">Submit Application</button>
+    </form>
+</div>
+{% endblock %}

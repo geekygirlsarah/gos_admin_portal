@@ -1,11 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}Application Submitted{% endblock %}
+{% block title %}Apply - Thank You{% endblock %}
 {% block content %}
-<div class="container mt-4">
-  <div class="alert alert-success">
-    <h2>Thank you!</h2>
-    <p>Your application has been submitted. Our team will review it and follow up via the contact information you provided.</p>
-  </div>
-  <p><a href="/" class="btn btn-primary">Return to Home</a></p>
+<div class="container mt-4 text-center">
+    <div class="alert alert-success">
+        <h1>Application Submitted!</h1>
+        <p>Thank you, {{ application.preferred_first_name }}. Your application for {{ application.program.name }} has been received.</p>
+    </div>
+    <p>A confirmation email has been sent to the addresses provided.</p>
+    <p>Our lead mentors will review your application soon. You will hear from us shortly.</p>
+    <a href="/" class="btn btn-primary">Return Home</a>
 </div>
 {% endblock %}

@@ -10,16 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import json as _json
 import os
 from pathlib import Path
 
 import csp
 import dj_database_url
-from csp.constants import SELF
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -39,7 +38,6 @@ ALLOWED_HOSTS = [
 if os.getenv("ALLOWED_HOSTS"):
     ALLOWED_HOSTS.extend(os.getenv("ALLOWED_HOSTS").split(","))
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -56,10 +54,12 @@ INSTALLED_APPS = [
     # Allauth apps
     "allauth",
     "allauth.account",
+    "formtools",
     # Local apps
     "programs",
     "attendance",
     "api",
+    "apply",
 ]
 
 MIDDLEWARE = [
@@ -99,7 +99,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "GoSAdminPortal.wsgi.application"
 
-
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
@@ -131,7 +130,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
@@ -142,7 +140,6 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
@@ -185,9 +182,8 @@ LOGIN_URL = "/accounts/login/"
 
 # Email OTP Login settings
 ACCOUNT_LOGIN_BY_CODE_ENABLED = True
-ACCOUNT_AUTHENTICATION_METHOD = "email"
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"  # We don't need verification if we use OTP
 ACCOUNT_ADAPTER = "GoSAdminPortal.adapter.AccountAdapter"
 
@@ -220,17 +216,6 @@ CONTENT_SECURITY_POLICY = {
         "style-src": ["'self'", "https://cdn.jsdelivr.net"],
     }
 }
-# CSP_DEFAULT_SRC = ["'self'",]
-# CSP_SCRIPT_SRC = ["'self'", 'https://cdn.jsdelivr.net']
-# CSP_STYLE_SRC = ["'self'", 'https://cdn.jsdelivr.net']
-# CSP_IMG_SRC = ["'self'", 'data:']
-# CSP_FONT_SRC = ["'self'", 'data:']
-# CSP_CONNECT_SRC = ["'self'",]
-# CSP_OBJECT_SRC = ["'none'",]
-# CSP_BASE_URI = ["'self'",]
-# CSP_FRAME_ANCESTORS = ["'self'",]
-# # Include a nonce for inline scripts we control
-# CSP_INCLUDE_NONCE_IN = ['script-src',]
 
 # Multiple sender accounts for messaging UI. Each item should be a dict with keys:
 # [
@@ -244,7 +229,6 @@ CONTENT_SECURITY_POLICY = {
 # ]
 # Host/port/TLS/SSL come from the global EMAIL_* settings above.
 # You can set via code or via an env var EMAIL_SENDER_ACCOUNTS_JSON containing a JSON list.
-import json as _json
 
 _email_accounts_env = os.getenv("EMAIL_SENDER_ACCOUNTS_JSON", "").strip()
 EMAIL_SENDER_ACCOUNTS = []
@@ -260,7 +244,7 @@ if _email_accounts_env:
 ADMIN_EMAILS = [
     e.strip() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
 ]
-ADMINS = tuple((f"Admin {i+1}", email) for i, email in enumerate(ADMIN_EMAILS))
+ADMINS = tuple((f"Admin {i + 1}", email) for i, email in enumerate(ADMIN_EMAILS))
 MANAGERS = ADMINS
 
 # Logging configuration: verbose console + email admins on server errors when DEBUG=False

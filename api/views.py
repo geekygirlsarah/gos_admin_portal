@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 # HTML management views for API keys
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from api.auth import require_api_key
-from attendance.models import AttendanceEvent, AttendanceSession
+from attendance.models import AttendanceSession
 from attendance.services import record_tap
 from programs.models import Program, Student
 

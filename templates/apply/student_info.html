@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Apply - Student Information{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>Student Information</h1>
+    <form method="POST">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field.label_tag }}
+                {{ field }}
+                {{ field.errors }}
+                {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        {% if otp_sent %}
+        <div class="mb-3">
+            <label for="id_student_otp" class="form-label">Verification Code</label>
+            <input type="text" name="student_otp" id="id_student_otp" class="form-control" placeholder="6-digit code sent to your email">
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary">{% if otp_sent %}Verify and Next{% else %}Next{% endif %}</button>
+    </form>
+</div>
+{% endblock %}
