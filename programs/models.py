@@ -128,6 +128,30 @@ MENTOR_ROLE_CHOICES = [
 ]
 
 
+class Team(models.Model):
+    TEAM_TYPES = [
+        ("FRC", "FRC"),
+        ("FTC", "FTC"),
+        ("FLL_CHALLENGE", "FLL Challenge"),
+        ("FLL_EXPLORE", "FLL Explore"),
+    ]
+    team_type = models.CharField(max_length=20, choices=TEAM_TYPES)
+    number = models.IntegerField()
+    name = models.CharField(max_length=100, blank=True, null=True)
+    color = models.CharField(
+        max_length=7, default="#0000ff", help_text="Hex color code (e.g. #0000ff)"
+    )
+
+    class Meta:
+        unique_together = ("team_type", "number")
+        ordering = ["team_type", "number"]
+
+    def __str__(self):
+        if self.name:
+            return f"{self.team_type} {self.number} {self.name}"
+        return f"{self.team_type} {self.number}"
+
+
 class RolePermission(models.Model):
     """
     Dynamic permission settings for Mentors and Parents.
@@ -644,6 +668,13 @@ class Student(models.Model):
 class Enrollment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     program = models.ForeignKey(Program, on_delete=models.CASCADE)
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

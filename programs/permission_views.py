@@ -3,7 +3,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
-from .models import Adult, RolePermission, Student
+from .models import Adult, RolePermission, Student, Team
+try:
+    from api.models import ApiClientKey
+except ImportError:
+    ApiClientKey = None
 
 
 def get_user_role(user):
@@ -96,8 +100,8 @@ class LeadMentorRequiredMixin(UserPassesTestMixin):
         )
 
 
-class RolePermissionSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
-    template_name = "programs/role_permission_settings.html"
+class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    template_name = "programs/settings.html"
 
     def get(self, request):
         sections = RolePermission.SECTION_CHOICES
@@ -130,21 +134,73 @@ class RolePermissionSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, Vi
                 }
             )
 
+        teams = Team.objects.all()
+        team_types = Team.TEAM_TYPES
+
+        api_keys = None
+        if ApiClientKey and request.user.has_perm("api.view_apiclientkey"):
+            api_keys = ApiClientKey.objects.all()
+
         context = {
             "grouped_permissions": grouped_permissions,
+            "teams": teams,
+            "team_types": team_types,
+            "api_keys": api_keys,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
+            "active_tab": request.GET.get("tab", "permissions"),
+            "sections": sections,
         }
         return render(request, self.template_name, context)
 
     def post(self, request):
-        permissions = RolePermission.objects.all()
-        for perm in permissions:
-            read_key = f"read_{perm.id}"
-            write_key = f"write_{perm.id}"
+        action = request.POST.get("action")
 
-            perm.can_read = read_key in request.POST
-            perm.can_write = write_key in request.POST
-            perm.save()
+        if action == "update_permissions":
+            permissions = RolePermission.objects.all()
+            for perm in permissions:
+                read_key = f"read_{perm.id}"
+                write_key = f"write_{perm.id}"
 
-        messages.success(request, "Permissions updated successfully.")
-        return redirect("role_permission_settings")
+                perm.can_read = read_key in request.POST
+                perm.can_write = write_key in request.POST
+                perm.save()
+            messages.success(request, "Permissions updated successfully.")
+            return redirect("/programs/settings/?tab=permissions")
+
+        elif action == "add_team":
+            team_type = request.POST.get("team_type")
+            number = request.POST.get("number")
+            name = request.POST.get("name")
+            color = request.POST.get("color")
+            if team_type and number:
+                Team.objects.create(
+                    team_type=team_type, number=number, name=name, color=color
+                )
+                messages.success(request, f"Team {team_type} {number} added.")
+            return redirect("/programs/settings/?tab=teams")
+
+        elif action == "delete_team":
+            team_id = request.POST.get("team_id")
+            if team_id:
+                Team.objects.filter(id=team_id).delete()
+                messages.success(request, "Team deleted.")
+            return redirect("/programs/settings/?tab=teams")
+
+        elif action == "update_team":
+            team_id = request.POST.get("team_id")
+            team_type = request.POST.get("team_type")
+            number = request.POST.get("number")
+            name = request.POST.get("name")
+            color = request.POST.get("color")
+            if team_id:
+                team = Team.objects.filter(id=team_id).first()
+                if team:
+                    team.team_type = team_type
+                    team.number = number
+                    team.name = name
+                    team.color = color
+                    team.save()
+                    messages.success(request, "Team updated.")
+            return redirect("/programs/settings/?tab=teams")
+
+        return redirect("portal_settings")

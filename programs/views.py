@@ -6,7 +6,11 @@ from django.contrib.auth.mixins import (
 )
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .permission_views import can_user_read, can_user_write
+from .permission_views import (
+    LeadMentorRequiredMixin,
+    can_user_read,
+    can_user_write,
+)
 
 
 class DynamicPermissionMixin(UserPassesTestMixin):
@@ -178,6 +182,7 @@ from .models import (
     Student,
     StudentApplication,
     TaxForm,
+    Team,
 )
 
 
@@ -272,9 +277,9 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
 
 
 class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
-    model = Student
+    model = Enrollment
     template_name = "students/photo_grid.html"
-    context_object_name = "students"
+    context_object_name = "enrollments"
     paginate_by = 48
 
     def dispatch(self, request, *args, **kwargs):
@@ -282,15 +287,23 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        # Students enrolled in this program
-        qs = Student.objects.filter(programs=self.program)
-        return qs.annotate(
-            sort_first=Coalesce("first_name", "legal_first_name"),
-        ).order_by(Lower("sort_first"), Lower("last_name"))
+        return (
+            Enrollment.objects.filter(program=self.program)
+            .select_related("student", "team")
+            .annotate(
+                sort_first=Lower(
+                    Coalesce("student__first_name", "student__legal_first_name")
+                ),
+                sort_last=Lower("student__last_name"),
+            )
+            .order_by("sort_first", "sort_last")
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["program"] = self.program
+        # Compatibility for the template which expects 'students'
+        ctx["students"] = ctx["enrollments"]
         return ctx
 
 
@@ -1855,11 +1868,13 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         from django.db.models.functions import Coalesce, Lower
 
         base_qs = (
-            program.students.select_related("user")
-            .all()
+            Enrollment.objects.filter(program=program)
+            .select_related("student", "student__user", "team")
             .annotate(
-                sort_first=Lower(Coalesce("first_name", "legal_first_name")),
-                sort_last=Lower("last_name"),
+                sort_first=Lower(
+                    Coalesce("student__first_name", "student__legal_first_name")
+                ),
+                sort_last=Lower("student__last_name"),
             )
         )
 
@@ -1867,21 +1882,26 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                base_qs = base_qs.filter(adults=adult)
+                base_qs = base_qs.filter(student__adults=adult)
             except (Adult.DoesNotExist, AttributeError):
-                base_qs = Student.objects.none()
+                base_qs = Enrollment.objects.none()
 
         # Split into active and inactive sections
-        ctx["active_students"] = base_qs.filter(active=True).order_by(
+        ctx["active_enrollments"] = base_qs.filter(student__active=True).order_by(
             "sort_first", "sort_last"
         )
-        ctx["inactive_students"] = base_qs.filter(active=False).order_by(
+        ctx["inactive_enrollments"] = base_qs.filter(student__active=False).order_by(
             "sort_first", "sort_last"
         )
+
         # Backwards compatibility (old templates may rely on a single list)
-        ctx["enrolled_students"] = list(ctx["active_students"]) + list(
-            ctx["inactive_students"]
+        ctx["active_students"] = [e.student for e in ctx["active_enrollments"]]
+        ctx["inactive_students"] = [e.student for e in ctx["inactive_enrollments"]]
+        ctx["enrolled_students"] = (
+            ctx["active_students"] + ctx["inactive_students"]
         )
+
+        ctx["teams"] = Team.objects.all()
 
         ctx["can_manage_students"] = can_user_write(self.request.user, "student_info")
         ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
@@ -2073,6 +2093,21 @@ class ProgramStudentQuickCreateView(LoginRequiredMixin, PermissionRequiredMixin,
         else:
             messages.error(request, "Could not create student.")
         return redirect("program_detail", pk=program.pk)
+
+
+class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    def post(self, request, pk):
+        enrollment_id = request.POST.get("enrollment_id")
+        team_id = request.POST.get("team_id")
+        enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
+        if team_id:
+            team = get_object_or_404(Team, id=team_id)
+            enrollment.team = team
+        else:
+            enrollment.team = None
+        enrollment.save()
+        messages.success(request, f"Team updated for {enrollment.student}.")
+        return redirect("program_detail", pk=pk)
 
 
 class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View):

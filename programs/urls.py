@@ -4,7 +4,7 @@ from django.views.generic import TemplateView
 
 from attendance.views import AttendanceImportView, student_attendance_view
 
-from .permission_views import RolePermissionSettingsView
+from .permission_views import PortalSettingsView
 from .views import (
     AdultsListView,
     AdultUpdateView,
@@ -23,6 +23,7 @@ from .views import (
     ProgramDuesOwedView,
     ProgramEmailBalancesView,
     ProgramEmailView,
+    ProgramEnrollmentUpdateView,
     ProgramFeeAssignmentEditView,
     ProgramFeeCreateView,
     ProgramFeeSelectView,
@@ -291,6 +292,11 @@ urlpatterns = [
         name="program_student_quick_create",
     ),
     path(
+        "<int:pk>/enrollment/update/",
+        ProgramEnrollmentUpdateView.as_view(),
+        name="program_enrollment_update",
+    ),
+    path(
         "<int:pk>/students/<int:student_id>/remove/",
         permission_required("programs.change_student")(
             ProgramStudentRemoveView.as_view()
@@ -406,10 +412,15 @@ urlpatterns = [
         permission_required("programs.change_school")(SchoolUpdateView.as_view()),
         name="school_edit",
     ),
-    # Permissions
+    # Settings
+    path(
+        "settings/",
+        PortalSettingsView.as_view(),
+        name="portal_settings",
+    ),
     path(
         "settings/permissions/",
-        RolePermissionSettingsView.as_view(),
+        PortalSettingsView.as_view(),
         name="role_permission_settings",
     ),
 ]

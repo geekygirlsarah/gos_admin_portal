@@ -10,23 +10,53 @@
 
   {% if students %}
     <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
-      {% for s in students %}
-        <div class="col">
-          <div class="card h-100 text-center">
-            <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
-              {% if s.photo %}
-                <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
-              {% else %}
-                <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
-                  <span class="text-muted">No Photo</span>
+      {% for item in students %}
+        {% if item.student %}
+            {# This is an Enrollment object #}
+            {% with s=item.student team=item.team %}
+                <div class="col">
+                  <div class="card h-100 text-center">
+                    <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+                      {% if s.photo %}
+                        <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
+                      {% else %}
+                        <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
+                          <span class="text-muted">No Photo</span>
+                        </div>
+                      {% endif %}
+                    </a>
+                    <div class="card-body p-2">
+                      <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                      {% if team %}
+                        <div class="mt-1">
+                          <span class="badge rounded-pill team-badge" data-color="{{ team.color }}">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
+                        </div>
+                      {% endif %}
+                    </div>
+                  </div>
                 </div>
-              {% endif %}
-            </a>
-            <div class="card-body p-2">
-              <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
-            </div>
-          </div>
-        </div>
+            {% endwith %}
+        {% else %}
+            {# This is a Student object #}
+            {% with s=item %}
+                <div class="col">
+                  <div class="card h-100 text-center">
+                    <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+                      {% if s.photo %}
+                        <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
+                      {% else %}
+                        <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
+                          <span class="text-muted">No Photo</span>
+                        </div>
+                      {% endif %}
+                    </a>
+                    <div class="card-body p-2">
+                      <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                    </div>
+                  </div>
+                </div>
+            {% endwith %}
+        {% endif %}
       {% endfor %}
     </div>
 
@@ -50,4 +80,17 @@
   {% else %}
     <div class="alert alert-info">No students found.</div>
   {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.team-badge').forEach(function(badge) {
+        var color = badge.getAttribute('data-color');
+        if (color) {
+            badge.style.backgroundColor = color;
+        }
+    });
+});
+</script>
 {% endblock %}

@@ -157,16 +157,22 @@ class ApiKeyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = ApiClientKey
     form_class = ApiClientKeyForm
     template_name = "api/api_key_form.html"
-    success_url = reverse_lazy("api_key_list")
+    success_url = reverse_lazy("portal_settings")
     permission_required = "api.add_apiclientkey"
+
+    def get_success_url(self):
+        return reverse_lazy("portal_settings") + "?tab=api_keys"
 
 
 class ApiKeyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
     model = ApiClientKey
     form_class = ApiClientKeyForm
     template_name = "api/api_key_form.html"
-    success_url = reverse_lazy("api_key_list")
+    success_url = reverse_lazy("portal_settings")
     permission_required = "api.change_apiclientkey"
+
+    def get_success_url(self):
+        return reverse_lazy("portal_settings") + "?tab=api_keys"
 
 
 class ApiKeyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -176,4 +182,4 @@ class ApiKeyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
         obj = ApiClientKey.objects.filter(pk=pk).first()
         if obj:
             obj.delete()
-        return redirect("api_key_list")
+        return redirect("/programs/settings/?tab=api_keys")
