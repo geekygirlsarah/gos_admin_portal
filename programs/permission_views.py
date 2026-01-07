@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
-from .models import Adult, RolePermission, Student, Team
+from .models import Adult, RolePermission, Student, Team, Crew, Program
 try:
     from api.models import ApiClientKey
 except ImportError:
@@ -136,6 +136,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         teams = Team.objects.all()
         team_types = Team.TEAM_TYPES
+        crews = Crew.objects.select_related("program").all()
+        programs = Program.objects.all()
 
         api_keys = None
         if ApiClientKey and request.user.has_perm("api.view_apiclientkey"):
@@ -145,6 +147,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "grouped_permissions": grouped_permissions,
             "teams": teams,
             "team_types": team_types,
+            "crews": crews,
+            "programs": programs,
             "api_keys": api_keys,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
@@ -202,5 +206,34 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     team.save()
                     messages.success(request, "Team updated.")
             return redirect("/programs/settings/?tab=teams")
+
+        elif action == "add_crew":
+            program_id = request.POST.get("program_id")
+            name = request.POST.get("name")
+            color = request.POST.get("color")
+            if program_id and name:
+                Crew.objects.create(program_id=program_id, name=name, color=color)
+                messages.success(request, f"Crew {name} added.")
+            return redirect("/programs/settings/?tab=crews")
+
+        elif action == "delete_crew":
+            crew_id = request.POST.get("crew_id")
+            if crew_id:
+                Crew.objects.filter(id=crew_id).delete()
+                messages.success(request, "Crew deleted.")
+            return redirect("/programs/settings/?tab=crews")
+
+        elif action == "update_crew":
+            crew_id = request.POST.get("crew_id")
+            name = request.POST.get("name")
+            color = request.POST.get("color")
+            if crew_id:
+                crew = Crew.objects.filter(id=crew_id).first()
+                if crew:
+                    crew.name = name
+                    crew.color = color
+                    crew.save()
+                    messages.success(request, "Crew updated.")
+            return redirect("/programs/settings/?tab=crews")
 
         return redirect("portal_settings")

@@ -183,6 +183,7 @@ from .models import (
     StudentApplication,
     TaxForm,
     Team,
+    Crew,
 )
 
 
@@ -1869,7 +1870,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
 
         base_qs = (
             Enrollment.objects.filter(program=program)
-            .select_related("student", "student__user", "team")
+            .select_related("student", "student__user", "team", "crew")
             .annotate(
                 sort_first=Lower(
                     Coalesce("student__first_name", "student__legal_first_name")
@@ -1902,6 +1903,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         )
 
         ctx["teams"] = Team.objects.all()
+        ctx["crews"] = program.crews.all()
 
         ctx["can_manage_students"] = can_user_write(self.request.user, "student_info")
         ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
@@ -2099,14 +2101,31 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     def post(self, request, pk):
         enrollment_id = request.POST.get("enrollment_id")
         team_id = request.POST.get("team_id")
+        crew_id = request.POST.get("crew_id")
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
-        if team_id:
-            team = get_object_or_404(Team, id=team_id)
-            enrollment.team = team
-        else:
-            enrollment.team = None
+
+        updated_fields = []
+        if team_id is not None:
+            if team_id:
+                team = get_object_or_404(Team, id=team_id)
+                enrollment.team = team
+            else:
+                enrollment.team = None
+            updated_fields.append("Team")
+
+        if crew_id is not None:
+            if crew_id:
+                crew = get_object_or_404(Crew, id=crew_id, program_id=pk)
+                enrollment.crew = crew
+            else:
+                enrollment.crew = None
+            updated_fields.append("Crew")
+
         enrollment.save()
-        messages.success(request, f"Team updated for {enrollment.student}.")
+        if updated_fields:
+            messages.success(
+                request, f"{' and '.join(updated_fields)} updated for {enrollment.student}."
+            )
         return redirect("program_detail", pk=pk)
 
 

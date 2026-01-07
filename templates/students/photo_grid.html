@@ -13,7 +13,7 @@
       {% for item in students %}
         {% if item.student %}
             {# This is an Enrollment object #}
-            {% with s=item.student team=item.team %}
+            {% with s=item.student team=item.team crew=item.crew %}
                 <div class="col">
                   <div class="card h-100 text-center">
                     <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
@@ -27,11 +27,14 @@
                     </a>
                     <div class="card-body p-2">
                       <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                      <div class="mt-1 d-flex flex-wrap justify-content-center gap-1">
                       {% if team %}
-                        <div class="mt-1">
-                          <span class="badge rounded-pill team-badge" data-color="{{ team.color }}">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
-                        </div>
+                        <span class="badge rounded-pill team-badge" data-color="{{ team.color }}">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
                       {% endif %}
+                      {% if crew %}
+                        <span class="badge rounded-pill crew-badge" data-color="{{ crew.color }}">{{ crew.name }}</span>
+                      {% endif %}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -85,7 +88,7 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.team-badge').forEach(function(badge) {
+    document.querySelectorAll('.team-badge, .crew-badge').forEach(function(badge) {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;

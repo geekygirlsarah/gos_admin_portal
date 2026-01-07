@@ -49,6 +49,9 @@
                 {% if e.team %}
                   <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                 {% endif %}
+                {% if e.crew %}
+                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                {% endif %}
                 {% if 'background-checks' in program.feature_keys %}
                 {% requires_bg s program as needs_bg %}
                   {% if needs_bg %}
@@ -65,7 +68,15 @@
                       <option value="">-- No Team --</option>
                       {% for team in teams %}
                         <option value="{{ team.id }}" {% if e.team_id == team.id %}selected{% endif %}>
-                          {% if team.name %}{{ team.name }} ({{ team.team_type }} {{ team.number }}){% else %}{{ team.team_type }} {{ team.number }}{% endif %}
+                          {% if team.name %}{{ team.name }} ({{ team.number }}){% else %}{{ team.team_type }} {{ team.number }}{% endif %}
+                        </option>
+                      {% endfor %}
+                    </select>
+                    <select name="crew_id" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()">
+                      <option value="">-- No Crew/Project --</option>
+                      {% for crew in crews %}
+                        <option value="{{ crew.id }}" {% if e.crew_id == crew.id %}selected{% endif %}>
+                          {{ crew.name }}
                         </option>
                       {% endfor %}
                     </select>
@@ -107,6 +118,9 @@
                 <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
                 {% if e.team %}
                   <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
+                {% endif %}
+                {% if e.crew %}
+                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
                 {% endif %}
                 {% requires_bg s program as needs_bg %}
                   {% if needs_bg %}
@@ -189,7 +203,7 @@
 {% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.team-badge').forEach(function(badge) {
+    document.querySelectorAll('.team-badge, .crew-badge').forEach(function(badge) {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;

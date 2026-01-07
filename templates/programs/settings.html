@@ -16,6 +16,9 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'teams' %}active{% endif %}" id="teams-tab" data-bs-toggle="tab" data-bs-target="#teams" type="button" role="tab" aria-controls="teams" aria-selected="{% if active_tab == 'teams' %}true{% else %}false{% endif %}">Teams</button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'crews' %}active{% endif %}" id="crews-tab" data-bs-toggle="tab" data-bs-target="#crews" type="button" role="tab" aria-controls="crews" aria-selected="{% if active_tab == 'crews' %}true{% else %}false{% endif %}">Crews/Projects</button>
+        </li>
         {% if perms.api.view_apiclientkey %}
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'api_keys' %}active{% endif %}" id="api_keys-tab" data-bs-toggle="tab" data-bs-target="#api_keys" type="button" role="tab" aria-controls="api_keys" aria-selected="{% if active_tab == 'api_keys' %}true{% else %}false{% endif %}">API Keys</button>
@@ -200,6 +203,91 @@
                                 {% empty %}
                                 <tr>
                                     <td colspan="4" class="text-center py-4 text-muted">No teams added yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Crews Tab -->
+        <div class="tab-pane fade {% if active_tab == 'crews' %}show active{% endif %}" id="crews" role="tabpanel" aria-labelledby="crews-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Add New Crew/Project</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" class="row g-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_crew">
+                        <div class="col-md-4">
+                            <label for="program_id" class="form-label">Program</label>
+                            <select name="program_id" id="program_id" class="form-select" required>
+                                {% for prog in programs %}
+                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="crew_name" class="form-label">Crew Name</label>
+                            <input type="text" name="name" id="crew_name" class="form-control" required placeholder="e.g. Chassis, Programming">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="crew_color" class="form-label">Color</label>
+                            <input type="color" name="color" id="crew_color" class="form-control form-control-color w-100" value="#0000ff">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success w-100">Add Crew</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Existing Crews/Projects</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Program</th>
+                                    <th>Crew Name</th>
+                                    <th>Color</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for crew in crews %}
+                                <tr>
+                                    <form method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="update_crew">
+                                        <input type="hidden" name="crew_id" value="{{ crew.id }}">
+                                        <td>{{ crew.program.name }} ({{ crew.program.year }})</td>
+                                        <td>
+                                            <input type="text" name="name" value="{{ crew.name }}" class="form-control form-control-sm" required>
+                                        </td>
+                                        <td>
+                                            <input type="color" name="color" value="{{ crew.color }}" class="form-control form-control-color form-control-sm">
+                                        </td>
+                                        <td class="text-end">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="if(confirm('Are you sure?')) { document.getElementById('delete-crew-{{ crew.id }}').submit(); }">Delete</button>
+                                        </td>
+                                    </form>
+                                    <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete_crew">
+                                        <input type="hidden" name="crew_id" value="{{ crew.id }}">
+                                    </form>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted">No crews added yet.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
