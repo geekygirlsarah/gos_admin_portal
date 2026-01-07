@@ -19,6 +19,9 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'crews' %}active{% endif %}" id="crews-tab" data-bs-toggle="tab" data-bs-target="#crews" type="button" role="tab" aria-controls="crews" aria-selected="{% if active_tab == 'crews' %}true{% else %}false{% endif %}">Crews/Projects</button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="tab" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">Imports</button>
+        </li>
         {% if perms.api.view_apiclientkey %}
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'api_keys' %}active{% endif %}" id="api_keys-tab" data-bs-toggle="tab" data-bs-target="#api_keys" type="button" role="tab" aria-controls="api_keys" aria-selected="{% if active_tab == 'api_keys' %}true{% else %}false{% endif %}">API Keys</button>
@@ -292,6 +295,146 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Imports Tab -->
+        <div class="tab-pane fade {% if active_tab == 'imports' %}show active{% endif %}" id="imports" role="tabpanel" aria-labelledby="imports-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <p class="text-muted">Upload CSV or XLSX files to import records. Use the sample templates to format your data.</p>
+                    <div class="row g-4">
+                        {% if perms.programs.add_student %}
+                        <div class="col-12 col-lg-6">
+                          <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">Students</h5>
+                              <p class="card-text">Import students with optional school and graduation year.</p>
+                              <form id="student-import-form" action="{% url 'student_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="d-flex gap-2">
+                                  <input type="file" name="file" id="student-import-file" class="form-control" accept=".csv,.xlsx" />
+                                  <button type="submit" class="btn btn-primary">Import</button>
+                                </div>
+                              </form>
+                              <div class="mt-2"><a href="{% url 'students_sample_csv' %}">Download CSV Template</a></div>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if perms.programs.add_adult %}
+                        <div class="col-12 col-lg-6">
+                          <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">Parents</h5>
+                              <p class="card-text">Import parent/guardian contacts.</p>
+                              <form id="parent-import-form" action="{% url 'parent_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="d-flex gap-2">
+                                  <input type="file" name="file" id="parent-import-file" class="form-control" accept=".csv,.xlsx" />
+                                  <button type="submit" class="btn btn-primary">Import</button>
+                                </div>
+                              </form>
+                              <div class="mt-2"><a href="{% url 'parents_sample_csv' %}">Download CSV Template</a></div>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if perms.programs.change_student %}
+                        <div class="col-12 col-lg-6">
+                          <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">Student-Parent Relationships</h5>
+                              <p class="card-text">Link existing students to parent/guardian contacts and set relationship types. Safe to re-run; idempotent.</p>
+                              <form id="relationships-import-form" action="{% url 'relationship_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="d-flex gap-2">
+                                  <input type="file" name="file" id="relationships-import-file" class="form-control" accept=".csv,.xlsx" />
+                                  <button type="submit" class="btn btn-primary">Import</button>
+                                </div>
+                                <div class="form-check mt-2">
+                                  <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
+                                  <label class="form-check-label" for="relationships-dry-run">Dry run (report only)</label>
+                                </div>
+                              </form>
+                              <div class="mt-2"><a href="{% url 'relationships_sample_csv' %}">Download CSV Template</a></div>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if perms.programs.add_adult %}
+                        <div class="col-12 col-lg-6">
+                          <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">Mentors</h5>
+                              <p class="card-text">Import mentors with emails and roles.</p>
+                              <form id="mentor-import-form" action="{% url 'mentor_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="d-flex gap-2">
+                                  <input type="file" name="file" id="mentor-import-file" class="form-control" accept=".csv,.xlsx" />
+                                  <button type="submit" class="btn btn-primary">Import</button>
+                                </div>
+                              </form>
+                              <div class="mt-2"><a href="{% url 'mentors_sample_csv' %}">Download CSV Template</a></div>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if perms.programs.add_school %}
+                        <div class="col-12 col-lg-6">
+                          <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">Schools</h5>
+                              <p class="card-text">Import schools with district and address details.</p>
+                              <form id="school-import-form" action="{% url 'school_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="d-flex gap-2">
+                                  <input type="file" name="file" id="school-import-file" class="form-control" accept=".csv,.xlsx" />
+                                  <button type="submit" class="btn btn-primary">Import</button>
+                                </div>
+                              </form>
+                              <div class="mt-2"><a href="{% url 'schools_sample_csv' %}">Download CSV Template</a></div>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if perms.programs.change_student %}
+                        <div class="col-12 col-lg-6">
+                          <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">Attendance (CSV)</h5>
+                              <p class="card-text">Import attendance sessions from legacy CSV export with columns: first_name, last_name, rfid, time_in_utc, time_out_utc. Requires selecting a Program.</p>
+                              <form id="attendance-import-form" action="{% url 'attendance_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="row g-2 align-items-start">
+                                  <div class="col-12">
+                                    <label for="attendance-program" class="form-label">Program</label>
+                                    <select id="attendance-program" name="program_id" class="form-select" required>
+                                      <option value="">Select a program…</option>
+                                      {% for p in attendance_programs|default:programs %}
+                                      <option value="{{ p.id }}">{{ p.name }}</option>
+                                      {% endfor %}
+                                    </select>
+                                  </div>
+                                  <div class="col-12 d-flex gap-2">
+                                    <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" />
+                                    <button type="submit" class="btn btn-primary">Import</button>
+                                  </div>
+                                </div>
+                                <div class="form-text mt-2">Times should be in UTC (e.g., 2025-09-01T20:15:00Z). If time_out is blank, an open session will be created.</div>
+                                <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

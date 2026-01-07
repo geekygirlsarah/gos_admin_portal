@@ -138,7 +138,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         teams = Team.objects.all()
         team_types = Team.TEAM_TYPES
         crews = Crew.objects.select_related("program").all()
-        programs = Program.objects.all()
+        programs = Program.objects.all().order_by("name")
+        attendance_programs = [p for p in programs if p.has_feature("attendance")]
 
         api_keys = None
         if ApiClientKey and request.user.has_perm("api.view_apiclientkey"):
@@ -150,6 +151,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "team_types": team_types,
             "crews": crews,
             "programs": programs,
+            "attendance_programs": attendance_programs,
             "api_keys": api_keys,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
