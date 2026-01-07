@@ -3,8 +3,16 @@ from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from django.utils.safestring import mark_safe
 
-from .models import (Adult, Fee, Payment, Program, School, SlidingScale,
-                     Student, StudentApplication)
+from .models import (
+    Adult,
+    Fee,
+    Payment,
+    Program,
+    School,
+    SlidingScale,
+    Student,
+    StudentApplication,
+)
 
 
 class StudentForm(forms.ModelForm):

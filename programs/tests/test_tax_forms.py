@@ -4,8 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from programs.models import (Adult, Enrollment, Program, SlidingScale, Student,
-                             TaxForm)
+from programs.models import Adult, Enrollment, Program, SlidingScale, Student, TaxForm
 
 
 class SlidingScaleTaxFormTests(TestCase):

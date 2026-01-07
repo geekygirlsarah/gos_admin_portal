@@ -3,8 +3,7 @@ from datetime import date
 from django.core.management import call_command
 from django.test import TestCase
 
-from programs.models import (Adult, Enrollment, Program, ProgramFeature,
-                             School, Student)
+from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
 class SeedDbCommandTest(TestCase):

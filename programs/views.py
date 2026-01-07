@@ -1,11 +1,12 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import (LoginRequiredMixin,
-                                        PermissionRequiredMixin,
-                                        UserPassesTestMixin)
+from django.contrib.auth.mixins import (
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UserPassesTestMixin,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .permission_views import (LeadMentorRequiredMixin, can_user_read,
-                               can_user_write)
+from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
 
 
 class DynamicPermissionMixin(UserPassesTestMixin):
@@ -47,8 +48,7 @@ from django.db.models.functions import Coalesce, Lower
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import strip_tags
-from django.views.generic import (CreateView, DetailView, ListView, UpdateView,
-                                  View)
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from premailer import transform
 
 logger = logging.getLogger("programs.email")
@@ -148,15 +148,39 @@ class LogFormSaveMixin:
         return response
 
 
-from .forms import (AddExistingStudentToProgramForm, AdultForm,
-                    FeeAssignmentEditForm, FeeForm, ParentForm, PaymentForm,
-                    ProgramApplySelectForm, ProgramEmailBalancesForm,
-                    ProgramEmailForm, ProgramForm, QuickCreateStudentForm,
-                    SchoolForm, SlidingScaleForm, StudentApplicationForm,
-                    StudentForm)
-from .models import (RELATIONSHIP_CHOICES, Adult, Crew, Enrollment, Fee,
-                     Payment, Program, RaceEthnicity, School, SlidingScale,
-                     Student, StudentApplication, TaxForm, Team)
+from .forms import (
+    AddExistingStudentToProgramForm,
+    AdultForm,
+    FeeAssignmentEditForm,
+    FeeForm,
+    ParentForm,
+    PaymentForm,
+    ProgramApplySelectForm,
+    ProgramEmailBalancesForm,
+    ProgramEmailForm,
+    ProgramForm,
+    QuickCreateStudentForm,
+    SchoolForm,
+    SlidingScaleForm,
+    StudentApplicationForm,
+    StudentForm,
+)
+from .models import (
+    RELATIONSHIP_CHOICES,
+    Adult,
+    Crew,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    RaceEthnicity,
+    School,
+    SlidingScale,
+    Student,
+    StudentApplication,
+    TaxForm,
+    Team,
+)
 
 
 class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
