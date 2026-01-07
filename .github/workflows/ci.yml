@@ -54,12 +54,6 @@ jobs:
         pip install semgrep
         semgrep --config auto --error .
 
-    - name: Dependency Scan (OSV-Scanner)
-      uses: google/osv-scanner-action/osv-scanner-action@v1
-      with:
-        scan-args: |-
-          -r .
-
     - name: Vulnerability Scan (Trivy)
       uses: aquasecurity/trivy-action@master
       with:
