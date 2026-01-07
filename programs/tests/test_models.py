@@ -4,20 +4,10 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from programs.models import (
-    Adult,
-    Enrollment,
-    Fee,
-    FeeAssignment,
-    Payment,
-    Program,
-    ProgramFeature,
-    RaceEthnicity,
-    RolePermission,
-    School,
-    Student,
-    StudentApplication,
-)
+from programs.models import (Adult, Enrollment, Fee, FeeAssignment, Payment,
+                             Program, ProgramFeature, RaceEthnicity,
+                             RolePermission, School, Student,
+                             StudentApplication)
 
 
 class ModelTests(TestCase):

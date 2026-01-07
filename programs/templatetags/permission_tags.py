@@ -1,6 +1,7 @@
 from django import template
 
-from programs.permission_views import can_user_read, can_user_write, get_user_role
+from programs.permission_views import (can_user_read, can_user_write,
+                                       get_user_role)
 
 register = template.Library()
 

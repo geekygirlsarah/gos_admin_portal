@@ -3,7 +3,8 @@ import string
 
 from django.conf import settings
 from django.core.mail import send_mail
-from django.core.signing import BadSignature, SignatureExpired, Signer, TimestampSigner
+from django.core.signing import (BadSignature, SignatureExpired, Signer,
+                                 TimestampSigner)
 from django.urls import reverse
 
 

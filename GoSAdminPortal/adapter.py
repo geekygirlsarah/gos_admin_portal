@@ -30,7 +30,9 @@ class AccountAdapter(DefaultAccountAdapter):
         Suppresses the 'unknown_account' email to avoid SMTPRecipientsRefused
         or other issues with invalid/non-existent emails.
         """
-        logging.debug(f"DEBUG: send_mail called with template_prefix={template_prefix}, email={email}")
+        logging.debug(
+            f"DEBUG: send_mail called with template_prefix={template_prefix}, email={email}"
+        )
         if template_prefix == "account/email/unknown_account":
             return
         super().send_mail(template_prefix, email, context)

@@ -3,7 +3,8 @@ from datetime import date, timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
+from programs.models import (Adult, Enrollment, Program, ProgramFeature,
+                             School, Student)
 
 
 class Command(BaseCommand):

@@ -6,16 +6,8 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
 from programs.forms import PaymentForm, ProgramEmailForm, SlidingScaleForm
-from programs.models import (
-    Enrollment,
-    Fee,
-    Program,
-    RaceEthnicity,
-    School,
-    SlidingScale,
-    Student,
-    StudentApplication,
-)
+from programs.models import (Enrollment, Fee, Program, RaceEthnicity, School,
+                             SlidingScale, Student, StudentApplication)
 from programs.views import compute_sliding_discount_rounded
 
 

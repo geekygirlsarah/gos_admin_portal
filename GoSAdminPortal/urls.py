@@ -22,7 +22,8 @@ from django.urls import include, path, re_path, reverse_lazy
 from django.views.generic import RedirectView
 from django.views.static import serve
 
-from programs.views import ApplyProgramSelectView, ApplyStudentView, ApplyThanksView
+from programs.views import (ApplyProgramSelectView, ApplyStudentView,
+                            ApplyThanksView)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

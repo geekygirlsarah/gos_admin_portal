@@ -3,7 +3,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
-from .models import Adult, RolePermission, Student, Team, Crew, Program
+from .models import Adult, Crew, Program, RolePermission, Student, Team
+
 try:
     from api.models import ApiClientKey
 except ImportError:

@@ -14,8 +14,8 @@ import json
 import os
 from pathlib import Path
 
-from csp import constants
 import dj_database_url
+from csp import constants
 from csp.constants import SELF
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
