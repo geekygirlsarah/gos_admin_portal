@@ -44,11 +44,30 @@ jobs:
       run: |
         bandit -r . -x ./venv,./.venv
 
-      #    - name: Security Scan (safety)
-      #      run: |
-      #        # safety check compares installed packages against a database of known vulnerabilities
-      #        # We'll allow it to fail for now if there are issues, or we can use it as a blocker
-      #        safety check
+    - name: Secret Scanning (Gitleaks)
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Static Analysis (Semgrep)
+      run: |
+        pip install semgrep
+        semgrep --config auto --error .
+
+    - name: Dependency Scan (OSV-Scanner)
+      uses: google/osv-scanner-action/osv-scanner-action@v1
+      with:
+        scan-args: |-
+          -r .
+
+    - name: Vulnerability Scan (Trivy)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        ignore-unfixed: true
+        format: 'table'
+        exit-code: '1'
+        severity: 'CRITICAL,HIGH'
 
     - name: Security Scan (safety)
       uses: pyupio/safety-action@v1
@@ -58,6 +77,7 @@ jobs:
     - name: Django System Check
       run: |
         python manage.py check
+        python manage.py check --deploy
 
     - name: Run Tests
       run: |
