@@ -7,10 +7,11 @@ from programs.models import Enrollment, Program, RolePermission, Student, Team
 
 class TeamSettingsTests(TestCase):
     def setUp(self):
+        self.password = "password"  # nosec B105
         self.user = User.objects.create_superuser(
-            username="admin", password="password", email="admin@example.com"
+            username="admin", password=self.password, email="admin@example.com"
         )
-        self.client.login(username="admin", password="password")
+        self.client.login(username="admin", password=self.password)
         self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_mentor_group)
 

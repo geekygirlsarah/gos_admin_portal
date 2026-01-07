@@ -7,10 +7,11 @@ from programs.models import Crew, Enrollment, Program, Student
 
 class CrewTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="leadmentor", password="password")
+        self.password = "password"  # nosec B105
+        self.user = User.objects.create_user(username="leadmentor", password=self.password)
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
-        self.client.login(username="leadmentor", password="password")
+        self.client.login(username="leadmentor", password=self.password)
 
         self.program = Program.objects.create(name="FLL 2025", year=2025)
         self.student = Student.objects.create(
