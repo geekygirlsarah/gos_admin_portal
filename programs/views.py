@@ -4,6 +4,7 @@ from django.contrib.auth.mixins import (
     PermissionRequiredMixin,
     UserPassesTestMixin,
 )
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
@@ -568,7 +569,13 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         if not ids:
             messages.info(request, "No students selected.")
             if year:
-                return redirect(f"{reverse('student_bulk_convert_select')}?year={year}")
+                redirect_url = f"{reverse('student_bulk_convert_select')}?year={year}"
+                if url_has_allowed_host_and_scheme(
+                    url=redirect_url,
+                    allowed_hosts={request.get_host()},
+                    require_https=request.is_secure(),
+                ):
+                    return redirect(redirect_url)
             return redirect("student_bulk_convert_select")
 
         qs = Student.objects.filter(pk__in=ids).order_by("last_name", "first_name")
