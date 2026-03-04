@@ -2171,7 +2171,9 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             messages.warning(request, f"No {assignment_type} selected.")
             return redirect("program_assignment", pk=pk)
 
-        enrollments = Enrollment.objects.filter(program=program, student_id__in=student_ids)
+        enrollments = Enrollment.objects.filter(
+            program=program, student_id__in=student_ids
+        )
 
         if assignment_type == "team":
             team = get_object_or_404(Team, id=target_id)
