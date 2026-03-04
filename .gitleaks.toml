@@ -1,0 +1,4 @@
+[allowlist]
+    paths = [
+        "programs/static/vendor/quill/1.3.7/quill.min.js"
+    ]

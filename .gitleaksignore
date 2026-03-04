@@ -1,2 +1,2 @@
-# Ignore false positives in the Quill vendor library
-programs/static/vendor/quill/1.3.7/quill.min.js
+# Ignore specific false positive findings by fingerprint
+# Format: fingerprint:line_number:file_path:rule_id:fingerprint (refer to Gitleaks report)
