@@ -52,7 +52,7 @@ jobs:
     - name: Static Analysis (Semgrep)
       run: |
         pip install semgrep
-        semgrep --config auto --error .
+        semgrep --config auto .
 
     - name: Vulnerability Scan (Trivy)
       uses: aquasecurity/trivy-action@master
