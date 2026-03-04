@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block title %}Team/Crew Assignment: {{ program.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <h1 class="h3 mb-4">Team/Crew Assignment for {{ program.name }}</h1>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h2 class="h5 mb-0">Bulk Assignment</h2>
+            </div>
+            <div class="card-body">
+                <form method="post" id="assignment-form">
+                    {% csrf_token %}
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">1. Select Assignment Type</label>
+                            <div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="assignment_type" id="type-team" value="team" checked>
+                                    <label class="form-check-label" for="type-team">Team</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="assignment_type" id="type-crew" value="crew">
+                                    <label class="form-check-label" for="type-crew">Crew/Project</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold" for="target_id">2. Select <span id="target-label">Team</span></label>
+                            <select name="target_id" id="target_id" class="form-select">
+                                <option value="">-- Select --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Save Assignments</button>
+                        </div>
+                    </div>
+
+                    <h3 class="h6 mb-3 fw-bold">3. Select Students</h3>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input class="form-check-input" type="checkbox" id="select-all">
+                                    </th>
+                                    <th>Student Name</th>
+                                    <th>Current Team</th>
+                                    <th>Current Crew</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for e in enrollments %}
+                                <tr>
+                                    <td>
+                                        <input class="form-check-input student-checkbox" type="checkbox" name="student_ids" value="{{ e.student.id }}">
+                                    </td>
+                                    <td>
+                                        {{ e.student.first_name|default:e.student.legal_first_name }} {{ e.student.last_name }}
+                                    </td>
+                                    <td>
+                                        {% if e.team %}
+                                            <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}</span>
+                                        {% else %}
+                                            <span class="text-muted small">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if e.crew %}
+                                            <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                                        {% else %}
+                                            <span class="text-muted small">None</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Data for Teams and Crews
+    const teams = [
+        {% for team in teams %}
+        { id: "{{ team.id }}", name: "{% if team.name %}{{ team.name }} ({{ team.number }}){% else %}{{ team.team_type }} {{ team.number }}{% endif %}" },
+        {% endfor %}
+    ];
+    const crews = [
+        {% for crew in crews %}
+        { id: "{{ crew.id }}", name: "{{ crew.name }}" },
+        {% endfor %}
+    ];
+
+    // Handle toggling between Team and Crew selection
+    const typeTeam = document.getElementById('type-team');
+    const typeCrew = document.getElementById('type-crew');
+    const targetSelect = document.getElementById('target_id');
+    const targetLabel = document.getElementById('target-label');
+
+    function updateDropdown() {
+        const isTeam = typeTeam.checked;
+        targetLabel.textContent = isTeam ? 'Team' : 'Crew/Project';
+        
+        // Clear current options
+        targetSelect.innerHTML = '';
+        
+        // Add default unassign option
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = isTeam ? '-- No Team (Unassign) --' : '-- No Crew/Project (Unassign) --';
+        targetSelect.appendChild(defaultOpt);
+        
+        // Add relevant options
+        const items = isTeam ? teams : crews;
+        items.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.name;
+            targetSelect.appendChild(opt);
+        });
+    }
+
+    typeTeam.addEventListener('change', updateDropdown);
+    typeCrew.addEventListener('change', updateDropdown);
+
+    // Initial population
+    updateDropdown();
+
+    // Select all functionality
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+    });
+
+    // Badge colors
+    document.querySelectorAll('.team-badge, .crew-badge').forEach(function(badge) {
+        var color = badge.getAttribute('data-color');
+        if (color) {
+            badge.style.backgroundColor = color;
+        }
+    });
+});
+</script>
+{% endblock %}
