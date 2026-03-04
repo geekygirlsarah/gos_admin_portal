@@ -557,6 +557,14 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         action = request.POST.get("action", "convert")
         ids = request.POST.getlist("student_ids")
         year = request.POST.get("year")
+
+        # Validate year to prevent open redirect
+        try:
+            if year:
+                int(year)
+        except (ValueError, TypeError):
+            year = None
+
         if not ids:
             messages.info(request, "No students selected.")
             if year:

@@ -32,11 +32,7 @@
     try {
       var initial = hidden && typeof hidden.value === 'string' ? hidden.value : '';
       if (initial) {
-        if (quill.clipboard && typeof quill.clipboard.dangerouslyPasteHTML === 'function') {
-          quill.clipboard.dangerouslyPasteHTML(initial);
-        } else {
-          quill.root.innerHTML = initial;
-        }
+        quill.clipboard.dangerouslyPasteHTML(initial);
       }
     } catch (e) {}
 

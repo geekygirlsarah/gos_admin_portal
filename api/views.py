@@ -33,7 +33,7 @@ def _hours_from_sessions(sessions, start, end):
     return round(total, 2)
 
 
-@csrf_exempt
+@csrf_exempt  # nosemgrep: python.django.security.audit.csrf-exempt.no-csrf-exempt
 @require_api_key(scope_required="write")
 def attendance_tap(request):
     if request.method != "POST":

@@ -46,7 +46,7 @@
         </div>
       {% endif %}
 
-      <form method="POST">
+      <form method="POST"> <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
         {% csrf_token %}
         <div class="mb-4 text-center">
           <label class="form-label d-block mb-3" for="id_code">6-Digit Login Code</label>
