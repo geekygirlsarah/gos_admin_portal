@@ -18,6 +18,7 @@ from .views import (
     ParentImportView,
     ParentListView,
     ParentUpdateView,
+    ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,
     ProgramDuesOwedView,
@@ -290,6 +291,11 @@ urlpatterns = [
             ProgramStudentQuickCreateView.as_view()
         ),
         name="program_student_quick_create",
+    ),
+    path(
+        "<int:pk>/assignments/",
+        login_required(ProgramAssignmentView.as_view()),
+        name="program_assignment",
     ),
     path(
         "<int:pk>/enrollment/update/",

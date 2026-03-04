@@ -2135,6 +2135,60 @@ class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View
         return redirect("program_detail", pk=program.pk)
 
 
+class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    template_name = "programs/assignment.html"
+
+    def get(self, request, pk):
+        program = get_object_or_404(Program, pk=pk)
+        enrollments = Enrollment.objects.filter(program=program).select_related(
+            "student", "team", "crew"
+        )
+        teams = Team.objects.all().order_by("number")
+        crews = Crew.objects.filter(program=program).order_by("name")
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "program": program,
+                "enrollments": enrollments,
+                "teams": teams,
+                "crews": crews,
+            },
+        )
+
+    def post(self, request, pk):
+        program = get_object_or_404(Program, pk=pk)
+        assignment_type = request.POST.get("assignment_type")
+        target_id = request.POST.get("target_id")
+        student_ids = request.POST.getlist("student_ids")
+
+        if not student_ids:
+            messages.warning(request, "No students selected.")
+            return redirect("program_assignment", pk=pk)
+
+        if not target_id:
+            messages.warning(request, f"No {assignment_type} selected.")
+            return redirect("program_assignment", pk=pk)
+
+        enrollments = Enrollment.objects.filter(program=program, student_id__in=student_ids)
+
+        if assignment_type == "team":
+            team = get_object_or_404(Team, id=target_id)
+            enrollments.update(team=team)
+            messages.success(
+                request, f"Assigned {len(student_ids)} students to team {team}."
+            )
+        elif assignment_type == "crew":
+            crew = get_object_or_404(Crew, id=target_id, program=program)
+            enrollments.update(crew=crew)
+            messages.success(
+                request, f"Assigned {len(student_ids)} students to crew {crew}."
+            )
+
+        return redirect("program_assignment", pk=pk)
+
+
 # --- Parent create/edit ---
 class ParentCreateView(
     LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView
@@ -2575,11 +2629,19 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
 
         can_view_sliding = can_user_read(request.user, "sliding_scale")
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
-        # Compute total fees first to apply percent-based discount
-        from decimal import Decimal
+        # Compute total fees for discount: ONLY include fees applicable to this student
+        # (if a fee has assignments and student is not in them, skip it)
+        applicable_fees_for_discount = []
+        for fee in Fee.objects.filter(program=program):
+            if (
+                fee.assignments.exists()
+                and not fee.assignments.filter(student=student).exists()
+            ):
+                continue
+            applicable_fees_for_discount.append(fee.amount)
 
         total_fees_for_discount = sum(
-            [fee.amount for fee in Fee.objects.filter(program=program)],
+            applicable_fees_for_discount,
             start=Decimal("0"),
         )
         if sliding and sliding.percent is not None and can_view_sliding:
@@ -2703,8 +2765,18 @@ class ProgramStudentBalancePrintView(
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
         from decimal import Decimal
 
+        # Compute total fees for discount: ONLY include fees applicable to this student
+        applicable_fees_for_discount = []
+        for fee in Fee.objects.filter(program=program):
+            if (
+                fee.assignments.exists()
+                and not fee.assignments.filter(student=student).exists()
+            ):
+                continue
+            applicable_fees_for_discount.append(fee.amount)
+
         total_fees_for_discount = sum(
-            [fee.amount for fee in Fee.objects.filter(program=program)],
+            applicable_fees_for_discount,
             start=Decimal("0"),
         )
         if sliding and sliding.percent is not None and can_view_sliding:
@@ -3129,8 +3201,18 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             sliding = SlidingScale.objects.filter(
                 student=student, program=program
             ).first()
+            # Compute total fees for discount: ONLY include fees applicable to this student
+            applicable_fees_for_discount = []
+            for fee in Fee.objects.filter(program=program):
+                if (
+                    fee.assignments.exists()
+                    and not fee.assignments.filter(student=student).exists()
+                ):
+                    continue
+                applicable_fees_for_discount.append(fee.amount)
+
             total_fees_for_discount = sum(
-                [fee.amount for fee in Fee.objects.filter(program=program)],
+                applicable_fees_for_discount,
                 start=Decimal("0"),
             )
             if sliding and sliding.percent is not None and can_view_sliding:
@@ -3345,8 +3427,19 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
 
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
+        # Compute total fees for discount: ONLY include fees applicable to this student
+        applicable_fees_for_discount = []
+        for fee in Fee.objects.filter(program=program):
+            if (
+                fee.assignments.exists()
+                and not fee.assignments.filter(student=student).exists()
+            ):
+                continue
+            applicable_fees_for_discount.append(fee.amount)
+
         total_fees_for_discount = sum(
-            [f.amount for f in Fee.objects.filter(program=program)], start=Decimal("0")
+            applicable_fees_for_discount,
+            start=Decimal("0"),
         )
         total_sliding = Decimal("0")
         if sliding and sliding.percent is not None and can_view_sliding:
