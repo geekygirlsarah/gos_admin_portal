@@ -4,7 +4,7 @@ python -m pip install --upgrade pip
 
 echo --- Installing Dependencies ---
 pip install -r requirements.txt
-pip install flake8 black isort bandit safety
+pip install flake8 black isort bandit safety semgrep
 
 echo --- Running Linter (flake8) ---
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
@@ -41,6 +41,13 @@ if %ERRORLEVEL% neq 0 (
     echo safety check failed. Note: If this is an API key issue, check your environment.
     rem Safety might fail without an API key or on vulnerabilities. 
     rem In CI it's a separate action, locally it might need config.
+)
+
+echo --- Static Analysis (semgrep) ---
+semgrep --config auto --error .
+if %ERRORLEVEL% neq 0 (
+    echo semgrep static analysis failed
+    exit /b %ERRORLEVEL%
 )
 
 echo --- Django System Check ---

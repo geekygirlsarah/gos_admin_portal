@@ -260,37 +260,37 @@
                                     <th>Program</th>
                                     <th>Crew Name</th>
                                     <th>Color</th>
-                                    <th class="text-end">Actions</th>
+                                    <th class="text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for crew in crews %}
                                 <tr>
-                                    <form method="post" class="d-inline">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="update_crew">
-                                        <input type="hidden" name="crew_id" value="{{ crew.id }}">
-                                        <td>{{ crew.program.name }} ({{ crew.program.year }})</td>
-                                        <td>
-                                            <input type="text" name="name" value="{{ crew.name }}" class="form-control form-control-sm" required>
-                                        </td>
-                                        <td>
-                                            <input type="color" name="color" value="{{ crew.color }}" class="form-control form-control-color form-control-sm">
-                                        </td>
-                                        <td class="text-end">
+                                    <td colspan="4">
+                                        <form method="post" class="d-flex gap-2 align-items-center m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="update_crew">
+                                            <input type="hidden" name="crew_id" value="{{ crew.id }}">
+                                            <div style="flex: 1;">{{ crew.program.name }} ({{ crew.program.year }})</div>
+                                            <div style="flex: 2;">
+                                                <input type="text" name="name" value="{{ crew.name }}" class="form-control form-control-sm" placeholder="Crew Name" required>
+                                            </div>
+                                            <div style="width: 50px;">
+                                                <input type="color" name="color" value="{{ crew.color }}" class="form-control form-control-color form-control-sm" title="Crew Color">
+                                            </div>
                                             <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="if(confirm('Are you sure?')) { document.getElementById('delete-crew-{{ crew.id }}').submit(); }">Delete</button>
-                                        </td>
-                                    </form>
-                                    <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="delete_crew">
-                                        <input type="hidden" name="crew_id" value="{{ crew.id }}">
-                                    </form>
+                                        </form>
+                                        <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_crew">
+                                            <input type="hidden" name="crew_id" value="{{ crew.id }}">
+                                        </form>
+                                    </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="4" class="text-center py-4 text-muted">No crews added yet.</td>
+                                    <th colspan="4" class="text-center py-4 text-muted">No crews added yet.</th>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -411,8 +411,8 @@
                             <div class="card-body d-flex flex-column">
                               <h5 class="card-title">Attendance (CSV)</h5>
                               <p class="card-text">Import attendance sessions from legacy CSV export with columns: first_name, last_name, rfid, time_in_utc, time_out_utc. Requires selecting a Program.</p>
-                              <form id="attendance-import-form" action="{% url 'attendance_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
-                                {% csrf_token %}
+                              <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">
+                                        {% csrf_token %}
                                 <div class="row g-2 align-items-start">
                                   <div class="col-12">
                                     <label for="attendance-program" class="form-label">Program</label>

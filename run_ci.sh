@@ -6,7 +6,7 @@ python -m pip install --upgrade pip
 
 echo "--- Installing Dependencies ---"
 pip install -r requirements.txt
-pip install flake8 black isort bandit safety
+pip install flake8 black isort bandit safety semgrep
 
 echo "--- Running Linter (flake8) ---"
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || { echo "flake8 critical failed"; exit 1; }
@@ -24,6 +24,9 @@ bandit -r . -x ./venv,./.venv,./venv2 || { echo "bandit security scan failed"; e
 echo "--- Security Scan (safety) ---"
 # Safety might fail due to missing API key or vulnerabilities; we can make it non-fatal or handle it.
 safety check || echo "Safety check failed. It may require an API key or found vulnerabilities."
+
+echo "--- Static Analysis (semgrep) ---"
+semgrep --config auto --error . || { echo "semgrep static analysis failed"; exit 1; }
 
 echo "--- Django System Check ---"
 python manage.py check || { echo "Django system check failed"; exit 1; }

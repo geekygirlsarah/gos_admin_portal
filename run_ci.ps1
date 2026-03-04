@@ -2,8 +2,8 @@ Write-Host "--- Upgrading Pip ---" -ForegroundColor Cyan
 python -m pip install --upgrade pip
 
 Write-Host "--- Installing Dependencies ---" -ForegroundColor Cyan
-pip install -r requirements.txt
-pip install flake8 black isort bandit safety
+python -m pip install -r requirements.txt
+python -m pip install flake8 black isort bandit safety semgrep
 
 $ErrorActionPreference = "Stop"
 
@@ -41,6 +41,13 @@ try {
     safety check
 } catch {
     Write-Warning "Safety check failed. It may require an API key or found vulnerabilities."
+}
+
+Write-Host "--- Static Analysis (semgrep) ---" -ForegroundColor Cyan
+semgrep --config auto --error .
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "semgrep static analysis failed"
+    exit $LASTEXITCODE
 }
 
 Write-Host "--- Django System Check ---" -ForegroundColor Cyan

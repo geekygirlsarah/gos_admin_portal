@@ -61,7 +61,7 @@
               </div>
               <div class="d-flex gap-2 align-items-center">
                 {% if role == 'LeadMentor' %}
-                  <form action="{% url 'program_enrollment_update' program.id %}" method="post" class="d-inline-block m-0">
+                  <form method="post" action="{% url 'program_enrollment_update' program.id %}" class="d-inline-block m-0">
                     {% csrf_token %}
                     <input type="hidden" name="enrollment_id" value="{{ e.id }}">
                     <select name="team_id" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()">
