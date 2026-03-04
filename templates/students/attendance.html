@@ -100,7 +100,7 @@
               </tr>
               <tr class="collapse" id="edit{{ s.id }}">
                 <td colspan="5">
-                  <form method="post" class="row g-3 p-3">{% csrf_token %}
+                  <form method="post" class="row g-3 p-3">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                     <input type="hidden" name="action" value="update" />
                     <input type="hidden" name="session_id" value="{{ s.id }}" />
                     <div class="col-md-5">

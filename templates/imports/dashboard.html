@@ -114,7 +114,7 @@
                   <div class="card-body d-flex flex-column">
                       <h5 class="card-title">Attendance (CSV)</h5>
                       <p class="card-text">Import attendance sessions from legacy CSV export with columns: first_name, last_name, rfid, time_in_utc, time_out_utc. Requires selecting a Program.</p>
-                      <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">{% csrf_token %}
+                      <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                           <div class="row g-2 align-items-start">
                               <div class="col-12">
                                   <label for="attendance-program" class="form-label">Program</label>

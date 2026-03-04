@@ -1,0 +1,8 @@
+# Semgrep ignore file
+# Use glob patterns to ignore files and directories from Semgrep scans.
+# To ignore specific rules, use inline comments in the source code like:
+# {% csrf_token %} # nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token
+
+# We tried reformatting templates but Semgrep still reports false positives.
+# Since we have manually verified these forms have CSRF tokens, we are ignoring these files for this specific rule
+# using inline comments in the templates instead of this file, as .semgrepignore is better for excluding whole files.
