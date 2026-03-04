@@ -1,0 +1,2 @@
+# Ignore false positive for generic-api-key in Quill editor
+df7e795f4d2fc8159ae00b34e6da95e9bb26dc48:programs/static/vendor/quill/1.3.7/quill.min.js:generic-api-key:7
