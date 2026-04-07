@@ -4,10 +4,11 @@
   {% load static %}
   <link href="{% static 'vendor/quill/1.3.7/quill.snow.css' %}" rel="stylesheet">
   <link href="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.css' %}" rel="stylesheet">
-  <style>
+  <style nonce="{{ request.csp_nonce }}">
     #editor { height: 300px; }
     .ql-editor table { border-collapse: collapse; width: 100%; }
     .ql-editor table td, .ql-editor table th { border: 1px solid #dee2e6; padding: 6px; }
+    .d-none { display: none !important; }
   </style>
 {% endblock %}
 {% block content %}
@@ -59,9 +60,14 @@
       <div class="card mb-3">
         <div class="card-header">Options</div>
         <div class="card-body">
-          <div class="form-check mb-3">
-            {{ form.include_zero_balances }}
-            <label class="form-check-label" for="id_include_zero_balances">{{ form.include_zero_balances.label }}</label>
+          <div class="mb-3">
+            {{ form.recipient_filter.label_tag }}
+            {{ form.recipient_filter }}
+          </div>
+          <div class="mb-3 d-none" id="student_select_container">
+            {{ form.student.label_tag }}
+            {{ form.student }}
+            <div class="form-text">{{ form.student.help_text }}</div>
           </div>
           <div class="mb-0">
             {{ form.test_email.label_tag }}
@@ -82,15 +88,43 @@
   {% load static %}
   <script src="{% static 'vendor/quill/1.3.7/quill.min.js' %}"></script>
   <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}"></script>
-  <script>
+  <script nonce="{{ request.csp_nonce }}">
     (function(){
       if (typeof window.quillBetterTable === 'undefined') {
         var s = document.createElement('script');
         s.src = 'https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js';
         s.async = true;
+        s.nonce = "{{ request.csp_nonce }}";
         document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
       }
     })();
   </script>
   <script src="{% static 'js/email_form.js' %}"></script>
+  <script nonce="{{ request.csp_nonce }}">
+    (function() {
+      function toggleStudentSelect() {
+        const recipientFilter = document.getElementById('id_recipient_filter');
+        const studentContainer = document.getElementById('student_select_container');
+        const studentSelect = document.getElementById('id_student');
+        
+        if (recipientFilter && studentContainer) {
+          if (recipientFilter.value === 'individual') {
+            studentContainer.classList.remove('d-none');
+            if (studentSelect) studentSelect.disabled = false;
+          } else {
+            studentContainer.classList.add('d-none');
+            if (studentSelect) studentSelect.disabled = true;
+          }
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const recipientFilter = document.getElementById('id_recipient_filter');
+        if (recipientFilter) {
+          recipientFilter.addEventListener('change', toggleStudentSelect);
+        }
+        toggleStudentSelect(); // Initial state
+      });
+    })();
+  </script>
 {% endblock %}

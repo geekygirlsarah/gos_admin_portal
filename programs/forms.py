@@ -368,6 +368,47 @@ class ProgramEmailForm(forms.Form):
         return cleaned
 
 
+from decimal import Decimal
+from django.db.models.functions import Lower, Coalesce
+
+class StudentBalanceModelChoiceField(forms.ModelChoiceField):
+    def __init__(self, *args, **kwargs):
+        self.program = kwargs.pop("program", None)
+        super().__init__(*args, **kwargs)
+
+    def label_from_instance(self, obj):
+        from .models import Fee, SlidingScale, Payment
+        from .views import compute_sliding_discount_rounded
+
+        student = obj
+        program = self.program
+
+        # Calculation logic mirror from views.py
+        total_fees = Decimal("0")
+        fees = Fee.objects.filter(program=program)
+        for fee in fees:
+            is_assigned = fee.assignments.exists()
+            if not is_assigned or fee.assignments.filter(student=student).exists():
+                total_fees += fee.amount
+
+        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+        total_sliding = Decimal("0")
+        if sliding and sliding.percent is not None:
+            total_sliding = compute_sliding_discount_rounded(
+                total_fees, sliding.percent
+            )
+
+        total_payments = sum(
+            Payment.objects.filter(student=student, program=program).values_list(
+                "amount", flat=True
+            ),
+            Decimal("0"),
+        )
+
+        balance = total_fees - total_sliding - total_payments
+        return f"{student.first_name or student.legal_first_name} {student.last_name} (${balance:,.2f})"
+
+
 class ProgramEmailBalancesForm(forms.Form):
     program = forms.ModelChoiceField(queryset=Program.objects.all(), required=False)
     subject = forms.CharField(
@@ -378,8 +419,23 @@ class ProgramEmailBalancesForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 6}),
         help_text="Optional message that will appear above the balance sheet.",
     )
-    include_zero_balances = forms.BooleanField(
-        required=False, initial=False, label="Email families with a $0.00 balance"
+    recipient_filter = forms.ChoiceField(
+        choices=[
+            ("all", "Send to everyone (in the program)"),
+            ("non_zero", "Send to everyone with a non-zero balance"),
+            ("positive", "Send to everyone with a positive non-zero balance"),
+            ("individual", "Send to an individual:"),
+        ],
+        initial="all",
+        label="Recipient Filter",
+        widget=forms.Select(attrs={"id": "id_recipient_filter"}),
+    )
+    student = StudentBalanceModelChoiceField(
+        queryset=Student.objects.none(),
+        required=False,
+        label="Student",
+        help_text="Only used if 'Send to an individual' is selected.",
+        widget=forms.Select(attrs={"id": "id_student"}),
     )
     test_email = forms.EmailField(
         required=False, help_text="Optional: send a single sample to this address."
@@ -421,6 +477,13 @@ class ProgramEmailBalancesForm(forms.Form):
             self.fields["program"].initial = program
             self.fields["program"].widget = forms.HiddenInput()
             self.fields["program"].required = True
+            # Population and sorting for student field
+            self.fields["student"].program = program
+            self.fields["student"].queryset = Student.objects.filter(
+                enrollment__program=program
+            ).order_by(
+                Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
+            )
 
     def clean(self):
         cleaned = super().clean()

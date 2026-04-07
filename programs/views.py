@@ -3132,7 +3132,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 
         subject = form.cleaned_data["subject"]
         default_message = form.cleaned_data.get("default_message") or ""
-        include_zero = form.cleaned_data.get("include_zero_balances") or False
+        recipient_filter = form.cleaned_data.get("recipient_filter")
+        selected_student = form.cleaned_data.get("student")
         test_email = form.cleaned_data.get("test_email")
 
         # Build sender connection (reuse logic from ProgramEmailView)
@@ -3180,12 +3181,14 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
         connection = get_connection(**conn_kwargs)
 
         # Collect students enrolled in program
-        students = (
-            Student.objects.filter(enrollment__program=program)
-            .select_related("school")
-            .order_by(
-                Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
-            )
+        students_qs = Student.objects.filter(enrollment__program=program).select_related(
+            "school"
+        )
+        if recipient_filter == "individual" and selected_student:
+            students_qs = students_qs.filter(pk=selected_student.pk)
+
+        students = students_qs.order_by(
+            Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
         )
 
         # Helper to compute balance and entries like ProgramStudentBalanceView
@@ -3280,8 +3283,13 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             entries, total_fees, total_sliding, total_payments, balance = (
                 compute_entries_and_balance(s)
             )
-            if not include_zero and balance == 0:
+
+            # Apply recipient filters
+            if recipient_filter == "non_zero" and balance == 0:
                 continue
+            if recipient_filter == "positive" and balance <= 0:
+                continue
+
             # Gather recipient emails: only parents/guardians who opted in for updates
             emails = []
             for adult in s.all_parents:
