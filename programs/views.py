@@ -1,3 +1,4 @@
+import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
@@ -51,6 +52,9 @@ from django.urls import reverse
 from django.utils.html import strip_tags
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from premailer import transform
+import cssutils
+
+cssutils.log.setLevel(logging.WARNING)
 
 logger = logging.getLogger("programs.email")
 forms_logger = logging.getLogger("programs.forms")

@@ -305,5 +305,10 @@ LOGGING = {
             "level": "ERROR",
             "propagate": False,
         },
+        "cssutils": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
     },
 }
