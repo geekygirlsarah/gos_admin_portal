@@ -1,4 +1,5 @@
 import logging
+
 from django.contrib import messages
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
@@ -43,6 +44,7 @@ import datetime
 import logging
 from decimal import ROUND_HALF_DOWN, Decimal
 
+import cssutils
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection, send_mail
 from django.db import models
@@ -52,7 +54,6 @@ from django.urls import reverse
 from django.utils.html import strip_tags
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from premailer import transform
-import cssutils
 
 cssutils.log.setLevel(logging.WARNING)
 
@@ -3185,9 +3186,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
         connection = get_connection(**conn_kwargs)
 
         # Collect students enrolled in program
-        students_qs = Student.objects.filter(enrollment__program=program).select_related(
-            "school"
-        )
+        students_qs = Student.objects.filter(
+            enrollment__program=program
+        ).select_related("school")
         if recipient_filter == "individual" and selected_student:
             students_qs = students_qs.filter(pk=selected_student.pk)
 

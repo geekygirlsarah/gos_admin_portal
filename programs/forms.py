@@ -369,7 +369,9 @@ class ProgramEmailForm(forms.Form):
 
 
 from decimal import Decimal
-from django.db.models.functions import Lower, Coalesce
+
+from django.db.models.functions import Coalesce, Lower
+
 
 class StudentBalanceModelChoiceField(forms.ModelChoiceField):
     def __init__(self, *args, **kwargs):
@@ -377,7 +379,7 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
         super().__init__(*args, **kwargs)
 
     def label_from_instance(self, obj):
-        from .models import Fee, SlidingScale, Payment
+        from .models import Fee, Payment, SlidingScale
         from .views import compute_sliding_discount_rounded
 
         student = obj
