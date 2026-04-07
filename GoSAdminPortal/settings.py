@@ -37,12 +37,30 @@ DEBUG = os.getenv("DEBUG", "True").lower() in ["1", "true", "yes"]
 # https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 if not DEBUG:
-    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in ["1", "true", "yes"]
-    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "True").lower() in ["1", "true", "yes"]
-    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "True").lower() in ["1", "true", "yes"]
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in [
+        "1",
+        "true",
+        "yes",
+    ]
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "True").lower() in [
+        "1",
+        "true",
+        "yes",
+    ]
+    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "True").lower() in [
+        "1",
+        "true",
+        "yes",
+    ]
     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "True").lower() in ["1", "true", "yes"]
-    SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "True").lower() in ["1", "true", "yes"]
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv(
+        "SECURE_HSTS_INCLUDE_SUBDOMAINS", "True"
+    ).lower() in ["1", "true", "yes"]
+    SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "True").lower() in [
+        "1",
+        "true",
+        "yes",
+    ]
     SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
