@@ -250,9 +250,11 @@ class SlidingScaleForm(forms.ModelForm):
         ]
         labels = {
             "percent": "Discount percent",
+            "date": "Effective date",
         }
         help_texts = {
-            "percent": "Enter a value between 0 and 100. This percent will discount the total fees for the full program year.",
+            "percent": "Enter a value between 0 and 100. This percent will discount applicable fees.",
+            "date": "Only fees on or after this date will be discounted. Leave blank to apply to all program fees.",
         }
         widgets = {
             "date": forms.DateInput(attrs={"type": "date"}),

@@ -976,7 +976,9 @@ class SlidingScale(models.Model):
         help_text="Percent discount applied to total program fees (0–100).",
     )
     date = models.DateField(
-        blank=True, null=True, help_text="Date the sliding scale was set/applied."
+        blank=True,
+        null=True,
+        help_text="Effective date the sliding scale starts. Only fees on or after this date will be discounted.",
     )
     family_size = models.PositiveIntegerField(blank=True, null=True)
     adjusted_gross_income = models.DecimalField(

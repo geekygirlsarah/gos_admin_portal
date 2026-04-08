@@ -2652,7 +2652,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
         can_view_sliding = can_user_read(request.user, "sliding_scale")
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
         # Compute total fees for discount: ONLY include fees applicable to this student
-        # (if a fee has assignments and student is not in them, skip it)
+        # and on or after the sliding scale's effective date.
         applicable_fees_for_discount = []
         for fee in Fee.objects.filter(program=program):
             if (
@@ -2660,6 +2660,11 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                 and not fee.assignments.filter(student=student).exists()
             ):
                 continue
+
+            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            if sliding and sliding.date and fee_date and fee_date < sliding.date:
+                continue
+
             applicable_fees_for_discount.append(fee.amount)
 
         total_fees_for_discount = sum(
@@ -2672,7 +2677,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
             )
             entries.append(
                 {
-                    "date": sliding.created_at.date(),
+                    "date": sliding.date or sliding.created_at.date(),
                     "type": "Sliding Scale",
                     "name": f"Sliding scale ({sliding.percent}%)",
                     "amount": -discount,
@@ -2788,6 +2793,7 @@ class ProgramStudentBalancePrintView(
         from decimal import Decimal
 
         # Compute total fees for discount: ONLY include fees applicable to this student
+        # and on or after the sliding scale's effective date.
         applicable_fees_for_discount = []
         for fee in Fee.objects.filter(program=program):
             if (
@@ -2795,6 +2801,11 @@ class ProgramStudentBalancePrintView(
                 and not fee.assignments.filter(student=student).exists()
             ):
                 continue
+
+            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            if sliding and sliding.date and fee_date and fee_date < sliding.date:
+                continue
+
             applicable_fees_for_discount.append(fee.amount)
 
         total_fees_for_discount = sum(
@@ -2807,7 +2818,7 @@ class ProgramStudentBalancePrintView(
             )
             entries.append(
                 {
-                    "date": sliding.date,
+                    "date": sliding.date or sliding.created_at.date(),
                     "type": "Sliding Scale",
                     "name": f"Sliding scale ({sliding.percent}%)",
                     "amount": -discount,
@@ -3227,6 +3238,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 student=student, program=program
             ).first()
             # Compute total fees for discount: ONLY include fees applicable to this student
+            # and on or after the sliding scale's effective date.
             applicable_fees_for_discount = []
             for fee in Fee.objects.filter(program=program):
                 if (
@@ -3234,6 +3246,13 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                     and not fee.assignments.filter(student=student).exists()
                 ):
                     continue
+
+                fee_date = fee.date or (
+                    fee.created_at.date() if fee.created_at else None
+                )
+                if sliding and sliding.date and fee_date and fee_date < sliding.date:
+                    continue
+
                 applicable_fees_for_discount.append(fee.amount)
 
             total_fees_for_discount = sum(
@@ -3246,7 +3265,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 )
                 entries.append(
                     {
-                        "date": sliding.created_at.date(),
+                        "date": sliding.date or sliding.created_at.date(),
                         "type": "Sliding Scale",
                         "name": f"Sliding scale ({sliding.percent}%)",
                         "amount": -discount,
@@ -3458,6 +3477,7 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
         sliding = SlidingScale.objects.filter(student=student, program=program).first()
         # Compute total fees for discount: ONLY include fees applicable to this student
+        # and on or after the sliding scale's effective date.
         applicable_fees_for_discount = []
         for fee in Fee.objects.filter(program=program):
             if (
@@ -3465,6 +3485,11 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
                 and not fee.assignments.filter(student=student).exists()
             ):
                 continue
+
+            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            if sliding and sliding.date and fee_date and fee_date < sliding.date:
+                continue
+
             applicable_fees_for_discount.append(fee.amount)
 
         total_fees_for_discount = sum(

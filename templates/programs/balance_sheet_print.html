@@ -102,7 +102,12 @@
                             <tr>
                                 <td>{{ e.date }}</td>
                                 <td>{{ e.type }}</td>
-                                <td>{{ e.name }}</td>
+                                <td>
+                                    {{ e.name }}
+                                    {% if e.type == 'Sliding Scale' and sliding_scale and sliding_scale.date %}
+                                        <div class="text-muted small">Effective: {{ sliding_scale.date }}</div>
+                                    {% endif %}
+                                </td>
                                 <td class="text-end">${{ e.amount|floatformat:2 }}</td>
                             </tr>
                         {% endfor %}

@@ -36,6 +36,11 @@
                   <td>
                     {% if e.type == 'Payment' and e.payment_id %}
                       <a href="{% url 'program_payment_detail' program.id e.payment_id %}">{{ e.name }}</a>
+                    {% elif e.type == 'Sliding Scale' and sliding_scale %}
+                      {{ e.name }}
+                      {% if sliding_scale.date %}
+                        <div class="text-muted small">Effective: {{ sliding_scale.date }}</div>
+                      {% endif %}
                     {% else %}
                       {{ e.name }}
                     {% endif %}
