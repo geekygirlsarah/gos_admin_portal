@@ -63,7 +63,14 @@ class SlidingScaleTimeRestrictedtest(TestCase):
         entries = response.context["entries"]
         sliding_scale_entry = next(e for e in entries if e["type"] == "Sliding Scale")
 
-        self.assertEqual(sliding_scale_entry["amount"], Decimal("-50.00"))
+        self.assertEqual(sliding_scale_entry["amount"], Decimal("0.00"))
+
+        # Verify adjusted_amount on fees
+        past_fee = next(e for e in entries if e["name"] == "Past Fee")
+        future_fee = next(e for e in entries if e["name"] == "Future Fee")
+        self.assertEqual(past_fee["adjusted_amount"], Decimal("100.00"))
+        self.assertEqual(future_fee["adjusted_amount"], Decimal("50.00"))
+
         # total_fees (200) - discount (50) = 150 balance
         self.assertEqual(response.context["balance"], Decimal("150.00"))
 
@@ -100,4 +107,10 @@ class SlidingScaleTimeRestrictedtest(TestCase):
             ),
             sliding_scale_entry,
         )
-        self.assertEqual(sliding_scale_entry["amount"], Decimal("-100.00"))
+        self.assertEqual(sliding_scale_entry["amount"], Decimal("0.00"))
+
+        # Verify adjusted_amount on fees
+        fee1 = next(e for e in response.context["entries"] if e["name"] == "Fee 1")
+        fee2 = next(e for e in response.context["entries"] if e["name"] == "Fee 2")
+        self.assertEqual(fee1["adjusted_amount"], Decimal("50.00"))
+        self.assertEqual(fee2["adjusted_amount"], Decimal("50.00"))

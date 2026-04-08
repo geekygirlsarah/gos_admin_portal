@@ -99,38 +99,55 @@
             <div class="table-responsive">
                 <table class="table table-sm align-middle balance-table">
                     <thead>
-                    <tr>
-                        <th style="width: 120px;">Date</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th class="text-end" style="width: 160px;">Amount</th>
-                    </tr>
+                        <tr>
+                            <th style="width: 120px;">Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th class="text-end" style="width: 120px;">Amount</th>
+                            {% if sliding_scale %}
+                                <th class="text-end" style="width: 120px;">Adjusted Rate</th>
+                            {% endif %}
+                        </tr>
                     </thead>
                     <tbody>
                     {% for e in entries %}
                         <tr>
                             <td>{{ e.date }}</td>
                             <td>{{ e.type }}</td>
-                            <td>{{ e.name }}</td>
+                            <td>
+                                {{ e.name }}
+                                {% if e.type == 'Sliding Scale' and sliding_scale and sliding_scale.date %}
+                                    <div class="text-muted small">Effective: {{ sliding_scale.date }}</div>
+                                {% endif %}
+                            </td>
                             <td class="text-end">${{ e.amount|floatformat:2 }}</td>
+                            {% if sliding_scale %}
+                                <td class="text-end">
+                                    {% if e.adjusted_amount != e.amount %}
+                                        <span class="fw-bold">${{ e.adjusted_amount|floatformat:2 }}</span>
+                                    {% else %}
+                                        <span class="text-muted">${{ e.adjusted_amount|floatformat:2 }}</span>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
                         </tr>
                     {% endfor %}
                     </tbody>
                     <tfoot>
                     <tr>
-                        <th colspan="3" class="text-end">Total Fees</th>
+                        <th colspan="{% if sliding_scale %}4{% else %}3{% endif %}" class="text-end">Total Fees</th>
                         <th class="text-end">${{ total_fees|floatformat:2 }}</th>
                     </tr>
                     <tr>
-                        <th colspan="3" class="text-end">Sliding Scale</th>
+                        <th colspan="{% if sliding_scale %}4{% else %}3{% endif %}" class="text-end">Sliding Scale</th>
                         <th class="text-end">-${{ total_sliding|floatformat:2 }}</th>
                     </tr>
                     <tr>
-                        <th colspan="3" class="text-end">Payments</th>
+                        <th colspan="{% if sliding_scale %}4{% else %}3{% endif %}" class="text-end">Payments</th>
                         <th class="text-end">-${{ total_payments|floatformat:2 }}</th>
                     </tr>
                     <tr>
-                        <th colspan="3" class="text-end">Balance Due</th>
+                        <th colspan="{% if sliding_scale %}4{% else %}3{% endif %}" class="text-end">Balance Due</th>
                         <th class="text-end">${{ balance|floatformat:2 }}</th>
                     </tr>
                     </tfoot>

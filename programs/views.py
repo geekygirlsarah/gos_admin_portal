@@ -2627,6 +2627,12 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
 
         # Gather entries: fees (program), sliding scale (if exists), and payments (student for program's fees)
         entries = []
+        # Sliding scale: include if exists and user has permission
+        from .permission_views import can_user_read
+
+        can_view_sliding = can_user_read(request.user, "sliding_scale")
+        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+
         # Fees: positive amounts
         # Use the editable fee.date when provided; otherwise fall back to created_at
         fees = Fee.objects.filter(program=program)
@@ -2638,19 +2644,24 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
             ):
                 continue
             fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            adjusted_amount = fee.amount
+            if sliding and sliding.percent is not None and can_view_sliding:
+                if not sliding.date or (fee_date and fee_date >= sliding.date):
+                    discount = compute_sliding_discount_rounded(
+                        fee.amount, sliding.percent
+                    )
+                    adjusted_amount = fee.amount - discount
+
             entries.append(
                 {
                     "date": fee_date,
                     "type": "Fee",
                     "name": fee.name,
                     "amount": fee.amount,
+                    "adjusted_amount": adjusted_amount,
                 }
             )
-        # Sliding scale: negative amount (discount), include if exists and user has permission
-        from .permission_views import can_user_read
 
-        can_view_sliding = can_user_read(request.user, "sliding_scale")
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
         # Compute total fees for discount: ONLY include fees applicable to this student
         # and on or after the sliding scale's effective date.
         applicable_fees_for_discount = []
@@ -2679,10 +2690,14 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                 {
                     "date": sliding.date or sliding.created_at.date(),
                     "type": "Sliding Scale",
-                    "name": f"Sliding scale ({sliding.percent}%)",
-                    "amount": -discount,
+                    "name": f"Sliding scale (owes {sliding.percent}%)",
+                    "amount": Decimal("0.00"),
+                    "adjusted_amount": Decimal("0.00"),
                 }
             )
+        else:
+            discount = Decimal("0")
+
         # Payments: negative amounts
         payments = Payment.objects.filter(student=student, program=program)
         for p in payments:
@@ -2700,6 +2715,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                     "type": "Payment",
                     "name": f"Payment via {via}{details}",
                     "amount": -p.amount,
+                    "adjusted_amount": -p.amount,
                     "payment_id": p.id,
                 }
             )
@@ -2708,11 +2724,8 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
         # Ensure None dates sort last
         entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
 
-        # Totals and balance
         total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
-        total_sliding = -sum(
-            [e["amount"] for e in entries if e["type"] == "Sliding Scale"]
-        )  # positive figure
+        total_sliding = discount
         total_payments = -sum(
             [e["amount"] for e in entries if e["type"] == "Payment"]
         )  # positive figure
@@ -2769,6 +2782,12 @@ class ProgramStudentBalancePrintView(
 
         # Gather entries similar to balance sheet
         entries = []
+        # Sliding scale: include if exists and user has permission
+        from .permission_views import can_user_read
+
+        can_view_sliding = can_user_read(request.user, "sliding_scale")
+        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+
         fees = Fee.objects.filter(program=program)
         for fee in fees:
             if (
@@ -2777,20 +2796,23 @@ class ProgramStudentBalancePrintView(
             ):
                 continue
             fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            adjusted_amount = fee.amount
+            if sliding and sliding.percent is not None and can_view_sliding:
+                if not sliding.date or (fee_date and fee_date >= sliding.date):
+                    discount = compute_sliding_discount_rounded(
+                        fee.amount, sliding.percent
+                    )
+                    adjusted_amount = fee.amount - discount
+
             entries.append(
                 {
                     "date": fee_date,
                     "type": "Fee",
                     "name": fee.name,
                     "amount": fee.amount,
+                    "adjusted_amount": adjusted_amount,
                 }
             )
-        # Sliding scale: include if exists and user has permission
-        from .permission_views import can_user_read
-
-        can_view_sliding = can_user_read(request.user, "sliding_scale")
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
-        from decimal import Decimal
 
         # Compute total fees for discount: ONLY include fees applicable to this student
         # and on or after the sliding scale's effective date.
@@ -2820,10 +2842,14 @@ class ProgramStudentBalancePrintView(
                 {
                     "date": sliding.date or sliding.created_at.date(),
                     "type": "Sliding Scale",
-                    "name": f"Sliding scale ({sliding.percent}%)",
-                    "amount": -discount,
+                    "name": f"Sliding scale (owes {sliding.percent}%)",
+                    "amount": Decimal("0.00"),
+                    "adjusted_amount": Decimal("0.00"),
                 }
             )
+        else:
+            discount = Decimal("0")
+
         payments = Payment.objects.filter(student=student, program=program)
         for p in payments:
             via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
@@ -2840,16 +2866,14 @@ class ProgramStudentBalancePrintView(
                     "type": "Payment",
                     "name": f"Payment via {via}{details}",
                     "amount": -p.amount,
-                    "payment_id": p.id,
+                    "adjusted_amount": -p.amount,
                 }
             )
 
         entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
 
         total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
-        total_sliding = -sum(
-            [e["amount"] for e in entries if e["type"] == "Sliding Scale"]
-        )
+        total_sliding = discount
         total_payments = -sum([e["amount"] for e in entries if e["type"] == "Payment"])
         balance = total_fees - total_sliding - total_payments
 
@@ -2866,6 +2890,7 @@ class ProgramStudentBalancePrintView(
                 "total_sliding": total_sliding,
                 "total_payments": total_payments,
                 "balance": balance,
+                "sliding_scale": sliding,
             },
         )
 
@@ -3216,6 +3241,10 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 
         def compute_entries_and_balance(student):
             entries = []
+            sliding = SlidingScale.objects.filter(
+                student=student, program=program
+            ).first()
+
             fees = Fee.objects.filter(program=program)
             for fee in fees:
                 if (
@@ -3226,17 +3255,24 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 fee_date = fee.date or (
                     fee.created_at.date() if fee.created_at else None
                 )
+                adjusted_amount = fee.amount
+                if sliding and sliding.percent is not None and can_view_sliding:
+                    if not sliding.date or (fee_date and fee_date >= sliding.date):
+                        discount = compute_sliding_discount_rounded(
+                            fee.amount, sliding.percent
+                        )
+                        adjusted_amount = fee.amount - discount
+
                 entries.append(
                     {
                         "date": fee_date,
                         "type": "Fee",
                         "name": fee.name,
                         "amount": fee.amount,
+                        "adjusted_amount": adjusted_amount,
                     }
                 )
-            sliding = SlidingScale.objects.filter(
-                student=student, program=program
-            ).first()
+
             # Compute total fees for discount: ONLY include fees applicable to this student
             # and on or after the sliding scale's effective date.
             applicable_fees_for_discount = []
@@ -3267,10 +3303,14 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                     {
                         "date": sliding.date or sliding.created_at.date(),
                         "type": "Sliding Scale",
-                        "name": f"Sliding scale ({sliding.percent}%)",
-                        "amount": -discount,
+                        "name": f"Sliding scale (owes {sliding.percent}%)",
+                        "amount": Decimal("0.00"),
+                        "adjusted_amount": Decimal("0.00"),
                     }
                 )
+            else:
+                discount = Decimal("0")
+
             payments = Payment.objects.filter(student=student, program=program)
             for p in payments:
                 via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
@@ -3287,24 +3327,23 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                         "type": "Payment",
                         "name": f"Payment via {via}{details}",
                         "amount": -p.amount,
+                        "adjusted_amount": -p.amount,
                         "payment_id": p.id,
                     }
                 )
             entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
             total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
-            total_sliding = -sum(
-                [e["amount"] for e in entries if e["type"] == "Sliding Scale"]
-            )
+            total_sliding = discount
             total_payments = -sum(
                 [e["amount"] for e in entries if e["type"] == "Payment"]
             )
             balance = total_fees - total_sliding - total_payments
-            return entries, total_fees, total_sliding, total_payments, balance
+            return entries, total_fees, total_sliding, total_payments, balance, sliding
 
         # Build list of targets with non-empty recipient emails
         targets = []
         for s in students:
-            entries, total_fees, total_sliding, total_payments, balance = (
+            entries, total_fees, total_sliding, total_payments, balance, sliding = (
                 compute_entries_and_balance(s)
             )
 
@@ -3342,6 +3381,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                     "total_sliding": total_sliding,
                     "total_payments": total_payments,
                     "balance": balance,
+                    "sliding_scale": sliding,
                 }
             )
 
@@ -3375,6 +3415,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 "total_sliding": data["total_sliding"],
                 "total_payments": data["total_payments"],
                 "balance": data["balance"],
+                "sliding_scale": data["sliding_scale"],
             }
             # Include optional rich-text message inside the template so styles apply correctly
             ctx["message_html"] = default_message or ""
