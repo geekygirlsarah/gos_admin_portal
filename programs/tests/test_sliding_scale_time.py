@@ -17,9 +17,9 @@ from programs.models import (
 class SlidingScaleTimeRestrictedtest(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser(
-            username="admin", password="admin_password_123", email="admin@example.com"
+            username="admin", password="password", email="admin@example.com"  # nosec B106
         )
-        self.client.login(username="admin", password="admin_password_123")
+        self.client.login(username="admin", password="password")  # nosec B106
 
     def test_sliding_scale_respects_date(self):
         """
