@@ -16,13 +16,13 @@ from programs.models import (
 
 class BalanceSheetSlidingScaleTest(TestCase):
     def setUp(self):
-        password = "password"
+        password = "password"  # nosec B105
         self.user = User.objects.create_superuser(
             username="admin",
-            password=password,
+            password=password,  # nosec B105
             email="admin@example.com",
         )
-        self.client.login(username="admin", password=password)
+        self.client.login(username="admin", password=password)  # nosec B105
 
     def test_adjusted_rate_column_presence_and_values(self):
         """
