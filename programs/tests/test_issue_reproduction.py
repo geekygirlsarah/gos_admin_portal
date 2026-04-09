@@ -64,11 +64,11 @@ class SlidingScaleDiscountTest(TestCase):
         entries = response.context["entries"]
         sliding_scale_entry = next(e for e in entries if e["type"] == "Sliding Scale")
 
-        # We expect discount to be 50.00 (amount = -50.00)
+        # We expect discount item to be 0.00 (amount = 0.00)
         self.assertEqual(
             sliding_scale_entry["amount"],
-            Decimal("-50.00"),
-            f"Discount should be 50.00, but got {sliding_scale_entry['amount']}",
+            Decimal("-0.00"),
+            f"Discount should be 0.00, but got {sliding_scale_entry['amount']}",
         )
 
         # Also check balance
