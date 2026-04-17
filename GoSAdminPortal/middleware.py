@@ -17,6 +17,7 @@ EXEMPT_URL_NAMES = {
     "apply_start",
     "apply_program",
     "apply_thanks",
+    "disclosure_upload",
 }
 
 EXEMPT_PATH_PREFIXES = (

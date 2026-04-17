@@ -48,6 +48,9 @@ from .views import (
     ProgramStudentRemoveView,
     ProgramUpdateView,
     RelationshipImportView,
+    ReviewApplicationDetailView,
+    ReviewApplicationListView,
+    DisclosureUploadView,
     SchoolCreateView,
     SchoolImportView,
     SchoolListView,
@@ -428,5 +431,21 @@ urlpatterns = [
         "settings/permissions/",
         PortalSettingsView.as_view(),
         name="role_permission_settings",
+    ),
+    # Application Review
+    path(
+        "applications/",
+        ReviewApplicationListView.as_view(),
+        name="application_review_list",
+    ),
+    path(
+        "applications/<int:pk>/",
+        ReviewApplicationDetailView.as_view(),
+        name="application_review_detail",
+    ),
+    path(
+        "apply/disclosures/<str:code>/",
+        DisclosureUploadView.as_view(),
+        name="disclosure_upload",
     ),
 ]

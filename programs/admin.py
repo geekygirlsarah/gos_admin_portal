@@ -3,6 +3,10 @@ from django.contrib import admin
 from .forms import StudentForm
 from .models import (
     Adult,
+    Application,
+    ApplicationDisclosure,
+    ApplicationFieldConfig,
+    DisclosureForm,
     Enrollment,
     Fee,
     Payment,
@@ -14,6 +18,28 @@ from .models import (
     Student,
     StudentApplication,
 )
+
+@admin.register(Application)
+class ApplicationAdmin(admin.ModelAdmin):
+    list_display = ("application_code", "email_to_verify", "role_type", "status", "current_step", "created_at")
+    list_filter = ("role_type", "status", "program")
+    search_fields = ("application_code", "email_to_verify")
+    readonly_fields = ("application_code", "created_at", "updated_at")
+
+@admin.register(DisclosureForm)
+class DisclosureFormAdmin(admin.ModelAdmin):
+    list_display = ("name", "required_for_role", "is_active")
+    list_filter = ("required_for_role", "is_active")
+
+@admin.register(ApplicationDisclosure)
+class ApplicationDisclosureAdmin(admin.ModelAdmin):
+    list_display = ("application", "disclosure_form", "uploaded_at", "is_verified")
+    list_filter = ("is_verified", "disclosure_form")
+
+@admin.register(ApplicationFieldConfig)
+class ApplicationFieldConfigAdmin(admin.ModelAdmin):
+    list_display = ("label", "field_name", "is_enabled", "is_required")
+    list_filter = ("is_enabled", "is_required")
 
 
 @admin.register(ProgramFeature)

@@ -1071,6 +1071,124 @@ class FeeAssignment(models.Model):
             )
 
 
+class Application(models.Model):
+    """
+    Unified application for Students, Parents, Mentors, and Volunteers.
+    Replaces StudentApplication with multi-step wizard support and OTP.
+    """
+    ROLE_CHOICES = [
+        ("student_parent", "Student/Parent"),
+        ("mentor_volunteer", "Mentor/Volunteer"),
+    ]
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("pending_handoff", "Pending Parent Completion"),
+        ("pending_approval", "Pending Lead Mentor Approval"),
+        ("pending_disclosures", "Pending Disclosures"),
+        ("accepted", "Accepted"),
+        ("rejected", "Rejected"),
+    ]
+
+    # Tracking and Security
+    application_code = models.CharField(max_length=8, unique=True, db_index=True)
+    email_to_verify = models.EmailField()
+    otp_code = models.CharField(max_length=6, blank=True, null=True)
+    is_verified = models.BooleanField(default=False)
+
+    # State Management
+    role_type = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    program = models.ForeignKey(
+        "Program", on_delete=models.CASCADE, related_name="new_applications"
+    )
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="draft")
+    current_step = models.CharField(max_length=50, default="identity")
+
+    # Multi-Role Data (JSON Payload for flexibility)
+    data = models.JSONField(default=dict)
+
+    # Reference to existing records (for reuse on approval)
+    existing_student = models.ForeignKey(
+        "Student", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    existing_primary_adult = models.ForeignKey(
+        "Adult",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="primary_apps",
+    )
+    existing_secondary_adult = models.ForeignKey(
+        "Adult",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="secondary_apps",
+    )
+
+    # Parent Verification
+    parent_email_to_verify = models.EmailField(blank=True, null=True)
+    parent_otp_code = models.CharField(max_length=6, blank=True, null=True)
+    is_parent_verified = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Application {self.application_code} ({self.get_role_type_display()}) - {self.status}"
+
+
+class DisclosureForm(models.Model):
+    """Blank PDF templates for disclosures."""
+
+    ROLE_CHOICES = [
+        ("student", "Student"),
+        ("parent", "Parent"),
+        ("mentor", "Mentor/Volunteer"),
+        ("all", "All"),
+    ]
+    name = models.CharField(max_length=200)
+    pdf_file = models.FileField(upload_to="disclosures/templates/")
+    required_for_role = models.CharField(
+        max_length=20, choices=ROLE_CHOICES, default="all"
+    )
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
+class ApplicationDisclosure(models.Model):
+    """Signed disclosure uploads linked to an application."""
+
+    application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, related_name="disclosures"
+    )
+    disclosure_form = models.ForeignKey(DisclosureForm, on_delete=models.CASCADE)
+    signed_pdf_upload = models.FileField(upload_to="disclosures/signed/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_verified = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.disclosure_form.name} for {self.application.application_code}"
+
+
+class ApplicationFieldConfig(models.Model):
+    """Global toggle for application fields."""
+
+    field_name = models.CharField(
+        max_length=100, unique=True, help_text="Internal name of the field"
+    )
+    label = models.CharField(max_length=200, help_text="Friendly label for the field")
+    is_enabled = models.BooleanField(default=True)
+    is_required = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.label} ({'Enabled' if self.is_enabled else 'Disabled'})"
+
+
 class StudentApplication(models.Model):
     """Public application submitted by a prospective student to a Program."""
 
