@@ -3,10 +3,6 @@ from django.contrib import admin
 from .forms import StudentForm
 from .models import (
     Adult,
-    Application,
-    ApplicationDisclosure,
-    ApplicationFieldConfig,
-    DisclosureForm,
     Enrollment,
     Fee,
     Payment,
@@ -16,30 +12,7 @@ from .models import (
     School,
     SlidingScale,
     Student,
-    StudentApplication,
 )
-
-@admin.register(Application)
-class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ("application_code", "email_to_verify", "role_type", "status", "current_step", "created_at")
-    list_filter = ("role_type", "status", "program")
-    search_fields = ("application_code", "email_to_verify")
-    readonly_fields = ("application_code", "created_at", "updated_at")
-
-@admin.register(DisclosureForm)
-class DisclosureFormAdmin(admin.ModelAdmin):
-    list_display = ("name", "required_for_role", "is_active")
-    list_filter = ("required_for_role", "is_active")
-
-@admin.register(ApplicationDisclosure)
-class ApplicationDisclosureAdmin(admin.ModelAdmin):
-    list_display = ("application", "disclosure_form", "uploaded_at", "is_verified")
-    list_filter = ("is_verified", "disclosure_form")
-
-@admin.register(ApplicationFieldConfig)
-class ApplicationFieldConfigAdmin(admin.ModelAdmin):
-    list_display = ("label", "field_name", "is_enabled", "is_required")
-    list_filter = ("is_enabled", "is_required")
 
 
 @admin.register(ProgramFeature)
@@ -349,45 +322,4 @@ class SlidingScaleAdmin(admin.ModelAdmin):
     autocomplete_fields = ("student", "program")
 
 
-@admin.register(StudentApplication)
-class StudentApplicationAdmin(admin.ModelAdmin):
-    list_display = (
-        "last_name",
-        "first_name",
-        "program",
-        "personal_email",
-        "status",
-        "created_at",
-    )
-    list_filter = ("program", "status")
-    search_fields = (
-        "first_name",
-        "legal_first_name",
-        "last_name",
-        "personal_email",
-        "andrew_email",
-    )
-    readonly_fields = ("created_at", "updated_at")
-    actions = ["approve_applications", "mark_rejected"]
-
-    def approve_applications(self, request, queryset):
-        created = 0
-        enrolled = 0
-        for app in queryset:
-            student = app.approve()
-            if student:
-                enrolled += 1
-        self.message_user(
-            request,
-            f"Approved {queryset.count()} application(s). Enrolled {enrolled} student(s).",
-        )
-
-    approve_applications.short_description = (
-        "Approve selected applications (create Student and enroll)"
-    )
-
-    def mark_rejected(self, request, queryset):
-        updated = queryset.update(status="rejected")
-        self.message_user(request, f"Marked {updated} application(s) as rejected.")
-
-    mark_rejected.short_description = "Mark selected applications as rejected"
+# StudentApplication admin removed; replaced by the `applications` app.

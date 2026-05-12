@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static l10n %}
+
+{% block title %}{% block wizard_title %}Apply{% endblock %} – Girls of Steel{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+
+        {# --- Progress indicator --- #}
+        {% if current_step and total_steps %}
+            {% widthratio current_step total_steps 100 as progress_pct %}
+            <nav aria-label="Application progress" class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small text-muted">
+                        Step {{ current_step }} of {{ total_steps }}
+                    </span>
+                    {% if application and application.application_id %}
+                        <span class="small text-muted">
+                            Application ID:
+                            <code class="ms-1">{{ application.application_id }}</code>
+                        </span>
+                    {% endif %}
+                </div>
+                <div class="progress" role="progressbar"
+                     aria-label="Application progress"
+                     aria-valuenow="{{ current_step|unlocalize }}"
+                     aria-valuemin="0"
+                     aria-valuemax="{{ total_steps|unlocalize }}"
+                     style="height: 0.5rem;">
+                    <div class="progress-bar bg-primary"
+                         style="width: {{ progress_pct|unlocalize }}%;"></div>
+                </div>
+            </nav>
+        {% endif %}
+
+        <div class="card shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-4">{% block wizard_heading %}{% endblock %}</h1>
+                {% block wizard_body %}{% endblock %}
+            </div>
+        </div>
+
+        <p class="text-center text-muted small mt-3 mb-0">
+            Need help? Contact
+            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

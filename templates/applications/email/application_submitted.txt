@@ -1,0 +1,15 @@
+Hi,
+
+Thanks for applying to Girls of Steel Robotics!
+
+We've received your application:
+
+  Program:        {{ application.program|default:"(not specified)" }}
+  Application ID: {{ application.application_id }}
+
+Our lead mentors have been notified and will review your application.
+You can check back at any time using your application ID:
+
+  {{ resume_url }}
+
+If you have questions, contact leads@girlsofsteelrobotics.org.

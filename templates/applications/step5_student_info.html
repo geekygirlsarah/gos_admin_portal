@@ -1,0 +1,64 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Student information{% endblock %}
+{% block wizard_heading %}Student information{% endblock %}
+
+{% block wizard_body %}
+{% if welcome_back %}
+    <div class="alert alert-info" role="status">
+        <strong>Welcome back{% if welcome_back.name %}, {{ welcome_back.name }}{% endif %}!</strong>
+        {% if welcome_back.last_program %}
+            We found your record from <strong>{{ welcome_back.last_program }}</strong>
+            and prefilled some fields below.
+        {% else %}
+            We found your record on file and prefilled some fields below.
+        {% endif %}
+        Please review and update anything that has changed.
+    </div>
+{% endif %}
+{% if picker %}
+    <form method="post" class="mb-4 p-3 bg-light rounded" novalidate>
+        {% csrf_token %}
+        <p class="mb-2">
+            We found these students linked to <strong>{{ application.email }}</strong>.
+            Pick the one this application is for, or apply for a new student.
+        </p>
+        <div class="mb-3">
+            {% for choice in picker.student %}
+                <div class="form-check">{{ choice.tag }} <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div>
+            {% endfor %}
+        </div>
+        <button type="submit" name="_pick_student" value="1" class="btn btn-outline-primary">
+            Use this selection
+        </button>
+        {% if chosen_student %}
+            <span class="text-success ms-2">
+                Prefilled from <strong>{{ chosen_student }}</strong>.
+            </span>
+        {% endif %}
+    </form>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+        {% for field in form %}
+            <div class="col-12 {% if field.name == 'pronouns' or field.name == 'tshirt_size' or field.name == 'graduation_year' %}col-md-4{% elif field.name == 'date_of_birth' or field.name == 'cell_phone_number' %}col-md-6{% else %}col-md-6{% endif %}">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'apply_step4' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+{% endblock %}

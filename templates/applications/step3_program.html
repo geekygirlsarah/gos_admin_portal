@@ -1,0 +1,89 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Choose a program{% endblock %}
+{% block wizard_heading %}Choose a program{% endblock %}
+
+{% block wizard_body %}
+<p class="text-muted">
+    Pick the upcoming program you'd like to apply to. Programs that are
+    already in session are listed below for reference but are no longer
+    accepting new applications.
+</p>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <fieldset class="mb-4">
+        <legend class="form-label fw-semibold">Upcoming programs</legend>
+
+        {% if future_programs %}
+            <div class="list-group mb-3">
+                {% for choice in form.program %}
+                    {% with program=choice.choice_value|stringformat:"s" %}
+                    <label class="list-group-item d-flex gap-3 align-items-start">
+                        {{ choice.tag }}
+                        <span class="flex-grow-1">
+                            <span class="fw-semibold">{{ choice.choice_label }}</span>
+                        </span>
+                    </label>
+                    {% endwith %}
+                {% endfor %}
+            </div>
+            {# Re-render the list with description metadata. #}
+            <div class="row g-3">
+                {% for prog in future_programs %}
+                <div class="col-12 col-md-6">
+                    <div class="card h-100 border-0 bg-light">
+                        <div class="card-body">
+                            <h3 class="h6 mb-1">{{ prog.name }}</h3>
+                            {% if prog.start_date %}
+                                <p class="small text-muted mb-2">
+                                    Starts {{ prog.start_date|date:"F j, Y" }}
+                                    {% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}
+                                </p>
+                            {% endif %}
+                            {% if prog.description %}
+                                <p class="small mb-0">{{ prog.description }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% if form.program.errors %}
+                <div class="invalid-feedback d-block mt-2" role="alert">
+                    {{ form.program.errors|join:" " }}
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info" role="status">
+                There are no upcoming programs accepting applications right now.
+                Please check back soon, or contact us at
+                <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+            </div>
+        {% endif %}
+    </fieldset>
+
+    {% if current_programs %}
+    <fieldset class="mb-4">
+        <legend class="form-label fw-semibold text-muted">Current programs</legend>
+        <div class="alert alert-secondary mb-3" role="note">
+            Applications for these programs are closed. Please contact us to
+            ask about joining.
+        </div>
+        <ul class="list-unstyled mb-0">
+            {% for prog in current_programs %}
+                <li>{{ prog.name }}{% if prog.start_date %} <span class="text-muted small">({{ prog.start_date|date:"M Y" }})</span>{% endif %}</li>
+            {% endfor %}
+        </ul>
+    </fieldset>
+    {% endif %}
+
+    <div class="d-flex justify-content-between">
+        <a href="{% url 'apply_step2' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary"{% if not future_programs %} disabled{% endif %}>
+            Continue
+        </button>
+    </div>
+</form>
+{% endblock %}
