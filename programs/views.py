@@ -168,6 +168,7 @@ from .forms import (
     FeeForm,
     ParentForm,
     PaymentForm,
+    ProgramDocumentForm,
     ProgramEmailBalancesForm,
     ProgramEmailForm,
     ProgramForm,
@@ -184,6 +185,7 @@ from .models import (
     Fee,
     Payment,
     Program,
+    ProgramDocument,
     RaceEthnicity,
     School,
     SlidingScale,
@@ -1929,6 +1931,15 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
         ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
         ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+        # Document management: any user who can edit the program can manage
+        # the blank documents attached to it (used by the application wizard
+        # Step 9 signed-document upload flow).
+        ctx["can_manage_documents"] = self.request.user.has_perm(
+            "programs.change_program"
+        )
+        ctx["program_documents"] = program.documents.all().order_by(
+            "display_order", "name"
+        )
 
         if ctx["can_manage_students"]:
             ctx["add_existing_form"] = AddExistingStudentToProgramForm(program=program)
@@ -3629,3 +3640,120 @@ class AdultUpdateView(
         if nxt:
             return nxt
         return reverse("adult_list")
+
+
+# --- Program documents (Step 9 blank forms) ---------------------------------
+
+
+class ProgramDocumentCreateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
+):
+    """Add a blank document (e.g. PDF) to a Program. Shown on the Program
+    settings page so lead mentors can manage them without going through
+    the Django admin.
+    """
+
+    permission_required = "programs.change_program"
+    model = ProgramDocument
+    form_class = ProgramDocumentForm
+    template_name = "programs/program_document_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_create"] = True
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Document added.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("program_detail", args=[self.program.pk])
+
+
+class ProgramDocumentUpdateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UpdateView,
+):
+    permission_required = "programs.change_program"
+    model = ProgramDocument
+    form_class = ProgramDocumentForm
+    template_name = "programs/program_document_form.html"
+    pk_url_kwarg = "doc_id"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            ProgramDocument, pk=self.kwargs["doc_id"], program=self.program
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_create"] = False
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Document updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("program_detail", args=[self.program.pk])
+
+
+class ProgramDocumentDeleteView(
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    View,
+):
+    """Delete a Program Document. POST-only (with a JS confirm on the
+    detail page); GET renders a small confirmation page for safety.
+    """
+
+    permission_required = "programs.change_program"
+    template_name = "programs/program_document_confirm_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        self.document = get_object_or_404(
+            ProgramDocument, pk=kwargs["doc_id"], program=self.program
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        from django.shortcuts import render
+
+        return render(
+            request,
+            self.template_name,
+            {"program": self.program, "document": self.document},
+        )
+
+    def post(self, request, *args, **kwargs):
+        name = self.document.name
+        self.document.delete()
+        messages.success(request, f"Deleted document “{name}”.")
+        return redirect("program_detail", pk=self.program.pk)

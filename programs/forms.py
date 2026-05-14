@@ -552,3 +552,49 @@ class FeeForm(forms.ModelForm):
         if program is not None:
             self.fields["program"].initial = program
             self.fields["program"].required = True
+
+
+class ProgramDocumentForm(forms.ModelForm):
+    """Form for adding/editing a blank document attached to a Program.
+
+    Used on the Program detail/settings page to let lead mentors manage the
+    list of forms approved applicants must download, sign, and re-upload
+    (Step 9 of the application wizard).
+    """
+
+    class Meta:
+        from .models import ProgramDocument as _PD
+
+        model = _PD
+        fields = [
+            "program",
+            "name",
+            "description",
+            "file",
+            "is_required",
+            "display_order",
+            "is_active",
+        ]
+        widgets = {
+            "program": forms.HiddenInput(),
+            "name": forms.TextInput(attrs={"class": "form-control"}),
+            "description": forms.Textarea(
+                attrs={"class": "form-control", "rows": 3}
+            ),
+            "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
+            "is_required": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "display_order": forms.NumberInput(
+                attrs={"class": "form-control", "min": 0}
+            ),
+            "is_active": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+        }
+
+    def __init__(self, *args, program: Program = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if program is not None:
+            self.fields["program"].initial = program
+            self.fields["program"].required = True

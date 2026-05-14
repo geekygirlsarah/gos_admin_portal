@@ -59,6 +59,9 @@
                     </li>
                     {% endif %}
                     {% user_role user as role %}
+                    {% if perms.applications.review_application %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'application_review_list' %}">Applications</a></li>
+                    {% endif %}
                     {% if role == 'LeadMentor' %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'portal_settings' %}">Settings</a></li>
                     {% endif %}

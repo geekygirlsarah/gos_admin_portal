@@ -287,3 +287,20 @@ class ConfirmSubmitForm(forms.Form):
         required=True,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
+
+
+# ---------------------------------------------------------------------------
+# Step 9: post-approval signed-document upload
+# ---------------------------------------------------------------------------
+
+
+class DocumentSubmissionForm(forms.Form):
+    """Upload a single signed document for an approved application."""
+
+    file = forms.FileField(
+        label="Signed file",
+        widget=forms.ClearableFileInput(
+            attrs={"class": "form-control", "accept": ".pdf,.png,.jpg,.jpeg"}
+        ),
+        help_text="PDF preferred. Images (PNG/JPEG) are also accepted.",
+    )

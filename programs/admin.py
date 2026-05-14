@@ -7,6 +7,7 @@ from .models import (
     Fee,
     Payment,
     Program,
+    ProgramDocument,
     ProgramFeature,
     RolePermission,
     School,
@@ -19,6 +20,21 @@ from .models import (
 class ProgramFeatureAdmin(admin.ModelAdmin):
     list_display = ("name", "key", "display_order")
     search_fields = ("name", "key")
+
+
+@admin.register(ProgramDocument)
+class ProgramDocumentAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "program",
+        "is_required",
+        "is_active",
+        "display_order",
+        "updated_at",
+    )
+    list_filter = ("program", "is_required", "is_active")
+    search_fields = ("name", "program__name")
+    autocomplete_fields = ("program",)
 
 
 @admin.register(RolePermission)

@@ -98,7 +98,9 @@ class Application(models.Model):
         EMAIL_VERIFIED = "email_verified", "Email verified"
         AWAITING_PARENT = "awaiting_parent", "Awaiting parent"
         SUBMITTED = "submitted", "Submitted"
-        APPROVED = "approved", "Approved"
+        APPROVED = "approved", "App Approved"
+        APPROVED_SIGNED = "approved_signed", "Approved + Signed"
+        CONVERTED = "converted", "Converted to Student"
         DECLINED = "declined", "Declined"
 
     application_id = models.CharField(
@@ -162,12 +164,29 @@ class Application(models.Model):
         related_name="reviewed_applications",
     )
 
+    # Set when a lead mentor converts an approved application into a real
+    # Student record + Enrollment in the program.
+    converted_student = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="source_applications",
+    )
+    converted_at = models.DateTimeField(blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            (
+                "review_application",
+                "Can review applications (approve / decline / edit / delete)",
+            ),
+        ]
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         who = self.email or "(no email)"
@@ -247,3 +266,41 @@ class Application(models.Model):
     @property
     def email_is_verified(self) -> bool:
         return self.email_verified_at is not None
+
+
+# --- Step 9: post-approval signed-document uploads --------------------------
+
+
+def _application_doc_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/application_documents/<application_id>/<filename>."""
+    aid = instance.application.application_id if instance.application_id else "unassigned"
+    return f"application_documents/{aid}/{filename}"
+
+
+class ApplicationDocumentSubmission(models.Model):
+    """A signed (or completed) document uploaded by an approved applicant
+    in response to a :class:`programs.ProgramDocument`.
+
+    One row per (application, program document). Re-uploading replaces the
+    file on the existing row.
+    """
+
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="document_submissions",
+    )
+    document = models.ForeignKey(
+        "programs.ProgramDocument",
+        on_delete=models.CASCADE,
+        related_name="submissions",
+    )
+    file = models.FileField(upload_to=_application_doc_upload_to)
+    uploaded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("application", "document")
+        ordering = ["document__display_order", "document__name"]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"Submission for {self.document} on {self.application.application_id}"

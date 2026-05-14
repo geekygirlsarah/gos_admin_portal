@@ -1,0 +1,29 @@
+{% extends 'applications/review/_base.html' %}
+{% block review_title %}Edit {{ application.application_id }}{% endblock %}
+{% block review_heading %}Edit application <code>{{ application.application_id }}</code>{% endblock %}
+{% block review_body %}
+  <p class="text-muted">
+    Edit the JSON captured by the wizard. Use this to fix typos or
+    other errors on the applicant's behalf. Each top-level key is a
+    wizard step (e.g. <code>step5</code>, <code>step6</code>).
+  </p>
+  <form method="post" class="mb-3">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label" for="id_email">{{ form.email.label }}</label>
+      {{ form.email }}
+      {% for e in form.email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="id_data_json">{{ form.data_json.label }}</label>
+      {{ form.data_json }}
+      {% if form.data_json.help_text %}<div class="form-text">{{ form.data_json.help_text }}</div>{% endif %}
+      {% for e in form.data_json.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a class="btn btn-outline-secondary"
+       href="{% url 'application_review_detail' application.application_id %}">
+      Cancel
+    </a>
+  </form>
+{% endblock %}

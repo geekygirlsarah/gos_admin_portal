@@ -19,6 +19,7 @@ EXEMPT_PATH_PREFIXES = (
     "/accounts/",
     "/admin/",
     "/apply/",  # public application wizard
+    settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,
 )
 

@@ -1,0 +1,15 @@
+Hi,
+
+Great news — your Girls of Steel application has been approved!
+
+Application ID: {{ application.application_id }}
+Program:        {{ application.program }}
+
+There are a few documents we need you to download, sign, and re-upload
+before we can finish enrolling you. Use the link below to access them:
+
+  {{ documents_url }}
+
+If you have any questions, just reply to this email.
+
+— Girls of Steel Robotics

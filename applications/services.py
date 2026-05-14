@@ -384,6 +384,293 @@ def send_application_submitted_email(
     )
 
 
+def send_application_approved_email(
+    application: Application, request=None
+) -> None:
+    """Notify the applicant that their application was approved and that
+    they have signed documents to download/upload (Step 9).
+
+    Recipients are the student + primary parent/guardian (or just the
+    parent when the student has no email), matching the submission
+    confirmation behavior. Called by the lead-mentor admin (to be built
+    in a follow-up phase) when an application is marked APPROVED.
+    """
+    recipients = _collect_applicant_recipients(application)
+    if not recipients:
+        return
+    # Link the applicant straight into Step 9 via the resume link, which
+    # will redirect to /apply/<id>/step9/ for APPROVED applications.
+    from django.urls import reverse
+
+    path = reverse("apply_resume_link", kwargs={"app_id": application.application_id})
+    documents_url = (
+        request.build_absolute_uri(path) if request is not None else path
+    )
+    ctx = {
+        "application": application,
+        "documents_url": documents_url,
+    }
+    text_body = render_to_string(
+        "applications/email/application_approved.txt", ctx
+    )
+    html_body = render_to_string(
+        "applications/email/application_approved.html", ctx
+    )
+    _send_html_email(
+        subject="Your Girls of Steel application has been approved",
+        text_body=text_body,
+        html_body=html_body,
+        recipients=recipients,
+    )
+
+
+def send_application_declined_email(
+    application: Application, reason: str = "", request=None
+) -> None:
+    """Notify the applicant that their application was declined.
+
+    Recipients are the student + primary parent/guardian (or just the
+    parent when the student has no email), matching the submission
+    confirmation behavior. Called by the lead-mentor review pages when
+    an application is marked DECLINED.
+    """
+    recipients = _collect_applicant_recipients(application)
+    if not recipients:
+        return
+    ctx = {
+        "application": application,
+        "reason": (reason or "").strip(),
+    }
+    text_body = render_to_string(
+        "applications/email/application_declined.txt", ctx
+    )
+    html_body = render_to_string(
+        "applications/email/application_declined.html", ctx
+    )
+    _send_html_email(
+        subject="An update on your Girls of Steel application",
+        text_body=text_body,
+        html_body=html_body,
+        recipients=recipients,
+    )
+
+
+class ApplicationConversionError(Exception):
+    """Raised when an application cannot be converted to a Student."""
+
+
+def _adult_from_data(parent_data: dict):
+    """Find or create an Adult from a step6/step7 parent data dict.
+
+    Match is by email (case-insensitive) when one is provided; otherwise a
+    new Adult is created. Existing Adults have their blank/null fields
+    filled in from the application data, but non-blank existing values
+    are preserved (we trust what's already in the system).
+    """
+    from programs.models import Adult
+
+    if not parent_data:
+        return None
+    email = (parent_data.get("email") or "").strip()
+    first_name = (parent_data.get("first_name") or "").strip()
+    last_name = (parent_data.get("last_name") or "").strip()
+    if not email and not (first_name and last_name):
+        return None
+
+    adult = None
+    if email:
+        adult = Adult.objects.filter(email__iexact=email).first()
+    if adult is None:
+        adult = Adult(
+            first_name=first_name or "(unknown)",
+            last_name=last_name or "(unknown)",
+            email=email or None,
+            is_parent=True,
+        )
+
+    # Fill in any missing fields from the captured data, without
+    # overwriting non-blank existing values.
+    def _fill(field, value):
+        value = (value or "").strip() if isinstance(value, str) else value
+        if value and not getattr(adult, field, None):
+            setattr(adult, field, value)
+
+    _fill("first_name", first_name)
+    _fill("last_name", last_name)
+    _fill("email", email)
+    _fill("cell_phone", parent_data.get("cell_phone"))
+    _fill("home_phone", parent_data.get("home_phone"))
+    rel = (parent_data.get("relationship_to_student") or "").strip().lower()
+    if rel:
+        # Only set if blank/default ("parent"); we don't try to map free-form
+        # values against RELATIONSHIP_CHOICES.
+        if not adult.relationship_to_student or adult.relationship_to_student == "parent":
+            adult.relationship_to_student = rel[:20]
+    adult.is_parent = True
+    adult.save()
+    return adult
+
+
+def _student_from_application(application: Application):
+    """Find or create a Student from the application's step5 + email data.
+
+    - If the wizard captured an `_existing_student_id`, that record is used.
+    - Otherwise looks up by `personal_email`/`andrew_email` matching the
+      application's email or step5 personal email.
+    - Falls back to creating a new Student from the step5 form fields.
+    """
+    from programs.models import School, Student
+
+    data = application.data or {}
+    step5 = (data.get("step5") or {}).copy()
+    existing_id = step5.pop("_existing_student_id", None)
+
+    student = None
+    if existing_id:
+        student = Student.objects.filter(pk=existing_id).first()
+
+    candidate_emails = [
+        (application.email or "").strip(),
+        (step5.get("personal_email") or "").strip(),
+    ]
+    candidate_emails = [e for e in candidate_emails if e]
+    if student is None and candidate_emails:
+        q = Q()
+        for e in candidate_emails:
+            q |= Q(personal_email__iexact=e) | Q(andrew_email__iexact=e)
+        student = Student.objects.filter(q).first()
+
+    if student is None:
+        legal_first = (step5.get("legal_first_name") or "").strip()
+        last_name = (step5.get("last_name") or "").strip()
+        if not legal_first or not last_name:
+            raise ApplicationConversionError(
+                "Cannot create a Student: legal first name and last name "
+                "are required in the application data (step 5)."
+            )
+        student = Student(
+            legal_first_name=legal_first,
+            last_name=last_name,
+        )
+
+    # Apply / fill from step5 without overwriting non-blank existing values.
+    def _fill(field, value):
+        value = (value or "").strip() if isinstance(value, str) else value
+        if value and not getattr(student, field, None):
+            setattr(student, field, value)
+
+    _fill("legal_first_name", step5.get("legal_first_name"))
+    _fill("first_name", step5.get("first_name"))
+    _fill("last_name", step5.get("last_name"))
+    _fill("pronouns", step5.get("pronouns"))
+    if step5.get("date_of_birth") and not student.date_of_birth:
+        student.date_of_birth = step5["date_of_birth"]
+    _fill("personal_email", step5.get("personal_email"))
+    _fill("cell_phone_number", step5.get("cell_phone_number"))
+    if step5.get("graduation_year") and not student.graduation_year:
+        try:
+            student.graduation_year = int(step5["graduation_year"])
+        except (TypeError, ValueError):
+            pass
+    _fill("tshirt_size", step5.get("tshirt_size"))
+    _fill("allergies", step5.get("allergies"))
+    _fill("dietary_restrictions", step5.get("dietary_restrictions"))
+    _fill("medical_notes", step5.get("medical_notes"))
+
+    # School: free-text -> lookup-or-create.
+    school_name = (step5.get("school_name") or "").strip()
+    if school_name and not student.school_id:
+        school, _ = School.objects.get_or_create(name=school_name)
+        student.school = school
+
+    student.save()
+    return student
+
+
+def convert_application_to_student(application: Application, request=None):
+    """Convert an APPROVED_SIGNED application into a real Student record.
+
+    Creates / updates Student + Adult records, links primary/secondary
+    contacts, creates an Enrollment in the application's program, and
+    flips the application status to CONVERTED. Idempotent: if the
+    application has already been converted, returns the existing
+    student.
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from programs.models import Enrollment
+
+    if application.converted_student_id:
+        return application.converted_student
+
+    if application.status not in (
+        Application.Status.APPROVED,
+        Application.Status.APPROVED_SIGNED,
+    ):
+        raise ApplicationConversionError(
+            "Only approved applications can be converted to a student."
+        )
+    # If approved (not yet APPROVED_SIGNED), verify there are no
+    # required signed documents still missing for the program.
+    if application.status == Application.Status.APPROVED and application.program_id:
+        from programs.models import ProgramDocument
+
+        required_docs = ProgramDocument.objects.filter(
+            program_id=application.program_id, is_active=True, is_required=True
+        )
+        submitted_ids = set(
+            application.document_submissions.values_list("document_id", flat=True)
+        )
+        missing = [d for d in required_docs if d.id not in submitted_ids]
+        if missing:
+            names = ", ".join(d.name for d in missing)
+            raise ApplicationConversionError(
+                "Cannot convert: required signed documents are still "
+                f"missing: {names}."
+            )
+    if not application.program_id:
+        raise ApplicationConversionError(
+            "Application has no program selected; cannot enroll."
+        )
+
+    data = application.data or {}
+    with transaction.atomic():
+        primary = _adult_from_data(data.get("step6") or {})
+        secondary = _adult_from_data(data.get("step7") or {})
+
+        student = _student_from_application(application)
+
+        # Link contacts if not already set on the student.
+        changed = False
+        if primary and not student.primary_contact_id:
+            student.primary_contact = primary
+            changed = True
+        if secondary and not student.secondary_contact_id:
+            student.secondary_contact = secondary
+            changed = True
+        if changed:
+            student.save()
+
+        Enrollment.objects.get_or_create(
+            student=student, program=application.program
+        )
+
+        application.converted_student = student
+        application.converted_at = timezone.now()
+        application.status = Application.Status.CONVERTED
+        application.save(
+            update_fields=[
+                "converted_student",
+                "converted_at",
+                "status",
+                "updated_at",
+            ]
+        )
+
+    return student
+
+
 def send_lead_notification_email(
     application: Application, request=None
 ) -> None:

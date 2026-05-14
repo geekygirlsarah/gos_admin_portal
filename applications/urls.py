@@ -6,9 +6,45 @@ from __future__ import annotations
 
 from django.urls import path
 
-from . import views
+from . import review, views
 
 urlpatterns = [
+    # --- Lead-mentor review pages (gated by applications.review_application) ---
+    path(
+        "review/",
+        review.ApplicationReviewListView.as_view(),
+        name="application_review_list",
+    ),
+    path(
+        "review/<str:app_id>/",
+        review.ApplicationReviewDetailView.as_view(),
+        name="application_review_detail",
+    ),
+    path(
+        "review/<str:app_id>/approve/",
+        review.ApplicationApproveView.as_view(),
+        name="application_review_approve",
+    ),
+    path(
+        "review/<str:app_id>/decline/",
+        review.ApplicationDeclineView.as_view(),
+        name="application_review_decline",
+    ),
+    path(
+        "review/<str:app_id>/edit/",
+        review.ApplicationEditView.as_view(),
+        name="application_review_edit",
+    ),
+    path(
+        "review/<str:app_id>/delete/",
+        review.ApplicationDeleteView.as_view(),
+        name="application_review_delete",
+    ),
+    path(
+        "review/<str:app_id>/convert/",
+        review.ApplicationConvertView.as_view(),
+        name="application_review_convert",
+    ),
     # Step 1: welcome / start / resume
     path("", views.WelcomeView.as_view(), name="apply_start"),
     path("resume/", views.ResumeView.as_view(), name="apply_resume"),
@@ -70,5 +106,13 @@ urlpatterns = [
         "<str:app_id>/submitted/",
         views.SubmittedView.as_view(),
         name="apply_submitted",
+    ),
+    # Step 9: post-approval signed-document download & re-upload page.
+    # Only reachable once the application has been APPROVED by a lead
+    # mentor; otherwise the view redirects to the applicant's current step.
+    path(
+        "<str:app_id>/step9/",
+        views.Step9DocumentsView.as_view(),
+        name="apply_step9",
     ),
 ]

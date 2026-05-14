@@ -1070,3 +1070,52 @@ class FeeAssignment(models.Model):
                 "Assigned student must be enrolled in the fee’s program."
             )
 
+
+def _program_document_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/program_documents/<program_id>/<filename>."""
+    pid = instance.program_id or "unassigned"
+    return f"program_documents/{pid}/{filename}"
+
+
+class ProgramDocument(models.Model):
+    """A document (typically a PDF) that an approved applicant needs to
+    download, sign, and re-upload before becoming a full student in the
+    program. Managed by lead mentors in Django admin.
+    """
+
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    name = models.CharField(
+        max_length=200,
+        help_text="Short name shown to applicants (e.g. 'Photo release form').",
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional longer explanation shown next to the download link.",
+    )
+    file = models.FileField(
+        upload_to=_program_document_upload_to,
+        help_text="The blank PDF (or other file) for the applicant to download and fill out.",
+    )
+    is_required = models.BooleanField(
+        default=True,
+        help_text="If checked, applicants must upload a signed copy before being marked complete.",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Uncheck to hide this document from applicants without deleting it.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["program", "display_order", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.program})"
+

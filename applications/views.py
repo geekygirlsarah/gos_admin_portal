@@ -18,6 +18,7 @@ from .forms import (
     ApplicantTypeForm,
     ChooseExistingStudentForm,
     ConfirmSubmitForm,
+    DocumentSubmissionForm,
     OtpVerifyForm,
     ParentHandoffForm,
     ParentInfoForm,
@@ -25,7 +26,7 @@ from .forms import (
     ResumeApplicationForm,
     StudentInfoForm,
 )
-from .models import Application, SiteSettings
+from .models import Application, ApplicationDocumentSubmission, SiteSettings
 from .services import (
     adult_to_prefill,
     find_adult_by_email,
@@ -65,6 +66,13 @@ def _redirect_to_current_step(application: Application):
     if step in name_map:
         return redirect(name_map[step], app_id=application.application_id)
     if step >= 9:
+        # Approved applicants jump straight to the signed-documents page.
+        # Everyone else lands on the post-submit confirmation page.
+        if application.status in (
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+        ):
+            return redirect("apply_step9", app_id=application.application_id)
         return redirect("apply_submitted", app_id=application.application_id)
     return redirect("apply_start")
 
@@ -824,12 +832,149 @@ class SubmittedView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
+        # Approved applicants belong on the documents page.
+        if application.status in (
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+        ):
+            return redirect("apply_step9", app_id=application.application_id)
         return render(
             request,
             self.template_name,
             {
                 "application": application,
                 "current_step": min(max(application.current_step, 9), TOTAL_STEPS),
+                "total_steps": TOTAL_STEPS,
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
+# Step 9: post-approval signed-document download + upload.
+#
+# This page is only reachable once a lead mentor has approved the
+# application (``application.status == APPROVED``). It lists every active
+# :class:`programs.ProgramDocument` attached to the application's
+# program, shows the applicant any submissions they've already uploaded,
+# and lets them upload (or replace) a signed copy per document.
+# ---------------------------------------------------------------------------
+
+
+@method_decorator(never_cache, name="dispatch")
+class Step9DocumentsView(View):
+    template_name = "applications/step9_documents.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = self._gate(application)
+        if guard is not None:
+            return guard
+        return self._render(request, application, DocumentSubmissionForm())
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = self._gate(application)
+        if guard is not None:
+            return guard
+
+        # Identify which ProgramDocument this upload is for. Must belong to
+        # the application's program and be active.
+        from programs.models import ProgramDocument
+
+        doc_id = request.POST.get("document_id")
+        document = (
+            ProgramDocument.objects.filter(
+                pk=doc_id,
+                program=application.program,
+                is_active=True,
+            ).first()
+            if doc_id
+            else None
+        )
+        if document is None:
+            messages.error(request, "We couldn't find that document. Please try again.")
+            return redirect("apply_step9", app_id=application.application_id)
+
+        form = DocumentSubmissionForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return self._render(request, application, form, focus_doc_id=document.pk)
+
+        submission, _created = ApplicationDocumentSubmission.objects.get_or_create(
+            application=application, document=document
+        )
+        submission.file = form.cleaned_data["file"]
+        submission.save()
+
+        # If every required ProgramDocument now has a submission, promote
+        # the application from APPROVED -> APPROVED_SIGNED so lead mentors
+        # can see at a glance that the paperwork is in.
+        if application.status == Application.Status.APPROVED:
+            required_doc_ids = set(
+                ProgramDocument.objects.filter(
+                    program=application.program,
+                    is_active=True,
+                    is_required=True,
+                ).values_list("pk", flat=True)
+            )
+            if required_doc_ids:
+                uploaded_doc_ids = set(
+                    ApplicationDocumentSubmission.objects.filter(
+                        application=application,
+                        document_id__in=required_doc_ids,
+                    ).values_list("document_id", flat=True)
+                )
+                if required_doc_ids.issubset(uploaded_doc_ids):
+                    application.status = Application.Status.APPROVED_SIGNED
+                    application.save(update_fields=["status", "updated_at"])
+
+        messages.success(
+            request,
+            f"Uploaded signed copy of “{document.name}”. Thank you!",
+        )
+        return redirect("apply_step9", app_id=application.application_id)
+
+    def _gate(self, application: Application):
+        """Only approved applications may access Step 9."""
+        if application.status not in (
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+        ):
+            # Send them somewhere sensible: their current step, or the
+            # post-submit confirmation page if they've already submitted.
+            return _redirect_to_current_step(application)
+        return None
+
+    def _render(self, request, application, form, focus_doc_id=None):
+        from programs.models import ProgramDocument
+
+        documents = list(
+            ProgramDocument.objects.filter(
+                program=application.program, is_active=True
+            ).order_by("display_order", "name")
+        )
+        submissions_by_doc = {
+            s.document_id: s
+            for s in ApplicationDocumentSubmission.objects.filter(
+                application=application
+            ).select_related("document")
+        }
+        rows = []
+        all_required_done = True
+        for doc in documents:
+            submission = submissions_by_doc.get(doc.pk)
+            if doc.is_required and submission is None:
+                all_required_done = False
+            rows.append({"document": doc, "submission": submission})
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "form": form,
+                "rows": rows,
+                "all_required_done": all_required_done,
+                "focus_doc_id": focus_doc_id,
+                "current_step": 9,
                 "total_steps": TOTAL_STEPS,
             },
         )
