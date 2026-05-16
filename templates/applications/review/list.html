@@ -1,0 +1,70 @@
+{% extends 'applications/review/_base.html' %}
+{% block review_title %}Applications{% endblock %}
+{% block review_heading %}Applications{% endblock %}
+{% block review_body %}
+  <form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-sm-4 col-md-3">
+      <label class="form-label" for="status-filter">Status</label>
+      <select class="form-select" name="status" id="status-filter">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-4 col-md-3">
+      <label class="form-label" for="type-filter">Applicant type</label>
+      <select class="form-select" name="type" id="type-filter">
+        <option value="">All types</option>
+        {% for value, label in type_choices %}
+          <option value="{{ value }}" {% if value == current_type %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if current_program %}
+      <input type="hidden" name="program" value="{{ current_program }}">
+    {% endif %}
+    <div class="col-auto">
+      <button class="btn btn-primary" type="submit">Filter</button>
+      <a class="btn btn-outline-secondary" href="{% url 'application_review_list' %}">Reset</a>
+    </div>
+  </form>
+
+  {% if applications %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Application ID</th>
+            <th>Type</th>
+            <th>Email</th>
+            <th>Program</th>
+            <th>Status</th>
+            <th>Submitted</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in applications %}
+            <tr>
+              <td><code>{{ app.application_id }}</code></td>
+              <td>{{ app.get_applicant_type_display|default:"—" }}</td>
+              <td>{{ app.email|default:"—" }}</td>
+              <td>{{ app.program|default:"—" }}</td>
+              <td><span class="badge bg-secondary">{{ app.get_status_display }}</span></td>
+              <td>{{ app.submitted_at|date:"Y-m-d"|default:"—" }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{% url 'application_review_detail' app.application_id %}">
+                  Review
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">No applications match your filters.</p>
+  {% endif %}
+{% endblock %}

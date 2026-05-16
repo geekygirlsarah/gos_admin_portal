@@ -52,7 +52,14 @@ from django.db.models.functions import Coalesce, Lower
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import strip_tags
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    ListView,
+    TemplateView,
+    UpdateView,
+    View,
+)
 from premailer import transform
 
 cssutils.log.setLevel(logging.WARNING)
@@ -161,14 +168,13 @@ from .forms import (
     FeeForm,
     ParentForm,
     PaymentForm,
-    ProgramApplySelectForm,
+    ProgramDocumentForm,
     ProgramEmailBalancesForm,
     ProgramEmailForm,
     ProgramForm,
     QuickCreateStudentForm,
     SchoolForm,
     SlidingScaleForm,
-    StudentApplicationForm,
     StudentForm,
 )
 from .models import (
@@ -179,11 +185,11 @@ from .models import (
     Fee,
     Payment,
     Program,
+    ProgramDocument,
     RaceEthnicity,
     School,
     SlidingScale,
     Student,
-    StudentApplication,
     TaxForm,
     Team,
 )
@@ -464,56 +470,10 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
     permission_required = "programs.change_student"
 
     def post(self, request, pk):
-        from django.contrib import messages
-        from django.shortcuts import get_object_or_404, redirect
+        from .utils import convert_student_to_alumni
 
         student = get_object_or_404(Student, pk=pk)
-
-        # Find or create an Adult flagged as alumni from this student's info
-        def find_matching_adult(s: Student):
-            emails = [s.personal_email, s.andrew_email]
-            for e in emails:
-                if e:
-                    a = Adult.objects.filter(alumni_email__iexact=e).first()
-                    if a:
-                        return a
-                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
-                    if a:
-                        return a
-            first = (s.first_name or s.legal_first_name or "").strip()
-            last = (s.last_name or "").strip()
-            if first and last:
-                return Adult.objects.filter(
-                    first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                ).first()
-            return None
-
-        adult = find_matching_adult(student)
-        created = False
-        if not adult:
-            adult = Adult.objects.create(
-                first_name=student.first_name or student.legal_first_name or "",
-                last_name=student.last_name or "",
-                alumni_email=student.personal_email or student.andrew_email,
-                is_alumni=True,
-            )
-            created = True
-        else:
-            changed = False
-            if not adult.is_alumni:
-                adult.is_alumni = True
-                changed = True
-            if not adult.alumni_email and (
-                student.personal_email or student.andrew_email
-            ):
-                adult.alumni_email = student.personal_email or student.andrew_email
-                changed = True
-            if changed:
-                adult.save(update_fields=["is_alumni", "alumni_email", "updated_at"])
-        # Mark student as graduated (do not change active)
-        if not student.graduated:
-            student.graduated = True
-            student.save(update_fields=["graduated", "updated_at"])
+        _adult, created, _marked = convert_student_to_alumni(student)
         if created:
             messages.success(
                 request,
@@ -524,9 +484,15 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 request,
                 f"{student} is now marked as Alumni. Student marked as graduated.",
             )
-        # Redirect back to list or provided next
+        # Redirect back to list or provided next (only if it's a safe URL)
         next_url = request.GET.get("next") or request.POST.get("next")
-        return redirect(next_url or "student_list")
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect("student_list")
 
 
 class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -534,7 +500,6 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
-        from django.shortcuts import render
         from django.utils import timezone
 
         year = request.GET.get("year")
@@ -558,7 +523,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         )
 
     def post(self, request):
-        from django.shortcuts import redirect, render
+        from .utils import convert_student_to_alumni, find_matching_alumni_adult
 
         action = request.POST.get("action", "convert")
         ids = request.POST.getlist("student_ids")
@@ -587,30 +552,10 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
 
         if action == "preview":
             # Build preview info without writing changes against Adults flagged as alumni
-            def find_matching_adult(s: Student):
-                emails = [s.personal_email, s.andrew_email]
-                for e in emails:
-                    if e:
-                        a = Adult.objects.filter(alumni_email__iexact=e).first()
-                        if a:
-                            return a
-                        a = Adult.objects.filter(
-                            email__iexact=e, is_alumni=True
-                        ).first()
-                        if a:
-                            return a
-                first = (s.first_name or s.legal_first_name or "").strip()
-                last = (s.last_name or "").strip()
-                if first and last:
-                    return Adult.objects.filter(
-                        first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                    ).first()
-                return None
-
             will_create = []
             already_alumni = []
             for s in qs:
-                if find_matching_adult(s):
+                if find_matching_alumni_adult(s):
                     already_alumni.append(s)
                 else:
                     will_create.append(s)
@@ -633,52 +578,13 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         existed = 0
         marked_graduated = 0
 
-        def find_matching_adult(s: Student):
-            emails = [s.personal_email, s.andrew_email]
-            for e in emails:
-                if e:
-                    a = Adult.objects.filter(alumni_email__iexact=e).first()
-                    if a:
-                        return a
-                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
-                    if a:
-                        return a
-            first = (s.first_name or s.legal_first_name or "").strip()
-            last = (s.last_name or "").strip()
-            if first and last:
-                return Adult.objects.filter(
-                    first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                ).first()
-            return None
-
         for student in qs:
-            adult = find_matching_adult(student)
-            if not adult:
-                Adult.objects.create(
-                    first_name=student.first_name or student.legal_first_name or "",
-                    last_name=student.last_name or "",
-                    alumni_email=student.personal_email or student.andrew_email,
-                    is_alumni=True,
-                )
+            _adult, was_created, was_marked = convert_student_to_alumni(student)
+            if was_created:
                 created += 1
             else:
-                changed = False
-                if not adult.is_alumni:
-                    adult.is_alumni = True
-                    changed = True
-                if not adult.alumni_email and (
-                    student.personal_email or student.andrew_email
-                ):
-                    adult.alumni_email = student.personal_email or student.andrew_email
-                    changed = True
-                if changed:
-                    adult.save(
-                        update_fields=["is_alumni", "alumni_email", "updated_at"]
-                    )
                 existed += 1
-            if not student.graduated:
-                student.graduated = True
-                student.save(update_fields=["graduated", "updated_at"])
+            if was_marked:
                 marked_graduated += 1
         messages.success(
             request,
@@ -1925,6 +1831,15 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
         ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
         ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+        # Document management: any user who can edit the program can manage
+        # the blank documents attached to it (used by the application wizard
+        # Step 9 signed-document upload flow).
+        ctx["can_manage_documents"] = self.request.user.has_perm(
+            "programs.change_program"
+        )
+        ctx["program_documents"] = program.documents.all().order_by(
+            "display_order", "name"
+        )
 
         if ctx["can_manage_students"]:
             ctx["add_existing_form"] = AddExistingStudentToProgramForm(program=program)
@@ -3033,128 +2948,6 @@ class ProgramFeeUpdateView(
         )
 
 
-class ApplyProgramSelectView(View):
-    template_name = "apply/select_program.html"
-
-    def get(self, request):
-        from django.shortcuts import render
-        from django.utils import timezone
-
-        # Show active programs grouped by timing (future/current/past)
-        today = timezone.localdate()
-        programs = list(Program.objects.filter(active=True))
-
-        def status(prog):
-            sd = prog.start_date
-            ed = prog.end_date
-            if sd and sd > today:
-                return "future"
-            if ed and ed < today:
-                return "past"
-            # If only start or only end or none: treat as current if not clearly future/past
-            return "current"
-
-        def sort_key(prog):
-            sd = prog.start_date
-            return (sd is None, sd or today, prog.name or "")
-
-        future_programs = sorted(
-            [p for p in programs if status(p) == "future"], key=sort_key
-        )
-        current_programs = sorted(
-            [p for p in programs if status(p) == "current"], key=sort_key
-        )
-        past_programs = sorted(
-            [p for p in programs if status(p) == "past"], key=sort_key
-        )
-        # Keep form in context for possible fallback
-        form = ProgramApplySelectForm()
-        return render(
-            request,
-            self.template_name,
-            {
-                "form": form,
-                "future_programs": future_programs,
-                "current_programs": current_programs,
-                "past_programs": past_programs,
-            },
-        )
-
-    def post(self, request):
-        from django.shortcuts import redirect, render
-
-        form = ProgramApplySelectForm(request.POST)
-        if form.is_valid():
-            program = form.cleaned_data["program"]
-            return redirect("apply_program", program_id=program.pk)
-        return render(request, self.template_name, {"form": form})
-
-
-class ApplyStudentView(View):
-    template_name = "apply/form.html"
-
-    def _program_status(self, program):
-        from django.utils import timezone
-
-        today = timezone.localdate()
-        sd = program.start_date
-        ed = program.end_date
-        if sd and sd > today:
-            return "future"
-        if ed and ed < today:
-            return "past"
-        return "current"
-
-    def get(self, request, program_id):
-        from django.shortcuts import get_object_or_404, redirect, render
-
-        program = get_object_or_404(Program, pk=program_id)
-        status = self._program_status(program)
-        if status != "future":
-            if status == "current":
-                messages.info(
-                    request,
-                    "Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.",
-                )
-            else:
-                messages.error(request, "Applications are closed for this program.")
-            return redirect("apply_start")
-        form = StudentApplicationForm(initial={"program": program})
-        return render(request, self.template_name, {"form": form, "program": program})
-
-    def post(self, request, program_id):
-        from django.shortcuts import get_object_or_404, redirect, render
-
-        program = get_object_or_404(Program, pk=program_id)
-        status = self._program_status(program)
-        if status != "future":
-            if status == "current":
-                messages.info(
-                    request,
-                    "Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.",
-                )
-            else:
-                messages.error(request, "Applications are closed for this program.")
-            return redirect("apply_start")
-        form = StudentApplicationForm(request.POST)
-        if form.is_valid():
-            app = form.save()
-            messages.success(
-                request, "Application submitted! We will be in touch soon."
-            )
-            return redirect("apply_thanks")
-        return render(request, self.template_name, {"form": form, "program": program})
-
-
-class ApplyThanksView(View):
-    template_name = "apply/thanks.html"
-
-    def get(self, request):
-        from django.shortcuts import render
-
-        return render(request, self.template_name)
-
-
 class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "programs"
     permission_required = "programs.view_program"
@@ -3746,3 +3539,120 @@ class AdultUpdateView(
         if nxt:
             return nxt
         return reverse("adult_list")
+
+
+# --- Program documents (Step 9 blank forms) ---------------------------------
+
+
+class ProgramDocumentCreateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
+):
+    """Add a blank document (e.g. PDF) to a Program. Shown on the Program
+    settings page so lead mentors can manage them without going through
+    the Django admin.
+    """
+
+    permission_required = "programs.change_program"
+    model = ProgramDocument
+    form_class = ProgramDocumentForm
+    template_name = "programs/program_document_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_create"] = True
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Document added.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("program_detail", args=[self.program.pk])
+
+
+class ProgramDocumentUpdateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UpdateView,
+):
+    permission_required = "programs.change_program"
+    model = ProgramDocument
+    form_class = ProgramDocumentForm
+    template_name = "programs/program_document_form.html"
+    pk_url_kwarg = "doc_id"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            ProgramDocument, pk=self.kwargs["doc_id"], program=self.program
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_create"] = False
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Document updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("program_detail", args=[self.program.pk])
+
+
+class ProgramDocumentDeleteView(
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    View,
+):
+    """Delete a Program Document. POST-only (with a JS confirm on the
+    detail page); GET renders a small confirmation page for safety.
+    """
+
+    permission_required = "programs.change_program"
+    template_name = "programs/program_document_confirm_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        self.document = get_object_or_404(
+            ProgramDocument, pk=kwargs["doc_id"], program=self.program
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        from django.shortcuts import render
+
+        return render(
+            request,
+            self.template_name,
+            {"program": self.program, "document": self.document},
+        )
+
+    def post(self, request, *args, **kwargs):
+        name = self.document.name
+        self.document.delete()
+        messages.success(request, f"Deleted document “{name}”.")
+        return redirect("program_detail", pk=self.program.pk)

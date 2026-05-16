@@ -13,15 +13,13 @@ EXEMPT_URL_NAMES = {
     "account_confirm_email",
     "home",  # home requires login via decorator, but keep to avoid loops
     "admin:login",
-    # Public application flow
-    "apply_start",
-    "apply_program",
-    "apply_thanks",
 }
 
 EXEMPT_PATH_PREFIXES = (
     "/accounts/",
     "/admin/",
+    "/apply/",  # public application wizard
+    settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,
 )
 

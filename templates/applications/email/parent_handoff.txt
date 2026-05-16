@@ -1,0 +1,12 @@
+Hi,
+
+A student has started a Girls of Steel Robotics application and needs a
+parent or guardian to finish it.
+
+Application ID: {{ application.application_id }}
+Resume link:    {{ resume_url }}
+
+To continue, follow the link above and complete the remaining steps.
+You'll be asked to verify your email with a one-time code.
+
+If you weren't expecting this email, you can safely ignore it.

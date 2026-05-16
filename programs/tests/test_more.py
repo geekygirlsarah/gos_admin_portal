@@ -14,7 +14,6 @@ from programs.models import (
     School,
     SlidingScale,
     Student,
-    StudentApplication,
 )
 from programs.views import compute_sliding_discount_rounded
 
@@ -211,57 +210,5 @@ class FormBehaviorTests(TestCase):
         self.assertTrue(form_hidden_ok.is_valid(), form_hidden_ok.errors)
 
 
-class ApplicationFlowTests(TestCase):
-    def setUp(self):
-        self.program = Program.objects.create(name="Season 25")
-        self.school = School.objects.create(name="North High")
-        # Ensure race options exist
-        for key, name in [
-            ("black-or-african-american", "Black or African-American"),
-            ("hispanic-or-latino", "Hispanic or Latino"),
-            ("asian", "Asian"),
-            ("white", "White"),
-            ("other", "Other"),
-        ]:
-            RaceEthnicity.objects.get_or_create(key=key, defaults={"name": name})
-
-    def test_student_application_approve_creates_and_enrolls(self):
-        app = StudentApplication.objects.create(
-            program=self.program,
-            legal_first_name="Jamie",
-            first_name="Jay",
-            last_name="Lee",
-            personal_email="jay@example.com",
-            school=self.school,
-            race_ethnicity="Black, Asian",
-        )
-        student = app.approve()
-        # Student created
-        self.assertIsNotNone(student.pk)
-        self.assertTrue(
-            Enrollment.objects.filter(student=student, program=self.program).exists()
-        )
-        # Status updated
-        app.refresh_from_db()
-        self.assertEqual(app.status, "accepted")
-        # Race mapping set
-        keys = set(student.race_ethnicities.values_list("key", flat=True))
-        self.assertTrue({"black-or-african-american", "asian"}.issubset(keys))
-
-    def test_student_application_approve_reuses_existing_by_email(self):
-        existing = Student.objects.create(
-            legal_first_name="Existing",
-            last_name="Person",
-            personal_email="e@example.com",
-        )
-        app = StudentApplication.objects.create(
-            program=self.program,
-            legal_first_name="New",
-            last_name="Name",
-            personal_email="e@example.com",
-        )
-        student = app.approve()
-        self.assertEqual(student.pk, existing.pk)
-        self.assertTrue(
-            Enrollment.objects.filter(student=existing, program=self.program).exists()
-        )
+# ApplicationFlowTests removed; the public application flow now lives in
+# the `applications` app and is covered by its own tests.

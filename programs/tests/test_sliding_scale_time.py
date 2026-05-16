@@ -5,13 +5,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
-from programs.models import (
-    Enrollment,
-    Fee,
-    Program,
-    SlidingScale,
-    Student,
-)
+from programs.models import Enrollment, Fee, Program, SlidingScale, Student
 
 
 class SlidingScaleTimeRestrictedtest(TestCase):

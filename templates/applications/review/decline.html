@@ -1,0 +1,25 @@
+{% extends 'applications/review/_base.html' %}
+{% block review_title %}Decline {{ application.application_id }}{% endblock %}
+{% block review_heading %}Decline application <code>{{ application.application_id }}</code>{% endblock %}
+{% block review_body %}
+  <p class="text-muted">
+    The applicant
+    {% if application.email %}(<strong>{{ application.email }}</strong>){% endif %}
+    will be emailed a message saying their application was not approved.
+    If you provide a reason below, it will be included in the email.
+  </p>
+  <form method="post" class="mb-3">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label" for="id_reason">{{ form.reason.label }}</label>
+      {{ form.reason }}
+      {% if form.reason.help_text %}<div class="form-text">{{ form.reason.help_text }}</div>{% endif %}
+      {% for e in form.reason.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+    <button class="btn btn-warning" type="submit">Send decline</button>
+    <a class="btn btn-outline-secondary"
+       href="{% url 'application_review_detail' application.application_id %}">
+      Cancel
+    </a>
+  </form>
+{% endblock %}

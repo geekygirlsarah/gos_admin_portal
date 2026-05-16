@@ -1,0 +1,22 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Already on file{% endblock %}
+{% block wizard_heading %}You're already on file with us{% endblock %}
+
+{% block wizard_body %}
+<p>
+    Thanks for your interest! The email
+    <strong>{{ application.email }}</strong> is already associated with a
+    mentor in our system.
+</p>
+<p>
+    Since you've already been onboarded, you don't need to reapply. Please
+    contact a lead mentor at
+    <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>
+    if you'd like to discuss returning or updating your information.
+</p>
+<p class="text-muted">
+    Application ID: <code>{{ application.application_id }}</code>
+</p>
+<a href="{% url 'apply_start' %}" class="btn btn-outline-secondary">Back to start</a>
+{% endblock %}

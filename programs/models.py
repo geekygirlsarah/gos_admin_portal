@@ -1,6 +1,5 @@
 import base64
 import logging
-import os
 from io import BytesIO
 
 from cryptography.fernet import Fernet
@@ -8,7 +7,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from PIL import Image, ImageFile, ImageOps
+from PIL import ImageFile
 
 logger = logging.getLogger(__name__)
 
@@ -367,114 +366,24 @@ class RaceEthnicity(models.Model):
 
 
 class Student(models.Model):
-    def save(self, *args, **kwargs):
-        # Normalize any new upload to a real RGB JPEG in-memory so storage doesn't depend on temp files.
-        # This also fixes EXIF orientation and strips problematic metadata (handles HEIC->JPEG edge cases).
-        if getattr(self, "photo", None):
-            try:
-                file_obj = self.photo
-                # Only process a newly assigned upload (uncommitted) or anything with an accessible file handle
-                if getattr(file_obj, "_committed", True) is False or hasattr(
-                    file_obj, "file"
-                ):
-                    try:
-                        f = getattr(file_obj, "file", file_obj)
-                        try:
-                            f.seek(0)
-                        except (AttributeError, IOError):
-                            # Not all file-like objects support seek
-                            pass
-                        img = Image.open(f)
-                        # Fully load and normalize orientation
-                        img.load()
-                        try:
-                            img = ImageOps.exif_transpose(img)
-                        except (AttributeError, TypeError, IndexError):
-                            # EXIF transpose can fail on malformed EXIF data
-                            pass
-                        # JPEG expects RGB
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        buffer = BytesIO()
-                        img.save(buffer, format="JPEG", quality=85, optimize=True)
-                        buffer.seek(0)
-                        base, _ = os.path.splitext(self.photo.name or "photo")
-                        new_name = f"{base}.jpg"
-                        # Replace the field file without triggering another save recursively
-                        self.photo.save(
-                            new_name, ContentFile(buffer.read()), save=False
-                        )
-                    except Exception:
-                        # Fallback: legacy HEIC/HEIF detection and conversion
-                        try:
-                            name_lower = (file_obj.name or "").lower()
-                            needs_convert_by_ext = name_lower.endswith(
-                                ".heic"
-                            ) or name_lower.endswith(".heif")
-                            convert = False
-                            if needs_convert_by_ext:
-                                convert = True
-                            else:
-                                try:
-                                    file_obj.open("rb")
-                                    img_probe = Image.open(file_obj)
-                                    fmt = (img_probe.format or "").upper()
-                                    img_probe.close()
-                                    if fmt in ("HEIC", "HEIF"):
-                                        convert = True
-                                except Exception:
-                                    convert = needs_convert_by_ext
-                                finally:
-                                    try:
-                                        file_obj.close()
-                                    except (AttributeError, IOError):
-                                        pass
-                            if convert:
-                                file_obj.open("rb")
-                                img = Image.open(file_obj)
-                                if img.mode != "RGB":
-                                    img = img.convert("RGB")
-                                buffer = BytesIO()
-                                img.save(
-                                    buffer, format="JPEG", quality=85, optimize=True
-                                )
-                                buffer.seek(0)
-                                base, _ = os.path.splitext(self.photo.name or "photo")
-                                new_name = f"{base}.jpg"
-                                self.photo.save(
-                                    new_name, ContentFile(buffer.read()), save=False
-                                )
-                                try:
-                                    file_obj.close()
-                                except (AttributeError, IOError):
-                                    pass
-                        except Exception:
-                            # If normalization fails for any reason, allow save to proceed with original file.
-                            logger.debug("Image normalization failed", exc_info=True)
-            except Exception:
-                # Fail-safe: never block saving on image issues
-                logger.debug("Unexpected error in photo processing", exc_info=True)
-
-        # Proactively clear dangling parent contact FKs before save to avoid integrity errors
+    def _prune_dangling_contacts(self):
+        """Clear dangling primary/secondary contact FKs in a single query."""
+        pks = [pk for pk in (self.primary_contact_id, self.secondary_contact_id) if pk]
+        if not pks:
+            return
         try:
-            if self.primary_contact_id:
-                try:
-                    # Adult is defined below in this module; accessible at runtime
-                    if not Adult.objects.filter(pk=self.primary_contact_id).exists():
-                        self.primary_contact_id = None
-                except Exception:
-                    # If anything goes wrong probing Adult, do not block the save
-                    logger.debug("Error probing primary contact Adult", exc_info=True)
-            if self.secondary_contact_id:
-                try:
-                    if not Adult.objects.filter(pk=self.secondary_contact_id).exists():
-                        self.secondary_contact_id = None
-                except Exception:
-                    logger.debug("Error probing secondary contact Adult", exc_info=True)
+            existing = set(
+                Adult.objects.filter(pk__in=pks).values_list("pk", flat=True)
+            )
+            if self.primary_contact_id and self.primary_contact_id not in existing:
+                self.primary_contact_id = None
+            if self.secondary_contact_id and self.secondary_contact_id not in existing:
+                self.secondary_contact_id = None
         except Exception:
             logger.debug("Unexpected error in contact cleanup", exc_info=True)
 
-        # Auto-opt-in primary contact for email updates if assigned
+    def _auto_optin_primary_contact(self):
+        """Auto-opt-in primary contact for email updates if assigned."""
         try:
             parent = self.primary_contact
         except Exception:
@@ -482,6 +391,14 @@ class Student(models.Model):
         if parent and parent.email_updates is False:
             parent.email_updates = True
             parent.save(update_fields=["email_updates"])
+
+    def save(self, *args, **kwargs):
+        # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
+        self._prune_dangling_contacts()
+        self._auto_optin_primary_contact()
         super().save(*args, **kwargs)
 
     def eighteenth_birthday(self):
@@ -835,42 +752,10 @@ class Adult(models.Model):
         return f"{pref} {self.last_name}".strip()
 
     def save(self, *args, **kwargs):
-        # Normalize newly uploaded photo like students/mentors: RGB JPEG, fixed orientation, in-memory.
-        if getattr(self, "photo", None):
-            try:
-                file_obj = self.photo
-                if getattr(file_obj, "_committed", True) is False or hasattr(
-                    file_obj, "file"
-                ):
-                    try:
-                        f = getattr(file_obj, "file", file_obj)
-                        try:
-                            f.seek(0)
-                        except (AttributeError, IOError):
-                            pass
-                        img = Image.open(f)
-                        img.load()
-                        try:
-                            img = ImageOps.exif_transpose(img)
-                        except (AttributeError, TypeError, IndexError):
-                            pass
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        buffer = BytesIO()
-                        img.save(buffer, format="JPEG", quality=85, optimize=True)
-                        buffer.seek(0)
-                        base, _ = os.path.splitext(self.photo.name or "photo")
-                        new_name = f"{base}.jpg"
-                        self.photo.save(
-                            new_name, ContentFile(buffer.read()), save=False
-                        )
-                    except Exception:
-                        # If normalization fails, continue with the original file to avoid blocking saves
-                        logger.debug("Adult photo normalization failed", exc_info=True)
-            except Exception:
-                logger.debug(
-                    "Unexpected error in Adult photo processing", exc_info=True
-                )
+        # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)
 
 
@@ -1071,119 +956,50 @@ class FeeAssignment(models.Model):
             )
 
 
-class StudentApplication(models.Model):
-    """Public application submitted by a prospective student to a Program."""
+def _program_document_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/program_documents/<program_id>/<filename>."""
+    pid = instance.program_id or "unassigned"
+    return f"program_documents/{pid}/{filename}"
 
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("accepted", "Accepted"),
-        ("rejected", "Rejected"),
-    ]
+
+class ProgramDocument(models.Model):
+    """A document (typically a PDF) that an approved applicant needs to
+    download, sign, and re-upload before becoming a full student in the
+    program. Managed by lead mentors in Django admin.
+    """
 
     program = models.ForeignKey(
-        Program, on_delete=models.CASCADE, related_name="applications"
+        Program,
+        on_delete=models.CASCADE,
+        related_name="documents",
     )
-
-    # Mirror key Student fields (omit internal/user/parents/media)
-    legal_first_name = models.CharField(max_length=150)
-    first_name = models.CharField(max_length=150, blank=True, null=True)
-    last_name = models.CharField(max_length=150)
-    pronouns = models.CharField(max_length=50, blank=True, null=True)
-    date_of_birth = models.DateField(blank=True, null=True)
-
-    address = models.CharField(max_length=255, blank=True, null=True)
-    city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
-
-    cell_phone_number = models.CharField(max_length=30, blank=True, null=True)
-    personal_email = models.EmailField(blank=True, null=True)
-
-    andrew_id = models.CharField(max_length=50, blank=True, null=True)
-    andrew_email = models.EmailField(blank=True, null=True)
-
-    school = models.ForeignKey(
-        "School",
-        on_delete=models.SET_NULL,
-        null=True,
+    name = models.CharField(
+        max_length=200,
+        help_text="Short name shown to applicants (e.g. 'Photo release form').",
+    )
+    description = models.TextField(
         blank=True,
-        related_name="applications",
+        default="",
+        help_text="Optional longer explanation shown next to the download link.",
     )
-    graduation_year = models.PositiveSmallIntegerField(blank=True, null=True)
-
-    race_ethnicity = models.CharField(max_length=100, blank=True, null=True)
-    tshirt_size = models.CharField(max_length=10, blank=True, null=True)
-
-    on_discord = models.BooleanField(default=False)
-    discord_handle = models.CharField(max_length=100, blank=True, null=True)
-
-    # Simple parent/guardian contact captured as text for application
-    parent_name = models.CharField(max_length=200, blank=True, null=True)
-    parent_email = models.EmailField(blank=True, null=True)
-    parent_phone = models.CharField(max_length=30, blank=True, null=True)
-
-    status = models.CharField(
-        max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True
+    file = models.FileField(
+        upload_to=_program_document_upload_to,
+        help_text="The blank PDF (or other file) for the applicant to download and fill out.",
     )
-    notes = models.TextField(blank=True, null=True)
-
+    is_required = models.BooleanField(
+        default=True,
+        help_text="If checked, applicants must upload a signed copy before being marked complete.",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Uncheck to hide this document from applicants without deleting it.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["program", "display_order", "name"]
 
     def __str__(self):
-        return f"Application: {self.first_name or self.legal_first_name} {self.last_name} → {self.program} ({self.status})"
-
-    def approve(self) -> Student:
-        """Create (or find) a Student from this application and enroll them in the program."""
-        # Try to find existing student by name and email
-        student = None
-        if self.personal_email:
-            student = Student.objects.filter(
-                personal_email__iexact=self.personal_email
-            ).first()
-        if not student:
-            student = Student.objects.create(
-                legal_first_name=self.legal_first_name,
-                first_name=self.first_name,
-                last_name=self.last_name,
-                pronouns=self.pronouns,
-                date_of_birth=self.date_of_birth,
-                address=self.address,
-                city=self.city,
-                state=self.state,
-                zip_code=self.zip_code,
-                cell_phone_number=self.cell_phone_number,
-                personal_email=self.personal_email,
-                andrew_id=self.andrew_id,
-                andrew_email=self.andrew_email,
-                school=self.school,
-                graduation_year=self.graduation_year,
-                tshirt_size=self.tshirt_size,
-                on_discord=self.on_discord,
-                discord_handle=self.discord_handle,
-            )
-        # Map application race text to Student multi-select
-        try:
-            options = RaceEthnicity.match_from_text(self.race_ethnicity)
-            if options.exists():
-                student.race_ethnicities.set(list(options))
-        except Exception:
-            logger.debug(
-                "Race/Ethnicity matching failed during approval", exc_info=True
-            )
-        # Enroll in program
-        try:
-            Enrollment.objects.get_or_create(student=student, program=self.program)
-        except Exception:
-            logger.exception("Failed to enroll student during application approval")
-            # This is critical for approval, but we still have the student record.
-            # Maybe don't pass here? But the issue asks to fix try-except-pass.
-            pass
-        # Update status
-        if self.status != "accepted":
-            self.status = "accepted"
-            self.save(update_fields=["status", "updated_at"])
-        return student
+        return f"{self.name} ({self.program})"

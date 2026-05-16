@@ -1,0 +1,34 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Secondary parent / guardian{% endblock %}
+{% block wizard_heading %}Secondary parent / guardian{% endblock %}
+
+{% block wizard_body %}
+<p>
+    Please provide a second parent, guardian, or emergency contact for the
+    student. We require a secondary contact in case we cannot reach the
+    primary parent / guardian.
+</p>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="row g-3">
+        {% for field in form %}
+            <div class="col-12 col-md-6">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+{% endblock %}

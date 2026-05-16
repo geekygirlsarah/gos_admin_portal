@@ -1,0 +1,30 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Application submitted{% endblock %}
+{% block wizard_heading %}Thanks — your application is in!{% endblock %}
+
+{% block wizard_body %}
+<div class="alert alert-success" role="status">
+    <p class="mb-1">
+        Your application to
+        <strong>{{ application.program|default:"Girls of Steel" }}</strong>
+        has been submitted.
+    </p>
+    <p class="mb-0">
+        Application ID:
+        <strong><code>{{ application.application_id }}</code></strong>
+    </p>
+</div>
+
+<p>
+    A confirmation email has been sent to <strong>{{ application.email }}</strong>.
+    Our lead mentors have been notified and will review your application.
+    You can check back any time using your application ID.
+</p>
+
+<p>
+    <a href="{% url 'apply_start' %}" class="btn btn-outline-primary">
+        Back to start
+    </a>
+</p>
+{% endblock %}

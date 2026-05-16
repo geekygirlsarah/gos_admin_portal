@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Application Review | GoS Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Pending Applications</h1>
+            {% if filtered_program %}
+                <p class="text-muted">Filtering for <strong>{{ filtered_program.name }}</strong></p>
+            {% endif %}
+        </div>
+        <div class="text-end">
+            <span class="badge bg-secondary mb-2">{{ applications|length }} Pending</span>
+            {% if filtered_program %}
+                <br>
+                <a href="{% url 'application_review_list' %}" class="btn btn-sm btn-outline-secondary">Clear Filter</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Code</th>
+                        <th>Type</th>
+                        <th>Program</th>
+                        <th>Applicant</th>
+                        <th>Submitted</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in applications %}
+                    <tr>
+                        <td><code>{{ app.application_code }}</code></td>
+                        <td>{{ app.get_role_type_display }}</td>
+                        <td>{{ app.program.name }}</td>
+                        <td>
+                            {% if app.role_type == 'student_parent' %}
+                                {{ app.data.student_info.first_name }} {{ app.data.student_info.last_name }}
+                            {% else %}
+                                {{ app.data.mentor_info.first_name }} {{ app.data.mentor_info.last_name }}
+                            {% endif %}
+                        </td>
+                        <td>{{ app.updated_at|date:"M d, Y" }}</td>
+                        <td>
+                            <a href="{% url 'application_review_detail' app.pk %}" class="btn btn-sm btn-primary">Review</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">No pending applications to review.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

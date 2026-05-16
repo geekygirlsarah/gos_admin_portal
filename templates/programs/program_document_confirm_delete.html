@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Delete Document — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-8 col-xl-6">
+      <h1 class="h4">Delete document?</h1>
+      <p>
+        Are you sure you want to delete
+        <strong>{{ document.name }}</strong> from
+        <strong>{{ program.name }}</strong>?
+      </p>
+      <p class="text-muted small">
+        Existing applicant uploads referencing this document will also be
+        removed. This cannot be undone.
+      </p>
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Yes, delete</button>
+        <a href="{% url 'program_detail' program.id %}" class="btn btn-outline-secondary">Cancel</a>
+      </form>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <h2 class="text-center mb-4">Program Application</h2>
+                    
+                    <!-- Progress Bar -->
+                    <div class="progress mb-4" style="height: 25px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" 
+                             style="width: {{ progress }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100">
+                            {{ progress }}%
+                        </div>
+                    </div>
+
+                    {% if app %}
+                    <div class="alert alert-info py-2">
+                        <small>Application Code: <strong>{{ app.application_code }}</strong> (Save this to resume later)</small>
+                    </div>
+                    {% endif %}
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        {% if step == 'select_role' %}
+                            <h4>Step 1: Get Started</h4>
+                            <p class="text-muted">Choose your role and the program you are applying for.</p>
+                        {% elif step == 'identity' %}
+                            <h4>Step 2: Your Identity</h4>
+                            <p class="text-muted">Enter your email to receive a verification code.</p>
+                        {% elif step == 'verify_otp' %}
+                            <h4>Step 3: Verify Email</h4>
+                            <p class="text-muted">Enter the 6-digit code sent to <strong>{{ app.email_to_verify }}</strong>.</p>
+                        {% elif step == 'verify_parent_otp' %}
+                            <h4>Step 4: Parent Verification</h4>
+                            <p class="text-muted">Enter the 6-digit code sent to <strong>{{ app.parent_email_to_verify }}</strong>.</p>
+                        {% elif step == 'student_info' %}
+                            <h4>Step 4: Student Information</h4>
+                        {% elif step == 'parent_info' %}
+                            <h4>Step 4: Parent/Guardian Information</h4>
+                        {% elif step == 'mentor_info' %}
+                            <h4>Step 4: Mentor/Volunteer Information</h4>
+                        {% elif step == 'disclosures' %}
+                            <h4>Step 5: Disclosure Forms</h4>
+                            <p class="text-muted">Please download the templates, sign them, and upload the signed copies.</p>
+                            
+                            <ul class="list-group mb-3">
+                                {% for df in disclosures %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ df.name }}
+                                    <a href="{{ df.pdf_file.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Download Template</a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+
+                        <hr>
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <div class="form-text">{{ field.help_text }}</div>
+                                {% endif %}
+                                {% if field.errors %}
+                                    <div class="text-danger small">{{ field.errors }}</div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+
+                        <div class="d-flex justify-content-between mt-4">
+                            {% if step != 'select_role' %}
+                                <button type="submit" name="action" value="back" class="btn btn-outline-secondary btn-lg">Back</button>
+                            {% else %}
+                                <span></span>
+                            {% endif %}
+                            <button type="submit" name="action" value="next" class="btn btn-primary btn-lg">Next Step</button>
+                        </div>
+                    </form>
+
+                    {% if not app %}
+                    <hr>
+                    <div class="mt-4 text-center">
+                        <h5>Already started?</h5>
+                        <p>Resume your application by entering your code below:</p>
+                        <form action="{% url 'apply_start' %}" method="get" class="row g-3 justify-content-center">
+                            <div class="col-auto">
+                                <input type="text" name="code" class="form-control" placeholder="ABC123XY" required>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-secondary">Resume</button>
+                            </div>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Style for form widgets */
+    input[type="text"], input[type="email"], input[type="number"], select, textarea {
+        display: block;
+        width: 100%;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+        font-weight: 400;
+        line-height: 1.5;
+        color: #212529;
+        background-color: #fff;
+        background-clip: padding-box;
+        border: 1px solid #ced4da;
+        appearance: none;
+        border-radius: 0.25rem;
+        transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+</style>
+{% endblock %}

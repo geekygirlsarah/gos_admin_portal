@@ -1,0 +1,30 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Email verified{% endblock %}
+{% block wizard_heading %}Email verified — thank you!{% endblock %}
+
+{% block wizard_body %}
+<div class="alert alert-success" role="status">
+    <p class="mb-1">
+        Your email has been verified and your application is saved.
+    </p>
+    <p class="mb-0">
+        Your application ID is
+        <strong><code>{{ application.application_id }}</code></strong>.
+        Please keep this safe — you can use it to resume your application
+        at any time.
+    </p>
+</div>
+
+<p>
+    The remaining steps of the application — student information, parent
+    information, and final review — will be available shortly. We'll email
+    you when they're ready.
+</p>
+
+<p>
+    <a href="{% url 'apply_start' %}" class="btn btn-outline-primary">
+        Back to start
+    </a>
+</p>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Primary parent / guardian{% endblock %}
+{% block wizard_heading %}Primary parent / guardian{% endblock %}
+
+{% block wizard_body %}
+{% if mode == "handoff" %}
+    <p>
+        Thanks! Now a parent or guardian needs to finish the application.
+        Enter their email below and we'll send them a link to take over.
+    </p>
+    <form method="post" novalidate class="mb-3">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="{{ handoff_form.parent_email.id_for_label }}" class="form-label">
+                {{ handoff_form.parent_email.label }}
+            </label>
+            {{ handoff_form.parent_email }}
+            {% if handoff_form.parent_email.help_text %}
+                <div class="form-text">{{ handoff_form.parent_email.help_text }}</div>
+            {% endif %}
+            {% if handoff_form.parent_email.errors %}
+                <div class="invalid-feedback d-block">{{ handoff_form.parent_email.errors|join:" " }}</div>
+            {% endif %}
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'apply_step5' app_id=application.application_id %}" class="btn btn-link">Back</a>
+            <button type="submit" class="btn btn-primary">Email my parent / guardian</button>
+        </div>
+    </form>
+{% else %}
+    {% if welcome_back %}
+        <div class="alert alert-info" role="status">
+            <strong>Welcome back{% if welcome_back.name %}, {{ welcome_back.name }}{% endif %}!</strong>
+            {% if welcome_back.last_program %}
+                We found your record from <strong>{{ welcome_back.last_program }}</strong>
+                and prefilled some fields below.
+            {% else %}
+                We found your record on file and prefilled some fields below.
+            {% endif %}
+            Please review and update anything that has changed.
+        </div>
+    {% endif %}
+    <p>
+        Please provide the primary parent or guardian's information.
+    </p>
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <div class="row g-3">
+            {% for field in form %}
+                <div class="col-12 col-md-6">
+                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'apply_step5' app_id=application.application_id %}" class="btn btn-link">Back</a>
+            <button type="submit" class="btn btn-primary">Save and continue</button>
+        </div>
+    </form>
+{% endif %}
+{% endblock %}

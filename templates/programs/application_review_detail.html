@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Review Application {{ app.application_code }} | GoS Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'application_review_list' %}">Review List</a></li>
+            <li class="breadcrumb-item active">Application {{ app.application_code }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Application Details ({{ app.get_role_type_display }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if app.role_type == 'student_parent' %}
+                        <h6>Student Information</h6>
+                        <table class="table table-sm">
+                            {% for key, value in app.data.student_info.items %}
+                            <tr>
+                                <th style="width: 30%">{{ key|title }}</th>
+                                <td>{{ value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+
+                        <h6 class="mt-4">Parent Information</h6>
+                        <table class="table table-sm">
+                            {% for key, value in app.data.parent_info.items %}
+                            <tr>
+                                <th style="width: 30%">{{ key|title }}</th>
+                                <td>{{ value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    {% else %}
+                        <h6>Mentor/Volunteer Information</h6>
+                        <table class="table table-sm">
+                            {% for key, value in app.data.mentor_info.items %}
+                            <tr>
+                                <th style="width: 30%">{{ key|title }}</th>
+                                <td>{{ value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-primary mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Decision</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Review the information provided by the applicant before approving or denying.</p>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" name="action" value="approve" class="btn btn-success btn-lg">
+                                <i class="bi bi-check-circle me-2"></i> Approve Application
+                            </button>
+                            <button type="submit" name="action" value="deny" class="btn btn-outline-danger" onclick="return confirm('Are you sure you want to REJECT this application?');">
+                                <i class="bi bi-x-circle me-2"></i> Reject Application
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Metadata</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li><strong>Program:</strong> {{ app.program.name }}</li>
+                        <li><strong>Status:</strong> <span class="badge bg-info">{{ app.get_status_display }}</span></li>
+                        <li><strong>Submitted:</strong> {{ app.updated_at|date:"M d, Y H:i" }}</li>
+                        <li><strong>Verified Email:</strong> {{ app.email_to_verify }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

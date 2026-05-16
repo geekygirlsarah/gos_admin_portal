@@ -1,0 +1,20 @@
+{% extends 'applications/review/_base.html' %}
+{% block review_title %}Delete {{ application.application_id }}{% endblock %}
+{% block review_heading %}Delete application <code>{{ application.application_id }}</code>{% endblock %}
+{% block review_body %}
+  <div class="alert alert-danger">
+    <p class="mb-1"><strong>This cannot be undone.</strong></p>
+    <p class="mb-0">
+      All captured data and uploaded signed documents for this
+      application will be permanently removed.
+    </p>
+  </div>
+  <form method="post" class="mb-3">
+    {% csrf_token %}
+    <button class="btn btn-danger" type="submit">Yes, delete</button>
+    <a class="btn btn-outline-secondary"
+       href="{% url 'application_review_detail' application.application_id %}">
+      Cancel
+    </a>
+  </form>
+{% endblock %}
