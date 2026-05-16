@@ -470,56 +470,10 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
     permission_required = "programs.change_student"
 
     def post(self, request, pk):
-        from django.contrib import messages
-        from django.shortcuts import get_object_or_404, redirect
+        from .utils import convert_student_to_alumni
 
         student = get_object_or_404(Student, pk=pk)
-
-        # Find or create an Adult flagged as alumni from this student's info
-        def find_matching_adult(s: Student):
-            emails = [s.personal_email, s.andrew_email]
-            for e in emails:
-                if e:
-                    a = Adult.objects.filter(alumni_email__iexact=e).first()
-                    if a:
-                        return a
-                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
-                    if a:
-                        return a
-            first = (s.first_name or s.legal_first_name or "").strip()
-            last = (s.last_name or "").strip()
-            if first and last:
-                return Adult.objects.filter(
-                    first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                ).first()
-            return None
-
-        adult = find_matching_adult(student)
-        created = False
-        if not adult:
-            adult = Adult.objects.create(
-                first_name=student.first_name or student.legal_first_name or "",
-                last_name=student.last_name or "",
-                alumni_email=student.personal_email or student.andrew_email,
-                is_alumni=True,
-            )
-            created = True
-        else:
-            changed = False
-            if not adult.is_alumni:
-                adult.is_alumni = True
-                changed = True
-            if not adult.alumni_email and (
-                student.personal_email or student.andrew_email
-            ):
-                adult.alumni_email = student.personal_email or student.andrew_email
-                changed = True
-            if changed:
-                adult.save(update_fields=["is_alumni", "alumni_email", "updated_at"])
-        # Mark student as graduated (do not change active)
-        if not student.graduated:
-            student.graduated = True
-            student.save(update_fields=["graduated", "updated_at"])
+        _adult, created, _marked = convert_student_to_alumni(student)
         if created:
             messages.success(
                 request,
@@ -530,9 +484,15 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 request,
                 f"{student} is now marked as Alumni. Student marked as graduated.",
             )
-        # Redirect back to list or provided next
+        # Redirect back to list or provided next (only if it's a safe URL)
         next_url = request.GET.get("next") or request.POST.get("next")
-        return redirect(next_url or "student_list")
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect("student_list")
 
 
 class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -540,7 +500,6 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
-        from django.shortcuts import render
         from django.utils import timezone
 
         year = request.GET.get("year")
@@ -564,7 +523,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         )
 
     def post(self, request):
-        from django.shortcuts import redirect, render
+        from .utils import convert_student_to_alumni, find_matching_alumni_adult
 
         action = request.POST.get("action", "convert")
         ids = request.POST.getlist("student_ids")
@@ -593,30 +552,10 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
 
         if action == "preview":
             # Build preview info without writing changes against Adults flagged as alumni
-            def find_matching_adult(s: Student):
-                emails = [s.personal_email, s.andrew_email]
-                for e in emails:
-                    if e:
-                        a = Adult.objects.filter(alumni_email__iexact=e).first()
-                        if a:
-                            return a
-                        a = Adult.objects.filter(
-                            email__iexact=e, is_alumni=True
-                        ).first()
-                        if a:
-                            return a
-                first = (s.first_name or s.legal_first_name or "").strip()
-                last = (s.last_name or "").strip()
-                if first and last:
-                    return Adult.objects.filter(
-                        first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                    ).first()
-                return None
-
             will_create = []
             already_alumni = []
             for s in qs:
-                if find_matching_adult(s):
+                if find_matching_alumni_adult(s):
                     already_alumni.append(s)
                 else:
                     will_create.append(s)
@@ -639,52 +578,13 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         existed = 0
         marked_graduated = 0
 
-        def find_matching_adult(s: Student):
-            emails = [s.personal_email, s.andrew_email]
-            for e in emails:
-                if e:
-                    a = Adult.objects.filter(alumni_email__iexact=e).first()
-                    if a:
-                        return a
-                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
-                    if a:
-                        return a
-            first = (s.first_name or s.legal_first_name or "").strip()
-            last = (s.last_name or "").strip()
-            if first and last:
-                return Adult.objects.filter(
-                    first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                ).first()
-            return None
-
         for student in qs:
-            adult = find_matching_adult(student)
-            if not adult:
-                Adult.objects.create(
-                    first_name=student.first_name or student.legal_first_name or "",
-                    last_name=student.last_name or "",
-                    alumni_email=student.personal_email or student.andrew_email,
-                    is_alumni=True,
-                )
+            _adult, was_created, was_marked = convert_student_to_alumni(student)
+            if was_created:
                 created += 1
             else:
-                changed = False
-                if not adult.is_alumni:
-                    adult.is_alumni = True
-                    changed = True
-                if not adult.alumni_email and (
-                    student.personal_email or student.andrew_email
-                ):
-                    adult.alumni_email = student.personal_email or student.andrew_email
-                    changed = True
-                if changed:
-                    adult.save(
-                        update_fields=["is_alumni", "alumni_email", "updated_at"]
-                    )
                 existed += 1
-            if not student.graduated:
-                student.graduated = True
-                student.save(update_fields=["graduated", "updated_at"])
+            if was_marked:
                 marked_graduated += 1
         messages.success(
             request,

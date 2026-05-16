@@ -1,6 +1,5 @@
 import base64
 import logging
-import os
 from io import BytesIO
 
 from cryptography.fernet import Fernet
@@ -8,7 +7,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from PIL import Image, ImageFile, ImageOps
+from PIL import ImageFile
 
 logger = logging.getLogger(__name__)
 
@@ -367,114 +366,24 @@ class RaceEthnicity(models.Model):
 
 
 class Student(models.Model):
-    def save(self, *args, **kwargs):
-        # Normalize any new upload to a real RGB JPEG in-memory so storage doesn't depend on temp files.
-        # This also fixes EXIF orientation and strips problematic metadata (handles HEIC->JPEG edge cases).
-        if getattr(self, "photo", None):
-            try:
-                file_obj = self.photo
-                # Only process a newly assigned upload (uncommitted) or anything with an accessible file handle
-                if getattr(file_obj, "_committed", True) is False or hasattr(
-                    file_obj, "file"
-                ):
-                    try:
-                        f = getattr(file_obj, "file", file_obj)
-                        try:
-                            f.seek(0)
-                        except (AttributeError, IOError):
-                            # Not all file-like objects support seek
-                            pass
-                        img = Image.open(f)
-                        # Fully load and normalize orientation
-                        img.load()
-                        try:
-                            img = ImageOps.exif_transpose(img)
-                        except (AttributeError, TypeError, IndexError):
-                            # EXIF transpose can fail on malformed EXIF data
-                            pass
-                        # JPEG expects RGB
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        buffer = BytesIO()
-                        img.save(buffer, format="JPEG", quality=85, optimize=True)
-                        buffer.seek(0)
-                        base, _ = os.path.splitext(self.photo.name or "photo")
-                        new_name = f"{base}.jpg"
-                        # Replace the field file without triggering another save recursively
-                        self.photo.save(
-                            new_name, ContentFile(buffer.read()), save=False
-                        )
-                    except Exception:
-                        # Fallback: legacy HEIC/HEIF detection and conversion
-                        try:
-                            name_lower = (file_obj.name or "").lower()
-                            needs_convert_by_ext = name_lower.endswith(
-                                ".heic"
-                            ) or name_lower.endswith(".heif")
-                            convert = False
-                            if needs_convert_by_ext:
-                                convert = True
-                            else:
-                                try:
-                                    file_obj.open("rb")
-                                    img_probe = Image.open(file_obj)
-                                    fmt = (img_probe.format or "").upper()
-                                    img_probe.close()
-                                    if fmt in ("HEIC", "HEIF"):
-                                        convert = True
-                                except Exception:
-                                    convert = needs_convert_by_ext
-                                finally:
-                                    try:
-                                        file_obj.close()
-                                    except (AttributeError, IOError):
-                                        pass
-                            if convert:
-                                file_obj.open("rb")
-                                img = Image.open(file_obj)
-                                if img.mode != "RGB":
-                                    img = img.convert("RGB")
-                                buffer = BytesIO()
-                                img.save(
-                                    buffer, format="JPEG", quality=85, optimize=True
-                                )
-                                buffer.seek(0)
-                                base, _ = os.path.splitext(self.photo.name or "photo")
-                                new_name = f"{base}.jpg"
-                                self.photo.save(
-                                    new_name, ContentFile(buffer.read()), save=False
-                                )
-                                try:
-                                    file_obj.close()
-                                except (AttributeError, IOError):
-                                    pass
-                        except Exception:
-                            # If normalization fails for any reason, allow save to proceed with original file.
-                            logger.debug("Image normalization failed", exc_info=True)
-            except Exception:
-                # Fail-safe: never block saving on image issues
-                logger.debug("Unexpected error in photo processing", exc_info=True)
-
-        # Proactively clear dangling parent contact FKs before save to avoid integrity errors
+    def _prune_dangling_contacts(self):
+        """Clear dangling primary/secondary contact FKs in a single query."""
+        pks = [pk for pk in (self.primary_contact_id, self.secondary_contact_id) if pk]
+        if not pks:
+            return
         try:
-            if self.primary_contact_id:
-                try:
-                    # Adult is defined below in this module; accessible at runtime
-                    if not Adult.objects.filter(pk=self.primary_contact_id).exists():
-                        self.primary_contact_id = None
-                except Exception:
-                    # If anything goes wrong probing Adult, do not block the save
-                    logger.debug("Error probing primary contact Adult", exc_info=True)
-            if self.secondary_contact_id:
-                try:
-                    if not Adult.objects.filter(pk=self.secondary_contact_id).exists():
-                        self.secondary_contact_id = None
-                except Exception:
-                    logger.debug("Error probing secondary contact Adult", exc_info=True)
+            existing = set(
+                Adult.objects.filter(pk__in=pks).values_list("pk", flat=True)
+            )
+            if self.primary_contact_id and self.primary_contact_id not in existing:
+                self.primary_contact_id = None
+            if self.secondary_contact_id and self.secondary_contact_id not in existing:
+                self.secondary_contact_id = None
         except Exception:
             logger.debug("Unexpected error in contact cleanup", exc_info=True)
 
-        # Auto-opt-in primary contact for email updates if assigned
+    def _auto_optin_primary_contact(self):
+        """Auto-opt-in primary contact for email updates if assigned."""
         try:
             parent = self.primary_contact
         except Exception:
@@ -482,6 +391,14 @@ class Student(models.Model):
         if parent and parent.email_updates is False:
             parent.email_updates = True
             parent.save(update_fields=["email_updates"])
+
+    def save(self, *args, **kwargs):
+        # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
+        self._prune_dangling_contacts()
+        self._auto_optin_primary_contact()
         super().save(*args, **kwargs)
 
     def eighteenth_birthday(self):
@@ -835,42 +752,10 @@ class Adult(models.Model):
         return f"{pref} {self.last_name}".strip()
 
     def save(self, *args, **kwargs):
-        # Normalize newly uploaded photo like students/mentors: RGB JPEG, fixed orientation, in-memory.
-        if getattr(self, "photo", None):
-            try:
-                file_obj = self.photo
-                if getattr(file_obj, "_committed", True) is False or hasattr(
-                    file_obj, "file"
-                ):
-                    try:
-                        f = getattr(file_obj, "file", file_obj)
-                        try:
-                            f.seek(0)
-                        except (AttributeError, IOError):
-                            pass
-                        img = Image.open(f)
-                        img.load()
-                        try:
-                            img = ImageOps.exif_transpose(img)
-                        except (AttributeError, TypeError, IndexError):
-                            pass
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        buffer = BytesIO()
-                        img.save(buffer, format="JPEG", quality=85, optimize=True)
-                        buffer.seek(0)
-                        base, _ = os.path.splitext(self.photo.name or "photo")
-                        new_name = f"{base}.jpg"
-                        self.photo.save(
-                            new_name, ContentFile(buffer.read()), save=False
-                        )
-                    except Exception:
-                        # If normalization fails, continue with the original file to avoid blocking saves
-                        logger.debug("Adult photo normalization failed", exc_info=True)
-            except Exception:
-                logger.debug(
-                    "Unexpected error in Adult photo processing", exc_info=True
-                )
+        # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)
 
 
