@@ -1,4 +1,5 @@
 """Template helpers for the application wizard."""
+
 from django import template
 
 register = template.Library()

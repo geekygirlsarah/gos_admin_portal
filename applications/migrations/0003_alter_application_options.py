@@ -6,12 +6,20 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('applications', '0002_applicationdocumentsubmission'),
+        ("applications", "0002_applicationdocumentsubmission"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='application',
-            options={'ordering': ['-created_at'], 'permissions': [('review_application', 'Can review applications (approve / decline / edit / delete)')]},
+            name="application",
+            options={
+                "ordering": ["-created_at"],
+                "permissions": [
+                    (
+                        "review_application",
+                        "Can review applications (approve / decline / edit / delete)",
+                    )
+                ],
+            },
         ),
     ]

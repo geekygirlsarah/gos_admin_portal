@@ -1,4 +1,5 @@
 """Django admin registrations for the application wizard models."""
+
 from __future__ import annotations
 
 from django.contrib import admin

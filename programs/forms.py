@@ -3,15 +3,7 @@ from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from django.utils.safestring import mark_safe
 
-from .models import (
-    Adult,
-    Fee,
-    Payment,
-    Program,
-    School,
-    SlidingScale,
-    Student,
-)
+from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
 
 
 class StudentForm(forms.ModelForm):
@@ -578,19 +570,13 @@ class ProgramDocumentForm(forms.ModelForm):
         widgets = {
             "program": forms.HiddenInput(),
             "name": forms.TextInput(attrs={"class": "form-control"}),
-            "description": forms.Textarea(
-                attrs={"class": "form-control", "rows": 3}
-            ),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
             "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
-            "is_required": forms.CheckboxInput(
-                attrs={"class": "form-check-input"}
-            ),
+            "is_required": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "display_order": forms.NumberInput(
                 attrs={"class": "form-control", "min": 0}
             ),
-            "is_active": forms.CheckboxInput(
-                attrs={"class": "form-check-input"}
-            ),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, program: Program = None, **kwargs):

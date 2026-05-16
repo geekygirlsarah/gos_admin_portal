@@ -1,4 +1,5 @@
 """End-to-end-ish tests for the application wizard views (Steps 1-4)."""
+
 from __future__ import annotations
 
 import datetime
@@ -192,6 +193,7 @@ class WizardFlowTests(TestCase):
         body = mail.outbox[0].body
         # Extract the 6-digit code from the email body for use in next step.
         import re
+
         m = re.search(r"\b(\d{6})\b", body)
         self.assertIsNotNone(m)
 

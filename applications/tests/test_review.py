@@ -1,4 +1,5 @@
 """Tests for the lead-mentor application review pages."""
+
 from __future__ import annotations
 
 import datetime
@@ -13,7 +14,6 @@ from django.utils import timezone
 
 from applications.models import Application
 from programs.models import Program
-
 
 User = get_user_model()
 
@@ -72,7 +72,9 @@ def _ensure_lead_mentors_group():
 
 
 def _reviewer_user(username="lead"):
-    user = User.objects.create_user(username=username, password="x", email=f"{username}@x.test")
+    user = User.objects.create_user(
+        username=username, password="x", email=f"{username}@x.test"
+    )
     user.groups.add(_ensure_lead_mentors_group())
     return user
 
@@ -287,9 +289,7 @@ class ApproveDeclineEditDeleteTests(TestCase):
 
     def test_delete_post_removes_application(self):
         app_id = self.app.application_id
-        url = reverse(
-            "application_review_delete", kwargs={"app_id": app_id}
-        )
+        url = reverse("application_review_delete", kwargs={"app_id": app_id})
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Application.objects.filter(application_id=app_id).exists())
@@ -368,9 +368,7 @@ class ConvertToStudentTests(TestCase):
         self.assertEqual(student.school.name, "Allderdice High School")
         # Enrolled in program.
         self.assertTrue(
-            Enrollment.objects.filter(
-                student=student, program=self.program
-            ).exists()
+            Enrollment.objects.filter(student=student, program=self.program).exists()
         )
 
     def test_convert_allowed_when_approved_and_no_required_docs(self):
@@ -386,8 +384,9 @@ class ConvertToStudentTests(TestCase):
         self.assertIsNotNone(app.converted_student)
 
     def test_convert_blocked_when_required_docs_missing(self):
-        from programs.models import ProgramDocument
         from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from programs.models import ProgramDocument
 
         ProgramDocument.objects.create(
             program=self.program,

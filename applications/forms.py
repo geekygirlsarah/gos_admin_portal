@@ -1,4 +1,5 @@
 """Forms for the public application wizard (Steps 1-8)."""
+
 from __future__ import annotations
 
 from django import forms
@@ -76,7 +77,10 @@ class ApplicantTypeForm(forms.Form):
         applicant_type = cleaned.get("applicant_type")
         email = cleaned.get("email")
         # Parents and mentors must have an email; students may not.
-        if applicant_type in (Application.Type.PARENT, Application.Type.MENTOR) and not email:
+        if (
+            applicant_type in (Application.Type.PARENT, Application.Type.MENTOR)
+            and not email
+        ):
             self.add_error(
                 "email",
                 "An email address is required for parents and mentors.",
@@ -161,56 +165,75 @@ class StudentInfoForm(forms.Form):
     """Step 5: blank or prefilled student information."""
 
     legal_first_name = forms.CharField(
-        label="Legal first name", max_length=150,
+        label="Legal first name",
+        max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     first_name = forms.CharField(
         label="Preferred first name (if different)",
-        max_length=150, required=False,
+        max_length=150,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     last_name = forms.CharField(
-        label="Last name", max_length=150,
+        label="Last name",
+        max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     pronouns = forms.CharField(
-        label="Pronouns", max_length=50, required=False,
+        label="Pronouns",
+        max_length=50,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     date_of_birth = forms.DateField(
-        label="Date of birth", required=False,
+        label="Date of birth",
+        required=False,
         widget=forms.DateInput(attrs={**_text_attrs, "type": "date"}),
     )
     personal_email = forms.EmailField(
-        label="Student's personal email", required=False,
+        label="Student's personal email",
+        required=False,
         widget=forms.EmailInput(attrs=_text_attrs),
     )
     cell_phone_number = forms.CharField(
-        label="Student's cell phone", max_length=30, required=False,
+        label="Student's cell phone",
+        max_length=30,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     school_name = forms.CharField(
-        label="School", max_length=200, required=False,
+        label="School",
+        max_length=200,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     graduation_year = forms.IntegerField(
-        label="Expected graduation year", required=False, min_value=2000, max_value=2100,
+        label="Expected graduation year",
+        required=False,
+        min_value=2000,
+        max_value=2100,
         widget=forms.NumberInput(attrs=_text_attrs),
     )
     tshirt_size = forms.CharField(
-        label="T-shirt size", max_length=10, required=False,
+        label="T-shirt size",
+        max_length=10,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     allergies = forms.CharField(
-        label="Allergies", required=False,
+        label="Allergies",
+        required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 2}),
     )
     dietary_restrictions = forms.CharField(
-        label="Dietary restrictions", required=False,
+        label="Dietary restrictions",
+        required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 2}),
     )
     medical_notes = forms.CharField(
-        label="Other medical notes", required=False,
+        label="Other medical notes",
+        required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 2}),
     )
 
@@ -224,15 +247,19 @@ class ParentInfoForm(forms.Form):
     """Step 6 (primary) and Step 7 (secondary) parent/guardian info."""
 
     first_name = forms.CharField(
-        label="First name", max_length=150,
+        label="First name",
+        max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     last_name = forms.CharField(
-        label="Last name", max_length=150,
+        label="Last name",
+        max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     relationship_to_student = forms.CharField(
-        label="Relationship to student", max_length=20, required=False,
+        label="Relationship to student",
+        max_length=20,
+        required=False,
         help_text="e.g. parent, guardian, grandparent.",
         widget=forms.TextInput(attrs=_text_attrs),
     )
@@ -241,11 +268,15 @@ class ParentInfoForm(forms.Form):
         widget=forms.EmailInput(attrs=_text_attrs),
     )
     cell_phone = forms.CharField(
-        label="Cell phone", max_length=30, required=False,
+        label="Cell phone",
+        max_length=30,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     home_phone = forms.CharField(
-        label="Home phone", max_length=30, required=False,
+        label="Home phone",
+        max_length=30,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
 
@@ -292,6 +323,99 @@ class ConfirmSubmitForm(forms.Form):
 # ---------------------------------------------------------------------------
 # Step 9: post-approval signed-document upload
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Mentor branch forms
+# ---------------------------------------------------------------------------
+
+
+class MentorInfoForm(forms.Form):
+    """Mentor application: basic mentor information."""
+
+    legal_first_name = forms.CharField(
+        label="Legal first name",
+        max_length=150,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    first_name = forms.CharField(
+        label="Preferred first name (if different)",
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    last_name = forms.CharField(
+        label="Last name",
+        max_length=150,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    cell_phone = forms.CharField(
+        label="Cell phone",
+        max_length=30,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    discord_username = forms.CharField(
+        label="Discord username",
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    andrew_id = forms.CharField(
+        label="Andrew ID (CMU affiliates only)",
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    employer = forms.CharField(
+        label="Employer / affiliation",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    notes = forms.CharField(
+        label="Why are you interested in mentoring Girls of Steel?",
+        required=False,
+        widget=forms.Textarea(attrs={**_text_attrs, "rows": 4}),
+    )
+
+
+class MentorClearanceInterestForm(forms.Form):
+    """Are you interested in getting PA child-protection clearances?"""
+
+    INTEREST_CHOICES = [
+        ("yes", "Yes, I want to start / complete clearances."),
+        ("no", "No, not at this time."),
+    ]
+    interested = forms.ChoiceField(
+        label="Are you interested in obtaining PA child-protection clearances?",
+        choices=INTEREST_CHOICES,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
+
+
+class MentorClearanceDetailForm(forms.Form):
+    """For each PA clearance, indicate whether you have it or still need it."""
+
+    STATUS_CHOICES = [
+        ("have", "I already have this clearance."),
+        ("need", "I don't have this yet — I'll need to get it."),
+    ]
+    paca = forms.ChoiceField(
+        label="PA Child Abuse Clearance (PACA)",
+        choices=STATUS_CHOICES,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
+    patch = forms.ChoiceField(
+        label="PA Criminal Record Clearance (PATCH)",
+        choices=STATUS_CHOICES,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
+    fbi = forms.ChoiceField(
+        label="FBI criminal fingerprint check",
+        choices=STATUS_CHOICES,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
 
 
 class DocumentSubmissionForm(forms.Form):

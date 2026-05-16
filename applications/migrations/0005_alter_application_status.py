@@ -6,13 +6,26 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('applications', '0004_lead_mentors_group'),
+        ("applications", "0004_lead_mentors_group"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='application',
-            name='status',
-            field=models.CharField(choices=[('draft', 'Draft'), ('email_verified', 'Email verified'), ('awaiting_parent', 'Awaiting parent'), ('submitted', 'Submitted'), ('approved', 'App Approved'), ('approved_signed', 'Approved + Signed'), ('declined', 'Declined')], db_index=True, default='draft', max_length=20),
+            model_name="application",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("draft", "Draft"),
+                    ("email_verified", "Email verified"),
+                    ("awaiting_parent", "Awaiting parent"),
+                    ("submitted", "Submitted"),
+                    ("approved", "App Approved"),
+                    ("approved_signed", "Approved + Signed"),
+                    ("declined", "Declined"),
+                ],
+                db_index=True,
+                default="draft",
+                max_length=20,
+            ),
         ),
     ]

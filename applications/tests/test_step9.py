@@ -1,4 +1,5 @@
 """Tests for the application wizard Step 9 (post-approval signed docs)."""
+
 from __future__ import annotations
 
 import datetime
@@ -14,7 +15,6 @@ from django.utils import timezone
 from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_application_approved_email
 from programs.models import Program, ProgramDocument
-
 
 # Use an isolated MEDIA_ROOT so file uploads from tests don't pollute the
 # real media tree.
@@ -170,7 +170,8 @@ class Step9DocumentsTests(TestCase):
         app = _approved_application(self.program)
         # An ID that doesn't belong to this program's docs:
         other_program = Program.objects.create(
-            name="Other", year=2030,
+            name="Other",
+            year=2030,
             start_date=timezone.localdate() + datetime.timedelta(days=30),
             end_date=timezone.localdate() + datetime.timedelta(days=90),
             active=True,

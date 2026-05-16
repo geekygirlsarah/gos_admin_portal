@@ -3048,7 +3048,6 @@ class ProgramFeeUpdateView(
         )
 
 
-
 class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "programs"
     permission_required = "programs.view_program"

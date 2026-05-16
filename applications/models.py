@@ -4,6 +4,7 @@ This app supersedes the previous lightweight ``StudentApplication`` model
 in ``programs``. It supports a multi-step, resumable wizard for students,
 parents and prospective mentors.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -53,9 +54,7 @@ class SiteSettings(models.Model):
 
     welcome_message = models.TextField(
         default=DEFAULT_WELCOME,
-        help_text=(
-            "Message shown on the first page of the public application wizard."
-        ),
+        help_text=("Message shown on the first page of the public application wizard."),
     )
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -273,7 +272,9 @@ class Application(models.Model):
 
 def _application_doc_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/application_documents/<application_id>/<filename>."""
-    aid = instance.application.application_id if instance.application_id else "unassigned"
+    aid = (
+        instance.application.application_id if instance.application_id else "unassigned"
+    )
     return f"application_documents/{aid}/{filename}"
 
 

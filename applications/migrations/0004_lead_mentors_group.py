@@ -2,10 +2,10 @@
 ``applications.review_application`` permission so members can use the
 custom Applications review pages.
 """
+
 from __future__ import annotations
 
 from django.db import migrations
-
 
 LEAD_MENTORS_GROUP = "Lead Mentors"
 REVIEW_PERM_CODENAME = "review_application"

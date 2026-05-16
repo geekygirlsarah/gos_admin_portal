@@ -1,4 +1,5 @@
 """Tests for the application wizard Steps 5-8 (Phase 2)."""
+
 from __future__ import annotations
 
 import datetime
@@ -59,7 +60,9 @@ class Step5StudentInfoTests(TestCase):
             last_name="Lovelace",
             personal_email="ada@example.com",
         )
-        app = _verified(applicant_type=Application.Type.STUDENT, email="ada@example.com")
+        app = _verified(
+            applicant_type=Application.Type.STUDENT, email="ada@example.com"
+        )
         response = self.client.get(
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
@@ -97,14 +100,20 @@ class Step5StudentInfoTests(TestCase):
 
     def test_step5_picker_shown_for_parent_with_existing_children(self):
         adult = Adult.objects.create(
-            first_name="Pat", last_name="Parent", email="parent@example.com",
+            first_name="Pat",
+            last_name="Parent",
+            email="parent@example.com",
             is_parent=True,
         )
         student_a = Student.objects.create(
-            legal_first_name="Anna", last_name="Smith", primary_contact=adult,
+            legal_first_name="Anna",
+            last_name="Smith",
+            primary_contact=adult,
         )
         Student.objects.create(
-            legal_first_name="Bea", last_name="Smith", primary_contact=adult,
+            legal_first_name="Bea",
+            last_name="Smith",
+            primary_contact=adult,
         )
         app = _verified(email="parent@example.com")
         response = self.client.get(
@@ -160,7 +169,8 @@ class Step6PrimaryParentTests(TestCase):
 
     def test_parent_with_existing_adult_record_prefills_form(self):
         Adult.objects.create(
-            first_name="Pat", last_name="Parent",
+            first_name="Pat",
+            last_name="Parent",
             email="parent@example.com",
             cell_phone="555-1212",
             is_parent=True,
@@ -253,11 +263,13 @@ class Step8ConfirmTests(TestCase):
             data={
                 "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
                 "step6": {
-                    "first_name": "Pat", "last_name": "Parent",
+                    "first_name": "Pat",
+                    "last_name": "Parent",
                     "email": "parent@example.com",
                 },
                 "step7": {
-                    "first_name": "Sam", "last_name": "Spouse",
+                    "first_name": "Sam",
+                    "last_name": "Spouse",
                     "relationship_to_student": "guardian",
                 },
             },
@@ -311,8 +323,7 @@ class Step8ConfirmTests(TestCase):
         # Find the applicant confirmation email specifically and assert its
         # recipient list contains both the applicant and the parent.
         confirm_msgs = [
-            m for m in mail.outbox
-            if "leads@girlsofsteelrobotics.org" not in m.to
+            m for m in mail.outbox if "leads@girlsofsteelrobotics.org" not in m.to
         ]
         self.assertEqual(len(confirm_msgs), 1)
         confirm = confirm_msgs[0]
@@ -331,11 +342,13 @@ class Step8ConfirmTests(TestCase):
             data={
                 "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
                 "step6": {
-                    "first_name": "Pat", "last_name": "Parent",
+                    "first_name": "Pat",
+                    "last_name": "Parent",
                     "email": "parent@example.com",
                 },
                 "step7": {
-                    "first_name": "Sam", "last_name": "Spouse",
+                    "first_name": "Sam",
+                    "last_name": "Spouse",
                     "relationship_to_student": "guardian",
                 },
             },
@@ -345,8 +358,7 @@ class Step8ConfirmTests(TestCase):
             {"confirm": "on"},
         )
         confirm_msgs = [
-            m for m in mail.outbox
-            if "leads@girlsofsteelrobotics.org" not in m.to
+            m for m in mail.outbox if "leads@girlsofsteelrobotics.org" not in m.to
         ]
         self.assertEqual(len(confirm_msgs), 1)
         self.assertEqual(confirm_msgs[0].to, ["parent@example.com"])

@@ -5,6 +5,7 @@ gated by the ``applications.review_application`` permission. The default
 ``Lead Mentors`` group bootstrapped in migration ``0004`` carries that
 permission.
 """
+
 from __future__ import annotations
 
 import json
@@ -164,6 +165,7 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
         any_documents = False
         if application.program_id:
             from programs.models import ProgramDocument
+
             program_docs = ProgramDocument.objects.filter(
                 program_id=application.program_id, is_active=True
             ).order_by("display_order", "name")
@@ -189,12 +191,8 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
         # convertible — the auto-upgrade to APPROVED_SIGNED only fires
         # via the applicant's upload flow, so an applicant whose program
         # has no required documents would otherwise be stuck.
-        can_convert = (
-            application.status == Application.Status.APPROVED_SIGNED
-            or (
-                application.status == Application.Status.APPROVED
-                and all_required_uploaded
-            )
+        can_convert = application.status == Application.Status.APPROVED_SIGNED or (
+            application.status == Application.Status.APPROVED and all_required_uploaded
         )
         return render(
             request,
@@ -224,7 +222,9 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
             Application.Status.CONVERTED,
         ):
             messages.info(request, "Application is already approved.")
-            return redirect("application_review_detail", app_id=application.application_id)
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
 
         application.status = Application.Status.APPROVED
         application.reviewed_at = timezone.now()
@@ -290,9 +290,7 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
         application.save()
 
         try:
-            send_application_declined_email(
-                application, reason=reason, request=request
-            )
+            send_application_declined_email(application, reason=reason, request=request)
         except Exception:  # pragma: no cover - defensive
             logger.exception(
                 "Failed to send decline email for %s",
@@ -356,9 +354,7 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
             request,
             f"Updated application {application.application_id}.",
         )
-        return redirect(
-            "application_review_detail", app_id=application.application_id
-        )
+        return redirect("application_review_detail", app_id=application.application_id)
 
 
 class ApplicationDeleteView(_ReviewerRequiredMixin, View):
@@ -370,9 +366,7 @@ class ApplicationDeleteView(_ReviewerRequiredMixin, View):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
-        return render(
-            request, self.template_name, {"application": application}
-        )
+        return render(request, self.template_name, {"application": application})
 
     def post(self, request, app_id: str):
         application = get_object_or_404(
@@ -428,6 +422,4 @@ class ApplicationConvertView(_ReviewerRequiredMixin, View):
             f"Converted application {application.application_id} into "
             f"student “{student}” enrolled in {application.program}.",
         )
-        return redirect(
-            "application_review_detail", app_id=application.application_id
-        )
+        return redirect("application_review_detail", app_id=application.application_id)

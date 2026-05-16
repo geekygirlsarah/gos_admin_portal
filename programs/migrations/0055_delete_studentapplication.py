@@ -15,7 +15,8 @@ def drop_table_if_exists(apps, schema_editor):
     if table_name in existing:
         with connection.cursor() as cursor:
             cursor.execute(
-                schema_editor.sql_delete_table % {
+                schema_editor.sql_delete_table
+                % {
                     "table": connection.ops.quote_name(table_name),
                 }
             )
@@ -30,14 +31,14 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0054_alter_slidingscale_date'),
+        ("programs", "0054_alter_slidingscale_date"),
     ]
 
     operations = [
         migrations.SeparateDatabaseAndState(
             state_operations=[
                 migrations.DeleteModel(
-                    name='StudentApplication',
+                    name="StudentApplication",
                 ),
             ],
             database_operations=[

@@ -3,6 +3,7 @@
 Step 9 (post-approval PDF download/upload) and the lead-mentor admin pages
 are deferred to a later phase per the design spec.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,11 +15,16 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
+from programs.models import Student
+
 from .forms import (
     ApplicantTypeForm,
     ChooseExistingStudentForm,
     ConfirmSubmitForm,
     DocumentSubmissionForm,
+    MentorClearanceDetailForm,
+    MentorClearanceInterestForm,
+    MentorInfoForm,
     OtpVerifyForm,
     ParentHandoffForm,
     ParentInfoForm,
@@ -30,6 +36,7 @@ from .models import Application, ApplicationDocumentSubmission, SiteSettings
 from .services import (
     adult_to_prefill,
     find_adult_by_email,
+    find_existing_mentor_by_email,
     find_student_by_email,
     get_program_buckets,
     send_application_started_email,
@@ -40,11 +47,29 @@ from .services import (
     student_to_prefill,
     students_for_adult,
 )
-from programs.models import Student
 
 logger = logging.getLogger(__name__)
 
-TOTAL_STEPS = 9  # Number of wizard steps the UI is designed to show.
+TOTAL_STEPS = 9  # Student/parent wizard step count.
+MENTOR_TOTAL_STEPS = 6  # Mentor wizard step count.
+
+
+def _is_mentor(application: Application) -> bool:
+    return application.applicant_type == Application.Type.MENTOR
+
+
+def _mentor_progress(view_key: str) -> tuple[int, int]:
+    """Return (current_step, total_steps) for a mentor wizard page."""
+    mapping = {
+        "step2": 1,
+        "step4": 2,
+        "mentor_info": 3,
+        "mentor_clearance_interest": 4,
+        "mentor_clearance_detail": 5,
+        "mentor_confirm": 6,
+        "submitted": 6,
+    }
+    return mapping.get(view_key, 1), MENTOR_TOTAL_STEPS
 
 
 def _get_application_or_404(app_id: str) -> Application:
@@ -53,6 +78,37 @@ def _get_application_or_404(app_id: str) -> Application:
 
 def _redirect_to_current_step(application: Application):
     """After resume, send the user to the step they were last on."""
+    # Mentor branch: no Step 3 program, no Steps 5/6/7. Map differently.
+    if _is_mentor(application):
+        step = application.current_step or 1
+        if application.status in (
+            Application.Status.SUBMITTED,
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+            Application.Status.CONVERTED,
+        ):
+            return redirect("apply_submitted", app_id=application.application_id)
+        if step <= 2:
+            return redirect("apply_step2", app_id=application.application_id)
+        if not application.email_is_verified:
+            return redirect("apply_step4", app_id=application.application_id)
+        data = application.data or {}
+        if not data.get("mentor_info"):
+            return redirect("apply_mentor_info", app_id=application.application_id)
+        if not data.get("mentor_clearance_interest"):
+            return redirect(
+                "apply_mentor_clearance_interest",
+                app_id=application.application_id,
+            )
+        if data.get("mentor_clearance_interest", {}).get(
+            "interested"
+        ) == "yes" and not data.get("mentor_clearance_detail"):
+            return redirect(
+                "apply_mentor_clearance_detail",
+                app_id=application.application_id,
+            )
+        return redirect("apply_mentor_confirm", app_id=application.application_id)
+
     step = max(1, min(application.current_step, TOTAL_STEPS))
     name_map = {
         2: "apply_step2",
@@ -203,17 +259,25 @@ class Step2ApplicantTypeView(View):
             )
             return redirect("apply_start")
 
+        # Mentor applicants skip Step 3 (program selection) — they apply
+        # to the organization, not to a specific program.
+        if application.applicant_type == Application.Type.MENTOR:
+            return redirect("apply_step4", app_id=application.application_id)
         return redirect("apply_step3", app_id=application.application_id)
 
     def _render(self, request, application, form):
+        if _is_mentor(application):
+            current_step, total_steps = _mentor_progress("step2")
+        else:
+            current_step, total_steps = 2, TOTAL_STEPS
         return render(
             request,
             self.template_name,
             {
                 "application": application,
                 "form": form,
-                "current_step": 2,
-                "total_steps": TOTAL_STEPS,
+                "current_step": current_step,
+                "total_steps": total_steps,
             },
         )
 
@@ -232,7 +296,9 @@ class Step3ProgramView(View):
         future, current, past = get_program_buckets()
         form = ProgramSelectForm(
             future_programs=future,
-            initial={"program": application.program_id} if application.program_id else None,
+            initial=(
+                {"program": application.program_id} if application.program_id else None
+            ),
         )
         return self._render(request, application, form, future, current, past)
 
@@ -301,6 +367,14 @@ class Step4VerifyEmailView(View):
         application.current_step = max(application.current_step, 5)
         application.save(update_fields=["current_step", "updated_at"])
         messages.success(request, "Email verified — thanks!")
+        # Mentor branch: block if the email already belongs to a mentor,
+        # otherwise jump into the mentor info step.
+        if _is_mentor(application):
+            if find_existing_mentor_by_email(application.email):
+                return redirect(
+                    "apply_mentor_blocked", app_id=application.application_id
+                )
+            return redirect("apply_mentor_info", app_id=application.application_id)
         return redirect("apply_continue", app_id=application.application_id)
 
     def _issue_and_send(self, application: Application, request) -> None:
@@ -313,14 +387,18 @@ class Step4VerifyEmailView(View):
             )
 
     def _render(self, request, application, form):
+        if _is_mentor(application):
+            current_step, total_steps = _mentor_progress("step4")
+        else:
+            current_step, total_steps = 4, TOTAL_STEPS
         return render(
             request,
             self.template_name,
             {
                 "application": application,
                 "form": form,
-                "current_step": 4,
-                "total_steps": TOTAL_STEPS,
+                "current_step": current_step,
+                "total_steps": total_steps,
             },
         )
 
@@ -334,7 +412,9 @@ class Step4ResendCodeView(View):
         try:
             code = application.issue_otp()
             send_otp_email(application, code, request=request)
-            messages.success(request, "A new verification code has been emailed to you.")
+            messages.success(
+                request, "A new verification code has been emailed to you."
+            )
         except Exception:
             logger.exception(
                 "Failed to resend OTP for application %s", application.application_id
@@ -472,9 +552,7 @@ class Step5StudentInfoView(View):
         picker = ChooseExistingStudentForm(post or None, students=qs)
         chosen = None
         # Honor previously-saved choice in application.data
-        prior_id = (application.data or {}).get("step5", {}).get(
-            "_existing_student_id"
-        )
+        prior_id = (application.data or {}).get("step5", {}).get("_existing_student_id")
         if post is not None and picker.is_valid():
             chosen = picker.cleaned_data.get("student")
         elif prior_id:
@@ -574,9 +652,7 @@ class Step6PrimaryParentView(View):
             application.save(
                 update_fields=["data", "status", "current_step", "updated_at"]
             )
-            send_parent_handoff_email(
-                application, parent_email, request=request
-            )
+            send_parent_handoff_email(application, parent_email, request=request)
             messages.success(
                 request,
                 "We emailed the parent/guardian a link to continue this "
@@ -606,12 +682,8 @@ class Step6PrimaryParentView(View):
         # asking for a handoff email — unless they're already filling out the
         # form (post with parent fields), or they previously entered parent
         # info.
-        student_initiated = (
-            application.applicant_type == Application.Type.STUDENT
-        )
-        already_handed_off = bool(
-            (application.data or {}).get("step6_handoff")
-        )
+        student_initiated = application.applicant_type == Application.Type.STUDENT
+        already_handed_off = bool((application.data or {}).get("step6_handoff"))
         # If a handoff already happened, the parent has now arrived via the
         # email link. Look the adult up by the parent_email captured at
         # handoff time (rather than the student's email) and show them the
@@ -635,11 +707,7 @@ class Step6PrimaryParentView(View):
             lookup_email = handoff_email or application.email
             existing_adult = find_adult_by_email(lookup_email)
 
-        if (
-            student_initiated
-            and not saved
-            and not already_handed_off
-        ):
+        if student_initiated and not saved and not already_handed_off:
             # Student is applying — the parent still needs to take over.
             # If we already know the parent's email (returning student's
             # primary_contact, or a found Adult), prefill the handoff form
@@ -662,15 +730,15 @@ class Step6PrimaryParentView(View):
         # Prefer prior saved data, then existing adult lookup. If we came in
         # via a handoff and have no other info, at least seed the parent's
         # email field.
-        initial = saved or (
-            adult_to_prefill(existing_adult) if existing_adult else {}
-        )
+        initial = saved or (adult_to_prefill(existing_adult) if existing_adult else {})
         if not initial and handoff_email:
             initial = {"email": handoff_email}
         form = ParentInfoForm(post or None, initial=initial)
         return form, ParentHandoffForm(), "form", existing_adult
 
-    def _render(self, request, application, form, handoff_form, mode, existing_adult=None):
+    def _render(
+        self, request, application, form, handoff_form, mode, existing_adult=None
+    ):
         from .services import latest_program_for_adult
 
         welcome_back = None
@@ -714,9 +782,7 @@ class Step7SecondaryParentView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
-        form = ParentInfoForm(
-            initial=self._initial(application), require_email=False
-        )
+        form = ParentInfoForm(initial=self._initial(application), require_email=False)
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
@@ -832,19 +898,25 @@ class SubmittedView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
-        # Approved applicants belong on the documents page.
-        if application.status in (
+        # Approved student/parent applicants belong on the documents page.
+        # Mentors have no Step 9 documents flow.
+        if not _is_mentor(application) and application.status in (
             Application.Status.APPROVED,
             Application.Status.APPROVED_SIGNED,
         ):
             return redirect("apply_step9", app_id=application.application_id)
+        if _is_mentor(application):
+            current_step, total_steps = _mentor_progress("submitted")
+        else:
+            current_step = min(max(application.current_step, 9), TOTAL_STEPS)
+            total_steps = TOTAL_STEPS
         return render(
             request,
             self.template_name,
             {
                 "application": application,
-                "current_step": min(max(application.current_step, 9), TOTAL_STEPS),
-                "total_steps": TOTAL_STEPS,
+                "current_step": current_step,
+                "total_steps": total_steps,
             },
         )
 
@@ -976,5 +1048,256 @@ class Step9DocumentsView(View):
                 "focus_doc_id": focus_doc_id,
                 "current_step": 9,
                 "total_steps": TOTAL_STEPS,
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
+# Mentor wizard branch
+# ---------------------------------------------------------------------------
+
+
+def _require_mentor(application: Application):
+    """Redirect non-mentor applicants back to their own flow."""
+    if not _is_mentor(application):
+        return _redirect_to_current_step(application)
+    return None
+
+
+def _require_mentor_verified(application: Application):
+    """Mentor pages past OTP require a verified email + mentor type."""
+    guard = _require_mentor(application)
+    if guard is not None:
+        return guard
+    if not application.email_is_verified:
+        return redirect("apply_step4", app_id=application.application_id)
+    # Block existing-mentor applicants from continuing past OTP.
+    if find_existing_mentor_by_email(application.email):
+        return redirect("apply_mentor_blocked", app_id=application.application_id)
+    return None
+
+
+@method_decorator(never_cache, name="dispatch")
+class MentorBlockedView(View):
+    """Shown when the OTP-verified email already belongs to a mentor on file."""
+
+    template_name = "applications/mentor_blocked.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        if not _is_mentor(application):
+            return _redirect_to_current_step(application)
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "current_step": _mentor_progress("step4")[0],
+                "total_steps": MENTOR_TOTAL_STEPS,
+            },
+        )
+
+
+@method_decorator(never_cache, name="dispatch")
+class MentorInfoView(View):
+    template_name = "applications/mentor_info.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        initial = (application.data or {}).get("mentor_info") or {}
+        return self._render(request, application, MentorInfoForm(initial=initial))
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        form = MentorInfoForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, application, form)
+        _save_step_data(
+            application, "mentor_info", dict(form.cleaned_data), next_step=6
+        )
+        return redirect(
+            "apply_mentor_clearance_interest", app_id=application.application_id
+        )
+
+    def _render(self, request, application, form):
+        current_step, total_steps = _mentor_progress("mentor_info")
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "form": form,
+                "current_step": current_step,
+                "total_steps": total_steps,
+            },
+        )
+
+
+@method_decorator(never_cache, name="dispatch")
+class MentorClearanceInterestView(View):
+    template_name = "applications/mentor_clearance_interest.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        initial = (application.data or {}).get("mentor_clearance_interest") or {}
+        return self._render(
+            request, application, MentorClearanceInterestForm(initial=initial)
+        )
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        form = MentorClearanceInterestForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, application, form)
+        _save_step_data(
+            application,
+            "mentor_clearance_interest",
+            dict(form.cleaned_data),
+            next_step=7,
+        )
+        if form.cleaned_data["interested"] == "yes":
+            return redirect(
+                "apply_mentor_clearance_detail",
+                app_id=application.application_id,
+            )
+        # Not interested → clear any prior detail and jump to confirm.
+        data = dict(application.data or {})
+        data.pop("mentor_clearance_detail", None)
+        application.data = data
+        application.save(update_fields=["data", "updated_at"])
+        return redirect("apply_mentor_confirm", app_id=application.application_id)
+
+    def _render(self, request, application, form):
+        current_step, total_steps = _mentor_progress("mentor_clearance_interest")
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "form": form,
+                "current_step": current_step,
+                "total_steps": total_steps,
+            },
+        )
+
+
+@method_decorator(never_cache, name="dispatch")
+class MentorClearanceDetailView(View):
+    template_name = "applications/mentor_clearance_detail.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        # Don't show this page if they said "no" on the interest step.
+        interest = (application.data or {}).get("mentor_clearance_interest") or {}
+        if interest.get("interested") != "yes":
+            return redirect(
+                "apply_mentor_clearance_interest",
+                app_id=application.application_id,
+            )
+        initial = (application.data or {}).get("mentor_clearance_detail") or {}
+        return self._render(
+            request, application, MentorClearanceDetailForm(initial=initial)
+        )
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        form = MentorClearanceDetailForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, application, form)
+        _save_step_data(
+            application,
+            "mentor_clearance_detail",
+            dict(form.cleaned_data),
+            next_step=8,
+        )
+        return redirect("apply_mentor_confirm", app_id=application.application_id)
+
+    def _render(self, request, application, form):
+        current_step, total_steps = _mentor_progress("mentor_clearance_detail")
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "form": form,
+                "current_step": current_step,
+                "total_steps": total_steps,
+            },
+        )
+
+
+@method_decorator(never_cache, name="dispatch")
+class MentorConfirmView(View):
+    template_name = "applications/mentor_confirm.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        return self._render(request, application, ConfirmSubmitForm())
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_mentor_verified(application)
+        if guard is not None:
+            return guard
+        form = ConfirmSubmitForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, application, form)
+        application.status = Application.Status.SUBMITTED
+        application.submitted_at = timezone.now()
+        application.current_step = max(application.current_step, 9)
+        application.save(
+            update_fields=["status", "submitted_at", "current_step", "updated_at"]
+        )
+        try:
+            send_application_submitted_email(application, request=request)
+        except Exception:
+            logger.exception(
+                "Failed to send mentor submitted email for %s",
+                application.application_id,
+            )
+        try:
+            send_lead_notification_email(application, request=request)
+        except Exception:
+            logger.exception(
+                "Failed to send lead notification for mentor %s",
+                application.application_id,
+            )
+        return redirect("apply_submitted", app_id=application.application_id)
+
+    def _render(self, request, application, form):
+        data = application.data or {}
+        current_step, total_steps = _mentor_progress("mentor_confirm")
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "form": form,
+                "mentor_info": data.get("mentor_info") or {},
+                "clearance_interest": data.get("mentor_clearance_interest") or {},
+                "clearance_detail": data.get("mentor_clearance_detail") or {},
+                "current_step": current_step,
+                "total_steps": total_steps,
             },
         )

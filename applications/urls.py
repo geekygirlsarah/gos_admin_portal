@@ -2,6 +2,7 @@
 
 Mounted at ``/apply/`` from the project urlconf.
 """
+
 from __future__ import annotations
 
 from django.urls import path
@@ -114,5 +115,31 @@ urlpatterns = [
         "<str:app_id>/step9/",
         views.Step9DocumentsView.as_view(),
         name="apply_step9",
+    ),
+    # --- Mentor branch (applicant_type=MENTOR; skips Steps 3, 5-7, 9) ---
+    path(
+        "<str:app_id>/mentor/blocked/",
+        views.MentorBlockedView.as_view(),
+        name="apply_mentor_blocked",
+    ),
+    path(
+        "<str:app_id>/mentor/info/",
+        views.MentorInfoView.as_view(),
+        name="apply_mentor_info",
+    ),
+    path(
+        "<str:app_id>/mentor/clearances/interest/",
+        views.MentorClearanceInterestView.as_view(),
+        name="apply_mentor_clearance_interest",
+    ),
+    path(
+        "<str:app_id>/mentor/clearances/detail/",
+        views.MentorClearanceDetailView.as_view(),
+        name="apply_mentor_clearance_detail",
+    ),
+    path(
+        "<str:app_id>/mentor/confirm/",
+        views.MentorConfirmView.as_view(),
+        name="apply_mentor_confirm",
     ),
 ]

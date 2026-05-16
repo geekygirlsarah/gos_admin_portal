@@ -1,4 +1,5 @@
 """Tests for the Application and SiteSettings models."""
+
 from __future__ import annotations
 
 from datetime import timedelta

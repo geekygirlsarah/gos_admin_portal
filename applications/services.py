@@ -1,4 +1,5 @@
 """Email + helper services for the application wizard."""
+
 from __future__ import annotations
 
 import logging
@@ -58,9 +59,7 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
     )
 
 
-def send_application_started_email(
-    application: Application, request=None
-) -> None:
+def send_application_started_email(application: Application, request=None) -> None:
     """Sent right after Step 2 so the applicant has their application ID
     even if they abandon the wizard before submitting.
     """
@@ -107,9 +106,11 @@ def get_program_buckets():
     future = Program.objects.filter(active=True, start_date__gt=today).order_by(
         "start_date", "name"
     )
-    current = Program.objects.filter(
-        active=True, start_date__lte=today
-    ).exclude(end_date__lt=today).order_by("start_date", "name")
+    current = (
+        Program.objects.filter(active=True, start_date__lte=today)
+        .exclude(end_date__lt=today)
+        .order_by("start_date", "name")
+    )
     past = Program.objects.filter(end_date__lt=today).order_by("-end_date", "name")
     return future, current, past
 
@@ -138,11 +139,9 @@ def find_student_by_email(email: str):
 
     if not email:
         return None
-    return (
-        Student.objects.filter(
-            Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
-        ).first()
-    )
+    return Student.objects.filter(
+        Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+    ).first()
 
 
 def find_adult_by_email(email: str):
@@ -151,14 +150,22 @@ def find_adult_by_email(email: str):
 
     if not email:
         return None
-    return (
-        Adult.objects.filter(
-            Q(email__iexact=email)
-            | Q(personal_email__iexact=email)
-            | Q(andrew_email__iexact=email)
-            | Q(alumni_email__iexact=email)
-        ).first()
-    )
+    return Adult.objects.filter(
+        Q(email__iexact=email)
+        | Q(personal_email__iexact=email)
+        | Q(andrew_email__iexact=email)
+        | Q(alumni_email__iexact=email)
+    ).first()
+
+
+def find_existing_mentor_by_email(email: str):
+    """Return an existing Adult flagged as a mentor matching this email,
+    or ``None``. Used to block re-applications by people we already know.
+    """
+    adult = find_adult_by_email(email)
+    if adult is not None and getattr(adult, "is_mentor", False):
+        return adult
+    return None
 
 
 def students_for_adult(adult) -> List:
@@ -301,12 +308,8 @@ def send_parent_handoff_email(
         "application": application,
         "resume_url": resume_url,
     }
-    text_body = render_to_string(
-        "applications/email/parent_handoff.txt", ctx
-    )
-    html_body = render_to_string(
-        "applications/email/parent_handoff.html", ctx
-    )
+    text_body = render_to_string("applications/email/parent_handoff.txt", ctx)
+    html_body = render_to_string("applications/email/parent_handoff.html", ctx)
     _send_html_email(
         subject="A Girls of Steel application is waiting for you",
         text_body=text_body,
@@ -354,9 +357,7 @@ def _collect_applicant_recipients(application: Application) -> List[str]:
     return recipients
 
 
-def send_application_submitted_email(
-    application: Application, request=None
-) -> None:
+def send_application_submitted_email(application: Application, request=None) -> None:
     """Confirmation email to the applicant on final submission.
 
     Sent to both the student and the primary parent/guardian (or to just
@@ -370,12 +371,8 @@ def send_application_submitted_email(
         "application": application,
         "resume_url": resume_url,
     }
-    text_body = render_to_string(
-        "applications/email/application_submitted.txt", ctx
-    )
-    html_body = render_to_string(
-        "applications/email/application_submitted.html", ctx
-    )
+    text_body = render_to_string("applications/email/application_submitted.txt", ctx)
+    html_body = render_to_string("applications/email/application_submitted.html", ctx)
     _send_html_email(
         subject="Your Girls of Steel application has been submitted",
         text_body=text_body,
@@ -384,9 +381,7 @@ def send_application_submitted_email(
     )
 
 
-def send_application_approved_email(
-    application: Application, request=None
-) -> None:
+def send_application_approved_email(application: Application, request=None) -> None:
     """Notify the applicant that their application was approved and that
     they have signed documents to download/upload (Step 9).
 
@@ -403,19 +398,13 @@ def send_application_approved_email(
     from django.urls import reverse
 
     path = reverse("apply_resume_link", kwargs={"app_id": application.application_id})
-    documents_url = (
-        request.build_absolute_uri(path) if request is not None else path
-    )
+    documents_url = request.build_absolute_uri(path) if request is not None else path
     ctx = {
         "application": application,
         "documents_url": documents_url,
     }
-    text_body = render_to_string(
-        "applications/email/application_approved.txt", ctx
-    )
-    html_body = render_to_string(
-        "applications/email/application_approved.html", ctx
-    )
+    text_body = render_to_string("applications/email/application_approved.txt", ctx)
+    html_body = render_to_string("applications/email/application_approved.html", ctx)
     _send_html_email(
         subject="Your Girls of Steel application has been approved",
         text_body=text_body,
@@ -441,12 +430,8 @@ def send_application_declined_email(
         "application": application,
         "reason": (reason or "").strip(),
     }
-    text_body = render_to_string(
-        "applications/email/application_declined.txt", ctx
-    )
-    html_body = render_to_string(
-        "applications/email/application_declined.html", ctx
-    )
+    text_body = render_to_string("applications/email/application_declined.txt", ctx)
+    html_body = render_to_string("applications/email/application_declined.html", ctx)
     _send_html_email(
         subject="An update on your Girls of Steel application",
         text_body=text_body,
@@ -504,7 +489,10 @@ def _adult_from_data(parent_data: dict):
     if rel:
         # Only set if blank/default ("parent"); we don't try to map free-form
         # values against RELATIONSHIP_CHOICES.
-        if not adult.relationship_to_student or adult.relationship_to_student == "parent":
+        if (
+            not adult.relationship_to_student
+            or adult.relationship_to_student == "parent"
+        ):
             adult.relationship_to_student = rel[:20]
     adult.is_parent = True
     adult.save()
@@ -652,9 +640,7 @@ def convert_application_to_student(application: Application, request=None):
         if changed:
             student.save()
 
-        Enrollment.objects.get_or_create(
-            student=student, program=application.program
-        )
+        Enrollment.objects.get_or_create(student=student, program=application.program)
 
         application.converted_student = student
         application.converted_at = timezone.now()
@@ -671,9 +657,7 @@ def convert_application_to_student(application: Application, request=None):
     return student
 
 
-def send_lead_notification_email(
-    application: Application, request=None
-) -> None:
+def send_lead_notification_email(application: Application, request=None) -> None:
     """Notify lead mentors that a new application was submitted."""
     recipient = _lead_mentor_email()
     if not recipient:
@@ -682,12 +666,8 @@ def send_lead_notification_email(
         "application": application,
         "applicant_data": application.data or {},
     }
-    text_body = render_to_string(
-        "applications/email/lead_notification.txt", ctx
-    )
-    html_body = render_to_string(
-        "applications/email/lead_notification.html", ctx
-    )
+    text_body = render_to_string("applications/email/lead_notification.txt", ctx)
+    html_body = render_to_string("applications/email/lead_notification.html", ctx)
     _send_html_email(
         subject=f"New application: {application.application_id}",
         text_body=text_body,

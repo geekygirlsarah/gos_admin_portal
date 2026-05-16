@@ -1,4 +1,5 @@
 """Tests for the "Welcome back" / prefill banners on Steps 5 and 6."""
+
 from __future__ import annotations
 
 import datetime
@@ -8,10 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
-from applications.services import (
-    latest_program_for_adult,
-    latest_program_for_student,
-)
+from applications.services import latest_program_for_adult, latest_program_for_student
 from programs.models import Adult, Enrollment, Program, Student
 
 
@@ -54,11 +52,15 @@ class LatestProgramHelpersTests(TestCase):
 
     def test_latest_program_for_adult_uses_their_students(self):
         adult = Adult.objects.create(
-            first_name="P", last_name="Q",
-            email="p@example.com", is_parent=True,
+            first_name="P",
+            last_name="Q",
+            email="p@example.com",
+            is_parent=True,
         )
         s = Student.objects.create(
-            legal_first_name="K", last_name="Q", primary_contact=adult,
+            legal_first_name="K",
+            last_name="Q",
+            primary_contact=adult,
         )
         program = Program.objects.create(
             name="Spring 2024",
@@ -116,11 +118,14 @@ class Step6WelcomeBackBannerTests(TestCase):
             start_date=datetime.date(2023, 9, 1),
         )
         adult = Adult.objects.create(
-            first_name="Pat", last_name="Parent",
-            email="parent@example.com", is_parent=True,
+            first_name="Pat",
+            last_name="Parent",
+            email="parent@example.com",
+            is_parent=True,
         )
         student = Student.objects.create(
-            legal_first_name="Kid", last_name="Parent",
+            legal_first_name="Kid",
+            last_name="Parent",
             primary_contact=adult,
         )
         Enrollment.objects.create(student=student, program=program)
