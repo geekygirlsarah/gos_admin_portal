@@ -49,7 +49,9 @@ class AccountAdapter(DefaultAccountAdapter):
             if settings.DEBUG or is_staging:
                 code = context.get("code")
                 if code:
-                    logging.info(f"STAGING/DEBUG FALLBACK: Login code for {email} is {code}")
+                    logging.info(
+                        f"STAGING/DEBUG FALLBACK: Login code for {email} is {code}"
+                    )
                 # We return instead of re-raising so the user is not greeted with a 500 error.
                 # They can check the logs to get their code.
                 return
