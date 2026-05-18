@@ -72,9 +72,7 @@ def _ensure_lead_mentors_group():
 
 
 def _reviewer_user(username="lead"):
-    user = User.objects.create_user(
-        username=username, password="x", email=f"{username}@x.test"
-    )
+    user = User.objects.create_user(username=username, email=f"{username}@x.test")
     user.groups.add(_ensure_lead_mentors_group())
     return user
 
@@ -110,7 +108,7 @@ class ReviewPermissionGatingTests(TestCase):
         self.assertIn("login", response.url.lower())
 
     def test_user_without_permission_forbidden(self):
-        plain = User.objects.create_user(username="plain", password="x")
+        plain = User.objects.create_user(username="plain")
         self.client.force_login(plain)
         response = self.client.get(self.list_url)
         # PermissionRequiredMixin denies access — either 403 (forbidden)
@@ -433,7 +431,7 @@ class ConvertToStudentTests(TestCase):
     def test_convert_requires_review_permission(self):
         app = self._approved_signed_app()
         self.client.logout()
-        plain = User.objects.create_user(username="plain", password="x")
+        plain = User.objects.create_user(username="plain")
         self.client.force_login(plain)
         url = reverse(
             "application_review_convert", kwargs={"app_id": app.application_id}
