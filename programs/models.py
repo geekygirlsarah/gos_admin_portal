@@ -120,6 +120,16 @@ RELATIONSHIP_CHOICES = [
     ("other", "Other"),
 ]
 
+TSHIRT_SIZE_CHOICES = [
+    ("S", "S"),
+    ("M", "M"),
+    ("L", "L"),
+    ("XL", "XL"),
+    ("2XL", "2XL"),
+    ("3XL", "3XL"),
+    ("4XL", "4XL"),
+]
+
 MENTOR_ROLE_CHOICES = [
     ("mentor", "Mentor"),
     ("volunteer", "Volunteer"),
@@ -491,7 +501,9 @@ class Student(models.Model):
         blank=True,
         verbose_name="Race / Ethnicity",
     )
-    tshirt_size = models.CharField(max_length=10, blank=True, null=True)
+    tshirt_size = models.CharField(
+        max_length=10, choices=TSHIRT_SIZE_CHOICES, blank=True, null=True
+    )
 
     seen_once = models.BooleanField(default=False)
     on_discord = models.BooleanField(default=False)
