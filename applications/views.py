@@ -655,8 +655,8 @@ class Step6PrimaryParentView(View):
             send_parent_handoff_email(application, parent_email, request=request)
             messages.success(
                 request,
-                "We emailed the parent/guardian a link to continue this "
-                "application. You can close this window — they'll take "
+                "<strong>We emailed the parent/guardian a link to continue this "
+                "application.</strong> You can close this window — they'll take "
                 f"over from here. Application ID: {application.application_id}.",
             )
             return redirect("apply_start")

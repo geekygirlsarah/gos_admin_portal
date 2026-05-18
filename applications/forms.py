@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from django import forms
 
-from programs.models import Program, Student
+from programs.models import (
+    RELATIONSHIP_CHOICES,
+    TSHIRT_SIZE_CHOICES,
+    Program,
+    School,
+    Student,
+)
 
 from .models import APP_ID_ALPHABET, APP_ID_LENGTH, Application
 
@@ -202,12 +208,18 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    school_name = forms.CharField(
+    school_name = forms.ChoiceField(
         label="School",
-        max_length=200,
         required=False,
-        widget=forms.TextInput(attrs=_text_attrs),
+        widget=forms.Select(attrs=_select_attrs),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["school_name"].choices = [("", "---")] + [
+            (s.name, s.name) for s in School.objects.all().order_by("name")
+        ]
+
     graduation_year = forms.IntegerField(
         label="Expected graduation year",
         required=False,
@@ -215,11 +227,11 @@ class StudentInfoForm(forms.Form):
         max_value=2100,
         widget=forms.NumberInput(attrs=_text_attrs),
     )
-    tshirt_size = forms.CharField(
+    tshirt_size = forms.ChoiceField(
         label="T-shirt size",
-        max_length=10,
+        choices=[("", "---")] + TSHIRT_SIZE_CHOICES,
         required=False,
-        widget=forms.TextInput(attrs=_text_attrs),
+        widget=forms.Select(attrs=_select_attrs),
     )
     allergies = forms.CharField(
         label="Allergies",
@@ -256,12 +268,11 @@ class ParentInfoForm(forms.Form):
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    relationship_to_student = forms.CharField(
+    relationship_to_student = forms.ChoiceField(
         label="Relationship to student",
-        max_length=20,
+        choices=[("", "---")] + RELATIONSHIP_CHOICES,
         required=False,
-        help_text="e.g. parent, guardian, grandparent.",
-        widget=forms.TextInput(attrs=_text_attrs),
+        widget=forms.Select(attrs=_select_attrs),
     )
     email = forms.EmailField(
         label="Email address",
