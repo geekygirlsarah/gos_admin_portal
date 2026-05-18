@@ -6,13 +6,26 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0056_programdocument'),
+        ("programs", "0056_programdocument"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='student',
-            name='tshirt_size',
-            field=models.CharField(blank=True, choices=[('S', 'S'), ('M', 'M'), ('L', 'L'), ('XL', 'XL'), ('2XL', '2XL'), ('3XL', '3XL'), ('4XL', '4XL')], max_length=10, null=True),
+            model_name="student",
+            name="tshirt_size",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("S", "S"),
+                    ("M", "M"),
+                    ("L", "L"),
+                    ("XL", "XL"),
+                    ("2XL", "2XL"),
+                    ("3XL", "3XL"),
+                    ("4XL", "4XL"),
+                ],
+                max_length=10,
+                null=True,
+            ),
         ),
     ]
