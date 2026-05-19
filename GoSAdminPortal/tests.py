@@ -1,8 +1,10 @@
-from django.test import TestCase, RequestFactory
-from GoSAdminPortal.middleware import LoginRequiredMiddleware
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
 from django.http import HttpResponse
-from django.conf import settings
+from django.test import RequestFactory, TestCase
+
+from GoSAdminPortal.middleware import LoginRequiredMiddleware
+
 
 class MiddlewareAsyncTest(TestCase):
     def setUp(self):
@@ -12,7 +14,7 @@ class MiddlewareAsyncTest(TestCase):
     def test_sync_middleware_auth(self):
         def get_response(request):
             return HttpResponse("OK")
-        
+
         middleware = LoginRequiredMiddleware(get_response)
         request = self.factory.get("/programs/")
         request.user = self.user
@@ -23,7 +25,7 @@ class MiddlewareAsyncTest(TestCase):
     def test_sync_middleware_anon(self):
         def get_response(request):
             return HttpResponse("OK")
-        
+
         middleware = LoginRequiredMiddleware(get_response)
         request = self.factory.get("/programs/")
         request.user = AnonymousUser()
@@ -34,7 +36,7 @@ class MiddlewareAsyncTest(TestCase):
     def test_sync_middleware_exempt(self):
         def get_response(request):
             return HttpResponse("OK")
-        
+
         middleware = LoginRequiredMiddleware(get_response)
         request = self.factory.get("/accounts/login/")
         request.user = AnonymousUser()
@@ -44,7 +46,7 @@ class MiddlewareAsyncTest(TestCase):
     async def test_async_middleware_auth(self):
         async def get_response(request):
             return HttpResponse("OK")
-        
+
         middleware = LoginRequiredMiddleware(get_response)
         request = self.factory.get("/programs/")
         request.user = self.user
@@ -55,7 +57,7 @@ class MiddlewareAsyncTest(TestCase):
     async def test_async_middleware_anon(self):
         async def get_response(request):
             return HttpResponse("OK")
-        
+
         middleware = LoginRequiredMiddleware(get_response)
         request = self.factory.get("/programs/")
         request.user = AnonymousUser()
@@ -66,7 +68,7 @@ class MiddlewareAsyncTest(TestCase):
     async def test_async_middleware_exempt(self):
         async def get_response(request):
             return HttpResponse("OK")
-        
+
         middleware = LoginRequiredMiddleware(get_response)
         request = self.factory.get("/accounts/login/")
         request.user = AnonymousUser()

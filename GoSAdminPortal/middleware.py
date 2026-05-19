@@ -1,9 +1,9 @@
 import logging
 
+from asgiref.sync import iscoroutinefunction, sync_to_async
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve
-from asgiref.sync import iscoroutinefunction, sync_to_async
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ EXEMPT_PATH_PREFIXES = (
 
 class LoginRequiredMiddleware:
     """Redirect anonymous users to login for all pages except exempt ones."""
+
     sync_capable = True
     async_capable = True
 
