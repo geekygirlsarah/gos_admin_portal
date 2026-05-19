@@ -35,6 +35,18 @@ def _absolute_apply_url(request, application: Application) -> str:
     return path
 
 
+def _should_send_async() -> bool:
+    """Backgrounding emails is a workaround for low-CPU environments (Render free tier).
+    In tests, we want synchronous delivery to avoid race conditions in assertions.
+    """
+    from django.conf import settings
+
+    if settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend":
+        return False
+    # If the user has a custom setting, respect it
+    return getattr(settings, "EMAIL_ASYNC", True)
+
+
 def send_otp_email(application: Application, code: str, request=None) -> None:
     """Email the OTP code to the application's email."""
     if not application.email:
@@ -69,7 +81,10 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         finally:
             close_old_connections()
 
-    threading.Thread(target=_send, name=f"otp-email-{application.pk}").start()
+    if _should_send_async():
+        threading.Thread(target=_send, name=f"otp-email-{application.pk}").start()
+    else:
+        _send()
 
 
 def send_application_started_email(application: Application, request=None) -> None:
@@ -107,7 +122,10 @@ def send_application_started_email(application: Application, request=None) -> No
         finally:
             close_old_connections()
 
-    threading.Thread(target=_send, name=f"started-email-{application.pk}").start()
+    if _should_send_async():
+        threading.Thread(target=_send, name=f"started-email-{application.pk}").start()
+    else:
+        _send()
 
 
 def get_program_buckets():
@@ -319,7 +337,10 @@ def _send_html_email(
         finally:
             close_old_connections()
 
-    threading.Thread(target=_do_send, name=f"html-email-{subject[:20]}").start()
+    if _should_send_async():
+        threading.Thread(target=_do_send, name=f"html-email-{subject[:20]}").start()
+    else:
+        _do_send()
 
 
 def send_parent_handoff_email(

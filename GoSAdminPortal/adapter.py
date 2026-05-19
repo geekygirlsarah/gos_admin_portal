@@ -56,7 +56,12 @@ class AccountAdapter(DefaultAccountAdapter):
             finally:
                 close_old_connections()
 
-        threading.Thread(target=_send, name=f"allauth-email-{email[:20]}").start()
+        if settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend" or not getattr(
+            settings, "EMAIL_ASYNC", True
+        ):
+            _send()
+        else:
+            threading.Thread(target=_send, name=f"allauth-email-{email[:20]}").start()
 
     def format_email_subject(self, subject):
         """
