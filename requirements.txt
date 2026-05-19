@@ -2,7 +2,7 @@ annotated-types==0.7.0
 anyio==4.12.0
 asgiref==3.11.0
 attrs==25.4.0
-Authlib==1.6.11
+Authlib==1.7.2
 bandit==1.9.2
 black==26.3.1
 boltons==21.0.0
