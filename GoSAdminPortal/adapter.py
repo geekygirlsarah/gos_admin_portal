@@ -39,21 +39,21 @@ class AccountAdapter(DefaultAccountAdapter):
         if template_prefix == "account/email/unknown_account":
             return
 
+        # Check if we are in a safe environment to expose the code in logs
+        is_staging = "staging" in os.getenv("RENDER_EXTERNAL_HOSTNAME", "")
+        code = context.get("code")
+
+        if (settings.DEBUG or is_staging) and code:
+            logging.info(f"DEBUG/STAGING: Login code for {email} is {code}")
+
         try:
             super().send_mail(template_prefix, email, context)
         except Exception as e:
             logging.error(f"Failed to send email {template_prefix} to {email}: {e}")
 
-            # Check if we are in a safe environment to expose the code in logs
-            is_staging = "staging" in os.getenv("RENDER_EXTERNAL_HOSTNAME", "")
             if settings.DEBUG or is_staging:
-                code = context.get("code")
-                if code:
-                    logging.info(
-                        f"STAGING/DEBUG FALLBACK: Login code for {email} is {code}"
-                    )
                 # We return instead of re-raising so the user is not greeted with a 500 error.
-                # They can check the logs to get their code.
+                # The code was already logged above.
                 return
 
             # In production, we still want to know it failed
