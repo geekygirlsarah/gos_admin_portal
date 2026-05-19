@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Iterable, List, Optional
 
 from django.conf import settings
@@ -50,13 +51,25 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         "application with Girls of Steel, you can safely ignore this email.\n\n"
         f"Application ID: {application.application_id}\n"
     )
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=_from_email(),
-        recipient_list=[application.email],
-        fail_silently=False,
-    )
+
+    def _send():
+        from django.db import close_old_connections
+        try:
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=_from_email(),
+                recipient_list=[application.email],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send OTP email for %s", application.application_id
+            )
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=_send, name=f"otp-email-{application.pk}").start()
 
 
 def send_application_started_email(application: Application, request=None) -> None:
@@ -75,19 +88,26 @@ def send_application_started_email(application: Application, request=None) -> No
         f"  Resume link:    {resume_url}\n\n"
         "If you didn't start this, you can ignore this email.\n"
     )
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=_from_email(),
-            recipient_list=[application.email],
-            fail_silently=True,
-        )
-    except Exception:  # pragma: no cover - defensive
-        logger.exception(
-            "Failed to send application-started email for %s",
-            application.application_id,
-        )
+
+    def _send():
+        from django.db import close_old_connections
+        try:
+            send_mail(
+                subject=subject,
+                message=body,
+                from_email=_from_email(),
+                recipient_list=[application.email],
+                fail_silently=True,
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to send application-started email for %s",
+                application.application_id,
+            )
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=_send, name=f"started-email-{application.pk}").start()
 
 
 def get_program_buckets():
@@ -281,18 +301,25 @@ def _send_html_email(
 ) -> None:
     if not recipients:
         return
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=_from_email(),
-        to=recipients,
-    )
-    if html_body:
-        msg.attach_alternative(html_body, "text/html")
-    try:
-        msg.send(fail_silently=False)
-    except Exception:  # pragma: no cover - defensive
-        logger.exception("Failed to send email %r to %r", subject, recipients)
+
+    def _do_send():
+        from django.db import close_old_connections
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=_from_email(),
+            to=recipients,
+        )
+        if html_body:
+            msg.attach_alternative(html_body, "text/html")
+        try:
+            msg.send(fail_silently=False)
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Failed to send email %r to %r", subject, recipients)
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=_do_send, name=f"html-email-{subject[:20]}").start()
 
 
 def send_parent_handoff_email(

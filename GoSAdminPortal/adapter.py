@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 
 from allauth.account.adapter import DefaultAccountAdapter
 from django.conf import settings
@@ -46,18 +47,16 @@ class AccountAdapter(DefaultAccountAdapter):
         if (settings.DEBUG or is_staging) and code:
             logging.info(f"DEBUG/STAGING: Login code for {email} is {code}")
 
-        try:
-            super().send_mail(template_prefix, email, context)
-        except Exception as e:
-            logging.error(f"Failed to send email {template_prefix} to {email}: {e}")
+        def _send():
+            from django.db import close_old_connections
+            try:
+                super(AccountAdapter, self).send_mail(template_prefix, email, context)
+            except Exception as e:
+                logging.error(f"Failed to send email {template_prefix} to {email}: {e}")
+            finally:
+                close_old_connections()
 
-            if settings.DEBUG or is_staging:
-                # We return instead of re-raising so the user is not greeted with a 500 error.
-                # The code was already logged above.
-                return
-
-            # In production, we still want to know it failed
-            raise
+        threading.Thread(target=_send, name=f"allauth-email-{email[:20]}").start()
 
     def format_email_subject(self, subject):
         """
