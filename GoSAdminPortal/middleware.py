@@ -1,9 +1,9 @@
 import logging
 
-from asgiref.sync import iscoroutinefunction, sync_to_async
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve
+from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
 
@@ -25,35 +25,15 @@ EXEMPT_PATH_PREFIXES = (
 )
 
 
-class LoginRequiredMiddleware:
+class LoginRequiredMiddleware(MiddlewareMixin):
     """Redirect anonymous users to login for all pages except exempt ones."""
 
-    sync_capable = True
-    async_capable = True
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-        self._is_async = iscoroutinefunction(get_response)
-
-    def __call__(self, request):
-        if self._is_async:
-            return self.__acall__(request)
-
+    def process_request(self, request):
         if request.user.is_authenticated:
-            return self.get_response(request)
+            return None
 
         if self._is_exempt(request.path):
-            return self.get_response(request)
-
-        return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
-
-    async def __acall__(self, request):
-        if request.user.is_authenticated:
-            return await self.get_response(request)
-
-        # In async context, resolve might be sync.
-        if await sync_to_async(self._is_exempt)(request.path):
-            return await self.get_response(request)
+            return None
 
         return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
 
