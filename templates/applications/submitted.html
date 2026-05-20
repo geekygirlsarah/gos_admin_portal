@@ -10,6 +10,27 @@
         <strong>{{ application.program|default:"Girls of Steel" }}</strong>
         has been submitted.
     </p>
+    {% if step5_data or mentor_info_data or step6_data %}
+        <dl class="row mb-1">
+            {% if step5_data %}
+                <dt class="col-sm-4">Student</dt>
+                <dd class="col-sm-8">{{ step5_data.first_name|default:step5_data.legal_first_name }} {{ step5_data.last_name }}</dd>
+            {% elif mentor_info_data %}
+                <dt class="col-sm-4">Mentor</dt>
+                <dd class="col-sm-8">{{ mentor_info_data.first_name|default:mentor_info_data.legal_first_name }} {{ mentor_info_data.last_name }}</dd>
+            {% endif %}
+
+            {% if step6_data %}
+                <dt class="col-sm-4">Primary parent/guardian</dt>
+                <dd class="col-sm-8">{{ step6_data.first_name }} {{ step6_data.last_name }}</dd>
+            {% endif %}
+
+            {% if step7_data and not step7_skipped %}
+                <dt class="col-sm-4">Secondary parent/guardian</dt>
+                <dd class="col-sm-8">{{ step7_data.first_name }} {{ step7_data.last_name }}</dd>
+            {% endif %}
+        </dl>
+    {% endif %}
     <p class="mb-0">
         Application ID:
         <strong><code>{{ application.application_id }}</code></strong>

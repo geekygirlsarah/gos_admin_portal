@@ -917,6 +917,13 @@ class SubmittedView(View):
                 "application": application,
                 "current_step": current_step,
                 "total_steps": total_steps,
+                "step5_data": application.data.get("step5") or {},
+                "step6_data": application.data.get("step6") or {},
+                "step7_data": application.data.get("step7") or {},
+                "step7_skipped": bool(
+                    (application.data.get("step7") or {}).get("_skipped")
+                ),
+                "mentor_info_data": application.data.get("mentor_info") or {},
             },
         )
 
