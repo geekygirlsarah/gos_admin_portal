@@ -121,13 +121,19 @@ RELATIONSHIP_CHOICES = [
 ]
 
 TSHIRT_SIZE_CHOICES = [
-    ("S", "S"),
-    ("M", "M"),
-    ("L", "L"),
-    ("XL", "XL"),
-    ("2XL", "2XL"),
-    ("3XL", "3XL"),
-    ("4XL", "4XL"),
+    ("XS", "Adult XS"),
+    ("S", "Adult S"),
+    ("M", "Adult M"),
+    ("L", "Adult L"),
+    ("XL", "Adult XL"),
+    ("2XL", "Adult 2XL"),
+    ("3XL", "Adult 3XL"),
+    ("4XL", "Adult 4XL"),
+    ("YXS", "Youth XS"),
+    ("YS", "Youth S"),
+    ("YM", "Youth M"),
+    ("YL", "Youth L"),
+    ("YXL", "Youth XL"),
 ]
 
 MENTOR_ROLE_CHOICES = [
