@@ -3012,6 +3012,10 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 }
             )
             from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+            # Include sender name from settings if available
+            sender_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if sender_name:
+                from_email = f'"{sender_name}" <{from_email}>'
         connection = get_connection(**conn_kwargs)
 
         # Collect students enrolled in program

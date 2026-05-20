@@ -77,3 +77,18 @@ class SubmittedNamesReproductionTest(TestCase):
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
         response = self.client.get(url)
         self.assertNotContains(response, "Secondary parent")
+
+
+from django.core import mail
+from django.test import override_settings
+from applications.services import send_otp_email
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class EmailSenderNameReproductionTest(TestCase):
+    def test_default_from_email_with_name(self):
+        app = Application.objects.create(email="test@example.com")
+        with override_settings(DEFAULT_FROM_EMAIL="noreply@girlsofsteelrobotics.org", DEFAULT_FROM_NAME="Girls of Steel Admin"):
+            send_otp_email(app, "123456")
+            
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].from_email, '"Girls of Steel Admin" <noreply@girlsofsteelrobotics.org>')

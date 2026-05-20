@@ -334,14 +334,16 @@ class ProgramEmailForm(forms.Form):
                 initial_value = choices[0][0]
         else:
             default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if default_name:
+                label = f"Default ({default_name} <{default_email}>)" if default_email else f"Default ({default_name})"
+            else:
+                label = f"Default ({default_email})" if default_email else "Default configured sender"
+
             choices = [
                 (
                     "DEFAULT",
-                    (
-                        f"Default ({default_email})"
-                        if default_email
-                        else "Default configured sender"
-                    ),
+                    label,
                 )
             ]
             initial_value = "DEFAULT"
@@ -454,14 +456,16 @@ class ProgramEmailBalancesForm(forms.Form):
                 initial_value = choices[0][0]
         else:
             default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if default_name:
+                label = f"Default ({default_name} <{default_email}>)" if default_email else f"Default ({default_name})"
+            else:
+                label = f"Default ({default_email})" if default_email else "Default configured sender"
+
             choices = [
                 (
                     "DEFAULT",
-                    (
-                        f"Default ({default_email})"
-                        if default_email
-                        else "Default configured sender"
-                    ),
+                    label,
                 )
             ]
             initial_value = "DEFAULT"

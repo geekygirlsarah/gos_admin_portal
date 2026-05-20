@@ -69,3 +69,13 @@ class AccountAdapter(DefaultAccountAdapter):
         We want just the subject.
         """
         return subject
+
+    def get_from_email(self):
+        """
+        Include the display name if DEFAULT_FROM_NAME is set.
+        """
+        email = super().get_from_email()
+        name = getattr(settings, "DEFAULT_FROM_NAME", None)
+        if name and "<" not in email:
+            return f'"{name}" <{email}>'
+        return email

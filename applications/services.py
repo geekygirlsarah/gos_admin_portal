@@ -20,7 +20,11 @@ LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
 
 def _from_email() -> str:
-    return getattr(settings, "DEFAULT_FROM_EMAIL", "") or "noreply@example.com"
+    email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or "noreply@example.com"
+    name = getattr(settings, "DEFAULT_FROM_NAME", None)
+    if name:
+        return f'"{name}" <{email}>'
+    return email
 
 
 def _lead_mentor_email() -> str:

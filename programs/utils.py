@@ -23,7 +23,11 @@ def send_otp_email(email, otp):
     message = (
         f"Your verification code is: {otp}\n\nThis code will expire in 10 minutes."
     )
-    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
+    from_email = settings.DEFAULT_FROM_EMAIL
+    name = getattr(settings, "DEFAULT_FROM_NAME", None)
+    if name:
+        from_email = f'"{name}" <{from_email}>'
+    send_mail(subject, message, from_email, [email])
 
 
 def generate_signed_parent_url(application_id):
