@@ -99,6 +99,11 @@ urlpatterns = [
         name="apply_step7",
     ),
     path(
+        "<str:app_id>/swap-parents/",
+        views.SwapParentsView.as_view(),
+        name="apply_swap_parents",
+    ),
+    path(
         "<str:app_id>/step8/",
         views.Step8ConfirmView.as_view(),
         name="apply_step8",

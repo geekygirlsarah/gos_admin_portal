@@ -80,7 +80,7 @@
     {% endif %}
 
     <div class="d-flex justify-content-between">
-        <a href="{% url 'apply_step2' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <a href="{% url 'apply_step4' app_id=application.application_id %}" class="btn btn-link">Back</a>
         <button type="submit" class="btn btn-primary"{% if not future_programs %} disabled{% endif %}>
             Continue
         </button>

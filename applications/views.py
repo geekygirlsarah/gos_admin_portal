@@ -112,8 +112,8 @@ def _redirect_to_current_step(application: Application):
     step = max(1, min(application.current_step, TOTAL_STEPS))
     name_map = {
         2: "apply_step2",
-        3: "apply_step3",
-        4: "apply_step4",
+        3: "apply_step4",
+        4: "apply_step3",
         5: "apply_step5",
         6: "apply_step6",
         7: "apply_step7",
@@ -263,7 +263,7 @@ class Step2ApplicantTypeView(View):
         # to the organization, not to a specific program.
         if application.applicant_type == Application.Type.MENTOR:
             return redirect("apply_step4", app_id=application.application_id)
-        return redirect("apply_step3", app_id=application.application_id)
+        return redirect("apply_step4", app_id=application.application_id)
 
     def _render(self, request, application, form):
         if _is_mentor(application):
@@ -309,9 +309,9 @@ class Step3ProgramView(View):
         if not form.is_valid():
             return self._render(request, application, form, future, current, past)
         application.program = form.cleaned_data["program"]
-        application.current_step = max(application.current_step, 4)
+        application.current_step = max(application.current_step, 5)
         application.save()
-        return redirect("apply_step4", app_id=application.application_id)
+        return redirect("apply_continue", app_id=application.application_id)
 
     def _render(self, request, application, form, future, current, past):
         return render(
@@ -323,7 +323,7 @@ class Step3ProgramView(View):
                 "future_programs": future,
                 "current_programs": current,
                 "past_programs": past,
-                "current_step": 3,
+                "current_step": 4,
                 "total_steps": TOTAL_STEPS,
             },
         )
@@ -375,7 +375,7 @@ class Step4VerifyEmailView(View):
                     "apply_mentor_blocked", app_id=application.application_id
                 )
             return redirect("apply_mentor_info", app_id=application.application_id)
-        return redirect("apply_continue", app_id=application.application_id)
+        return redirect("apply_step3", app_id=application.application_id)
 
     def _issue_and_send(self, application: Application, request) -> None:
         try:
@@ -390,7 +390,7 @@ class Step4VerifyEmailView(View):
         if _is_mentor(application):
             current_step, total_steps = _mentor_progress("step4")
         else:
-            current_step, total_steps = 4, TOTAL_STEPS
+            current_step, total_steps = 3, TOTAL_STEPS
         return render(
             request,
             self.template_name,
@@ -766,6 +766,47 @@ class Step6PrimaryParentView(View):
                 "total_steps": TOTAL_STEPS,
             },
         )
+
+
+# ---------------------------------------------------------------------------
+# Swap primary / secondary parent data (POST only).
+# ---------------------------------------------------------------------------
+
+
+@method_decorator(never_cache, name="dispatch")
+class SwapParentsView(View):
+    """Swap the saved step6 (primary) and step7 (secondary) parent data.
+
+    Only meaningful when both steps have already been filled in (e.g. a
+    returning student whose contacts are pre-filled).  After the swap the
+    user is redirected back to whichever step they came from (``next``
+    query-param, defaulting to step 6).
+    """
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
+
+        data = dict(application.data or {})
+        step6 = data.get("step6") or {}
+        step7 = data.get("step7") or {}
+
+        # Only swap when both sides have content.
+        if step6 or step7:
+            data["step6"], data["step7"] = step7, step6
+            application.data = data
+            application.save(update_fields=["data", "updated_at"])
+            messages.success(
+                request,
+                "Primary and secondary parent / guardian information has been swapped.",
+            )
+
+        next_step = request.POST.get("next", "6")
+        if next_step == "7":
+            return redirect("apply_step7", app_id=application.application_id)
+        return redirect("apply_step6", app_id=application.application_id)
 
 
 # ---------------------------------------------------------------------------

@@ -376,6 +376,99 @@ class Step8ConfirmTests(TestCase):
         self.assertContains(response, app.application_id)
 
 
+class SwapParentsViewTests(TestCase):
+    """Tests for the swap-parents endpoint."""
+
+    def _app_with_both_parents(self, **kwargs):
+        defaults = dict(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step6": {
+                    "first_name": "Joe",
+                    "last_name": "Primary",
+                    "email": "joe@example.com",
+                },
+                "step7": {
+                    "first_name": "Jane",
+                    "last_name": "Secondary",
+                },
+            },
+        )
+        defaults.update(kwargs)
+        return Application.objects.create(**defaults)
+
+    def test_swap_exchanges_step6_and_step7_data(self):
+        app = self._app_with_both_parents()
+        self.client.post(
+            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
+            {"next": "6"},
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.data["step6"]["first_name"], "Jane")
+        self.assertEqual(app.data["step7"]["first_name"], "Joe")
+
+    def test_swap_redirects_to_step6_by_default(self):
+        app = self._app_with_both_parents()
+        response = self.client.post(
+            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
+            {"next": "6"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
+    def test_swap_redirects_to_step7_when_requested(self):
+        app = self._app_with_both_parents()
+        response = self.client.post(
+            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
+            {"next": "7"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
+    def test_swap_twice_restores_original_data(self):
+        app = self._app_with_both_parents()
+        url = reverse("apply_swap_parents", kwargs={"app_id": app.application_id})
+        self.client.post(url, {"next": "6"})
+        self.client.post(url, {"next": "6"})
+        app.refresh_from_db()
+        self.assertEqual(app.data["step6"]["first_name"], "Joe")
+        self.assertEqual(app.data["step7"]["first_name"], "Jane")
+
+    def test_swap_requires_verified_email(self):
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=6,
+            data={
+                "step6": {"first_name": "Joe"},
+                "step7": {"first_name": "Jane"},
+            },
+        )
+        response = self.client.post(
+            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
+            {"next": "6"},
+        )
+        # Should redirect to email verification, not swap.
+        self.assertRedirects(
+            response,
+            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+        app.refresh_from_db()
+        # Data must be unchanged.
+        self.assertEqual(app.data["step6"]["first_name"], "Joe")
+
+
 class ResumeRedirectsToCurrentStepTests(TestCase):
     """Resume should land users on the right step 5/6/7/8."""
 
