@@ -1,5 +1,12 @@
 <p>A new application has been submitted.</p>
 <table style="border-collapse:collapse">
+    <tr><td><strong>Student</strong></td><td>{{ application.student_name|default:"(not specified)" }}</td></tr>
+    {% if application.primary_parent_name %}
+    <tr><td><strong>Primary Parent/Guardian</strong></td><td>{{ application.primary_parent_name }}</td></tr>
+    {% endif %}
+    {% if application.secondary_parent_name %}
+    <tr><td><strong>Secondary Parent/Guardian</strong></td><td>{{ application.secondary_parent_name }}</td></tr>
+    {% endif %}
     <tr><td><strong>Application ID</strong></td><td><code>{{ application.application_id }}</code></td></tr>
     <tr><td><strong>Type</strong></td><td>{{ application.get_applicant_type_display|default:"(unspecified)" }}</td></tr>
     <tr><td><strong>Email</strong></td><td>{{ application.email }}</td></tr>

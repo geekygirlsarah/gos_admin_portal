@@ -1,8 +1,9 @@
-<p>Hi,</p>
+<p>Hi {{ application.applicant_name|default:"" }},</p>
 
 <p><strong>Great news</strong> — your Girls of Steel application has been approved!</p>
 
 <ul>
+    <li><strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}</li>
     <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
     <li><strong>Program:</strong> {{ application.program }}</li>
 </ul>

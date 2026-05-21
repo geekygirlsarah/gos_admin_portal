@@ -1,6 +1,6 @@
-Hi,
+Hi {{ application.secondary_parent_name|default:"" }},
 
-A student has started a Girls of Steel Robotics application and needs a
+{{ application.student_name|default:"A student" }} has started a Girls of Steel Robotics application and needs a
 parent or guardian to finish it.
 
 Application ID: {{ application.application_id }}

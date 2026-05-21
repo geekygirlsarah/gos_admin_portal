@@ -266,6 +266,59 @@ class Application(models.Model):
     def email_is_verified(self) -> bool:
         return self.email_verified_at is not None
 
+    @property
+    def student_name(self) -> str:
+        """Friendly name of the student from step 5 data."""
+        data = self.data or {}
+        step5 = data.get("step5") or {}
+        first = (step5.get("first_name") or step5.get("legal_first_name") or "").strip()
+        last = (step5.get("last_name") or "").strip()
+        if first and last:
+            return f"{first} {last}"
+        return first or last or ""
+
+    @property
+    def primary_parent_name(self) -> str:
+        """Friendly name of the primary parent from step 6 data."""
+        data = self.data or {}
+        step6 = data.get("step6") or {}
+        first = (step6.get("first_name") or "").strip()
+        last = (step6.get("last_name") or "").strip()
+        if first and last:
+            return f"{first} {last}"
+        return first or last or ""
+
+    @property
+    def secondary_parent_name(self) -> str:
+        """Friendly name of the secondary parent from step 7 data (if not skipped)."""
+        data = self.data or {}
+        step7 = data.get("step7") or {}
+        if step7.get("_skipped"):
+            return ""
+        first = (step7.get("first_name") or "").strip()
+        last = (step7.get("last_name") or "").strip()
+        if first and last:
+            return f"{first} {last}"
+        return first or last or ""
+
+    @property
+    def mentor_name(self) -> str:
+        """Friendly name of the mentor from mentor_info data."""
+        data = self.data or {}
+        minfo = data.get("mentor_info") or {}
+        first = (minfo.get("first_name") or minfo.get("legal_first_name") or "").strip()
+        last = (minfo.get("last_name") or "").strip()
+        if first and last:
+            return f"{first} {last}"
+        return first or last or ""
+
+    @property
+    def applicant_name(self) -> str:
+        """Friendly name of the main person applying (student or mentor)."""
+        if self.applicant_type == self.Type.MENTOR:
+            return self.mentor_name
+        return self.student_name
+
 
 # --- Step 9: post-approval signed-document uploads --------------------------
 

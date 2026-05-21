@@ -1,6 +1,6 @@
-<p>Hi,</p>
+<p>Hi {{ application.secondary_parent_name|default:"" }},</p>
 <p>
-    A student has started a Girls of Steel Robotics application and needs
+    {{ application.student_name|default:"A student" }} has started a Girls of Steel Robotics application and needs
     a parent or guardian to finish it.
 </p>
 <p>

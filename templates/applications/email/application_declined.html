@@ -1,9 +1,12 @@
-<p>Hello,</p>
+<p>Hello {{ application.applicant_name|default:"" }},</p>
 
 <p>Thank you for applying to Girls of Steel Robotics. After review, we are
 unable to approve your application at this time.</p>
 
-<p><strong>Application ID:</strong> {{ application.application_id }}</p>
+<p>
+    <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
+    <strong>Application ID:</strong> {{ application.application_id }}
+</p>
 
 {% if reason %}
 <p><strong>Note from the lead mentors:</strong></p>

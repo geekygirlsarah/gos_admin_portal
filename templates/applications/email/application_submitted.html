@@ -1,6 +1,9 @@
-<p>Hi,</p>
+<p>Hi {{ application.applicant_name|default:"" }},</p>
 <p>Thanks for applying to <strong>Girls of Steel Robotics</strong>!</p>
 <p>
+    <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
+    {% if application.primary_parent_name %}<strong>Primary parent/guardian:</strong> {{ application.primary_parent_name }}<br>{% endif %}
+    {% if application.secondary_parent_name %}<strong>Secondary parent/guardian:</strong> {{ application.secondary_parent_name }}<br>{% endif %}
     <strong>Program:</strong> {{ application.program|default:"(not specified)" }}<br>
     <strong>Application ID:</strong> <code>{{ application.application_id }}</code>
 </p>
