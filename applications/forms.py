@@ -11,6 +11,7 @@ from programs.models import (
     School,
     Student,
 )
+from programs.validators import validate_phone_number
 
 from .models import APP_ID_ALPHABET, APP_ID_LENGTH, Application
 
@@ -206,6 +207,7 @@ class StudentInfoForm(forms.Form):
         label="Student's cell phone",
         max_length=30,
         required=False,
+        validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
     )
     school_name = forms.ChoiceField(
@@ -282,12 +284,14 @@ class ParentInfoForm(forms.Form):
         label="Cell phone",
         max_length=30,
         required=False,
+        validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
     )
     home_phone = forms.CharField(
         label="Home phone",
         max_length=30,
         required=False,
+        validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
     )
 
@@ -364,6 +368,7 @@ class MentorInfoForm(forms.Form):
         label="Cell phone",
         max_length=30,
         required=False,
+        validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
     )
     discord_username = forms.CharField(

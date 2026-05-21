@@ -9,6 +9,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from PIL import ImageFile
 
+from .validators import validate_phone_number
+
 logger = logging.getLogger(__name__)
 
 
@@ -483,7 +485,9 @@ class Student(models.Model):
     state = models.CharField(max_length=50, blank=True, null=True)
     zip_code = models.CharField(max_length=20, blank=True, null=True)
 
-    cell_phone_number = models.CharField(max_length=30, blank=True, null=True)
+    cell_phone_number = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
     personal_email = models.EmailField(blank=True, null=True)
 
     andrew_id = models.CharField(max_length=50, blank=True, null=True)
@@ -680,9 +684,15 @@ class Adult(models.Model):
 
     # Contact
     email = models.EmailField(blank=True, null=True)
-    phone_number = models.CharField(max_length=30, blank=True, null=True)
-    cell_phone = models.CharField(max_length=30, blank=True, null=True)
-    home_phone = models.CharField(max_length=30, blank=True, null=True)
+    phone_number = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
+    cell_phone = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
+    home_phone = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
     personal_email = models.EmailField(blank=True, null=True)
 
     # Mentor-like fields
@@ -735,7 +745,9 @@ class Adult(models.Model):
 
     # Emergency contact
     emergency_contact_name = models.CharField(max_length=150, blank=True, null=True)
-    emergency_contact_phone = models.CharField(max_length=30, blank=True, null=True)
+    emergency_contact_phone = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
 
     # Status
     email_updates = models.BooleanField(

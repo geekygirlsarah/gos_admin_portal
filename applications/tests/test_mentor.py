@@ -135,7 +135,7 @@ class MentorFlowTests(TestCase):
                 "legal_first_name": "Alex",
                 "first_name": "",
                 "last_name": "Lee",
-                "cell_phone": "555-1212",
+                "cell_phone": "555-444-1212",
                 "discord_username": "alexlee#1234",
                 "andrew_id": "",
                 "employer": "Acme Robotics",

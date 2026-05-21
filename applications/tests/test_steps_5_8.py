@@ -172,7 +172,7 @@ class Step6PrimaryParentTests(TestCase):
             first_name="Pat",
             last_name="Parent",
             email="parent@example.com",
-            cell_phone="555-1212",
+            cell_phone="555-444-1212",
             is_parent=True,
         )
         app = _verified(email="parent@example.com")
@@ -182,7 +182,7 @@ class Step6PrimaryParentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'value="Pat"')
         self.assertContains(response, 'value="Parent"')
-        self.assertContains(response, "555-1212")
+        self.assertContains(response, "555-444-1212")
 
     def test_parent_form_post_saves_and_advances_to_step7(self):
         app = _verified()
