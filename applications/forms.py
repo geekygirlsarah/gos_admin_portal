@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django import forms
+from django.utils import timezone
 
 from programs.models import (
     RELATIONSHIP_CHOICES,
@@ -222,6 +223,17 @@ class StudentInfoForm(forms.Form):
         self.fields["school_name"].choices = [("", "---")] + [
             (s.name, s.name) for s in School.objects.all().order_by("name")
         ]
+        current_year = timezone.now().year
+        self.fields["graduation_year"].min_value = current_year
+        # Also update the MinValueValidator limit to ensure the error message is correct
+        for validator in self.fields["graduation_year"].validators:
+            if hasattr(validator, "limit_value") and not hasattr(validator, "max_value"):
+                # MaxValueValidator usually doesn't have min_value attribute, but they both have limit_value.
+                # In Django, MinValueValidator and MaxValueValidator are subclasses of BaseValidator.
+                # MinValueValidator has code 'min_value'
+                # MaxValueValidator has code 'max_value'
+                if getattr(validator, "code", None) == "min_value":
+                    validator.limit_value = current_year
 
     graduation_year = forms.IntegerField(
         label="Expected graduation year",
