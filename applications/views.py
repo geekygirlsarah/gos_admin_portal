@@ -39,6 +39,7 @@ from .services import (
     find_existing_mentor_by_email,
     find_student_by_email,
     get_program_buckets,
+    get_student_emails,
     send_application_started_email,
     send_application_submitted_email,
     send_lead_notification_email,
@@ -638,7 +639,6 @@ class Step6PrimaryParentView(View):
         )
 
         if mode == "handoff":
-            handoff_form = ParentHandoffForm(request.POST)
             if not handoff_form.is_valid():
                 return self._render(
                     request, application, form, handoff_form, mode, existing_adult
@@ -707,6 +707,7 @@ class Step6PrimaryParentView(View):
             lookup_email = handoff_email or application.email
             existing_adult = find_adult_by_email(lookup_email)
 
+        student_emails = get_student_emails(application)
         if student_initiated and not saved and not already_handed_off:
             # Student is applying — the parent still needs to take over.
             # If we already know the parent's email (returning student's
@@ -717,11 +718,13 @@ class Step6PrimaryParentView(View):
             if existing_adult and existing_adult.email:
                 handoff_initial["parent_email"] = existing_adult.email
             if post:
-                handoff_form = ParentHandoffForm(post)
+                handoff_form = ParentHandoffForm(post, student_emails=student_emails)
             else:
-                handoff_form = ParentHandoffForm(initial=handoff_initial)
+                handoff_form = ParentHandoffForm(
+                    initial=handoff_initial, student_emails=student_emails
+                )
             return (
-                ParentInfoForm(initial=saved or {}),
+                ParentInfoForm(initial=saved or {}, student_emails=student_emails),
                 handoff_form,
                 mode,
                 existing_adult,
@@ -733,8 +736,13 @@ class Step6PrimaryParentView(View):
         initial = saved or (adult_to_prefill(existing_adult) if existing_adult else {})
         if not initial and handoff_email:
             initial = {"email": handoff_email}
-        form = ParentInfoForm(post or None, initial=initial)
-        return form, ParentHandoffForm(), "form", existing_adult
+        form = ParentInfoForm(post or None, initial=initial, student_emails=student_emails)
+        return (
+            form,
+            ParentHandoffForm(student_emails=student_emails),
+            "form",
+            existing_adult,
+        )
 
     def _render(
         self, request, application, form, handoff_form, mode, existing_adult=None
@@ -877,7 +885,12 @@ class Step7SecondaryParentView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
-        form = ParentInfoForm(initial=self._initial(application), require_email=False)
+        student_emails = get_student_emails(application)
+        form = ParentInfoForm(
+            initial=self._initial(application),
+            require_email=False,
+            student_emails=student_emails,
+        )
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
@@ -886,7 +899,10 @@ class Step7SecondaryParentView(View):
         if guard is not None:
             return guard
 
-        form = ParentInfoForm(request.POST, require_email=False)
+        student_emails = get_student_emails(application)
+        form = ParentInfoForm(
+            request.POST, require_email=False, student_emails=student_emails
+        )
         if not form.is_valid():
             return self._render(request, application, form)
         payload = dict(form.cleaned_data)

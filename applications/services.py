@@ -19,6 +19,20 @@ logger = logging.getLogger(__name__)
 LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
 
+def normalize_email(email: str) -> str:
+    """Normalize an email address by lowering it and removing subaddressing (+) parts.
+    Example: 'User+Tag@example.com' -> 'user@example.com'
+    """
+    if not email:
+        return ""
+    email = email.strip().lower()
+    if "@" not in email:
+        return email
+    local_part, domain_part = email.rsplit("@", 1)
+    local_part = local_part.split("+")[0]
+    return f"{local_part}@{domain_part}"
+
+
 def _from_email() -> str:
     email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or "noreply@example.com"
     name = getattr(settings, "DEFAULT_FROM_NAME", None)
@@ -165,6 +179,24 @@ def emails_for_lookup(application: Application) -> Iterable[str]:
     """
     if application.email:
         yield application.email
+
+
+def get_student_emails(application: Application) -> List[str]:
+    """Collect all emails that might belong to the student in this application.
+    Used to prevent students from using their own email for a parent.
+    """
+    emails = []
+    # If the applicant is a student, the application email is theirs.
+    if application.applicant_type == Application.Type.STUDENT and application.email:
+        emails.append(application.email)
+
+    # Check step 5 data (student info)
+    step5_data = (application.data or {}).get("step5", {})
+    personal_email = step5_data.get("personal_email")
+    if personal_email:
+        emails.append(personal_email)
+
+    return list(set(emails))
 
 
 # ---------------------------------------------------------------------------

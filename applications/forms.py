@@ -14,6 +14,7 @@ from programs.models import (
 from programs.validators import validate_phone_number
 
 from .models import APP_ID_ALPHABET, APP_ID_LENGTH, Application
+from .services import normalize_email
 
 
 class ResumeApplicationForm(forms.Form):
@@ -295,10 +296,22 @@ class ParentInfoForm(forms.Form):
         widget=forms.TextInput(attrs=_text_attrs),
     )
 
-    def __init__(self, *args, require_email=True, **kwargs):
+    def __init__(self, *args, require_email=True, student_emails=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.student_emails = [normalize_email(e) for e in (student_emails or []) if e]
         if not require_email:
             self.fields["email"].required = False
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email")
+        if not email:
+            return email
+        normalized = normalize_email(email)
+        if normalized in self.student_emails:
+            raise forms.ValidationError(
+                "This email address is already used by the student."
+            )
+        return email
 
 
 class ParentHandoffForm(forms.Form):
@@ -315,6 +328,21 @@ class ParentHandoffForm(forms.Form):
         ),
         widget=forms.EmailInput(attrs=_text_attrs),
     )
+
+    def __init__(self, *args, student_emails=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.student_emails = [normalize_email(e) for e in (student_emails or []) if e]
+
+    def clean_parent_email(self):
+        email = self.cleaned_data.get("parent_email")
+        if not email:
+            return email
+        normalized = normalize_email(email)
+        if normalized in self.student_emails:
+            raise forms.ValidationError(
+                "You cannot use your own email address for your parent/guardian."
+            )
+        return email
 
 
 # ---------------------------------------------------------------------------
