@@ -655,8 +655,8 @@ class Step6PrimaryParentView(View):
             send_parent_handoff_email(application, parent_email, request=request)
             messages.success(
                 request,
-                "<strong>We emailed the parent/guardian a link to continue this "
-                "application.</strong> You can close this window — they'll take "
+                "We emailed the parent/guardian a link to continue this "
+                "application. You can close this window — they'll take "
                 f"over from here. Application ID: {application.application_id}.",
             )
             return redirect("apply_start")
@@ -753,6 +753,45 @@ class Step6PrimaryParentView(View):
                 "name": display_name,
                 "last_program": latest_program_for_adult(existing_adult),
             }
+        # Show the swap box if step7 is already saved, OR if the returning
+        # student has a secondary_contact on file (step7 prefill exists but
+        # hasn't been submitted yet).  Also collect the secondary's display
+        # name so the template can show it in the swap prompt.
+        has_secondary = False
+        secondary_name = None
+        step7_data = (application.data or {}).get("step7") or {}
+        if step7_data:
+            has_secondary = True
+            first = step7_data.get("first_name") or ""
+            last = step7_data.get("last_name") or ""
+            secondary_name = " ".join(filter(None, [first, last])) or None
+        if not has_secondary:
+            sid = (application.data or {}).get("step5", {}).get(
+                "_existing_student_id"
+            )
+            if sid:
+                student = Student.objects.filter(pk=sid).first()
+                if student and student.secondary_contact_id:
+                    has_secondary = True
+                    sc = student.secondary_contact
+                    secondary_name = " ".join(filter(None, [sc.first_name or "", sc.last_name or ""])) or None
+        # Also check via the existing_adult (or a fresh email lookup when
+        # step6 was already saved and existing_adult wasn't populated):
+        # if this adult is the primary contact for any student that has a
+        # secondary_contact, show the swap box.
+        if not has_secondary:
+            adult_for_check = existing_adult
+            if adult_for_check is None:
+                adult_for_check = find_adult_by_email(application.email)
+            if adult_for_check is not None:
+                linked_student = Student.objects.filter(
+                    primary_contact=adult_for_check,
+                    secondary_contact__isnull=False,
+                ).first()
+                if linked_student:
+                    has_secondary = True
+                    sc = linked_student.secondary_contact
+                    secondary_name = " ".join(filter(None, [sc.first_name or "", sc.last_name or ""])) or None
         return render(
             request,
             self.template_name,
@@ -762,6 +801,8 @@ class Step6PrimaryParentView(View):
                 "handoff_form": handoff_form,
                 "mode": mode,
                 "welcome_back": welcome_back,
+                "has_secondary": has_secondary,
+                "secondary_name": secondary_name,
                 "current_step": 6,
                 "total_steps": TOTAL_STEPS,
             },
@@ -792,6 +833,19 @@ class SwapParentsView(View):
         data = dict(application.data or {})
         step6 = data.get("step6") or {}
         step7 = data.get("step7") or {}
+
+        # For returning students the wizard prefills from the Student record
+        # but doesn't save to application.data until the user submits each
+        # step.  If either side is empty, hydrate it from the Student record
+        # so the swap has something to work with.
+        existing_student_id = (data.get("step5") or {}).get("_existing_student_id")
+        if existing_student_id and (not step6 or not step7):
+            student = Student.objects.filter(pk=existing_student_id).first()
+            if student:
+                if not step6 and student.primary_contact_id:
+                    step6 = adult_to_prefill(student.primary_contact)
+                if not step7 and student.secondary_contact_id:
+                    step7 = adult_to_prefill(student.secondary_contact)
 
         # Only swap when both sides have content.
         if step6 or step7:

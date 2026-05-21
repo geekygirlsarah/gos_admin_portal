@@ -444,6 +444,39 @@ class SwapParentsViewTests(TestCase):
         self.assertEqual(app.data["step6"]["first_name"], "Joe")
         self.assertEqual(app.data["step7"]["first_name"], "Jane")
 
+    def test_swap_hydrates_from_student_record_when_steps_not_yet_saved(self):
+        # Returning student: application.data has no step6/step7 yet because
+        # the user hasn't submitted those forms — data lives only in the
+        # Student record.  Swap should still work by reading from the record.
+        primary = Adult.objects.create(
+            first_name="Joe", last_name="Primary", email="joe@example.com"
+        )
+        secondary = Adult.objects.create(
+            first_name="Jane", last_name="Secondary", email="jane@example.com"
+        )
+        student = Student.objects.create(
+            legal_first_name="Ada",
+            last_name="Lovelace",
+            primary_contact=primary,
+            secondary_contact=secondary,
+        )
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="joe@example.com",
+            current_step=6,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={"step5": {"_existing_student_id": student.pk}},
+        )
+        self.client.post(
+            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
+            {"next": "6"},
+        )
+        app.refresh_from_db()
+        # After swap, step6 should contain Jane (old secondary) and step7 Joe (old primary).
+        self.assertEqual(app.data["step6"]["first_name"], "Jane")
+        self.assertEqual(app.data["step7"]["first_name"], "Joe")
+
     def test_swap_requires_verified_email(self):
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
@@ -467,6 +500,93 @@ class SwapParentsViewTests(TestCase):
         app.refresh_from_db()
         # Data must be unchanged.
         self.assertEqual(app.data["step6"]["first_name"], "Joe")
+
+
+class Step6SwapBoxVisibilityTests(TestCase):
+    """Swap box on step 6 should appear when a secondary contact exists."""
+
+    def setUp(self):
+        today = timezone.localdate()
+        import datetime
+
+        self.program = Program.objects.create(
+            name="Spring 2030",
+            year=2030,
+            start_date=today + datetime.timedelta(days=60),
+            end_date=today + datetime.timedelta(days=120),
+            active=True,
+        )
+        self.primary = Adult.objects.create(
+            first_name="Joe", last_name="Primary", email="joe@example.com"
+        )
+        self.secondary = Adult.objects.create(
+            first_name="Jane", last_name="Secondary", email="jane@example.com"
+        )
+        self.student = Student.objects.create(
+            legal_first_name="Ada",
+            last_name="Lovelace",
+            personal_email="ada@example.com",
+            primary_contact=self.primary,
+            secondary_contact=self.secondary,
+        )
+
+    def _app_with_existing_student(self):
+        return Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="joe@example.com",
+            current_step=6,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step5": {"_existing_student_id": self.student.pk},
+            },
+        )
+
+    def test_swap_box_shown_when_secondary_contact_exists_but_step7_not_saved(self):
+        app = self._app_with_existing_student()
+        response = self.client.get(
+            reverse("apply_step6", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Swap primary")
+        # Secondary's full name should appear in the swap prompt.
+        self.assertContains(response, "Jane")
+        self.assertContains(response, "Secondary")
+
+    def test_swap_box_hidden_when_no_secondary_contact_and_no_step7(self):
+        self.student.secondary_contact = None
+        self.student.save()
+        app = self._app_with_existing_student()
+        response = self.client.get(
+            reverse("apply_step6", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Swap primary")
+
+    def test_swap_box_shown_when_step6_already_saved_and_adult_has_secondary(self):
+        # Returning parent who already completed step6 in a prior session —
+        # existing_adult is not populated by _build_forms (because saved is
+        # truthy), so _render must fall back to an email lookup.
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="joe@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step5": {"_existing_student_id": self.student.pk},
+                "step6": {
+                    "first_name": "Joe",
+                    "last_name": "Primary",
+                    "email": "joe@example.com",
+                },
+            },
+        )
+        response = self.client.get(
+            reverse("apply_step6", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Swap primary")
 
 
 class ResumeRedirectsToCurrentStepTests(TestCase):

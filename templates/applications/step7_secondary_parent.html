@@ -9,18 +9,6 @@
     student. The secondary parent or guardian is the one we will reach out to
     if we <strong>cannot get a hold of</strong> the primary parent or guardian.
 </p>
-{% if application.data.step6 %}
-<div class="alert alert-secondary d-flex align-items-center justify-content-between gap-3" role="note">
-    <span>Want to make this person the primary parent / guardian instead?</span>
-    <form method="post" action="{% url 'apply_swap_parents' app_id=application.application_id %}" class="d-inline">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="7">
-        <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">
-            ⇄ Swap primary &amp; secondary
-        </button>
-    </form>
-</div>
-{% endif %}
 <form method="post" novalidate>
     {% csrf_token %}
     {% if form.non_field_errors %}

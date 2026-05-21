@@ -46,9 +46,9 @@
         The primary parent or guardian is the one we will reach out to
         <strong>first</strong> in an emergency.
     </p>
-    {% if application.data.step7 %}
+    {% if has_secondary %}
     <div class="alert alert-secondary d-flex align-items-center justify-content-between gap-3" role="note">
-        <span>Want to make the secondary parent / guardian the primary instead?</span>
+        <span>Want to make {% if secondary_name %}<strong>{{ secondary_name }}</strong> (the secondary parent / guardian){% else %}the secondary parent / guardian{% endif %} the primary instead?</span>
         <form method="post" action="{% url 'apply_swap_parents' app_id=application.application_id %}" class="d-inline">
             {% csrf_token %}
             <input type="hidden" name="next" value="6">
