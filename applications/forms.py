@@ -9,6 +9,7 @@ from programs.models import (
     RELATIONSHIP_CHOICES,
     TSHIRT_SIZE_CHOICES,
     Program,
+    RaceEthnicity,
     School,
     Student,
 )
@@ -200,6 +201,30 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={**_text_attrs, "type": "date"}),
     )
+    address = forms.CharField(
+        label="Address",
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    city = forms.CharField(
+        label="City",
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    state = forms.CharField(
+        label="State",
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    zip_code = forms.CharField(
+        label="Zip code",
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
     personal_email = forms.EmailField(
         label="Student's personal email",
         required=False,
@@ -217,12 +242,22 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.Select(attrs=_select_attrs),
     )
+    race_ethnicities = forms.ModelMultipleChoiceField(
+        label="Race / Ethnicity",
+        queryset=RaceEthnicity.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        help_text="Optional. We use aggregated stats for grants and to ensure we're meeting our own diversity goals.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["school_name"].choices = [("", "---")] + [
             (s.name, s.name) for s in School.objects.all().order_by("name")
         ]
+        self.fields["race_ethnicities"].queryset = RaceEthnicity.objects.all().order_by(
+            "name"
+        )
         current_year = timezone.now().year
         self.fields["graduation_year"].min_value = current_year
         # Also update the MinValueValidator limit to ensure the error message is correct
@@ -283,6 +318,12 @@ class ParentInfoForm(forms.Form):
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
+    pronouns = forms.CharField(
+        label="Pronouns",
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
     relationship_to_student = forms.ChoiceField(
         label="Relationship to student",
         choices=[("", "---")] + RELATIONSHIP_CHOICES,
@@ -306,6 +347,13 @@ class ParentInfoForm(forms.Form):
         required=False,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
+    )
+    email_updates = forms.BooleanField(
+        label="Receive email updates",
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        help_text="If checked, you will receive email updates about the program.",
     )
 
     def __init__(self, *args, require_email=True, student_emails=None, **kwargs):

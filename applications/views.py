@@ -452,6 +452,27 @@ def _save_step_data(application: Application, key: str, payload: dict, next_step
     application.save(update_fields=["data", "current_step", "updated_at"])
 
 
+def _sanitize_payload(cleaned_data: dict) -> dict:
+    """Prepare form.cleaned_data for storage in JSONField.
+    - Dates/datetimes -> ISO string
+    - QuerySets (from ModelChoice) -> list of PKs
+    - Model instances (from ModelChoiceField) -> PK
+    """
+    payload = {}
+    for k, v in cleaned_data.items():
+        if hasattr(v, "isoformat"):
+            payload[k] = v.isoformat()
+        elif hasattr(v, "values_list"):
+            # ModelMultipleChoiceField returns a QuerySet
+            payload[k] = list(v.values_list("pk", flat=True))
+        elif hasattr(v, "pk"):
+            # ModelChoiceField returns a single model instance
+            payload[k] = v.pk
+        else:
+            payload[k] = v
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # Continue: alias that drops the user back into the wizard at their current
 # step. Kept so existing email links pointing at ``apply_continue`` still
@@ -528,10 +549,7 @@ class Step5StudentInfoView(View):
         if not form.is_valid():
             return self._render(request, application, form, picker, chosen_student)
 
-        payload = {
-            k: (v.isoformat() if hasattr(v, "isoformat") else v)
-            for k, v in form.cleaned_data.items()
-        }
+        payload = _sanitize_payload(form.cleaned_data)
         if chosen_student is not None:
             payload["_existing_student_id"] = chosen_student.pk
         elif application.applicant_type == Application.Type.STUDENT:
@@ -668,7 +686,7 @@ class Step6PrimaryParentView(View):
             return self._render(
                 request, application, form, handoff_form, mode, existing_adult
             )
-        payload = dict(form.cleaned_data)
+        payload = _sanitize_payload(form.cleaned_data)
         _save_step_data(application, "step6", payload, next_step=7)
         return redirect("apply_step7", app_id=application.application_id)
 
@@ -917,7 +935,7 @@ class Step7SecondaryParentView(View):
         )
         if not form.is_valid():
             return self._render(request, application, form)
-        payload = dict(form.cleaned_data)
+        payload = _sanitize_payload(form.cleaned_data)
         _save_step_data(application, "step7", payload, next_step=8)
         return redirect("apply_step8", app_id=application.application_id)
 

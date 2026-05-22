@@ -27,6 +27,8 @@ FIELD_LABELS = {
     "personal_email": "Personal email",
     "andrew_email": "Andrew email",
     "race_ethnicity": "Race / ethnicity",
+    "race_ethnicities": "Race / Ethnicity",
+    "pronouns": "Pronouns",
     "address_line_1": "Address line 1",
     "address_line_2": "Address line 2",
     "address_street": "Street address",
@@ -36,6 +38,8 @@ FIELD_LABELS = {
     "city": "City",
     "state": "State",
     "zip_code": "ZIP code",
+    "address": "Address",
+    "email_updates": "Receive email updates",
     "relationship": "Relationship to student",
     "medical_info": "Medical information",
     "medical_notes": "Medical notes",
@@ -63,3 +67,23 @@ def humanize_field(value):
     if not text:
         return ""
     return text[:1].upper() + text[1:]
+
+
+@register.filter(name="format_application_value")
+def format_application_value(value, key):
+    """Format a saved form value for display on the review page.
+    Resolves FK/M2M IDs to names where appropriate.
+    """
+    if not value:
+        return "—"
+
+    if key == "race_ethnicities" and isinstance(value, list):
+        from programs.models import RaceEthnicity
+
+        names = RaceEthnicity.objects.filter(pk__in=value).values_list("name", flat=True)
+        return ", ".join(names) or "—"
+
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+
+    return value

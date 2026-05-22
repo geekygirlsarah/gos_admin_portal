@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     # Local apps
+    "django.forms",
     "programs",
     "attendance",
     "api",
@@ -207,6 +208,9 @@ MEDIA_ROOT = "media/"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Use project templates for form widgets
+FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
 
 # Django-allauth configuration
 SITE_ID = 1

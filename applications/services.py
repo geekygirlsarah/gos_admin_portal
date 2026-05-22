@@ -569,6 +569,12 @@ def _adult_from_data(parent_data: dict):
     _fill("email", email)
     _fill("cell_phone", parent_data.get("cell_phone"))
     _fill("home_phone", parent_data.get("home_phone"))
+    _fill("pronouns", parent_data.get("pronouns"))
+
+    # For boolean fields, only update if the existing value is False and we have a True value.
+    if parent_data.get("email_updates") and not adult.email_updates:
+        adult.email_updates = True
+
     rel = (parent_data.get("relationship_to_student") or "").strip().lower()
     if rel:
         # Only set if blank/default ("parent"); we don't try to map free-form
@@ -639,6 +645,10 @@ def _student_from_application(application: Application):
         student.date_of_birth = step5["date_of_birth"]
     _fill("personal_email", step5.get("personal_email"))
     _fill("cell_phone_number", step5.get("cell_phone_number"))
+    _fill("address", step5.get("address"))
+    _fill("city", step5.get("city"))
+    _fill("state", step5.get("state"))
+    _fill("zip_code", step5.get("zip_code"))
     if step5.get("graduation_year") and not student.graduation_year:
         try:
             student.graduation_year = int(step5["graduation_year"])
@@ -656,6 +666,12 @@ def _student_from_application(application: Application):
         student.school = school
 
     student.save()
+
+    # M2M Race ethnicities (only if student didn't already have some on file)
+    race_ids = step5.get("race_ethnicities")
+    if race_ids and not student.race_ethnicities.exists():
+        student.race_ethnicities.set(race_ids)
+
     return student
 
 

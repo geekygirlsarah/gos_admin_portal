@@ -47,7 +47,14 @@
 
     <div class="row g-3">
         {% for field in form %}
-            <div class="col-12 {% if field.name == 'pronouns' or field.name == 'tshirt_size' or field.name == 'graduation_year' %}col-md-4{% elif field.name == 'date_of_birth' or field.name == 'cell_phone_number' %}col-md-6{% else %}col-md-6{% endif %}">
+            <div class="col-12 
+                {% if field.name == 'address' or field.name == 'race_ethnicities' or field.name == 'allergies' or field.name == 'dietary_restrictions' or field.name == 'medical_notes' %}
+                    col-md-12
+                {% elif field.name == 'city' or field.name == 'state' or field.name == 'zip_code' or field.name == 'pronouns' or field.name == 'tshirt_size' or field.name == 'graduation_year' %}
+                    col-md-4
+                {% else %}
+                    col-md-6
+                {% endif %}">
                 <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
                 {{ field }}
                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}

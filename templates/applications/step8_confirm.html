@@ -28,9 +28,9 @@
     {% if step5_data %}
         <dl class="row mb-0">
             {% for k, v in step5_data.items %}
-                {% if not k|slice:":1" == "_" and v %}
+                {% if not k|slice:":1" == "_" and v is not None %}
                     <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v }}</dd>
+                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
                 {% endif %}
             {% endfor %}
         </dl>
@@ -44,9 +44,9 @@
     {% if step6_data %}
         <dl class="row mb-0">
             {% for k, v in step6_data.items %}
-                {% if v and not k|slice:":1" == "_" %}
+                {% if v is not None and not k|slice:":1" == "_" %}
                     <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v }}</dd>
+                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
                 {% endif %}
             {% endfor %}
         </dl>
@@ -60,9 +60,9 @@
     {% if step7_data and not step7_skipped %}
         <dl class="row mb-0">
             {% for k, v in step7_data.items %}
-                {% if v and not k|slice:":1" == "_" %}
+                {% if v is not None and not k|slice:":1" == "_" %}
                     <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v }}</dd>
+                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
                 {% endif %}
             {% endfor %}
         </dl>

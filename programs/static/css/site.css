@@ -20,3 +20,24 @@
 .avatar + strong {
   margin-left: 8px;
 }
+
+/* Spacing and layout for multi-select checkboxes and radio buttons */
+.checkbox-select-wrapper,
+.radio-select-wrapper {
+  display: flow-root;
+  width: 100%;
+  clear: both;
+}
+
+/* Ensure the row inside the wrapper doesn't collapse */
+.checkbox-select-wrapper .row,
+.radio-select-wrapper .row {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.checkbox-select-wrapper .col,
+.radio-select-wrapper .col {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
