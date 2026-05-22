@@ -26,9 +26,11 @@
         </div>
     {% endfor %}
     <div class="d-flex justify-content-between">
-        <a href="{% url 'apply_step4' app_id=application.application_id %}" class="btn btn-link">
-            Back
-        </a>
+        {% if application.email_is_verified %}
+            <a href="{% url 'apply_step2' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        {% else %}
+            <a href="{% url 'apply_step4' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        {% endif %}
         <button type="submit" class="btn btn-primary">Continue</button>
     </div>
 </form>

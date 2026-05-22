@@ -341,6 +341,8 @@ class Step4VerifyEmailView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
+        if application.email_is_verified:
+            return redirect("apply_step3", app_id=application.application_id)
         if not application.email:
             messages.error(
                 request,
@@ -736,7 +738,9 @@ class Step6PrimaryParentView(View):
         initial = saved or (adult_to_prefill(existing_adult) if existing_adult else {})
         if not initial and handoff_email:
             initial = {"email": handoff_email}
-        form = ParentInfoForm(post or None, initial=initial, student_emails=student_emails)
+        form = ParentInfoForm(
+            post or None, initial=initial, student_emails=student_emails
+        )
         return (
             form,
             ParentHandoffForm(student_emails=student_emails),
@@ -774,15 +778,18 @@ class Step6PrimaryParentView(View):
             last = step7_data.get("last_name") or ""
             secondary_name = " ".join(filter(None, [first, last])) or None
         if not has_secondary:
-            sid = (application.data or {}).get("step5", {}).get(
-                "_existing_student_id"
-            )
+            sid = (application.data or {}).get("step5", {}).get("_existing_student_id")
             if sid:
                 student = Student.objects.filter(pk=sid).first()
                 if student and student.secondary_contact_id:
                     has_secondary = True
                     sc = student.secondary_contact
-                    secondary_name = " ".join(filter(None, [sc.first_name or "", sc.last_name or ""])) or None
+                    secondary_name = (
+                        " ".join(
+                            filter(None, [sc.first_name or "", sc.last_name or ""])
+                        )
+                        or None
+                    )
         # Also check via the existing_adult (or a fresh email lookup when
         # step6 was already saved and existing_adult wasn't populated):
         # if this adult is the primary contact for any student that has a
@@ -799,7 +806,12 @@ class Step6PrimaryParentView(View):
                 if linked_student:
                     has_secondary = True
                     sc = linked_student.secondary_contact
-                    secondary_name = " ".join(filter(None, [sc.first_name or "", sc.last_name or ""])) or None
+                    secondary_name = (
+                        " ".join(
+                            filter(None, [sc.first_name or "", sc.last_name or ""])
+                        )
+                        or None
+                    )
         return render(
             request,
             self.template_name,
