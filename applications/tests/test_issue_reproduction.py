@@ -531,6 +531,87 @@ class ParentNotificationOptInReproductionTests(TestCase):
             'name="email_updates" class="form-check-input" id="id_email_updates" checked',
         )
 
+    def test_both_parents_opt_out_blocked_at_step8(self):
+        """If both parents opt out, the error should appear at step 8 (not step 9)."""
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=8,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            program=self.program,
+            data={
+                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7": {
+                    "first_name": "Pat",
+                    "last_name": "Parent",
+                    "email": "parent@example.com",
+                    "email_updates": False,  # Primary parent opted out
+                },
+            },
+        )
+        response = self.client.post(
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            {
+                "first_name": "Sam",
+                "last_name": "Spouse",
+                "relationship_to_student": "guardian",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "cell_phone": "412-555-0100",
+                # email_updates not checked → False
+            },
+        )
+        # Should stay on step 8 and show error
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "At least one parent or guardian must opt in to receiving email updates",
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.current_step, 8)
+
+    def test_step8_proceeds_when_primary_parent_opted_in(self):
+        """If primary parent opted in, step 8 should proceed even if secondary opts out."""
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=8,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            program=self.program,
+            data={
+                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7": {
+                    "first_name": "Pat",
+                    "last_name": "Parent",
+                    "email": "parent@example.com",
+                    "email_updates": True,  # Primary parent opted in
+                },
+            },
+        )
+        response = self.client.post(
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            {
+                "first_name": "Sam",
+                "last_name": "Spouse",
+                "relationship_to_student": "guardian",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "cell_phone": "412-555-0100",
+                # email_updates not checked → False
+            },
+        )
+        # Should proceed to step 9
+        self.assertRedirects(
+            response,
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+        )
+
     def test_cannot_submit_without_at_least_one_parent_opting_in(self):
         # Create an application where both parents opted out in their respective steps
         app = Application.objects.create(

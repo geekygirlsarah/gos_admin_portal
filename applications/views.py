@@ -1038,6 +1038,23 @@ class Step8SecondaryParentView(View):
         )
         if not form.is_valid():
             return self._render(request, application, form)
+
+        # If the secondary parent is also opting out, check whether the primary
+        # parent opted in. If neither opted in, surface the error here (step 8)
+        # rather than making the applicant go all the way to step 9 to find out.
+        # Only run this check when step 7 data is present (primary parent was collected).
+        step7_data = (application.data or {}).get("step7") or {}
+        p1_opt = step7_data.get("email_updates", False)
+        p2_opt = form.cleaned_data.get("email_updates", False)
+        if step7_data and not p1_opt and not p2_opt:
+            form.add_error(
+                None,
+                "At least one adult contact must opt in to receiving email "
+                "updates from Girls of Steel. Please check the box on this page or "
+                "go back and check it on the primary contact page.",
+            )
+            return self._render(request, application, form)
+
         payload = _sanitize_payload(form.cleaned_data)
         _save_step_data(application, "step8", payload, next_step=9)
         return redirect("apply_step9", app_id=application.application_id)
