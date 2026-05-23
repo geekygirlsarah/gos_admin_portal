@@ -112,8 +112,8 @@ def _redirect_to_current_step(application: Application):
     step = max(1, min(application.current_step, TOTAL_STEPS))
     name_map = {
         2: "apply_step2",
-        3: "apply_step4",
-        4: "apply_step3",
+        3: "apply_step3",
+        4: "apply_step4",
         5: "apply_step5",
         6: "apply_step6",
         7: "apply_step7",
@@ -258,11 +258,11 @@ class Step2ApplicantTypeView(View):
             )
             return redirect("apply_start")
 
-        # Mentor applicants skip Step 3 (program selection) — they apply
+        # Mentor applicants skip Step 4 (program selection) — they apply
         # to the organization, not to a specific program.
         if application.applicant_type == Application.Type.MENTOR:
-            return redirect("apply_step4", app_id=application.application_id)
-        return redirect("apply_step4", app_id=application.application_id)
+            return redirect("apply_step3", app_id=application.application_id)
+        return redirect("apply_step3", app_id=application.application_id)
 
     def _render(self, request, application, form):
         if _is_mentor(application):
@@ -287,8 +287,8 @@ class Step2ApplicantTypeView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step3ProgramView(View):
-    template_name = "applications/step3_program.html"
+class Step4ProgramView(View):
+    template_name = "applications/step4_program.html"
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
@@ -334,13 +334,13 @@ class Step3ProgramView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step4VerifyEmailView(View):
-    template_name = "applications/step4_verify_email.html"
+class Step3VerifyEmailView(View):
+    template_name = "applications/step3_verify_email.html"
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
         if application.email_is_verified:
-            return redirect("apply_step3", app_id=application.application_id)
+            return redirect("apply_step4", app_id=application.application_id)
         if not application.email:
             messages.error(
                 request,
@@ -365,7 +365,7 @@ class Step4VerifyEmailView(View):
                 "Please check your email and try again, or request a new code.",
             )
             return self._render(request, application, form)
-        application.current_step = max(application.current_step, 5)
+        application.current_step = max(application.current_step, 4)
         application.save(update_fields=["current_step", "updated_at"])
         messages.success(request, "Email verified — thanks!")
         # Mentor branch: block if the email already belongs to a mentor,
@@ -376,7 +376,7 @@ class Step4VerifyEmailView(View):
                     "apply_mentor_blocked", app_id=application.application_id
                 )
             return redirect("apply_mentor_info", app_id=application.application_id)
-        return redirect("apply_step3", app_id=application.application_id)
+        return redirect("apply_step4", app_id=application.application_id)
 
     def _issue_and_send(self, application: Application, request) -> None:
         try:
@@ -405,7 +405,7 @@ class Step4VerifyEmailView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step4ResendCodeView(View):
+class Step3ResendCodeView(View):
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id)
         if not application.email:
@@ -424,7 +424,7 @@ class Step4ResendCodeView(View):
                 request,
                 "Sorry, we couldn't send a new code right now. Please try again in a minute.",
             )
-        return redirect("apply_step4", app_id=application.application_id)
+        return redirect("apply_step3", app_id=application.application_id)
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +434,7 @@ class Step4ResendCodeView(View):
 
 def _require_verified_email(application: Application):
     if not application.email_is_verified:
-        return redirect("apply_step4", app_id=application.application_id)
+        return redirect("apply_step3", app_id=application.application_id)
     return None
 
 
@@ -1289,7 +1289,7 @@ def _require_mentor_verified(application: Application):
     if guard is not None:
         return guard
     if not application.email_is_verified:
-        return redirect("apply_step4", app_id=application.application_id)
+        return redirect("apply_step3", app_id=application.application_id)
     # Block existing-mentor applicants from continuing past OTP.
     if find_existing_mentor_by_email(application.email):
         return redirect("apply_mentor_blocked", app_id=application.application_id)

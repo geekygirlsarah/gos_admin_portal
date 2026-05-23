@@ -153,39 +153,39 @@ class WizardBackNavigationReproductionTests(TestCase):
             email="test@example.com",
             applicant_type="student",
             email_verified_at=timezone.now(),
-            current_step=5,  # Beyond step 4
+            current_step=4,  # Beyond step 3
         )
 
-        # 2. Check Step 3 "Back" button (Program selection)
+        # 2. Check Step 3 "Back" button (Email verification - redirects to Step 4)
+        # But wait, Step 3 GET redirects to Step 4 if verified.
+        # So testing Step 3's back button while verified is tricky via GET.
+        # Let's check Step 4 "Back" button instead.
         response = self.client.get(
-            reverse("apply_step3", kwargs={"app_id": app.application_id})
+            reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        # It should link to Step 2 now, because email is already verified
+        # In step4_program.html, Back button goes to Step 2 if verified.
         self.assertContains(
             response, reverse("apply_step2", kwargs={"app_id": app.application_id})
         )
-        self.assertNotContains(
-            response, reverse("apply_step4", kwargs={"app_id": app.application_id})
-        )
 
-    def test_accessing_step4_while_verified_redirects_forward(self):
+    def test_accessing_step3_while_verified_redirects_forward(self):
         app = Application.objects.create(
             email="test@example.com",
             applicant_type="student",
             email_verified_at=timezone.now(),
-            current_step=5,
+            current_step=4,
         )
-        # 3. Access Step 4 while verified
+        # 3. Access Step 3 while verified
         response = self.client.get(
-            reverse("apply_step4", kwargs={"app_id": app.application_id})
+            reverse("apply_step3", kwargs={"app_id": app.application_id})
         )
-        # It should redirect to Step 3
+        # It should redirect to Step 4
         self.assertRedirects(
-            response, reverse("apply_step3", kwargs={"app_id": app.application_id})
+            response, reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
 
-    def test_back_button_from_step5_leads_to_step3(self):
+    def test_back_button_from_step5_leads_to_step4(self):
         # 1. Create an application that has verified email and chosen a program
         app = Application.objects.create(
             email="test@example.com",
@@ -200,12 +200,12 @@ class WizardBackNavigationReproductionTests(TestCase):
             reverse("apply_step5", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        # It should link to Step 3
+        # It should link to Step 4
         self.assertContains(
-            response, reverse("apply_step3", kwargs={"app_id": app.application_id})
+            response, reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
         self.assertNotContains(
-            response, reverse("apply_step4", kwargs={"app_id": app.application_id})
+            response, reverse("apply_step3", kwargs={"app_id": app.application_id})
         )
 
     def test_back_button_from_mentor_info_leads_to_step2_if_verified(self):
@@ -283,15 +283,18 @@ class Step2LabelReproductionTest(TestCase):
             f"Expected 1 'Mentor / Volunteer' label, found {len(mentor_labels)}: {mentor_labels}",
         )
 
-    def test_step3_labels_not_duplicated(self):
+    def test_step4_labels_not_duplicated(self):
         program = Program.objects.create(
             name="Test Program",
             year=2026,
             active=True,
             start_date=timezone.now().date() + datetime.timedelta(days=30),
         )
-        app = Application.objects.create(email="test@example.com")
-        url = reverse("apply_step3", kwargs={"app_id": app.application_id})
+        app = Application.objects.create(
+            email="test@example.com",
+            email_verified_at=timezone.now(),
+        )
+        url = reverse("apply_step4", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 

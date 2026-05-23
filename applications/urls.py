@@ -69,18 +69,18 @@ urlpatterns = [
     ),
     path(
         "<str:app_id>/step3/",
-        views.Step3ProgramView.as_view(),
+        views.Step3VerifyEmailView.as_view(),
         name="apply_step3",
     ),
     path(
         "<str:app_id>/step4/",
-        views.Step4VerifyEmailView.as_view(),
+        views.Step4ProgramView.as_view(),
         name="apply_step4",
     ),
     path(
         "<str:app_id>/resend-code/",
-        views.Step4ResendCodeView.as_view(),
-        name="apply_step4_resend",
+        views.Step3ResendCodeView.as_view(),
+        name="apply_step3_resend",
     ),
     # Continue alias — drops the user back into the wizard at their step.
     path(

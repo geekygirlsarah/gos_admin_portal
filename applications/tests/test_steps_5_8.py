@@ -39,7 +39,7 @@ class Step5StudentInfoTests(TestCase):
         )
         mail.outbox = []
 
-    def test_step5_redirects_to_step4_if_email_not_verified(self):
+    def test_step5_redirects_to_step3_if_email_not_verified(self):
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
@@ -50,7 +50,7 @@ class Step5StudentInfoTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
 
@@ -506,7 +506,7 @@ class SwapParentsViewTests(TestCase):
         # Should redirect to email verification, not swap.
         self.assertRedirects(
             response,
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()

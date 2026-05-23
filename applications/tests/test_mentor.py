@@ -28,9 +28,9 @@ class MentorFlowTests(TestCase):
     def setUp(self):
         mail.outbox = []
 
-    # --- Step 2 → skip Step 3 for mentor --------------------------------
+    # --- Step 2 → Step 3 (Email) for mentor -----------------------------
 
-    def test_mentor_step2_skips_program_and_goes_to_step4(self):
+    def test_mentor_step2_goes_to_step3(self):
         app = Application.objects.create()
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
@@ -38,13 +38,13 @@ class MentorFlowTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
         self.assertEqual(app.applicant_type, "mentor")
 
-    # --- Step 4 (OTP) → mentor-info or blocked --------------------------
+    # --- Step 3 (OTP) → mentor-info or blocked --------------------------
 
     def test_mentor_otp_success_redirects_to_mentor_info_when_new(self):
         app = Application.objects.create(
@@ -53,7 +53,7 @@ class MentorFlowTests(TestCase):
         )
         code = app.issue_otp()
         response = self.client.post(
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             {"code": code},
         )
         self.assertRedirects(
@@ -75,7 +75,7 @@ class MentorFlowTests(TestCase):
         )
         code = app.issue_otp()
         response = self.client.post(
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             {"code": code},
         )
         self.assertRedirects(
@@ -109,7 +109,7 @@ class MentorFlowTests(TestCase):
             reverse("apply_mentor_info", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 302)
-        self.assertIn("step4", response["Location"])
+        self.assertIn("step3", response["Location"])
 
     def test_mentor_info_get_blocks_non_mentor_applicants(self):
         app = Application.objects.create(

@@ -61,7 +61,7 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, "couldn&#x27;t find")
 
     def test_step1_resume_with_known_id_redirects_to_current_step(self):
-        # current_step=3 means email verify is next (step 4 in the URL)
+        # current_step=3 means email verify is next (step 3 in the URL)
         app = Application.objects.create(current_step=3)
         response = self.client.post(
             reverse("apply_resume"),
@@ -69,7 +69,7 @@ class WizardFlowTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
 
@@ -103,7 +103,7 @@ class WizardFlowTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
@@ -123,51 +123,51 @@ class WizardFlowTests(TestCase):
             response, reverse("apply_start"), fetch_redirect_response=False
         )
 
-    # --- Step 3 ---------------------------------------------------------
+    # --- Step 4 (Program Select) -----------------------------------------
 
-    def test_step3_lists_future_and_current_programs_separately(self):
+    def test_step4_lists_future_and_current_programs_separately(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=3,
+            current_step=4,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
         response = self.client.get(
-            reverse("apply_step3", kwargs={"app_id": app.application_id})
+            reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.future_program.name)
         self.assertContains(response, self.current_program.name)
         self.assertContains(response, "Applications for these programs are closed")
 
-    def test_step3_post_only_accepts_future_programs(self):
+    def test_step4_post_only_accepts_future_programs(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=3,
+            current_step=4,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
         # Trying to pick a current (closed) program must fail validation.
         response = self.client.post(
-            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            reverse("apply_step4", kwargs={"app_id": app.application_id}),
             {"program": self.current_program.pk},
         )
         self.assertEqual(response.status_code, 200)
         app.refresh_from_db()
         self.assertIsNone(app.program)
 
-    def test_step3_post_with_future_program_advances(self):
+    def test_step4_post_with_future_program_advances(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=3,
+            current_step=4,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
         )
         response = self.client.post(
-            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            reverse("apply_step4", kwargs={"app_id": app.application_id}),
             {"program": self.future_program.pk},
         )
         self.assertRedirects(
@@ -178,16 +178,16 @@ class WizardFlowTests(TestCase):
         app.refresh_from_db()
         self.assertEqual(app.program_id, self.future_program.pk)
 
-    # --- Step 4 ---------------------------------------------------------
+    # --- Step 3 (Email Verify) -------------------------------------------
 
-    def test_step4_get_issues_otp_and_emails_it(self):
+    def test_step3_get_issues_otp_and_emails_it(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=4,
+            current_step=3,
         )
         response = self.client.get(
-            reverse("apply_step4", kwargs={"app_id": app.application_id})
+            reverse("apply_step3", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         app.refresh_from_db()
@@ -205,51 +205,51 @@ class WizardFlowTests(TestCase):
         m = re.search(r"\b(\d{6})\b", body)
         self.assertIsNotNone(m)
 
-    def test_step4_post_with_correct_code_advances_to_step3(self):
+    def test_step3_post_with_correct_code_advances_to_step4(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=4,
+            current_step=3,
         )
         code = app.issue_otp()
         response = self.client.post(
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             {"code": code},
         )
         self.assertRedirects(
             response,
-            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            reverse("apply_step4", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
         self.assertIsNotNone(app.email_verified_at)
         self.assertEqual(app.status, Application.Status.EMAIL_VERIFIED)
 
-    def test_step4_post_with_wrong_code_stays_on_page(self):
+    def test_step3_post_with_wrong_code_stays_on_page(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=4,
+            current_step=3,
         )
         app.issue_otp()
         response = self.client.post(
-            reverse("apply_step4", kwargs={"app_id": app.application_id}),
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
             {"code": "000000"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "didn&#x27;t match")
 
-    def test_step4_resend_issues_new_code(self):
+    def test_step3_resend_issues_new_code(self):
         app = Application.objects.create(
             applicant_type="parent",
             email="parent@example.com",
-            current_step=4,
+            current_step=3,
         )
         old_code = app.issue_otp()
         old_hash = Application.objects.get(pk=app.pk).otp_hash
         mail.outbox = []
         response = self.client.post(
-            reverse("apply_step4_resend", kwargs={"app_id": app.application_id})
+            reverse("apply_step3_resend", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 302)
         app.refresh_from_db()

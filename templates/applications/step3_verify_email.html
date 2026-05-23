@@ -33,7 +33,7 @@
     </div>
 </form>
 
-<form method="post" action="{% url 'apply_step4_resend' app_id=application.application_id %}">
+<form method="post" action="{% url 'apply_step3_resend' app_id=application.application_id %}">
     {% csrf_token %}
     <button type="submit" class="btn btn-link p-0">
         Didn't get a code? Send a new one.
