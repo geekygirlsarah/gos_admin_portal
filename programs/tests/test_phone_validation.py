@@ -73,9 +73,14 @@ class PhoneValidationTestCase(TestCase):
                 "legal_first_name": "A",
                 "last_name": "B",
                 "cell_phone_number": "1234567890",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
             }
         )
-        self.assertTrue(form.is_valid())
+        self.assertTrue(form.is_valid(), form.errors)
 
         # ParentInfoForm
         form = ParentInfoForm(
@@ -84,6 +89,10 @@ class PhoneValidationTestCase(TestCase):
                 "last_name": "B",
                 "email": "a@b.com",
                 "cell_phone": "123",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
             }
         )
         self.assertFalse(form.is_valid())
@@ -95,9 +104,13 @@ class PhoneValidationTestCase(TestCase):
                 "last_name": "B",
                 "email": "a@b.com",
                 "cell_phone": "1234567890",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
             }
         )
-        self.assertTrue(form.is_valid())
+        self.assertTrue(form.is_valid(), form.errors)
 
         # MentorInfoForm
         form = MentorInfoForm(

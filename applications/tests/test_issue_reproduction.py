@@ -309,3 +309,80 @@ class Step2LabelReproductionTest(TestCase):
             1,
             f"Expected 1 'Test Program' label, found {len(program_labels)}: {program_labels}",
         )
+
+
+class EmailSubaddressingValidationReproductionTests(TestCase):
+    """
+    Test that we correctly allow/prevent certain subaddressing (+) email
+    combinations between students and parents.
+    """
+
+    def test_parent_info_form_validation(self):
+        from applications.forms import ParentInfoForm
+
+        # Case 1: Same email (should be blocked)
+        form = ParentInfoForm(
+            data={"email": "name@email.com"}, student_emails=["name@email.com"]
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("email", form.errors)
+
+        # Case 2: Forged parent email (should be blocked)
+        # Parent is base+tag, student is base.
+        form = ParentInfoForm(
+            data={"email": "name+parent@email.com"}, student_emails=["name@email.com"]
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("email", form.errors)
+
+        # Case 3: Tagged student email, raw parent email (SHOULD BE ALLOWED)
+        # Student uses name+student@email.com, Parent uses name@email.com
+        form = ParentInfoForm(
+            data={
+                "first_name": "Pat",
+                "last_name": "Parent",
+                "relationship_to_student": "parent",
+                "email": "name@email.com",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "cell_phone": "555-444-1212",
+            },
+            student_emails=["name+student@email.com"],
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        # Case 4: Different bases, student has subaddressing (should be allowed)
+        form = ParentInfoForm(
+            data={
+                "first_name": "Pat",
+                "last_name": "Parent",
+                "relationship_to_student": "parent",
+                "email": "parent@email.com",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "cell_phone": "555-444-1212",
+            },
+            student_emails=["student+something@email.com"],
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_parent_handoff_form_validation(self):
+        from applications.forms import ParentHandoffForm
+
+        # Case: student+something@email.com and parent@email.com (should be allowed)
+        form = ParentHandoffForm(
+            data={"parent_email": "parent@email.com"},
+            student_emails=["student+something@email.com"],
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        # Case: student@email.com and name+parent@email.com (should be blocked)
+        form = ParentHandoffForm(
+            data={"parent_email": "name+parent@email.com"},
+            student_emails=["name@email.com"],
+        )
+        self.assertFalse(form.is_valid())

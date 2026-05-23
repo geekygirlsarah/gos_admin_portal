@@ -389,7 +389,9 @@ class ParentInfoForm(forms.Form):
 
     def __init__(self, *args, require_email=True, student_emails=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.student_emails = [normalize_email(e) for e in (student_emails or []) if e]
+        # Store student emails in lower case but NOT normalized (keep +tags)
+        # so we can distinguish between base@ and base+tag@.
+        self.student_emails = [e.strip().lower() for e in (student_emails or []) if e]
         if not require_email:
             self.fields["email"].required = False
 
@@ -398,7 +400,12 @@ class ParentInfoForm(forms.Form):
         if not email:
             return email
         normalized = normalize_email(email)
-        if normalized in self.student_emails:
+        raw_email = email.strip().lower()
+        # We block if the parent email matches a student email exactly, OR
+        # if the parent is a "forged" version of a student email (e.g. parent
+        # is base+tag@ and student is base@).
+        # We allow the reverse: student is base+tag@ and parent is base@.
+        if raw_email in self.student_emails or normalized in self.student_emails:
             raise forms.ValidationError(
                 "This email address is already used by the student."
             )
@@ -422,14 +429,15 @@ class ParentHandoffForm(forms.Form):
 
     def __init__(self, *args, student_emails=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.student_emails = [normalize_email(e) for e in (student_emails or []) if e]
+        self.student_emails = [e.strip().lower() for e in (student_emails or []) if e]
 
     def clean_parent_email(self):
         email = self.cleaned_data.get("parent_email")
         if not email:
             return email
         normalized = normalize_email(email)
-        if normalized in self.student_emails:
+        raw_email = email.strip().lower()
+        if raw_email in self.student_emails or normalized in self.student_emails:
             raise forms.ValidationError(
                 "You cannot use your own email address for your parent/guardian."
             )
