@@ -80,7 +80,9 @@ def format_application_value(value, key):
     if key == "race_ethnicities" and isinstance(value, list):
         from programs.models import RaceEthnicity
 
-        names = RaceEthnicity.objects.filter(pk__in=value).values_list("name", flat=True)
+        names = RaceEthnicity.objects.filter(pk__in=value).values_list(
+            "name", flat=True
+        )
         return ", ".join(names) or "—"
 
     if isinstance(value, bool):

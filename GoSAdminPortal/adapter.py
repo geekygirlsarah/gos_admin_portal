@@ -49,6 +49,7 @@ class AccountAdapter(DefaultAccountAdapter):
 
         def _send():
             from django.db import close_old_connections
+
             try:
                 super(AccountAdapter, self).send_mail(template_prefix, email, context)
             except Exception as e:
@@ -56,8 +57,9 @@ class AccountAdapter(DefaultAccountAdapter):
             finally:
                 close_old_connections()
 
-        if settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend" or not getattr(
-            settings, "EMAIL_ASYNC", True
+        if (
+            settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend"
+            or not getattr(settings, "EMAIL_ASYNC", True)
         ):
             _send()
         else:

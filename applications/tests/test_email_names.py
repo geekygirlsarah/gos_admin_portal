@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from django.core import mail
 from django.test import TestCase, override_settings
+
 from applications.models import Application
 from applications.services import (
-    send_application_submitted_email,
     send_application_approved_email,
     send_application_declined_email,
+    send_application_submitted_email,
     send_lead_notification_email,
     send_parent_handoff_email,
 )
 from programs.models import Program
+
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class EmailNamesTest(TestCase):
@@ -38,7 +40,7 @@ class EmailNamesTest(TestCase):
                     "first_name": "Mary",
                     "last_name": "Doe",
                 },
-            }
+            },
         )
         self.mentor_app = Application.objects.create(
             applicant_type=Application.Type.MENTOR,
@@ -50,7 +52,7 @@ class EmailNamesTest(TestCase):
                     "legal_first_name": "James",
                     "last_name": "Smith",
                 }
-            }
+            },
         )
 
     def test_application_submitted_email_contains_names(self):

@@ -10,12 +10,7 @@
     <fieldset class="mb-4">
         <legend class="form-label fw-semibold">{{ form.applicant_type.label }}</legend>
         {% for choice in form.applicant_type %}
-            <div class="form-check">
-                {{ choice.tag }}
-                <label class="form-check-label" for="{{ choice.id_for_label }}">
-                    {{ choice.choice_label }}
-                </label>
-            </div>
+            {{ choice.tag }}
         {% endfor %}
         {% if form.applicant_type.errors %}
             <div class="invalid-feedback d-block" role="alert">

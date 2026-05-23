@@ -229,3 +229,83 @@ class WizardBackNavigationReproductionTests(TestCase):
         self.assertNotContains(
             response, reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
+
+
+class Step2LabelReproductionTest(TestCase):
+    def test_step2_labels_not_duplicated(self):
+        app = Application.objects.create(email="test@example.com")
+        url = reverse("apply_step2", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode()
+
+        # Check for duplicated labels.
+        # We expect "Student" to appear once in a label, not twice.
+        # The duplicated labels might have slight differences in whitespace or attributes,
+        # but both should be visible to the user.
+
+        # radio_option.html has:
+        # <label{% if widget.attrs.id %} for="{{ widget.attrs.id }}"{% endif %} class="form-check-label">
+        #   {{ widget.label }}
+        # </label>
+
+        # step2_applicant_type.html has:
+        # <label class="form-check-label" for="{{ choice.id_for_label }}">
+        #     {{ choice.choice_label }}
+        # </label>
+
+        import re
+
+        # Count occurrences of label text "Student" within label tags.
+        student_labels = re.findall(r"<label[^>]*>\s*Student\s*</label>", content)
+        self.assertEqual(
+            len(student_labels),
+            1,
+            f"Expected 1 'Student' label, found {len(student_labels)}: {student_labels}",
+        )
+
+        parent_labels = re.findall(
+            r"<label[^>]*>\s*Parent / Guardian\s*</label>", content
+        )
+        self.assertEqual(
+            len(parent_labels),
+            1,
+            f"Expected 1 'Parent / Guardian' label, found {len(parent_labels)}: {parent_labels}",
+        )
+
+        mentor_labels = re.findall(
+            r"<label[^>]*>\s*Mentor / Volunteer\s*</label>", content
+        )
+        self.assertEqual(
+            len(mentor_labels),
+            1,
+            f"Expected 1 'Mentor / Volunteer' label, found {len(mentor_labels)}: {mentor_labels}",
+        )
+
+    def test_step3_labels_not_duplicated(self):
+        program = Program.objects.create(
+            name="Test Program",
+            year=2026,
+            active=True,
+            start_date=timezone.now().date() + datetime.timedelta(days=30),
+        )
+        app = Application.objects.create(email="test@example.com")
+        url = reverse("apply_step3", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode()
+
+        import re
+
+        # Count occurrences of label text "Test Program" within label tags.
+        program_labels = re.findall(r"<label[^>]*>\s*Test Program\s*</label>", content)
+        # It should appear in the widget label. 
+        # Note: there is also an <h3>Test Program</h3> in the metadata section, 
+        # but we are only counting <label> tags.
+        self.assertEqual(
+            len(program_labels),
+            1,
+            f"Expected 1 'Test Program' label, found {len(program_labels)}: {program_labels}",
+        )

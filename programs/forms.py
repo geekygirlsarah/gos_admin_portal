@@ -31,6 +31,9 @@ class StudentForm(forms.ModelForm):
             "clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
             # Render as clear, clickable checkboxes (fixes empty button appearance)
             "race_ethnicities": forms.CheckboxSelectMultiple(),
+            "directory_consent": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -336,9 +339,17 @@ class ProgramEmailForm(forms.Form):
             default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
             default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
             if default_name:
-                label = f"Default ({default_name} <{default_email}>)" if default_email else f"Default ({default_name})"
+                label = (
+                    f"Default ({default_name} <{default_email}>)"
+                    if default_email
+                    else f"Default ({default_name})"
+                )
             else:
-                label = f"Default ({default_email})" if default_email else "Default configured sender"
+                label = (
+                    f"Default ({default_email})"
+                    if default_email
+                    else "Default configured sender"
+                )
 
             choices = [
                 (
@@ -458,9 +469,17 @@ class ProgramEmailBalancesForm(forms.Form):
             default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
             default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
             if default_name:
-                label = f"Default ({default_name} <{default_email}>)" if default_email else f"Default ({default_name})"
+                label = (
+                    f"Default ({default_name} <{default_email}>)"
+                    if default_email
+                    else f"Default ({default_name})"
+                )
             else:
-                label = f"Default ({default_email})" if default_email else "Default configured sender"
+                label = (
+                    f"Default ({default_email})"
+                    if default_email
+                    else "Default configured sender"
+                )
 
             choices = [
                 (

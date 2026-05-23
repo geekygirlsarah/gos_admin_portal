@@ -84,6 +84,7 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
 
     def _send():
         from django.db import close_old_connections
+
         try:
             send_mail(
                 subject=subject,
@@ -124,6 +125,7 @@ def send_application_started_email(application: Application, request=None) -> No
 
     def _send():
         from django.db import close_old_connections
+
         try:
             send_mail(
                 subject=subject,
@@ -358,6 +360,7 @@ def _send_html_email(
 
     def _do_send():
         from django.db import close_old_connections
+
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
@@ -644,6 +647,8 @@ def _student_from_application(application: Application):
     if step5.get("date_of_birth") and not student.date_of_birth:
         student.date_of_birth = step5["date_of_birth"]
     _fill("personal_email", step5.get("personal_email"))
+    if "directory_consent" in step5:
+        student.directory_consent = bool(step5["directory_consent"])
     _fill("cell_phone_number", step5.get("cell_phone_number"))
     _fill("address", step5.get("address"))
     _fill("city", step5.get("city"))

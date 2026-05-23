@@ -31,12 +31,7 @@
     <fieldset class="mb-3">
         <legend class="visually-hidden">{{ form.interested.label }}</legend>
         {% for choice in form.interested %}
-            <div class="form-check">
-                {{ choice.tag }}
-                <label class="form-check-label" for="{{ choice.id_for_label }}">
-                    {{ choice.choice_label }}
-                </label>
-            </div>
+            {{ choice.tag }}
         {% endfor %}
         {% if form.interested.errors %}
             <div class="invalid-feedback d-block" role="alert">

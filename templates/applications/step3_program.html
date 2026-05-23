@@ -19,14 +19,9 @@
         {% if future_programs %}
             <div class="list-group mb-3">
                 {% for choice in form.program %}
-                    {% with program=choice.choice_value|stringformat:"s" %}
-                    <label class="list-group-item d-flex gap-3 align-items-start">
+                    <div class="list-group-item">
                         {{ choice.tag }}
-                        <span class="flex-grow-1">
-                            <span class="fw-semibold">{{ choice.choice_label }}</span>
-                        </span>
-                    </label>
-                    {% endwith %}
+                    </div>
                 {% endfor %}
             </div>
             {# Re-render the list with description metadata. #}

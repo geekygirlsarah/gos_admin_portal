@@ -16,12 +16,7 @@
         <fieldset class="mb-4">
             <legend class="h6">{{ field.label }}</legend>
             {% for choice in field %}
-                <div class="form-check">
-                    {{ choice.tag }}
-                    <label class="form-check-label" for="{{ choice.id_for_label }}">
-                        {{ choice.choice_label }}
-                    </label>
-                </div>
+                {{ choice.tag }}
             {% endfor %}
             {% if field.errors %}
                 <div class="invalid-feedback d-block" role="alert">

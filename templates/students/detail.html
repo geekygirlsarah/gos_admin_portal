@@ -75,6 +75,7 @@
             <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ student.city|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ student.state|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">Zip</div><div>{{ student.zip_code|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Directory consent</div><div>{{ student.directory_consent|yesno:"Yes,No" }}</div></div>
           </div>
         </div>
       </div>

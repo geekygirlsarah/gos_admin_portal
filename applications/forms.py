@@ -230,6 +230,12 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.EmailInput(attrs=_text_attrs),
     )
+    directory_consent = forms.BooleanField(
+        label="OK to share name, address, and phone for student directory",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
     cell_phone_number = forms.CharField(
         label="Student's cell phone",
         max_length=30,
@@ -262,7 +268,9 @@ class StudentInfoForm(forms.Form):
         self.fields["graduation_year"].min_value = current_year
         # Also update the MinValueValidator limit to ensure the error message is correct
         for validator in self.fields["graduation_year"].validators:
-            if hasattr(validator, "limit_value") and not hasattr(validator, "max_value"):
+            if hasattr(validator, "limit_value") and not hasattr(
+                validator, "max_value"
+            ):
                 # MaxValueValidator usually doesn't have min_value attribute, but they both have limit_value.
                 # In Django, MinValueValidator and MaxValueValidator are subclasses of BaseValidator.
                 # MinValueValidator has code 'min_value'
@@ -287,16 +295,19 @@ class StudentInfoForm(forms.Form):
         label="Allergies",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 2}),
+        help_text="List any food, drug, environmental, or other allergies. Include severity and typical reactions if known.",
     )
     dietary_restrictions = forms.CharField(
         label="Dietary restrictions",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 2}),
+        help_text="Dietary needs or restrictions (e.g., vegetarian, halal, no pork, no nuts).",
     )
     medical_notes = forms.CharField(
         label="Other medical notes",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 2}),
+        help_text="Other health information staff should know (e.g., asthma, seizures, physical limitations).",
     )
 
 

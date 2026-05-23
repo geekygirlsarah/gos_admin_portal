@@ -72,7 +72,7 @@
             </div>
         {% endif %}
         <div class="d-flex gap-2 align-items-center">
-            {% if "/apply" not in request.path %}
+            {% if not user.is_authenticated and "/apply" not in request.path %}
             <a class="btn btn-warning" href="/apply/">Apply to the Program</a>
             {% endif %}
             {% if user.is_authenticated %}
