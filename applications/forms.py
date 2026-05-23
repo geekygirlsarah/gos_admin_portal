@@ -63,7 +63,9 @@ class ApplicantTypeForm(forms.Form):
 
     applicant_type = forms.ChoiceField(
         label="I am applying as a…",
-        choices=Application.Type.choices,
+        choices=[
+            c for c in Application.Type.choices if c[0] != Application.Type.MENTOR
+        ],
         widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
     email = forms.EmailField(
@@ -334,15 +336,15 @@ class StudentExperienceForm(forms.Form):
     def __init__(self, *args, applicant_type=None, **kwargs):
         super().__init__(*args, **kwargs)
         if applicant_type == Application.Type.PARENT:
-            self.fields[
-                "interest_reason"
-            ].label = "Why is your child interested in participating in this Girls of Steel program this season?"
-            self.fields[
-                "hoped_gains"
-            ].label = "What does your child hope to gain from the experience?"
-            self.fields[
-                "prior_robotics_experience"
-            ].label = "What prior robotics experience does your child have?"
+            self.fields["interest_reason"].label = (
+                "Why is your child interested in participating in this Girls of Steel program this season?"
+            )
+            self.fields["hoped_gains"].label = (
+                "What does your child hope to gain from the experience?"
+            )
+            self.fields["prior_robotics_experience"].label = (
+                "What prior robotics experience does your child have?"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +565,7 @@ class MentorInfoForm(forms.Form):
         widget=forms.TextInput(attrs=_text_attrs),
     )
     notes = forms.CharField(
-        label="Why are you interested in mentoring Girls of Steel?",
+        label="Why are you interested in volunteering with Girls of Steel?",
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 4}),
     )

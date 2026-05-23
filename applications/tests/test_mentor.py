@@ -30,19 +30,16 @@ class MentorFlowTests(TestCase):
 
     # --- Step 2 → Step 3 (Email) for mentor -----------------------------
 
-    def test_mentor_step2_goes_to_step3(self):
+    def test_mentor_step2_fails_when_disabled(self):
+        """Verify that Step 2 now rejects 'mentor' because it's disabled."""
         app = Application.objects.create()
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
             {"applicant_type": "mentor", "email": "mentor@example.com"},
         )
-        self.assertRedirects(
-            response,
-            reverse("apply_step3", kwargs={"app_id": app.application_id}),
-            fetch_redirect_response=False,
-        )
-        app.refresh_from_db()
-        self.assertEqual(app.applicant_type, "mentor")
+        # 200 means form error (stay on page) instead of 302 redirect.
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select a valid choice")
 
     # --- Step 3 (OTP) → mentor-info or blocked --------------------------
 

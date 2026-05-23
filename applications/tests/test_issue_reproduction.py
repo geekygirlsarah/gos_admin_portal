@@ -277,10 +277,11 @@ class Step2LabelReproductionTest(TestCase):
         mentor_labels = re.findall(
             r"<label[^>]*>\s*Mentor / Volunteer\s*</label>", content
         )
+        # Mentor option is temporarily disabled
         self.assertEqual(
             len(mentor_labels),
-            1,
-            f"Expected 1 'Mentor / Volunteer' label, found {len(mentor_labels)}: {mentor_labels}",
+            0,
+            f"Expected 0 'Mentor / Volunteer' label (disabled), found {len(mentor_labels)}: {mentor_labels}",
         )
 
     def test_step4_labels_not_duplicated(self):
