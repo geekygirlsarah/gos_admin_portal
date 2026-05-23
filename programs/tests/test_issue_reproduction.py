@@ -5,6 +5,8 @@ from django.test import TestCase
 from django.urls import reverse
 
 from programs.models import (
+    RELATIONSHIP_CHOICES,
+    Adult,
     Enrollment,
     Fee,
     FeeAssignment,
@@ -74,3 +76,60 @@ class SlidingScaleDiscountTest(TestCase):
         # Also check balance
         # total_fees = 100, total_sliding = 50, total_payments = 0 -> balance = 50
         self.assertEqual(response.context["balance"], Decimal("50.00"))
+
+
+class RelationshipChoicesTest(TestCase):
+    """Verify RELATIONSHIP_CHOICES contains only gender-neutral options."""
+
+    EXPECTED_KEYS = {
+        "parent",
+        "grandparent",
+        "pibling",
+        "sibling",
+        "guardian",
+        "family_friend",
+        "other",
+    }
+    REMOVED_KEYS = {
+        "mother",
+        "father",
+        "grandmother",
+        "grandfather",
+        "aunt",
+        "uncle",
+        "sister",
+        "brother",
+        "friend",
+    }
+
+    def test_only_gender_neutral_choices(self):
+        keys = {k for k, _ in RELATIONSHIP_CHOICES}
+        self.assertEqual(keys, self.EXPECTED_KEYS)
+
+    def test_gendered_choices_removed(self):
+        keys = {k for k, _ in RELATIONSHIP_CHOICES}
+        self.assertTrue(
+            self.REMOVED_KEYS.isdisjoint(keys),
+            f"Gendered choices still present: {self.REMOVED_KEYS & keys}",
+        )
+
+    def test_adult_default_relationship_is_parent(self):
+        adult = Adult(first_name="Test", last_name="Adult")
+        self.assertEqual(adult.relationship_to_student, "parent")
+
+    def test_adult_specific_relationship_optional(self):
+        adult = Adult.objects.create(
+            first_name="Test",
+            last_name="Adult",
+            relationship_to_student="parent",
+        )
+        self.assertIsNone(adult.specific_relationship)
+
+    def test_adult_specific_relationship_can_be_set(self):
+        adult = Adult.objects.create(
+            first_name="Test",
+            last_name="Adult",
+            relationship_to_student="parent",
+            specific_relationship="foster parent",
+        )
+        self.assertEqual(adult.specific_relationship, "foster parent")

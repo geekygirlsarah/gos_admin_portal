@@ -572,6 +572,9 @@ def _adult_from_data(parent_data: dict):
             or adult.relationship_to_student == "parent"
         ):
             adult.relationship_to_student = rel[:20]
+    specific_rel = (parent_data.get("specific_relationship") or "").strip()
+    if specific_rel and not adult.specific_relationship:
+        adult.specific_relationship = specific_rel[:100]
     adult.is_parent = True
     adult.save()
     return adult

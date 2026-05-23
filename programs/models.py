@@ -106,19 +106,11 @@ except Exception:
 
 RELATIONSHIP_CHOICES = [
     ("parent", "Parent"),
-    ("mother", "Mother"),
-    ("father", "Father"),
     ("grandparent", "Grandparent"),
-    ("grandmother", "Grandmother"),
-    ("grandfather", "Grandfather"),
-    ("pibling", "Pibling"),
-    ("aunt", "Aunt"),
-    ("uncle", "Uncle"),
+    ("pibling", "Pibling (aunt/uncle)"),
     ("sibling", "Sibling"),
-    ("sister", "Sister"),
-    ("brother", "Brother"),
-    ("friend", "Friend"),
     ("guardian", "Guardian"),
+    ("family_friend", "Family Friend"),
     ("other", "Other"),
 ]
 
@@ -715,6 +707,12 @@ class Adult(models.Model):
     # Relationship to student (for parents/guardians)
     relationship_to_student = models.CharField(
         max_length=20, choices=RELATIONSHIP_CHOICES, default="parent"
+    )
+    specific_relationship = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Specific relationship, e.g. father, stepmom, foster parent, etc.",
     )
 
     # Contact

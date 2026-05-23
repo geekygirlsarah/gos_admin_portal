@@ -108,6 +108,7 @@ class PhoneValidationTestCase(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
+                "relationship_to_student": "parent",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)

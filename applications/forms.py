@@ -365,8 +365,15 @@ class ParentInfoForm(forms.Form):
     relationship_to_student = forms.ChoiceField(
         label="Relationship to student",
         choices=[("", "---")] + RELATIONSHIP_CHOICES,
-        required=False,
+        required=True,
         widget=forms.Select(attrs=_select_attrs),
+    )
+    specific_relationship = forms.CharField(
+        label="Specific relationship",
+        max_length=100,
+        required=False,
+        help_text="e.g. father, stepmom, foster parent, etc.",
+        widget=forms.TextInput(attrs=_text_attrs),
     )
     email = forms.EmailField(
         label="Email address",
