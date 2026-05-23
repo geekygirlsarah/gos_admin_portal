@@ -204,25 +204,21 @@ class StudentInfoForm(forms.Form):
     address = forms.CharField(
         label="Address",
         max_length=255,
-        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     city = forms.CharField(
         label="City",
         max_length=100,
-        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     state = forms.CharField(
         label="State",
         max_length=50,
-        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     zip_code = forms.CharField(
         label="Zip code",
         max_length=20,
-        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     personal_email = forms.EmailField(
@@ -288,7 +284,6 @@ class StudentInfoForm(forms.Form):
     tshirt_size = forms.ChoiceField(
         label="T-shirt size",
         choices=[("", "---")] + TSHIRT_SIZE_CHOICES,
-        required=False,
         widget=forms.Select(attrs=_select_attrs),
     )
     allergies = forms.CharField(
@@ -320,8 +315,14 @@ class ParentInfoForm(forms.Form):
     """Step 6 (primary) and Step 7 (secondary) parent/guardian info."""
 
     first_name = forms.CharField(
-        label="First name",
+        label="Legal first name",
         max_length=150,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    preferred_first_name = forms.CharField(
+        label="Preferred first name (if different)",
+        max_length=150,
+        required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     last_name = forms.CharField(
@@ -345,10 +346,29 @@ class ParentInfoForm(forms.Form):
         label="Email address",
         widget=forms.EmailInput(attrs=_text_attrs),
     )
+    address = forms.CharField(
+        label="Address",
+        max_length=255,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    city = forms.CharField(
+        label="City",
+        max_length=100,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    state = forms.CharField(
+        label="State",
+        max_length=50,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
+    zip_code = forms.CharField(
+        label="Zip code",
+        max_length=20,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
     cell_phone = forms.CharField(
         label="Cell phone",
         max_length=30,
-        required=False,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
     )

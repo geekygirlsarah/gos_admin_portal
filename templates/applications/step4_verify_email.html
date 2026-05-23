@@ -15,7 +15,7 @@
 
     <div class="mb-3">
         <label for="{{ form.code.id_for_label }}" class="form-label">
-            {{ form.code.label }}
+            {{ form.code.label }}{% if form.code.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
         </label>
         {{ form.code }}
         {% if form.code.errors %}

@@ -697,6 +697,10 @@ class Adult(models.Model):
     home_phone = models.CharField(
         max_length=30, blank=True, null=True, validators=[validate_phone_number]
     )
+    address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
     personal_email = models.EmailField(blank=True, null=True)
 
     # Mentor-like fields

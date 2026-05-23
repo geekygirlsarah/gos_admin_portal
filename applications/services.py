@@ -568,10 +568,15 @@ def _adult_from_data(parent_data: dict):
             setattr(adult, field, value)
 
     _fill("first_name", first_name)
+    _fill("preferred_first_name", parent_data.get("preferred_first_name"))
     _fill("last_name", last_name)
     _fill("email", email)
     _fill("cell_phone", parent_data.get("cell_phone"))
     _fill("home_phone", parent_data.get("home_phone"))
+    _fill("address", parent_data.get("address"))
+    _fill("city", parent_data.get("city"))
+    _fill("state", parent_data.get("state"))
+    _fill("zip_code", parent_data.get("zip_code"))
     _fill("pronouns", parent_data.get("pronouns"))
 
     # For boolean fields, only update if the existing value is False and we have a True value.

@@ -58,10 +58,14 @@
                 {% if field.name == 'directory_consent' %}
                     <div class="form-check mt-md-4">
                         {{ field }}
-                        <label for="{{ field.id_for_label }}" class="form-check-label">{{ field.label }}</label>
+                        <label for="{{ field.id_for_label }}" class="form-check-label">
+                            {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                        </label>
                     </div>
                 {% else %}
-                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                    <label for="{{ field.id_for_label }}" class="form-label">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                    </label>
                     {{ field }}
                 {% endif %}
                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
