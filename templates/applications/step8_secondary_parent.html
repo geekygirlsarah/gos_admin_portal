@@ -1,13 +1,13 @@
 {% extends "applications/_wizard_base.html" %}
 
-{% block wizard_title %}Secondary parent / guardian{% endblock %}
-{% block wizard_heading %}Secondary parent / guardian{% endblock %}
+{% block wizard_title %}Secondary adult contact{% endblock %}
+{% block wizard_heading %}Secondary adult contact{% endblock %}
 
 {% block wizard_body %}
 <p>
-    Please provide a second parent, guardian, or emergency contact for the
-    student. The secondary parent or guardian is the one we will reach out to
-    if we <strong>cannot get a hold of</strong> the primary parent or guardian.
+    Please provide a second adult contact or emergency contact for the
+    student. The secondary adult contact is the one we will reach out to
+    if we <strong>cannot get a hold of</strong> the primary adult contact.
 </p>
 <form method="post" novalidate>
     {% csrf_token %}

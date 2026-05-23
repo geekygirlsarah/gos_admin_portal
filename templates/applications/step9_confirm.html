@@ -56,7 +56,7 @@
 </div>
 
 <div class="mb-4">
-    <h2 class="h5">Primary parent / guardian</h2>
+    <h2 class="h5">Primary adult contact</h2>
     {% if step7_data %}
         <dl class="row mb-0">
             {% for k, v in step7_data.items %}
@@ -67,12 +67,12 @@
             {% endfor %}
         </dl>
     {% else %}
-        <p class="text-muted">No primary parent information provided.</p>
+        <p class="text-muted">No primary adult contact information provided.</p>
     {% endif %}
 </div>
 
 <div class="mb-4">
-    <h2 class="h5">Secondary parent / guardian</h2>
+    <h2 class="h5">Secondary adult contact</h2>
     {% if step8_data and not step8_skipped %}
         <dl class="row mb-0">
             {% for k, v in step8_data.items %}
@@ -83,7 +83,7 @@
             {% endfor %}
         </dl>
     {% else %}
-        <p class="text-muted">No secondary parent / guardian information provided.</p>
+        <p class="text-muted">No secondary adult contact information provided.</p>
     {% endif %}
 </div>
 

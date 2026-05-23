@@ -408,7 +408,7 @@ class HandoffSecurityReproductionTests(TestCase):
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertContains(
-            response, "Now a parent or guardian needs to finish the application"
+            response, "Now an adult contact needs to finish the application"
         )
 
         # 3. Perform handoff to parent
@@ -437,10 +437,10 @@ class HandoffSecurityReproductionTests(TestCase):
 
         # DESIRED BEHAVIOR: it should show the handoff required page
         self.assertContains(
-            response, "This application has been handed off to a parent or guardian"
+            response, "This application has been handed off to an adult contact"
         )
         self.assertNotContains(
-            response, "Please provide the primary parent or guardian's information"
+            response, "Please provide the primary adult contact's information"
         )
 
     def test_parent_can_access_handoff_with_token(self):
@@ -477,7 +477,7 @@ class HandoffSecurityReproductionTests(TestCase):
         # Follow the redirect - should NOW be authorized because token is in session
         response = self.client.get(response.url)
         self.assertContains(
-            response, "Please provide the primary parent or guardian's information"
+            response, "Please provide the primary adult contact's information"
         )
 
 

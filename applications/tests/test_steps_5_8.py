@@ -150,7 +150,7 @@ class Step7PrimaryParentTests(TestCase):
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Email my parent")
+        self.assertContains(response, "Email my adult contact")
 
     def test_student_handoff_post_emails_parent_and_redirects_to_start(self):
         app = _verified(

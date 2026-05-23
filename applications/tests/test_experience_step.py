@@ -84,14 +84,14 @@ class RenumberingTests(TestCase):
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Primary parent / guardian")
+        self.assertContains(response, "Primary adult contact")
 
         # Step 8 (was 7)
         response = self.client.get(
             reverse("apply_step8", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Secondary parent / guardian")
+        self.assertContains(response, "Secondary adult contact")
 
         # Step 9 (was 8)
         response = self.client.get(

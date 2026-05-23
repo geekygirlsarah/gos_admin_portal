@@ -1,12 +1,12 @@
 {% extends "applications/_wizard_base.html" %}
 
-{% block wizard_title %}Primary parent / guardian{% endblock %}
-{% block wizard_heading %}Primary parent / guardian{% endblock %}
+{% block wizard_title %}Primary adult contact{% endblock %}
+{% block wizard_heading %}Primary adult contact{% endblock %}
 
 {% block wizard_body %}
 {% if mode == "handoff" %}
     <p>
-        Thanks! Now a parent or guardian needs to finish the application.
+        Thanks! Now an adult contact needs to finish the application.
         Enter their email below and we'll send them a link to take over.
     </p>
     <form method="post" novalidate class="mb-3">
@@ -25,7 +25,7 @@
         </div>
         <div class="d-flex justify-content-between">
             <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
-            <button type="submit" class="btn btn-primary">Email my parent / guardian</button>
+            <button type="submit" class="btn btn-primary">Email my adult contact</button>
         </div>
     </form>
 {% else %}
@@ -42,13 +42,13 @@
         </div>
     {% endif %}
     <p>
-        Please provide the primary parent or guardian's information.
-        The primary parent or guardian is the one we will reach out to
+        Please provide the primary adult contact's information.
+        The primary adult contact is the one we will reach out to
         <strong>first</strong> in an emergency.
     </p>
     {% if has_secondary %}
     <div class="alert alert-secondary d-flex align-items-center justify-content-between gap-3" role="note">
-        <span>Want to make {% if secondary_name %}<strong>{{ secondary_name }}</strong> (the secondary parent / guardian){% else %}the secondary parent / guardian{% endif %} the primary instead?</span>
+        <span>Want to make {% if secondary_name %}<strong>{{ secondary_name }}</strong> (the secondary adult contact){% else %}the secondary adult contact{% endif %} the primary instead?</span>
         <form method="post" action="{% url 'apply_swap_parents' app_id=application.application_id %}" class="d-inline">
             {% csrf_token %}
             <input type="hidden" name="next" value="7">

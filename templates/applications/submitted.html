@@ -21,12 +21,12 @@
             {% endif %}
 
             {% if step7_data %}
-                <dt class="col-sm-4">Primary parent/guardian</dt>
+                <dt class="col-sm-4">Primary adult contact</dt>
                 <dd class="col-sm-8">{{ step7_data.first_name }} {{ step7_data.last_name }}</dd>
             {% endif %}
 
             {% if step8_data and not step8_skipped %}
-                <dt class="col-sm-4">Secondary parent/guardian</dt>
+                <dt class="col-sm-4">Secondary adult contact</dt>
                 <dd class="col-sm-8">{{ step8_data.first_name }} {{ step8_data.last_name }}</dd>
             {% endif %}
         </dl>
@@ -38,7 +38,7 @@
 </div>
 
 <p>
-    A confirmation email has been sent to both student and the primary parent/guardian.
+    A confirmation email has been sent to both student and the primary adult contact.
     Our lead mentors have been notified and will review your application.
     You can check back any time using your application ID.
 </p>
