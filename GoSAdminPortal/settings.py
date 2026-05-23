@@ -263,7 +263,7 @@ CONTENT_SECURITY_POLICY = {
         "img-src": ["'self'", "data:"],
         "object-src": ["'none'"],
         "script-src": ["'self'", "https://cdn.jsdelivr.net", constants.NONCE],
-        "style-src": ["'self'", "https://cdn.jsdelivr.net"],
+        "style-src": ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
     }
 }
 

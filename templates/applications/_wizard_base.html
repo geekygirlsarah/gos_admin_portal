@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static l10n %}
+{% load static %}
 
 {% block title %}{% block wizard_title %}Apply{% endblock %} – Girls of Steel{% endblock %}
 
@@ -22,14 +22,14 @@
                         </span>
                     {% endif %}
                 </div>
-                <div class="progress" style="height: 0.5rem;">
-                    <div class="progress-bar bg-primary"
+                <div class="progress" style="height: 1.0rem;">
+                    <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
                          role="progressbar"
                          aria-label="Application progress"
-                         aria-valuenow="{{ current_step|unlocalize }}"
+                         aria-valuenow="{{ current_step }}"
                          aria-valuemin="0"
-                         aria-valuemax="{{ total_steps|unlocalize }}"
-                         style="width: {{ progress_pct|unlocalize }}%;"></div>
+                         aria-valuemax="{{ total_steps }}"
+                         style="width: {{ progress_pct }}%;"></div>
                 </div>
             </nav>
         {% endif %}
