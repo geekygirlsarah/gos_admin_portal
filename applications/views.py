@@ -314,13 +314,16 @@ class Step4ProgramView(View):
         return redirect("apply_continue", app_id=application.application_id)
 
     def _render(self, request, application, form, future, current, past):
+        future_list = list(future)
+        program_choices = list(zip(form["program"], future_list))
         return render(
             request,
             self.template_name,
             {
                 "application": application,
                 "form": form,
-                "future_programs": future,
+                "future_programs": future_list,
+                "program_choices": program_choices,
                 "current_programs": current,
                 "past_programs": past,
                 "current_step": 4,
