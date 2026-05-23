@@ -227,7 +227,7 @@ class StudentInfoForm(forms.Form):
         widget=forms.EmailInput(attrs=_text_attrs),
     )
     directory_consent = forms.BooleanField(
-        label="OK to share name, address, and phone for student directory",
+        label="OK to share name, address, and phone for student directory and carpool map",
         required=False,
         initial=True,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
@@ -330,6 +330,19 @@ class StudentExperienceForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
     )
+
+    def __init__(self, *args, applicant_type=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if applicant_type == Application.Type.PARENT:
+            self.fields[
+                "interest_reason"
+            ].label = "Why is your child interested in participating in this Girls of Steel program this season?"
+            self.fields[
+                "hoped_gains"
+            ].label = "What does your child hope to gain from the experience?"
+            self.fields[
+                "prior_robotics_experience"
+            ].label = "What prior robotics experience does your child have?"
 
 
 # ---------------------------------------------------------------------------

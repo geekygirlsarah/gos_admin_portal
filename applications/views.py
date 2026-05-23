@@ -660,7 +660,9 @@ class Step6ExperienceView(View):
             return guard
 
         initial = (application.data or {}).get("step6") or {}
-        form = StudentExperienceForm(initial=initial)
+        form = StudentExperienceForm(
+            initial=initial, applicant_type=application.applicant_type
+        )
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
@@ -669,7 +671,9 @@ class Step6ExperienceView(View):
         if guard is not None:
             return guard
 
-        form = StudentExperienceForm(request.POST)
+        form = StudentExperienceForm(
+            request.POST, applicant_type=application.applicant_type
+        )
         if not form.is_valid():
             return self._render(request, application, form)
 
@@ -832,8 +836,11 @@ class Step7PrimaryParentView(View):
         # via a handoff and have no other info, at least seed the parent's
         # email field.
         initial = saved or (adult_to_prefill(existing_adult) if existing_adult else {})
-        if not initial and handoff_email:
-            initial = {"email": handoff_email}
+        if not initial:
+            if handoff_email:
+                initial = {"email": handoff_email}
+            elif application.applicant_type == Application.Type.PARENT:
+                initial = {"email": application.email}
         # For new applications (no saved data), default primary to opted-in.
         if not saved and "email_updates" not in initial:
             initial["email_updates"] = True

@@ -568,7 +568,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "At least one parent or guardian must opt in to receiving email updates",
+            "At least one adult contact must opt in to receiving email updates",
         )
         app.refresh_from_db()
         self.assertEqual(app.current_step, 8)
@@ -650,3 +650,51 @@ class ParentNotificationOptInReproductionTests(TestCase):
 
         app.refresh_from_db()
         self.assertNotEqual(app.status, Application.Status.SUBMITTED)
+
+
+class Step7PrefillEmailReproductionTests(TestCase):
+    def test_parent_initiated_prefills_email(self):
+        """
+        If a parent starts the application, their verified email should
+        prefill the Step 7 (Primary Parent) form by default.
+        """
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            email_verified_at=timezone.now(),
+            current_step=4,
+        )
+        url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["form"].initial.get("email"), "parent@example.com"
+        )
+
+    def test_student_initiated_handoff_prefills_email(self):
+        """
+        If a student starts the application and hands off to a parent,
+        the parent email provided during handoff should prefill Step 7.
+        """
+        app = Application.objects.create(
+            applicant_type=Application.Type.STUDENT,
+            email="student@example.com",
+            email_verified_at=timezone.now(),
+            current_step=7,
+            data={"step7_handoff": {"parent_email": "parent_handoff@example.com"}},
+        )
+        # Mock session handoff token
+        app.issue_handoff_token()
+        app.status = Application.Status.AWAITING_PARENT
+        app.save()
+
+        session = self.client.session
+        session[f"handoff_token_{app.application_id}"] = app.handoff_token
+        session.save()
+
+        url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["form"].initial.get("email"), "parent_handoff@example.com"
+        )
