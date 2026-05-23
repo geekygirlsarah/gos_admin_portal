@@ -30,6 +30,7 @@ from .forms import (
     ParentInfoForm,
     ProgramSelectForm,
     ResumeApplicationForm,
+    StudentExperienceForm,
     StudentInfoForm,
 )
 from .models import Application, ApplicationDocumentSubmission, SiteSettings
@@ -50,7 +51,7 @@ from .services import (
 
 logger = logging.getLogger(__name__)
 
-TOTAL_STEPS = 9  # Student/parent wizard step count.
+TOTAL_STEPS = 10  # Student/parent wizard step count.
 MENTOR_TOTAL_STEPS = 6  # Mentor wizard step count.
 
 
@@ -118,17 +119,18 @@ def _redirect_to_current_step(application: Application):
         6: "apply_step6",
         7: "apply_step7",
         8: "apply_step8",
+        9: "apply_step9",
     }
     if step in name_map:
         return redirect(name_map[step], app_id=application.application_id)
-    if step >= 9:
+    if step >= 10:
         # Approved applicants jump straight to the signed-documents page.
         # Everyone else lands on the post-submit confirmation page.
         if application.status in (
             Application.Status.APPROVED,
             Application.Status.APPROVED_SIGNED,
         ):
-            return redirect("apply_step9", app_id=application.application_id)
+            return redirect("apply_step10", app_id=application.application_id)
         return redirect("apply_submitted", app_id=application.application_id)
     return redirect("apply_start")
 
@@ -645,6 +647,47 @@ class Step5StudentInfoView(View):
         )
 
 
+@method_decorator(never_cache, name="dispatch")
+class Step6ExperienceView(View):
+    template_name = "applications/step6_experience.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
+
+        initial = (application.data or {}).get("step6") or {}
+        form = StudentExperienceForm(initial=initial)
+        return self._render(request, application, form)
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
+
+        form = StudentExperienceForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, application, form)
+
+        payload = _sanitize_payload(form.cleaned_data)
+        _save_step_data(application, "step6", payload, next_step=7)
+        return redirect("apply_step7", app_id=application.application_id)
+
+    def _render(self, request, application, form):
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "form": form,
+                "current_step": 6,
+                "total_steps": TOTAL_STEPS,
+            },
+        )
+
+
 # ---------------------------------------------------------------------------
 # Step 6: primary parent / guardian (with optional handoff if a student
 # started the application).
@@ -652,8 +695,8 @@ class Step5StudentInfoView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step6PrimaryParentView(View):
-    template_name = "applications/step6_primary_parent.html"
+class Step7PrimaryParentView(View):
+    template_name = "applications/step7_primary_parent.html"
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
@@ -697,10 +740,10 @@ class Step6PrimaryParentView(View):
                 )
             parent_email = handoff_form.cleaned_data["parent_email"]
             data = dict(application.data or {})
-            data["step6_handoff"] = {"parent_email": parent_email}
+            data["step7_handoff"] = {"parent_email": parent_email}
             application.data = data
             application.status = Application.Status.AWAITING_PARENT
-            application.current_step = max(application.current_step, 6)
+            application.current_step = max(application.current_step, 7)
             application.issue_handoff_token()
             application.save(
                 update_fields=["data", "status", "current_step", "updated_at"]
@@ -720,8 +763,8 @@ class Step6PrimaryParentView(View):
                 request, application, form, handoff_form, mode, existing_adult
             )
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step6", payload, next_step=7)
-        return redirect("apply_step7", app_id=application.application_id)
+        _save_step_data(application, "step7", payload, next_step=8)
+        return redirect("apply_step8", app_id=application.application_id)
 
     def _build_forms(self, application, post=None):
         """Decide which form mode to show:
@@ -730,19 +773,19 @@ class Step6PrimaryParentView(View):
         - "form": show the actual ParentInfoForm.
         Returns (form, handoff_form, mode).
         """
-        saved = (application.data or {}).get("step6") or {}
+        saved = (application.data or {}).get("step7") or {}
         # If the student initiated and we don't have a parent yet, default to
         # asking for a handoff email — unless they're already filling out the
         # form (post with parent fields), or they previously entered parent
         # info.
         student_initiated = application.applicant_type == Application.Type.STUDENT
-        already_handed_off = bool((application.data or {}).get("step6_handoff"))
+        already_handed_off = bool((application.data or {}).get("step7_handoff"))
         # If a handoff already happened, the parent has now arrived via the
         # email link. Look the adult up by the parent_email captured at
         # handoff time (rather than the student's email) and show them the
         # parent form directly — never loop back into handoff mode.
         handoff_email = (
-            (application.data or {}).get("step6_handoff", {}).get("parent_email")
+            (application.data or {}).get("step7_handoff", {}).get("parent_email")
         )
         existing_adult = None
         # If Step 5 linked us to an existing Student record (returning
@@ -808,25 +851,25 @@ class Step6PrimaryParentView(View):
         # Only show "welcome back" if we actually prefilled from an existing
         # adult record (i.e., we're in form mode and the form is unbound, or
         # bound but came in with prefilled initial data). Don't show it if
-        # the applicant has already saved step6 data in a previous visit.
-        saved = (application.data or {}).get("step6") or {}
+        # the applicant has already saved step7 data in a previous visit.
+        saved = (application.data or {}).get("step7") or {}
         if existing_adult is not None and not saved and mode == "form":
             display_name = existing_adult.first_name or str(existing_adult)
             welcome_back = {
                 "name": display_name,
                 "last_program": latest_program_for_adult(existing_adult),
             }
-        # Show the swap box if step7 is already saved, OR if the returning
-        # student has a secondary_contact on file (step7 prefill exists but
+        # Show the swap box if step8 is already saved, OR if the returning
+        # student has a secondary_contact on file (step8 prefill exists but
         # hasn't been submitted yet).  Also collect the secondary's display
         # name so the template can show it in the swap prompt.
         has_secondary = False
         secondary_name = None
-        step7_data = (application.data or {}).get("step7") or {}
-        if step7_data:
+        step8_data = (application.data or {}).get("step8") or {}
+        if step8_data:
             has_secondary = True
-            first = step7_data.get("first_name") or ""
-            last = step7_data.get("last_name") or ""
+            first = step8_data.get("first_name") or ""
+            last = step8_data.get("last_name") or ""
             secondary_name = " ".join(filter(None, [first, last])) or None
         if not has_secondary:
             sid = (application.data or {}).get("step5", {}).get("_existing_student_id")
@@ -874,7 +917,7 @@ class Step6PrimaryParentView(View):
                 "welcome_back": welcome_back,
                 "has_secondary": has_secondary,
                 "secondary_name": secondary_name,
-                "current_step": 6,
+                "current_step": 7,
                 "total_steps": TOTAL_STEPS,
             },
         )
@@ -887,12 +930,12 @@ class Step6PrimaryParentView(View):
 
 @method_decorator(never_cache, name="dispatch")
 class SwapParentsView(View):
-    """Swap the saved step6 (primary) and step7 (secondary) parent data.
+    """Swap the saved step7 (primary) and step8 (secondary) parent data.
 
     Only meaningful when both steps have already been filled in (e.g. a
     returning student whose contacts are pre-filled).  After the swap the
     user is redirected back to whichever step they came from (``next``
-    query-param, defaulting to step 6).
+    query-param, defaulting to step 7).
     """
 
     def post(self, request, app_id: str):
@@ -909,25 +952,25 @@ class SwapParentsView(View):
             )
 
         data = dict(application.data or {})
-        step6 = data.get("step6") or {}
         step7 = data.get("step7") or {}
+        step8 = data.get("step8") or {}
 
         # For returning students the wizard prefills from the Student record
         # but doesn't save to application.data until the user submits each
         # step.  If either side is empty, hydrate it from the Student record
         # so the swap has something to work with.
         existing_student_id = (data.get("step5") or {}).get("_existing_student_id")
-        if existing_student_id and (not step6 or not step7):
+        if existing_student_id and (not step7 or not step8):
             student = Student.objects.filter(pk=existing_student_id).first()
             if student:
-                if not step6 and student.primary_contact_id:
-                    step6 = adult_to_prefill(student.primary_contact)
-                if not step7 and student.secondary_contact_id:
-                    step7 = adult_to_prefill(student.secondary_contact)
+                if not step7 and student.primary_contact_id:
+                    step7 = adult_to_prefill(student.primary_contact)
+                if not step8 and student.secondary_contact_id:
+                    step8 = adult_to_prefill(student.secondary_contact)
 
         # Only swap when both sides have content.
-        if step6 or step7:
-            data["step6"], data["step7"] = step7, step6
+        if step7 or step8:
+            data["step7"], data["step8"] = step8, step7
             application.data = data
             application.save(update_fields=["data", "updated_at"])
             messages.success(
@@ -935,10 +978,10 @@ class SwapParentsView(View):
                 "Primary and secondary parent / guardian information has been swapped.",
             )
 
-        next_step = request.POST.get("next", "6")
-        if next_step == "7":
-            return redirect("apply_step7", app_id=application.application_id)
-        return redirect("apply_step6", app_id=application.application_id)
+        next_step = request.POST.get("next", "7")
+        if next_step == "8":
+            return redirect("apply_step8", app_id=application.application_id)
+        return redirect("apply_step7", app_id=application.application_id)
 
 
 # ---------------------------------------------------------------------------
@@ -947,8 +990,8 @@ class SwapParentsView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step7SecondaryParentView(View):
-    template_name = "applications/step7_secondary_parent.html"
+class Step8SecondaryParentView(View):
+    template_name = "applications/step8_secondary_parent.html"
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
@@ -991,11 +1034,11 @@ class Step7SecondaryParentView(View):
         if not form.is_valid():
             return self._render(request, application, form)
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step7", payload, next_step=8)
-        return redirect("apply_step8", app_id=application.application_id)
+        _save_step_data(application, "step8", payload, next_step=9)
+        return redirect("apply_step9", app_id=application.application_id)
 
     def _initial(self, application):
-        saved = (application.data or {}).get("step7") or {}
+        saved = (application.data or {}).get("step8") or {}
         if saved and not saved.get("_skipped"):
             # Strip any internal underscore-prefixed keys before passing
             # back to the form as initial data.
@@ -1015,7 +1058,7 @@ class Step7SecondaryParentView(View):
             {
                 "application": application,
                 "form": form,
-                "current_step": 7,
+                "current_step": 8,
                 "total_steps": TOTAL_STEPS,
             },
         )
@@ -1027,8 +1070,8 @@ class Step7SecondaryParentView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step8ConfirmView(View):
-    template_name = "applications/step8_confirm.html"
+class Step9ConfirmView(View):
+    template_name = "applications/step9_confirm.html"
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
@@ -1064,7 +1107,7 @@ class Step8ConfirmView(View):
 
         application.status = Application.Status.SUBMITTED
         application.submitted_at = timezone.now()
-        application.current_step = 9
+        application.current_step = 10
         application.save(
             update_fields=["status", "submitted_at", "current_step", "updated_at"]
         )
@@ -1097,8 +1140,9 @@ class Step8ConfirmView(View):
                 "step5_data": data.get("step5") or {},
                 "step6_data": data.get("step6") or {},
                 "step7_data": data.get("step7") or {},
-                "step7_skipped": bool((data.get("step7") or {}).get("_skipped")),
-                "current_step": 8,
+                "step8_data": data.get("step8") or {},
+                "step8_skipped": bool((data.get("step8") or {}).get("_skipped")),
+                "current_step": 9,
                 "total_steps": TOTAL_STEPS,
             },
         )
@@ -1111,16 +1155,16 @@ class SubmittedView(View):
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
         # Approved student/parent applicants belong on the documents page.
-        # Mentors have no Step 9 documents flow.
+        # Mentors have no Step 10 documents flow.
         if not _is_mentor(application) and application.status in (
             Application.Status.APPROVED,
             Application.Status.APPROVED_SIGNED,
         ):
-            return redirect("apply_step9", app_id=application.application_id)
+            return redirect("apply_step10", app_id=application.application_id)
         if _is_mentor(application):
             current_step, total_steps = _mentor_progress("submitted")
         else:
-            current_step = min(max(application.current_step, 9), TOTAL_STEPS)
+            current_step = min(max(application.current_step, 10), TOTAL_STEPS)
             total_steps = TOTAL_STEPS
         return render(
             request,
@@ -1132,8 +1176,9 @@ class SubmittedView(View):
                 "step5_data": application.data.get("step5") or {},
                 "step6_data": application.data.get("step6") or {},
                 "step7_data": application.data.get("step7") or {},
-                "step7_skipped": bool(
-                    (application.data.get("step7") or {}).get("_skipped")
+                "step8_data": application.data.get("step8") or {},
+                "step8_skipped": bool(
+                    (application.data.get("step8") or {}).get("_skipped")
                 ),
                 "mentor_info_data": application.data.get("mentor_info") or {},
             },
@@ -1152,8 +1197,8 @@ class SubmittedView(View):
 
 
 @method_decorator(never_cache, name="dispatch")
-class Step9DocumentsView(View):
-    template_name = "applications/step9_documents.html"
+class Step10DocumentsView(View):
+    template_name = "applications/step10_documents.html"
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
@@ -1184,7 +1229,7 @@ class Step9DocumentsView(View):
         )
         if document is None:
             messages.error(request, "We couldn't find that document. Please try again.")
-            return redirect("apply_step9", app_id=application.application_id)
+            return redirect("apply_step10", app_id=application.application_id)
 
         form = DocumentSubmissionForm(request.POST, request.FILES)
         if not form.is_valid():
@@ -1222,7 +1267,7 @@ class Step9DocumentsView(View):
             request,
             f"Uploaded signed copy of “{document.name}”. Thank you!",
         )
-        return redirect("apply_step9", app_id=application.application_id)
+        return redirect("apply_step10", app_id=application.application_id)
 
     def _gate(self, application: Application):
         """Only approved applications may access Step 9."""
@@ -1265,7 +1310,7 @@ class Step9DocumentsView(View):
                 "rows": rows,
                 "all_required_done": all_required_done,
                 "focus_doc_id": focus_doc_id,
-                "current_step": 9,
+                "current_step": 10,
                 "total_steps": TOTAL_STEPS,
             },
         )

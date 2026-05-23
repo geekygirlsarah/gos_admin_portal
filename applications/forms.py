@@ -306,6 +306,32 @@ class StudentInfoForm(forms.Form):
     )
 
 
+class StudentExperienceForm(forms.Form):
+    """New Step 6: qualitative questions about student interest/experience."""
+
+    interest_reason = forms.CharField(
+        label="Why are you interested in participating in this Girls of Steel program this season?",
+        required=False,
+        widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
+    )
+    hoped_gains = forms.CharField(
+        label="What do you hope to gain from the experience?",
+        required=False,
+        widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
+    )
+    prior_robotics_experience = forms.CharField(
+        label="What prior robotics experience do you have?",
+        help_text="No experience is necessary to be a part of the program.",
+        required=False,
+        widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
+    )
+    referral_source = forms.CharField(
+        label="How did you hear about Girls of Steel Robotics?",
+        required=False,
+        widget=forms.Textarea(attrs={**_text_attrs, "rows": 5}),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Steps 6 & 7: parent / guardian information
 # ---------------------------------------------------------------------------

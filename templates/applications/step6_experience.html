@@ -1,0 +1,36 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Experience and Interest{% endblock %}
+{% block wizard_heading %}Experience and interest{% endblock %}
+
+{% block wizard_body %}
+<p class="text-muted mb-4">
+    We'd love to learn more about why you're interested in joining Girls of Steel. 
+    There are no wrong answers, and no prior experience is required!
+</p>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-4">
+        {% for field in form %}
+            <div class="col-12">
+                <label for="{{ field.id_for_label }}" class="form-label fw-bold">
+                    {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between mt-5">
+        <a href="{% url 'apply_step5' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+{% endblock %}

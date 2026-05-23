@@ -95,13 +95,18 @@ urlpatterns = [
     ),
     path(
         "<str:app_id>/step6/",
-        views.Step6PrimaryParentView.as_view(),
+        views.Step6ExperienceView.as_view(),
         name="apply_step6",
     ),
     path(
         "<str:app_id>/step7/",
-        views.Step7SecondaryParentView.as_view(),
+        views.Step7PrimaryParentView.as_view(),
         name="apply_step7",
+    ),
+    path(
+        "<str:app_id>/step8/",
+        views.Step8SecondaryParentView.as_view(),
+        name="apply_step8",
     ),
     path(
         "<str:app_id>/swap-parents/",
@@ -109,22 +114,22 @@ urlpatterns = [
         name="apply_swap_parents",
     ),
     path(
-        "<str:app_id>/step8/",
-        views.Step8ConfirmView.as_view(),
-        name="apply_step8",
+        "<str:app_id>/step9/",
+        views.Step9ConfirmView.as_view(),
+        name="apply_step9",
     ),
     path(
         "<str:app_id>/submitted/",
         views.SubmittedView.as_view(),
         name="apply_submitted",
     ),
-    # Step 9: post-approval signed-document download & re-upload page.
+    # Step 10: post-approval signed-document download & re-upload page.
     # Only reachable once the application has been APPROVED by a lead
     # mentor; otherwise the view redirects to the applicant's current step.
     path(
-        "<str:app_id>/step9/",
-        views.Step9DocumentsView.as_view(),
-        name="apply_step9",
+        "<str:app_id>/step10/",
+        views.Step10DocumentsView.as_view(),
+        name="apply_step10",
     ),
     # --- Mentor branch (applicant_type=MENTOR; skips Steps 3, 5-7, 9) ---
     path(

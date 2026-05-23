@@ -26,18 +26,18 @@ def _approved_application(program, **overrides):
         applicant_type=Application.Type.PARENT,
         email="parent@example.com",
         program=program,
-        current_step=9,
+        current_step=10,
         email_verified_at=timezone.now(),
         status=Application.Status.APPROVED,
         submitted_at=timezone.now(),
         data={
             "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
-            "step6": {
+            "step7": {
                 "first_name": "Pat",
                 "last_name": "Parent",
                 "email": "parent@example.com",
             },
-            "step7": {
+            "step8": {
                 "first_name": "Sam",
                 "last_name": "Spouse",
                 "relationship_to_student": "guardian",
@@ -102,18 +102,18 @@ class Step9DocumentsTests(TestCase):
         app = _approved_application(
             self.program,
             status=Application.Status.SUBMITTED,
-            current_step=9,
+            current_step=10,
         )
-        url = reverse("apply_step9", kwargs={"app_id": app.application_id})
+        url = reverse("apply_step10", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-        # Either to submitted page or to a wizard step, but NEVER 200 on /step9/.
+        # Either to submitted page or to a wizard step, but NEVER 200 on /step10/.
         self.assertEqual(response.status_code, 302)
-        self.assertNotIn("/step9/", response.url)
+        self.assertNotIn("/step10/", response.url)
 
     def test_approved_application_can_view_documents(self):
         app = _approved_application(self.program)
         response = self.client.get(
-            reverse("apply_step9", kwargs={"app_id": app.application_id})
+            reverse("apply_step10", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Photo release form")
@@ -126,7 +126,7 @@ class Step9DocumentsTests(TestCase):
     def test_upload_creates_submission(self):
         app = _approved_application(self.program)
         response = self.client.post(
-            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
             {
                 "document_id": self.doc_required.pk,
                 "file": _make_signed_upload("photo_release_signed.pdf"),
@@ -134,7 +134,7 @@ class Step9DocumentsTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         subs = ApplicationDocumentSubmission.objects.filter(application=app)
@@ -145,7 +145,7 @@ class Step9DocumentsTests(TestCase):
 
     def test_reupload_replaces_existing_submission(self):
         app = _approved_application(self.program)
-        url = reverse("apply_step9", kwargs={"app_id": app.application_id})
+        url = reverse("apply_step10", kwargs={"app_id": app.application_id})
         self.client.post(
             url,
             {
@@ -182,7 +182,7 @@ class Step9DocumentsTests(TestCase):
             file=_make_blank_pdf("foreign.pdf"),
         )
         response = self.client.post(
-            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
             {
                 "document_id": foreign_doc.pk,
                 "file": _make_signed_upload(),
@@ -197,7 +197,7 @@ class Step9DocumentsTests(TestCase):
     def test_upload_with_missing_file_re_renders_form(self):
         app = _approved_application(self.program)
         response = self.client.post(
-            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
             {"document_id": self.doc_required.pk},
         )
         # Form invalid → re-render page (200), no submission row created.
@@ -209,25 +209,25 @@ class Step9DocumentsTests(TestCase):
 
     # -- Routing for APPROVED applicants ------------------------------------
 
-    def test_resume_link_for_approved_application_goes_to_step9(self):
+    def test_resume_link_for_approved_application_goes_to_step10(self):
         app = _approved_application(self.program)
         response = self.client.get(
             reverse("apply_resume_link", kwargs={"app_id": app.application_id})
         )
         self.assertRedirects(
             response,
-            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
 
-    def test_submitted_view_redirects_approved_application_to_step9(self):
+    def test_submitted_view_redirects_approved_application_to_step10(self):
         app = _approved_application(self.program)
         response = self.client.get(
             reverse("apply_submitted", kwargs={"app_id": app.application_id})
         )
         self.assertRedirects(
             response,
-            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            reverse("apply_step10", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
 
@@ -240,6 +240,6 @@ class Step9DocumentsTests(TestCase):
         msg = mail.outbox[0]
         self.assertIn("parent@example.com", msg.to)
         # Body should reference the application ID and the resume link
-        # (which routes to /step9/ for APPROVED apps).
+        # (which routes to /step10/ for APPROVED apps).
         self.assertIn(app.application_id, msg.body)
         self.assertIn("/apply/r/", msg.body)

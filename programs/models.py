@@ -605,6 +605,31 @@ class Student(models.Model):
 
         return result
 
+    interest_reason = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Interest reason",
+        help_text="Why are you interested in participating in this Girls of Steel program this season?",
+    )
+    hoped_gains = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Hoped gains",
+        help_text="What do you hope to gain from the experience?",
+    )
+    prior_robotics_experience = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Prior robotics experience",
+        help_text="What prior robotics experience do you have? (No experience is necessary to be a part of the program.)",
+    )
+    referral_source = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Referral source",
+        help_text="How did you hear about Girls of Steel Robotics?",
+    )
+
     active = models.BooleanField(default=True)
     # Indicates the student has graduated from the program(s)
     graduated = models.BooleanField(

@@ -136,26 +136,26 @@ class Step5StudentInfoTests(TestCase):
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-class Step6PrimaryParentTests(TestCase):
+class Step7PrimaryParentTests(TestCase):
     def setUp(self):
         mail.outbox = []
 
     def test_student_initiated_no_existing_parent_shows_handoff(self):
         app = _verified(
-            applicant_type=Application.Type.STUDENT, email="kid@example.com"
+            applicant_type=Application.Type.STUDENT, email="kid@example.com", current_step=7
         )
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Email my parent")
 
     def test_student_handoff_post_emails_parent_and_redirects_to_start(self):
         app = _verified(
-            applicant_type=Application.Type.STUDENT, email="kid@example.com"
+            applicant_type=Application.Type.STUDENT, email="kid@example.com", current_step=7
         )
         response = self.client.post(
-            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {"parent_email": "guardian@example.com"},
         )
         self.assertRedirects(
@@ -164,7 +164,7 @@ class Step6PrimaryParentTests(TestCase):
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.AWAITING_PARENT)
         self.assertEqual(
-            app.data.get("step6_handoff", {}).get("parent_email"),
+            app.data.get("step7_handoff", {}).get("parent_email"),
             "guardian@example.com",
         )
         self.assertEqual(len(mail.outbox), 1)
@@ -179,19 +179,19 @@ class Step6PrimaryParentTests(TestCase):
             cell_phone="555-444-1212",
             is_parent=True,
         )
-        app = _verified(email="parent@example.com")
+        app = _verified(email="parent@example.com", current_step=7)
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'value="Pat"')
         self.assertContains(response, 'value="Parent"')
         self.assertContains(response, "555-444-1212")
 
-    def test_parent_form_post_saves_and_advances_to_step7(self):
+    def test_parent_form_post_saves_and_advances_to_step8(self):
         app = _verified()
         response = self.client.post(
-            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {
                 "first_name": "Pat",
                 "last_name": "Parent",
@@ -207,32 +207,32 @@ class Step6PrimaryParentTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step7", kwargs={"app_id": app.application_id}),
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step6", {}).get("first_name"), "Pat")
-        self.assertGreaterEqual(app.current_step, 7)
+        self.assertEqual(app.data.get("step7", {}).get("first_name"), "Pat")
+        self.assertGreaterEqual(app.current_step, 8)
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-class Step7SecondaryParentTests(TestCase):
+class Step8SecondaryParentTests(TestCase):
     def test_secondary_parent_is_required(self):
         # Posting an empty form (or the legacy "skip" button) must not
-        # advance to step 8 — a secondary contact is required.
-        app = _verified(current_step=7)
+        # advance to step 9 — a secondary contact is required.
+        app = _verified(current_step=8)
         response = self.client.post(
-            reverse("apply_step7", kwargs={"app_id": app.application_id}),
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {"skip": "1"},
         )
         self.assertEqual(response.status_code, 200)
         app.refresh_from_db()
-        self.assertNotIn("step7", app.data or {})
+        self.assertNotIn("step8", app.data or {})
 
     def test_filled_form_saves_and_advances(self):
-        app = _verified(current_step=7)
+        app = _verified(current_step=8)
         response = self.client.post(
-            reverse("apply_step7", kwargs={"app_id": app.application_id}),
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {
                 "first_name": "Sam",
                 "last_name": "Spouse",
@@ -248,15 +248,15 @@ class Step7SecondaryParentTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step7", {}).get("first_name"), "Sam")
+        self.assertEqual(app.data.get("step8", {}).get("first_name"), "Sam")
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-class Step8ConfirmTests(TestCase):
+class Step9ConfirmTests(TestCase):
     def setUp(self):
         today = timezone.localdate()
         self.program = Program.objects.create(
@@ -271,15 +271,15 @@ class Step8ConfirmTests(TestCase):
     def _verified_with_data(self):
         return _verified(
             program=self.program,
-            current_step=8,
+            current_step=9,
             data={
                 "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
-                "step6": {
+                "step7": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                 },
-                "step7": {
+                "step8": {
                     "first_name": "Sam",
                     "last_name": "Spouse",
                     "relationship_to_student": "guardian",
@@ -290,7 +290,7 @@ class Step8ConfirmTests(TestCase):
     def test_get_renders_review_with_collected_data(self):
         app = self._verified_with_data()
         response = self.client.get(
-            reverse("apply_step8", kwargs={"app_id": app.application_id})
+            reverse("apply_step9", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Grace")
@@ -300,7 +300,7 @@ class Step8ConfirmTests(TestCase):
     def test_post_without_confirm_stays_on_page(self):
         app = self._verified_with_data()
         response = self.client.post(
-            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
             {},
         )
         self.assertEqual(response.status_code, 200)
@@ -310,7 +310,7 @@ class Step8ConfirmTests(TestCase):
     def test_post_confirms_and_submits_application(self):
         app = self._verified_with_data()
         response = self.client.post(
-            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
             {"confirm": "on"},
         )
         self.assertRedirects(
@@ -349,16 +349,16 @@ class Step8ConfirmTests(TestCase):
         # be sent once, to that single address.
         app = _verified(
             program=self.program,
-            current_step=8,
+            current_step=9,
             email="parent@example.com",
             data={
                 "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
-                "step6": {
+                "step7": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                 },
-                "step7": {
+                "step8": {
                     "first_name": "Sam",
                     "last_name": "Spouse",
                     "relationship_to_student": "guardian",
@@ -366,7 +366,7 @@ class Step8ConfirmTests(TestCase):
             },
         )
         self.client.post(
-            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
             {"confirm": "on"},
         )
         confirm_msgs = [
@@ -379,7 +379,7 @@ class Step8ConfirmTests(TestCase):
         app = self._verified_with_data()
         app.status = Application.Status.SUBMITTED
         app.submitted_at = timezone.now()
-        app.current_step = 9
+        app.current_step = 10
         app.save()
         response = self.client.get(
             reverse("apply_submitted", kwargs={"app_id": app.application_id})
@@ -395,16 +395,16 @@ class SwapParentsViewTests(TestCase):
         defaults = dict(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
-            current_step=7,
+            current_step=8,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={
-                "step6": {
+                "step7": {
                     "first_name": "Joe",
                     "last_name": "Primary",
                     "email": "joe@example.com",
                 },
-                "step7": {
+                "step8": {
                     "first_name": "Jane",
                     "last_name": "Secondary",
                 },
@@ -413,29 +413,17 @@ class SwapParentsViewTests(TestCase):
         defaults.update(kwargs)
         return Application.objects.create(**defaults)
 
-    def test_swap_exchanges_step6_and_step7_data(self):
+    def test_swap_exchanges_step7_and_step8_data(self):
         app = self._app_with_both_parents()
         self.client.post(
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
-            {"next": "6"},
+            {"next": "7"},
         )
         app.refresh_from_db()
-        self.assertEqual(app.data["step6"]["first_name"], "Jane")
-        self.assertEqual(app.data["step7"]["first_name"], "Joe")
+        self.assertEqual(app.data["step7"]["first_name"], "Jane")
+        self.assertEqual(app.data["step8"]["first_name"], "Joe")
 
-    def test_swap_redirects_to_step6_by_default(self):
-        app = self._app_with_both_parents()
-        response = self.client.post(
-            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
-            {"next": "6"},
-        )
-        self.assertRedirects(
-            response,
-            reverse("apply_step6", kwargs={"app_id": app.application_id}),
-            fetch_redirect_response=False,
-        )
-
-    def test_swap_redirects_to_step7_when_requested(self):
+    def test_swap_redirects_to_step7_by_default(self):
         app = self._app_with_both_parents()
         response = self.client.post(
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
@@ -447,17 +435,29 @@ class SwapParentsViewTests(TestCase):
             fetch_redirect_response=False,
         )
 
+    def test_swap_redirects_to_step8_when_requested(self):
+        app = self._app_with_both_parents()
+        response = self.client.post(
+            reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
+            {"next": "8"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
     def test_swap_twice_restores_original_data(self):
         app = self._app_with_both_parents()
         url = reverse("apply_swap_parents", kwargs={"app_id": app.application_id})
-        self.client.post(url, {"next": "6"})
-        self.client.post(url, {"next": "6"})
+        self.client.post(url, {"next": "7"})
+        self.client.post(url, {"next": "7"})
         app.refresh_from_db()
-        self.assertEqual(app.data["step6"]["first_name"], "Joe")
-        self.assertEqual(app.data["step7"]["first_name"], "Jane")
+        self.assertEqual(app.data["step7"]["first_name"], "Joe")
+        self.assertEqual(app.data["step8"]["first_name"], "Jane")
 
     def test_swap_hydrates_from_student_record_when_steps_not_yet_saved(self):
-        # Returning student: application.data has no step6/step7 yet because
+        # Returning student: application.data has no step7/step8 yet because
         # the user hasn't submitted those forms — data lives only in the
         # Student record.  Swap should still work by reading from the record.
         primary = Adult.objects.create(
@@ -475,33 +475,33 @@ class SwapParentsViewTests(TestCase):
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="joe@example.com",
-            current_step=6,
+            current_step=7,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={"step5": {"_existing_student_id": student.pk}},
         )
         self.client.post(
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
-            {"next": "6"},
+            {"next": "7"},
         )
         app.refresh_from_db()
-        # After swap, step6 should contain Jane (old secondary) and step7 Joe (old primary).
-        self.assertEqual(app.data["step6"]["first_name"], "Jane")
-        self.assertEqual(app.data["step7"]["first_name"], "Joe")
+        # After swap, step7 should contain Jane (old secondary) and step8 Joe (old primary).
+        self.assertEqual(app.data["step7"]["first_name"], "Jane")
+        self.assertEqual(app.data["step8"]["first_name"], "Joe")
 
     def test_swap_requires_verified_email(self):
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
-            current_step=6,
+            current_step=7,
             data={
-                "step6": {"first_name": "Joe"},
-                "step7": {"first_name": "Jane"},
+                "step7": {"first_name": "Joe"},
+                "step8": {"first_name": "Jane"},
             },
         )
         response = self.client.post(
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
-            {"next": "6"},
+            {"next": "7"},
         )
         # Should redirect to email verification, not swap.
         self.assertRedirects(
@@ -511,11 +511,11 @@ class SwapParentsViewTests(TestCase):
         )
         app.refresh_from_db()
         # Data must be unchanged.
-        self.assertEqual(app.data["step6"]["first_name"], "Joe")
+        self.assertEqual(app.data["step7"]["first_name"], "Joe")
 
 
-class Step6SwapBoxVisibilityTests(TestCase):
-    """Swap box on step 6 should appear when a secondary contact exists."""
+class Step7SwapBoxVisibilityTests(TestCase):
+    """Swap box on step 7 should appear when a secondary contact exists."""
 
     def setUp(self):
         today = timezone.localdate()
@@ -546,7 +546,7 @@ class Step6SwapBoxVisibilityTests(TestCase):
         return Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="joe@example.com",
-            current_step=6,
+            current_step=7,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={
@@ -554,10 +554,10 @@ class Step6SwapBoxVisibilityTests(TestCase):
             },
         )
 
-    def test_swap_box_shown_when_secondary_contact_exists_but_step7_not_saved(self):
+    def test_swap_box_shown_when_secondary_contact_exists_but_step8_not_saved(self):
         app = self._app_with_existing_student()
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Swap primary")
@@ -565,29 +565,29 @@ class Step6SwapBoxVisibilityTests(TestCase):
         self.assertContains(response, "Jane")
         self.assertContains(response, "Secondary")
 
-    def test_swap_box_hidden_when_no_secondary_contact_and_no_step7(self):
+    def test_swap_box_hidden_when_no_secondary_contact_and_no_step8(self):
         self.student.secondary_contact = None
         self.student.save()
         app = self._app_with_existing_student()
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Swap primary")
 
-    def test_swap_box_shown_when_step6_already_saved_and_adult_has_secondary(self):
-        # Returning parent who already completed step6 in a prior session —
+    def test_swap_box_shown_when_step7_already_saved_and_adult_has_secondary(self):
+        # Returning parent who already completed step7 in a prior session —
         # existing_adult is not populated by _build_forms (because saved is
         # truthy), so _render must fall back to an email lookup.
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="joe@example.com",
-            current_step=7,
+            current_step=8,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={
                 "step5": {"_existing_student_id": self.student.pk},
-                "step6": {
+                "step7": {
                     "first_name": "Joe",
                     "last_name": "Primary",
                     "email": "joe@example.com",
@@ -595,14 +595,14 @@ class Step6SwapBoxVisibilityTests(TestCase):
             },
         )
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Swap primary")
 
 
 class ResumeRedirectsToCurrentStepTests(TestCase):
-    """Resume should land users on the right step 5/6/7/8."""
+    """Resume should land users on the right step 5/6/7/8/9."""
 
     def test_resume_to_step5(self):
         app = _verified(current_step=5)
@@ -616,14 +616,26 @@ class ResumeRedirectsToCurrentStepTests(TestCase):
             fetch_redirect_response=False,
         )
 
-    def test_resume_to_step8(self):
-        app = _verified(current_step=8)
+    def test_resume_to_step6(self):
+        app = _verified(current_step=6)
         response = self.client.post(
             reverse("apply_resume"),
             {"application_id": app.application_id},
         )
         self.assertRedirects(
             response,
-            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
+    def test_resume_to_step9(self):
+        app = _verified(current_step=9)
+        response = self.client.post(
+            reverse("apply_resume"),
+            {"application_id": app.application_id},
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )

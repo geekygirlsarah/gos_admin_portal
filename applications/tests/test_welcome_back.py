@@ -110,7 +110,7 @@ class Step5WelcomeBackBannerTests(TestCase):
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-class Step6WelcomeBackBannerTests(TestCase):
+class Step7WelcomeBackBannerTests(TestCase):
     def test_banner_shown_when_prefilling_from_existing_adult(self):
         program = Program.objects.create(
             name="Fall 2023",
@@ -132,10 +132,10 @@ class Step6WelcomeBackBannerTests(TestCase):
         app = _verified(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
-            current_step=6,
+            current_step=7,
         )
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Welcome back")
@@ -146,10 +146,10 @@ class Step6WelcomeBackBannerTests(TestCase):
         app = _verified(
             applicant_type=Application.Type.PARENT,
             email="brand-new-parent@example.com",
-            current_step=6,
+            current_step=7,
         )
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Welcome back")

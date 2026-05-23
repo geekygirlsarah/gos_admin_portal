@@ -24,7 +24,7 @@
             {% endif %}
         </div>
         <div class="d-flex justify-content-between">
-            <a href="{% url 'apply_step5' app_id=application.application_id %}" class="btn btn-link">Back</a>
+            <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
             <button type="submit" class="btn btn-primary">Email my parent / guardian</button>
         </div>
     </form>
@@ -51,7 +51,7 @@
         <span>Want to make {% if secondary_name %}<strong>{{ secondary_name }}</strong> (the secondary parent / guardian){% else %}the secondary parent / guardian{% endif %} the primary instead?</span>
         <form method="post" action="{% url 'apply_swap_parents' app_id=application.application_id %}" class="d-inline">
             {% csrf_token %}
-            <input type="hidden" name="next" value="6">
+            <input type="hidden" name="next" value="7">
             <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">
                 ⇄ Swap primary &amp; secondary
             </button>
@@ -87,7 +87,7 @@
             {% endfor %}
         </div>
         <div class="d-flex justify-content-between mt-4">
-            <a href="{% url 'apply_step5' app_id=application.application_id %}" class="btn btn-link">Back</a>
+            <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
             <button type="submit" class="btn btn-primary">Save and continue</button>
         </div>
     </form>

@@ -1,6 +1,6 @@
 {% extends "applications/_wizard_base.html" %}
 
-{% block wizard_title %}Step 9 – Signed documents{% endblock %}
+{% block wizard_title %}Step 10 – Signed documents{% endblock %}
 {% block wizard_heading %}Your application is approved — a few documents to sign{% endblock %}
 
 {% block wizard_body %}
@@ -73,7 +73,7 @@
 
                         <form method="post"
                               enctype="multipart/form-data"
-                              action="{% url 'apply_step9' app_id=application.application_id %}"
+                              action="{% url 'apply_step10' app_id=application.application_id %}"
                               class="row g-2 align-items-end">
                             {% csrf_token %}
                             <input type="hidden" name="document_id" value="{{ doc.pk }}">

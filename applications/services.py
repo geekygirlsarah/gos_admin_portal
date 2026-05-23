@@ -648,6 +648,13 @@ def _student_from_application(application: Application):
     _fill("dietary_restrictions", step5.get("dietary_restrictions"))
     _fill("medical_notes", step5.get("medical_notes"))
 
+    # Experience / qualitative questions (from step6)
+    step6 = data.get("step6") or {}
+    _fill("interest_reason", step6.get("interest_reason"))
+    _fill("hoped_gains", step6.get("hoped_gains"))
+    _fill("prior_robotics_experience", step6.get("prior_robotics_experience"))
+    _fill("referral_source", step6.get("referral_source"))
+
     # School: free-text -> lookup-or-create.
     school_name = (step5.get("school_name") or "").strip()
     if school_name and not student.school_id:

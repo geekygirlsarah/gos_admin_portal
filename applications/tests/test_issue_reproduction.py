@@ -32,11 +32,11 @@ class SubmittedNamesReproductionTest(TestCase):
                     "legal_first_name": "Jane",
                     "last_name": "Doe",
                 },
-                "step6": {
+                "step7": {
                     "first_name": "John",
                     "last_name": "Doe",
                 },
-                "step7": {
+                "step8": {
                     "first_name": "Mary",
                     "last_name": "Doe",
                 },
@@ -76,8 +76,8 @@ class SubmittedNamesReproductionTest(TestCase):
             status=Application.Status.SUBMITTED,
             data={
                 "step5": {"legal_first_name": "Jane", "last_name": "Doe"},
-                "step6": {"first_name": "John", "last_name": "Doe"},
-                "step7": {"_skipped": True},
+                "step7": {"first_name": "John", "last_name": "Doe"},
+                "step8": {"_skipped": True},
             },
         )
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
@@ -399,12 +399,12 @@ class HandoffSecurityReproductionTests(TestCase):
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
             email_verified_at=timezone.now(),
-            current_step=5,
+            current_step=6,
         )
 
-        # 2. Advance to step 6 (handoff)
+        # 2. Advance to step 7 (handoff)
         response = self.client.get(
-            reverse("apply_step6", kwargs={"app_id": app.application_id})
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertContains(
             response, "Now a parent or guardian needs to finish the application"
@@ -412,13 +412,13 @@ class HandoffSecurityReproductionTests(TestCase):
 
         # 3. Perform handoff to parent
         response = self.client.post(
-            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {"parent_email": "parent@example.com"},
         )
 
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.AWAITING_PARENT)
-        self.assertTrue("step6_handoff" in app.data)
+        self.assertTrue("step7_handoff" in app.data)
         self.assertRedirects(response, reverse("apply_start"))
 
         # 4. Try to resume from home page (ResumeView)
@@ -426,9 +426,9 @@ class HandoffSecurityReproductionTests(TestCase):
             reverse("apply_resume"), {"application_id": app.application_id}
         )
 
-        # It redirects to Step 6 because current_step is 6
+        # It redirects to Step 7 because current_step is 7
         self.assertRedirects(
-            response, reverse("apply_step6", kwargs={"app_id": app.application_id})
+            response, reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
 
         # Follow the redirect
@@ -449,10 +449,10 @@ class HandoffSecurityReproductionTests(TestCase):
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
             email_verified_at=timezone.now(),
-            current_step=5,
+            current_step=6,
         )
         self.client.post(
-            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {"parent_email": "parent@example.com"},
         )
         app.refresh_from_db()
@@ -467,9 +467,9 @@ class HandoffSecurityReproductionTests(TestCase):
             )
         )
 
-        # Should redirect to Step 6
+        # Should redirect to Step 7
         self.assertRedirects(
-            response, reverse("apply_step6", kwargs={"app_id": app.application_id})
+            response, reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
 
         # Follow the redirect - should NOW be authorized because token is in session
