@@ -40,7 +40,6 @@ from .services import (
     find_student_by_email,
     get_program_buckets,
     get_student_emails,
-    send_application_started_email,
     send_application_submitted_email,
     send_lead_notification_email,
     send_otp_email,
@@ -244,10 +243,6 @@ class Step2ApplicantTypeView(View):
         application.current_step = max(application.current_step, 3)
         application.save()
 
-        # If we have an email, send the "you started an application" email
-        # so they always have their application ID.
-        if application.email:
-            send_application_started_email(application, request=request)
 
         # If a student didn't provide an email, tell them the parent should
         # take over and stop the wizard here for now.

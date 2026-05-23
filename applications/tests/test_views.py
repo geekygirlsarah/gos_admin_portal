@@ -95,7 +95,7 @@ class WizardFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "An email address is required")
 
-    def test_step2_student_with_email_advances_and_emails_resume_link(self):
+    def test_step2_student_with_email_advances(self):
         app = Application.objects.create()
         response = self.client.post(
             reverse("apply_step2", kwargs={"app_id": app.application_id}),
@@ -110,9 +110,8 @@ class WizardFlowTests(TestCase):
         self.assertEqual(app.email, "kid@example.com")
         self.assertEqual(app.applicant_type, "student")
         self.assertGreaterEqual(app.current_step, 3)
-        # "You started an application" email sent.
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn(app.application_id, mail.outbox[0].body)
+        # No email sent yet — it's deferred until Step 4 landing.
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_step2_student_without_email_redirects_to_start_with_message(self):
         app = Application.objects.create()
@@ -195,8 +194,11 @@ class WizardFlowTests(TestCase):
         self.assertTrue(app.otp_hash)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("verification code", mail.outbox[0].subject.lower())
-        # The email body contains the plain code.
+        # The email body contains the plain code and resume link.
         body = mail.outbox[0].body
+        self.assertIn("Thanks for starting an application", body)
+        self.assertIn(app.application_id, body)
+        self.assertIn("Resume link:", body)
         # Extract the 6-digit code from the email body for use in next step.
         import re
 

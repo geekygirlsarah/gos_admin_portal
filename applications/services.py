@@ -66,20 +66,25 @@ def _should_send_async() -> bool:
 
 
 def send_otp_email(application: Application, code: str, request=None) -> None:
-    """Email the OTP code to the application's email."""
+    """Email the OTP code to the application's email, including resume info."""
     if not application.email:
         logger.warning(
             "Refusing to send OTP for application %s: no email on file",
             application.application_id,
         )
         return
+
+    resume_url = _absolute_apply_url(request, application)
     subject = "Your Girls of Steel application verification code"
     body = (
         "Hi,\n\n"
+        "Thanks for starting an application with Girls of Steel Robotics!\n\n"
         f"Your verification code is: {code}\n\n"
-        "This code expires in 15 minutes. If you did not start an "
-        "application with Girls of Steel, you can safely ignore this email.\n\n"
-        f"Application ID: {application.application_id}\n"
+        "This code expires in 15 minutes.\n\n"
+        "You can also resume your application any time using:\n"
+        f"  Application ID: {application.application_id}\n"
+        f"  Resume link:    {resume_url}\n\n"
+        "If you did not start an application with Girls of Steel, you can safely ignore this email.\n"
     )
 
     def _send():
@@ -102,48 +107,6 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
 
     if _should_send_async():
         threading.Thread(target=_send, name=f"otp-email-{application.pk}").start()
-    else:
-        _send()
-
-
-def send_application_started_email(application: Application, request=None) -> None:
-    """Sent right after Step 2 so the applicant has their application ID
-    even if they abandon the wizard before submitting.
-    """
-    if not application.email:
-        return
-    resume_url = _absolute_apply_url(request, application)
-    subject = "You started a Girls of Steel application"
-    body = (
-        "Hi,\n\n"
-        "Thanks for starting an application with Girls of Steel Robotics! "
-        "You can resume it any time using:\n\n"
-        f"  Application ID: {application.application_id}\n"
-        f"  Resume link:    {resume_url}\n\n"
-        "If you didn't start this, you can ignore this email.\n"
-    )
-
-    def _send():
-        from django.db import close_old_connections
-
-        try:
-            send_mail(
-                subject=subject,
-                message=body,
-                from_email=_from_email(),
-                recipient_list=[application.email],
-                fail_silently=True,
-            )
-        except Exception:  # pragma: no cover - defensive
-            logger.exception(
-                "Failed to send application-started email for %s",
-                application.application_id,
-            )
-        finally:
-            close_old_connections()
-
-    if _should_send_async():
-        threading.Thread(target=_send, name=f"started-email-{application.pk}").start()
     else:
         _send()
 
