@@ -256,14 +256,24 @@ SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "base-uri": ["'self'"],
-        "connect-src": ["'self'"],
+        "connect-src": ["'self'", "https://nominatim.openstreetmap.org"],
         "default-src": ["'self'"],
         "font-src": ["'self'", "data:"],
         "frame-ancestors": ["'self'"],
-        "img-src": ["'self'", "data:"],
+        "img-src": ["'self'", "data:", "*.tile.openstreetmap.org"],
         "object-src": ["'none'"],
-        "script-src": ["'self'", "https://cdn.jsdelivr.net", constants.NONCE],
-        "style-src": ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+        "script-src": [
+            "'self'",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            constants.NONCE,
+        ],
+        "style-src": [
+            "'self'",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "'unsafe-inline'",
+        ],
     }
 }
 

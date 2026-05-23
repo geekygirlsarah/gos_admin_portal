@@ -77,7 +77,7 @@
         <div class="alert alert-info">No students enrolled.</div>
     {% endif %}
 
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
         (function(){
             const d = new Date();
             const opts = { year: 'numeric', month: 'long', day: 'numeric' };

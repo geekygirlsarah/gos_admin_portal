@@ -161,7 +161,7 @@
 
         </div>
     </div>
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
       (function() {
         function calcAge(dobStr) {
           var dob = new Date(dobStr + 'T00:00:00');

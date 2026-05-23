@@ -253,7 +253,7 @@
       {% endif %}
     </div>
 
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
       (function(){
         // Relationship choices from server for creating new items dynamically
         var REL_CHOICES = [

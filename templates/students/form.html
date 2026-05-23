@@ -19,7 +19,7 @@
           <a class="btn btn-secondary" href="{{ request.GET.next|default:'/' }}">Cancel</a>
         </div>
       </form>
-      <script>
+      <script nonce="{{ request.csp_nonce }}">
         (function(){
           function calcGraduationYearFromGrade(grade){
             if(grade === '' || grade === null || grade === undefined) return '';
@@ -88,16 +88,38 @@
 
 {% block extra_head %}
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet" integrity="sha384-Y87xRkYcSpzXkX0m0O6Cq5C9S6Vp9Z8X7p3V7p3V7p3V7p3V7p3V7p3V7p3V7p3" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
   <style>
     .cropper-modal .modal-body { max-height: 70vh; }
     .cropper-preview.rounded-circle { width: 180px; height: 180px; overflow: hidden; border-radius: 50%; background: #f8f9fa; }
     .cropper-preview.small { width: 80px; height: 80px; }
+
+    /* Ensure the Tom Select control matches Bootstrap's form-select height and styling */
+    .ts-control {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+    }
+    .ts-wrapper.single .ts-control {
+        padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+    }
   </style>
 {% endblock %}
 
 {% block extra_scripts %}
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-vIPrwVp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
   <script nonce="{{ request.csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function() {
+        const schoolSelect = document.getElementById("id_school");
+        if (schoolSelect) {
+            new TomSelect(schoolSelect, {
+                create: false,
+                allowEmptyOption: true,
+                maxOptions: null,
+            });
+        }
+    });
+
     (function(){
       var selector = 'input[type="file"][name="photo"]';
       var modalEl = document.getElementById('photoCropModal');

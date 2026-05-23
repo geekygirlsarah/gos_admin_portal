@@ -16,7 +16,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 {{ items|json_script:"student-items" }}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (function(){
   const items = JSON.parse(document.getElementById('student-items').textContent || '[]');
   const map = L.map('map');

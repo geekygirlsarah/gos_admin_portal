@@ -67,7 +67,7 @@
   {% endif %}
 
   {% block extra_scripts %}
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
       (function(){
         const selectAll = document.getElementById('selectAll');
         if (selectAll) {

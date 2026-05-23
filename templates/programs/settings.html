@@ -498,7 +498,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
     // Maintain tab state after POST
     var activeTab = "{{ active_tab }}";
     if (activeTab) {
