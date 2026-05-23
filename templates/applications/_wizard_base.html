@@ -22,13 +22,13 @@
                         </span>
                     {% endif %}
                 </div>
-                <div class="progress" role="progressbar"
-                     aria-label="Application progress"
-                     aria-valuenow="{{ current_step|unlocalize }}"
-                     aria-valuemin="0"
-                     aria-valuemax="{{ total_steps|unlocalize }}"
-                     style="height: 0.5rem;">
+                <div class="progress" style="height: 0.5rem;">
                     <div class="progress-bar bg-primary"
+                         role="progressbar"
+                         aria-label="Application progress"
+                         aria-valuenow="{{ current_step|unlocalize }}"
+                         aria-valuemin="0"
+                         aria-valuemax="{{ total_steps|unlocalize }}"
                          style="width: {{ progress_pct|unlocalize }}%;"></div>
                 </div>
             </nav>
@@ -44,6 +44,7 @@
         <p class="text-center text-muted small mt-3 mb-0">
             Need help? Contact
             <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+            Be sure to include your application ID if you have one and what issue you are experiencing.
         </p>
     </div>
 </div>
