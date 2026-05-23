@@ -189,6 +189,11 @@ class Application(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["program", "status"], name="application_program_status_idx"),
+            models.Index(fields=["email"], name="application_email_idx"),
+            models.Index(fields=["status", "submitted_at"], name="application_status_sub_idx"),
+        ]
         permissions = [
             (
                 "review_application",

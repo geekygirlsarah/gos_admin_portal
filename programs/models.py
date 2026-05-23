@@ -465,7 +465,7 @@ class Student(models.Model):
     first_name = models.CharField(
         max_length=150, blank=True, null=True, verbose_name="First name"
     )
-    last_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150, db_index=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     # Background clearances (per-student, separate from mentor clearances)
@@ -505,7 +505,7 @@ class Student(models.Model):
         related_name="students",
     )
     graduation_year = models.PositiveSmallIntegerField(
-        blank=True, null=True, help_text="Expected high school graduation year"
+        blank=True, null=True, db_index=True, help_text="Expected high school graduation year"
     )
 
     # New multi-select of canonical options
@@ -630,10 +630,10 @@ class Student(models.Model):
         help_text="How did you hear about Girls of Steel Robotics?",
     )
 
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=True, db_index=True)
     # Indicates the student has graduated from the program(s)
     graduated = models.BooleanField(
-        default=False, help_text="Check if this student has graduated."
+        default=False, db_index=True, help_text="Check if this student has graduated."
     )
     programs = models.ManyToManyField(
         "Program", through="Enrollment", related_name="students", blank=True
@@ -643,6 +643,11 @@ class Student(models.Model):
 
     class Meta:
         ordering = ["first_name", "last_name"]
+        indexes = [
+            models.Index(fields=["last_name", "first_name"], name="student_name_idx"),
+            models.Index(fields=["school", "graduation_year"], name="student_school_grad_idx"),
+            models.Index(fields=["active", "graduated"], name="student_active_graduated_idx"),
+        ]
 
     def __str__(self):
         pref = self.first_name or self.legal_first_name
@@ -682,13 +687,14 @@ class Adult(models.Model):
     # Role flags
     is_parent = models.BooleanField(
         default=False,
+        db_index=True,
         help_text="Check if this adult is a parent/guardian of any student.",
     )
     is_mentor = models.BooleanField(
-        default=False, help_text="Check if this adult serves as a mentor/volunteer."
+        default=False, db_index=True, help_text="Check if this adult serves as a mentor/volunteer."
     )
     is_alumni = models.BooleanField(
-        default=False, help_text="Check if this adult is a program alumni."
+        default=False, db_index=True, help_text="Check if this adult is a program alumni."
     )
 
     # Optional link to a User; allows adults (parents/mentors) to have accounts
@@ -786,7 +792,7 @@ class Adult(models.Model):
     email_updates = models.BooleanField(
         default=False, help_text="If checked, this adult will receive email updates."
     )
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=True, db_index=True)
 
     # Alumni information (merged from Alumni)
     alumni_email = models.EmailField(
@@ -809,6 +815,12 @@ class Adult(models.Model):
 
     class Meta:
         ordering = ["last_name", "first_name"]
+        indexes = [
+            models.Index(fields=["last_name", "first_name"], name="adult_name_idx"),
+            models.Index(fields=["is_parent", "active"], name="adult_parent_active_idx"),
+            models.Index(fields=["is_mentor", "active"], name="adult_mentor_active_idx"),
+            models.Index(fields=["is_alumni", "active"], name="adult_alumni_active_idx"),
+        ]
 
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
@@ -872,6 +884,10 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ["-paid_on", "-created_at"]
+        indexes = [
+            models.Index(fields=["student", "program"], name="payment_student_program_idx"),
+            models.Index(fields=["program", "paid_on"], name="payment_program_date_idx"),
+        ]
 
     def __str__(self):
         via = dict(self.PAID_VIA_CHOICES).get(self.paid_via, self.paid_via)
@@ -940,6 +956,9 @@ class SlidingScale(models.Model):
     class Meta:
         unique_together = ("student", "program")
         ordering = ["program__name", "student__last_name", "student__first_name"]
+        indexes = [
+            models.Index(fields=["student", "program"], name="slidingscale_stu_prog_idx"),
+        ]
 
     def __str__(self):
         return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
