@@ -6,28 +6,48 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0060_adult_address_adult_city_adult_state_adult_zip_code'),
+        ("programs", "0060_adult_address_adult_city_adult_state_adult_zip_code"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='student',
-            name='hoped_gains',
-            field=models.TextField(blank=True, help_text='What do you hope to gain from the experience?', null=True, verbose_name='Hoped gains'),
+            model_name="student",
+            name="hoped_gains",
+            field=models.TextField(
+                blank=True,
+                help_text="What do you hope to gain from the experience?",
+                null=True,
+                verbose_name="Hoped gains",
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='interest_reason',
-            field=models.TextField(blank=True, help_text='Why are you interested in participating in this Girls of Steel program this season?', null=True, verbose_name='Interest reason'),
+            model_name="student",
+            name="interest_reason",
+            field=models.TextField(
+                blank=True,
+                help_text="Why are you interested in participating in this Girls of Steel program this season?",
+                null=True,
+                verbose_name="Interest reason",
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='prior_robotics_experience',
-            field=models.TextField(blank=True, help_text='What prior robotics experience do you have? (No experience is necessary to be a part of the program.)', null=True, verbose_name='Prior robotics experience'),
+            model_name="student",
+            name="prior_robotics_experience",
+            field=models.TextField(
+                blank=True,
+                help_text="What prior robotics experience do you have? (No experience is necessary to be a part of the program.)",
+                null=True,
+                verbose_name="Prior robotics experience",
+            ),
         ),
         migrations.AddField(
-            model_name='student',
-            name='referral_source',
-            field=models.TextField(blank=True, help_text='How did you hear about Girls of Steel Robotics?', null=True, verbose_name='Referral source'),
+            model_name="student",
+            name="referral_source",
+            field=models.TextField(
+                blank=True,
+                help_text="How did you hear about Girls of Steel Robotics?",
+                null=True,
+                verbose_name="Referral source",
+            ),
         ),
     ]

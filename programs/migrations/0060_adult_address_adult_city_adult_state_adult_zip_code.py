@@ -6,28 +6,28 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0059_student_directory_consent_alter_adult_cell_phone_and_more'),
+        ("programs", "0059_student_directory_consent_alter_adult_cell_phone_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='adult',
-            name='address',
+            model_name="adult",
+            name="address",
             field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.AddField(
-            model_name='adult',
-            name='city',
+            model_name="adult",
+            name="city",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='adult',
-            name='state',
+            model_name="adult",
+            name="state",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='adult',
-            name='zip_code',
+            model_name="adult",
+            name="zip_code",
             field=models.CharField(blank=True, max_length=20, null=True),
         ),
     ]

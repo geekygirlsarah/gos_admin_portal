@@ -142,7 +142,9 @@ class Step7PrimaryParentTests(TestCase):
 
     def test_student_initiated_no_existing_parent_shows_handoff(self):
         app = _verified(
-            applicant_type=Application.Type.STUDENT, email="kid@example.com", current_step=7
+            applicant_type=Application.Type.STUDENT,
+            email="kid@example.com",
+            current_step=7,
         )
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
@@ -152,7 +154,9 @@ class Step7PrimaryParentTests(TestCase):
 
     def test_student_handoff_post_emails_parent_and_redirects_to_start(self):
         app = _verified(
-            applicant_type=Application.Type.STUDENT, email="kid@example.com", current_step=7
+            applicant_type=Application.Type.STUDENT,
+            email="kid@example.com",
+            current_step=7,
         )
         response = self.client.post(
             reverse("apply_step7", kwargs={"app_id": app.application_id}),
@@ -278,6 +282,7 @@ class Step9ConfirmTests(TestCase):
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
+                    "email_updates": True,
                 },
                 "step8": {
                     "first_name": "Sam",
@@ -357,6 +362,7 @@ class Step9ConfirmTests(TestCase):
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
+                    "email_updates": True,
                 },
                 "step8": {
                     "first_name": "Sam",
@@ -403,6 +409,7 @@ class SwapParentsViewTests(TestCase):
                     "first_name": "Joe",
                     "last_name": "Primary",
                     "email": "joe@example.com",
+                    "email_updates": True,
                 },
                 "step8": {
                     "first_name": "Jane",

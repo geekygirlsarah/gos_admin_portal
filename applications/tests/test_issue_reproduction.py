@@ -304,8 +304,8 @@ class Step2LabelReproductionTest(TestCase):
 
         # Count occurrences of label text "Test Program" within label tags.
         program_labels = re.findall(r"<label[^>]*>\s*Test Program\s*</label>", content)
-        # It should appear in the widget label. 
-        # Note: there is also an <h3>Test Program</h3> in the metadata section, 
+        # It should appear in the widget label.
+        # Note: there is also an <h3>Test Program</h3> in the metadata section,
         # but we are only counting <label> tags.
         self.assertEqual(
             len(program_labels),
@@ -395,6 +395,7 @@ class HandoffSecurityReproductionTests(TestCase):
     def test_student_cannot_bypass_handoff_by_resuming(self):
         # 1. Create a student-initiated application
         from django.utils import timezone
+
         app = Application.objects.create(
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
@@ -445,6 +446,7 @@ class HandoffSecurityReproductionTests(TestCase):
     def test_parent_can_access_handoff_with_token(self):
         # 1. Create a student-initiated application and hand it off
         from django.utils import timezone
+
         app = Application.objects.create(
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
@@ -477,3 +479,92 @@ class HandoffSecurityReproductionTests(TestCase):
         self.assertContains(
             response, "Please provide the primary parent or guardian's information"
         )
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class ParentNotificationOptInReproductionTests(TestCase):
+    def setUp(self):
+        self.program = Program.objects.create(
+            name="Spring 2030",
+            year=2030,
+            start_date=timezone.localdate() + datetime.timedelta(days=60),
+            active=True,
+        )
+
+    def test_primary_parent_optin_defaults_to_true(self):
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+        response = self.client.get(
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        # The checkbox for email_updates should be checked by default for primary parent
+        self.assertContains(
+            response,
+            'name="email_updates" class="form-check-input" id="id_email_updates" checked',
+        )
+
+    def test_secondary_parent_optin_defaults_to_false(self):
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=8,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+        response = self.client.get(
+            reverse("apply_step8", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        # The checkbox for email_updates should NOT be checked by default for secondary parent
+        self.assertContains(
+            response, 'name="email_updates" class="form-check-input" id="id_email_updates"'
+        )
+        self.assertNotContains(
+            response,
+            'name="email_updates" class="form-check-input" id="id_email_updates" checked',
+        )
+
+    def test_cannot_submit_without_at_least_one_parent_opting_in(self):
+        # Create an application where both parents opted out in their respective steps
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=9,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            program=self.program,
+            data={
+                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7": {
+                    "first_name": "Pat",
+                    "last_name": "Parent",
+                    "email": "parent@example.com",
+                    "email_updates": False,  # Opted out
+                },
+                "step8": {
+                    "first_name": "Sam",
+                    "last_name": "Spouse",
+                    "relationship_to_student": "guardian",
+                    "email_updates": False,  # Opted out
+                },
+            },
+        )
+        response = self.client.post(
+            reverse("apply_step9", kwargs={"app_id": app.application_id}),
+            {"confirm": "on"},
+        )
+        # Should stay on page and show error
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "At least one parent or guardian must opt in to receiving email updates",
+        )
+
+        app.refresh_from_db()
+        self.assertNotEqual(app.status, Application.Status.SUBMITTED)

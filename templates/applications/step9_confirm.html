@@ -89,6 +89,11 @@
 
 <form method="post" novalidate>
     {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+            {{ form.non_field_errors|join:" " }}
+        </div>
+    {% endif %}
     <div class="form-check mb-3">
         {{ form.confirm }}
         <label for="{{ form.confirm.id_for_label }}" class="form-check-label">

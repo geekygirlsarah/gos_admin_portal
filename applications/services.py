@@ -304,6 +304,7 @@ def adult_to_prefill(adult) -> dict:
         "email": adult.email or adult.personal_email or "",
         "cell_phone": adult.cell_phone or "",
         "home_phone": adult.home_phone or "",
+        "email_updates": adult.email_updates,
     }
 
 

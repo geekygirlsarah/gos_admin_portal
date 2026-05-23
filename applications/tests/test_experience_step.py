@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 import datetime
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+
 from applications.models import Application
-from programs.models import Program, Student, Adult
+from programs.models import Adult, Program, Student
+
 
 def _verified(**kwargs):
     """Convenience: create an application that has cleared Steps 1-4."""
@@ -17,6 +21,7 @@ def _verified(**kwargs):
     )
     defaults.update(kwargs)
     return Application.objects.create(**defaults)
+
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step6ExperienceTests(TestCase):
@@ -38,7 +43,7 @@ class Step6ExperienceTests(TestCase):
                 "hoped_gains": "Knowledge",
                 "prior_robotics_experience": "None",
                 "referral_source": "Friend",
-            }
+            },
         )
         self.assertRedirects(
             response,
@@ -48,6 +53,7 @@ class Step6ExperienceTests(TestCase):
         self.app.refresh_from_db()
         self.assertEqual(self.app.data["step6"]["interest_reason"], "I love robots")
         self.assertEqual(self.app.current_step, 7)
+
 
 class RenumberingTests(TestCase):
     def test_step5_post_advances_to_step6(self):
@@ -74,24 +80,31 @@ class RenumberingTests(TestCase):
     def test_step_urls_and_views(self):
         app = _verified()
         # Step 7 (was 6)
-        response = self.client.get(reverse("apply_step7", kwargs={"app_id": app.application_id}))
+        response = self.client.get(
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Primary parent / guardian")
-        
+
         # Step 8 (was 7)
-        response = self.client.get(reverse("apply_step8", kwargs={"app_id": app.application_id}))
+        response = self.client.get(
+            reverse("apply_step8", kwargs={"app_id": app.application_id})
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Secondary parent / guardian")
-        
+
         # Step 9 (was 8)
-        response = self.client.get(reverse("apply_step9", kwargs={"app_id": app.application_id}))
+        response = self.client.get(
+            reverse("apply_step9", kwargs={"app_id": app.application_id})
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Review and submit")
+
 
 class ConversionTests(TestCase):
     def test_experience_fields_saved_to_student(self):
         from applications.services import convert_application_to_student
-        
+
         program = Program.objects.create(name="Test", year=2026, active=True)
         app = _verified(program=program, status=Application.Status.APPROVED)
         app.data = {
@@ -110,10 +123,10 @@ class ConversionTests(TestCase):
                 "first_name": "Parent",
                 "last_name": "One",
                 "email": "p1@example.com",
-            }
+            },
         }
         app.save()
-        
+
         student = convert_application_to_student(app)
         self.assertEqual(student.interest_reason, "Reason")
         self.assertEqual(student.hoped_gains, "Gains")

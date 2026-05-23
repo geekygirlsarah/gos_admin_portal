@@ -245,7 +245,6 @@ class Step2ApplicantTypeView(View):
         application.current_step = max(application.current_step, 3)
         application.save()
 
-
         # If a student didn't provide an email, tell them the parent should
         # take over and stop the wizard here for now.
         if (
@@ -832,6 +831,9 @@ class Step7PrimaryParentView(View):
         initial = saved or (adult_to_prefill(existing_adult) if existing_adult else {})
         if not initial and handoff_email:
             initial = {"email": handoff_email}
+        # For new applications (no saved data), default primary to opted-in.
+        if not saved and "email_updates" not in initial:
+            initial["email_updates"] = True
         form = ParentInfoForm(
             post or None, initial=initial, student_emails=student_emails
         )
@@ -1103,6 +1105,18 @@ class Step9ConfirmView(View):
 
         form = ConfirmSubmitForm(request.POST)
         if not form.is_valid():
+            return self._render(request, application, form)
+
+        # Ensure at least one parent opted in to notifications (only for students/parents)
+        data = application.data or {}
+        p1_opt = (data.get("step7") or {}).get("email_updates", False)
+        p2_opt = (data.get("step8") or {}).get("email_updates", False)
+        if not p1_opt and not p2_opt:
+            form.add_error(
+                None,
+                "At least one parent or guardian must opt in to receiving email "
+                "updates from Girls of Steel.",
+            )
             return self._render(request, application, form)
 
         application.status = Application.Status.SUBMITTED
