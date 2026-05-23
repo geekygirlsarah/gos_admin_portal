@@ -55,6 +55,11 @@ urlpatterns = [
         views.ResumeLinkView.as_view(),
         name="apply_resume_link",
     ),
+    path(
+        "r/<str:app_id>/<str:token>/",
+        views.ResumeLinkView.as_view(),
+        name="apply_resume_link_with_token",
+    ),
     # Wizard steps. Each step is keyed by application_id so the URL is
     # shareable / bookmarkable for the same in-progress application.
     path(

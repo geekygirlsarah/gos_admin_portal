@@ -390,7 +390,23 @@ def send_parent_handoff_email(
     """
     if not parent_email:
         return
-    resume_url = _absolute_apply_url(request, application)
+
+    # Use the token-authenticated resume link if available.
+    if application.handoff_token:
+        path = reverse(
+            "apply_resume_link_with_token",
+            kwargs={
+                "app_id": application.application_id,
+                "token": application.handoff_token,
+            },
+        )
+    else:
+        path = reverse(
+            "apply_resume_link",
+            kwargs={"app_id": application.application_id},
+        )
+    resume_url = request.build_absolute_uri(path) if request is not None else path
+
     ctx = {
         "application": application,
         "resume_url": resume_url,

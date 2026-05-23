@@ -1,0 +1,28 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Waiting for Parent / Guardian{% endblock %}
+{% block wizard_heading %}Waiting for parent / guardian{% endblock %}
+
+{% block wizard_body %}
+    <div class="text-center py-4">
+        <p class="lead">
+            This application has been handed off to a parent or guardian.
+        </p>
+        <p>
+            For security, a parent or guardian must continue the application
+            using the special link sent to their email address.
+        </p>
+        <div class="alert alert-info mt-4 text-start">
+            <p class="mb-0 small">
+                <strong>Why am I seeing this?</strong><br>
+                Once a student finishes their portion of the application, the
+                next steps require parent/guardian verification and signatures.
+                The person taking over must use the email link to prove they
+                are the intended recipient.
+            </p>
+        </div>
+        <div class="mt-4">
+            <a href="{% url 'apply_start' %}" class="btn btn-outline-primary">Back to home</a>
+        </div>
+    </div>
+{% endblock %}

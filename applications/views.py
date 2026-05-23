@@ -199,8 +199,11 @@ class ResumeView(View):
 class ResumeLinkView(View):
     """Direct link from the welcome email — drop straight into the wizard."""
 
-    def get(self, request, app_id: str):
+    def get(self, request, app_id: str, token: str = None):
         application = _get_application_or_404(app_id)
+        if token and application.handoff_token and token == application.handoff_token:
+            # Store the token in the session to authorize access to handed-off steps.
+            request.session[f"handoff_token_{application.application_id}"] = token
         return _redirect_to_current_step(application)
 
 
@@ -435,10 +438,30 @@ class Step4ResendCodeView(View):
 
 
 def _require_verified_email(application: Application):
-    """Return a redirect response if the email isn't verified, else None."""
     if not application.email_is_verified:
         return redirect("apply_step4", app_id=application.application_id)
     return None
+
+
+def _is_handoff_authorized(request, application: Application) -> bool:
+    """Check if the current session is authorized to access handed-off steps.
+
+    Required when a student-initiated application has been handed off to a
+    parent (status=AWAITING_PARENT).
+    """
+    if application.status != Application.Status.AWAITING_PARENT:
+        return True
+    if application.applicant_type != Application.Type.STUDENT:
+        return True
+
+    expected = application.handoff_token
+    if not expected:
+        # If for some reason there is no token on file but it's awaiting
+        # parent, we allow it (best effort for legacy/corrupt records).
+        return True
+
+    session_token = request.session.get(f"handoff_token_{application.application_id}")
+    return bool(session_token and session_token == expected)
 
 
 def _save_step_data(application: Application, key: str, payload: dict, next_step: int):
@@ -643,6 +666,13 @@ class Step6PrimaryParentView(View):
         if guard is not None:
             return guard
 
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
+
         form, handoff_form, mode, existing_adult = self._build_forms(application)
         return self._render(
             request, application, form, handoff_form, mode, existing_adult
@@ -653,6 +683,13 @@ class Step6PrimaryParentView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
+
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
 
         form, handoff_form, mode, existing_adult = self._build_forms(
             application, request.POST
@@ -669,6 +706,7 @@ class Step6PrimaryParentView(View):
             application.data = data
             application.status = Application.Status.AWAITING_PARENT
             application.current_step = max(application.current_step, 6)
+            application.issue_handoff_token()
             application.save(
                 update_fields=["data", "status", "current_step", "updated_at"]
             )
@@ -868,6 +906,13 @@ class SwapParentsView(View):
         if guard is not None:
             return guard
 
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
+
         data = dict(application.data or {})
         step6 = data.get("step6") or {}
         step7 = data.get("step7") or {}
@@ -915,6 +960,14 @@ class Step7SecondaryParentView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
+
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
+
         student_emails = get_student_emails(application)
         form = ParentInfoForm(
             initial=self._initial(application),
@@ -928,6 +981,13 @@ class Step7SecondaryParentView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
+
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
 
         student_emails = get_student_emails(application)
         form = ParentInfoForm(
@@ -980,6 +1040,14 @@ class Step8ConfirmView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
+
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
+
         return self._render(request, application, ConfirmSubmitForm())
 
     def post(self, request, app_id: str):
@@ -987,6 +1055,14 @@ class Step8ConfirmView(View):
         guard = _require_verified_email(application)
         if guard is not None:
             return guard
+
+        if not _is_handoff_authorized(request, application):
+            return render(
+                request,
+                "applications/handoff_required.html",
+                {"application": application},
+            )
+
         form = ConfirmSubmitForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)

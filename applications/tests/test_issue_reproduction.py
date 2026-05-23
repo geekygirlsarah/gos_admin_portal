@@ -386,3 +386,91 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
             student_emails=["name@email.com"],
         )
         self.assertFalse(form.is_valid())
+
+
+class HandoffSecurityReproductionTests(TestCase):
+    def test_student_cannot_bypass_handoff_by_resuming(self):
+        # 1. Create a student-initiated application
+        from django.utils import timezone
+        app = Application.objects.create(
+            applicant_type=Application.Type.STUDENT,
+            email="student@example.com",
+            email_verified_at=timezone.now(),
+            current_step=5,
+        )
+
+        # 2. Advance to step 6 (handoff)
+        response = self.client.get(
+            reverse("apply_step6", kwargs={"app_id": app.application_id})
+        )
+        self.assertContains(
+            response, "Now a parent or guardian needs to finish the application"
+        )
+
+        # 3. Perform handoff to parent
+        response = self.client.post(
+            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            {"parent_email": "parent@example.com"},
+        )
+
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.AWAITING_PARENT)
+        self.assertTrue("step6_handoff" in app.data)
+        self.assertRedirects(response, reverse("apply_start"))
+
+        # 4. Try to resume from home page (ResumeView)
+        response = self.client.post(
+            reverse("apply_resume"), {"application_id": app.application_id}
+        )
+
+        # It redirects to Step 6 because current_step is 6
+        self.assertRedirects(
+            response, reverse("apply_step6", kwargs={"app_id": app.application_id})
+        )
+
+        # Follow the redirect
+        response = self.client.get(response.url)
+
+        # DESIRED BEHAVIOR: it should show the handoff required page
+        self.assertContains(
+            response, "This application has been handed off to a parent or guardian"
+        )
+        self.assertNotContains(
+            response, "Please provide the primary parent or guardian's information"
+        )
+
+    def test_parent_can_access_handoff_with_token(self):
+        # 1. Create a student-initiated application and hand it off
+        from django.utils import timezone
+        app = Application.objects.create(
+            applicant_type=Application.Type.STUDENT,
+            email="student@example.com",
+            email_verified_at=timezone.now(),
+            current_step=5,
+        )
+        self.client.post(
+            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            {"parent_email": "parent@example.com"},
+        )
+        app.refresh_from_db()
+        token = app.handoff_token
+        self.assertTrue(token)
+
+        # 2. Access via ResumeLinkView with token
+        response = self.client.get(
+            reverse(
+                "apply_resume_link_with_token",
+                kwargs={"app_id": app.application_id, "token": token},
+            )
+        )
+
+        # Should redirect to Step 6
+        self.assertRedirects(
+            response, reverse("apply_step6", kwargs={"app_id": app.application_id})
+        )
+
+        # Follow the redirect - should NOW be authorized because token is in session
+        response = self.client.get(response.url)
+        self.assertContains(
+            response, "Please provide the primary parent or guardian's information"
+        )

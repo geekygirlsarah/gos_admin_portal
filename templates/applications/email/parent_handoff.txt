@@ -7,6 +7,5 @@ Application ID: {{ application.application_id }}
 Resume link:    {{ resume_url }}
 
 To continue, follow the link above and complete the remaining steps.
-You'll be asked to verify your email with a one-time code.
 
-If you weren't expecting this email, you can safely ignore it.
+If you weren't expecting this email, you can safely ignore it. If you have any questions, please hit reply and let us know.

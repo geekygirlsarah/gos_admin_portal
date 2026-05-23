@@ -152,6 +152,15 @@ class Application(models.Model):
     otp_expires_at = models.DateTimeField(blank=True, null=True)
     otp_attempts = models.PositiveSmallIntegerField(default=0)
 
+    # Secret token for parent handoff. When a student hands off to a parent,
+    # this token is included in the email and must be present to resume.
+    handoff_token = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Secret token required for parent handoff access.",
+    )
+
     # Lead-mentor review fields
     decline_reason = models.TextField(blank=True, default="")
     reviewed_at = models.DateTimeField(blank=True, null=True)
@@ -261,6 +270,13 @@ class Application(models.Model):
             ]
         )
         return True
+
+    def issue_handoff_token(self) -> str:
+        """Generate and store a fresh handoff token. Returns it."""
+        token = secrets.token_urlsafe(32)
+        self.handoff_token = token
+        self.save(update_fields=["handoff_token", "updated_at"])
+        return token
 
     @property
     def email_is_verified(self) -> bool:
