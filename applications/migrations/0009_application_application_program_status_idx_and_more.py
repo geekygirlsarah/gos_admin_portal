@@ -6,20 +6,24 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('applications', '0008_alter_sitesettings_welcome_message'),
+        ("applications", "0008_alter_sitesettings_welcome_message"),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='application',
-            index=models.Index(fields=['program', 'status'], name='application_program_status_idx'),
+            model_name="application",
+            index=models.Index(
+                fields=["program", "status"], name="application_program_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='application',
-            index=models.Index(fields=['email'], name='application_email_idx'),
+            model_name="application",
+            index=models.Index(fields=["email"], name="application_email_idx"),
         ),
         migrations.AddIndex(
-            model_name='application',
-            index=models.Index(fields=['status', 'submitted_at'], name='application_status_sub_idx'),
+            model_name="application",
+            index=models.Index(
+                fields=["status", "submitted_at"], name="application_status_sub_idx"
+            ),
         ),
     ]

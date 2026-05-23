@@ -6,88 +6,129 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0061_student_hoped_gains_student_interest_reason_and_more'),
+        ("programs", "0061_student_hoped_gains_student_interest_reason_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='adult',
-            name='active',
+            model_name="adult",
+            name="active",
             field=models.BooleanField(db_index=True, default=True),
         ),
         migrations.AlterField(
-            model_name='adult',
-            name='is_alumni',
-            field=models.BooleanField(db_index=True, default=False, help_text='Check if this adult is a program alumni.'),
+            model_name="adult",
+            name="is_alumni",
+            field=models.BooleanField(
+                db_index=True,
+                default=False,
+                help_text="Check if this adult is a program alumni.",
+            ),
         ),
         migrations.AlterField(
-            model_name='adult',
-            name='is_mentor',
-            field=models.BooleanField(db_index=True, default=False, help_text='Check if this adult serves as a mentor/volunteer.'),
+            model_name="adult",
+            name="is_mentor",
+            field=models.BooleanField(
+                db_index=True,
+                default=False,
+                help_text="Check if this adult serves as a mentor/volunteer.",
+            ),
         ),
         migrations.AlterField(
-            model_name='adult',
-            name='is_parent',
-            field=models.BooleanField(db_index=True, default=False, help_text='Check if this adult is a parent/guardian of any student.'),
+            model_name="adult",
+            name="is_parent",
+            field=models.BooleanField(
+                db_index=True,
+                default=False,
+                help_text="Check if this adult is a parent/guardian of any student.",
+            ),
         ),
         migrations.AlterField(
-            model_name='student',
-            name='active',
+            model_name="student",
+            name="active",
             field=models.BooleanField(db_index=True, default=True),
         ),
         migrations.AlterField(
-            model_name='student',
-            name='graduated',
-            field=models.BooleanField(db_index=True, default=False, help_text='Check if this student has graduated.'),
+            model_name="student",
+            name="graduated",
+            field=models.BooleanField(
+                db_index=True,
+                default=False,
+                help_text="Check if this student has graduated.",
+            ),
         ),
         migrations.AlterField(
-            model_name='student',
-            name='graduation_year',
-            field=models.PositiveSmallIntegerField(blank=True, db_index=True, help_text='Expected high school graduation year', null=True),
+            model_name="student",
+            name="graduation_year",
+            field=models.PositiveSmallIntegerField(
+                blank=True,
+                db_index=True,
+                help_text="Expected high school graduation year",
+                null=True,
+            ),
         ),
         migrations.AlterField(
-            model_name='student',
-            name='last_name',
+            model_name="student",
+            name="last_name",
             field=models.CharField(db_index=True, max_length=150),
         ),
         migrations.AddIndex(
-            model_name='adult',
-            index=models.Index(fields=['last_name', 'first_name'], name='adult_name_idx'),
+            model_name="adult",
+            index=models.Index(
+                fields=["last_name", "first_name"], name="adult_name_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='adult',
-            index=models.Index(fields=['is_parent', 'active'], name='adult_parent_active_idx'),
+            model_name="adult",
+            index=models.Index(
+                fields=["is_parent", "active"], name="adult_parent_active_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='adult',
-            index=models.Index(fields=['is_mentor', 'active'], name='adult_mentor_active_idx'),
+            model_name="adult",
+            index=models.Index(
+                fields=["is_mentor", "active"], name="adult_mentor_active_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='adult',
-            index=models.Index(fields=['is_alumni', 'active'], name='adult_alumni_active_idx'),
+            model_name="adult",
+            index=models.Index(
+                fields=["is_alumni", "active"], name="adult_alumni_active_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='payment',
-            index=models.Index(fields=['student', 'program'], name='payment_student_program_idx'),
+            model_name="payment",
+            index=models.Index(
+                fields=["student", "program"], name="payment_student_program_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='payment',
-            index=models.Index(fields=['program', 'paid_on'], name='payment_program_date_idx'),
+            model_name="payment",
+            index=models.Index(
+                fields=["program", "paid_on"], name="payment_program_date_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='slidingscale',
-            index=models.Index(fields=['student', 'program'], name='slidingscale_stu_prog_idx'),
+            model_name="slidingscale",
+            index=models.Index(
+                fields=["student", "program"], name="slidingscale_stu_prog_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='student',
-            index=models.Index(fields=['last_name', 'first_name'], name='student_name_idx'),
+            model_name="student",
+            index=models.Index(
+                fields=["last_name", "first_name"], name="student_name_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='student',
-            index=models.Index(fields=['school', 'graduation_year'], name='student_school_grad_idx'),
+            model_name="student",
+            index=models.Index(
+                fields=["school", "graduation_year"], name="student_school_grad_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='student',
-            index=models.Index(fields=['active', 'graduated'], name='student_active_graduated_idx'),
+            model_name="student",
+            index=models.Index(
+                fields=["active", "graduated"], name="student_active_graduated_idx"
+            ),
         ),
     ]

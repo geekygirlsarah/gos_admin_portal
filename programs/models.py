@@ -497,7 +497,10 @@ class Student(models.Model):
         related_name="students",
     )
     graduation_year = models.PositiveSmallIntegerField(
-        blank=True, null=True, db_index=True, help_text="Expected high school graduation year"
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Expected high school graduation year",
     )
 
     # New multi-select of canonical options
@@ -637,8 +640,12 @@ class Student(models.Model):
         ordering = ["first_name", "last_name"]
         indexes = [
             models.Index(fields=["last_name", "first_name"], name="student_name_idx"),
-            models.Index(fields=["school", "graduation_year"], name="student_school_grad_idx"),
-            models.Index(fields=["active", "graduated"], name="student_active_graduated_idx"),
+            models.Index(
+                fields=["school", "graduation_year"], name="student_school_grad_idx"
+            ),
+            models.Index(
+                fields=["active", "graduated"], name="student_active_graduated_idx"
+            ),
         ]
 
     def __str__(self):
@@ -683,10 +690,14 @@ class Adult(models.Model):
         help_text="Check if this adult is a parent/guardian of any student.",
     )
     is_mentor = models.BooleanField(
-        default=False, db_index=True, help_text="Check if this adult serves as a mentor/volunteer."
+        default=False,
+        db_index=True,
+        help_text="Check if this adult serves as a mentor/volunteer.",
     )
     is_alumni = models.BooleanField(
-        default=False, db_index=True, help_text="Check if this adult is a program alumni."
+        default=False,
+        db_index=True,
+        help_text="Check if this adult is a program alumni.",
     )
 
     # Optional link to a User; allows adults (parents/mentors) to have accounts
@@ -815,9 +826,15 @@ class Adult(models.Model):
         ordering = ["last_name", "first_name"]
         indexes = [
             models.Index(fields=["last_name", "first_name"], name="adult_name_idx"),
-            models.Index(fields=["is_parent", "active"], name="adult_parent_active_idx"),
-            models.Index(fields=["is_mentor", "active"], name="adult_mentor_active_idx"),
-            models.Index(fields=["is_alumni", "active"], name="adult_alumni_active_idx"),
+            models.Index(
+                fields=["is_parent", "active"], name="adult_parent_active_idx"
+            ),
+            models.Index(
+                fields=["is_mentor", "active"], name="adult_mentor_active_idx"
+            ),
+            models.Index(
+                fields=["is_alumni", "active"], name="adult_alumni_active_idx"
+            ),
         ]
 
     def __str__(self):
@@ -883,8 +900,12 @@ class Payment(models.Model):
     class Meta:
         ordering = ["-paid_on", "-created_at"]
         indexes = [
-            models.Index(fields=["student", "program"], name="payment_student_program_idx"),
-            models.Index(fields=["program", "paid_on"], name="payment_program_date_idx"),
+            models.Index(
+                fields=["student", "program"], name="payment_student_program_idx"
+            ),
+            models.Index(
+                fields=["program", "paid_on"], name="payment_program_date_idx"
+            ),
         ]
 
     def __str__(self):
@@ -955,7 +976,9 @@ class SlidingScale(models.Model):
         unique_together = ("student", "program")
         ordering = ["program__name", "student__last_name", "student__first_name"]
         indexes = [
-            models.Index(fields=["student", "program"], name="slidingscale_stu_prog_idx"),
+            models.Index(
+                fields=["student", "program"], name="slidingscale_stu_prog_idx"
+            ),
         ]
 
     def __str__(self):

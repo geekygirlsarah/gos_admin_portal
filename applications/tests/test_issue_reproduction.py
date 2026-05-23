@@ -523,7 +523,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # The checkbox for email_updates should NOT be checked by default for secondary parent
         self.assertContains(
-            response, 'name="email_updates" class="form-check-input" id="id_email_updates"'
+            response,
+            'name="email_updates" class="form-check-input" id="id_email_updates"',
         )
         self.assertNotContains(
             response,
