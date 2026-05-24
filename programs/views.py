@@ -190,6 +190,7 @@ from .models import (
     School,
     SlidingScale,
     Student,
+    SubTeam,
     TaxForm,
     Team,
 )
@@ -2031,6 +2032,7 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         enrollment_id = request.POST.get("enrollment_id")
         team_id = request.POST.get("team_id")
         crew_id = request.POST.get("crew_id")
+        subteam_id = request.POST.get("subteam_id")
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
 
         updated_fields = []
@@ -2049,6 +2051,14 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
             else:
                 enrollment.crew = None
             updated_fields.append("Crew")
+
+        if subteam_id is not None:
+            if subteam_id:
+                subteam = get_object_or_404(SubTeam, id=subteam_id, program_id=pk)
+                enrollment.subteam = subteam
+            else:
+                enrollment.subteam = None
+            updated_fields.append("SubTeam")
 
         enrollment.save()
         if updated_fields:
@@ -2076,10 +2086,11 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
         enrollments = Enrollment.objects.filter(program=program).select_related(
-            "student", "team", "crew"
+            "student", "team", "crew", "subteam"
         )
         teams = Team.objects.all().order_by("number")
         crews = Crew.objects.filter(program=program).order_by("name")
+        subteams = SubTeam.objects.filter(program=program).order_by("name")
 
         return render(
             request,
@@ -2089,6 +2100,7 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "enrollments": enrollments,
                 "teams": teams,
                 "crews": crews,
+                "subteams": subteams,
             },
         )
 
@@ -2121,6 +2133,12 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             enrollments.update(crew=crew)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to crew {crew}."
+            )
+        elif assignment_type == "subteam":
+            subteam = get_object_or_404(SubTeam, id=target_id, program=program)
+            enrollments.update(subteam=subteam)
+            messages.success(
+                request, f"Assigned {len(student_ids)} students to subteam {subteam}."
             )
 
         return redirect("program_assignment", pk=pk)

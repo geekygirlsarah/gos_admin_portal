@@ -20,6 +20,9 @@
             <button class="nav-link {% if active_tab == 'crews' %}active{% endif %}" id="crews-tab" data-bs-toggle="tab" data-bs-target="#crews" type="button" role="tab" aria-controls="crews" aria-selected="{% if active_tab == 'crews' %}true{% else %}false{% endif %}">Crews/Projects</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'subteams' %}active{% endif %}" id="subteams-tab" data-bs-toggle="tab" data-bs-target="#subteams" type="button" role="tab" aria-controls="subteams" aria-selected="{% if active_tab == 'subteams' %}true{% else %}false{% endif %}">SubTeams</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="tab" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">Imports</button>
         </li>
         {% if perms.api.view_apiclientkey %}
@@ -299,6 +302,90 @@
             </div>
         </div>
 
+        <!-- SubTeams Tab -->
+        <div class="tab-pane fade {% if active_tab == 'subteams' %}show active{% endif %}" id="subteams" role="tabpanel" aria-labelledby="subteams-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Add New SubTeam</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" class="row g-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_subteam">
+                        <div class="col-md-4">
+                            <label for="program_id_subteam" class="form-label">Program</label>
+                            <select name="program_id" id="program_id_subteam" class="form-select" required>
+                                {% for prog in programs %}
+                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="subteam_name" class="form-label">SubTeam Name</label>
+                            <input type="text" name="name" id="subteam_name" class="form-control" required placeholder="e.g. Design, Build">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="subteam_color" class="form-label">Color</label>
+                            <input type="color" name="color" id="subteam_color" class="form-control form-control-color w-100" value="#0000ff">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success w-100">Add SubTeam</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Existing SubTeams</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Program</th>
+                                    <th>SubTeam Name</th>
+                                    <th>Color</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subteam in subteams %}
+                                <tr>
+                                    <td colspan="4">
+                                        <form method="post" class="d-flex gap-2 align-items-center m-0">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+                                            <input type="hidden" name="action" value="update_subteam">
+                                            <input type="hidden" name="subteam_id" value="{{ subteam.id }}">
+                                            <div style="flex: 1;">{{ subteam.program.name }} ({{ subteam.program.year }})</div>
+                                            <div style="flex: 2;">
+                                                <input type="text" name="name" value="{{ subteam.name }}" class="form-control form-control-sm" placeholder="SubTeam Name" required>
+                                            </div>
+                                            <div style="width: 50px;">
+                                                <input type="color" name="color" value="{{ subteam.color }}" class="form-control form-control-color form-control-sm" title="SubTeam Color">
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="if(confirm('Are you sure?')) { document.getElementById('delete-subteam-{{ subteam.id }}').submit(); }">Delete</button>
+                                        </form>
+                                        <form id="delete-subteam-{{ subteam.id }}" method="post" style="display:none;">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_subteam">
+                                            <input type="hidden" name="subteam_id" value="{{ subteam.id }}">
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <th colspan="4" class="text-center py-4 text-muted">No subteams added yet.</th>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Imports Tab -->
         <div class="tab-pane fade {% if active_tab == 'imports' %}show active{% endif %}" id="imports" role="tabpanel" aria-labelledby="imports-tab">
             <div class="card shadow-sm mb-4">
@@ -415,7 +502,7 @@
                                   <div class="col-12">
                                     <label for="attendance-program" class="form-label">Program</label>
                                     <select id="attendance-program" name="program_id" class="form-select" required>
-                                      <option value="">Select a program…</option>
+                                      <option value="">Select a program...</option>
                                       {% for p in attendance_programs|default:programs %}
                                       <option value="{{ p.id }}">{{ p.name }}</option>
                                       {% endfor %}

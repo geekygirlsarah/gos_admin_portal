@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
-from .models import Adult, Crew, Program, RolePermission, Student, Team
+from .models import Adult, Crew, Program, RolePermission, Student, SubTeam, Team
 
 try:
     from api.models import ApiClientKey
@@ -138,6 +138,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         teams = Team.objects.all()
         team_types = Team.TEAM_TYPES
         crews = Crew.objects.select_related("program").all()
+        subteams = SubTeam.objects.select_related("program").all()
         programs = Program.objects.all().order_by("name")
         attendance_programs = [p for p in programs if p.has_feature("attendance")]
 
@@ -150,6 +151,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "teams": teams,
             "team_types": team_types,
             "crews": crews,
+            "subteams": subteams,
             "programs": programs,
             "attendance_programs": attendance_programs,
             "api_keys": api_keys,
@@ -238,5 +240,34 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     crew.save()
                     messages.success(request, "Crew updated.")
             return redirect("/programs/settings/?tab=crews")
+
+        elif action == "add_subteam":
+            program_id = request.POST.get("program_id")
+            name = request.POST.get("name")
+            color = request.POST.get("color")
+            if program_id and name:
+                SubTeam.objects.create(program_id=program_id, name=name, color=color)
+                messages.success(request, f"SubTeam {name} added.")
+            return redirect("/programs/settings/?tab=subteams")
+
+        elif action == "delete_subteam":
+            subteam_id = request.POST.get("subteam_id")
+            if subteam_id:
+                SubTeam.objects.filter(id=subteam_id).delete()
+                messages.success(request, "SubTeam deleted.")
+            return redirect("/programs/settings/?tab=subteams")
+
+        elif action == "update_subteam":
+            subteam_id = request.POST.get("subteam_id")
+            name = request.POST.get("name")
+            color = request.POST.get("color")
+            if subteam_id:
+                subteam = SubTeam.objects.filter(id=subteam_id).first()
+                if subteam:
+                    subteam.name = name
+                    subteam.color = color
+                    subteam.save()
+                    messages.success(request, "SubTeam updated.")
+            return redirect("/programs/settings/?tab=subteams")
 
         return redirect("portal_settings")

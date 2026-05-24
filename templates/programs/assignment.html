@@ -31,6 +31,10 @@
                                     <input class="form-check-input" type="radio" name="assignment_type" id="type-crew" value="crew">
                                     <label class="form-check-label" for="type-crew">Crew/Project</label>
                                 </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="assignment_type" id="type-subteam" value="subteam">
+                                    <label class="form-check-label" for="type-subteam">SubTeam</label>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -55,6 +59,7 @@
                                     <th>Student Name</th>
                                     <th>Current Team</th>
                                     <th>Current Crew</th>
+                                    <th>Current SubTeam</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -76,6 +81,13 @@
                                     <td>
                                         {% if e.crew %}
                                             <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                                        {% else %}
+                                            <span class="text-muted small">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if e.subteam %}
+                                            <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
                                         {% else %}
                                             <span class="text-muted small">None</span>
                                         {% endif %}
@@ -106,16 +118,25 @@ document.addEventListener('DOMContentLoaded', function() {
         { id: "{{ crew.id }}", name: "{{ crew.name }}" },
         {% endfor %}
     ];
+    const subteams = [
+        {% for subteam in subteams %}
+        { id: "{{ subteam.id }}", name: "{{ subteam.name }}" },
+        {% endfor %}
+    ];
 
     // Handle toggling between Team and Crew selection
     const typeTeam = document.getElementById('type-team');
     const typeCrew = document.getElementById('type-crew');
+    const typeSubTeam = document.getElementById('type-subteam');
     const targetSelect = document.getElementById('target_id');
     const targetLabel = document.getElementById('target-label');
 
     function updateDropdown() {
         const isTeam = typeTeam.checked;
-        targetLabel.textContent = isTeam ? 'Team' : 'Crew/Project';
+        const isCrew = typeCrew.checked;
+        const isSubTeam = typeSubTeam.checked;
+        
+        targetLabel.textContent = isTeam ? 'Team' : (isCrew ? 'Crew/Project' : 'SubTeam');
         
         // Clear current options
         targetSelect.innerHTML = '';
@@ -123,11 +144,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add default unassign option
         const defaultOpt = document.createElement('option');
         defaultOpt.value = '';
-        defaultOpt.textContent = isTeam ? '-- No Team (Unassign) --' : '-- No Crew/Project (Unassign) --';
+        defaultOpt.textContent = isTeam ? '-- No Team (Unassign) --' : (isCrew ? '-- No Crew/Project (Unassign) --' : '-- No SubTeam (Unassign) --');
         targetSelect.appendChild(defaultOpt);
         
         // Add relevant options
-        const items = isTeam ? teams : crews;
+        const items = isTeam ? teams : (isCrew ? crews : subteams);
         items.forEach(item => {
             const opt = document.createElement('option');
             opt.value = item.id;
@@ -138,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     typeTeam.addEventListener('change', updateDropdown);
     typeCrew.addEventListener('change', updateDropdown);
+    typeSubTeam.addEventListener('change', updateDropdown);
 
     // Initial population
     updateDropdown();
@@ -153,7 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Badge colors
-    document.querySelectorAll('.team-badge, .crew-badge').forEach(function(badge) {
+    document.querySelectorAll('.team-badge, .crew-badge, .subteam-badge').forEach(function(badge) {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;
