@@ -740,6 +740,12 @@ def convert_application_to_student(application: Application, request=None):
         if changed:
             student.save()
 
+        # Ensure bi-directional M2M relationship is also established.
+        if primary:
+            student.adults.add(primary)
+        if secondary:
+            student.adults.add(secondary)
+
         Enrollment.objects.get_or_create(student=student, program=application.program)
 
         application.converted_student = student
