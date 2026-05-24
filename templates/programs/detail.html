@@ -30,6 +30,7 @@
             <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
             <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
             <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
+            <a class="btn btn-outline-primary" href="{% url 'program_assignment' program.id %}">Assign Teams/Crews</a>
             {% if 'signout-sheet' in program.feature_keys %}
               <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
             {% endif %}
@@ -63,27 +64,6 @@
                 {% endif %}
               </div>
               <div class="d-flex gap-2 align-items-center">
-                {% if role == 'LeadMentor' %}
-                  <form method="post" action="{% url 'program_enrollment_update' program.id %}" class="d-inline-block m-0">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
-                    <input type="hidden" name="enrollment_id" value="{{ e.id }}">
-                    <select name="team_id" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()">
-                      <option value="">-- No Team --</option>
-                      {% for team in teams %}
-                        <option value="{{ team.id }}" {% if e.team_id == team.id %}selected{% endif %}>
-                          {% if team.name %}{{ team.name }} ({{ team.number }}){% else %}{{ team.team_type }} {{ team.number }}{% endif %}
-                        </option>
-                      {% endfor %}
-                    </select>
-                    <select name="crew_id" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()">
-                      <option value="">-- No Crew/Project --</option>
-                      {% for crew in crews %}
-                        <option value="{{ crew.id }}" {% if e.crew_id == crew.id %}selected{% endif %}>
-                          {{ crew.name }}
-                        </option>
-                      {% endfor %}
-                    </select>
-                  </form>
-                {% endif %}
                 {% if can_view_payments %}
                 <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
                 {% endif %}
