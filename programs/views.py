@@ -3385,8 +3385,11 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
 
         rows = []
         grand_total = 0
+        filter_owed = request.GET.get("filter") == "owed"
         for s in students:
             balance_sum = self._program_balance_for_student(s, program)
+            if filter_owed and balance_sum <= 0:
+                continue
             rows.append(
                 {
                     "student": s,
@@ -3402,6 +3405,7 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
                 "program": program,
                 "rows": rows,
                 "grand_total": grand_total,
+                "filter_owed": filter_owed,
             },
         )
 
