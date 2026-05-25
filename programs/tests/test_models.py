@@ -149,3 +149,13 @@ class RolePermissionTests(TestCase):
 
 # StudentApplicationTests removed; new application flow lives in the
 # `applications` app and is tested there.
+
+class UnsavedStudentTest(TestCase):
+    def test_all_parents_on_unsaved_student(self):
+        student = Student(legal_first_name="Unsaved", last_name="Student")
+        # Accessing all_parents should not raise ValueError
+        try:
+            parents = student.all_parents
+            self.assertEqual(parents, [])
+        except ValueError as e:
+            self.fail(f"all_parents() raised ValueError on unsaved student: {e}")

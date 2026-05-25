@@ -36,6 +36,11 @@
 
         <div class="card shadow-sm">
             <div class="card-body p-4 p-md-5">
+                {% if warnings %}
+                    {% for warning in warnings %}
+                        <div class="alert alert-warning">{{ warning }}</div>
+                    {% endfor %}
+                {% endif %}
                 <h1 class="h3 mb-4">{% block wizard_heading %}{% endblock %}</h1>
                 {% block wizard_body %}{% endblock %}
             </div>

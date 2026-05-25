@@ -36,6 +36,7 @@ class StudentFormTests(TestCase):
                 "legal_first_name": "Jamie",
                 "last_name": "Lee",
                 "grade_selector": "12",
+                "date_of_birth": "2010-01-01",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)
@@ -50,6 +51,7 @@ class StudentFormTests(TestCase):
                 "primary_contact": self.parent1.id,
                 "secondary_contact": self.parent2.id,
                 "parents": [self.parent1.id],  # only p1 preselected
+                "date_of_birth": "2010-01-01",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)

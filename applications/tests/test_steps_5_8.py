@@ -91,6 +91,7 @@ class Step5StudentInfoTests(TestCase):
                 "allergies": "",
                 "dietary_restrictions": "",
                 "medical_notes": "",
+                "date_of_birth": "2010-01-01",
             },
         )
         self.assertRedirects(

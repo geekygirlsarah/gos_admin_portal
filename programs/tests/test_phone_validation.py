@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -8,10 +10,12 @@ from programs.models import Adult, Student
 
 class PhoneValidationTestCase(TestCase):
     def test_student_model_phone_validation(self):
+        date_of_birth_year = date.today().year - 12;
         student = Student(
             legal_first_name="Test",
             last_name="Student",
             cell_phone_number="12345",  # Invalid: too short
+            date_of_birth=date(date_of_birth_year, 1, 1),
         )
         with self.assertRaises(ValidationError):
             student.full_clean()
@@ -51,6 +55,7 @@ class PhoneValidationTestCase(TestCase):
             "legal_first_name": "Test",
             "last_name": "Student",
             "cell_phone_number": "123",
+            "date_of_birth": "2010-01-01",
         }
         form = StudentForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -63,7 +68,12 @@ class PhoneValidationTestCase(TestCase):
     def test_application_forms_validation(self):
         # StudentInfoForm
         form = StudentInfoForm(
-            data={"legal_first_name": "A", "last_name": "B", "cell_phone_number": "123"}
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "cell_phone_number": "123",
+                "date_of_birth": "2010-01-01",
+            }
         )
         self.assertFalse(form.is_valid())
         self.assertIn("cell_phone_number", form.errors)
@@ -78,6 +88,7 @@ class PhoneValidationTestCase(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "tshirt_size": "M",
+                "date_of_birth": "2010-01-01",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)

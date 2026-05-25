@@ -200,9 +200,26 @@ class StudentInfoForm(forms.Form):
     )
     date_of_birth = forms.DateField(
         label="Date of birth",
-        required=False,
+        required=True,
         widget=forms.DateInput(attrs={**_text_attrs, "type": "date"}),
     )
+    confirm_age = forms.BooleanField(
+        label="I confirm this birthdate is correct",
+        required=False,
+    )
+
+    def clean_date_of_birth(self):
+        dob = self.cleaned_data.get("date_of_birth")
+        if not dob:
+            raise forms.ValidationError("This field is required.")
+        if dob > timezone.localdate():
+            raise forms.ValidationError("Date of birth cannot be in the future.")
+        
+        today = timezone.localdate()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        if age >= 19:
+            raise forms.ValidationError("The student is over 18, which is too old for our programs.")
+        return dob
     address = forms.CharField(
         label="Address",
         max_length=255,

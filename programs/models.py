@@ -476,7 +476,7 @@ class Student(models.Model):
     )
     last_name = models.CharField(max_length=150, db_index=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
-    date_of_birth = models.DateField(blank=True, null=True)
+    date_of_birth = models.DateField(blank=False, null=False)
     # Background clearances (per-student, separate from mentor clearances)
     has_passed_clearances = models.BooleanField(
         default=False,
@@ -610,10 +610,11 @@ class Student(models.Model):
             result.append(self.secondary_contact)
             seen_ids.add(self.secondary_contact_id)
 
-        for p in self.adults.all():
-            if p.id not in seen_ids:
-                result.append(p)
-                seen_ids.add(p.id)
+        if self.pk:
+            for p in self.adults.all():
+                if p.id not in seen_ids:
+                    result.append(p)
+                    seen_ids.add(p.id)
 
         return result
 

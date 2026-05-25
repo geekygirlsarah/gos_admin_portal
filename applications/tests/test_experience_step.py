@@ -58,6 +58,7 @@ class Step6ExperienceTests(TestCase):
 class RenumberingTests(TestCase):
     def test_step5_post_advances_to_step6(self):
         app = _verified()
+        date_of_birth_year_string = str(datetime.date.today().year - 12)
         response = self.client.post(
             reverse("apply_step5", kwargs={"app_id": app.application_id}),
             {
@@ -69,6 +70,7 @@ class RenumberingTests(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "tshirt_size": "M",
+                "date_of_birth": date_of_birth_year_string + "-01-01",
             },
         )
         self.assertRedirects(

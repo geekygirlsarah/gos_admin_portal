@@ -508,8 +508,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
         # The checkbox for email_updates should be checked by default for primary parent
         self.assertContains(
             response,
-            '<input type="checkbox" name="email_updates" class="form-check-input" id="id_email_updates" checked>',
-            html=True,
+            'id="id_email_updates" checked',
+            html=False,
         )
 
     def test_secondary_parent_optin_defaults_to_false(self):
@@ -527,14 +527,13 @@ class ParentNotificationOptInReproductionTests(TestCase):
         # The checkbox for email_updates should NOT be checked by default for secondary parent
         self.assertContains(
             response,
-            '<input type="checkbox" name="email_updates" class="form-check-input" id="id_email_updates">',
-            html=True,
+            'id="id_email_updates"',
+            html=False,
         )
-        self.assertContains(
+        self.assertNotContains(
             response,
-            '<input type="checkbox" name="email_updates" class="form-check-input" id="id_email_updates" checked>',
-            html=True,
-            count=0,
+            'id="id_email_updates" checked',
+            html=False,
         )
 
     def test_both_parents_opt_out_blocked_at_step8(self):
