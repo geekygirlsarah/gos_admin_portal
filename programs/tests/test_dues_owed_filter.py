@@ -4,16 +4,18 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 
 from programs.models import Enrollment, Fee, FeeAssignment, Payment, Program, Student
 
 
 class DuesOwedFilterTest(TestCase):
     def setUp(self):
+        password = get_random_string(32)
         self.user = User.objects.create_superuser(
-            username="admin", password="password", email="admin@example.com"
+            username="admin", password=password, email="admin@example.com"
         )
-        self.client.login(username="admin", password="password")
+        self.client.login(username="admin", password=password)
         self.program = Program.objects.create(name="Test Program")
 
     def test_filter_owed(self):
