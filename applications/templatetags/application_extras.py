@@ -74,6 +74,9 @@ def format_application_value(value, key):
     """Format a saved form value for display on the review page.
     Resolves FK/M2M IDs to names where appropriate.
     """
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+
     if not value:
         return "—"
 

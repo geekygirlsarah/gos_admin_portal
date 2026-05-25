@@ -167,7 +167,7 @@
               {% for field, value in step_data.items %}
                 {% if not field|slice:":1" == "_" %}
                   <dt class="col-sm-4">{{ field|humanize_field }}</dt>
-                  <dd class="col-sm-8">{{ value|default:"—" }}</dd>
+                  <dd class="col-sm-8">{{ value|format_application_value:field }}</dd>
                 {% endif %}
               {% endfor %}
             </dl>

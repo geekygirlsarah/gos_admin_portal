@@ -504,6 +504,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
+
         # The checkbox for email_updates should be checked by default for primary parent
         self.assertContains(
             response,
@@ -703,3 +704,32 @@ class Step7PrefillEmailReproductionTests(TestCase):
         self.assertEqual(
             response.context["form"].initial.get("email"), "parent_handoff@example.com"
         )
+
+
+from .test_review import _reviewer_user
+
+
+class BooleanRenderingReproductionTest(TestCase):
+    def setUp(self):
+        self.reviewer = _reviewer_user()
+        self.client.force_login(self.reviewer)
+
+    def test_boolean_fields_displayed_as_yes_no(self):
+        app = Application.objects.create(
+            email="test@example.com",
+            data={
+                "step1": {
+                    "some_checkbox": False,
+                    "other_checkbox": True,
+                },
+            },
+        )
+        url = reverse("application_review_detail", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertContains(response, "Some checkbox")
+        # Currently, False renders as "—"
+        self.assertContains(response, "No")
+        self.assertContains(response, "Other checkbox")
+        self.assertContains(response, "Yes")
