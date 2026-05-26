@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from django import forms
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from programs.constants import (
+    APP_ID_ALPHABET,
+    APP_ID_LENGTH,
+    GRADE_CHOICES,
     RELATIONSHIP_CHOICES,
     STATE_CHOICES,
     TSHIRT_SIZE_CHOICES,
@@ -13,10 +17,6 @@ from programs.constants import (
 from programs.models import Program, RaceEthnicity, School, Student
 from programs.validators import validate_phone_number
 
-from programs.constants import (
-    APP_ID_ALPHABET,
-    APP_ID_LENGTH,
-)
 from .models import Application
 from .services import normalize_email
 
@@ -269,6 +269,11 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.Select(attrs=_select_attrs),
     )
+    grade = forms.ChoiceField(
+        label="Grade (K–12)",
+        choices=[("", "—")] + [(str(v), label) for v, label in GRADE_CHOICES],
+        required=True,
+    )
     race_ethnicities = forms.ModelMultipleChoiceField(
         label="Race / Ethnicity",
         queryset=RaceEthnicity.objects.none(),
@@ -277,8 +282,13 @@ class StudentInfoForm(forms.Form):
         help_text="Optional. We use aggregated stats for grants and to ensure we're meeting our own diversity goals.",
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, program_start_date=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if program_start_date:
+            formatted_date = date_format(program_start_date, use_l10n=True)
+            self.fields["grade"].label = (
+                f"Grade going into the program as of {formatted_date}"
+            )
         self.fields["school_name"].choices = [("", "---")] + [
             (s.name, s.name) for s in School.objects.all().order_by("name")
         ]

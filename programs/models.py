@@ -17,6 +17,7 @@ from programs.constants import (
     TEAM_TYPES,
     TSHIRT_SIZE_CHOICES,
 )
+
 from .validators import validate_phone_number
 
 logger = logging.getLogger(__name__)
@@ -420,6 +421,16 @@ class Student(models.Model):
             return None
         today = datetime.date.today()
         return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+    @property
+    def current_grade(self):
+        """Return the student's current grade (1-12)."""
+        if not self.graduation_year:
+            return None
+        from programs.utils import get_academic_year_ending
+
+        academic_year_ending = get_academic_year_ending()
+        return 12 - (self.graduation_year - academic_year_ending)
 
     def requires_background_check(self, program: "Program") -> bool:
         """Whether the student will be 18 at any point during the given program's dates.

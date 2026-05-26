@@ -161,6 +161,8 @@ class LogFormSaveMixin:
         return response
 
 
+from programs.constants import RELATIONSHIP_CHOICES, TSHIRT_SIZE_CHOICES
+
 from .forms import (
     AddExistingStudentToProgramForm,
     AdultForm,
@@ -177,7 +179,6 @@ from .forms import (
     SlidingScaleForm,
     StudentForm,
 )
-from programs.constants import RELATIONSHIP_CHOICES, TSHIRT_SIZE_CHOICES
 from .models import (
     Adult,
     Crew,

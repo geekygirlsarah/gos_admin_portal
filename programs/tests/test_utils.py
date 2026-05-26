@@ -8,6 +8,7 @@ from programs.utils import (
     convert_student_to_alumni,
     find_matching_alumni_adult,
     generate_otp,
+    get_academic_year_ending,
     row_raw,
     row_val,
     row_val_bool,
@@ -31,6 +32,14 @@ class UtilsTests(TestCase):
         otp1 = generate_otp()
         otp2 = generate_otp()
         self.assertNotEqual(otp1, otp2)
+
+    def test_get_academic_year_ending(self):
+        # Before July 1
+        self.assertEqual(get_academic_year_ending(datetime.date(2025, 6, 30)), 2025)
+        # On July 1
+        self.assertEqual(get_academic_year_ending(datetime.date(2025, 7, 1)), 2026)
+        # After July 1
+        self.assertEqual(get_academic_year_ending(datetime.date(2025, 12, 31)), 2026)
 
 
 class RowHelpersTests(TestCase):

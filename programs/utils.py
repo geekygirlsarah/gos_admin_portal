@@ -281,3 +281,17 @@ def row_val_date(d, *keys):
         except ValueError:
             continue
     return None
+
+
+def get_academic_year_ending(today: date = None) -> int:
+    """Return the academic year ending (e.g., 2025 for 2024-25 school year).
+    July 1 rollover:
+    - before July 1: academic year ending = current year
+    - on/after July 1: academic year ending = next year
+    """
+    if today is None:
+        today = date.today()
+    if today.month < 7:
+        return today.year
+    else:
+        return today.year + 1

@@ -223,10 +223,9 @@ def students_for_adult(adult) -> List:
     return list(seen.values())
 
 
-def latest_program_for_student(student) -> Optional[str]:
-    """Return a friendly label (e.g. "Summer 2024") for the most recent
-    program this student has been enrolled in, or ``None`` if there isn't
-    one.
+def latest_program_for_student(student) -> Optional[Program]:
+    """Return the most recent program this student has been enrolled in,
+    or ``None`` if there isn't one.
     """
     if student is None:
         return None
@@ -244,17 +243,16 @@ def latest_program_for_student(student) -> Optional[str]:
     )
     if enrollment is None or enrollment.program is None:
         return None
-    return str(enrollment.program)
+    return enrollment.program
 
 
-def latest_program_for_adult(adult) -> Optional[str]:
-    """Return a friendly label for the most recent program any student
-    linked to this adult was enrolled in, or ``None``."""
+def latest_program_for_adult(adult) -> Optional[Program]:
+    """Return the most recent program any student linked to this adult was enrolled in,
+    or ``None``.
+    """
     if adult is None:
         return None
     students = students_for_adult(adult)
-    best_label = None
-    best_key = None
     from programs.models import Enrollment
 
     enrollment = (
@@ -269,7 +267,7 @@ def latest_program_for_adult(adult) -> Optional[str]:
     )
     if enrollment is None or enrollment.program is None:
         return None
-    return str(enrollment.program)
+    return enrollment.program
 
 
 def student_to_prefill(student) -> dict:

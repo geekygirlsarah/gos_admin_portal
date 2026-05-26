@@ -16,6 +16,7 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from programs.models import Student
+from programs.utils import get_academic_year_ending
 
 from .forms import (
     ApplicantTypeForm,
@@ -548,9 +549,22 @@ class Step5StudentInfoView(View):
         if guard is not None:
             return guard
 
-        chosen_student, picker = self._existing_student_picker(application)
-        form = StudentInfoForm(initial=self._initial(application, chosen_student))
-        return self._render(request, application, form, picker, chosen_student)
+        program_start_date = (
+            application.program.start_date if application.program else None
+        )
+        chosen_student, picker = self._existing_student_picker(application, request.GET)
+        form = StudentInfoForm(
+            initial=self._initial(application, chosen_student),
+            program_start_date=program_start_date,
+        )
+        return self._render(
+            request,
+            application,
+            form,
+            picker,
+            chosen_student,
+            program_start_date=program_start_date,
+        )
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id)
@@ -561,15 +575,35 @@ class Step5StudentInfoView(View):
         chosen_student, picker = self._existing_student_picker(
             application, request.POST
         )
+        program_start_date = (
+            application.program.start_date if application.program else None
+        )
         # If the parent picked an existing student via the picker but
         # didn't yet submit the main form, just re-render with prefill.
         if picker is not None and "_pick_student" in request.POST:
-            form = StudentInfoForm(initial=self._initial(application, chosen_student))
-            return self._render(request, application, form, picker, chosen_student)
+            form = StudentInfoForm(
+                initial=self._initial(application, chosen_student),
+                program_start_date=program_start_date,
+            )
+            return self._render(
+                request,
+                application,
+                form,
+                picker,
+                chosen_student,
+                program_start_date=program_start_date,
+            )
 
-        form = StudentInfoForm(request.POST)
+        form = StudentInfoForm(request.POST, program_start_date=program_start_date)
         if not form.is_valid():
-            return self._render(request, application, form, picker, chosen_student)
+            return self._render(
+                request,
+                application,
+                form,
+                picker,
+                chosen_student,
+                program_start_date=program_start_date,
+            )
 
         # Add warnings for age
         dob = form.cleaned_data["date_of_birth"]
@@ -601,6 +635,12 @@ class Step5StudentInfoView(View):
                 )
 
         payload = _sanitize_payload(form.cleaned_data)
+        # Convert grade to expected_grad_year
+        if "grade" in payload:
+            grade = int(payload.pop("grade"))
+            academic_year_ending = get_academic_year_ending()
+            payload["expected_grad_year"] = academic_year_ending + (12 - grade)
+
         if chosen_student is not None:
             payload["_existing_student_id"] = chosen_student.pk
         elif application.applicant_type == Application.Type.STUDENT:
@@ -638,13 +678,29 @@ class Step5StudentInfoView(View):
             initial["personal_email"] = (
                 chosen_student.personal_email or application.email or ""
             )
+            # Add grade prefill
+            if chosen_student.graduation_year:
+                academic_year_ending = get_academic_year_ending()
+                # Grade calculation: 12 - (grad_year - academic_year_ending)
+                grade = 12 - (chosen_student.graduation_year - academic_year_ending)
+                if 1 <= grade <= 12:
+                    initial["grade"] = grade
             return initial
         return _student_initial_for(application)
 
     def _render(
-        self, request, application, form, picker, chosen_student, warnings=None
+        self,
+        request,
+        application,
+        form,
+        picker,
+        chosen_student,
+        warnings=None,
+        program_start_date=None,
     ):
         from .services import latest_program_for_student
+
+        academic_year_ending = get_academic_year_ending()
 
         # Determine which Student record (if any) we're prefilling from so
         # we can show a friendly "Welcome back" banner.
@@ -666,6 +722,7 @@ class Step5StudentInfoView(View):
                 "name": display_name,
                 "last_program": latest_program_for_student(prefill_student),
             }
+
         return render(
             request,
             self.template_name,
@@ -674,8 +731,10 @@ class Step5StudentInfoView(View):
                 "form": form,
                 "picker": picker,
                 "chosen_student": chosen_student,
-                "welcome_back": welcome_back,
                 "warnings": warnings,
+                "welcome_back": welcome_back,
+                "academic_year_ending": academic_year_ending,
+                "program_start_date": program_start_date,
                 "current_step": 5,
                 "total_steps": TOTAL_STEPS,
             },

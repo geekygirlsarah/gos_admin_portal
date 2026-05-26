@@ -22,7 +22,7 @@
     <div class="alert alert-info" role="status">
         <strong>Welcome back{% if welcome_back.name %}, {{ welcome_back.name }}{% endif %}!</strong>
         {% if welcome_back.last_program %}
-            We found your record from <strong>{{ welcome_back.last_program }}</strong>
+            We found your record from <strong>{{ welcome_back.last_program.name }}{% if welcome_back.last_program.start_date %} ({{ welcome_back.last_program.start_date|date }}){% endif %}</strong>
             and prefilled some fields below.
         {% else %}
             We found your record on file and prefilled some fields below.
@@ -81,6 +81,9 @@
                         {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
                     </label>
                     {{ field }}
+                    {% if field.name == 'grade' %}
+                        <div id="grad-year-display" class="form-text text-primary"></div>
+                    {% endif %}
                 {% endif %}
                 {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                 {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
@@ -106,6 +109,25 @@
                 allowEmptyOption: true,
                 maxOptions: null,
             });
+        }
+
+        const gradeSelect = document.getElementById("id_grade");
+        const gradYearDisplay = document.getElementById("grad-year-display");
+        const academicYearEnding = {{ academic_year_ending|default:0 }};
+
+        function updateGradYear() {
+            if (!gradeSelect || !gradYearDisplay) return;
+            const grade = parseInt(gradeSelect.value);
+            if (!isNaN(grade)) {
+                const gradYear = academicYearEnding + (12 - grade);
+                gradYearDisplay.textContent = `Expected graduation year: ${gradYear}`;
+            } else {
+                gradYearDisplay.textContent = "";
+            }
+        }
+        if (gradeSelect) {
+            gradeSelect.addEventListener("change", updateGradYear);
+            updateGradYear(); // initialize
         }
     });
 </script>

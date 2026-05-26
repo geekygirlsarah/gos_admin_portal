@@ -33,7 +33,7 @@
         <div class="alert alert-info" role="status">
             <strong>Welcome back{% if welcome_back.name %}, {{ welcome_back.name }}{% endif %}!</strong>
             {% if welcome_back.last_program %}
-                We found your record from <strong>{{ welcome_back.last_program }}</strong>
+                We found your record from <strong>{{ welcome_back.last_program.name }}{% if welcome_back.last_program.start_date %} ({{ welcome_back.last_program.start_date|date }}){% endif %}</strong>
                 and prefilled some fields below.
             {% else %}
                 We found your record on file and prefilled some fields below.

@@ -13,7 +13,12 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
-from programs.constants import APP_ID_ALPHABET, APP_ID_LENGTH, OTP_LENGTH, OTP_TTL_SECONDS
+from programs.constants import (
+    APP_ID_ALPHABET,
+    APP_ID_LENGTH,
+    OTP_LENGTH,
+    OTP_TTL_SECONDS,
+)
 
 
 def generate_application_id() -> str:

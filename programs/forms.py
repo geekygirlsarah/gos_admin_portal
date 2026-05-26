@@ -1,7 +1,11 @@
+import datetime
+
 from django import forms
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
 from django.utils.safestring import mark_safe
+
+from programs.utils import get_academic_year_ending
 
 from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
 
@@ -65,8 +69,6 @@ class StudentForm(forms.ModelForm):
         gy = self.instance.graduation_year if instance else None
         if gy:
             # infer grade from graduation year based on current academic year
-            import datetime
-
             today = datetime.date.today()
             end_year = today.year + (1 if today.month >= 7 else 0)
             # years remaining from current school year end to graduation
@@ -109,21 +111,10 @@ class StudentForm(forms.ModelForm):
         if grade_val not in (None, "", "None"):
             try:
                 g = int(grade_val)
-            except (TypeError, ValueError):
-                g = None
-            if g is not None and 0 <= g <= 12:
-                import datetime
 
-                today = datetime.date.today()
-                end_year = today.year + (1 if today.month >= 7 else 0)
-                if g == 0:
-                    grad_year = end_year + 13
-                else:
-                    grad_year = end_year + max(0, 12 - g)
-                # assign to instance via cleaned_data for model save
-                self.cleaned_data["graduation_year"] = grad_year
-                if "graduation_year" in self.fields:
-                    self.instance.graduation_year = grad_year
+                self.instance.graduation_year = get_academic_year_ending() + (12 - g)
+            except (ValueError, TypeError):
+                pass
         # Save base fields first
         instance = super().save(commit=False)
         if commit:

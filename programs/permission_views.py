@@ -4,6 +4,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from programs.constants import TEAM_TYPES
+
 from .models import Adult, Crew, Program, RolePermission, Student, SubTeam, Team
 
 try:

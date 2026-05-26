@@ -48,7 +48,7 @@ class LatestProgramHelpersTests(TestCase):
         )
         Enrollment.objects.create(student=s, program=older)
         Enrollment.objects.create(student=s, program=newer)
-        self.assertEqual(latest_program_for_student(s), "Summer 2025")
+        self.assertEqual(str(latest_program_for_student(s)), "Summer 2025")
 
     def test_latest_program_for_adult_uses_their_students(self):
         adult = Adult.objects.create(
@@ -68,7 +68,7 @@ class LatestProgramHelpersTests(TestCase):
             start_date=datetime.date(2024, 3, 1),
         )
         Enrollment.objects.create(student=s, program=program)
-        self.assertEqual(latest_program_for_adult(adult), "Spring 2024")
+        self.assertEqual(str(latest_program_for_adult(adult)), "Spring 2024")
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
