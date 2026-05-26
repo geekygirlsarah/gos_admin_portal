@@ -7,30 +7,19 @@ on:
     branches: [ "main", "staging" ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-          cache: 'pip'
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
   lint:
-    needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.13'
         cache: 'pip'
+    - name: Install Linting Tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
     - name: Run Linter (flake8)
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
@@ -41,25 +30,27 @@ jobs:
         isort --check-only --profile black .
 
   security:
-    needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.13'
         cache: 'pip'
+    - name: Install Security Tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit semgrep
     - name: Security Scan (bandit)
       run: bandit -r . -x ./venv,./.venv
     - name: Static Analysis (Semgrep)
       run: semgrep --config auto .
 
   safety:
-    needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Security Scan (safety)
       uses: pyupio/safety-action@v1
       with:
@@ -68,7 +59,7 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: Secret Scanning (Gitleaks)
@@ -79,7 +70,7 @@ jobs:
   trivy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Vulnerability Scan (Trivy)
       uses: aquasecurity/trivy-action@master
       with:
@@ -90,15 +81,18 @@ jobs:
         severity: 'CRITICAL,HIGH'
 
   django:
-    needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.13'
         cache: 'pip'
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
     - name: Django System Check
       run: |
         python manage.py check
