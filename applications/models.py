@@ -13,10 +13,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
-# 8-char alphanumeric application IDs using an unambiguous Crockford-style
-# alphabet (no 0/O, no 1/I/L). Easy to read aloud over the phone.
-APP_ID_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
-APP_ID_LENGTH = 8
+from programs.constants import APP_ID_ALPHABET, APP_ID_LENGTH, OTP_LENGTH, OTP_TTL_SECONDS
 
 
 def generate_application_id() -> str:
@@ -25,9 +22,6 @@ def generate_application_id() -> str:
 
 
 # --- OTP helpers ------------------------------------------------------------
-
-OTP_LENGTH = 6
-OTP_TTL_SECONDS = 15 * 60
 
 
 def generate_otp_code() -> str:

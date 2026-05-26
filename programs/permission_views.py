@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
+from programs.constants import TEAM_TYPES
 from .models import Adult, Crew, Program, RolePermission, Student, SubTeam, Team
 
 try:
@@ -136,7 +137,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             )
 
         teams = Team.objects.all()
-        team_types = Team.TEAM_TYPES
+        team_types = TEAM_TYPES
         crews = Crew.objects.select_related("program").all()
         subteams = SubTeam.objects.select_related("program").all()
         programs = Program.objects.all().order_by("name")

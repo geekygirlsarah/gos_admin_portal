@@ -10,6 +10,13 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from PIL import ImageFile
 
+from programs.constants import (
+    MENTOR_ROLE_CHOICES,
+    RELATIONSHIP_CHOICES,
+    STATE_CHOICES,
+    TEAM_TYPES,
+    TSHIRT_SIZE_CHOICES,
+)
 from .validators import validate_phone_number
 
 logger = logging.getLogger(__name__)
@@ -105,46 +112,7 @@ except Exception:
     logger.exception("Unexpected error registering HEIF opener")
 
 
-RELATIONSHIP_CHOICES = [
-    ("parent", "Parent"),
-    ("grandparent", "Grandparent"),
-    ("pibling", "Pibling (aunt/uncle)"),
-    ("sibling", "Sibling"),
-    ("guardian", "Guardian"),
-    ("family_friend", "Family Friend"),
-    ("other", "Other"),
-]
-
-TSHIRT_SIZE_CHOICES = [
-    ("YXS", "Youth XS"),
-    ("YS", "Youth S"),
-    ("YM", "Youth M"),
-    ("YL", "Youth L"),
-    ("YXL", "Youth XL"),
-    ("XS", "Adult XS"),
-    ("S", "Adult S"),
-    ("M", "Adult M"),
-    ("L", "Adult L"),
-    ("XL", "Adult XL"),
-    ("2XL", "Adult 2XL"),
-    ("3XL", "Adult 3XL"),
-    ("4XL", "Adult 4XL"),
-]
-
-MENTOR_ROLE_CHOICES = [
-    ("mentor", "Mentor"),
-    ("volunteer", "Volunteer"),
-    ("chaperone", "Chaperone"),
-]
-
-
 class Team(models.Model):
-    TEAM_TYPES = [
-        ("FRC", "FRC"),
-        ("FTC", "FTC"),
-        ("FLL_CHALLENGE", "FLL Challenge"),
-        ("FLL_EXPLORE", "FLL Explore"),
-    ]
     team_type = models.CharField(max_length=20, choices=TEAM_TYPES)
     number = models.IntegerField()
     name = models.CharField(max_length=100, blank=True, null=True)
@@ -315,7 +283,9 @@ class School(models.Model):
     )
     street_address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
+    )
     zip_code = models.CharField(max_length=20, blank=True, null=True)
 
     class Meta:
@@ -494,7 +464,9 @@ class Student(models.Model):
 
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
+    )
     zip_code = models.CharField(max_length=20, blank=True, null=True)
 
     cell_phone_number = models.CharField(
@@ -767,7 +739,9 @@ class Adult(models.Model):
     )
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
+    )
     zip_code = models.CharField(max_length=20, blank=True, null=True)
     personal_email = models.EmailField(blank=True, null=True)
 

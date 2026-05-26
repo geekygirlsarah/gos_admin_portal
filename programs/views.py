@@ -177,8 +177,8 @@ from .forms import (
     SlidingScaleForm,
     StudentForm,
 )
+from programs.constants import RELATIONSHIP_CHOICES, TSHIRT_SIZE_CHOICES
 from .models import (
-    RELATIONSHIP_CHOICES,
     Adult,
     Crew,
     Enrollment,

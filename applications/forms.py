@@ -5,17 +5,19 @@ from __future__ import annotations
 from django import forms
 from django.utils import timezone
 
-from programs.models import (
+from programs.constants import (
     RELATIONSHIP_CHOICES,
+    STATE_CHOICES,
     TSHIRT_SIZE_CHOICES,
-    Program,
-    RaceEthnicity,
-    School,
-    Student,
 )
+from programs.models import Program, RaceEthnicity, School, Student
 from programs.validators import validate_phone_number
 
-from .models import APP_ID_ALPHABET, APP_ID_LENGTH, Application
+from programs.constants import (
+    APP_ID_ALPHABET,
+    APP_ID_LENGTH,
+)
+from .models import Application
 from .services import normalize_email
 
 
@@ -233,10 +235,11 @@ class StudentInfoForm(forms.Form):
         max_length=100,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    state = forms.CharField(
+    state = forms.ChoiceField(
         label="State",
-        max_length=50,
-        widget=forms.TextInput(attrs=_text_attrs),
+        choices=[("", "---")] + STATE_CHOICES,
+        widget=forms.Select(attrs=_select_attrs),
+        initial="PA",
     )
     zip_code = forms.CharField(
         label="Zip code",
@@ -424,10 +427,11 @@ class ParentInfoForm(forms.Form):
         max_length=100,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    state = forms.CharField(
+    state = forms.ChoiceField(
         label="State",
-        max_length=50,
-        widget=forms.TextInput(attrs=_text_attrs),
+        choices=[("", "---")] + STATE_CHOICES,
+        widget=forms.Select(attrs=_select_attrs),
+        initial="PA",
     )
     zip_code = forms.CharField(
         label="Zip code",
