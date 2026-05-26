@@ -526,6 +526,13 @@ def _student_initial_for(application: Application) -> dict:
     data, then existing-record lookup, then bare email-only defaults."""
     saved = (application.data or {}).get("step5") or {}
     if saved:
+        # If we have expected_grad_year, calculate grade back
+        if "expected_grad_year" in saved:
+            academic_year_ending = get_academic_year_ending()
+            grad_year = saved["expected_grad_year"]
+            grade = 12 - (grad_year - academic_year_ending)
+            if 1 <= grade <= 12:
+                saved["grade"] = grade
         return saved
     # Try to prefill from an existing Student record.
     if application.applicant_type == Application.Type.STUDENT:
@@ -1170,10 +1177,17 @@ class Step8SecondaryParentView(View):
 
     def _initial(self, application):
         saved = (application.data or {}).get("step8") or {}
-        if saved and not saved.get("_skipped"):
-            # Strip any internal underscore-prefixed keys before passing
-            # back to the form as initial data.
-            return {k: v for k, v in saved.items() if not k.startswith("_")}
+
+        # If we have actual form data, return it regardless of _skipped
+        data = {k: v for k, v in saved.items() if not k.startswith("_")}
+        if data:
+            return data
+
+        # If we only have underscore-prefixed keys (like _skipped),
+        # and _skipped is true, don't prefill.
+        if saved.get("_skipped"):
+            return {}
+
         # Prefill from existing secondary contact if we can identify the student.
         sid = (application.data or {}).get("step5", {}).get("_existing_student_id")
         if sid:
