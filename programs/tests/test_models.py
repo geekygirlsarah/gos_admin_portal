@@ -150,6 +150,7 @@ class RolePermissionTests(TestCase):
 # StudentApplicationTests removed; new application flow lives in the
 # `applications` app and is tested there.
 
+
 class UnsavedStudentTest(TestCase):
     def test_all_parents_on_unsaved_student(self):
         student = Student(legal_first_name="Unsaved", last_name="Student")

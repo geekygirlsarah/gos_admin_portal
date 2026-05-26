@@ -10,7 +10,7 @@ from programs.models import Adult, Student
 
 class PhoneValidationTestCase(TestCase):
     def test_student_model_phone_validation(self):
-        date_of_birth_year = date.today().year - 12;
+        date_of_birth_year = date.today().year - 12
         student = Student(
             legal_first_name="Test",
             last_name="Student",

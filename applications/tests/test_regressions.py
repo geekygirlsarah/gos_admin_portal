@@ -723,7 +723,9 @@ class BooleanRenderingReproductionTest(TestCase):
                 },
             },
         )
-        url = reverse("application_review_detail", kwargs={"app_id": app.application_id})
+        url = reverse(
+            "application_review_detail", kwargs={"app_id": app.application_id}
+        )
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 

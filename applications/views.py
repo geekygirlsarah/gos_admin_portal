@@ -575,19 +575,30 @@ class Step5StudentInfoView(View):
         dob = form.cleaned_data["date_of_birth"]
         today = timezone.localdate()
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-        
+
         warnings = []
         if age < 5:
-            warnings.append("The birthdate seems a bit young for our programs, please double-check the birthdate to continue.")
+            warnings.append(
+                "The birthdate seems a bit young for our programs, please double-check the birthdate to continue."
+            )
         elif age == 18:
-            warnings.append("The birthdate seems a bit old for our programs,  please double-check the birthdate to continue.")
-            
+            warnings.append(
+                "The birthdate seems a bit old for our programs,  please double-check the birthdate to continue."
+            )
+
         if warnings:
             # If we have warnings, the user MUST confirm the birthdate.
             form.fields["confirm_age"].required = True
             form._errors = None  # Force re-validation
             if not form.is_valid():
-                return self._render(request, application, form, picker, chosen_student, warnings=warnings)
+                return self._render(
+                    request,
+                    application,
+                    form,
+                    picker,
+                    chosen_student,
+                    warnings=warnings,
+                )
 
         payload = _sanitize_payload(form.cleaned_data)
         if chosen_student is not None:
@@ -599,7 +610,7 @@ class Step5StudentInfoView(View):
             if matched is not None:
                 payload["_existing_student_id"] = matched.pk
         _save_step_data(application, "step5", payload, next_step=6)
-        
+
         return redirect("apply_step6", app_id=application.application_id)
 
     def _existing_student_picker(self, application, post=None):
@@ -630,7 +641,9 @@ class Step5StudentInfoView(View):
             return initial
         return _student_initial_for(application)
 
-    def _render(self, request, application, form, picker, chosen_student, warnings=None):
+    def _render(
+        self, request, application, form, picker, chosen_student, warnings=None
+    ):
         from .services import latest_program_for_student
 
         # Determine which Student record (if any) we're prefilling from so

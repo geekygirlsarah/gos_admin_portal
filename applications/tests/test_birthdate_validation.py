@@ -1,11 +1,13 @@
+import datetime
 
 from django.contrib import messages
-import datetime
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+
 from applications.models import Application
 from programs.models import Program
+
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class BirthdateValidationTests(TestCase):
@@ -55,7 +57,7 @@ class BirthdateValidationTests(TestCase):
 
     def test_birthdate_19_older_invalid(self):
         # 20 years old
-        dob = timezone.localdate() - datetime.timedelta(days=20*365)
+        dob = timezone.localdate() - datetime.timedelta(days=20 * 365)
         response = self.client.post(
             reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
             {
@@ -74,8 +76,8 @@ class BirthdateValidationTests(TestCase):
 
     def test_birthdate_young_allowed_with_confirmation(self):
         # 4 years old (requires warning)
-        dob = timezone.localdate() - datetime.timedelta(days=4*365)
-        
+        dob = timezone.localdate() - datetime.timedelta(days=4 * 365)
+
         # 1. First attempt without confirmation -> should re-render with warning + confirm checkbox
         response = self.client.post(
             reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
@@ -110,4 +112,6 @@ class BirthdateValidationTests(TestCase):
             },
             follow=True,
         )
-        self.assertRedirects(response, reverse("apply_step6", kwargs={"app_id": self.app.application_id}))
+        self.assertRedirects(
+            response, reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        )
