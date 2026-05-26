@@ -502,6 +502,19 @@ class ParentInfoForm(forms.Form):
             self.fields["state"].required = False
             self.fields["zip_code"].required = False
 
+    def clean(self):
+        cleaned_data = super().clean()
+        email_updates = cleaned_data.get("email_updates")
+        email = cleaned_data.get("email")
+
+        if email_updates and not email:
+            self.add_error(
+                "email",
+                "Email address is required if you have selected to receive email updates.",
+            )
+
+        return cleaned_data
+
     def clean_email(self):
         email = self.cleaned_data.get("email")
         if not email:
