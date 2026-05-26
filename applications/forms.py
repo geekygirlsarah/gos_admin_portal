@@ -266,7 +266,7 @@ class StudentInfoForm(forms.Form):
     )
     school_name = forms.ChoiceField(
         label="School",
-        required=False,
+        required=True,
         widget=forms.Select(attrs=_select_attrs),
     )
     grade = forms.ChoiceField(
@@ -281,6 +281,17 @@ class StudentInfoForm(forms.Form):
         widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
         help_text="Optional. We use aggregated stats for grants and to ensure we're meeting our own diversity goals.",
     )
+
+    def clean(self):
+        cleaned = super().clean()
+
+        if not cleaned.get("grade"):
+            self.add_error("grade", "Please select a grade.")
+
+        if not cleaned.get("school_name"):
+            self.add_error("school_name", "Please select a school.")
+
+        return cleaned
 
     def __init__(self, *args, program_start_date=None, **kwargs):
         super().__init__(*args, **kwargs)
