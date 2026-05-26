@@ -18,7 +18,7 @@ from programs.constants import (
     TSHIRT_SIZE_CHOICES,
 )
 
-from .validators import validate_phone_number
+from .validators import validate_phone_number, validate_zip_code
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +287,9 @@ class School(models.Model):
     state = models.CharField(
         max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
     )
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    zip_code = models.CharField(
+        max_length=20, blank=True, null=True, validators=[validate_zip_code]
+    )
 
     class Meta:
         ordering = ["name"]
@@ -478,7 +480,9 @@ class Student(models.Model):
     state = models.CharField(
         max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
     )
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    zip_code = models.CharField(
+        max_length=20, blank=True, null=True, validators=[validate_zip_code]
+    )
 
     cell_phone_number = models.CharField(
         max_length=30, blank=True, null=True, validators=[validate_phone_number]
@@ -753,7 +757,9 @@ class Adult(models.Model):
     state = models.CharField(
         max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
     )
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    zip_code = models.CharField(
+        max_length=20, blank=True, null=True, validators=[validate_zip_code]
+    )
     personal_email = models.EmailField(blank=True, null=True)
 
     # Mentor-like fields

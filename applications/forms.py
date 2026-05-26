@@ -15,7 +15,7 @@ from programs.constants import (
     TSHIRT_SIZE_CHOICES,
 )
 from programs.models import Program, RaceEthnicity, School, Student
-from programs.validators import validate_phone_number
+from programs.validators import validate_phone_number, validate_zip_code
 
 from .models import Application
 from .services import normalize_email
@@ -245,6 +245,7 @@ class StudentInfoForm(forms.Form):
         label="Zip code",
         max_length=20,
         widget=forms.TextInput(attrs=_text_attrs),
+        validators=[validate_zip_code],
     )
     personal_email = forms.EmailField(
         label="Student's personal email",
@@ -458,6 +459,7 @@ class ParentInfoForm(forms.Form):
         label="Zip code",
         max_length=20,
         widget=forms.TextInput(attrs=_text_attrs),
+        validators=[validate_zip_code],
     )
     cell_phone = forms.CharField(
         label="Cell phone",
