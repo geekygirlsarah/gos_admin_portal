@@ -28,6 +28,7 @@ class ConversionRelationshipTests(TestCase):
                 "legal_first_name": "Ada",
                 "last_name": "Lovelace",
                 "personal_email": "ada@example.com",
+                "date_of_birth": "2010-01-01",
             },
             "step6": {
                 "first_name": "Pat",
@@ -93,6 +94,7 @@ class ConversionRelationshipTests(TestCase):
                 "legal_first_name": "Ada",
                 "last_name": "Lovelace",
                 "personal_email": "ada@example.com",
+                "date_of_birth": "2010-01-01",
             },
             "step6": {
                 "first_name": "Pat",
@@ -125,7 +127,7 @@ class ConversionRelationshipTests(TestCase):
             is_parent=True,
         )
         other_student = Student.objects.create(
-            legal_first_name="Old", last_name="Student", primary_contact=existing_parent
+            legal_first_name="Old", last_name="Student", primary_contact=existing_parent, date_of_birth="2010-01-01"
         )
         # Manually add to M2M as well if that's expected
         existing_parent.students.add(other_student)
@@ -135,6 +137,7 @@ class ConversionRelationshipTests(TestCase):
                 "legal_first_name": "Ada",
                 "last_name": "Lovelace",
                 "personal_email": "ada@example.com",
+                "date_of_birth": "2010-01-01",
             },
             "step6": {
                 "first_name": "Pat",
@@ -171,7 +174,7 @@ class ConversionRelationshipTests(TestCase):
         # Application 1 for Student A
         app1 = self._create_app(
             {
-                "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
+                "step5": {"legal_first_name": "Ada", "last_name": "Lovelace", "date_of_birth": "2010-01-01"},
                 "step6": parent_data,
             }
         )
@@ -179,7 +182,7 @@ class ConversionRelationshipTests(TestCase):
         # Application 2 for Student B
         app2 = self._create_app(
             {
-                "step5": {"legal_first_name": "Barbara", "last_name": "Liskov"},
+                "step5": {"legal_first_name": "Barbara", "last_name": "Liskov", "date_of_birth": "2010-01-01"},
                 "step6": parent_data,
             }
         )
@@ -218,7 +221,7 @@ class ConversionRelationshipTests(TestCase):
         # App 1 in Program 1
         app1 = self._create_app(
             {
-                "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
+                "step5": {"legal_first_name": "Ada", "last_name": "Lovelace", "date_of_birth": "2010-01-01"},
                 "step6": parent_data,
             }
         )
@@ -229,7 +232,7 @@ class ConversionRelationshipTests(TestCase):
             email="student_b@example.com",
             status=Application.Status.APPROVED_SIGNED,
             data={
-                "step5": {"legal_first_name": "Barbara", "last_name": "Liskov"},
+                "step5": {"legal_first_name": "Barbara", "last_name": "Liskov", "date_of_birth": "2010-01-01"},
                 "step6": parent_data,
             },
         )

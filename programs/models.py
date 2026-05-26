@@ -1,4 +1,5 @@
 import base64
+import datetime
 import logging
 from io import BytesIO
 
@@ -476,7 +477,7 @@ class Student(models.Model):
     )
     last_name = models.CharField(max_length=150, db_index=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
-    date_of_birth = models.DateField(blank=False, null=False)
+    date_of_birth = models.DateField(blank=False, null=False, default=datetime.date(2000, 1, 1))
     # Background clearances (per-student, separate from mentor clearances)
     has_passed_clearances = models.BooleanField(
         default=False,

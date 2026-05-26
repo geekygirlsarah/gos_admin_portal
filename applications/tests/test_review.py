@@ -323,6 +323,7 @@ class ConvertToStudentTests(TestCase):
                     "personal_email": "ada@example.com",
                     "school_name": "Allderdice High School",
                     "graduation_year": 2030,
+                    "date_of_birth": "2010-01-01",
                 },
                 "step6": {
                     "first_name": "Pat",

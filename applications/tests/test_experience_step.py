@@ -114,6 +114,7 @@ class ConversionTests(TestCase):
                 "legal_first_name": "Test",
                 "last_name": "Student",
                 "personal_email": "test@example.com",
+                "date_of_birth": "2010-01-01",
             },
             "step6": {
                 "interest_reason": "Reason",

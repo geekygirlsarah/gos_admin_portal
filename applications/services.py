@@ -617,9 +617,16 @@ def _student_from_application(application: Application):
                 "Cannot create a Student: legal first name and last name "
                 "are required in the application data (step 5)."
             )
+        dob = step5.get("date_of_birth")
+        if not dob:
+            raise ApplicationConversionError(
+                "Cannot create a Student: date of birth is required in the "
+                "application data (step 5)."
+            )
         student = Student(
             legal_first_name=legal_first,
             last_name=last_name,
+            date_of_birth=dob,
         )
 
     # Apply / fill from step5 without overwriting non-blank existing values.
