@@ -46,6 +46,11 @@
         The primary adult contact is the one we will reach out to
         <strong>first</strong> in an emergency.
     </p>
+    <p>
+        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="copyStudentAddress()">
+            Copy address from student
+        </button>
+    </p>
     {% if has_secondary %}
     <div class="alert alert-secondary d-flex align-items-center justify-content-between gap-3" role="note">
         <span>Want to make {% if secondary_name %}<strong>{{ secondary_name }}</strong> (the secondary adult contact){% else %}the secondary adult contact{% endif %} the primary instead?</span>
@@ -87,9 +92,21 @@
             {% endfor %}
         </div>
         <div class="d-flex justify-content-between mt-4">
-            <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
-            <button type="submit" class="btn btn-primary">Save and continue</button>
-        </div>
-    </form>
+        <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+
+{% if student_address %}
+<script>
+    function copyStudentAddress() {
+        document.getElementById('id_address').value = "{{ student_address|escapejs }}";
+        document.getElementById('id_city').value = "{{ student_city|escapejs }}";
+        document.getElementById('id_state').value = "{{ student_state|escapejs }}";
+        document.getElementById('id_zip_code').value = "{{ student_zip_code|escapejs }}";
+    }
+</script>
+{% endif %}
+
 {% endif %}
 {% endblock %}

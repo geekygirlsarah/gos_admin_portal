@@ -480,13 +480,25 @@ class ParentInfoForm(forms.Form):
         help_text="If checked, you will receive email updates about the program.",
     )
 
-    def __init__(self, *args, require_email=True, student_emails=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        require_email=True,
+        require_address=True,
+        student_emails=None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         # Store student emails in lower case but NOT normalized (keep +tags)
         # so we can distinguish between base@ and base+tag@.
         self.student_emails = [e.strip().lower() for e in (student_emails or []) if e]
         if not require_email:
             self.fields["email"].required = False
+        if not require_address:
+            self.fields["address"].required = False
+            self.fields["city"].required = False
+            self.fields["state"].required = False
+            self.fields["zip_code"].required = False
 
     def clean_email(self):
         email = self.cleaned_data.get("email")

@@ -9,6 +9,17 @@
     student. The secondary adult contact is the one we will reach out to
     if we <strong>cannot get a hold of</strong> the primary adult contact.
 </p>
+
+<p>
+    For this contact, only a name and phone number are required.
+</p>
+
+<p>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="copyStudentAddress()">
+        Copy address from student
+    </button>
+</p>
+
 <form method="post" novalidate>
     {% csrf_token %}
     {% if form.non_field_errors %}
@@ -43,4 +54,15 @@
         <button type="submit" class="btn btn-primary">Save and continue</button>
     </div>
 </form>
+
+{% if student_address %}
+<script>
+    function copyStudentAddress() {
+        document.getElementById('id_address').value = "{{ student_address|escapejs }}";
+        document.getElementById('id_city').value = "{{ student_city|escapejs }}";
+        document.getElementById('id_state').value = "{{ student_state|escapejs }}";
+        document.getElementById('id_zip_code').value = "{{ student_zip_code|escapejs }}";
+    }
+</script>
+{% endif %}
 {% endblock %}

@@ -1010,6 +1010,8 @@ class Step7PrimaryParentView(View):
                         )
                         or None
                     )
+
+        step5_data = (application.data or {}).get("step5") or {}
         return render(
             request,
             self.template_name,
@@ -1021,6 +1023,10 @@ class Step7PrimaryParentView(View):
                 "welcome_back": welcome_back,
                 "has_secondary": has_secondary,
                 "secondary_name": secondary_name,
+                "student_address": step5_data.get("address"),
+                "student_city": step5_data.get("city"),
+                "student_state": step5_data.get("state"),
+                "student_zip_code": step5_data.get("zip_code"),
                 "current_step": 7,
                 "total_steps": TOTAL_STEPS,
             },
@@ -1114,6 +1120,7 @@ class Step8SecondaryParentView(View):
         form = ParentInfoForm(
             initial=self._initial(application),
             require_email=False,
+            require_address=False,
             student_emails=student_emails,
         )
         return self._render(request, application, form)
@@ -1133,7 +1140,10 @@ class Step8SecondaryParentView(View):
 
         student_emails = get_student_emails(application)
         form = ParentInfoForm(
-            request.POST, require_email=False, student_emails=student_emails
+            request.POST,
+            require_email=False,
+            require_address=False,
+            student_emails=student_emails,
         )
         if not form.is_valid():
             return self._render(request, application, form)
@@ -1173,12 +1183,18 @@ class Step8SecondaryParentView(View):
         return {}
 
     def _render(self, request, application, form):
+        data = application.data or {}
+        step5_data = data.get("step5") or {}
         return render(
             request,
             self.template_name,
             {
                 "application": application,
                 "form": form,
+                "student_address": step5_data.get("address"),
+                "student_city": step5_data.get("city"),
+                "student_state": step5_data.get("state"),
+                "student_zip_code": step5_data.get("zip_code"),
                 "current_step": 8,
                 "total_steps": TOTAL_STEPS,
             },
