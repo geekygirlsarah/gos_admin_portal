@@ -93,7 +93,7 @@ Technologies:
 ### How to Run Locally
 
 Prerequisites:
-- Python 3.13+ (3.13 is in use in the active venv `venv2/`)
+- Python 3.13+ (3.13 is in use in the active venv)
 - A virtual environment tool (venv)
 - (Optional) Google OAuth client credentials for django-allauth if you want Google login locally; otherwise use a Django superuser
 
@@ -102,7 +102,6 @@ Steps:
     - Windows (PowerShell):
         - `python -m venv .venv`
         - `.\.venv\Scripts\Activate.ps1`
-    - Note: the repo also contains an existing `venv2/` that may already be configured.
 2) Install dependencies
     - `pip install -r requirements.txt`
 3) Run migrations
@@ -131,7 +130,7 @@ Media and static:
 
 Use the `run_ci.*` scripts to mirror the CI pipeline before pushing. They run, in order:
 - `flake8` (critical errors then full report)
-- `black --check` (excludes `venv`, `venv2`, `.venv`)
+- `black --check` (excludes `venv`, `.venv`)
 - `isort --check-only --profile black`
 - `bandit -r .` (security)
 - `safety check` (dependency CVEs — may warn)
