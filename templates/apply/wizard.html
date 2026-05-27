@@ -68,10 +68,10 @@
                         {% for field in form %}
                             <div class="mb-3">
                                 <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                                {{ field }}
                                 {% if field.help_text %}
-                                    <div class="form-text">{{ field.help_text }}</div>
+                                    <div class="form-text mb-1">{{ field.help_text }}</div>
                                 {% endif %}
+                                {{ field }}
                                 {% if field.errors %}
                                     <div class="text-danger small">{{ field.errors }}</div>
                                 {% endif %}
