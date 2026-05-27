@@ -1863,6 +1863,13 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
     form_class = ProgramForm
     template_name = "programs/form.html"
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program = self.object
+        ctx["can_manage_documents"] = self.request.user.has_perm("programs.change_program")
+        ctx["program_documents"] = program.documents.all().order_by("display_order", "name")
+        return ctx
+
     def get_success_url(self):
         return reverse("program_detail", args=[self.object.pk])
 
