@@ -1,6 +1,8 @@
-from django.test import TestCase
-from programs.models import Student
 from django.db import connection
+from django.test import TestCase
+
+from programs.models import Student
+
 
 class EncryptionTest(TestCase):
     def test_student_fields_are_encrypted(self):
@@ -9,12 +11,15 @@ class EncryptionTest(TestCase):
             last_name="Test",
             allergies="Peanuts",
             medical_notes="Asthma",
-            dietary_restrictions="Vegetarian"
+            dietary_restrictions="Vegetarian",
         )
-        
+
         # Verify that data is encrypted in the database
         with connection.cursor() as cursor:
-            cursor.execute("SELECT allergies, medical_notes, dietary_restrictions FROM programs_student WHERE id = %s", [student.id])
+            cursor.execute(
+                "SELECT allergies, medical_notes, dietary_restrictions FROM programs_student WHERE id = %s",
+                [student.id],
+            )
             row = cursor.fetchone()
             # The data should NOT be "Peanuts", "Asthma", "Vegetarian"
             # Since Fernet encryption output starts with 'gAAAAAB', we can check that.

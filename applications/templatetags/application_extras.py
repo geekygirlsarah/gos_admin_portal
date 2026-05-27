@@ -1,6 +1,7 @@
 """Template helpers for the application wizard."""
 
 from django import template
+
 from programs.utils import get_academic_year_ending
 
 register = template.Library()
@@ -103,7 +104,11 @@ def get_grade(step5_data, application=None):
     grad_year = step5_data.get("graduation_year")
     if grad_year:
         try:
-            ref_date = application.program.start_date if application and application.program else None
+            ref_date = (
+                application.program.start_date
+                if application and application.program
+                else None
+            )
             academic_year_ending = get_academic_year_ending(ref_date)
             # grad_year = academic_year_ending + (12 - grade)
             # grade = 12 - (grad_year - academic_year_ending)
