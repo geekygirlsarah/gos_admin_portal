@@ -118,9 +118,11 @@
         function updateGradYear() {
             if (!gradeSelect || !gradYearDisplay) return;
             const grade = parseInt(gradeSelect.value);
+            const gradYearInput = document.getElementById("id_graduation_year");
             if (!isNaN(grade)) {
                 const gradYear = academicYearEnding + (12 - grade);
                 gradYearDisplay.textContent = `Expected graduation year: ${gradYear}`;
+                if (gradYearInput) gradYearInput.value = gradYear;
             } else {
                 gradYearDisplay.textContent = "";
             }

@@ -1,6 +1,7 @@
 """Template helpers for the application wizard."""
 
 from django import template
+from programs.utils import get_academic_year_ending
 
 register = template.Library()
 
@@ -92,3 +93,23 @@ def format_application_value(value, key):
         return "Yes" if value else "No"
 
     return value
+
+
+@register.filter(name="get_grade")
+def get_grade(step5_data, application=None):
+    if step5_data.get("grade"):
+        return step5_data["grade"]
+
+    grad_year = step5_data.get("graduation_year")
+    if grad_year:
+        try:
+            ref_date = application.program.start_date if application and application.program else None
+            academic_year_ending = get_academic_year_ending(ref_date)
+            # grad_year = academic_year_ending + (12 - grade)
+            # grade = 12 - (grad_year - academic_year_ending)
+            grade = 12 - (int(grad_year) - academic_year_ending)
+            if 1 <= grade <= 12:
+                return grade
+        except (ValueError, TypeError):
+            pass
+    return "—"

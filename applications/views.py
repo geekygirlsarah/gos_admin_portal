@@ -526,10 +526,10 @@ def _student_initial_for(application: Application) -> dict:
     data, then existing-record lookup, then bare email-only defaults."""
     saved = (application.data or {}).get("step5") or {}
     if saved:
-        # If we have expected_grad_year, calculate grade back
-        if "expected_grad_year" in saved:
+        # If we have graduation_year, calculate grade back
+        if "graduation_year" in saved and "grade" not in saved:
             academic_year_ending = get_academic_year_ending()
-            grad_year = saved["expected_grad_year"]
+            grad_year = saved["graduation_year"]
             grade = 12 - (grad_year - academic_year_ending)
             if 1 <= grade <= 12:
                 saved["grade"] = grade
@@ -642,11 +642,13 @@ class Step5StudentInfoView(View):
                 )
 
         payload = _sanitize_payload(form.cleaned_data)
-        # Convert grade to expected_grad_year
+        # Convert grade to graduation_year if not already present
         if "grade" in payload:
-            grade = int(payload.pop("grade"))
+            grade = int(payload["grade"])
             academic_year_ending = get_academic_year_ending()
-            payload["expected_grad_year"] = academic_year_ending + (12 - grade)
+            # If graduation_year not provided by the form, calculate it from grade
+            if not payload.get("graduation_year"):
+                payload["graduation_year"] = academic_year_ending + (12 - grade)
 
         if chosen_student is not None:
             payload["_existing_student_id"] = chosen_student.pk

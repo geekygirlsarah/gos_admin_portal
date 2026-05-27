@@ -28,11 +28,15 @@
     {% if step5_data %}
         <dl class="row mb-0">
             {% for k, v in step5_data.items %}
-                {% if not k|slice:":1" == "_" and v is not None %}
+                {% if not k == "grade" and not k == "graduation_year" and not k|slice:":1" == "_" and v is not None %}
                     <dt class="col-sm-4">{{ k|humanize_field }}</dt>
                     <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
                 {% endif %}
             {% endfor %}
+            <dt class="col-sm-4">Grade</dt>
+            <dd class="col-sm-8">{{ step5_data|get_grade:application }}</dd>
+            <dt class="col-sm-4">Graduation year</dt>
+            <dd class="col-sm-8">{{ step5_data.graduation_year|default:"—" }}</dd>
         </dl>
     {% else %}
         <p class="text-muted">No student information provided.</p>
