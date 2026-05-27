@@ -64,6 +64,46 @@ class EncryptedFileField(models.FileField):
         setattr(cls, self.name, EncryptedFileDescriptor(getattr(cls, self.name)))
 
 
+class EncryptedTextField(models.TextField):
+    def get_prep_value(self, value):
+        if value is None:
+            return value
+        if isinstance(value, str) and value.startswith("gAAAAAB"):
+            return value
+        fernet = get_fernet()
+        return fernet.encrypt(value.encode()).decode()
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        fernet = get_fernet()
+        try:
+            return fernet.decrypt(value.encode()).decode()
+        except Exception:
+            # If decryption fails, return original (might be already decrypted or not encrypted)
+            return value
+
+
+class EncryptedCharField(models.CharField):
+    def get_prep_value(self, value):
+        if value is None:
+            return value
+        if isinstance(value, str) and value.startswith("gAAAAAB"):
+            return value
+        fernet = get_fernet()
+        return fernet.encrypt(value.encode()).decode()
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        fernet = get_fernet()
+        try:
+            return fernet.decrypt(value.encode()).decode()
+        except Exception:
+            # If decryption fails, return original (might be already decrypted or not encrypted)
+            return value
+
+
 class EncryptedFileDescriptor:
     def __init__(self, original_field):
         self.original_field = original_field
@@ -526,17 +566,17 @@ class Student(models.Model):
     discord_handle = models.CharField(max_length=100, blank=True, null=True)
 
     # Health & Medical
-    allergies = models.TextField(
+    allergies = EncryptedTextField(
         blank=True,
         null=True,
         help_text="List any food, drug, environmental, or other allergies. Include severity and typical reactions if known.",
     )
-    dietary_restrictions = models.TextField(
+    dietary_restrictions = EncryptedTextField(
         blank=True,
         null=True,
         help_text="Dietary needs or restrictions (e.g., vegetarian, halal, no pork, no nuts).",
     )
-    medical_notes = models.TextField(
+    medical_notes = EncryptedTextField(
         blank=True,
         null=True,
         help_text="Other health information staff should know (e.g., asthma, seizures, physical limitations).",
