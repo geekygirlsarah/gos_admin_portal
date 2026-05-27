@@ -13,6 +13,7 @@ from programs.models import Program
 class BirthdateValidationTests(TestCase):
     def setUp(self):
         from programs.models import School
+
         School.objects.get_or_create(name="Pittsburgh High")
         self.app = Application.objects.create(
             applicant_type=Application.Type.STUDENT,

@@ -7,7 +7,6 @@
 <p>
     We sent a 6-digit verification code to
     <strong>{{ application.email }}</strong>. Enter it below to continue.
-    The code expires in 15 minutes.
 </p>
 
 <form method="post" novalidate class="mb-3">
@@ -17,6 +16,9 @@
         <label for="{{ form.code.id_for_label }}" class="form-label">
             {{ form.code.label }}{% if form.code.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
         </label>
+        {% if form.code.help_text %}
+            <div class="form-text mb-1">{{ form.code.help_text }}</div>
+        {% endif %}
         {{ form.code }}
         {% if form.code.errors %}
             <div class="invalid-feedback d-block" role="alert">

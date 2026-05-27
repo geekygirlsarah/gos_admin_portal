@@ -78,8 +78,9 @@ class ApplicationDataEditForm(forms.Form):
             attrs={"class": "form-control font-monospace", "rows": 20}
         ),
         help_text=(
-            "Edit the JSON for each wizard step. Must be valid JSON; an "
-            "object is expected at the top level."
+            "Edit the JSON captured by the wizard to fix typos or other "
+            "errors. Each top-level key is a wizard step (e.g. step5, step6). "
+            "Must be valid JSON; an object is expected at the top level."
         ),
     )
     email = forms.EmailField(

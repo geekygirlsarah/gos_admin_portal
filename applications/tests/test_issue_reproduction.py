@@ -27,6 +27,7 @@ def _verified(**kwargs):
 class TestGradeRepopulation(TestCase):
     def setUp(self):
         from programs.models import School
+
         School.objects.get_or_create(name="Pittsburgh High")
         self.program = Program.objects.create(
             name="Spring 2030",

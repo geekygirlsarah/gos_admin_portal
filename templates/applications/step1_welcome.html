@@ -18,10 +18,6 @@
     <hr class="my-4" aria-hidden="true">
 
     <h2 class="h5">Resume an application</h2>
-    <p class="text-muted small">
-        If you've already started an application, enter your 8-character
-        Application ID to pick up where you left off.
-    </p>
 
     <form method="post" action="{% url 'apply_resume' %}" novalidate>
         {% csrf_token %}
@@ -29,12 +25,12 @@
             <label for="id_application_id" class="form-label">
                 {{ resume_form.application_id.label }}
             </label>
-            {{ resume_form.application_id }}
             {% if resume_form.application_id.help_text %}
-                <div id="application_id_help" class="form-text">
+                <div id="application_id_help" class="form-text mb-1">
                     {{ resume_form.application_id.help_text }}
                 </div>
             {% endif %}
+            {{ resume_form.application_id }}
             {% if resume_form.application_id.errors %}
                 <div class="invalid-feedback d-block" role="alert">
                     {{ resume_form.application_id.errors|join:" " }}

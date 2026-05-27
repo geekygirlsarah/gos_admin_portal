@@ -1866,8 +1866,12 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         program = self.object
-        ctx["can_manage_documents"] = self.request.user.has_perm("programs.change_program")
-        ctx["program_documents"] = program.documents.all().order_by("display_order", "name")
+        ctx["can_manage_documents"] = self.request.user.has_perm(
+            "programs.change_program"
+        )
+        ctx["program_documents"] = program.documents.all().order_by(
+            "display_order", "name"
+        )
         return ctx
 
     def get_success_url(self):

@@ -2,11 +2,6 @@
 {% block review_title %}Edit {{ application.application_id }}{% endblock %}
 {% block review_heading %}Edit application <code>{{ application.application_id }}</code>{% endblock %}
 {% block review_body %}
-  <p class="text-muted">
-    Edit the JSON captured by the wizard. Use this to fix typos or
-    other errors on the applicant's behalf. Each top-level key is a
-    wizard step (e.g. <code>step5</code>, <code>step6</code>).
-  </p>
   <form method="post" class="mb-3">
     {% csrf_token %}
     <div class="mb-3">

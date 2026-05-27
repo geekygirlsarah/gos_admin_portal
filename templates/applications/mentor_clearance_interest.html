@@ -11,25 +11,13 @@
     CMU will pay for the fees if you volunteer through us.
 </p>
 
-<p>
-    Pennsylvania law requires anyone working directly with children to
-    have three background-check clearances on file. They are:
-</p>
-<ul>
-    <li>PA Child Abuse Clearance (PACA)</li>
-    <li>PA Criminal Record Clearance (PATCH)</li>
-    <li>FBI criminal fingerprint check</li>
-</ul>
-
-<p>
-    Are you interested in obtaining (or providing copies of) these clearances
-    so you can work directly with our students?
-</p>
-
     <form method="post" novalidate>
     {% csrf_token %}
     <fieldset class="mb-3">
         <legend class="visually-hidden">{{ form.interested.label }}</legend>
+        {% if form.interested.help_text %}
+            <div class="form-text mb-3">{{ form.interested.help_text }}</div>
+        {% endif %}
         {% for choice in form.interested %}
             {{ choice.tag }}
         {% endfor %}

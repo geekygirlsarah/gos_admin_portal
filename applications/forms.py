@@ -36,7 +36,10 @@ class ResumeApplicationForm(forms.Form):
                 "aria-describedby": "application_id_help",
             }
         ),
-        help_text="Enter the 8-character code shown when you started.",
+        help_text=(
+            "If you've already started an application, enter your 8-character "
+            "Application ID to pick up where you left off."
+        ),
     )
 
     def clean_application_id(self):
@@ -114,6 +117,11 @@ class ProgramSelectForm(forms.Form):
         queryset=Program.objects.none(),
         empty_label=None,
         widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+        help_text=(
+            "Pick the upcoming program you'd like to apply to. Programs "
+            "that are already in session are no longer accepting new "
+            "applications."
+        ),
     )
 
     def __init__(self, *args, future_programs=None, **kwargs):
@@ -129,6 +137,7 @@ class OtpVerifyForm(forms.Form):
         label="Verification code",
         min_length=6,
         max_length=6,
+        help_text="The code expires in 15 minutes.",
         widget=forms.TextInput(
             attrs={
                 "class": "form-control form-control-lg text-center",
@@ -661,6 +670,13 @@ class MentorClearanceInterestForm(forms.Form):
         label="Are you interested in obtaining PA child-protection clearances?",
         choices=INTEREST_CHOICES,
         widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+        help_text=(
+            "Pennsylvania law requires anyone working directly with children "
+            "to have three background-check clearances on file (PACA, PATCH, "
+            "and FBI fingerprint check). Are you interested in obtaining (or "
+            "providing copies of) these clearances so you can work directly "
+            "with our students?"
+        ),
     )
 
 

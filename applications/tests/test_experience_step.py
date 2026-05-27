@@ -58,6 +58,7 @@ class Step6ExperienceTests(TestCase):
 class RenumberingTests(TestCase):
     def setUp(self):
         from programs.models import School
+
         School.objects.get_or_create(name="Pittsburgh High")
 
     def test_step5_post_advances_to_step6(self):

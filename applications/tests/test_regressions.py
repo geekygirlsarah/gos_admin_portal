@@ -440,9 +440,7 @@ class HandoffSecurityReproductionTests(TestCase):
         self.assertContains(
             response, "This application has been handed off to an adult contact"
         )
-        self.assertNotContains(
-            response, "Please provide the primary adult contact's information"
-        )
+        self.assertNotContains(response, "Please provide the primary adult contact")
 
     def test_parent_can_access_handoff_with_token(self):
         # 1. Create a student-initiated application and hand it off
@@ -477,9 +475,7 @@ class HandoffSecurityReproductionTests(TestCase):
 
         # Follow the redirect - should NOW be authorized because token is in session
         response = self.client.get(response.url)
-        self.assertContains(
-            response, "Please provide the primary adult contact's information"
-        )
+        self.assertContains(response, "Please provide the primary adult contact")
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")

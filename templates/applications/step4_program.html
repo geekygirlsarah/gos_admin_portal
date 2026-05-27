@@ -4,17 +4,15 @@
 {% block wizard_heading %}Choose a program{% endblock %}
 
 {% block wizard_body %}
-<p class="text-muted">
-    Pick the upcoming program you'd like to apply to. Programs that are
-    already in session are listed below for reference but are no longer
-    accepting new applications.
-</p>
 
 <form method="post" novalidate>
     {% csrf_token %}
 
     <fieldset class="mb-4">
         <legend class="form-label fw-semibold">Upcoming programs</legend>
+        {% if form.program.help_text %}
+            <div class="form-text mb-3">{{ form.program.help_text }}</div>
+        {% endif %}
 
         {% if future_programs %}
             <div class="list-group mb-3">

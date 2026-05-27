@@ -563,9 +563,11 @@ class Step5StudentInfoView(View):
         form = StudentInfoForm(
             initial=self._initial(application, chosen_student),
             program_start_date=program_start_date,
-            tshirt_enabled=application.program.has_feature("tshirt-size")
-            if application.program
-            else False,
+            tshirt_enabled=(
+                application.program.has_feature("tshirt-size")
+                if application.program
+                else False
+            ),
         )
         return self._render(
             request,
@@ -594,9 +596,11 @@ class Step5StudentInfoView(View):
             form = StudentInfoForm(
                 initial=self._initial(application, chosen_student),
                 program_start_date=program_start_date,
-                tshirt_enabled=application.program.has_feature("tshirt-size")
-                if application.program
-                else False,
+                tshirt_enabled=(
+                    application.program.has_feature("tshirt-size")
+                    if application.program
+                    else False
+                ),
             )
             return self._render(
                 request,
@@ -610,9 +614,11 @@ class Step5StudentInfoView(View):
         form = StudentInfoForm(
             request.POST,
             program_start_date=program_start_date,
-            tshirt_enabled=application.program.has_feature("tshirt-size")
-            if application.program
-            else False,
+            tshirt_enabled=(
+                application.program.has_feature("tshirt-size")
+                if application.program
+                else False
+            ),
         )
         if not form.is_valid():
             return self._render(
@@ -960,6 +966,11 @@ class Step7PrimaryParentView(View):
         form = ParentInfoForm(
             post or None, initial=initial, student_emails=student_emails
         )
+        # form.fields["first_name"].help_text = (
+        #     "Please provide the primary adult contact's information. "
+        #     "The primary adult contact is the one we will reach out to "
+        #     "first in an emergency."
+        # )
         return (
             form,
             ParentHandoffForm(student_emails=student_emails),
@@ -1144,6 +1155,11 @@ class Step8SecondaryParentView(View):
             require_address=False,
             student_emails=student_emails,
         )
+        # form.fields["first_name"].help_text = (
+        #     "Please provide a second adult contact or emergency contact. "
+        #     "This is who we will reach out to if we cannot get a hold of "
+        #     "the primary contact. Only a name and phone number are required."
+        # )
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
@@ -1165,6 +1181,11 @@ class Step8SecondaryParentView(View):
             require_email=False,
             require_address=False,
             student_emails=student_emails,
+        )
+        form.fields["first_name"].help_text = (
+            "Please provide a second adult contact or emergency contact. "
+            "This is who we will reach out to if we cannot get a hold of "
+            "the primary contact. Only a name and phone number are required."
         )
         if not form.is_valid():
             return self._render(request, application, form)

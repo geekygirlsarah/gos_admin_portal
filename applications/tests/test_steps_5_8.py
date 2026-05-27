@@ -30,6 +30,7 @@ def _verified(**kwargs):
 class Step5StudentInfoTests(TestCase):
     def setUp(self):
         from programs.models import School
+
         School.objects.get_or_create(name="Pittsburgh High")
         today = timezone.localdate()
         self.program = Program.objects.create(
