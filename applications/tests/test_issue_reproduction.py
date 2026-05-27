@@ -26,6 +26,8 @@ def _verified(**kwargs):
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class TestGradeRepopulation(TestCase):
     def setUp(self):
+        from programs.models import School
+        School.objects.get_or_create(name="Pittsburgh High")
         self.program = Program.objects.create(
             name="Spring 2030",
             year=2030,
@@ -51,7 +53,7 @@ class TestGradeRepopulation(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "cell_phone_number": "",
-                "school_name": "",
+                "school_name": "Pittsburgh High",
                 "graduation_year": "",
                 "tshirt_size": "M",
                 "allergies": "",

@@ -56,6 +56,10 @@ class Step6ExperienceTests(TestCase):
 
 
 class RenumberingTests(TestCase):
+    def setUp(self):
+        from programs.models import School
+        School.objects.get_or_create(name="Pittsburgh High")
+
     def test_step5_post_advances_to_step6(self):
         app = _verified()
         date_of_birth_year_string = str(datetime.date.today().year - 12)
@@ -71,6 +75,8 @@ class RenumberingTests(TestCase):
                 "zip_code": "15213",
                 "tshirt_size": "M",
                 "date_of_birth": date_of_birth_year_string + "-01-01",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
             },
         )
         self.assertRedirects(

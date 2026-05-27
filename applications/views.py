@@ -563,6 +563,9 @@ class Step5StudentInfoView(View):
         form = StudentInfoForm(
             initial=self._initial(application, chosen_student),
             program_start_date=program_start_date,
+            tshirt_enabled=application.program.has_feature("tshirt-size")
+            if application.program
+            else False,
         )
         return self._render(
             request,
@@ -591,6 +594,9 @@ class Step5StudentInfoView(View):
             form = StudentInfoForm(
                 initial=self._initial(application, chosen_student),
                 program_start_date=program_start_date,
+                tshirt_enabled=application.program.has_feature("tshirt-size")
+                if application.program
+                else False,
             )
             return self._render(
                 request,
@@ -601,7 +607,13 @@ class Step5StudentInfoView(View):
                 program_start_date=program_start_date,
             )
 
-        form = StudentInfoForm(request.POST, program_start_date=program_start_date)
+        form = StudentInfoForm(
+            request.POST,
+            program_start_date=program_start_date,
+            tshirt_enabled=application.program.has_feature("tshirt-size")
+            if application.program
+            else False,
+        )
         if not form.is_valid():
             return self._render(
                 request,

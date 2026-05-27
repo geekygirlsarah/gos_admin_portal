@@ -5,10 +5,13 @@ from django.test import TestCase
 
 from applications.forms import MentorInfoForm, ParentInfoForm, StudentInfoForm
 from programs.forms import AdultForm, StudentForm
-from programs.models import Adult, Student
+from programs.models import Adult, School, Student
 
 
 class PhoneValidationTestCase(TestCase):
+    def setUp(self):
+        School.objects.get_or_create(name="Pittsburgh High")
+
     def test_student_model_phone_validation(self):
         date_of_birth_year = date.today().year - 12
         student = Student(
@@ -89,6 +92,8 @@ class PhoneValidationTestCase(TestCase):
                 "zip_code": "15213",
                 "tshirt_size": "M",
                 "date_of_birth": "2010-01-01",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)

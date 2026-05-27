@@ -46,7 +46,7 @@ class TestStep8Repopulation(TestCase):
             {
                 "first_name": "Secondary",
                 "last_name": "Parent",
-                "relationship_to_student": "Mother",
+                "relationship_to_student": "guardian",
                 "email": "secondary@example.com",
                 "address": "123 Main St",
                 "city": "Pittsburgh",

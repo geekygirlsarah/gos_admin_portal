@@ -12,6 +12,8 @@ from programs.models import Program
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class BirthdateValidationTests(TestCase):
     def setUp(self):
+        from programs.models import School
+        School.objects.get_or_create(name="Pittsburgh High")
         self.app = Application.objects.create(
             applicant_type=Application.Type.STUDENT,
             email="student@example.com",
@@ -31,6 +33,8 @@ class BirthdateValidationTests(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "tshirt_size": "M",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
                 # Missing date_of_birth
             },
             follow=True,
@@ -50,6 +54,8 @@ class BirthdateValidationTests(TestCase):
                 "zip_code": "15213",
                 "tshirt_size": "M",
                 "date_of_birth": future_date.strftime("%Y-%m-%d"),
+                "school_name": "Pittsburgh High",
+                "grade": "9",
             },
             follow=True,
         )
@@ -69,6 +75,8 @@ class BirthdateValidationTests(TestCase):
                 "zip_code": "15213",
                 "tshirt_size": "M",
                 "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": "Pittsburgh High",
+                "grade": "9",
             },
             follow=True,
         )
@@ -90,6 +98,8 @@ class BirthdateValidationTests(TestCase):
                 "zip_code": "15213",
                 "tshirt_size": "M",
                 "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": "Pittsburgh High",
+                "grade": "9",
             },
             follow=True,
         )
@@ -109,6 +119,8 @@ class BirthdateValidationTests(TestCase):
                 "tshirt_size": "M",
                 "date_of_birth": dob.strftime("%Y-%m-%d"),
                 "confirm_age": "on",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
             },
             follow=True,
         )

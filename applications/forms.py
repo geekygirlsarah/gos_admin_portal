@@ -292,10 +292,16 @@ class StudentInfoForm(forms.Form):
         if not cleaned.get("school_name"):
             self.add_error("school_name", "Please select a school.")
 
+        if self.tshirt_enabled and not cleaned.get("tshirt_size"):
+            self.add_error("tshirt_size", "Please select a T-shirt size.")
+
         return cleaned
 
-    def __init__(self, *args, program_start_date=None, **kwargs):
+    def __init__(self, *args, program_start_date=None, tshirt_enabled=True, **kwargs):
         super().__init__(*args, **kwargs)
+        self.tshirt_enabled = tshirt_enabled
+        if not tshirt_enabled:
+            self.fields.pop("tshirt_size", None)
         if program_start_date:
             formatted_date = date_format(program_start_date, use_l10n=True)
             self.fields["grade"].label = (
@@ -332,6 +338,7 @@ class StudentInfoForm(forms.Form):
         label="T-shirt size",
         choices=[("", "---")] + TSHIRT_SIZE_CHOICES,
         widget=forms.Select(attrs=_select_attrs),
+        required=False,
     )
     allergies = forms.CharField(
         label="Allergies",

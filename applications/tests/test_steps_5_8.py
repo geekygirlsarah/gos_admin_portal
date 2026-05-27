@@ -29,6 +29,8 @@ def _verified(**kwargs):
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step5StudentInfoTests(TestCase):
     def setUp(self):
+        from programs.models import School
+        School.objects.get_or_create(name="Pittsburgh High")
         today = timezone.localdate()
         self.program = Program.objects.create(
             name="Spring 2030",
@@ -85,7 +87,8 @@ class Step5StudentInfoTests(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "cell_phone_number": "",
-                "school_name": "",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
                 "graduation_year": "",
                 "tshirt_size": "M",
                 "allergies": "",
