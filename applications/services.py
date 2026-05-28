@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Iterable, List, Optional
+from typing import Iterable, List, Optional
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, send_mail
+from django.db import close_old_connections, transaction
 from django.db.models import Q
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
+
+from programs.models import Adult, Enrollment, Program, Student
 
 from .models import Application
-
-if TYPE_CHECKING:
-    from programs.models import Program
 
 logger = logging.getLogger(__name__)
 
@@ -23,17 +24,10 @@ LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
 
 def normalize_email(email: str) -> str:
-    """Normalize an email address by lowering it and removing subaddressing (+) parts.
-    Example: 'User+Tag@example.com' -> 'user@example.com'
-    """
+    """Normalize an email address by lowering and stripping whitespace."""
     if not email:
         return ""
-    email = email.strip().lower()
-    if "@" not in email:
-        return email
-    local_part, domain_part = email.rsplit("@", 1)
-    local_part = local_part.split("+")[0]
-    return f"{local_part}@{domain_part}"
+    return email.strip().lower()
 
 
 def _from_email() -> str:
@@ -60,7 +54,6 @@ def _should_send_async() -> bool:
     """Backgrounding emails is a workaround for low-CPU environments (Render free tier).
     In tests, we want synchronous delivery to avoid race conditions in assertions.
     """
-    from django.conf import settings
 
     if settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend":
         return False
@@ -91,8 +84,6 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
     )
 
     def _send():
-        from django.db import close_old_connections
-
         try:
             send_mail(
                 subject=subject,
@@ -122,9 +113,6 @@ def get_program_buckets():
     - current: started already and not ended — applications closed.
     - past: ended.
     """
-    from django.utils import timezone
-
-    from programs.models import Program
 
     today = timezone.localdate()
     future = Program.objects.filter(active=True, start_date__gt=today).order_by(
@@ -177,8 +165,6 @@ def find_student_by_email(email: str):
 
     Case-insensitive. Returns the first match or ``None``.
     """
-    from programs.models import Student
-
     if not email:
         return None
     return Student.objects.filter(
@@ -188,8 +174,6 @@ def find_student_by_email(email: str):
 
 def find_adult_by_email(email: str):
     """Find an Adult whose email/personal_email/andrew_email/alumni_email matches."""
-    from programs.models import Adult
-
     if not email:
         return None
     return Adult.objects.filter(
@@ -232,8 +216,6 @@ def latest_program_for_student(student) -> Optional[Program]:
     """
     if student is None:
         return None
-    from programs.models import Enrollment
-
     enrollment = (
         Enrollment.objects.filter(student=student)
         .select_related("program")
@@ -256,8 +238,6 @@ def latest_program_for_adult(adult) -> Optional[Program]:
     if adult is None:
         return None
     students = students_for_adult(adult)
-    from programs.models import Enrollment
-
     enrollment = (
         Enrollment.objects.filter(student__in=students)
         .select_related("program")
@@ -324,8 +304,6 @@ def _send_html_email(
         return
 
     def _do_send():
-        from django.db import close_old_connections
-
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
@@ -463,7 +441,6 @@ def send_application_approved_email(application: Application, request=None) -> N
         return
     # Link the applicant straight into Step 9 via the resume link, which
     # will redirect to /apply/<id>/step9/ for APPROVED applications.
-    from django.urls import reverse
 
     path = reverse("apply_resume_link", kwargs={"app_id": application.application_id})
     documents_url = request.build_absolute_uri(path) if request is not None else path
@@ -692,8 +669,6 @@ def convert_application_to_student(application: Application, request=None):
     application has already been converted, returns the existing
     student.
     """
-    from django.db import transaction
-    from django.utils import timezone
 
     from programs.models import Enrollment
 

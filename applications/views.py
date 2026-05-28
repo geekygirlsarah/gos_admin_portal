@@ -531,7 +531,7 @@ def _student_initial_for(application: Application) -> dict:
             academic_year_ending = get_academic_year_ending()
             grad_year = saved["graduation_year"]
             grade = 12 - (grad_year - academic_year_ending)
-            if 1 <= grade <= 12:
+            if 0 <= grade <= 12:
                 saved["grade"] = grade
         return saved
     # Try to prefill from an existing Student record.
@@ -708,9 +708,8 @@ class Step5StudentInfoView(View):
             # Add grade prefill
             if chosen_student.graduation_year:
                 academic_year_ending = get_academic_year_ending()
-                # Grade calculation: 12 - (grad_year - academic_year_ending)
                 grade = 12 - (chosen_student.graduation_year - academic_year_ending)
-                if 1 <= grade <= 12:
+                if 0 <= grade <= 12:
                     initial["grade"] = grade
             return initial
         return _student_initial_for(application)

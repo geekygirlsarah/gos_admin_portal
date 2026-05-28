@@ -317,30 +317,40 @@ class Step2LabelReproductionTest(TestCase):
 
 class EmailSubaddressingValidationReproductionTests(TestCase):
     """
-    Test that we correctly allow/prevent certain subaddressing (+) email
-    combinations between students and parents.
+    Test that we correctly allow/prevent student emails being reused as parent emails.
+    Subaddressing (+tag) is no longer stripped — only exact (case-insensitive) matches
+    are blocked.
     """
 
     def test_parent_info_form_validation(self):
         from applications.forms import ParentInfoForm
 
-        # Case 1: Same email (should be blocked)
+        # Case 1: Exact same email (should be blocked)
         form = ParentInfoForm(
             data={"email": "name@email.com"}, student_emails=["name@email.com"]
         )
         self.assertFalse(form.is_valid())
         self.assertIn("email", form.errors)
 
-        # Case 2: Forged parent email (should be blocked)
-        # Parent is base+tag, student is base.
+        # Case 2: Parent uses +tag variant of student email (now ALLOWED —
+        # we no longer strip subaddressing, so these are different addresses).
         form = ParentInfoForm(
-            data={"email": "name+parent@email.com"}, student_emails=["name@email.com"]
+            data={
+                "first_name": "Pat",
+                "last_name": "Parent",
+                "relationship_to_student": "parent",
+                "email": "name+parent@email.com",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "cell_phone": "555-444-1212",
+            },
+            student_emails=["name@email.com"],
         )
-        self.assertFalse(form.is_valid())
-        self.assertIn("email", form.errors)
+        self.assertTrue(form.is_valid(), form.errors)
 
-        # Case 3: Tagged student email, raw parent email (SHOULD BE ALLOWED)
-        # Student uses name+student@email.com, Parent uses name@email.com
+        # Case 3: Tagged student email, raw parent email (should be allowed)
         form = ParentInfoForm(
             data={
                 "first_name": "Pat",
@@ -384,12 +394,13 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
         )
         self.assertTrue(form.is_valid(), form.errors)
 
-        # Case: student@email.com and name+parent@email.com (should be blocked)
+        # Case: student@email.com and name+parent@email.com (now ALLOWED —
+        # subaddressing is no longer stripped, so these are different addresses).
         form = ParentHandoffForm(
             data={"parent_email": "name+parent@email.com"},
             student_emails=["name@email.com"],
         )
-        self.assertFalse(form.is_valid())
+        self.assertTrue(form.is_valid(), form.errors)
 
 
 class HandoffSecurityReproductionTests(TestCase):

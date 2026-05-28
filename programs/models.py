@@ -672,13 +672,41 @@ class Student(models.Model):
 
     @property
     def current_grade(self):
-        """Return the student's current grade (1-12)."""
+        """Return the student's current grade as an integer (0=K, 1–12).
+
+        Returns ``None`` if ``graduation_year`` is not set, or if the student
+        has already graduated (calculated grade > 12).
+        Grades below 0 are clamped to 0 (Kindergarten).
+        """
         if not self.graduation_year:
             return None
         from programs.utils import get_academic_year_ending
 
         academic_year_ending = get_academic_year_ending()
-        return 12 - (self.graduation_year - academic_year_ending)
+        grade = 12 - (self.graduation_year - academic_year_ending)
+        if grade > 12:
+            return None
+        return max(0, grade)
+
+    @property
+    def grade_display(self):
+        """Return a human-readable grade label: 'K', '1st Grade', …, '12th Grade',
+        'Graduated', or ``None`` if ``graduation_year`` is not set.
+        """
+        if not self.graduation_year:
+            return None
+        grade = self.current_grade
+        if grade is None:
+            # graduation_year is set but grade > 12 — student has graduated
+            return "Graduated"
+        if grade == 0:
+            return "K"
+        n = int(grade)
+        if 10 <= (n % 100) <= 13:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix} Grade"
 
     def requires_background_check(self, program: "Program") -> bool:
         """Whether the student will be 18 at any point during the given program's dates.
