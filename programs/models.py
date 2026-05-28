@@ -37,28 +37,21 @@ def get_fernet():
 
 class EncryptedFileField(models.FileField):
     """
-    A simple wrapper around FileField that encrypts file content on save and decrypts on read.
-    NOTE: This is a basic implementation for demonstration. In a real production
-    environment, consider using more robust libraries or dedicated storage backends.
+    A FileField that transparently encrypts file content on save (via pre_save)
+    and decrypts on read (via EncryptedFileDescriptor). Uses Fernet symmetric
+    encryption with the key from settings.FILE_ENCRYPTION_KEY.
     """
 
     def pre_save(self, model_instance, add):
-        file = super().pre_save(model_instance, add)
-        if file and hasattr(file, "file") and not getattr(file, "_encrypted", False):
+        # Encrypt before super() so the storage backend writes ciphertext, not plaintext.
+        file = getattr(model_instance, self.attname)
+        if file and not file._committed and not getattr(file, "_encrypted", False):
             fernet = get_fernet()
-            file.open("rb")
-            content = file.read()
-            file.close()
-            encrypted_content = fernet.encrypt(content)
-
-            # Use ContentFile to replace the content
-            new_file = ContentFile(encrypted_content)
-            new_file.name = file.name
-
-            # This is the tricky part in Django - we need to update the underlying file object
-            file.file = new_file
+            plaintext = file.read()
+            encrypted = fernet.encrypt(plaintext)
+            file.file = ContentFile(encrypted, name=file.name)
             file._encrypted = True
-        return file
+        return super().pre_save(model_instance, add)
 
     def contribute_to_class(self, cls, name, private_only=False):
         super().contribute_to_class(cls, name)
@@ -70,9 +63,12 @@ class EncryptedTextField(models.TextField):
     def get_prep_value(self, value):
         if value is None:
             return value
-        if isinstance(value, str) and value.startswith("gAAAAAB"):
-            return value
         fernet = get_fernet()
+        try:
+            fernet.decrypt(value.encode())
+            return value  # already encrypted
+        except Exception:
+            pass
         return fernet.encrypt(value.encode()).decode()
 
     def from_db_value(self, value, expression, connection):
@@ -90,9 +86,12 @@ class EncryptedCharField(models.CharField):
     def get_prep_value(self, value):
         if value is None:
             return value
-        if isinstance(value, str) and value.startswith("gAAAAAB"):
-            return value
         fernet = get_fernet()
+        try:
+            fernet.decrypt(value.encode())
+            return value  # already encrypted
+        except Exception:
+            pass
         return fernet.encrypt(value.encode()).decode()
 
     def from_db_value(self, value, expression, connection):
@@ -409,74 +408,6 @@ class RaceEthnicity(models.Model):
 
 
 class Student(models.Model):
-    def _prune_dangling_contacts(self):
-        """Clear dangling primary/secondary contact FKs in a single query."""
-        pks = [pk for pk in (self.primary_contact_id, self.secondary_contact_id) if pk]
-        if not pks:
-            return
-        try:
-            existing = set(
-                Adult.objects.filter(pk__in=pks).values_list("pk", flat=True)
-            )
-            if self.primary_contact_id and self.primary_contact_id not in existing:
-                self.primary_contact_id = None
-            if self.secondary_contact_id and self.secondary_contact_id not in existing:
-                self.secondary_contact_id = None
-        except Exception:
-            logger.debug("Unexpected error in contact cleanup", exc_info=True)
-
-    def save(self, *args, **kwargs):
-        # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
-        from .utils import normalize_image_field
-
-        normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
-        self._prune_dangling_contacts()
-        super().save(*args, **kwargs)
-
-    def eighteenth_birthday(self):
-        """Return the date this student turns 18, or None if DOB unknown."""
-        dob = self.date_of_birth
-        if not dob:
-            return None
-        try:
-            return dob.replace(year=dob.year + 18)
-        except ValueError:
-            # Handle Feb 29 on non-leap years by using Feb 28
-            return dob.replace(month=2, day=28, year=dob.year + 18)
-
-    @property
-    def age(self):
-        """Return the student's current age in years, or None if DOB unknown."""
-        import datetime
-
-        dob = self.date_of_birth
-        if not dob:
-            return None
-        today = datetime.date.today()
-        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-
-    @property
-    def current_grade(self):
-        """Return the student's current grade (1-12)."""
-        if not self.graduation_year:
-            return None
-        from programs.utils import get_academic_year_ending
-
-        academic_year_ending = get_academic_year_ending()
-        return 12 - (self.graduation_year - academic_year_ending)
-
-    def requires_background_check(self, program: "Program") -> bool:
-        """Whether the student will be 18 at any point during the given program's dates.
-        Returns False if insufficient data (no DOB or no program dates).
-        """
-        if not program or not program.start_date or not program.end_date:
-            return False
-        b18 = self.eighteenth_birthday()
-        if not b18:
-            return False
-        # If the program end is on/after 18th birthday, and the start is on/before end.
-        return program.end_date >= b18 and program.start_date <= program.end_date
-
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -691,6 +622,72 @@ class Student(models.Model):
         pref = self.first_name or self.legal_first_name
         full = f"{pref} {self.last_name}".strip()
         return full or f"Student #{self.pk}"
+
+    def _prune_dangling_contacts(self):
+        """Clear dangling primary/secondary contact FKs in a single query."""
+        pks = [pk for pk in (self.primary_contact_id, self.secondary_contact_id) if pk]
+        if not pks:
+            return
+        try:
+            existing = set(
+                Adult.objects.filter(pk__in=pks).values_list("pk", flat=True)
+            )
+            if self.primary_contact_id and self.primary_contact_id not in existing:
+                self.primary_contact_id = None
+            if self.secondary_contact_id and self.secondary_contact_id not in existing:
+                self.secondary_contact_id = None
+        except Exception:
+            logger.debug("Unexpected error in contact cleanup", exc_info=True)
+
+    def save(self, *args, **kwargs):
+        # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
+        self._prune_dangling_contacts()
+        super().save(*args, **kwargs)
+
+    def eighteenth_birthday(self):
+        """Return the date this student turns 18, or None if DOB unknown."""
+        dob = self.date_of_birth
+        if not dob:
+            return None
+        try:
+            return dob.replace(year=dob.year + 18)
+        except ValueError:
+            # Handle Feb 29 on non-leap years by using Feb 28
+            return dob.replace(month=2, day=28, year=dob.year + 18)
+
+    @property
+    def age(self):
+        """Return the student's current age in years, or None if DOB unknown."""
+        dob = self.date_of_birth
+        if not dob:
+            return None
+        today = datetime.date.today()
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+    @property
+    def current_grade(self):
+        """Return the student's current grade (1-12)."""
+        if not self.graduation_year:
+            return None
+        from programs.utils import get_academic_year_ending
+
+        academic_year_ending = get_academic_year_ending()
+        return 12 - (self.graduation_year - academic_year_ending)
+
+    def requires_background_check(self, program: "Program") -> bool:
+        """Whether the student will be 18 at any point during the given program's dates.
+        Returns False if insufficient data (no DOB or no program dates).
+        """
+        if not program or not program.start_date or not program.end_date:
+            return False
+        b18 = self.eighteenth_birthday()
+        if not b18:
+            return False
+        # If the program end is on/after 18th birthday, and the start is on/before end.
+        return program.end_date >= b18 and program.start_date <= program.end_date
 
 
 class Enrollment(models.Model):
@@ -1047,21 +1044,6 @@ class TaxForm(models.Model):
 
     def __str__(self):
         return f"Tax form for {self.sliding_scale}"
-
-    def save(self, *args, **kwargs):
-        if (
-            self.file
-            and hasattr(self.file, "file")
-            and not getattr(self.file, "_encrypted", False)
-        ):
-            fernet = get_fernet()
-            self.file.open("rb")
-            content = self.file.read()
-            self.file.close()
-            encrypted_content = fernet.encrypt(content)
-            self.file.file = ContentFile(encrypted_content, name=self.file.name)
-            self.file._encrypted = True
-        super().save(*args, **kwargs)
 
 
 class FeeAssignment(models.Model):
