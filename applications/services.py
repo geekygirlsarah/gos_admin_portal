@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Iterable, List, Optional
+from typing import TYPE_CHECKING, Iterable, List, Optional
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, send_mail
@@ -13,6 +13,9 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 from .models import Application
+
+if TYPE_CHECKING:
+    from programs.models import Program
 
 logger = logging.getLogger(__name__)
 
