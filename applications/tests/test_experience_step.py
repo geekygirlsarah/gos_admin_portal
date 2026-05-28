@@ -51,7 +51,9 @@ class Step6ExperienceTests(TestCase):
             fetch_redirect_response=False,
         )
         self.app.refresh_from_db()
-        self.assertEqual(self.app.data["step6-experience"]["interest_reason"], "I love robots")
+        self.assertEqual(
+            self.app.data["step6-experience"]["interest_reason"], "I love robots"
+        )
         self.assertEqual(self.app.current_step, 7)
 
 

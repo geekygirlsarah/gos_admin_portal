@@ -1007,7 +1007,11 @@ class Step7PrimaryParentView(View):
             last = step8_data.get("last_name") or ""
             secondary_name = " ".join(filter(None, [first, last])) or None
         if not has_secondary:
-            sid = (application.data or {}).get("step5-student", {}).get("_existing_student_id")
+            sid = (
+                (application.data or {})
+                .get("step5-student", {})
+                .get("_existing_student_id")
+            )
             if sid:
                 student = Student.objects.filter(pk=sid).first()
                 if student and student.secondary_contact_id:
@@ -1100,7 +1104,9 @@ class SwapParentsView(View):
         # but doesn't save to application.data until the user submits each
         # step.  If either side is empty, hydrate it from the Student record
         # so the swap has something to work with.
-        existing_student_id = (data.get("step5-student") or {}).get("_existing_student_id")
+        existing_student_id = (data.get("step5-student") or {}).get(
+            "_existing_student_id"
+        )
         if existing_student_id and (not step7 or not step8):
             student = Student.objects.filter(pk=existing_student_id).first()
             if student:
@@ -1213,7 +1219,11 @@ class Step8SecondaryParentView(View):
             return {}
 
         # Prefill from existing secondary contact if we can identify the student.
-        sid = (application.data or {}).get("step5-student", {}).get("_existing_student_id")
+        sid = (
+            (application.data or {})
+            .get("step5-student", {})
+            .get("_existing_student_id")
+        )
         if sid:
             student = Student.objects.filter(pk=sid).first()
             if student and student.secondary_contact_id:
@@ -1328,7 +1338,9 @@ class Step9ConfirmView(View):
                 "step6_data": data.get("step6-experience") or {},
                 "step7_data": data.get("step7-primaryparent") or {},
                 "step8_data": data.get("step8-secondaryparent") or {},
-                "step8_skipped": bool((data.get("step8-secondaryparent") or {}).get("_skipped")),
+                "step8_skipped": bool(
+                    (data.get("step8-secondaryparent") or {}).get("_skipped")
+                ),
                 "current_step": 9,
                 "total_steps": TOTAL_STEPS,
             },
@@ -1365,7 +1377,9 @@ class SubmittedView(View):
                 "step7_data": application.data.get("step7-primaryparent") or {},
                 "step8_data": application.data.get("step8-secondaryparent") or {},
                 "step8_skipped": bool(
-                    (application.data.get("step8-secondaryparent") or {}).get("_skipped")
+                    (application.data.get("step8-secondaryparent") or {}).get(
+                        "_skipped"
+                    )
                 ),
                 "mentor_info_data": application.data.get("mentor_info") or {},
             },

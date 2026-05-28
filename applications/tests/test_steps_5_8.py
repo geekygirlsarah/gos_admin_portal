@@ -104,7 +104,9 @@ class Step5StudentInfoTests(TestCase):
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step5-student", {}).get("legal_first_name"), "Grace")
+        self.assertEqual(
+            app.data.get("step5-student", {}).get("legal_first_name"), "Grace"
+        )
         self.assertGreaterEqual(app.current_step, 6)
 
     def test_step5_picker_shown_for_parent_with_existing_children(self):
@@ -220,7 +222,9 @@ class Step7PrimaryParentTests(TestCase):
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step7-primaryparent", {}).get("first_name"), "Pat")
+        self.assertEqual(
+            app.data.get("step7-primaryparent", {}).get("first_name"), "Pat"
+        )
         self.assertGreaterEqual(app.current_step, 8)
 
 
@@ -261,7 +265,9 @@ class Step8SecondaryParentTests(TestCase):
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step8-secondaryparent", {}).get("first_name"), "Sam")
+        self.assertEqual(
+            app.data.get("step8-secondaryparent", {}).get("first_name"), "Sam"
+        )
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
