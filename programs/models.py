@@ -423,7 +423,10 @@ class Student(models.Model):
     last_name = models.CharField(max_length=150, db_index=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     date_of_birth = models.DateField(
-        blank=False, null=False, default=datetime.date(2000, 1, 1)
+        blank=False,
+        null=False,
+        default=datetime.date(1900, 1, 1),
+        help_text="Student's date of birth. The default value (1900-01-01) is a placeholder — please enter the actual date.",
     )
     # Background clearances (per-student, separate from mentor clearances)
     has_passed_clearances = models.BooleanField(

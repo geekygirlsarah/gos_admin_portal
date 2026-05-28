@@ -221,7 +221,7 @@ def students_for_adult(adult) -> List:
     for s in adult.secondary_for.all():
         seen.setdefault(s.pk, s)
     # Reverse M2M from Student.adults
-    for s in getattr(adult, "students", []).all() if hasattr(adult, "students") else []:
+    for s in adult.students.all():
         seen.setdefault(s.pk, s)
     return list(seen.values())
 

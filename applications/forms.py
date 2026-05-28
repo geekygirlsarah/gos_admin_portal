@@ -230,7 +230,7 @@ class StudentInfoForm(forms.Form):
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
         if age >= 19:
             raise forms.ValidationError(
-                "The student is over 18, which is too old for our programs."
+                "The student must be 18 or younger to enroll in our programs."
             )
         return dob
 

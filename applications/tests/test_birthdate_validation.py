@@ -81,7 +81,7 @@ class BirthdateValidationTests(TestCase):
             },
             follow=True,
         )
-        self.assertContains(response, "student is over 18")
+        self.assertContains(response, "must be 18 or younger")
 
     def test_birthdate_young_allowed_with_confirmation(self):
         # 4 years old (requires warning)

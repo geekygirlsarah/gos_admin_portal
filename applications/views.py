@@ -1155,11 +1155,6 @@ class Step8SecondaryParentView(View):
             require_address=False,
             student_emails=student_emails,
         )
-        # form.fields["first_name"].help_text = (
-        #     "Please provide a second adult contact or emergency contact. "
-        #     "This is who we will reach out to if we cannot get a hold of "
-        #     "the primary contact. Only a name and phone number are required."
-        # )
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
@@ -1181,11 +1176,6 @@ class Step8SecondaryParentView(View):
             require_email=False,
             require_address=False,
             student_emails=student_emails,
-        )
-        form.fields["first_name"].help_text = (
-            "Please provide a second adult contact or emergency contact. "
-            "This is who we will reach out to if we cannot get a hold of "
-            "the primary contact. Only a name and phone number are required."
         )
         if not form.is_valid():
             return self._render(request, application, form)
@@ -1251,7 +1241,7 @@ class Step8SecondaryParentView(View):
 
 
 # ---------------------------------------------------------------------------
-# Step 8: final confirmation + submission.
+# Step 9: final confirmation + submission.
 # ---------------------------------------------------------------------------
 
 
