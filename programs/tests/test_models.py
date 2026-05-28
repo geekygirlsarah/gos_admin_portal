@@ -118,14 +118,17 @@ class ModelTests(TestCase):
         qs2 = RaceEthnicity.match_from_text("Something totally unknown")
         self.assertIn("other", set(qs2.values_list("key", flat=True)))
 
-    def test_student_save_auto_opt_in_primary_parent(self):
+    def test_student_save_does_not_override_parent_opt_out(self):
+        # Saving a student must NOT silently flip a parent's explicit opt-out.
+        # The email_updates preference is the parent's own choice and should
+        # only be changed through the application wizard form validation.
         parent = Adult.objects.create(
             first_name="Pat", last_name="Smith", is_parent=True, email_updates=False
         )
         s = Student(legal_first_name="Riley", last_name="Jones", primary_contact=parent)
         s.save()
         parent.refresh_from_db()
-        self.assertTrue(parent.email_updates)
+        self.assertFalse(parent.email_updates)
 
 
 class RolePermissionTests(TestCase):

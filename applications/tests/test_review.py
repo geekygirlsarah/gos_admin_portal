@@ -30,12 +30,12 @@ def _make_application(**overrides):
         status=Application.Status.SUBMITTED,
         submitted_at=timezone.now(),
         data={
-            "step5": {
+            "step5-student": {
                 "legal_first_name": "Ada",
                 "last_name": "Lovelace",
                 "email": "ada@example.com",
             },
-            "step6": {
+            "step7-primaryparent": {
                 "first_name": "Pat",
                 "last_name": "Parent",
                 "email": "parent@example.com",
@@ -316,7 +316,7 @@ class ConvertToStudentTests(TestCase):
             program=self.program,
             submitted_at=timezone.now(),
             data={
-                "step5": {
+                "step5-student": {
                     "legal_first_name": "Ada",
                     "first_name": "Ada",
                     "last_name": "Lovelace",
@@ -325,13 +325,13 @@ class ConvertToStudentTests(TestCase):
                     "graduation_year": 2030,
                     "date_of_birth": "2010-01-01",
                 },
-                "step6": {
+                "step7-primaryparent": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "cell_phone": "555-444-0100",
                 },
-                "step7": {
+                "step8-secondaryparent": {
                     "first_name": "Sam",
                     "last_name": "Parent",
                     "email": "sam@example.com",

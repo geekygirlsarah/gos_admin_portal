@@ -78,7 +78,7 @@ class TestGradeRepopulation(TestCase):
         app = _verified(program=self.program, current_step=9)
         # Add grade to step 5 data
         data = app.data or {}
-        data["step5"] = {"grade": "8"}
+        data["step5-student"] = {"grade": "8"}
         app.data = data
         app.save()
 
@@ -104,7 +104,7 @@ class TestGradeRepopulation(TestCase):
         app = _verified(program=self.program, current_step=9)
         # Add grad_year to step 5 data, NO grade
         data = app.data or {}
-        data["step5"] = {"graduation_year": grad_year}
+        data["step5-student"] = {"graduation_year": grad_year}
         app.data = data
         app.save()
 

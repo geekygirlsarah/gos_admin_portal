@@ -51,7 +51,7 @@ class Step6ExperienceTests(TestCase):
             fetch_redirect_response=False,
         )
         self.app.refresh_from_db()
-        self.assertEqual(self.app.data["step6"]["interest_reason"], "I love robots")
+        self.assertEqual(self.app.data["step6-experience"]["interest_reason"], "I love robots")
         self.assertEqual(self.app.current_step, 7)
 
 
@@ -117,19 +117,19 @@ class ConversionTests(TestCase):
         program = Program.objects.create(name="Test", year=2026, active=True)
         app = _verified(program=program, status=Application.Status.APPROVED)
         app.data = {
-            "step5": {
+            "step5-student": {
                 "legal_first_name": "Test",
                 "last_name": "Student",
                 "personal_email": "test@example.com",
                 "date_of_birth": "2010-01-01",
             },
-            "step6": {
+            "step6-experience": {
                 "interest_reason": "Reason",
                 "hoped_gains": "Gains",
                 "prior_robotics_experience": "Exp",
                 "referral_source": "Source",
             },
-            "step7": {
+            "step7-primaryparent": {
                 "first_name": "Parent",
                 "last_name": "One",
                 "email": "p1@example.com",

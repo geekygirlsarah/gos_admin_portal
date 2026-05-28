@@ -28,15 +28,15 @@ class EmailNamesTest(TestCase):
             program=self.program,
             status=Application.Status.SUBMITTED,
             data={
-                "step5": {
+                "step5-student": {
                     "legal_first_name": "Jane",
                     "last_name": "Doe",
                 },
-                "step6": {
+                "step7-primaryparent": {
                     "first_name": "John",
                     "last_name": "Doe",
                 },
-                "step7": {
+                "step8-secondaryparent": {
                     "first_name": "Mary",
                     "last_name": "Doe",
                 },

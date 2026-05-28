@@ -159,7 +159,7 @@ def get_student_emails(application: Application) -> List[str]:
         emails.append(application.email)
 
     # Check step 5 data (student info)
-    step5_data = (application.data or {}).get("step5", {})
+    step5_data = (application.data or {}).get("step5-student", {})
     personal_email = step5_data.get("personal_email")
     if personal_email:
         emails.append(personal_email)
@@ -398,8 +398,8 @@ def _collect_applicant_recipients(application: Application) -> List[str]:
       captured one different from the application email.
     """
     data = application.data or {}
-    step5 = data.get("step5") or {}
-    step6 = data.get("step6") or {}
+    step5 = data.get("step5-student") or {}
+    step7 = data.get("step7-primaryparent") or {}
 
     candidates: List[str] = []
     # Primary applicant email (whoever started / verified the OTP).
@@ -410,8 +410,8 @@ def _collect_applicant_recipients(application: Application) -> List[str]:
     student_email = (step5.get("email") or "").strip()
     if student_email:
         candidates.append(student_email)
-    # Primary parent / guardian email from Step 6.
-    parent_email = (step6.get("email") or "").strip()
+    # Primary parent / guardian email from Step 7.
+    parent_email = (step7.get("email") or "").strip()
     if parent_email:
         candidates.append(parent_email)
 
@@ -513,7 +513,7 @@ class ApplicationConversionError(Exception):
 
 
 def _adult_from_data(parent_data: dict):
-    """Find or create an Adult from a step6/step7 parent data dict.
+    """Find or create an Adult from a step7-primaryparent/step8-secondaryparent data dict.
 
     Match is by email (case-insensitive) when one is provided; otherwise a
     new Adult is created. Existing Adults have their blank/null fields
@@ -592,7 +592,7 @@ def _student_from_application(application: Application):
     from programs.models import School, Student
 
     data = application.data or {}
-    step5 = (data.get("step5") or {}).copy()
+    step5 = (data.get("step5-student") or {}).copy()
     existing_id = step5.pop("_existing_student_id", None)
 
     student = None
@@ -661,7 +661,7 @@ def _student_from_application(application: Application):
     _fill("medical_notes", step5.get("medical_notes"))
 
     # Experience / qualitative questions (from step6)
-    step6 = data.get("step6") or {}
+    step6 = data.get("step6-experience") or {}
     _fill("interest_reason", step6.get("interest_reason"))
     _fill("hoped_gains", step6.get("hoped_gains"))
     _fill("prior_robotics_experience", step6.get("prior_robotics_experience"))
@@ -732,8 +732,8 @@ def convert_application_to_student(application: Application, request=None):
 
     data = application.data or {}
     with transaction.atomic():
-        primary = _adult_from_data(data.get("step6") or {})
-        secondary = _adult_from_data(data.get("step7") or {})
+        primary = _adult_from_data(data.get("step7-primaryparent") or {})
+        secondary = _adult_from_data(data.get("step8-secondaryparent") or {})
 
         student = _student_from_application(application)
 

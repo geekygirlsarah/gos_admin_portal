@@ -31,13 +31,13 @@ def _approved_application(program, **overrides):
         status=Application.Status.APPROVED,
         submitted_at=timezone.now(),
         data={
-            "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
-            "step7": {
+            "step5-student": {"legal_first_name": "Ada", "last_name": "Lovelace"},
+            "step7-primaryparent": {
                 "first_name": "Pat",
                 "last_name": "Parent",
                 "email": "parent@example.com",
             },
-            "step8": {
+            "step8-secondaryparent": {
                 "first_name": "Sam",
                 "last_name": "Spouse",
                 "relationship_to_student": "guardian",

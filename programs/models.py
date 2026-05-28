@@ -30,6 +30,8 @@ def get_fernet():
         key = base64.urlsafe_b64encode(
             settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
         )
+    if isinstance(key, str):
+        key = key.encode()
     return Fernet(key)
 
 
@@ -423,23 +425,12 @@ class Student(models.Model):
         except Exception:
             logger.debug("Unexpected error in contact cleanup", exc_info=True)
 
-    def _auto_optin_primary_contact(self):
-        """Auto-opt-in primary contact for email updates if assigned."""
-        try:
-            parent = self.primary_contact
-        except Exception:
-            parent = None
-        if parent and parent.email_updates is False:
-            parent.email_updates = True
-            parent.save(update_fields=["email_updates"])
-
     def save(self, *args, **kwargs):
         # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
         from .utils import normalize_image_field
 
         normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
         self._prune_dangling_contacts()
-        self._auto_optin_primary_contact()
         super().save(*args, **kwargs)
 
     def eighteenth_birthday(self):

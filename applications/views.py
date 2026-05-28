@@ -524,7 +524,7 @@ class ContinueView(View):
 def _student_initial_for(application: Application) -> dict:
     """Build the initial dict for the StudentInfoForm based on prior step
     data, then existing-record lookup, then bare email-only defaults."""
-    saved = (application.data or {}).get("step5") or {}
+    saved = (application.data or {}).get("step5-student") or {}
     if saved:
         # If we have graduation_year, calculate grade back
         if "graduation_year" in saved and "grade" not in saved:
@@ -676,7 +676,7 @@ class Step5StudentInfoView(View):
             matched = find_student_by_email(application.email)
             if matched is not None:
                 payload["_existing_student_id"] = matched.pk
-        _save_step_data(application, "step5", payload, next_step=6)
+        _save_step_data(application, "step5-student", payload, next_step=6)
 
         return redirect("apply_step6", app_id=application.application_id)
 
@@ -778,7 +778,7 @@ class Step6ExperienceView(View):
         if guard is not None:
             return guard
 
-        initial = (application.data or {}).get("step6") or {}
+        initial = (application.data or {}).get("step6-experience") or {}
         form = StudentExperienceForm(
             initial=initial, applicant_type=application.applicant_type
         )
@@ -797,7 +797,7 @@ class Step6ExperienceView(View):
             return self._render(request, application, form)
 
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step6", payload, next_step=7)
+        _save_step_data(application, "step6-experience", payload, next_step=7)
         return redirect("apply_step7", app_id=application.application_id)
 
     def _render(self, request, application, form):
@@ -888,7 +888,7 @@ class Step7PrimaryParentView(View):
                 request, application, form, handoff_form, mode, existing_adult
             )
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step7", payload, next_step=8)
+        _save_step_data(application, "step7-primaryparent", payload, next_step=8)
         return redirect("apply_step8", app_id=application.application_id)
 
     def _build_forms(self, application, post=None):
@@ -898,7 +898,7 @@ class Step7PrimaryParentView(View):
         - "form": show the actual ParentInfoForm.
         Returns (form, handoff_form, mode).
         """
-        saved = (application.data or {}).get("step7") or {}
+        saved = (application.data or {}).get("step7-primaryparent") or {}
         # If the student initiated and we don't have a parent yet, default to
         # asking for a handoff email — unless they're already filling out the
         # form (post with parent fields), or they previously entered parent
@@ -988,7 +988,7 @@ class Step7PrimaryParentView(View):
         # adult record (i.e., we're in form mode and the form is unbound, or
         # bound but came in with prefilled initial data). Don't show it if
         # the applicant has already saved step7 data in a previous visit.
-        saved = (application.data or {}).get("step7") or {}
+        saved = (application.data or {}).get("step7-primaryparent") or {}
         if existing_adult is not None and not saved and mode == "form":
             display_name = existing_adult.first_name or str(existing_adult)
             welcome_back = {
@@ -1001,14 +1001,14 @@ class Step7PrimaryParentView(View):
         # name so the template can show it in the swap prompt.
         has_secondary = False
         secondary_name = None
-        step8_data = (application.data or {}).get("step8") or {}
+        step8_data = (application.data or {}).get("step8-secondaryparent") or {}
         if step8_data:
             has_secondary = True
             first = step8_data.get("first_name") or ""
             last = step8_data.get("last_name") or ""
             secondary_name = " ".join(filter(None, [first, last])) or None
         if not has_secondary:
-            sid = (application.data or {}).get("step5", {}).get("_existing_student_id")
+            sid = (application.data or {}).get("step5-student", {}).get("_existing_student_id")
             if sid:
                 student = Student.objects.filter(pk=sid).first()
                 if student and student.secondary_contact_id:
@@ -1094,14 +1094,14 @@ class SwapParentsView(View):
             )
 
         data = dict(application.data or {})
-        step7 = data.get("step7") or {}
-        step8 = data.get("step8") or {}
+        step7 = data.get("step7-primaryparent") or {}
+        step8 = data.get("step8-secondaryparent") or {}
 
         # For returning students the wizard prefills from the Student record
         # but doesn't save to application.data until the user submits each
         # step.  If either side is empty, hydrate it from the Student record
         # so the swap has something to work with.
-        existing_student_id = (data.get("step5") or {}).get("_existing_student_id")
+        existing_student_id = (data.get("step5-student") or {}).get("_existing_student_id")
         if existing_student_id and (not step7 or not step8):
             student = Student.objects.filter(pk=existing_student_id).first()
             if student:
@@ -1112,7 +1112,7 @@ class SwapParentsView(View):
 
         # Only swap when both sides have content.
         if step7 or step8:
-            data["step7"], data["step8"] = step8, step7
+            data["step7-primaryparent"], data["step8-secondaryparent"] = step8, step7
             application.data = data
             application.save(update_fields=["data", "updated_at"])
             messages.success(
@@ -1194,7 +1194,7 @@ class Step8SecondaryParentView(View):
         # parent opted in. If neither opted in, surface the error here (step 8)
         # rather than making the applicant go all the way to step 9 to find out.
         # Only run this check when step 7 data is present (primary parent was collected).
-        step7_data = (application.data or {}).get("step7") or {}
+        step7_data = (application.data or {}).get("step7-primaryparent") or {}
         p1_opt = step7_data.get("email_updates", False)
         p2_opt = form.cleaned_data.get("email_updates", False)
         if step7_data and not p1_opt and not p2_opt:
@@ -1207,11 +1207,11 @@ class Step8SecondaryParentView(View):
             return self._render(request, application, form)
 
         payload = _sanitize_payload(form.cleaned_data)
-        _save_step_data(application, "step8", payload, next_step=9)
+        _save_step_data(application, "step8-secondaryparent", payload, next_step=9)
         return redirect("apply_step9", app_id=application.application_id)
 
     def _initial(self, application):
-        saved = (application.data or {}).get("step8") or {}
+        saved = (application.data or {}).get("step8-secondaryparent") or {}
 
         # If we have actual form data, return it regardless of _skipped
         data = {k: v for k, v in saved.items() if not k.startswith("_")}
@@ -1224,7 +1224,7 @@ class Step8SecondaryParentView(View):
             return {}
 
         # Prefill from existing secondary contact if we can identify the student.
-        sid = (application.data or {}).get("step5", {}).get("_existing_student_id")
+        sid = (application.data or {}).get("step5-student", {}).get("_existing_student_id")
         if sid:
             student = Student.objects.filter(pk=sid).first()
             if student and student.secondary_contact_id:
@@ -1233,7 +1233,7 @@ class Step8SecondaryParentView(View):
 
     def _render(self, request, application, form):
         data = application.data or {}
-        step5_data = data.get("step5") or {}
+        step5_data = data.get("step5-student") or {}
         return render(
             request,
             self.template_name,
@@ -1293,8 +1293,8 @@ class Step9ConfirmView(View):
 
         # Ensure at least one parent opted in to notifications (only for students/parents)
         data = application.data or {}
-        p1_opt = (data.get("step7") or {}).get("email_updates", False)
-        p2_opt = (data.get("step8") or {}).get("email_updates", False)
+        p1_opt = (data.get("step7-primaryparent") or {}).get("email_updates", False)
+        p2_opt = (data.get("step8-secondaryparent") or {}).get("email_updates", False)
         if not p1_opt and not p2_opt:
             form.add_error(
                 None,
@@ -1335,11 +1335,11 @@ class Step9ConfirmView(View):
             {
                 "application": application,
                 "form": form,
-                "step5_data": data.get("step5") or {},
-                "step6_data": data.get("step6") or {},
-                "step7_data": data.get("step7") or {},
-                "step8_data": data.get("step8") or {},
-                "step8_skipped": bool((data.get("step8") or {}).get("_skipped")),
+                "step5_data": data.get("step5-student") or {},
+                "step6_data": data.get("step6-experience") or {},
+                "step7_data": data.get("step7-primaryparent") or {},
+                "step8_data": data.get("step8-secondaryparent") or {},
+                "step8_skipped": bool((data.get("step8-secondaryparent") or {}).get("_skipped")),
                 "current_step": 9,
                 "total_steps": TOTAL_STEPS,
             },
@@ -1371,12 +1371,12 @@ class SubmittedView(View):
                 "application": application,
                 "current_step": current_step,
                 "total_steps": total_steps,
-                "step5_data": application.data.get("step5") or {},
-                "step6_data": application.data.get("step6") or {},
-                "step7_data": application.data.get("step7") or {},
-                "step8_data": application.data.get("step8") or {},
+                "step5_data": application.data.get("step5-student") or {},
+                "step6_data": application.data.get("step6-experience") or {},
+                "step7_data": application.data.get("step7-primaryparent") or {},
+                "step8_data": application.data.get("step8-secondaryparent") or {},
                 "step8_skipped": bool(
-                    (application.data.get("step8") or {}).get("_skipped")
+                    (application.data.get("step8-secondaryparent") or {}).get("_skipped")
                 ),
                 "mentor_info_data": application.data.get("mentor_info") or {},
             },

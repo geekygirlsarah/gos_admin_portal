@@ -104,7 +104,7 @@ class Step5StudentInfoTests(TestCase):
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step5", {}).get("legal_first_name"), "Grace")
+        self.assertEqual(app.data.get("step5-student", {}).get("legal_first_name"), "Grace")
         self.assertGreaterEqual(app.current_step, 6)
 
     def test_step5_picker_shown_for_parent_with_existing_children(self):
@@ -220,7 +220,7 @@ class Step7PrimaryParentTests(TestCase):
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step7", {}).get("first_name"), "Pat")
+        self.assertEqual(app.data.get("step7-primaryparent", {}).get("first_name"), "Pat")
         self.assertGreaterEqual(app.current_step, 8)
 
 
@@ -236,7 +236,7 @@ class Step8SecondaryParentTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         app.refresh_from_db()
-        self.assertNotIn("step8", app.data or {})
+        self.assertNotIn("step8-secondaryparent", app.data or {})
 
     def test_filled_form_saves_and_advances(self):
         app = _verified(current_step=8)
@@ -261,7 +261,7 @@ class Step8SecondaryParentTests(TestCase):
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        self.assertEqual(app.data.get("step8", {}).get("first_name"), "Sam")
+        self.assertEqual(app.data.get("step8-secondaryparent", {}).get("first_name"), "Sam")
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
@@ -282,14 +282,14 @@ class Step9ConfirmTests(TestCase):
             program=self.program,
             current_step=9,
             data={
-                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
-                "step7": {
+                "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7-primaryparent": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "email_updates": True,
                 },
-                "step8": {
+                "step8-secondaryparent": {
                     "first_name": "Sam",
                     "last_name": "Spouse",
                     "relationship_to_student": "guardian",
@@ -362,14 +362,14 @@ class Step9ConfirmTests(TestCase):
             current_step=9,
             email="parent@example.com",
             data={
-                "step5": {"legal_first_name": "Ada", "last_name": "Lovelace"},
-                "step7": {
+                "step5-student": {"legal_first_name": "Ada", "last_name": "Lovelace"},
+                "step7-primaryparent": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "email_updates": True,
                 },
-                "step8": {
+                "step8-secondaryparent": {
                     "first_name": "Sam",
                     "last_name": "Spouse",
                     "relationship_to_student": "guardian",
@@ -410,13 +410,13 @@ class SwapParentsViewTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={
-                "step7": {
+                "step7-primaryparent": {
                     "first_name": "Joe",
                     "last_name": "Primary",
                     "email": "joe@example.com",
                     "email_updates": True,
                 },
-                "step8": {
+                "step8-secondaryparent": {
                     "first_name": "Jane",
                     "last_name": "Secondary",
                 },
@@ -432,8 +432,8 @@ class SwapParentsViewTests(TestCase):
             {"next": "7"},
         )
         app.refresh_from_db()
-        self.assertEqual(app.data["step7"]["first_name"], "Jane")
-        self.assertEqual(app.data["step8"]["first_name"], "Joe")
+        self.assertEqual(app.data["step7-primaryparent"]["first_name"], "Jane")
+        self.assertEqual(app.data["step8-secondaryparent"]["first_name"], "Joe")
 
     def test_swap_redirects_to_step7_by_default(self):
         app = self._app_with_both_parents()
@@ -465,8 +465,8 @@ class SwapParentsViewTests(TestCase):
         self.client.post(url, {"next": "7"})
         self.client.post(url, {"next": "7"})
         app.refresh_from_db()
-        self.assertEqual(app.data["step7"]["first_name"], "Joe")
-        self.assertEqual(app.data["step8"]["first_name"], "Jane")
+        self.assertEqual(app.data["step7-primaryparent"]["first_name"], "Joe")
+        self.assertEqual(app.data["step8-secondaryparent"]["first_name"], "Jane")
 
     def test_swap_hydrates_from_student_record_when_steps_not_yet_saved(self):
         # Returning student: application.data has no step7/step8 yet because
@@ -490,7 +490,7 @@ class SwapParentsViewTests(TestCase):
             current_step=7,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
-            data={"step5": {"_existing_student_id": student.pk}},
+            data={"step5-student": {"_existing_student_id": student.pk}},
         )
         self.client.post(
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
@@ -498,8 +498,8 @@ class SwapParentsViewTests(TestCase):
         )
         app.refresh_from_db()
         # After swap, step7 should contain Jane (old secondary) and step8 Joe (old primary).
-        self.assertEqual(app.data["step7"]["first_name"], "Jane")
-        self.assertEqual(app.data["step8"]["first_name"], "Joe")
+        self.assertEqual(app.data["step7-primaryparent"]["first_name"], "Jane")
+        self.assertEqual(app.data["step8-secondaryparent"]["first_name"], "Joe")
 
     def test_swap_requires_verified_email(self):
         app = Application.objects.create(
@@ -507,8 +507,8 @@ class SwapParentsViewTests(TestCase):
             email="parent@example.com",
             current_step=7,
             data={
-                "step7": {"first_name": "Joe"},
-                "step8": {"first_name": "Jane"},
+                "step7-primaryparent": {"first_name": "Joe"},
+                "step8-secondaryparent": {"first_name": "Jane"},
             },
         )
         response = self.client.post(
@@ -523,7 +523,7 @@ class SwapParentsViewTests(TestCase):
         )
         app.refresh_from_db()
         # Data must be unchanged.
-        self.assertEqual(app.data["step7"]["first_name"], "Joe")
+        self.assertEqual(app.data["step7-primaryparent"]["first_name"], "Joe")
 
 
 class Step7SwapBoxVisibilityTests(TestCase):
@@ -562,7 +562,7 @@ class Step7SwapBoxVisibilityTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={
-                "step5": {"_existing_student_id": self.student.pk},
+                "step5-student": {"_existing_student_id": self.student.pk},
             },
         )
 
@@ -598,8 +598,8 @@ class Step7SwapBoxVisibilityTests(TestCase):
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
             data={
-                "step5": {"_existing_student_id": self.student.pk},
-                "step7": {
+                "step5-student": {"_existing_student_id": self.student.pk},
+                "step7-primaryparent": {
                     "first_name": "Joe",
                     "last_name": "Primary",
                     "email": "joe@example.com",

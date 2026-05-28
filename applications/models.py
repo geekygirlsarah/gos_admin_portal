@@ -294,7 +294,7 @@ class Application(models.Model):
     def student_name(self) -> str:
         """Friendly name of the student from step 5 data."""
         data = self.data or {}
-        step5 = data.get("step5") or {}
+        step5 = data.get("step5-student") or {}
         first = (step5.get("first_name") or step5.get("legal_first_name") or "").strip()
         last = (step5.get("last_name") or "").strip()
         if first and last:
@@ -303,9 +303,9 @@ class Application(models.Model):
 
     @property
     def primary_parent_name(self) -> str:
-        """Friendly name of the primary parent from step 6 data."""
+        """Friendly name of the primary parent from step 7 data."""
         data = self.data or {}
-        step6 = data.get("step6") or {}
+        step6 = data.get("step7-primaryparent") or {}
         first = (step6.get("first_name") or "").strip()
         last = (step6.get("last_name") or "").strip()
         if first and last:
@@ -314,9 +314,9 @@ class Application(models.Model):
 
     @property
     def secondary_parent_name(self) -> str:
-        """Friendly name of the secondary parent from step 7 data (if not skipped)."""
+        """Friendly name of the secondary parent from step 8 data (if not skipped)."""
         data = self.data or {}
-        step7 = data.get("step7") or {}
+        step7 = data.get("step8-secondaryparent") or {}
         if step7.get("_skipped"):
             return ""
         first = (step7.get("first_name") or "").strip()

@@ -28,15 +28,15 @@ class SubmittedNamesReproductionTest(TestCase):
             program=self.program,
             status=Application.Status.SUBMITTED,
             data={
-                "step5": {
+                "step5-student": {
                     "legal_first_name": "Jane",
                     "last_name": "Doe",
                 },
-                "step7": {
+                "step7-primaryparent": {
                     "first_name": "John",
                     "last_name": "Doe",
                 },
-                "step8": {
+                "step8-secondaryparent": {
                     "first_name": "Mary",
                     "last_name": "Doe",
                 },
@@ -75,9 +75,9 @@ class SubmittedNamesReproductionTest(TestCase):
             program=self.program,
             status=Application.Status.SUBMITTED,
             data={
-                "step5": {"legal_first_name": "Jane", "last_name": "Doe"},
-                "step7": {"first_name": "John", "last_name": "Doe"},
-                "step8": {"_skipped": True},
+                "step5-student": {"legal_first_name": "Jane", "last_name": "Doe"},
+                "step7-primaryparent": {"first_name": "John", "last_name": "Doe"},
+                "step8-secondaryparent": {"_skipped": True},
             },
         )
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
@@ -542,8 +542,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             program=self.program,
             data={
-                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
-                "step7": {
+                "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7-primaryparent": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
@@ -584,8 +584,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             program=self.program,
             data={
-                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
-                "step7": {
+                "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7-primaryparent": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
@@ -623,14 +623,14 @@ class ParentNotificationOptInReproductionTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             program=self.program,
             data={
-                "step5": {"legal_first_name": "Grace", "last_name": "Hopper"},
-                "step7": {
+                "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
+                "step7-primaryparent": {
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "email_updates": False,  # Opted out
                 },
-                "step8": {
+                "step8-secondaryparent": {
                     "first_name": "Sam",
                     "last_name": "Spouse",
                     "relationship_to_student": "guardian",

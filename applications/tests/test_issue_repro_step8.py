@@ -37,7 +37,7 @@ class TestStep8Repopulation(TestCase):
     def test_step8_repopulates_when_navigating_back(self):
         # Need some application data to pass handoff check
         app = _verified(program=self.program)
-        app.data = {"step5": {"address": "123 Main St"}}
+        app.data = {"step5-student": {"address": "123 Main St"}}
         app.save()
 
         # 1. Post valid info to step 8
@@ -59,7 +59,7 @@ class TestStep8Repopulation(TestCase):
         # Verify it advanced to step 9
         app.refresh_from_db()
         self.assertEqual(app.current_step, 9)
-        self.assertIn("step8", app.data)
+        self.assertIn("step8-secondaryparent", app.data)
 
         # 2. Go back to step 8
         response = self.client.get(
