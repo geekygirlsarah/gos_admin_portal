@@ -251,7 +251,10 @@ class StudentAdmin(admin.ModelAdmin):
         return None
 
     def convert_to_alumni(self, request, queryset):
-        """Create or update Adult records flagged as alumni for selected students, and mark the students as graduated (no change to active)."""
+        """Create or update Adult records flagged as alumni for selected students.
+
+        Marks the students as graduated (no change to active).
+        """
         created = 0
         existed = 0
         for student in queryset:

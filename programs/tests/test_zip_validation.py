@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from applications.forms import ParentInfoForm, StudentInfoForm
+from applications.forms import StudentInfoForm
 from programs.forms import StudentForm
 from programs.models import Student
 

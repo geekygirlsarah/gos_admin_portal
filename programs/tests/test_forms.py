@@ -3,9 +3,8 @@ import datetime
 from django import forms
 from django.test import TestCase
 
-from programs.constants import STATE_CHOICES
 from programs.forms import StudentForm
-from programs.models import Adult, Student
+from programs.models import Adult
 
 
 class StudentFormTests(TestCase):

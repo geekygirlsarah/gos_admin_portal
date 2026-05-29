@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
-from programs.models import Adult, Program, Student
+from programs.models import Program
 
 
 def _verified(**kwargs):

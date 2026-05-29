@@ -16,7 +16,6 @@ from pathlib import Path
 
 import dj_database_url
 from csp import constants
-from csp.constants import SELF
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

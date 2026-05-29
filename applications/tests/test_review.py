@@ -342,7 +342,7 @@ class ConvertToStudentTests(TestCase):
         return Application.objects.create(**defaults)
 
     def test_convert_creates_student_adults_and_enrollment(self):
-        from programs.models import Adult, Enrollment, Student
+        from programs.models import Enrollment
 
         app = self._approved_signed_app()
         url = reverse(

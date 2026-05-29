@@ -8,7 +8,7 @@ from io import BytesIO
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import send_mail
-from django.core.signing import BadSignature, SignatureExpired, Signer, TimestampSigner
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.urls import reverse
 
 logger = logging.getLogger(__name__)

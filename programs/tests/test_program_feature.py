@@ -1,5 +1,4 @@
 from django.test import TestCase
-from django.urls import reverse
 
 from programs.forms import ProgramForm
 from programs.models import Program, ProgramFeature
@@ -35,7 +34,7 @@ class ProgramFeatureTests(TestCase):
 
     def test_program_edit_view_shows_tshirt_feature(self):
         # This requires login and permissions, but we can at least check the model/form logic
-        program = Program.objects.create(name="Test Program", year=2025)
+        Program.objects.create(name="Test Program", year=2025)
         # Check that the feature is available to be selected for this program
         features = ProgramFeature.objects.all()
         self.assertTrue(features.filter(key="tshirt-size").exists())

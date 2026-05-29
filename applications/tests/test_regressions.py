@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import datetime
+import re
 
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from applications.forms import StudentInfoForm
 from applications.models import Application
+from applications.services import send_otp_email
+from applications.tests.test_review import _reviewer_user
 from programs.models import Program
 
 
@@ -83,12 +87,6 @@ class SubmittedNamesReproductionTest(TestCase):
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
         response = self.client.get(url)
         self.assertNotContains(response, "Secondary parent")
-
-
-from django.core import mail
-from django.test import override_settings
-
-from applications.services import send_otp_email
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
@@ -255,8 +253,6 @@ class Step2LabelReproductionTest(TestCase):
         #     {{ choice.choice_label }}
         # </label>
 
-        import re
-
         # Count occurrences of label text "Student" within label tags.
         student_labels = re.findall(r"<label[^>]*>\s*Student\s*</label>", content)
         self.assertEqual(
@@ -285,7 +281,7 @@ class Step2LabelReproductionTest(TestCase):
         )
 
     def test_step4_labels_not_duplicated(self):
-        program = Program.objects.create(
+        Program.objects.create(
             name="Test Program",
             year=2026,
             active=True,
@@ -300,8 +296,6 @@ class Step2LabelReproductionTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
         content = response.content.decode()
-
-        import re
 
         # Count occurrences of label text "Test Program" within label tags.
         program_labels = re.findall(r"<label[^>]*>\s*Test Program\s*</label>", content)
@@ -710,9 +704,6 @@ class Step7PrefillEmailReproductionTests(TestCase):
         self.assertEqual(
             response.context["form"].initial.get("email"), "parent_handoff@example.com"
         )
-
-
-from .test_review import _reviewer_user
 
 
 class BooleanRenderingReproductionTest(TestCase):

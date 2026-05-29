@@ -1,15 +1,70 @@
 import logging
+from decimal import ROUND_HALF_DOWN, Decimal
 
+import cssutils
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
     PermissionRequiredMixin,
     UserPassesTestMixin,
 )
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.db.models.functions import Coalesce, Lower
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.html import strip_tags
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    ListView,
+    UpdateView,
+    View,
+)
+from premailer import transform
 
+
+from .forms import (
+    AddExistingStudentToProgramForm,
+    AdultForm,
+    FeeAssignmentEditForm,
+    FeeForm,
+    ParentForm,
+    PaymentForm,
+    ProgramDocumentForm,
+    ProgramEmailBalancesForm,
+    ProgramEmailForm,
+    ProgramForm,
+    QuickCreateStudentForm,
+    SchoolForm,
+    SlidingScaleForm,
+    StudentForm,
+)
+from .models import (
+    Adult,
+    Crew,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    ProgramDocument,
+    RaceEthnicity,
+    School,
+    SlidingScale,
+    Student,
+    SubTeam,
+    TaxForm,
+    Team,
+)
+from programs.constants import RELATIONSHIP_CHOICES
 from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
+
+cssutils.log.setLevel(logging.WARNING)
+
+logger = logging.getLogger("programs.email")
+forms_logger = logging.getLogger("programs.forms")
 
 
 class DynamicPermissionMixin(UserPassesTestMixin):
@@ -38,34 +93,6 @@ class DynamicReadPermissionMixin(DynamicPermissionMixin):
 
 class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
-
-
-import datetime
-import logging
-from decimal import ROUND_HALF_DOWN, Decimal
-
-import cssutils
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection, send_mail
-from django.db import models
-from django.db.models.functions import Coalesce, Lower
-from django.template.loader import render_to_string
-from django.urls import reverse
-from django.utils.html import strip_tags
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    ListView,
-    TemplateView,
-    UpdateView,
-    View,
-)
-from premailer import transform
-
-cssutils.log.setLevel(logging.WARNING)
-
-logger = logging.getLogger("programs.email")
-forms_logger = logging.getLogger("programs.forms")
 
 
 def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> Decimal:
@@ -161,42 +188,6 @@ class LogFormSaveMixin:
         return response
 
 
-from programs.constants import RELATIONSHIP_CHOICES, TSHIRT_SIZE_CHOICES
-
-from .forms import (
-    AddExistingStudentToProgramForm,
-    AdultForm,
-    FeeAssignmentEditForm,
-    FeeForm,
-    ParentForm,
-    PaymentForm,
-    ProgramDocumentForm,
-    ProgramEmailBalancesForm,
-    ProgramEmailForm,
-    ProgramForm,
-    QuickCreateStudentForm,
-    SchoolForm,
-    SlidingScaleForm,
-    StudentForm,
-)
-from .models import (
-    Adult,
-    Crew,
-    Enrollment,
-    Fee,
-    Payment,
-    Program,
-    ProgramDocument,
-    RaceEthnicity,
-    School,
-    SlidingScale,
-    Student,
-    SubTeam,
-    TaxForm,
-    Team,
-)
-
-
 class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     model = Program
     template_name = "home.html"  # landing page
@@ -208,8 +199,6 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         return Program.objects.all()
 
     def get_context_data(self, **kwargs):
-        from operator import attrgetter
-
         from django.utils import timezone
 
         ctx = super().get_context_data(**kwargs)
@@ -590,7 +579,8 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
                 marked_graduated += 1
         messages.success(
             request,
-            f"Converted {created} new alumni (Adults), {existed} already existed/updated. Marked {marked_graduated} student(s) as graduated.",
+            f"Converted {created} new alumni (Adults), {existed} already existed/updated. "
+            f"Marked {marked_graduated} student(s) as graduated.",
         )
         return redirect("alumni_list")
 
@@ -1328,7 +1318,8 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 request,
                 f"Relationships import: linked {linked} (primary set {set_primary}, secondary set {set_secondary}); "
                 f"updated relationship types {rel_updated}; "
-                f"created parents {created_parents}{(' (would create: ' + str(would_create_parents) + ')' if dry_run else '')}; "
+                f"created parents {created_parents}"
+                f"{(' (would create: ' + str(would_create_parents) + ')' if dry_run else '')}; "
                 f"missing/ambiguous students {missing_or_ambiguous_students}; skipped {skipped}.{extras}",
             )
         except Exception as e:
@@ -1918,7 +1909,7 @@ class StudentUpdateView(
         response = super().form_valid(form)
         # Persist relationship selections for each selected parent (note: global per Parent)
         rel_map = {
-            k[len("parent_rel_") :]: v
+            k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
             if k.startswith("parent_rel_")
         }
@@ -1965,7 +1956,7 @@ class StudentCreateView(
         response = super().form_valid(form)
         # Persist relationship selections for each selected parent (note: global per Parent)
         rel_map = {
-            k[len("parent_rel_") :]: v
+            k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
             if k.startswith("parent_rel_")
         }
@@ -3439,13 +3430,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
                 sort_last=Lower("last_name"),
             )
         )
-        active_students = list(
+        students = list(
             base_qs.filter(active=True).order_by("sort_first", "sort_last")
         )
-        inactive_students = list(
-            base_qs.filter(active=False).order_by("sort_first", "sort_last")
-        )
-        students = active_students
         ctx = {
             "program": program,
             "students": students,

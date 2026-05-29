@@ -1,9 +1,9 @@
 import datetime
+from decimal import Decimal
 
 from django import forms
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
-from django.utils.safestring import mark_safe
 
 from programs.utils import get_academic_year_ending
 
@@ -369,11 +369,6 @@ class ProgramEmailForm(forms.Form):
         return cleaned
 
 
-from decimal import Decimal
-
-from django.db.models.functions import Coalesce, Lower
-
-
 class StudentBalanceModelChoiceField(forms.ModelChoiceField):
     def __init__(self, *args, **kwargs):
         self.program = kwargs.pop("program", None)
@@ -518,7 +513,8 @@ class FeeAssignmentEditForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.program = program
         self.fee = fee
-        # Limit to students enrolled in the program (sorted by displayed first name then last name, case-insensitive; use legal_first_name fallback)
+        # Limit to students enrolled in the program, sorted by display name then last name
+        # (case-insensitive; uses legal_first_name as fallback)
         self.fields["students"].queryset = Student.objects.filter(
             programs=program
         ).order_by(

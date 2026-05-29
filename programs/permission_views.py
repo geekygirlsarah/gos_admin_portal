@@ -33,7 +33,7 @@ def get_user_role(user):
 
     # Check if the user is linked to a Student profile
     try:
-        student = user.student_profile
+        user.student_profile
         return "Student"
     except (Student.DoesNotExist, AttributeError):
         pass

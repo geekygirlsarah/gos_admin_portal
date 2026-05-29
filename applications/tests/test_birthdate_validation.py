@@ -1,12 +1,10 @@
 import datetime
 
-from django.contrib import messages
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
-from programs.models import Program
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")

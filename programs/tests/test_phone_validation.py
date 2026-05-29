@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from applications.forms import MentorInfoForm, ParentInfoForm, StudentInfoForm
-from programs.forms import AdultForm, StudentForm
+from programs.forms import StudentForm
 from programs.models import Adult, School, Student
 
 

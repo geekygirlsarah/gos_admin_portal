@@ -70,9 +70,7 @@ class TestGradeRepopulation(TestCase):
         self.assertEqual(app.current_step, 6)
 
         # 2. Go back to step 5
-        response = self.client.get(
-            reverse("apply_step5", kwargs={"app_id": app.application_id})
-        )
+        self.client.get(reverse("apply_step5", kwargs={"app_id": app.application_id}))
 
     def test_step5_grade_appears_in_review(self):
         app = _verified(program=self.program, current_step=9)
