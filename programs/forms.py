@@ -290,7 +290,6 @@ class ProgramForm(forms.ModelForm):
         fields = [
             "name",
             "description",
-            "year",
             "start_date",
             "end_date",
             "cost",

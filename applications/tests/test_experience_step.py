@@ -116,7 +116,7 @@ class ConversionTests(TestCase):
     def test_experience_fields_saved_to_student(self):
         from applications.services import convert_application_to_student
 
-        program = Program.objects.create(name="Test", year=2026, active=True)
+        program = Program.objects.create(name="Test", active=True)
         app = _verified(program=program, status=Application.Status.APPROVED)
         app.data = {
             "step5-student": {

@@ -132,7 +132,7 @@
                 <ul class="mb-0">
                     {% for prog in student.programs.all %}
                         {% requires_bg student prog as needs_bg %}
-                        <li>{{ prog.year }} {{ prog.name }}: <span class="badge {% if needs_bg %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ needs_bg|yesno:"Yes,No" }}</span></li>
+                        <li>{{ prog.year_display }} {{ prog.name }}: <span class="badge {% if needs_bg %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ needs_bg|yesno:"Yes,No" }}</span></li>
                     {% empty %}
                         <li class="text-muted">Not enrolled in any programs.</li>
                     {% endfor %}

@@ -19,7 +19,6 @@ class WizardFlowTests(TestCase):
         today = timezone.localdate()
         self.future_program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             description="An upcoming program.",
             start_date=today + datetime.timedelta(days=60),
             end_date=today + datetime.timedelta(days=120),
@@ -27,7 +26,6 @@ class WizardFlowTests(TestCase):
         )
         self.current_program = Program.objects.create(
             name="Right Now",
-            year=today.year,
             start_date=today - datetime.timedelta(days=10),
             end_date=today + datetime.timedelta(days=10),
             active=True,

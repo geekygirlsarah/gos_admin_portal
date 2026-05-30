@@ -15,7 +15,7 @@ class AssignmentTests(TestCase):
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
 
-        self.program = Program.objects.create(name="FLL 2025", year=2025)
+        self.program = Program.objects.create(name="FLL 2025")
         self.student1 = Student.objects.create(
             legal_first_name="Alex", last_name="Smith"
         )

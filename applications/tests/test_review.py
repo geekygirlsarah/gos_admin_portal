@@ -298,7 +298,6 @@ class ConvertToStudentTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
             name="Summer Camp",
-            year=2099,
             start_date=datetime.date(2099, 6, 1),
             end_date=datetime.date(2099, 6, 30),
             active=True,

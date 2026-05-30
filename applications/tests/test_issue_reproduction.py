@@ -31,7 +31,6 @@ class TestGradeRepopulation(TestCase):
         School.objects.get_or_create(name="Pittsburgh High")
         self.program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             start_date=timezone.localdate() + datetime.timedelta(days=60),
             end_date=timezone.localdate() + datetime.timedelta(days=120),
             active=True,

@@ -5,7 +5,7 @@ from programs.models import Enrollment, Program, Student, SubTeam
 
 class SubTeamTests(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(name="Test Program", year=2025)
+        self.program = Program.objects.create(name="Test Program")
         self.subteam = SubTeam.objects.create(
             name="Test SubTeam", program=self.program, color="#ff0000"
         )

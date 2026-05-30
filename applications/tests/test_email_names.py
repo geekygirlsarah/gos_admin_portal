@@ -19,7 +19,6 @@ class EmailNamesTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
             name="Test Program",
-            year=2026,
             active=True,
         )
         self.student_app = Application.objects.create(

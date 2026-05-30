@@ -21,13 +21,39 @@ from programs.models import (
 
 class ModelTests(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(name="Robotics 2025", year=2025)
+        self.program = Program.objects.create(name="Robotics 2025")
         self.school = School.objects.create(name="Carnegie High")
         self.student = Student.objects.create(
             legal_first_name="Alex",
             last_name="Smith",
             school=self.school,
         )
+
+    def test_program_year_display(self):
+        # Case 1: No dates
+        p = Program(name="Test")
+        self.assertEqual(p.year_display, "")
+        self.assertEqual(str(p), "Test")
+
+        # Case 2: Same year
+        p.start_date = datetime.date(2025, 1, 1)
+        p.end_date = datetime.date(2025, 12, 31)
+        self.assertEqual(p.year_display, "2025")
+        self.assertEqual(str(p), "Test (2025)")
+
+        # Case 3: Different years
+        p.end_date = datetime.date(2026, 1, 1)
+        self.assertEqual(p.year_display, "2025-2026")
+        self.assertEqual(str(p), "Test (2025-2026)")
+
+        # Case 4: Only start date
+        p.end_date = None
+        self.assertEqual(p.year_display, "2025")
+
+        # Case 5: Only end date
+        p.start_date = None
+        p.end_date = datetime.date(2026, 1, 1)
+        self.assertEqual(p.year_display, "2026")
 
     def test_program_has_feature(self):
         feat, _ = ProgramFeature.objects.get_or_create(

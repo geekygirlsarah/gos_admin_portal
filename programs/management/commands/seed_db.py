@@ -38,14 +38,12 @@ class Command(BaseCommand):
         # Past Programs
         p1, _ = Program.objects.get_or_create(
             name=f"Robotics {this_year - 1}",
-            year=this_year - 1,
             start_date=date(this_year - 1, 1, 1),
             end_date=date(this_year - 1, 12, 31),
             active=False,
         )
         p2, _ = Program.objects.get_or_create(
             name=f"Coding {this_year - 1}",
-            year=this_year - 1,
             start_date=date(this_year - 1, 1, 1),
             end_date=date(this_year - 1, 12, 31),
             active=False,
@@ -54,14 +52,12 @@ class Command(BaseCommand):
         # Present Programs
         p3, _ = Program.objects.get_or_create(
             name=f"Robotics {this_year}",
-            year=this_year,
             start_date=date(this_year, 1, 1),
             end_date=date(this_year, 12, 31),
             active=True,
         )
         p4, _ = Program.objects.get_or_create(
             name=f"Design {this_year}",
-            year=this_year,
             start_date=date(this_year, 1, 1),
             end_date=date(this_year, 12, 31),
             active=True,
@@ -72,14 +68,12 @@ class Command(BaseCommand):
         # Future Programs
         p5, _ = Program.objects.get_or_create(
             name=f"Robotics {this_year + 1}",
-            year=this_year + 1,
             start_date=date(this_year + 1, 1, 1),
             end_date=date(this_year + 1, 12, 31),
             active=True,
         )
         p6, _ = Program.objects.get_or_create(
             name=f"AI {this_year + 1}",
-            year=this_year + 1,
             start_date=date(this_year + 1, 1, 1),
             end_date=date(this_year + 1, 12, 31),
             active=True,

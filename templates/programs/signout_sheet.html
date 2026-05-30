@@ -33,7 +33,7 @@
     </div>
 
     <div class="sheet-header">
-        <h1 class="h4 mb-1">{{ program.name }} {{ program.year }}— Sign-out Sheet</h1>
+        <h1 class="h4 mb-1">{{ program.name }}{% if program.year_display %} {{ program.year_display }}{% endif %}— Sign-out Sheet</h1>
         <h2 class="h4 sheet-subtitle">Date: <span id="today"></span></h2>
     </div>
 

@@ -18,10 +18,9 @@ class ProgramFeatureTests(TestCase):
         self.assertIn("T-shirt Sizes", feature_choices)
 
     def test_saving_program_with_tshirt_feature(self):
-        program = Program.objects.create(name="Test Program", year=2025)
+        program = Program.objects.create(name="Test Program")
         form_data = {
             "name": "Updated Program",
-            "year": 2025,
             "active": True,
             "features": [self.tshirt_feature.pk],
         }
@@ -34,7 +33,7 @@ class ProgramFeatureTests(TestCase):
 
     def test_program_edit_view_shows_tshirt_feature(self):
         # This requires login and permissions, but we can at least check the model/form logic
-        Program.objects.create(name="Test Program", year=2025)
+        Program.objects.create(name="Test Program")
         # Check that the feature is available to be selected for this program
         features = ProgramFeature.objects.all()
         self.assertTrue(features.filter(key="tshirt-size").exists())

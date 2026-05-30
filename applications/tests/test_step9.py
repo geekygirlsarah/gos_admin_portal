@@ -74,7 +74,6 @@ class Step9DocumentsTests(TestCase):
         today = timezone.localdate()
         self.program = Program.objects.create(
             name="Summer 2030",
-            year=2030,
             start_date=today + datetime.timedelta(days=60),
             end_date=today + datetime.timedelta(days=120),
             active=True,
@@ -171,7 +170,6 @@ class Step9DocumentsTests(TestCase):
         # An ID that doesn't belong to this program's docs:
         other_program = Program.objects.create(
             name="Other",
-            year=2030,
             start_date=timezone.localdate() + datetime.timedelta(days=30),
             end_date=timezone.localdate() + datetime.timedelta(days=90),
             active=True,

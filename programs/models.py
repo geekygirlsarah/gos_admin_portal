@@ -280,13 +280,6 @@ class Program(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     active = models.BooleanField(default=True)
-    year = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-        db_index=True,
-        validators=[MinValueValidator(1900), MaxValueValidator(2200)],
-        help_text="Calendar year the program runs (e.g., 2025).",
-    )
     start_date = models.DateField(
         null=True, blank=True, db_index=True, help_text="Program start date"
     )
@@ -311,7 +304,22 @@ class Program(models.Model):
     class Meta:
         ordering = ["name"]
 
+    @property
+    def year_display(self):
+        if self.start_date and self.end_date:
+            if self.start_date.year == self.end_date.year:
+                return str(self.start_date.year)
+            return f"{self.start_date.year}-{self.end_date.year}"
+        if self.start_date:
+            return str(self.start_date.year)
+        if self.end_date:
+            return str(self.end_date.year)
+        return ""
+
     def __str__(self):
+        yr = self.year_display
+        if yr:
+            return f"{self.name} ({yr})"
         return self.name
 
     @property
