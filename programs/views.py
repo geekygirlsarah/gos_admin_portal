@@ -1533,7 +1533,13 @@ class MentorUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("mentor_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("mentor_edit", args=[self.object.pk])
 
 
 # --- Schools list/create/edit ---
@@ -1566,7 +1572,13 @@ class SchoolUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("school_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("school_edit", args=[self.object.pk])
 
 
 class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1928,7 +1940,13 @@ class StudentUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("student_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("student_edit", args=[self.object.pk])
 
 
 class StudentCreateView(
@@ -2200,7 +2218,13 @@ class ParentUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("parent_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("parent_edit", args=[self.object.pk])
 
 
 # --- Payment create ---
@@ -3559,7 +3583,11 @@ class AdultUpdateView(
 
     def get_success_url(self):
         nxt = self.request.GET.get("next")
-        if nxt:
+        if nxt and url_has_allowed_host_and_scheme(
+            url=nxt,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
             return nxt
         return reverse("adult_list")
 
