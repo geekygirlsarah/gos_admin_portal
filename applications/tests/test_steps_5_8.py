@@ -62,6 +62,10 @@ class Step5StudentInfoTests(TestCase):
             legal_first_name="Ada",
             last_name="Lovelace",
             personal_email="ada@example.com",
+            address="123 Science Way",
+            city="London",
+            state="PA",
+            zip_code="SW1",
         )
         app = _verified(
             applicant_type=Application.Type.STUDENT, email="ada@example.com"
@@ -72,6 +76,9 @@ class Step5StudentInfoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'value="Ada"')
         self.assertContains(response, 'value="Lovelace"')
+        self.assertContains(response, 'value="123 Science Way"')
+        self.assertContains(response, 'value="London"')
+        self.assertContains(response, 'value="SW1"')
 
     def test_step5_post_saves_data_and_advances_to_step6(self):
         app = _verified()
@@ -657,3 +664,133 @@ class ResumeRedirectsToCurrentStepTests(TestCase):
             reverse("apply_step9", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
+
+
+class Step7AddressCopyTests(TestCase):
+    def test_step7_has_student_address_in_context(self):
+        """
+        Verify that Step 7 context contains student address data from Step 5.
+        """
+        # 1. Create an application that has completed step 5.
+        # Note: Step 5 now saves to "step5-student" key.
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step5-student": {
+                    "address": "123 Main St",
+                    "city": "Pittsburgh",
+                    "state": "PA",
+                    "zip_code": "15213",
+                }
+            },
+        )
+
+        # 2. Access Step 7 (Primary Parent)
+        url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context.get("student_address"), "123 Main St")
+        self.assertEqual(response.context.get("student_city"), "Pittsburgh")
+        self.assertEqual(response.context.get("student_state"), "PA")
+        self.assertEqual(response.context.get("student_zip_code"), "15213")
+
+    def test_step8_has_student_address_in_context(self):
+        """
+        Verify that Step 8 context contains student address data from Step 5.
+        """
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=8,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step5-student": {
+                    "address": "123 Main St",
+                    "city": "Pittsburgh",
+                    "state": "PA",
+                    "zip_code": "15213",
+                }
+            },
+        )
+
+        url = reverse("apply_step8", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context.get("student_address"), "123 Main St")
+
+    def test_step7_fallback_to_student_model(self):
+        """Verify Step 7 context has student address even if missing in application.data."""
+        student = Student.objects.create(
+            legal_first_name="Jane",
+            last_name="Doe",
+            personal_email="jane@example.com",
+            address="456 Elm St",
+            city="Pittsburgh",
+            state="PA",
+            zip_code="15201",
+        )
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={"step5-student": {"_existing_student_id": student.pk}},
+        )
+
+        url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context.get("student_address"), "456 Elm St")
+        self.assertEqual(response.context.get("student_city"), "Pittsburgh")
+
+    def test_step7_fallback_to_old_key(self):
+        """Verify Step 7 context has student address from old 'step5' key."""
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={
+                "step5": {
+                    "address": "789 Pine St",
+                    "city": "Cleveland",
+                    "state": "OH",
+                    "zip_code": "44101",
+                }
+            },
+        )
+
+        url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context.get("student_address"), "789 Pine St")
+        self.assertEqual(response.context.get("student_city"), "Cleveland")
+
+    def test_button_not_rendered_when_address_missing(self):
+        """Verify button is not in HTML when no student address is available."""
+        app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            current_step=7,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+            data={},  # No step5 data
+        )
+
+        url = reverse("apply_step7", kwargs={"app_id": app.application_id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Copy address from student")
+        self.assertNotContains(response, "function copyStudentAddress")

@@ -77,7 +77,7 @@ class ApplicationDataEditForm(forms.Form):
         ),
         help_text=(
             "Edit the JSON captured by the wizard to fix typos or other "
-            "errors. Each top-level key is a wizard step (e.g. step5, step6). "
+            "errors. Each top-level key is a wizard step (e.g. step5-student, step6-experience). "
             "Must be valid JSON; an object is expected at the top level."
         ),
     )

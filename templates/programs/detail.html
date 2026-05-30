@@ -76,7 +76,7 @@
                 {% if can_manage_students %}
                   <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0">
                     {% csrf_token %}
-                    <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }} from {{ program.name }}?')">Remove</button>
+                    <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }} from {{ program.name }}?">Remove</button>
                   </form>
                 {% endif %}
               </div>
@@ -126,7 +126,7 @@
                 {% if can_manage_students %}
                   <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0">
                     {% csrf_token %}
-                    <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }} from {{ program.name }}?')">Remove</button>
+                    <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }} from {{ program.name }}?">Remove</button>
                   </form>
                 {% endif %}
               </div>

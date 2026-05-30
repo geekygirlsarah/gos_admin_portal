@@ -197,7 +197,7 @@
                                         </td>
                                         <td class="text-end">
                                             <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="if(confirm('Are you sure?')) { document.getElementById('delete-team-{{ team.id }}').submit(); }">Delete</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-team-{{ team.id }}">Delete</button>
                                         </td>
                                     </form>
                                     <form id="delete-team-{{ team.id }}" method="post" style="display:none;">
@@ -281,7 +281,7 @@
                                                 <input type="color" name="color" value="{{ crew.color }}" class="form-control form-control-color form-control-sm" title="Crew Color">
                                             </div>
                                             <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="if(confirm('Are you sure?')) { document.getElementById('delete-crew-{{ crew.id }}').submit(); }">Delete</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-crew-{{ crew.id }}">Delete</button>
                                         </form>
                                         <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;">
                                             {% csrf_token %}
@@ -365,7 +365,7 @@
                                                 <input type="color" name="color" value="{{ subteam.color }}" class="form-control form-control-color form-control-sm" title="SubTeam Color">
                                             </div>
                                             <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="if(confirm('Are you sure?')) { document.getElementById('delete-subteam-{{ subteam.id }}').submit(); }">Delete</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-subteam-{{ subteam.id }}">Delete</button>
                                         </form>
                                         <form id="delete-subteam-{{ subteam.id }}" method="post" style="display:none;">
                                             {% csrf_token %}
@@ -563,7 +563,7 @@
                                         <a class="btn btn-sm btn-outline-primary" href="{% url 'api_key_edit' k.pk %}">Edit</a>
                                         {% endif %}
                                         {% if perms.api.delete_apiclientkey %}
-                                        <form action="{% url 'api_key_delete' k.pk %}" method="post" class="d-inline" onsubmit="return confirm('Delete this API key? This cannot be undone.');">
+                                        <form action="{% url 'api_key_delete' k.pk %}" method="post" class="d-inline js-confirm" data-confirm="Delete this API key? This cannot be undone.">
                                             {% csrf_token %}
                                             <button class="btn btn-sm btn-outline-danger">Delete</button>
                                         </form>

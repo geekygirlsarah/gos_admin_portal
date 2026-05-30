@@ -35,8 +35,6 @@
             {% endfor %}
             <dt class="col-sm-4">Grade</dt>
             <dd class="col-sm-8">{{ step5_data|get_grade:application }}</dd>
-            <dt class="col-sm-4">Graduation year</dt>
-            <dd class="col-sm-8">{{ step5_data.graduation_year|default:"—" }}</dd>
         </dl>
     {% else %}
         <p class="text-muted">No student information provided.</p>

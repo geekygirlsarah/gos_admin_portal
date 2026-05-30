@@ -98,5 +98,34 @@
 </main>
 
 {% block extra_scripts %}{% endblock %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('.js-confirm');
+        if (target) {
+            var message = target.getAttribute('data-confirm') || 'Are you sure?';
+            if (!confirm(message)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            } else {
+                var submitId = target.getAttribute('data-submit-id');
+                if (submitId) {
+                    var form = document.getElementById(submitId);
+                    if (form) {
+                        form.submit();
+                    }
+                }
+            }
+        }
+    }, true);
+    document.addEventListener('submit', function(e) {
+        if (e.target.classList.contains('js-confirm')) {
+            var message = e.target.getAttribute('data-confirm') || 'Are you sure?';
+            if (!confirm(message)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
+        }
+    }, true);
+</script>
 </body>
 </html>

@@ -166,15 +166,15 @@
             <dl class="row mb-0">
               {% for field, value in step_data.items %}
                 {% if not field|slice:":1" == "_" %}
-                  {% if step_key == 'step5' and field == 'grade' %}
-                  {% elif step_key == 'step5' and field == 'graduation_year' %}
+                  {% if step_key == 'step5-student' and field == 'grade' %}
+                  {% elif step_key == 'step5-student' and field == 'graduation_year' %}
                   {% else %}
                     <dt class="col-sm-4">{{ field|humanize_field }}</dt>
                     <dd class="col-sm-8">{{ value|format_application_value:field }}</dd>
                   {% endif %}
                 {% endif %}
               {% endfor %}
-              {% if step_key == 'step5' %}
+              {% if step_key == 'step5-student' %}
                   <dt class="col-sm-4">Grade</dt>
                   <dd class="col-sm-8">{{ step_data|get_grade:application }}</dd>
                   <dt class="col-sm-4">Graduation year</dt>

@@ -680,13 +680,9 @@ class Student(models.Model):
         """
         if not self.graduation_year:
             return None
-        from programs.utils import get_academic_year_ending
+        from programs.utils import calculate_grade
 
-        academic_year_ending = get_academic_year_ending()
-        grade = 12 - (self.graduation_year - academic_year_ending)
-        if grade > 12:
-            return None
-        return max(0, grade)
+        return calculate_grade(self.graduation_year)
 
     @property
     def grade_display(self):
@@ -695,18 +691,9 @@ class Student(models.Model):
         """
         if not self.graduation_year:
             return None
-        grade = self.current_grade
-        if grade is None:
-            # graduation_year is set but grade > 12 — student has graduated
-            return "Graduated"
-        if grade == 0:
-            return "K"
-        n = int(grade)
-        if 10 <= (n % 100) <= 13:
-            suffix = "th"
-        else:
-            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-        return f"{n}{suffix} Grade"
+        from programs.utils import format_grade
+
+        return format_grade(self.current_grade)
 
     def requires_background_check(self, program: "Program") -> bool:
         """Whether the student will be 18 at any point during the given program's dates.

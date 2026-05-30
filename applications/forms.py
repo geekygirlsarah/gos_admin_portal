@@ -341,7 +341,7 @@ class StudentInfoForm(forms.Form):
         required=False,
         min_value=2000,
         max_value=2100,
-        widget=forms.NumberInput(attrs=_text_attrs),
+        widget=forms.HiddenInput(),
     )
     tshirt_size = forms.ChoiceField(
         label="T-shirt size",

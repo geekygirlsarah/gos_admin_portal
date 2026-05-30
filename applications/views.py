@@ -16,7 +16,11 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from programs.models import Student
-from programs.utils import get_academic_year_ending
+from programs.utils import (
+    calculate_grade,
+    calculate_graduation_year,
+    get_academic_year_ending,
+)
 
 from .forms import (
     ApplicantTypeForm,
@@ -528,10 +532,13 @@ def _student_initial_for(application: Application) -> dict:
     if saved:
         # If we have graduation_year, calculate grade back
         if "graduation_year" in saved and "grade" not in saved:
-            academic_year_ending = get_academic_year_ending()
-            grad_year = saved["graduation_year"]
-            grade = 12 - (grad_year - academic_year_ending)
-            if 0 <= grade <= 12:
+            ref_date = (
+                application.program.start_date
+                if application and application.program
+                else None
+            )
+            grade = calculate_grade(saved["graduation_year"], ref_date)
+            if grade is not None:
                 saved["grade"] = grade
         return saved
     # Try to prefill from an existing Student record.
@@ -540,6 +547,16 @@ def _student_initial_for(application: Application) -> dict:
         if existing:
             initial = student_to_prefill(existing)
             initial["personal_email"] = application.email
+            # Calculate grade from graduation year based on program start date
+            if existing.graduation_year:
+                ref_date = (
+                    application.program.start_date
+                    if application and application.program
+                    else None
+                )
+                grade = calculate_grade(existing.graduation_year, ref_date)
+                if grade is not None:
+                    initial["grade"] = grade
             return initial
         return {"personal_email": application.email}
     # Parent: prefill is decided by ChooseExistingStudent flow.
@@ -662,11 +679,12 @@ class Step5StudentInfoView(View):
         payload = _sanitize_payload(form.cleaned_data)
         # Convert grade to graduation_year if not already present
         if "grade" in payload:
-            grade = int(payload["grade"])
-            academic_year_ending = get_academic_year_ending()
+            ref_date = application.program.start_date if application.program else None
             # If graduation_year not provided by the form, calculate it from grade
             if not payload.get("graduation_year"):
-                payload["graduation_year"] = academic_year_ending + (12 - grade)
+                payload["graduation_year"] = calculate_graduation_year(
+                    payload["grade"], ref_date
+                )
 
         if chosen_student is not None:
             payload["_existing_student_id"] = chosen_student.pk
@@ -692,7 +710,11 @@ class Step5StudentInfoView(View):
         picker = ChooseExistingStudentForm(post or None, students=qs)
         chosen = None
         # Honor previously-saved choice in application.data
-        prior_id = (application.data or {}).get("step5", {}).get("_existing_student_id")
+        prior_id = (
+            (application.data or {})
+            .get("step5-student", {})
+            .get("_existing_student_id")
+        )
         if post is not None and picker.is_valid():
             chosen = picker.cleaned_data.get("student")
         elif prior_id:
@@ -705,11 +727,15 @@ class Step5StudentInfoView(View):
             initial["personal_email"] = (
                 chosen_student.personal_email or application.email or ""
             )
-            # Add grade prefill
+            # Add grade prefill based on program start date
             if chosen_student.graduation_year:
-                academic_year_ending = get_academic_year_ending()
-                grade = 12 - (chosen_student.graduation_year - academic_year_ending)
-                if 0 <= grade <= 12:
+                ref_date = (
+                    application.program.start_date
+                    if application and application.program
+                    else None
+                )
+                grade = calculate_grade(chosen_student.graduation_year, ref_date)
+                if grade is not None:
                     initial["grade"] = grade
             return initial
         return _student_initial_for(application)
@@ -726,7 +752,7 @@ class Step5StudentInfoView(View):
     ):
         from .services import latest_program_for_student
 
-        academic_year_ending = get_academic_year_ending()
+        academic_year_ending = get_academic_year_ending(program_start_date)
 
         # Determine which Student record (if any) we're prefilling from so
         # we can show a friendly "Welcome back" banner.
@@ -734,7 +760,7 @@ class Step5StudentInfoView(View):
         if (
             prefill_student is None
             and application.applicant_type == Application.Type.STUDENT
-            and not (application.data or {}).get("step5")
+            and not (application.data or {}).get("step5-student")
         ):
             prefill_student = find_student_by_email(application.email)
         welcome_back = None
@@ -917,7 +943,9 @@ class Step7PrimaryParentView(View):
         # student's primary_contact Adult for prefill so the applicant
         # doesn't have to retype it.
         existing_student_id = (
-            (application.data or {}).get("step5", {}).get("_existing_student_id")
+            (application.data or {})
+            .get("step5-student", {})
+            .get("_existing_student_id")
         )
         if not saved and existing_student_id:
             student = Student.objects.filter(pk=existing_student_id).first()
@@ -1046,7 +1074,27 @@ class Step7PrimaryParentView(View):
                         or None
                     )
 
-        step5_data = (application.data or {}).get("step5") or {}
+        step5_data = (
+            (application.data or {}).get("step5-student")
+            or (application.data or {}).get("step5")
+            or {}
+        )
+        student_address = step5_data.get("address")
+        student_city = step5_data.get("city")
+        student_state = step5_data.get("state")
+        student_zip_code = step5_data.get("zip_code")
+
+        if not student_address:
+            # Fallback to existing student record if we have one but data is missing
+            sid = step5_data.get("_existing_student_id")
+            if sid:
+                student = Student.objects.filter(pk=sid).first()
+                if student:
+                    student_address = student.address
+                    student_city = student.city
+                    student_state = student.state
+                    student_zip_code = student.zip_code
+
         return render(
             request,
             self.template_name,
@@ -1058,10 +1106,10 @@ class Step7PrimaryParentView(View):
                 "welcome_back": welcome_back,
                 "has_secondary": has_secondary,
                 "secondary_name": secondary_name,
-                "student_address": step5_data.get("address"),
-                "student_city": step5_data.get("city"),
-                "student_state": step5_data.get("state"),
-                "student_zip_code": step5_data.get("zip_code"),
+                "student_address": student_address,
+                "student_city": student_city,
+                "student_state": student_state,
+                "student_zip_code": student_zip_code,
                 "current_step": 7,
                 "total_steps": TOTAL_STEPS,
             },
@@ -1232,17 +1280,33 @@ class Step8SecondaryParentView(View):
 
     def _render(self, request, application, form):
         data = application.data or {}
-        step5_data = data.get("step5-student") or {}
+        step5_data = data.get("step5-student") or data.get("step5") or {}
+        student_address = step5_data.get("address")
+        student_city = step5_data.get("city")
+        student_state = step5_data.get("state")
+        student_zip_code = step5_data.get("zip_code")
+
+        if not student_address:
+            # Fallback to existing student record if we have one but data is missing
+            sid = step5_data.get("_existing_student_id")
+            if sid:
+                student = Student.objects.filter(pk=sid).first()
+                if student:
+                    student_address = student.address
+                    student_city = student.city
+                    student_state = student.state
+                    student_zip_code = student.zip_code
+
         return render(
             request,
             self.template_name,
             {
                 "application": application,
                 "form": form,
-                "student_address": step5_data.get("address"),
-                "student_city": step5_data.get("city"),
-                "student_state": step5_data.get("state"),
-                "student_zip_code": step5_data.get("zip_code"),
+                "student_address": student_address,
+                "student_city": student_city,
+                "student_state": student_state,
+                "student_zip_code": student_zip_code,
                 "current_step": 8,
                 "total_steps": TOTAL_STEPS,
             },

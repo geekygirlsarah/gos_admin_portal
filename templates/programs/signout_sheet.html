@@ -29,7 +29,7 @@
 <body class="container-fluid py-3">
     <div class="no-print mb-3 d-flex gap-2 align-items-center">
         <a class="btn btn-outline-secondary" href="{% url 'program_detail' program.id %}">Back to Program</a>
-        <button class="btn btn-primary" onclick="window.print()">Print</button>
+        <button id="print-btn" class="btn btn-primary">Print</button>
     </div>
 
     <div class="sheet-header">
@@ -79,6 +79,13 @@
 
     <script nonce="{{ request.csp_nonce }}">
         (function(){
+            const printBtn = document.getElementById('print-btn');
+            if (printBtn) {
+                printBtn.addEventListener('click', function() {
+                    window.print();
+                });
+            }
+
             const d = new Date();
             const opts = { year: 'numeric', month: 'long', day: 'numeric' };
             document.getElementById('today').textContent = d.toLocaleDateString(undefined, opts);
