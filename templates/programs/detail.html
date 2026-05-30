@@ -22,7 +22,6 @@
       {% if program.cost %}
         <p><span class="fw-semibold">Cost:</span> {{ program.cost }}</p>
       {% endif %}
-      <p class="text-muted">{{ program.description|default:"No description provided." }}</p>
       <hr>
         <div class="mt-4 d-flex flex-wrap gap-2">
             {% if perms.applications.review_application %}
