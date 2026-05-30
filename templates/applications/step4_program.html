@@ -26,6 +26,9 @@
                                 Runs {{ prog.start_date|date:"F j, Y" }}{% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}
                             </div>
                         {% endif %}
+                        {% if prog.cost %}
+                            <div class="small mt-1">Cost: <strong>{{ prog.cost }}</strong></div>
+                        {% endif %}
                         {% if prog.description %}
                             <div class="small mt-1">{{ prog.description }}</div>
                         {% endif %}
@@ -55,7 +58,15 @@
         </div>
         <ul class="list-unstyled mb-0">
             {% for prog in current_programs %}
-                <li>{{ prog.name }}{% if prog.start_date or prog.end_date %} <span class="text-muted small">({% if prog.start_date %}{{ prog.start_date|date:"F j, Y" }}{% endif %}{% if prog.start_date and prog.end_date %} – {% endif %}{% if prog.end_date %}{{ prog.end_date|date:"F j, Y" }}{% endif %})</span>{% endif %}</li>
+                <li>
+                    {{ prog.name }}
+                    {% if prog.start_date or prog.end_date %}
+                        <span class="text-muted small">({% if prog.start_date %}{{ prog.start_date|date:"F j, Y" }}{% endif %}{% if prog.start_date and prog.end_date %} – {% endif %}{% if prog.end_date %}{{ prog.end_date|date:"F j, Y" }}{% endif %})</span>
+                    {% endif %}
+                    {% if prog.cost %}
+                        <span class="text-muted small ms-1">Cost: {{ prog.cost }}</span>
+                    {% endif %}
+                </li>
             {% endfor %}
         </ul>
     </fieldset>

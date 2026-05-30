@@ -293,6 +293,11 @@ class Program(models.Model):
     end_date = models.DateField(
         null=True, blank=True, db_index=True, help_text="Program end date"
     )
+    cost = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Program cost (e.g., $300 or $200-500).",
+    )
     # Feature toggles
     features = models.ManyToManyField(
         ProgramFeature,

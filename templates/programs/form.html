@@ -40,6 +40,11 @@
               </div>
             </div>
           </div>
+          <div class="mb-3">
+            <label for="id_cost" class="form-label">Cost</label>
+            {{ form.cost|add_class:"form-control" }}
+            <div class="form-text">Enter program cost (e.g., $300 or $200-500).</div>
+          </div>
           <div class="form-check mb-4">
             {{ form.active|add_class:"form-check-input" }}
             <label for="id_active" class="form-check-label">Active</label>

@@ -46,7 +46,15 @@ class RolePermissionAdmin(admin.ModelAdmin):
 
 @admin.register(Program)
 class ProgramAdmin(admin.ModelAdmin):
-    list_display = ("name", "year", "start_date", "end_date", "active", "updated_at")
+    list_display = (
+        "name",
+        "year",
+        "start_date",
+        "end_date",
+        "cost",
+        "active",
+        "updated_at",
+    )
     search_fields = ("name",)
     list_filter = ("active", "year", "start_date", "end_date")
     filter_horizontal = ("features",)
@@ -61,6 +69,7 @@ class ProgramAdmin(admin.ModelAdmin):
                     "year",
                     "start_date",
                     "end_date",
+                    "cost",
                 )
             },
         ),

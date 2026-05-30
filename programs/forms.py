@@ -278,6 +278,7 @@ class ProgramForm(forms.ModelForm):
             "year",
             "start_date",
             "end_date",
+            "cost",
             "active",
             "features",
         ]
