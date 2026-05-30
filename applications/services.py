@@ -116,12 +116,12 @@ def get_program_buckets():
 
     today = timezone.localdate()
     future = Program.objects.filter(active=True, start_date__gt=today).order_by(
-        "start_date", "name"
+        "-start_date", "name"
     )
     current = (
         Program.objects.filter(active=True, start_date__lte=today)
         .exclude(end_date__lt=today)
-        .order_by("start_date", "name")
+        .order_by("-end_date", "name")
     )
     past = Program.objects.filter(end_date__lt=today).order_by("-end_date", "name")
     return future, current, past

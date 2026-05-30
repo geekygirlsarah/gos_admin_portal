@@ -218,15 +218,23 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
             # If only start or only end or none: treat as current if not clearly future/past
             return "current"
 
-        def sort_key(prog):
-            # Sort by start_date (None last), then by name
-            sd = prog.start_date
-            # Use a tuple where None sorts after real dates
-            return (sd is None, sd or today, prog.name or "")
+        future = sorted(
+            [p for p in programs if status(p) == "future"],
+            key=lambda p: p.name or "",
+        )
+        future.sort(key=lambda p: (p.start_date is not None, p.start_date), reverse=True)
 
-        future = sorted([p for p in programs if status(p) == "future"], key=sort_key)
-        current = sorted([p for p in programs if status(p) == "current"], key=sort_key)
-        past = sorted([p for p in programs if status(p) == "past"], key=sort_key)
+        current = sorted(
+            [p for p in programs if status(p) == "current"],
+            key=lambda p: p.name or "",
+        )
+        current.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
+
+        past = sorted(
+            [p for p in programs if status(p) == "past"],
+            key=lambda p: p.name or "",
+        )
+        past.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
 
         ctx.update(
             {

@@ -51,11 +51,11 @@
         <legend class="form-label fw-semibold text-muted">Current programs</legend>
         <div class="alert alert-secondary mb-3" role="note">
             Applications for these programs are closed. Please contact us to
-            ask about joining.
+            see if it's possible to join.
         </div>
         <ul class="list-unstyled mb-0">
             {% for prog in current_programs %}
-                <li>{{ prog.name }}{% if prog.start_date %} <span class="text-muted small">({{ prog.start_date|date:"M Y" }})</span>{% endif %}</li>
+                <li>{{ prog.name }}{% if prog.start_date or prog.end_date %} <span class="text-muted small">({% if prog.start_date %}{{ prog.start_date|date:"F j, Y" }}{% endif %}{% if prog.start_date and prog.end_date %} – {% endif %}{% if prog.end_date %}{{ prog.end_date|date:"F j, Y" }}{% endif %})</span>{% endif %}</li>
             {% endfor %}
         </ul>
     </fieldset>
