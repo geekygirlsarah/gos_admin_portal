@@ -3,7 +3,7 @@ import datetime
 import logging
 from io import BytesIO
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -67,7 +67,7 @@ class EncryptedTextField(models.TextField):
         try:
             fernet.decrypt(value.encode())
             return value  # already encrypted
-        except Exception:
+        except (InvalidToken, UnicodeEncodeError):
             pass
         return fernet.encrypt(value.encode()).decode()
 
@@ -77,7 +77,7 @@ class EncryptedTextField(models.TextField):
         fernet = get_fernet()
         try:
             return fernet.decrypt(value.encode()).decode()
-        except Exception:
+        except (InvalidToken, UnicodeEncodeError, UnicodeDecodeError):
             # If decryption fails, return original (might be already decrypted or not encrypted)
             return value
 
@@ -90,7 +90,7 @@ class EncryptedCharField(models.CharField):
         try:
             fernet.decrypt(value.encode())
             return value  # already encrypted
-        except Exception:
+        except (InvalidToken, UnicodeEncodeError):
             pass
         return fernet.encrypt(value.encode()).decode()
 
@@ -100,7 +100,7 @@ class EncryptedCharField(models.CharField):
         fernet = get_fernet()
         try:
             return fernet.decrypt(value.encode()).decode()
-        except Exception:
+        except (InvalidToken, UnicodeEncodeError, UnicodeDecodeError):
             # If decryption fails, return original (might be already decrypted or not encrypted)
             return value
 
@@ -124,7 +124,7 @@ class EncryptedFileDescriptor:
                         fernet = get_fernet()
                         decrypted_content = fernet.decrypt(content)
                         return BytesIO(decrypted_content)
-                    except Exception:
+                    except InvalidToken:
                         # If decryption fails, return original (might be already decrypted or not encrypted)
                         f.seek(0)
                         return f
