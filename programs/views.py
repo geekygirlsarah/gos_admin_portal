@@ -10,7 +10,8 @@ from django.contrib.auth.mixins import (
     UserPassesTestMixin,
 )
 from django.core.mail import EmailMultiAlternatives, get_connection
-from django.db.models.functions import Coalesce, Lower
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -222,7 +223,9 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
             [p for p in programs if status(p) == "future"],
             key=lambda p: p.name or "",
         )
-        future.sort(key=lambda p: (p.start_date is not None, p.start_date), reverse=True)
+        future.sort(
+            key=lambda p: (p.start_date is not None, p.start_date), reverse=True
+        )
 
         current = sorted(
             [p for p in programs if status(p) == "current"],
@@ -266,7 +269,7 @@ class StudentListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
-            sort_first=Coalesce("first_name", "legal_first_name"),
+            sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
         ).order_by(Lower("sort_first"), Lower("last_name"))
 
 
@@ -280,7 +283,7 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
         qs = super().get_queryset()
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
-            sort_first=Coalesce("first_name", "legal_first_name"),
+            sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
         ).order_by(Lower("sort_first"), Lower("last_name"))
 
 
@@ -300,7 +303,10 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
             .select_related("student", "team")
             .annotate(
                 sort_first=Lower(
-                    Coalesce("student__first_name", "student__legal_first_name")
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
                 ),
                 sort_last=Lower("student__last_name"),
             )
@@ -326,7 +332,9 @@ class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
             qs.select_related("school", "primary_contact", "secondary_contact")
             .prefetch_related("adults")
             .annotate(
-                sort_first=Coalesce("first_name", "legal_first_name"),
+                sort_first=Coalesce(
+                    NullIf("first_name", Value("")), "legal_first_name"
+                ),
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
@@ -348,7 +356,9 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
         return (
             qs.select_related("school")
             .annotate(
-                sort_first=Coalesce("first_name", "legal_first_name"),
+                sort_first=Coalesce(
+                    NullIf("first_name", Value("")), "legal_first_name"
+                ),
             )
             .order_by("graduation_year", Lower("sort_first"), Lower("last_name"))
         )
@@ -411,7 +421,9 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
         return (
             qs.select_related("school")
             .annotate(
-                sort_first=Coalesce("first_name", "legal_first_name"),
+                sort_first=Coalesce(
+                    NullIf("first_name", Value("")), "legal_first_name"
+                ),
             )
             .order_by("school__name", Lower("sort_first"), Lower("last_name"))
         )
@@ -509,7 +521,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         # Default to seniors: graduation_year equals the selected year, and active
         students = (
             Student.objects.filter(graduation_year=year, active=True)
-            .annotate(sort_first=Coalesce("first_name", "legal_first_name"))
+            .annotate(
+                sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+            )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
         return render(
@@ -1801,14 +1815,18 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         role = ctx["role"]
 
         # Prepare annotated queryset for consistent sorting
-        from django.db.models.functions import Coalesce, Lower
+        from django.db.models import Value
+        from django.db.models.functions import Coalesce, Lower, NullIf
 
         base_qs = (
             Enrollment.objects.filter(program=program)
             .select_related("student", "student__user", "team", "crew")
             .annotate(
                 sort_first=Lower(
-                    Coalesce("student__first_name", "student__legal_first_name")
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
                 ),
                 sort_last=Lower("student__last_name"),
             )
@@ -3079,7 +3097,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             students_qs = students_qs.filter(pk=selected_student.pk)
 
         students = students_qs.order_by(
-            Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
+            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower("last_name"),
         )
 
         # Helper to compute balance and entries like ProgramStudentBalanceView
@@ -3414,7 +3433,8 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             Student.objects.filter(enrollment__program=program, active=True)
             .select_related("school")
             .order_by(
-                Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
+                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower("last_name"),
             )
         )
 
@@ -3458,7 +3478,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
             program.students.select_related("user")
             .all()
             .annotate(
-                sort_first=Lower(Coalesce("first_name", "legal_first_name")),
+                sort_first=Lower(
+                    Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                ),
                 sort_last=Lower("last_name"),
             )
         )
@@ -3483,7 +3505,9 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             Student.objects.filter(enrollment__program=program, active=True)
             .select_related("school")
             .annotate(
-                sort_first=Coalesce("first_name", "legal_first_name"),
+                sort_first=Coalesce(
+                    NullIf("first_name", Value("")), "legal_first_name"
+                ),
             )
             .order_by("school__name", Lower("sort_first"), Lower("last_name"))
         )
@@ -3524,7 +3548,9 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
                 "state",
                 "zip_code",
             )
-            .annotate(sort_first=Coalesce("first_name", "legal_first_name"))
+            .annotate(
+                sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+            )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
         items = []
