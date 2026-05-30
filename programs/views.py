@@ -25,6 +25,7 @@ from django.views.generic import (
 )
 from premailer import transform
 
+from programs.constants import RELATIONSHIP_CHOICES
 
 from .forms import (
     AddExistingStudentToProgramForm,
@@ -58,7 +59,6 @@ from .models import (
     TaxForm,
     Team,
 )
-from programs.constants import RELATIONSHIP_CHOICES
 from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
 
 cssutils.log.setLevel(logging.WARNING)
@@ -3430,9 +3430,7 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
                 sort_last=Lower("last_name"),
             )
         )
-        students = list(
-            base_qs.filter(active=True).order_by("sort_first", "sort_last")
-        )
+        students = list(base_qs.filter(active=True).order_by("sort_first", "sort_last"))
         ctx = {
             "program": program,
             "students": students,
