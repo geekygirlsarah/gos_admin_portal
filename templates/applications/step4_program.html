@@ -30,7 +30,7 @@
                             <div class="small mt-1">Cost: <strong>{{ prog.cost }}</strong></div>
                         {% endif %}
                         {% if prog.description %}
-                            <div class="small mt-1">{{ prog.description }}</div>
+                            <div class="small mt-1">{{ prog.description|linebreaksbr }}</div>
                         {% endif %}
                     </label>
                 {% endfor %}
