@@ -58,6 +58,7 @@ class ViewTests(TestCase):
                 "legal_first_name": "Jamie",
                 "last_name": "Lee",
                 "grade_selector": "9",
+                "date_of_birth": "2010-01-01",
             },
         )
         # If it fails validation, it might be 200.

@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve
+from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
 
@@ -13,43 +14,42 @@ EXEMPT_URL_NAMES = {
     "account_confirm_email",
     "home",  # home requires login via decorator, but keep to avoid loops
     "admin:login",
-    # Public application flow
-    "apply_start",
-    "apply_program",
-    "apply_thanks",
 }
 
 EXEMPT_PATH_PREFIXES = (
     "/accounts/",
     "/admin/",
+    "/apply/",  # public application wizard
+    settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,
 )
 
 
-class LoginRequiredMiddleware:
+class LoginRequiredMiddleware(MiddlewareMixin):
     """Redirect anonymous users to login for all pages except exempt ones."""
 
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
+    def process_request(self, request):
         if request.user.is_authenticated:
-            return self.get_response(request)
+            return None
 
-        path = request.path
+        if self._is_exempt(request.path):
+            return None
+
+        return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
+
+    def _is_exempt(self, path):
         # Allow exempt prefixes
         for prefix in EXEMPT_PATH_PREFIXES:
             if prefix and path.startswith(prefix):
-                return self.get_response(request)
+                return True
 
         # Allow named urls in exempt set
         try:
             match = resolve(path)
             if match.view_name in EXEMPT_URL_NAMES:
-                return self.get_response(request)
+                return True
         except Resolver404:
             pass
         except Exception:
             logger.debug("Unexpected error resolving path %s", path, exc_info=True)
-
-        return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
+        return False

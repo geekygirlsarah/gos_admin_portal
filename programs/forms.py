@@ -1,18 +1,13 @@
+import datetime
+from decimal import Decimal
+
 from django import forms
 from django.conf import settings
 from django.db.models.functions import Coalesce, Lower
-from django.utils.safestring import mark_safe
 
-from .models import (
-    Adult,
-    Fee,
-    Payment,
-    Program,
-    School,
-    SlidingScale,
-    Student,
-    StudentApplication,
-)
+from programs.utils import get_academic_year_ending
+
+from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
 
 
 class StudentForm(forms.ModelForm):
@@ -40,6 +35,9 @@ class StudentForm(forms.ModelForm):
             "clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
             # Render as clear, clickable checkboxes (fixes empty button appearance)
             "race_ethnicities": forms.CheckboxSelectMultiple(),
+            "directory_consent": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -71,8 +69,6 @@ class StudentForm(forms.ModelForm):
         gy = self.instance.graduation_year if instance else None
         if gy:
             # infer grade from graduation year based on current academic year
-            import datetime
-
             today = datetime.date.today()
             end_year = today.year + (1 if today.month >= 7 else 0)
             # years remaining from current school year end to graduation
@@ -115,21 +111,10 @@ class StudentForm(forms.ModelForm):
         if grade_val not in (None, "", "None"):
             try:
                 g = int(grade_val)
-            except (TypeError, ValueError):
-                g = None
-            if g is not None and 0 <= g <= 12:
-                import datetime
 
-                today = datetime.date.today()
-                end_year = today.year + (1 if today.month >= 7 else 0)
-                if g == 0:
-                    grad_year = end_year + 13
-                else:
-                    grad_year = end_year + max(0, 12 - g)
-                # assign to instance via cleaned_data for model save
-                self.cleaned_data["graduation_year"] = grad_year
-                if "graduation_year" in self.fields:
-                    self.instance.graduation_year = grad_year
+                self.instance.graduation_year = get_academic_year_ending() + (12 - g)
+            except (ValueError, TypeError):
+                pass
         # Save base fields first
         instance = super().save(commit=False)
         if commit:
@@ -191,6 +176,10 @@ class AdultForm(forms.ModelForm):
             "phone_number",
             "cell_phone",
             "home_phone",
+            "address",
+            "city",
+            "state",
+            "zip_code",
             "email_updates",
             "is_parent",
             "is_mentor",
@@ -343,14 +332,24 @@ class ProgramEmailForm(forms.Form):
                 initial_value = choices[0][0]
         else:
             default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if default_name:
+                label = (
+                    f"Default ({default_name} <{default_email}>)"
+                    if default_email
+                    else f"Default ({default_name})"
+                )
+            else:
+                label = (
+                    f"Default ({default_email})"
+                    if default_email
+                    else "Default configured sender"
+                )
+
             choices = [
                 (
                     "DEFAULT",
-                    (
-                        f"Default ({default_email})"
-                        if default_email
-                        else "Default configured sender"
-                    ),
+                    label,
                 )
             ]
             initial_value = "DEFAULT"
@@ -368,11 +367,6 @@ class ProgramEmailForm(forms.Form):
         if self.fields["program"].widget.__class__ is forms.HiddenInput and not prog:
             raise forms.ValidationError("Program is required.")
         return cleaned
-
-
-from decimal import Decimal
-
-from django.db.models.functions import Coalesce, Lower
 
 
 class StudentBalanceModelChoiceField(forms.ModelChoiceField):
@@ -463,14 +457,24 @@ class ProgramEmailBalancesForm(forms.Form):
                 initial_value = choices[0][0]
         else:
             default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if default_name:
+                label = (
+                    f"Default ({default_name} <{default_email}>)"
+                    if default_email
+                    else f"Default ({default_name})"
+                )
+            else:
+                label = (
+                    f"Default ({default_email})"
+                    if default_email
+                    else "Default configured sender"
+                )
+
             choices = [
                 (
                     "DEFAULT",
-                    (
-                        f"Default ({default_email})"
-                        if default_email
-                        else "Default configured sender"
-                    ),
+                    label,
                 )
             ]
             initial_value = "DEFAULT"
@@ -509,7 +513,8 @@ class FeeAssignmentEditForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.program = program
         self.fee = fee
-        # Limit to students enrolled in the program (sorted by displayed first name then last name, case-insensitive; use legal_first_name fallback)
+        # Limit to students enrolled in the program, sorted by display name then last name
+        # (case-insensitive; uses legal_first_name as fallback)
         self.fields["students"].queryset = Student.objects.filter(
             programs=program
         ).order_by(
@@ -535,111 +540,8 @@ class FeeAssignmentEditForm(forms.Form):
         return self.fee
 
 
-class ProgramApplySelectForm(forms.Form):
-    program = forms.ModelChoiceField(
-        queryset=Program.objects.all(), required=True, label="Select a program"
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["program"].queryset = Program.objects.filter(active=True).order_by(
-            "name"
-        )
-
-
-class StudentApplicationForm(forms.ModelForm):
-    # grade selector to compute graduation_year like StudentForm
-    GRADE_CHOICES = [(0, "K")] + [(i, str(i)) for i in range(1, 13)]
-    grade_selector = forms.ChoiceField(
-        choices=[("", "—")] + [(str(v), label) for v, label in GRADE_CHOICES],
-        required=False,
-        label="Grade (K–12)",
-    )
-
-    class Meta:
-        model = StudentApplication
-        fields = [
-            "program",
-            "legal_first_name",
-            "first_name",
-            "last_name",
-            "pronouns",
-            "date_of_birth",
-            "address",
-            "city",
-            "state",
-            "zip_code",
-            "cell_phone_number",
-            "personal_email",
-            "andrew_id",
-            "andrew_email",
-            "school",
-            "graduation_year",
-            "race_ethnicity",
-            "tshirt_size",
-            "on_discord",
-            "discord_handle",
-            "parent_name",
-            "parent_email",
-            "parent_phone",
-        ]
-        widgets = {
-            "program": forms.HiddenInput(),
-            "date_of_birth": forms.DateInput(attrs={"type": "date"}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Prefill grade_selector from grad year
-        gy = self.instance.graduation_year if getattr(self, "instance", None) else None
-        if gy:
-            import datetime
-
-            today = datetime.date.today()
-            end_year = today.year + (1 if today.month >= 7 else 0)
-            years_remaining = gy - end_year
-            if years_remaining == 13:
-                grade_str = "0"
-            else:
-                grade = 12 - years_remaining
-                grade_str = str(grade) if 0 <= grade <= 12 else ""
-            if grade_str:
-                self.fields["grade_selector"].initial = grade_str
-        if "graduation_year" in self.fields:
-            self.fields["graduation_year"].help_text = (
-                "Auto-calculated from Grade, but you may override if needed."
-            )
-
-    def clean(self):
-        cleaned = super().clean()
-        # Basic validation to ensure contact info present
-        if not cleaned.get("personal_email") and not cleaned.get("cell_phone_number"):
-            raise forms.ValidationError(
-                "Please provide at least an email or a phone number."
-            )
-        return cleaned
-
-    def save(self, commit=True):
-        grade_val = (
-            self.cleaned_data.get("grade_selector")
-            if hasattr(self, "cleaned_data")
-            else None
-        )
-        if grade_val not in (None, "", "None"):
-            try:
-                g = int(grade_val)
-            except (TypeError, ValueError):
-                g = None
-            if g is not None and 0 <= g <= 12:
-                import datetime
-
-                today = datetime.date.today()
-                end_year = today.year + (1 if today.month >= 7 else 0)
-                grad_year = end_year + (13 if g == 0 else max(0, 12 - g))
-                self.cleaned_data["graduation_year"] = grad_year
-                if "graduation_year" in self.fields:
-                    self.instance.graduation_year = grad_year
-        return super().save(commit=commit)
+# ProgramApplySelectForm and StudentApplicationForm removed; the public
+# application flow now lives in the `applications` app.
 
 
 class FeeForm(forms.ModelForm):
@@ -649,6 +551,46 @@ class FeeForm(forms.ModelForm):
         widgets = {
             "program": forms.HiddenInput(),
             "date": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, program: Program = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if program is not None:
+            self.fields["program"].initial = program
+            self.fields["program"].required = True
+
+
+class ProgramDocumentForm(forms.ModelForm):
+    """Form for adding/editing a blank document attached to a Program.
+
+    Used on the Program detail/settings page to let lead mentors manage the
+    list of forms approved applicants must download, sign, and re-upload
+    (Step 9 of the application wizard).
+    """
+
+    class Meta:
+        from .models import ProgramDocument as _PD
+
+        model = _PD
+        fields = [
+            "program",
+            "name",
+            "description",
+            "file",
+            "is_required",
+            "display_order",
+            "is_active",
+        ]
+        widgets = {
+            "program": forms.HiddenInput(),
+            "name": forms.TextInput(attrs={"class": "form-control"}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
+            "is_required": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "display_order": forms.NumberInput(
+                attrs={"class": "form-control", "min": 0}
+            ),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, program: Program = None, **kwargs):

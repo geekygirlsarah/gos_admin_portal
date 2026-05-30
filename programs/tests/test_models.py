@@ -16,7 +16,6 @@ from programs.models import (
     RolePermission,
     School,
     Student,
-    StudentApplication,
 )
 
 
@@ -119,14 +118,17 @@ class ModelTests(TestCase):
         qs2 = RaceEthnicity.match_from_text("Something totally unknown")
         self.assertIn("other", set(qs2.values_list("key", flat=True)))
 
-    def test_student_save_auto_opt_in_primary_parent(self):
+    def test_student_save_does_not_override_parent_opt_out(self):
+        # Saving a student must NOT silently flip a parent's explicit opt-out.
+        # The email_updates preference is the parent's own choice and should
+        # only be changed through the application wizard form validation.
         parent = Adult.objects.create(
             first_name="Pat", last_name="Smith", is_parent=True, email_updates=False
         )
         s = Student(legal_first_name="Riley", last_name="Jones", primary_contact=parent)
         s.save()
         parent.refresh_from_db()
-        self.assertTrue(parent.email_updates)
+        self.assertFalse(parent.email_updates)
 
 
 class RolePermissionTests(TestCase):
@@ -148,26 +150,16 @@ class RolePermissionTests(TestCase):
         self.assertIn("R:True, W:True", str(rp))
 
 
-class StudentApplicationTests(TestCase):
-    def setUp(self):
-        self.program = Program.objects.create(name="App Program", year=2025)
-        self.app = StudentApplication.objects.create(
-            program=self.program,
-            legal_first_name="App",
-            last_name="Test",
-            personal_email="app@example.com",
-            date_of_birth=datetime.date(2010, 1, 1),
-            parent_name="Parent App",
-            parent_email="parent@example.com",
-        )
+# StudentApplicationTests removed; new application flow lives in the
+# `applications` app and is tested there.
 
-    def test_approve_creates_records(self):
-        student = self.app.approve()
-        self.assertIsInstance(student, Student)
-        self.assertEqual(student.legal_first_name, "App")
-        self.assertEqual(student.personal_email, "app@example.com")
-        self.assertTrue(
-            Enrollment.objects.filter(student=student, program=self.program).exists()
-        )
-        self.app.refresh_from_db()
-        self.assertEqual(self.app.status, "accepted")
+
+class UnsavedStudentTest(TestCase):
+    def test_all_parents_on_unsaved_student(self):
+        student = Student(legal_first_name="Unsaved", last_name="Student")
+        # Accessing all_parents should not raise ValueError
+        try:
+            parents = student.all_parents
+            self.assertEqual(parents, [])
+        except ValueError as e:
+            self.fail(f"all_parents() raised ValueError on unsaved student: {e}")

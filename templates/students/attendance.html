@@ -89,7 +89,7 @@
                 <td class="text-nowrap">
                   {% if can_write_attendance %}
                   <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">Edit</button>
-                  <form method="post" class="d-inline" onsubmit="return confirm('Delete this session?');">
+                  <form method="post" class="d-inline js-confirm" data-confirm="Delete this session?">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="delete" />
                     <input type="hidden" name="session_id" value="{{ s.id }}" />

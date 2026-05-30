@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import TestCase
 from django.urls import reverse
 
 from programs.models import Adult, Enrollment, Program, SlidingScale, Student, TaxForm

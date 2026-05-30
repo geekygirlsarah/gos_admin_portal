@@ -1,0 +1,14 @@
+<div class="radio-select-wrapper w-100 mb-2"{% if widget.attrs.id %} id="{{ widget.attrs.id }}"{% endif %} style="display: flow-root;">
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-2">
+    {% for group_name, group_choices, group_index in widget.optgroups %}
+      {% if group_name %}
+        <div class="col-12"><strong>{{ group_name }}</strong></div>
+      {% endif %}
+      {% for option in group_choices %}
+        <div class="col">
+          {% include option.template_name with widget=option %}
+        </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+</div>

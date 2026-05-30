@@ -1,0 +1,64 @@
+      {% if can_manage_documents or program_documents %}
+      <div class="mt-4">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Documents to Sign</span>
+            {% if can_manage_documents %}
+              <a class="btn btn-sm btn-outline-primary"
+                 href="{% url 'program_document_create' program.id %}">
+                Add Document
+              </a>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">
+              Blank forms approved applicants must download, sign, and
+              re-upload as part of the application process.
+            </p>
+            {% if program_documents %}
+              <ul class="list-group">
+                {% for doc in program_documents %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                      <a href="{{ doc.file.url }}" target="_blank" rel="noopener">
+                        {{ doc.name }}
+                      </a>
+                      {% if doc.is_required %}
+                        <span class="badge bg-secondary ms-1">Required</span>
+                      {% else %}
+                        <span class="badge bg-light text-dark border ms-1">Optional</span>
+                      {% endif %}
+                      {% if not doc.is_active %}
+                        <span class="badge bg-warning text-dark ms-1">Inactive</span>
+                      {% endif %}
+                      {% if doc.description %}
+                        <div class="text-muted small">{{ doc.description }}</div>
+                      {% endif %}
+                    </div>
+                    {% if can_manage_documents %}
+                      <div class="d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="{% url 'program_document_edit' program.id doc.id %}">
+                          Edit
+                        </a>
+                        <a class="btn btn-sm btn-outline-danger"
+                           href="{% url 'program_document_delete' program.id doc.id %}">
+                          Delete
+                        </a>
+                      </div>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <div class="text-muted small">
+                No documents attached yet.
+                {% if can_manage_documents %}
+                  Click <em>Add Document</em> to upload one.
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}

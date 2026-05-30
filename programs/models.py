@@ -1,14 +1,24 @@
 import base64
+import datetime
 import logging
-import os
 from io import BytesIO
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from PIL import Image, ImageFile, ImageOps
+from PIL import ImageFile
+
+from programs.constants import (
+    MENTOR_ROLE_CHOICES,
+    RELATIONSHIP_CHOICES,
+    STATE_CHOICES,
+    TEAM_TYPES,
+    TSHIRT_SIZE_CHOICES,
+)
+
+from .validators import validate_phone_number, validate_zip_code
 
 logger = logging.getLogger(__name__)
 
@@ -20,38 +30,79 @@ def get_fernet():
         key = base64.urlsafe_b64encode(
             settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
         )
+    if isinstance(key, str):
+        key = key.encode()
     return Fernet(key)
 
 
 class EncryptedFileField(models.FileField):
     """
-    A simple wrapper around FileField that encrypts file content on save and decrypts on read.
-    NOTE: This is a basic implementation for demonstration. In a real production
-    environment, consider using more robust libraries or dedicated storage backends.
+    A FileField that transparently encrypts file content on save (via pre_save)
+    and decrypts on read (via EncryptedFileDescriptor). Uses Fernet symmetric
+    encryption with the key from settings.FILE_ENCRYPTION_KEY.
     """
 
     def pre_save(self, model_instance, add):
-        file = super().pre_save(model_instance, add)
-        if file and hasattr(file, "file") and not getattr(file, "_encrypted", False):
+        # Encrypt before super() so the storage backend writes ciphertext, not plaintext.
+        file = getattr(model_instance, self.attname)
+        if file and not file._committed and not getattr(file, "_encrypted", False):
             fernet = get_fernet()
-            file.open("rb")
-            content = file.read()
-            file.close()
-            encrypted_content = fernet.encrypt(content)
-
-            # Use ContentFile to replace the content
-            new_file = ContentFile(encrypted_content)
-            new_file.name = file.name
-
-            # This is the tricky part in Django - we need to update the underlying file object
-            file.file = new_file
+            plaintext = file.read()
+            encrypted = fernet.encrypt(plaintext)
+            file.file = ContentFile(encrypted, name=file.name)
             file._encrypted = True
-        return file
+        return super().pre_save(model_instance, add)
 
     def contribute_to_class(self, cls, name, private_only=False):
         super().contribute_to_class(cls, name)
         # Patch the descriptor to decrypt when accessed
         setattr(cls, self.name, EncryptedFileDescriptor(getattr(cls, self.name)))
+
+
+class EncryptedTextField(models.TextField):
+    def get_prep_value(self, value):
+        if value is None:
+            return value
+        fernet = get_fernet()
+        try:
+            fernet.decrypt(value.encode())
+            return value  # already encrypted
+        except (InvalidToken, UnicodeEncodeError):
+            pass
+        return fernet.encrypt(value.encode()).decode()
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        fernet = get_fernet()
+        try:
+            return fernet.decrypt(value.encode()).decode()
+        except (InvalidToken, UnicodeEncodeError, UnicodeDecodeError):
+            # If decryption fails, return original (might be already decrypted or not encrypted)
+            return value
+
+
+class EncryptedCharField(models.CharField):
+    def get_prep_value(self, value):
+        if value is None:
+            return value
+        fernet = get_fernet()
+        try:
+            fernet.decrypt(value.encode())
+            return value  # already encrypted
+        except (InvalidToken, UnicodeEncodeError):
+            pass
+        return fernet.encrypt(value.encode()).decode()
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        fernet = get_fernet()
+        try:
+            return fernet.decrypt(value.encode()).decode()
+        except (InvalidToken, UnicodeEncodeError, UnicodeDecodeError):
+            # If decryption fails, return original (might be already decrypted or not encrypted)
+            return value
 
 
 class EncryptedFileDescriptor:
@@ -73,7 +124,7 @@ class EncryptedFileDescriptor:
                         fernet = get_fernet()
                         decrypted_content = fernet.decrypt(content)
                         return BytesIO(decrypted_content)
-                    except Exception:
+                    except InvalidToken:
                         # If decryption fails, return original (might be already decrypted or not encrypted)
                         f.seek(0)
                         return f
@@ -103,38 +154,7 @@ except Exception:
     logger.exception("Unexpected error registering HEIF opener")
 
 
-RELATIONSHIP_CHOICES = [
-    ("parent", "Parent"),
-    ("mother", "Mother"),
-    ("father", "Father"),
-    ("grandparent", "Grandparent"),
-    ("grandmother", "Grandmother"),
-    ("grandfather", "Grandfather"),
-    ("pibling", "Pibling"),
-    ("aunt", "Aunt"),
-    ("uncle", "Uncle"),
-    ("sibling", "Sibling"),
-    ("sister", "Sister"),
-    ("brother", "Brother"),
-    ("friend", "Friend"),
-    ("guardian", "Guardian"),
-    ("other", "Other"),
-]
-
-MENTOR_ROLE_CHOICES = [
-    ("mentor", "Mentor"),
-    ("volunteer", "Volunteer"),
-    ("chaperone", "Chaperone"),
-]
-
-
 class Team(models.Model):
-    TEAM_TYPES = [
-        ("FRC", "FRC"),
-        ("FTC", "FTC"),
-        ("FLL_CHALLENGE", "FLL Challenge"),
-        ("FLL_EXPLORE", "FLL Explore"),
-    ]
     team_type = models.CharField(max_length=20, choices=TEAM_TYPES)
     number = models.IntegerField()
     name = models.CharField(max_length=100, blank=True, null=True)
@@ -156,6 +176,23 @@ class Crew(models.Model):
     name = models.CharField(max_length=100)
     program = models.ForeignKey(
         "Program", on_delete=models.CASCADE, related_name="crews"
+    )
+    color = models.CharField(
+        max_length=7, default="#0000ff", help_text="Hex color code (e.g. #0000ff)"
+    )
+
+    class Meta:
+        unique_together = ("name", "program")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.program.name})"
+
+
+class SubTeam(models.Model):
+    name = models.CharField(max_length=100)
+    program = models.ForeignKey(
+        "Program", on_delete=models.CASCADE, related_name="subteams"
     )
     color = models.CharField(
         max_length=7, default="#0000ff", help_text="Hex color code (e.g. #0000ff)"
@@ -288,8 +325,12 @@ class School(models.Model):
     )
     street_address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
+    )
+    zip_code = models.CharField(
+        max_length=20, blank=True, null=True, validators=[validate_zip_code]
+    )
 
     class Meta:
         ordering = ["name"]
@@ -367,157 +408,6 @@ class RaceEthnicity(models.Model):
 
 
 class Student(models.Model):
-    def save(self, *args, **kwargs):
-        # Normalize any new upload to a real RGB JPEG in-memory so storage doesn't depend on temp files.
-        # This also fixes EXIF orientation and strips problematic metadata (handles HEIC->JPEG edge cases).
-        if getattr(self, "photo", None):
-            try:
-                file_obj = self.photo
-                # Only process a newly assigned upload (uncommitted) or anything with an accessible file handle
-                if getattr(file_obj, "_committed", True) is False or hasattr(
-                    file_obj, "file"
-                ):
-                    try:
-                        f = getattr(file_obj, "file", file_obj)
-                        try:
-                            f.seek(0)
-                        except (AttributeError, IOError):
-                            # Not all file-like objects support seek
-                            pass
-                        img = Image.open(f)
-                        # Fully load and normalize orientation
-                        img.load()
-                        try:
-                            img = ImageOps.exif_transpose(img)
-                        except (AttributeError, TypeError, IndexError):
-                            # EXIF transpose can fail on malformed EXIF data
-                            pass
-                        # JPEG expects RGB
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        buffer = BytesIO()
-                        img.save(buffer, format="JPEG", quality=85, optimize=True)
-                        buffer.seek(0)
-                        base, _ = os.path.splitext(self.photo.name or "photo")
-                        new_name = f"{base}.jpg"
-                        # Replace the field file without triggering another save recursively
-                        self.photo.save(
-                            new_name, ContentFile(buffer.read()), save=False
-                        )
-                    except Exception:
-                        # Fallback: legacy HEIC/HEIF detection and conversion
-                        try:
-                            name_lower = (file_obj.name or "").lower()
-                            needs_convert_by_ext = name_lower.endswith(
-                                ".heic"
-                            ) or name_lower.endswith(".heif")
-                            convert = False
-                            if needs_convert_by_ext:
-                                convert = True
-                            else:
-                                try:
-                                    file_obj.open("rb")
-                                    img_probe = Image.open(file_obj)
-                                    fmt = (img_probe.format or "").upper()
-                                    img_probe.close()
-                                    if fmt in ("HEIC", "HEIF"):
-                                        convert = True
-                                except Exception:
-                                    convert = needs_convert_by_ext
-                                finally:
-                                    try:
-                                        file_obj.close()
-                                    except (AttributeError, IOError):
-                                        pass
-                            if convert:
-                                file_obj.open("rb")
-                                img = Image.open(file_obj)
-                                if img.mode != "RGB":
-                                    img = img.convert("RGB")
-                                buffer = BytesIO()
-                                img.save(
-                                    buffer, format="JPEG", quality=85, optimize=True
-                                )
-                                buffer.seek(0)
-                                base, _ = os.path.splitext(self.photo.name or "photo")
-                                new_name = f"{base}.jpg"
-                                self.photo.save(
-                                    new_name, ContentFile(buffer.read()), save=False
-                                )
-                                try:
-                                    file_obj.close()
-                                except (AttributeError, IOError):
-                                    pass
-                        except Exception:
-                            # If normalization fails for any reason, allow save to proceed with original file.
-                            logger.debug("Image normalization failed", exc_info=True)
-            except Exception:
-                # Fail-safe: never block saving on image issues
-                logger.debug("Unexpected error in photo processing", exc_info=True)
-
-        # Proactively clear dangling parent contact FKs before save to avoid integrity errors
-        try:
-            if self.primary_contact_id:
-                try:
-                    # Adult is defined below in this module; accessible at runtime
-                    if not Adult.objects.filter(pk=self.primary_contact_id).exists():
-                        self.primary_contact_id = None
-                except Exception:
-                    # If anything goes wrong probing Adult, do not block the save
-                    logger.debug("Error probing primary contact Adult", exc_info=True)
-            if self.secondary_contact_id:
-                try:
-                    if not Adult.objects.filter(pk=self.secondary_contact_id).exists():
-                        self.secondary_contact_id = None
-                except Exception:
-                    logger.debug("Error probing secondary contact Adult", exc_info=True)
-        except Exception:
-            logger.debug("Unexpected error in contact cleanup", exc_info=True)
-
-        # Auto-opt-in primary contact for email updates if assigned
-        try:
-            parent = self.primary_contact
-        except Exception:
-            parent = None
-        if parent and parent.email_updates is False:
-            parent.email_updates = True
-            parent.save(update_fields=["email_updates"])
-        super().save(*args, **kwargs)
-
-    def eighteenth_birthday(self):
-        """Return the date this student turns 18, or None if DOB unknown."""
-        dob = self.date_of_birth
-        if not dob:
-            return None
-        try:
-            return dob.replace(year=dob.year + 18)
-        except ValueError:
-            # Handle Feb 29 on non-leap years by using Feb 28
-            return dob.replace(month=2, day=28, year=dob.year + 18)
-
-    @property
-    def age(self):
-        """Return the student's current age in years, or None if DOB unknown."""
-        import datetime
-
-        dob = self.date_of_birth
-        if not dob:
-            return None
-        today = datetime.date.today()
-        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-
-    def requires_background_check(self, program: "Program") -> bool:
-        """Whether the student will be 18 at any point during the given program's dates.
-        Returns False if insufficient data (no DOB or no program dates).
-        """
-        if not program or not program.start_date or not program.end_date:
-            return False
-        b18 = self.eighteenth_birthday()
-        if not b18:
-            return False
-        # If the program end is on/after 18th birthday, and the start is on/before end.
-        return program.end_date >= b18 and program.start_date <= program.end_date
-
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -530,9 +420,14 @@ class Student(models.Model):
     first_name = models.CharField(
         max_length=150, blank=True, null=True, verbose_name="First name"
     )
-    last_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150, db_index=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
-    date_of_birth = models.DateField(blank=True, null=True)
+    date_of_birth = models.DateField(
+        blank=False,
+        null=False,
+        default=datetime.date(1900, 1, 1),
+        help_text="Student's date of birth. The default value (1900-01-01) is a placeholder — please enter the actual date.",
+    )
     # Background clearances (per-student, separate from mentor clearances)
     has_passed_clearances = models.BooleanField(
         default=False,
@@ -547,11 +442,21 @@ class Student(models.Model):
 
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
+    )
+    zip_code = models.CharField(
+        max_length=20, blank=True, null=True, validators=[validate_zip_code]
+    )
 
-    cell_phone_number = models.CharField(max_length=30, blank=True, null=True)
+    cell_phone_number = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
     personal_email = models.EmailField(blank=True, null=True)
+    directory_consent = models.BooleanField(
+        default=True,
+        verbose_name="OK to share name, address, and phone for student directory",
+    )
 
     andrew_id = models.CharField(max_length=50, blank=True, null=True)
     andrew_email = models.EmailField(blank=True, null=True)
@@ -564,7 +469,10 @@ class Student(models.Model):
         related_name="students",
     )
     graduation_year = models.PositiveSmallIntegerField(
-        blank=True, null=True, help_text="Expected high school graduation year"
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Expected high school graduation year",
     )
 
     # New multi-select of canonical options
@@ -574,24 +482,26 @@ class Student(models.Model):
         blank=True,
         verbose_name="Race / Ethnicity",
     )
-    tshirt_size = models.CharField(max_length=10, blank=True, null=True)
+    tshirt_size = models.CharField(
+        max_length=10, choices=TSHIRT_SIZE_CHOICES, blank=True, null=True
+    )
 
     seen_once = models.BooleanField(default=False)
     on_discord = models.BooleanField(default=False)
     discord_handle = models.CharField(max_length=100, blank=True, null=True)
 
     # Health & Medical
-    allergies = models.TextField(
+    allergies = EncryptedTextField(
         blank=True,
         null=True,
         help_text="List any food, drug, environmental, or other allergies. Include severity and typical reactions if known.",
     )
-    dietary_restrictions = models.TextField(
+    dietary_restrictions = EncryptedTextField(
         blank=True,
         null=True,
         help_text="Dietary needs or restrictions (e.g., vegetarian, halal, no pork, no nuts).",
     )
-    medical_notes = models.TextField(
+    medical_notes = EncryptedTextField(
         blank=True,
         null=True,
         help_text="Other health information staff should know (e.g., asthma, seizures, physical limitations).",
@@ -655,17 +565,43 @@ class Student(models.Model):
             result.append(self.secondary_contact)
             seen_ids.add(self.secondary_contact_id)
 
-        for p in self.adults.all():
-            if p.id not in seen_ids:
-                result.append(p)
-                seen_ids.add(p.id)
+        if self.pk:
+            for p in self.adults.all():
+                if p.id not in seen_ids:
+                    result.append(p)
+                    seen_ids.add(p.id)
 
         return result
 
-    active = models.BooleanField(default=True)
+    interest_reason = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Interest reason",
+        help_text="Why are you interested in participating in this Girls of Steel program this season?",
+    )
+    hoped_gains = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Hoped gains",
+        help_text="What do you hope to gain from the experience?",
+    )
+    prior_robotics_experience = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Prior robotics experience",
+        help_text="What prior robotics experience do you have? (No experience is necessary to be a part of the program.)",
+    )
+    referral_source = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Referral source",
+        help_text="How did you hear about Girls of Steel Robotics?",
+    )
+
+    active = models.BooleanField(default=True, db_index=True)
     # Indicates the student has graduated from the program(s)
     graduated = models.BooleanField(
-        default=False, help_text="Check if this student has graduated."
+        default=False, db_index=True, help_text="Check if this student has graduated."
     )
     programs = models.ManyToManyField(
         "Program", through="Enrollment", related_name="students", blank=True
@@ -675,11 +611,101 @@ class Student(models.Model):
 
     class Meta:
         ordering = ["first_name", "last_name"]
+        indexes = [
+            models.Index(fields=["last_name", "first_name"], name="student_name_idx"),
+            models.Index(
+                fields=["school", "graduation_year"], name="student_school_grad_idx"
+            ),
+            models.Index(
+                fields=["active", "graduated"], name="student_active_graduated_idx"
+            ),
+        ]
 
     def __str__(self):
         pref = self.first_name or self.legal_first_name
         full = f"{pref} {self.last_name}".strip()
         return full or f"Student #{self.pk}"
+
+    def _prune_dangling_contacts(self):
+        """Clear dangling primary/secondary contact FKs in a single query."""
+        pks = [pk for pk in (self.primary_contact_id, self.secondary_contact_id) if pk]
+        if not pks:
+            return
+        try:
+            existing = set(
+                Adult.objects.filter(pk__in=pks).values_list("pk", flat=True)
+            )
+            if self.primary_contact_id and self.primary_contact_id not in existing:
+                self.primary_contact_id = None
+            if self.secondary_contact_id and self.secondary_contact_id not in existing:
+                self.secondary_contact_id = None
+        except Exception:
+            logger.debug("Unexpected error in contact cleanup", exc_info=True)
+
+    def save(self, *args, **kwargs):
+        # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
+        self._prune_dangling_contacts()
+        super().save(*args, **kwargs)
+
+    def eighteenth_birthday(self):
+        """Return the date this student turns 18, or None if DOB unknown."""
+        dob = self.date_of_birth
+        if not dob:
+            return None
+        try:
+            return dob.replace(year=dob.year + 18)
+        except ValueError:
+            # Handle Feb 29 on non-leap years by using Feb 28
+            return dob.replace(month=2, day=28, year=dob.year + 18)
+
+    @property
+    def age(self):
+        """Return the student's current age in years, or None if DOB unknown."""
+        dob = self.date_of_birth
+        if not dob:
+            return None
+        today = datetime.date.today()
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+    @property
+    def current_grade(self):
+        """Return the student's current grade as an integer (0=K, 1–12).
+
+        Returns ``None`` if ``graduation_year`` is not set, or if the student
+        has already graduated (calculated grade > 12).
+        Grades below 0 are clamped to 0 (Kindergarten).
+        """
+        if not self.graduation_year:
+            return None
+        from programs.utils import calculate_grade
+
+        return calculate_grade(self.graduation_year)
+
+    @property
+    def grade_display(self):
+        """Return a human-readable grade label: 'K', '1st Grade', …, '12th Grade',
+        'Graduated', or ``None`` if ``graduation_year`` is not set.
+        """
+        if not self.graduation_year:
+            return None
+        from programs.utils import format_grade
+
+        return format_grade(self.current_grade)
+
+    def requires_background_check(self, program: "Program") -> bool:
+        """Whether the student will be 18 at any point during the given program's dates.
+        Returns False if insufficient data (no DOB or no program dates).
+        """
+        if not program or not program.start_date or not program.end_date:
+            return False
+        b18 = self.eighteenth_birthday()
+        if not b18:
+            return False
+        # If the program end is on/after 18th birthday, and the start is on/before end.
+        return program.end_date >= b18 and program.start_date <= program.end_date
 
 
 class Enrollment(models.Model):
@@ -694,6 +720,13 @@ class Enrollment(models.Model):
     )
     crew = models.ForeignKey(
         Crew,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments",
+    )
+    subteam = models.ForeignKey(
+        SubTeam,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -714,13 +747,18 @@ class Adult(models.Model):
     # Role flags
     is_parent = models.BooleanField(
         default=False,
+        db_index=True,
         help_text="Check if this adult is a parent/guardian of any student.",
     )
     is_mentor = models.BooleanField(
-        default=False, help_text="Check if this adult serves as a mentor/volunteer."
+        default=False,
+        db_index=True,
+        help_text="Check if this adult serves as a mentor/volunteer.",
     )
     is_alumni = models.BooleanField(
-        default=False, help_text="Check if this adult is a program alumni."
+        default=False,
+        db_index=True,
+        help_text="Check if this adult is a program alumni.",
     )
 
     # Optional link to a User; allows adults (parents/mentors) to have accounts
@@ -742,12 +780,32 @@ class Adult(models.Model):
     relationship_to_student = models.CharField(
         max_length=20, choices=RELATIONSHIP_CHOICES, default="parent"
     )
+    specific_relationship = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Specific relationship, e.g. father, stepmom, foster parent, etc.",
+    )
 
     # Contact
     email = models.EmailField(blank=True, null=True)
-    phone_number = models.CharField(max_length=30, blank=True, null=True)
-    cell_phone = models.CharField(max_length=30, blank=True, null=True)
-    home_phone = models.CharField(max_length=30, blank=True, null=True)
+    phone_number = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
+    cell_phone = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
+    home_phone = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
+    address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(
+        max_length=50, choices=STATE_CHOICES, blank=True, null=True, default="PA"
+    )
+    zip_code = models.CharField(
+        max_length=20, blank=True, null=True, validators=[validate_zip_code]
+    )
     personal_email = models.EmailField(blank=True, null=True)
 
     # Mentor-like fields
@@ -800,13 +858,15 @@ class Adult(models.Model):
 
     # Emergency contact
     emergency_contact_name = models.CharField(max_length=150, blank=True, null=True)
-    emergency_contact_phone = models.CharField(max_length=30, blank=True, null=True)
+    emergency_contact_phone = models.CharField(
+        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    )
 
     # Status
     email_updates = models.BooleanField(
         default=False, help_text="If checked, this adult will receive email updates."
     )
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=True, db_index=True)
 
     # Alumni information (merged from Alumni)
     alumni_email = models.EmailField(
@@ -829,48 +889,28 @@ class Adult(models.Model):
 
     class Meta:
         ordering = ["last_name", "first_name"]
+        indexes = [
+            models.Index(fields=["last_name", "first_name"], name="adult_name_idx"),
+            models.Index(
+                fields=["is_parent", "active"], name="adult_parent_active_idx"
+            ),
+            models.Index(
+                fields=["is_mentor", "active"], name="adult_mentor_active_idx"
+            ),
+            models.Index(
+                fields=["is_alumni", "active"], name="adult_alumni_active_idx"
+            ),
+        ]
 
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
 
     def save(self, *args, **kwargs):
-        # Normalize newly uploaded photo like students/mentors: RGB JPEG, fixed orientation, in-memory.
-        if getattr(self, "photo", None):
-            try:
-                file_obj = self.photo
-                if getattr(file_obj, "_committed", True) is False or hasattr(
-                    file_obj, "file"
-                ):
-                    try:
-                        f = getattr(file_obj, "file", file_obj)
-                        try:
-                            f.seek(0)
-                        except (AttributeError, IOError):
-                            pass
-                        img = Image.open(f)
-                        img.load()
-                        try:
-                            img = ImageOps.exif_transpose(img)
-                        except (AttributeError, TypeError, IndexError):
-                            pass
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        buffer = BytesIO()
-                        img.save(buffer, format="JPEG", quality=85, optimize=True)
-                        buffer.seek(0)
-                        base, _ = os.path.splitext(self.photo.name or "photo")
-                        new_name = f"{base}.jpg"
-                        self.photo.save(
-                            new_name, ContentFile(buffer.read()), save=False
-                        )
-                    except Exception:
-                        # If normalization fails, continue with the original file to avoid blocking saves
-                        logger.debug("Adult photo normalization failed", exc_info=True)
-            except Exception:
-                logger.debug(
-                    "Unexpected error in Adult photo processing", exc_info=True
-                )
+        # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).
+        from .utils import normalize_image_field
+
+        normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)
 
 
@@ -924,6 +964,14 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ["-paid_on", "-created_at"]
+        indexes = [
+            models.Index(
+                fields=["student", "program"], name="payment_student_program_idx"
+            ),
+            models.Index(
+                fields=["program", "paid_on"], name="payment_program_date_idx"
+            ),
+        ]
 
     def __str__(self):
         via = dict(self.PAID_VIA_CHOICES).get(self.paid_via, self.paid_via)
@@ -992,6 +1040,11 @@ class SlidingScale(models.Model):
     class Meta:
         unique_together = ("student", "program")
         ordering = ["program__name", "student__last_name", "student__first_name"]
+        indexes = [
+            models.Index(
+                fields=["student", "program"], name="slidingscale_stu_prog_idx"
+            ),
+        ]
 
     def __str__(self):
         return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
@@ -1009,21 +1062,6 @@ class TaxForm(models.Model):
 
     def __str__(self):
         return f"Tax form for {self.sliding_scale}"
-
-    def save(self, *args, **kwargs):
-        if (
-            self.file
-            and hasattr(self.file, "file")
-            and not getattr(self.file, "_encrypted", False)
-        ):
-            fernet = get_fernet()
-            self.file.open("rb")
-            content = self.file.read()
-            self.file.close()
-            encrypted_content = fernet.encrypt(content)
-            self.file.file = ContentFile(encrypted_content, name=self.file.name)
-            self.file._encrypted = True
-        super().save(*args, **kwargs)
 
 
 class FeeAssignment(models.Model):
@@ -1071,119 +1109,50 @@ class FeeAssignment(models.Model):
             )
 
 
-class StudentApplication(models.Model):
-    """Public application submitted by a prospective student to a Program."""
+def _program_document_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/program_documents/<program_id>/<filename>."""
+    pid = instance.program_id or "unassigned"
+    return f"program_documents/{pid}/{filename}"
 
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("accepted", "Accepted"),
-        ("rejected", "Rejected"),
-    ]
+
+class ProgramDocument(models.Model):
+    """A document (typically a PDF) that an approved applicant needs to
+    download, sign, and re-upload before becoming a full student in the
+    program. Managed by lead mentors in Django admin.
+    """
 
     program = models.ForeignKey(
-        Program, on_delete=models.CASCADE, related_name="applications"
+        Program,
+        on_delete=models.CASCADE,
+        related_name="documents",
     )
-
-    # Mirror key Student fields (omit internal/user/parents/media)
-    legal_first_name = models.CharField(max_length=150)
-    first_name = models.CharField(max_length=150, blank=True, null=True)
-    last_name = models.CharField(max_length=150)
-    pronouns = models.CharField(max_length=50, blank=True, null=True)
-    date_of_birth = models.DateField(blank=True, null=True)
-
-    address = models.CharField(max_length=255, blank=True, null=True)
-    city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=50, blank=True, null=True)
-    zip_code = models.CharField(max_length=20, blank=True, null=True)
-
-    cell_phone_number = models.CharField(max_length=30, blank=True, null=True)
-    personal_email = models.EmailField(blank=True, null=True)
-
-    andrew_id = models.CharField(max_length=50, blank=True, null=True)
-    andrew_email = models.EmailField(blank=True, null=True)
-
-    school = models.ForeignKey(
-        "School",
-        on_delete=models.SET_NULL,
-        null=True,
+    name = models.CharField(
+        max_length=200,
+        help_text="Short name shown to applicants (e.g. 'Photo release form').",
+    )
+    description = models.TextField(
         blank=True,
-        related_name="applications",
+        default="",
+        help_text="Optional longer explanation shown next to the download link.",
     )
-    graduation_year = models.PositiveSmallIntegerField(blank=True, null=True)
-
-    race_ethnicity = models.CharField(max_length=100, blank=True, null=True)
-    tshirt_size = models.CharField(max_length=10, blank=True, null=True)
-
-    on_discord = models.BooleanField(default=False)
-    discord_handle = models.CharField(max_length=100, blank=True, null=True)
-
-    # Simple parent/guardian contact captured as text for application
-    parent_name = models.CharField(max_length=200, blank=True, null=True)
-    parent_email = models.EmailField(blank=True, null=True)
-    parent_phone = models.CharField(max_length=30, blank=True, null=True)
-
-    status = models.CharField(
-        max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True
+    file = models.FileField(
+        upload_to=_program_document_upload_to,
+        help_text="The blank PDF (or other file) for the applicant to download and fill out.",
     )
-    notes = models.TextField(blank=True, null=True)
-
+    is_required = models.BooleanField(
+        default=True,
+        help_text="If checked, applicants must upload a signed copy before being marked complete.",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Uncheck to hide this document from applicants without deleting it.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["program", "display_order", "name"]
 
     def __str__(self):
-        return f"Application: {self.first_name or self.legal_first_name} {self.last_name} → {self.program} ({self.status})"
-
-    def approve(self) -> Student:
-        """Create (or find) a Student from this application and enroll them in the program."""
-        # Try to find existing student by name and email
-        student = None
-        if self.personal_email:
-            student = Student.objects.filter(
-                personal_email__iexact=self.personal_email
-            ).first()
-        if not student:
-            student = Student.objects.create(
-                legal_first_name=self.legal_first_name,
-                first_name=self.first_name,
-                last_name=self.last_name,
-                pronouns=self.pronouns,
-                date_of_birth=self.date_of_birth,
-                address=self.address,
-                city=self.city,
-                state=self.state,
-                zip_code=self.zip_code,
-                cell_phone_number=self.cell_phone_number,
-                personal_email=self.personal_email,
-                andrew_id=self.andrew_id,
-                andrew_email=self.andrew_email,
-                school=self.school,
-                graduation_year=self.graduation_year,
-                tshirt_size=self.tshirt_size,
-                on_discord=self.on_discord,
-                discord_handle=self.discord_handle,
-            )
-        # Map application race text to Student multi-select
-        try:
-            options = RaceEthnicity.match_from_text(self.race_ethnicity)
-            if options.exists():
-                student.race_ethnicities.set(list(options))
-        except Exception:
-            logger.debug(
-                "Race/Ethnicity matching failed during approval", exc_info=True
-            )
-        # Enroll in program
-        try:
-            Enrollment.objects.get_or_create(student=student, program=self.program)
-        except Exception:
-            logger.exception("Failed to enroll student during application approval")
-            # This is critical for approval, but we still have the student record.
-            # Maybe don't pass here? But the issue asks to fix try-except-pass.
-            pass
-        # Update status
-        if self.status != "accepted":
-            self.status = "accepted"
-            self.save(update_fields=["status", "updated_at"])
-        return student
+        return f"{self.name} ({self.program})"

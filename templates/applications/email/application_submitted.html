@@ -1,0 +1,18 @@
+<p>Hi {{ application.applicant_name|default:"" }},</p>
+<p>Thanks for applying to <strong>Girls of Steel Robotics</strong>!</p>
+<p>
+    <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
+    {% if application.primary_parent_name %}<strong>Primary adult contact:</strong> {{ application.primary_parent_name }}<br>{% endif %}
+    {% if application.secondary_parent_name %}<strong>Secondary adult contact:</strong> {{ application.secondary_parent_name }}<br>{% endif %}
+    <strong>Program:</strong> {{ application.program|default:"(not specified)" }}<br>
+    <strong>Application ID:</strong> <code>{{ application.application_id }}</code>
+</p>
+<p>
+    Our lead mentors have been notified and will review your application.
+    You can check back at any time using
+    <a href="{{ resume_url }}">your application link</a>.
+</p>
+<p style="color:#666;font-size:0.9em">
+    Questions? Email
+    <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+</p>

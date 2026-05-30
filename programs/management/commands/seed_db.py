@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
@@ -27,6 +26,9 @@ class Command(BaseCommand):
         )
         andrew_id, _ = ProgramFeature.objects.get_or_create(
             key="cmu-andrew", name="CMU Andrew ID"
+        )
+        tshirt_size, _ = ProgramFeature.objects.get_or_create(
+            key="tshirt-size", name="T-shirt Sizes"
         )
 
         # 2. Programs
@@ -64,7 +66,7 @@ class Command(BaseCommand):
             end_date=date(this_year, 12, 31),
             active=True,
         )
-        p3.features.add(discord, bg_checks, andrew_id)
+        p3.features.add(discord, bg_checks, andrew_id, tshirt_size)
         p4.features.add(discord)
 
         # Future Programs

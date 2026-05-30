@@ -66,6 +66,7 @@
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.city %}{% else %}{% render_field form.city readonly=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.state %}{% else %}{% render_field form.state readonly=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.zip_code %}{% else %}{% render_field form.zip_code readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_contact %}{% render_field form.directory_consent %}{% else %}{% render_field form.directory_consent disabled=True %}{% endif %}</div>
     </div>
 </div>
 </div>
@@ -252,7 +253,7 @@
       {% endif %}
     </div>
 
-    <script>
+    <script nonce="{{ request.csp_nonce }}">
       (function(){
         // Relationship choices from server for creating new items dynamically
         var REL_CHOICES = [

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import dj_database_url
 from csp import constants
-from csp.constants import SELF
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -95,9 +94,11 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     # Local apps
+    "django.forms",
     "programs",
     "attendance",
     "api",
+    "applications",
 ]
 
 MIDDLEWARE = [
@@ -207,6 +208,9 @@ MEDIA_ROOT = "media/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Use project templates for form widgets
+FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
+
 # Django-allauth configuration
 SITE_ID = 1
 
@@ -227,17 +231,23 @@ ACCOUNT_EMAIL_VERIFICATION = "none"  # We don't need verification if we use OTP
 ACCOUNT_ADAPTER = "GoSAdminPortal.adapter.AccountAdapter"
 
 # Email (SMTP) configuration via environment variables
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
-)
+# Default to console backend if no user is provided to avoid crashes in staging/dev
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
+if not EMAIL_BACKEND:
+    if os.getenv("EMAIL_HOST_USER"):
+        EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    else:
+        EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.fastmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() in ["1", "true", "yes"]
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() in ["1", "true", "yes"]
-EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "")
+DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Admin")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 # Content Security Policy (django-csp)
@@ -245,14 +255,24 @@ SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "base-uri": ["'self'"],
-        "connect-src": ["'self'"],
+        "connect-src": ["'self'", "https://nominatim.openstreetmap.org"],
         "default-src": ["'self'"],
         "font-src": ["'self'", "data:"],
         "frame-ancestors": ["'self'"],
-        "img-src": ["'self'", "data:"],
+        "img-src": ["'self'", "data:", "*.tile.openstreetmap.org"],
         "object-src": ["'none'"],
-        "script-src": ["'self'", "https://cdn.jsdelivr.net", constants.NONCE],
-        "style-src": ["'self'", "https://cdn.jsdelivr.net"],
+        "script-src": [
+            "'self'",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            constants.NONCE,
+        ],
+        "style-src": [
+            "'self'",
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "'unsafe-inline'",
+        ],
     }
 }
 

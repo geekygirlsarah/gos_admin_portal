@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}{% block review_title %}Applications{% endblock %} — Girls of Steel{% endblock %}
+{% block content %}
+  <div class="row mb-3 align-items-center">
+    <div class="col">
+      <h1 class="h3 mb-0">{% block review_heading %}Applications{% endblock %}</h1>
+    </div>
+    <div class="col-auto">
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'application_review_list' %}">
+        ← All applications
+      </a>
+    </div>
+  </div>
+  {% block review_body %}{% endblock %}
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends 'applications/review/_base.html' %}
+{% block review_title %}Edit {{ application.application_id }}{% endblock %}
+{% block review_heading %}Edit application <code>{{ application.application_id }}</code>{% endblock %}
+{% block review_body %}
+  <form method="post" class="mb-3">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label" for="id_email">{{ form.email.label }}</label>
+      {{ form.email }}
+      {% for e in form.email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="id_data_json">{{ form.data_json.label }}</label>
+      {% if form.data_json.help_text %}<div class="form-text mb-1">{{ form.data_json.help_text }}</div>{% endif %}
+      {{ form.data_json }}
+      {% for e in form.data_json.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a class="btn btn-outline-secondary"
+       href="{% url 'application_review_detail' application.application_id %}">
+      Cancel
+    </a>
+  </form>
+{% endblock %}

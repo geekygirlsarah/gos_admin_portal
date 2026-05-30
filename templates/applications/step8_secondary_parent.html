@@ -1,0 +1,75 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Secondary adult contact{% endblock %}
+{% block wizard_heading %}Secondary adult contact{% endblock %}
+
+{% block wizard_body %}
+<p>
+    Please provide a second adult contact or emergency contact for the
+    student. The secondary adult contact is the one we will reach out to
+    if we <strong>cannot get a hold of</strong> the primary adult contact.
+</p>
+
+<p>
+    For this contact, only a name and phone number are required.
+</p>
+
+{% if student_address %}
+<p>
+    <button type="button" id="copy-address-btn" class="btn btn-sm btn-outline-secondary mt-2">
+        Copy address from student
+    </button>
+</p>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="row g-3">
+        {% for field in form %}
+            <div class="col-12 {% if field.name == 'email_updates' %}col-md-12{% else %}col-md-6{% endif %}">
+                {% if field.field.widget.input_type == 'checkbox' %}
+                    <div class="form-check mt-2">
+                        {{ field }}
+                        <label for="{{ field.id_for_label }}" class="form-check-label">
+                            {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                        </label>
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                    </div>
+                {% else %}
+                    <label for="{{ field.id_for_label }}" class="form-label">
+                        {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                    </label>
+                    {% if field.help_text %}<div class="form-text mb-1">{{ field.help_text }}</div>{% endif %}
+                    {{ field }}
+                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'apply_step7' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+
+{% if student_address %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function() {
+        const btn = document.getElementById('copy-address-btn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                document.getElementById('id_address').value = "{{ student_address|escapejs }}";
+                document.getElementById('id_city').value = "{{ student_city|escapejs }}";
+                document.getElementById('id_state').value = "{{ student_state|escapejs }}";
+                document.getElementById('id_zip_code').value = "{{ student_zip_code|escapejs }}";
+            });
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

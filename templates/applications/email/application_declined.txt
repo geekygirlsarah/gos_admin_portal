@@ -1,0 +1,16 @@
+Hello {{ application.applicant_name|default:"" }},
+
+Thank you for applying to Girls of Steel Robotics. After review, we are
+unable to approve your application at this time.
+
+Student:        {{ application.student_name|default:"(not specified)" }}
+Application ID: {{ application.application_id }}
+{% if reason %}
+Note from the lead mentors:
+
+{{ reason }}
+{% endif %}
+If you have questions, please reply to this email or contact us at
+leads@girlsofsteelrobotics.org.
+
+— Girls of Steel Robotics

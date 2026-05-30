@@ -1,0 +1,12 @@
+<p>Hi {{ application.secondary_parent_name|default:"" }},</p>
+<p>
+    {{ application.student_name|default:"A student" }} has started a Girls of Steel Robotics application and needs
+    an adult contact to finish it.
+</p>
+<p>
+    <strong>Application ID:</strong> <code>{{ application.application_id }}</code><br>
+    <a href="{{ resume_url }}">Continue the application</a>
+</p>
+<p style="color:#666;font-size:0.9em">
+    If you weren't expecting this email, you can safely ignore it. If you have any questions, please hit reply and let us know.
+</p>

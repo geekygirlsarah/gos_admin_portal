@@ -1,0 +1,87 @@
+{% extends "applications/_wizard_base.html" %}
+{% load application_extras %}
+
+{% block wizard_title %}Review &amp; submit{% endblock %}
+{% block wizard_heading %}Review your mentor application{% endblock %}
+
+{% block wizard_body %}
+<p>
+    Please review the information below. Once you submit, lead mentors
+    will be notified to review your application and follow up by email.
+</p>
+
+<div class="card mb-3">
+    <div class="card-header">Mentor information</div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-4">Email</dt>
+            <dd class="col-sm-8">{{ application.email }}</dd>
+            {% for key, value in mentor_info.items %}
+                {% if value %}
+                    <dt class="col-sm-4">{{ key|humanize_field }}</dt>
+                    <dd class="col-sm-8">{{ value }}</dd>
+                {% endif %}
+            {% endfor %}
+        </dl>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">PA Clearances</div>
+    <div class="card-body">
+        {% if clearance_interest.interested == "yes" %}
+            <p class="mb-2">
+                Interested in obtaining child-protection clearances:
+                <strong>Yes</strong>
+            </p>
+            <dl class="row mb-0">
+                {% for key, value in clearance_detail.items %}
+                    <dt class="col-sm-4">{{ key|humanize_field }}</dt>
+                    <dd class="col-sm-8">
+                        {% if value == "have" %}Already have it
+                        {% elif value == "need" %}Need to obtain
+                        {% else %}{{ value }}{% endif %}
+                    </dd>
+                {% endfor %}
+            </dl>
+        {% else %}
+            <p class="mb-0 text-muted">
+                Not pursuing PA clearances at this time.
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+<p class="text-muted small">
+    Lead mentors will be notified to review your
+    application. You'll get a confirmation email with your application
+    ID (<code>{{ application.application_id }}</code>) right after you
+    submit.
+</p>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+            {{ form.non_field_errors|join:" " }}
+        </div>
+    {% endif %}
+    <div class="form-check mb-3">
+        {{ form.confirm }}
+        <label class="form-check-label" for="{{ form.confirm.id_for_label }}">
+            {{ form.confirm.label }}
+        </label>
+        {% if form.confirm.errors %}
+            <div class="invalid-feedback d-block" role="alert">
+                {{ form.confirm.errors|join:" " }}
+            </div>
+        {% endif %}
+    </div>
+    <div class="d-flex justify-content-between">
+        <a href="{% url 'apply_mentor_clearance_interest' app_id=application.application_id %}" class="btn btn-link">
+            Back
+        </a>
+        <button type="submit" class="btn btn-primary">Submit application</button>
+    </div>
+</form>
+{% endblock %}

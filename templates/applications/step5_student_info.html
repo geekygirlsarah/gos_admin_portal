@@ -1,0 +1,143 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>
+    /* Ensure the Tom Select control matches Bootstrap's form-select height and styling */
+    .ts-control {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+    }
+    .ts-wrapper.single .ts-control {
+        padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block wizard_title %}Student information{% endblock %}
+{% block wizard_heading %}Student information{% endblock %}
+
+{% block wizard_body %}
+{% if welcome_back %}
+    <div class="alert alert-info" role="status">
+        <strong>Welcome back{% if welcome_back.name %}, {{ welcome_back.name }}{% endif %}!</strong>
+        {% if welcome_back.last_program %}
+            We found your record from <strong>{{ welcome_back.last_program.name }}{% if welcome_back.last_program.start_date %} ({{ welcome_back.last_program.start_date|date }}){% endif %}</strong>
+            and prefilled some fields below.
+        {% else %}
+            We found your record on file and prefilled some fields below.
+        {% endif %}
+        Please review and update anything that has changed.
+    </div>
+{% endif %}
+{% if picker %}
+    <form method="post" class="mb-4 p-3 bg-light rounded" novalidate>
+        {% csrf_token %}
+        <p class="mb-2">
+            We found these students linked to <strong>{{ application.email }}</strong>.
+            Pick the one this application is for, or apply for a new student.
+        </p>
+        <div class="mb-3">
+            {% for choice in picker.student %}
+                {{ choice.tag }}
+            {% endfor %}
+        </div>
+        <button type="submit" name="_pick_student" value="1" class="btn btn-outline-primary">
+            Use this selection
+        </button>
+        {% if chosen_student %}
+            <span class="text-success ms-2">
+                Prefilled from <strong>{{ chosen_student }}</strong>.
+            </span>
+        {% endif %}
+    </form>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="row g-3">
+        {% for field in form %}
+            {% if field.is_hidden %}
+                {{ field }}
+            {% else %}
+                <div class="col-12 
+                    {% if field.name == 'address' or field.name == 'race_ethnicities' or field.name == 'allergies' or field.name == 'dietary_restrictions' or field.name == 'medical_notes' %}
+                        col-md-12
+                    {% elif field.name == 'city' or field.name == 'state' or field.name == 'zip_code' or field.name == 'pronouns' or field.name == 'tshirt_size' %}
+                        col-md-4
+                    {% else %}
+                        col-md-6
+                    {% endif %}">
+                    {% if field.name == 'directory_consent' or field.name == 'confirm_age' %}
+                        {% if field.name == 'confirm_age' and not warnings %}
+                            {# hidden unless warnings present #}
+                        {% else %}
+                            <div class="form-check mt-md-4">
+                                {{ field }}
+                                <label for="{{ field.id_for_label }}" class="form-check-label">
+                                    {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                </label>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <label for="{{ field.id_for_label }}" class="form-label">
+                            {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                        </label>
+                        {% if field.help_text %}<div class="form-text mb-1">{{ field.help_text }}</div>{% endif %}
+                        {{ field }}
+                        {% if field.name == 'grade' %}
+                            <div id="grad-year-display" class="form-text text-primary"></div>
+                        {% endif %}
+                    {% endif %}
+                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'apply_step4' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function() {
+        const schoolSelect = document.getElementById("id_school_name");
+        if (schoolSelect) {
+            new TomSelect(schoolSelect, {
+                create: false,
+                allowEmptyOption: true,
+                maxOptions: null,
+            });
+        }
+
+        const gradeSelect = document.getElementById("id_grade");
+        const gradYearDisplay = document.getElementById("grad-year-display");
+        const academicYearEnding = {{ academic_year_ending|default:0 }};
+
+        function updateGradYear() {
+            if (!gradeSelect || !gradYearDisplay) return;
+            const grade = parseInt(gradeSelect.value);
+            const gradYearInput = document.getElementById("id_graduation_year");
+            if (!isNaN(grade)) {
+                const gradYear = academicYearEnding + (12 - grade);
+                gradYearDisplay.textContent = `Expected graduation year: ${gradYear}`;
+                if (gradYearInput) gradYearInput.value = gradYear;
+            } else {
+                gradYearDisplay.textContent = "";
+            }
+        }
+        if (gradeSelect) {
+            gradeSelect.addEventListener("change", updateGradYear);
+            updateGradYear(); // initialize
+        }
+    });
+</script>
+{% endblock %}

@@ -21,6 +21,9 @@ from .views import (
     ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,
+    ProgramDocumentCreateView,
+    ProgramDocumentDeleteView,
+    ProgramDocumentUpdateView,
     ProgramDuesOwedView,
     ProgramEmailBalancesView,
     ProgramEmailView,
@@ -382,6 +385,28 @@ urlpatterns = [
             ProgramFeeAssignmentEditView.as_view()
         ),
         name="program_fee_assignments",
+    ),
+    # Program documents (Step 9 blank forms)
+    path(
+        "<int:pk>/documents/new/",
+        permission_required("programs.change_program")(
+            ProgramDocumentCreateView.as_view()
+        ),
+        name="program_document_create",
+    ),
+    path(
+        "<int:pk>/documents/<int:doc_id>/edit/",
+        permission_required("programs.change_program")(
+            ProgramDocumentUpdateView.as_view()
+        ),
+        name="program_document_edit",
+    ),
+    path(
+        "<int:pk>/documents/<int:doc_id>/delete/",
+        permission_required("programs.change_program")(
+            ProgramDocumentDeleteView.as_view()
+        ),
+        name="program_document_delete",
     ),
     # Student edit
     path(

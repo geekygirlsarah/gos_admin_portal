@@ -5,7 +5,10 @@ from programs.models import Adult, Student
 
 
 class Command(BaseCommand):
-    help = "Convert graduating seniors (graduation_year <= current year) to alumni by creating/updating Adults and marking students as graduated."
+    help = (
+        "Convert graduating seniors (graduation_year <= current year) to alumni "
+        "by creating/updating Adults and marking students as graduated."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -108,6 +111,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Processed {total} students up to year {year}. Adults created/updated as alumni: {created + existed} (new: {created}, existing: {existed}), marked graduated: {marked_graduated}."
+                f"Processed {total} students up to year {year}. "
+                f"Adults created/updated as alumni: {created + existed} "
+                f"(new: {created}, existing: {existed}), marked graduated: {marked_graduated}."
             )
         )

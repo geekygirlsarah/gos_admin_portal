@@ -6,32 +6,35 @@ python -m pip install --upgrade pip
 
 echo "--- Installing Dependencies ---"
 pip install -r requirements.txt
-pip install flake8 black isort bandit safety semgrep
 
-echo "--- Running Linter (flake8) ---"
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || { echo "flake8 critical failed"; exit 1; }
-flake8 . --count --exit-zero --statistics
+echo "--- Running Checks in Parallel ---"
+# Launch independent checks in background
+flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics &
+p1=$!
+black --check --exclude "(venv|venv2|\.venv)" . &
+p2=$!
+isort --check-only --profile black --skip venv --skip venv2 --skip .venv . &
+p3=$!
+bandit -r . -x ./venv,./.venv,./venv2 &
+p4=$!
 
-echo "--- Checking Formatting (black) ---"
-black --check --exclude "(venv|venv2|\.venv)" . || { echo "black formatting check failed"; exit 1; }
-
-echo "--- Checking Formatting (isort) ---"
-isort --check-only --profile black --skip venv --skip venv2 --skip .venv . || { echo "isort formatting check failed"; exit 1; }
-
-echo "--- Security Scan (bandit) ---"
-bandit -r . -x ./venv,./.venv,./venv2 || { echo "bandit security scan failed"; exit 1; }
-
-echo "--- Security Scan (safety) ---"
-# Safety might fail due to missing API key or vulnerabilities; we can make it non-fatal or handle it.
-safety check || echo "Safety check failed. It may require an API key or found vulnerabilities."
+# Wait for background jobs and collect results
+wait $p1 || ( echo "flake8 critical failed"; exit 1 )
+wait $p2 || ( echo "black formatting check failed"; exit 1 )
+wait $p3 || ( echo "isort formatting check failed"; exit 1 )
+wait $p4 || ( echo "bandit security scan failed"; exit 1 )
 
 echo "--- Static Analysis (semgrep) ---"
+# Semgrep can be slow and output-heavy, keeping it sequential or separate
 semgrep --config auto . || echo "semgrep static analysis reported findings. Proceeding..."
 
-echo "--- Django System Check ---"
-python manage.py check || { echo "Django system check failed"; exit 1; }
+echo "--- Security Scan (safety) ---"
+safety check || echo "Safety check failed. It may require an API key or found vulnerabilities."
 
-echo "--- Running Tests ---"
-python manage.py test --noinput || { echo "Django tests failed"; exit 1; }
+echo "--- Django System Check ---"
+python manage.py check || ( echo "Django system check failed"; exit 1 )
+
+echo "--- Running Tests (Parallel) ---"
+python manage.py test --noinput --parallel || ( echo "Django tests failed"; exit 1 )
 
 echo "CI Tasks Completed Successfully!"

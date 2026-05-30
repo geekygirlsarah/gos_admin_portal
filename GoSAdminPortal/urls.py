@@ -22,18 +22,14 @@ from django.urls import include, path, re_path, reverse_lazy
 from django.views.generic import RedirectView
 from django.views.static import serve
 
-from programs.views import ApplyProgramSelectView, ApplyStudentView, ApplyThanksView
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("programs/", include("programs.urls")),
     path("api/v1/", include("api.urls")),
     path("api-keys/", include("api.manage_urls")),
-    # Public application flow
-    path("apply/", ApplyProgramSelectView.as_view(), name="apply_start"),
-    path("apply/<int:program_id>/", ApplyStudentView.as_view(), name="apply_program"),
-    path("apply/thanks/", ApplyThanksView.as_view(), name="apply_thanks"),
+    # Public application flow (new wizard lives in the `applications` app)
+    path("apply/", include("applications.urls")),
     # Root redirects to the programs list (home)
     path(
         "",

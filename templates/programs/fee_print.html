@@ -36,7 +36,7 @@
 {% block content %}
     <div class="row">
         <div class="col-lg-10 col-xl-8 text-end">
-            <button class="btn btn-primary no-print" onclick="window.print()">Print</button>
+            <button id="print-btn" class="btn btn-primary no-print">Print</button>
         </div>
     </div>
 
@@ -111,4 +111,14 @@
 
     </div>
     </div>
+    <script nonce="{{ request.csp_nonce }}">
+      (function() {
+        const printBtn = document.getElementById('print-btn');
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                window.print();
+            });
+        }
+      })();
+    </script>
 {% endblock %}

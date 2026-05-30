@@ -1,0 +1,35 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Clearance status{% endblock %}
+{% block wizard_heading %}Which clearances do you already have?{% endblock %}
+
+{% block wizard_body %}
+<p>
+    For each of these clearances, let us know whether you already have
+    the documentsone on file or whether you'll need to obtain it before working
+    directly with students.
+</p>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+        <fieldset class="mb-4">
+            <legend class="h6">{{ field.label }}</legend>
+            {% for choice in field %}
+                {{ choice.tag }}
+            {% endfor %}
+            {% if field.errors %}
+                <div class="invalid-feedback d-block" role="alert">
+                    {{ field.errors|join:" " }}
+                </div>
+            {% endif %}
+        </fieldset>
+    {% endfor %}
+    <div class="d-flex justify-content-between">
+        <a href="{% url 'apply_mentor_clearance_interest' app_id=application.application_id %}" class="btn btn-link">
+            Back
+        </a>
+        <button type="submit" class="btn btn-primary">Continue</button>
+    </div>
+</form>
+{% endblock %}

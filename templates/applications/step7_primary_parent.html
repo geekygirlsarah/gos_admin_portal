@@ -1,0 +1,119 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Primary adult contact{% endblock %}
+{% block wizard_heading %}Primary adult contact{% endblock %}
+
+{% block wizard_body %}
+{% if mode == "handoff" %}
+    <p>
+        Thanks! Now an adult contact needs to finish the application.
+        Enter their email below and we'll send them a link to take over.
+    </p>
+    <form method="post" novalidate class="mb-3">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="{{ handoff_form.parent_email.id_for_label }}" class="form-label">
+                {{ handoff_form.parent_email.label }}
+            </label>
+            {% if handoff_form.parent_email.help_text %}
+                <div class="form-text mb-1">{{ handoff_form.parent_email.help_text }}</div>
+            {% endif %}
+            {{ handoff_form.parent_email }}
+            {% if handoff_form.parent_email.errors %}
+                <div class="invalid-feedback d-block">{{ handoff_form.parent_email.errors|join:" " }}</div>
+            {% endif %}
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
+            <button type="submit" class="btn btn-primary">Email my adult contact</button>
+        </div>
+    </form>
+{% else %}
+    {% if welcome_back %}
+        <div class="alert alert-info" role="status">
+            <strong>Welcome back{% if welcome_back.name %}, {{ welcome_back.name }}{% endif %}!</strong>
+            {% if welcome_back.last_program %}
+                We found your record from <strong>{{ welcome_back.last_program.name }}{% if welcome_back.last_program.start_date %} ({{ welcome_back.last_program.start_date|date }}){% endif %}</strong>
+                and prefilled some fields below.
+            {% else %}
+                We found your record on file and prefilled some fields below.
+            {% endif %}
+            Please review and update anything that has changed.
+        </div>
+    {% endif %}
+    <p>
+        Please provide the primary adult contact's information.
+        The primary adult contact is the one we will reach out to
+        <strong>first</strong> in an emergency.
+    </p>
+    {% if student_address %}
+    <p>
+        <button type="button" id="copy-address-btn" class="btn btn-sm btn-outline-secondary mt-2">
+            Copy address from student
+        </button>
+    </p>
+    {% endif %}
+    {% if has_secondary %}
+    <div class="alert alert-secondary d-flex align-items-center justify-content-between gap-3" role="note">
+        <span>Want to make {% if secondary_name %}<strong>{{ secondary_name }}</strong> (the secondary adult contact){% else %}the secondary adult contact{% endif %} the primary instead?</span>
+        <form method="post" action="{% url 'apply_swap_parents' app_id=application.application_id %}" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="7">
+            <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">
+                ⇄ Swap primary &amp; secondary
+            </button>
+        </form>
+    </div>
+    {% endif %}
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <div class="row g-3">
+            {% for field in form %}
+                <div class="col-12 {% if field.name == 'email_updates' %}col-md-12{% else %}col-md-6{% endif %}">
+                    {% if field.field.widget.input_type == 'checkbox' %}
+                        <div class="form-check mt-2">
+                            {{ field }}
+                            <label for="{{ field.id_for_label }}" class="form-check-label">
+                                {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </label>
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                        </div>
+                    {% else %}
+                        <label for="{{ field.id_for_label }}" class="form-label">
+                            {{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                        </label>
+                        {% if field.help_text %}<div class="form-text mb-1">{{ field.help_text }}</div>{% endif %}
+                        {{ field }}
+                        {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors|join:" " }}</div>{% endif %}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'apply_step6' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary">Save and continue</button>
+    </div>
+</form>
+
+{% if student_address %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function() {
+        const btn = document.getElementById('copy-address-btn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                document.getElementById('id_address').value = "{{ student_address|escapejs }}";
+                document.getElementById('id_city').value = "{{ student_city|escapejs }}";
+                document.getElementById('id_state').value = "{{ student_state|escapejs }}";
+                document.getElementById('id_zip_code').value = "{{ student_zip_code|escapejs }}";
+            });
+        }
+    });
+</script>
+{% endif %}
+
+{% endif %}
+{% endblock %}

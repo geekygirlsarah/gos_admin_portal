@@ -1,0 +1,193 @@
+{% extends 'applications/review/_base.html' %}
+{% load application_extras %}
+{% block review_title %}Application {{ application.application_id }}{% endblock %}
+{% block review_heading %}Application <code>{{ application.application_id }}</code>{% endblock %}
+{% block review_body %}
+  <div class="row g-3 mb-3">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Overview</span>
+          <span class="badge bg-secondary">{{ application.get_status_display }}</span>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Applicant type</dt>
+            <dd class="col-sm-8">{{ application.get_applicant_type_display|default:"—" }}</dd>
+            <dt class="col-sm-4">Email</dt>
+            <dd class="col-sm-8">{{ application.email|default:"—" }}</dd>
+            <dt class="col-sm-4">Email verified</dt>
+            <dd class="col-sm-8">{{ application.email_verified_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+            <dt class="col-sm-4">Program</dt>
+            <dd class="col-sm-8">{{ application.program|default:"—" }}</dd>
+            <dt class="col-sm-4">Current step</dt>
+            <dd class="col-sm-8">{{ application.current_step }}</dd>
+            <dt class="col-sm-4">Created</dt>
+            <dd class="col-sm-8">{{ application.created_at|date:"Y-m-d H:i" }}</dd>
+            <dt class="col-sm-4">Submitted</dt>
+            <dd class="col-sm-8">{{ application.submitted_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+            <dt class="col-sm-4">Reviewed</dt>
+            <dd class="col-sm-8">
+              {% if application.reviewed_at %}
+                {{ application.reviewed_at|date:"Y-m-d H:i" }}
+                {% if application.reviewed_by %} by {{ application.reviewed_by }}{% endif %}
+              {% else %}—{% endif %}
+            </dd>
+            {% if application.decline_reason %}
+              <dt class="col-sm-4">Decline reason</dt>
+              <dd class="col-sm-8"><pre class="mb-0">{{ application.decline_reason }}</pre></dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">Actions</div>
+        <div class="card-body d-grid gap-2">
+          <form method="post" action="{% url 'application_review_approve' application.application_id %}">
+            {% csrf_token %}
+            <button class="btn btn-success w-100" type="submit"
+                    {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}disabled{% endif %}>
+              Approve
+            </button>
+          </form>
+          {% if application.status == 'converted' %}
+            <button class="btn btn-primary w-100" type="button" disabled>
+              ✓ Converted to Student
+            </button>
+            {% if application.converted_student %}
+              <a class="btn btn-outline-primary"
+                 href="{% url 'student_edit' application.converted_student.id %}">
+                View student record
+              </a>
+            {% endif %}
+          {% else %}
+            <form method="post" action="{% url 'application_review_convert' application.application_id %}">
+              {% csrf_token %}
+              <button class="btn btn-primary w-100" type="submit"
+                      {% if not can_convert %}disabled
+                      title="Approve the application first, and make sure any required signed documents have been uploaded."{% endif %}>
+                Convert to Student
+              </button>
+            </form>
+          {% endif %}
+          <a class="btn btn-warning"
+             href="{% url 'application_review_decline' application.application_id %}">
+            Decline…
+          </a>
+          <a class="btn btn-outline-primary"
+             href="{% url 'application_review_edit' application.application_id %}">
+            Edit captured data
+          </a>
+          <a class="btn btn-outline-danger"
+             href="{% url 'application_review_delete' application.application_id %}">
+            Delete…
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if any_documents %}
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Signed Documents</span>
+        {% if all_required_uploaded %}
+          <span class="badge bg-success">All required uploaded</span>
+        {% else %}
+          <span class="badge bg-warning text-dark">Awaiting required uploads</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        <table class="table mb-0 align-middle">
+          <thead>
+            <tr>
+              <th scope="col">Document</th>
+              <th scope="col">Required</th>
+              <th scope="col">Status</th>
+              <th scope="col">Uploaded</th>
+              <th scope="col">Files</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in documents_status %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ row.document.name }}</div>
+                  {% if row.document.description %}
+                    <div class="small text-muted">{{ row.document.description }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.document.is_required %}
+                    <span class="badge bg-secondary">Required</span>
+                  {% else %}
+                    <span class="badge bg-light text-dark border">Optional</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.submission %}
+                    <span class="badge bg-success">Uploaded</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">Not uploaded</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.submission %}
+                    {{ row.submission.uploaded_at|date:"Y-m-d H:i" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.document.file %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ row.document.file.url }}" target="_blank" rel="noopener">Blank</a>
+                  {% endif %}
+                  {% if row.submission and row.submission.file %}
+                    <a class="btn btn-sm btn-outline-primary" href="{{ row.submission.file.url }}" target="_blank" rel="noopener">Signed</a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">Captured data</div>
+    <div class="card-body">
+      {% if data %}
+        {% for step_key, step_data in data.items %}
+          <h2 class="h6 text-uppercase text-muted mt-3">{{ step_key }}</h2>
+          {% if step_data.items %}
+            <dl class="row mb-0">
+              {% for field, value in step_data.items %}
+                {% if not field|slice:":1" == "_" %}
+                  {% if step_key == 'step5-student' and field == 'grade' %}
+                  {% elif step_key == 'step5-student' and field == 'graduation_year' %}
+                  {% else %}
+                    <dt class="col-sm-4">{{ field|humanize_field }}</dt>
+                    <dd class="col-sm-8">{{ value|format_application_value:field }}</dd>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% if step_key == 'step5-student' %}
+                  <dt class="col-sm-4">Grade</dt>
+                  <dd class="col-sm-8">{{ step_data|get_grade:application }}</dd>
+                  <dt class="col-sm-4">Graduation year</dt>
+                  <dd class="col-sm-8">{{ step_data.graduation_year|default:"—" }}</dd>
+              {% endif %}
+            </dl>
+          {% else %}
+            <p class="text-muted small">{{ step_data }}</p>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="text-muted mb-0">No data captured yet.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

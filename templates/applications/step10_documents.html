@@ -1,0 +1,132 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Step 10 – Signed documents{% endblock %}
+{% block wizard_heading %}Your application is approved — a few documents to sign{% endblock %}
+
+{% block wizard_body %}
+    <p class="lead">
+        Great news! Your application
+        <code>{{ application.application_id }}</code>
+        for <strong>{{ application.program }}</strong> has been approved.
+    </p>
+
+    <p>
+        Below is the list of documents we need you to download, fill out
+        and sign, and re-upload. You can come back to this page at any time
+        using your application ID and the same email address.
+    </p>
+
+    {% if rows %}
+        <ul class="list-group mb-4">
+            {% for row in rows %}
+                {% with doc=row.document submission=row.submission %}
+                    <li class="list-group-item p-3"
+                        {% if focus_doc_id == doc.pk %}id="doc-{{ doc.pk }}"{% endif %}>
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div class="me-3">
+                                <h2 class="h5 mb-1">
+                                    {{ doc.name }}
+                                    {% if doc.is_required %}
+                                        <span class="badge bg-secondary ms-1" aria-label="Required">Required</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border ms-1">Optional</span>
+                                    {% endif %}
+                                </h2>
+                                {% if doc.description %}
+                                    <p class="text-muted small mb-2">{{ doc.description|linebreaksbr }}</p>
+                                {% endif %}
+                                <p class="mb-0">
+                                    <a class="btn btn-sm btn-outline-primary"
+                                       href="{{ doc.file.url }}"
+                                       target="_blank"
+                                       rel="noopener">
+                                        Download blank form
+                                    </a>
+                                </p>
+                            </div>
+                            <div class="text-end">
+                                {% if submission %}
+                                    <span class="badge bg-success mb-2" aria-label="Signed copy uploaded">
+                                        ✓ Signed copy uploaded
+                                    </span>
+                                    <div class="small">
+                                        <a href="{{ submission.file.url }}"
+                                           target="_blank"
+                                           rel="noopener">
+                                            View your upload
+                                        </a>
+                                        <div class="text-muted">
+                                            Uploaded {{ submission.uploaded_at|date:"M j, Y g:i a" }}
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    {% if doc.is_required %}
+                                        <span class="badge bg-warning text-dark">Not yet uploaded</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border">Not yet uploaded</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <form method="post"
+                              enctype="multipart/form-data"
+                              action="{% url 'apply_step10' app_id=application.application_id %}"
+                              class="row g-2 align-items-end">
+                            {% csrf_token %}
+                            <input type="hidden" name="document_id" value="{{ doc.pk }}">
+                            <div class="col-12 col-md">
+                                <label class="form-label small mb-1"
+                                       for="file_{{ doc.pk }}">
+                                    {% if submission %}Replace with a new signed copy{% else %}Upload signed copy{% endif %}
+                                </label>
+                                <input type="file"
+                                       id="file_{{ doc.pk }}"
+                                       name="file"
+                                       accept=".pdf,.png,.jpg,.jpeg"
+                                       class="form-control form-control-sm"
+                                       required>
+                                {% if focus_doc_id == doc.pk and form.file.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.file.errors|join:"; " }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-md-auto">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    {% if submission %}Replace upload{% else %}Upload{% endif %}
+                                </button>
+                            </div>
+                        </form>
+                    </li>
+                {% endwith %}
+            {% endfor %}
+        </ul>
+
+        {% if all_required_done %}
+            <div class="alert alert-success" role="status">
+                <strong>All required documents uploaded.</strong>
+                A lead mentor will review your uploads and finish enrolling
+                you in <strong>{{ application.program }}</strong>. We'll be
+                in touch soon — thanks!
+            </div>
+        {% else %}
+            <div class="alert alert-info" role="status">
+                Please upload all required documents above. You can come
+                back to this page at any time using your application ID.
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="alert alert-info" role="status">
+            There are no documents to upload for
+            <strong>{{ application.program }}</strong> right now. We'll be
+            in touch with next steps shortly.
+        </div>
+    {% endif %}
+
+    <p class="text-muted small mt-4 mb-0">
+        Application ID: <code>{{ application.application_id }}</code>
+    </p>
+{% endblock %}

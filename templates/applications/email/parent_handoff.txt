@@ -1,0 +1,11 @@
+Hi {{ application.secondary_parent_name|default:"" }},
+
+{{ application.student_name|default:"A student" }} has started a Girls of Steel Robotics application and needs
+an adult contact to finish it.
+
+Application ID: {{ application.application_id }}
+Resume link:    {{ resume_url }}
+
+To continue, follow the link above and complete the remaining steps.
+
+If you weren't expecting this email, you can safely ignore it. If you have any questions, please hit reply and let us know.

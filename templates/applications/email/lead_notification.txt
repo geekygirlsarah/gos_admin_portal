@@ -1,0 +1,12 @@
+A new application has been submitted.
+
+Student:          {{ application.student_name|default:"(not specified)" }}
+{% if application.primary_parent_name %}Primary Adult Contact:   {{ application.primary_parent_name }}
+{% endif %}{% if application.secondary_parent_name %}Secondary Adult Contact: {{ application.secondary_parent_name }}
+{% endif %}Application ID:   {{ application.application_id }}
+Type:             {{ application.get_applicant_type_display|default:"(unspecified)" }}
+Email:            {{ application.email }}
+Program:          {{ application.program|default:"(not specified)" }}
+Submitted at:     {{ application.submitted_at }}
+
+Please review it in the admin / Applications page.

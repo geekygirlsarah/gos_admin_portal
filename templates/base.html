@@ -21,7 +21,10 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
     <div class="container">
-        <a class="navbar-brand" href="/">Girls of Steel Portal</a>
+        <a class="navbar-brand" href="/">
+            <img src="{% static 'img/rosie_icon.png' %}" alt="Rosie Icon" width="30" height="30" class="d-inline-block align-text-top me-2">
+            Girls of Steel Portal
+        </a>
         {% if user.is_authenticated %}
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -59,6 +62,9 @@
                     </li>
                     {% endif %}
                     {% user_role user as role %}
+                    {% if perms.applications.review_application %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'application_review_list' %}">Applications</a></li>
+                    {% endif %}
                     {% if role == 'LeadMentor' %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'portal_settings' %}">Settings</a></li>
                     {% endif %}
@@ -68,7 +74,10 @@
                 </div>
             </div>
         {% endif %}
-        <div class="d-flex">
+        <div class="d-flex gap-2 align-items-center">
+            {% if not user.is_authenticated and "/apply" not in request.path %}
+            <a class="btn btn-warning" href="/apply/">Apply to the Program</a>
+            {% endif %}
             {% if user.is_authenticated %}
                 <a class="btn btn-outline-light d-none d-lg-inline-block" href="/accounts/logout/">Logout</a>
             {% endif %}
@@ -89,5 +98,34 @@
 </main>
 
 {% block extra_scripts %}{% endblock %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener('click', function(e) {
+        var target = e.target.closest('.js-confirm');
+        if (target) {
+            var message = target.getAttribute('data-confirm') || 'Are you sure?';
+            if (!confirm(message)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            } else {
+                var submitId = target.getAttribute('data-submit-id');
+                if (submitId) {
+                    var form = document.getElementById(submitId);
+                    if (form) {
+                        form.submit();
+                    }
+                }
+            }
+        }
+    }, true);
+    document.addEventListener('submit', function(e) {
+        if (e.target.classList.contains('js-confirm')) {
+            var message = e.target.getAttribute('data-confirm') || 'Are you sure?';
+            if (!confirm(message)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
+        }
+    }, true);
+</script>
 </body>
 </html>

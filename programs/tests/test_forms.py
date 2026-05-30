@@ -1,9 +1,10 @@
 import datetime
 
+from django import forms
 from django.test import TestCase
 
 from programs.forms import StudentForm
-from programs.models import Adult, Student
+from programs.models import Adult
 
 
 class StudentFormTests(TestCase):
@@ -36,6 +37,7 @@ class StudentFormTests(TestCase):
                 "legal_first_name": "Jamie",
                 "last_name": "Lee",
                 "grade_selector": "12",
+                "date_of_birth": "2010-01-01",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)
@@ -50,6 +52,7 @@ class StudentFormTests(TestCase):
                 "primary_contact": self.parent1.id,
                 "secondary_contact": self.parent2.id,
                 "parents": [self.parent1.id],  # only p1 preselected
+                "date_of_birth": "2010-01-01",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)
@@ -57,3 +60,14 @@ class StudentFormTests(TestCase):
         # adults should include both parents including secondary
         adult_ids = set(student.adults.values_list("id", flat=True))
         self.assertSetEqual(adult_ids, {self.parent1.id, self.parent2.id})
+
+    def test_state_field_is_dropdown(self):
+        form = StudentForm()
+        self.assertIsInstance(form.fields["state"].widget, forms.Select)
+
+    def test_state_field_default_is_PA(self):
+        form = StudentForm()
+        # StudentForm is a ModelForm, it should pick up the default from the model field
+        # but let's see if it's in the initial attribute.
+        # Actually ModelForm fields have `initial` attribute based on model's default.
+        self.assertEqual(form.fields["state"].initial, "PA")

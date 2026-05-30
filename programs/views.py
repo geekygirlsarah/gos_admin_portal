@@ -1,15 +1,70 @@
 import logging
+from decimal import ROUND_HALF_DOWN, Decimal
 
+import cssutils
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
     PermissionRequiredMixin,
     UserPassesTestMixin,
 )
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.db.models.functions import Coalesce, Lower
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.html import strip_tags
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    ListView,
+    UpdateView,
+    View,
+)
+from premailer import transform
 
+from programs.constants import RELATIONSHIP_CHOICES
+
+from .forms import (
+    AddExistingStudentToProgramForm,
+    AdultForm,
+    FeeAssignmentEditForm,
+    FeeForm,
+    ParentForm,
+    PaymentForm,
+    ProgramDocumentForm,
+    ProgramEmailBalancesForm,
+    ProgramEmailForm,
+    ProgramForm,
+    QuickCreateStudentForm,
+    SchoolForm,
+    SlidingScaleForm,
+    StudentForm,
+)
+from .models import (
+    Adult,
+    Crew,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    ProgramDocument,
+    RaceEthnicity,
+    School,
+    SlidingScale,
+    Student,
+    SubTeam,
+    TaxForm,
+    Team,
+)
 from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
+
+cssutils.log.setLevel(logging.WARNING)
+
+logger = logging.getLogger("programs.email")
+forms_logger = logging.getLogger("programs.forms")
 
 
 class DynamicPermissionMixin(UserPassesTestMixin):
@@ -38,27 +93,6 @@ class DynamicReadPermissionMixin(DynamicPermissionMixin):
 
 class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
-
-
-import datetime
-import logging
-from decimal import ROUND_HALF_DOWN, Decimal
-
-import cssutils
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection, send_mail
-from django.db import models
-from django.db.models.functions import Coalesce, Lower
-from django.template.loader import render_to_string
-from django.urls import reverse
-from django.utils.html import strip_tags
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
-from premailer import transform
-
-cssutils.log.setLevel(logging.WARNING)
-
-logger = logging.getLogger("programs.email")
-forms_logger = logging.getLogger("programs.forms")
 
 
 def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> Decimal:
@@ -154,41 +188,6 @@ class LogFormSaveMixin:
         return response
 
 
-from .forms import (
-    AddExistingStudentToProgramForm,
-    AdultForm,
-    FeeAssignmentEditForm,
-    FeeForm,
-    ParentForm,
-    PaymentForm,
-    ProgramApplySelectForm,
-    ProgramEmailBalancesForm,
-    ProgramEmailForm,
-    ProgramForm,
-    QuickCreateStudentForm,
-    SchoolForm,
-    SlidingScaleForm,
-    StudentApplicationForm,
-    StudentForm,
-)
-from .models import (
-    RELATIONSHIP_CHOICES,
-    Adult,
-    Crew,
-    Enrollment,
-    Fee,
-    Payment,
-    Program,
-    RaceEthnicity,
-    School,
-    SlidingScale,
-    Student,
-    StudentApplication,
-    TaxForm,
-    Team,
-)
-
-
 class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     model = Program
     template_name = "home.html"  # landing page
@@ -200,8 +199,6 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         return Program.objects.all()
 
     def get_context_data(self, **kwargs):
-        from operator import attrgetter
-
         from django.utils import timezone
 
         ctx = super().get_context_data(**kwargs)
@@ -464,56 +461,10 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
     permission_required = "programs.change_student"
 
     def post(self, request, pk):
-        from django.contrib import messages
-        from django.shortcuts import get_object_or_404, redirect
+        from .utils import convert_student_to_alumni
 
         student = get_object_or_404(Student, pk=pk)
-
-        # Find or create an Adult flagged as alumni from this student's info
-        def find_matching_adult(s: Student):
-            emails = [s.personal_email, s.andrew_email]
-            for e in emails:
-                if e:
-                    a = Adult.objects.filter(alumni_email__iexact=e).first()
-                    if a:
-                        return a
-                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
-                    if a:
-                        return a
-            first = (s.first_name or s.legal_first_name or "").strip()
-            last = (s.last_name or "").strip()
-            if first and last:
-                return Adult.objects.filter(
-                    first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                ).first()
-            return None
-
-        adult = find_matching_adult(student)
-        created = False
-        if not adult:
-            adult = Adult.objects.create(
-                first_name=student.first_name or student.legal_first_name or "",
-                last_name=student.last_name or "",
-                alumni_email=student.personal_email or student.andrew_email,
-                is_alumni=True,
-            )
-            created = True
-        else:
-            changed = False
-            if not adult.is_alumni:
-                adult.is_alumni = True
-                changed = True
-            if not adult.alumni_email and (
-                student.personal_email or student.andrew_email
-            ):
-                adult.alumni_email = student.personal_email or student.andrew_email
-                changed = True
-            if changed:
-                adult.save(update_fields=["is_alumni", "alumni_email", "updated_at"])
-        # Mark student as graduated (do not change active)
-        if not student.graduated:
-            student.graduated = True
-            student.save(update_fields=["graduated", "updated_at"])
+        _adult, created, _marked = convert_student_to_alumni(student)
         if created:
             messages.success(
                 request,
@@ -524,9 +475,15 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 request,
                 f"{student} is now marked as Alumni. Student marked as graduated.",
             )
-        # Redirect back to list or provided next
+        # Redirect back to list or provided next (only if it's a safe URL)
         next_url = request.GET.get("next") or request.POST.get("next")
-        return redirect(next_url or "student_list")
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect("student_list")
 
 
 class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -534,7 +491,6 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
-        from django.shortcuts import render
         from django.utils import timezone
 
         year = request.GET.get("year")
@@ -558,7 +514,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         )
 
     def post(self, request):
-        from django.shortcuts import redirect, render
+        from .utils import convert_student_to_alumni, find_matching_alumni_adult
 
         action = request.POST.get("action", "convert")
         ids = request.POST.getlist("student_ids")
@@ -587,30 +543,10 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
 
         if action == "preview":
             # Build preview info without writing changes against Adults flagged as alumni
-            def find_matching_adult(s: Student):
-                emails = [s.personal_email, s.andrew_email]
-                for e in emails:
-                    if e:
-                        a = Adult.objects.filter(alumni_email__iexact=e).first()
-                        if a:
-                            return a
-                        a = Adult.objects.filter(
-                            email__iexact=e, is_alumni=True
-                        ).first()
-                        if a:
-                            return a
-                first = (s.first_name or s.legal_first_name or "").strip()
-                last = (s.last_name or "").strip()
-                if first and last:
-                    return Adult.objects.filter(
-                        first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                    ).first()
-                return None
-
             will_create = []
             already_alumni = []
             for s in qs:
-                if find_matching_adult(s):
+                if find_matching_alumni_adult(s):
                     already_alumni.append(s)
                 else:
                     will_create.append(s)
@@ -633,56 +569,18 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         existed = 0
         marked_graduated = 0
 
-        def find_matching_adult(s: Student):
-            emails = [s.personal_email, s.andrew_email]
-            for e in emails:
-                if e:
-                    a = Adult.objects.filter(alumni_email__iexact=e).first()
-                    if a:
-                        return a
-                    a = Adult.objects.filter(email__iexact=e, is_alumni=True).first()
-                    if a:
-                        return a
-            first = (s.first_name or s.legal_first_name or "").strip()
-            last = (s.last_name or "").strip()
-            if first and last:
-                return Adult.objects.filter(
-                    first_name__iexact=first, last_name__iexact=last, is_alumni=True
-                ).first()
-            return None
-
         for student in qs:
-            adult = find_matching_adult(student)
-            if not adult:
-                Adult.objects.create(
-                    first_name=student.first_name or student.legal_first_name or "",
-                    last_name=student.last_name or "",
-                    alumni_email=student.personal_email or student.andrew_email,
-                    is_alumni=True,
-                )
+            _adult, was_created, was_marked = convert_student_to_alumni(student)
+            if was_created:
                 created += 1
             else:
-                changed = False
-                if not adult.is_alumni:
-                    adult.is_alumni = True
-                    changed = True
-                if not adult.alumni_email and (
-                    student.personal_email or student.andrew_email
-                ):
-                    adult.alumni_email = student.personal_email or student.andrew_email
-                    changed = True
-                if changed:
-                    adult.save(
-                        update_fields=["is_alumni", "alumni_email", "updated_at"]
-                    )
                 existed += 1
-            if not student.graduated:
-                student.graduated = True
-                student.save(update_fields=["graduated", "updated_at"])
+            if was_marked:
                 marked_graduated += 1
         messages.success(
             request,
-            f"Converted {created} new alumni (Adults), {existed} already existed/updated. Marked {marked_graduated} student(s) as graduated.",
+            f"Converted {created} new alumni (Adults), {existed} already existed/updated. "
+            f"Marked {marked_graduated} student(s) as graduated.",
         )
         return redirect("alumni_list")
 
@@ -1420,7 +1318,8 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 request,
                 f"Relationships import: linked {linked} (primary set {set_primary}, secondary set {set_secondary}); "
                 f"updated relationship types {rel_updated}; "
-                f"created parents {created_parents}{(' (would create: ' + str(would_create_parents) + ')' if dry_run else '')}; "
+                f"created parents {created_parents}"
+                f"{(' (would create: ' + str(would_create_parents) + ')' if dry_run else '')}; "
                 f"missing/ambiguous students {missing_or_ambiguous_students}; skipped {skipped}.{extras}",
             )
         except Exception as e:
@@ -1634,7 +1533,13 @@ class MentorUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("mentor_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("mentor_edit", args=[self.object.pk])
 
 
 # --- Schools list/create/edit ---
@@ -1667,7 +1572,13 @@ class SchoolUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("school_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("school_edit", args=[self.object.pk])
 
 
 class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1925,6 +1836,15 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
         ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
         ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+        # Document management: any user who can edit the program can manage
+        # the blank documents attached to it (used by the application wizard
+        # Step 9 signed-document upload flow).
+        ctx["can_manage_documents"] = self.request.user.has_perm(
+            "programs.change_program"
+        )
+        ctx["program_documents"] = program.documents.all().order_by(
+            "display_order", "name"
+        )
 
         if ctx["can_manage_students"]:
             ctx["add_existing_form"] = AddExistingStudentToProgramForm(program=program)
@@ -1945,6 +1865,17 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
     model = Program
     form_class = ProgramForm
     template_name = "programs/form.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program = self.object
+        ctx["can_manage_documents"] = self.request.user.has_perm(
+            "programs.change_program"
+        )
+        ctx["program_documents"] = program.documents.all().order_by(
+            "display_order", "name"
+        )
+        return ctx
 
     def get_success_url(self):
         return reverse("program_detail", args=[self.object.pk])
@@ -1990,7 +1921,7 @@ class StudentUpdateView(
         response = super().form_valid(form)
         # Persist relationship selections for each selected parent (note: global per Parent)
         rel_map = {
-            k[len("parent_rel_") :]: v
+            k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
             if k.startswith("parent_rel_")
         }
@@ -2009,7 +1940,13 @@ class StudentUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("student_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("student_edit", args=[self.object.pk])
 
 
 class StudentCreateView(
@@ -2037,7 +1974,7 @@ class StudentCreateView(
         response = super().form_valid(form)
         # Persist relationship selections for each selected parent (note: global per Parent)
         rel_map = {
-            k[len("parent_rel_") :]: v
+            k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
             if k.startswith("parent_rel_")
         }
@@ -2116,6 +2053,7 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         enrollment_id = request.POST.get("enrollment_id")
         team_id = request.POST.get("team_id")
         crew_id = request.POST.get("crew_id")
+        subteam_id = request.POST.get("subteam_id")
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
 
         updated_fields = []
@@ -2134,6 +2072,14 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
             else:
                 enrollment.crew = None
             updated_fields.append("Crew")
+
+        if subteam_id is not None:
+            if subteam_id:
+                subteam = get_object_or_404(SubTeam, id=subteam_id, program_id=pk)
+                enrollment.subteam = subteam
+            else:
+                enrollment.subteam = None
+            updated_fields.append("SubTeam")
 
         enrollment.save()
         if updated_fields:
@@ -2161,10 +2107,11 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
         enrollments = Enrollment.objects.filter(program=program).select_related(
-            "student", "team", "crew"
+            "student", "team", "crew", "subteam"
         )
         teams = Team.objects.all().order_by("number")
         crews = Crew.objects.filter(program=program).order_by("name")
+        subteams = SubTeam.objects.filter(program=program).order_by("name")
 
         return render(
             request,
@@ -2174,6 +2121,7 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "enrollments": enrollments,
                 "teams": teams,
                 "crews": crews,
+                "subteams": subteams,
             },
         )
 
@@ -2206,6 +2154,12 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             enrollments.update(crew=crew)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to crew {crew}."
+            )
+        elif assignment_type == "subteam":
+            subteam = get_object_or_404(SubTeam, id=target_id, program=program)
+            enrollments.update(subteam=subteam)
+            messages.success(
+                request, f"Assigned {len(student_ids)} students to subteam {subteam}."
             )
 
         return redirect("program_assignment", pk=pk)
@@ -2264,7 +2218,13 @@ class ParentUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url or reverse("parent_edit", args=[self.object.pk])
+        if next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return next_url
+        return reverse("parent_edit", args=[self.object.pk])
 
 
 # --- Payment create ---
@@ -3033,128 +2993,6 @@ class ProgramFeeUpdateView(
         )
 
 
-class ApplyProgramSelectView(View):
-    template_name = "apply/select_program.html"
-
-    def get(self, request):
-        from django.shortcuts import render
-        from django.utils import timezone
-
-        # Show active programs grouped by timing (future/current/past)
-        today = timezone.localdate()
-        programs = list(Program.objects.filter(active=True))
-
-        def status(prog):
-            sd = prog.start_date
-            ed = prog.end_date
-            if sd and sd > today:
-                return "future"
-            if ed and ed < today:
-                return "past"
-            # If only start or only end or none: treat as current if not clearly future/past
-            return "current"
-
-        def sort_key(prog):
-            sd = prog.start_date
-            return (sd is None, sd or today, prog.name or "")
-
-        future_programs = sorted(
-            [p for p in programs if status(p) == "future"], key=sort_key
-        )
-        current_programs = sorted(
-            [p for p in programs if status(p) == "current"], key=sort_key
-        )
-        past_programs = sorted(
-            [p for p in programs if status(p) == "past"], key=sort_key
-        )
-        # Keep form in context for possible fallback
-        form = ProgramApplySelectForm()
-        return render(
-            request,
-            self.template_name,
-            {
-                "form": form,
-                "future_programs": future_programs,
-                "current_programs": current_programs,
-                "past_programs": past_programs,
-            },
-        )
-
-    def post(self, request):
-        from django.shortcuts import redirect, render
-
-        form = ProgramApplySelectForm(request.POST)
-        if form.is_valid():
-            program = form.cleaned_data["program"]
-            return redirect("apply_program", program_id=program.pk)
-        return render(request, self.template_name, {"form": form})
-
-
-class ApplyStudentView(View):
-    template_name = "apply/form.html"
-
-    def _program_status(self, program):
-        from django.utils import timezone
-
-        today = timezone.localdate()
-        sd = program.start_date
-        ed = program.end_date
-        if sd and sd > today:
-            return "future"
-        if ed and ed < today:
-            return "past"
-        return "current"
-
-    def get(self, request, program_id):
-        from django.shortcuts import get_object_or_404, redirect, render
-
-        program = get_object_or_404(Program, pk=program_id)
-        status = self._program_status(program)
-        if status != "future":
-            if status == "current":
-                messages.info(
-                    request,
-                    "Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.",
-                )
-            else:
-                messages.error(request, "Applications are closed for this program.")
-            return redirect("apply_start")
-        form = StudentApplicationForm(initial={"program": program})
-        return render(request, self.template_name, {"form": form, "program": program})
-
-    def post(self, request, program_id):
-        from django.shortcuts import get_object_or_404, redirect, render
-
-        program = get_object_or_404(Program, pk=program_id)
-        status = self._program_status(program)
-        if status != "future":
-            if status == "current":
-                messages.info(
-                    request,
-                    "Applications for this program are closed. For current programs, please contact us at info@girlsofsteelrobotics.org.",
-                )
-            else:
-                messages.error(request, "Applications are closed for this program.")
-            return redirect("apply_start")
-        form = StudentApplicationForm(request.POST)
-        if form.is_valid():
-            app = form.save()
-            messages.success(
-                request, "Application submitted! We will be in touch soon."
-            )
-            return redirect("apply_thanks")
-        return render(request, self.template_name, {"form": form, "program": program})
-
-
-class ApplyThanksView(View):
-    template_name = "apply/thanks.html"
-
-    def get(self, request):
-        from django.shortcuts import render
-
-        return render(request, self.template_name)
-
-
 class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "programs"
     permission_required = "programs.view_program"
@@ -3219,6 +3057,10 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 }
             )
             from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+            # Include sender name from settings if available
+            sender_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if sender_name:
+                from_email = f'"{sender_name}" <{from_email}>'
         connection = get_connection(**conn_kwargs)
 
         # Collect students enrolled in program
@@ -3570,8 +3412,11 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
 
         rows = []
         grand_total = 0
+        filter_owed = request.GET.get("filter") == "owed"
         for s in students:
             balance_sum = self._program_balance_for_student(s, program)
+            if filter_owed and balance_sum <= 0:
+                continue
             rows.append(
                 {
                     "student": s,
@@ -3587,6 +3432,7 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
                 "program": program,
                 "rows": rows,
                 "grand_total": grand_total,
+                "filter_owed": filter_owed,
             },
         )
 
@@ -3608,13 +3454,7 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
                 sort_last=Lower("last_name"),
             )
         )
-        active_students = list(
-            base_qs.filter(active=True).order_by("sort_first", "sort_last")
-        )
-        inactive_students = list(
-            base_qs.filter(active=False).order_by("sort_first", "sort_last")
-        )
-        students = active_students
+        students = list(base_qs.filter(active=True).order_by("sort_first", "sort_last"))
         ctx = {
             "program": program,
             "students": students,
@@ -3743,6 +3583,127 @@ class AdultUpdateView(
 
     def get_success_url(self):
         nxt = self.request.GET.get("next")
-        if nxt:
+        if nxt and url_has_allowed_host_and_scheme(
+            url=nxt,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
             return nxt
         return reverse("adult_list")
+
+
+# --- Program documents (Step 9 blank forms) ---------------------------------
+
+
+class ProgramDocumentCreateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
+):
+    """Add a blank document (e.g. PDF) to a Program. Shown on the Program
+    settings page so lead mentors can manage them without going through
+    the Django admin.
+    """
+
+    permission_required = "programs.change_program"
+    model = ProgramDocument
+    form_class = ProgramDocumentForm
+    template_name = "programs/program_document_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_create"] = True
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Document added.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("program_detail", args=[self.program.pk])
+
+
+class ProgramDocumentUpdateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UpdateView,
+):
+    permission_required = "programs.change_program"
+    model = ProgramDocument
+    form_class = ProgramDocumentForm
+    template_name = "programs/program_document_form.html"
+    pk_url_kwarg = "doc_id"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            ProgramDocument, pk=self.kwargs["doc_id"], program=self.program
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_create"] = False
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Document updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("program_detail", args=[self.program.pk])
+
+
+class ProgramDocumentDeleteView(
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    View,
+):
+    """Delete a Program Document. POST-only (with a JS confirm on the
+    detail page); GET renders a small confirmation page for safety.
+    """
+
+    permission_required = "programs.change_program"
+    template_name = "programs/program_document_confirm_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        self.document = get_object_or_404(
+            ProgramDocument, pk=kwargs["doc_id"], program=self.program
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        from django.shortcuts import render
+
+        return render(
+            request,
+            self.template_name,
+            {"program": self.program, "document": self.document},
+        )
+
+    def post(self, request, *args, **kwargs):
+        name = self.document.name
+        self.document.delete()
+        messages.success(request, f"Deleted document “{name}”.")
+        return redirect("program_detail", pk=self.program.pk)

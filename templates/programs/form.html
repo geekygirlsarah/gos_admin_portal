@@ -61,7 +61,11 @@
             </div>
           </div>
 
-          <div class="d-flex gap-2">
+          {% if form.instance.pk %}
+              {% include "programs/_disclosure_documents.html" %}
+          {% endif %}
+
+          <div class="d-flex gap-2 mt-4">
             <button type="submit" class="btn btn-primary">Save</button>
             <a class="btn btn-secondary" href="{% if form.instance.pk %}{% url 'program_detail' form.instance.pk %}{% else %}/programs/{% endif %}">Cancel</a>
           </div>

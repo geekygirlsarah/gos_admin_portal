@@ -1,0 +1,71 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Choose a program{% endblock %}
+{% block wizard_heading %}Choose a program{% endblock %}
+
+{% block wizard_body %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <fieldset class="mb-4">
+        <legend class="form-label fw-semibold">Upcoming programs</legend>
+        {% if form.program.help_text %}
+            <div class="form-text mb-3">{{ form.program.help_text }}</div>
+        {% endif %}
+
+        {% if future_programs %}
+            <div class="list-group mb-3">
+                {% for choice, prog in program_choices %}
+                    <label class="list-group-item">
+                        <div class="d-flex gap-2 align-items-center mb-1">
+                            <span class="fw-semibold">{{ choice.tag }}</span>
+                        </div>
+                        {% if prog.start_date %}
+                            <div class="small text-muted">
+                                Runs {{ prog.start_date|date:"F j, Y" }}{% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}
+                            </div>
+                        {% endif %}
+                        {% if prog.description %}
+                            <div class="small mt-1">{{ prog.description }}</div>
+                        {% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+            {% if form.program.errors %}
+                <div class="invalid-feedback d-block mt-2" role="alert">
+                    {{ form.program.errors|join:" " }}
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info" role="status">
+                There are no upcoming programs accepting applications right now.
+                Please check back soon, or contact us at
+                <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+            </div>
+        {% endif %}
+    </fieldset>
+
+    {% if current_programs %}
+    <fieldset class="mb-4">
+        <legend class="form-label fw-semibold text-muted">Current programs</legend>
+        <div class="alert alert-secondary mb-3" role="note">
+            Applications for these programs are closed. Please contact us to
+            ask about joining.
+        </div>
+        <ul class="list-unstyled mb-0">
+            {% for prog in current_programs %}
+                <li>{{ prog.name }}{% if prog.start_date %} <span class="text-muted small">({{ prog.start_date|date:"M Y" }})</span>{% endif %}</li>
+            {% endfor %}
+        </ul>
+    </fieldset>
+    {% endif %}
+
+    <div class="d-flex justify-content-between">
+        <a href="{% url 'apply_step2' app_id=application.application_id %}" class="btn btn-link">Back</a>
+        <button type="submit" class="btn btn-primary"{% if not future_programs %} disabled{% endif %}>
+            Continue
+        </button>
+    </div>
+</form>
+{% endblock %}

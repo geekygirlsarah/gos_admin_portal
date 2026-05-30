@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% block wizard_title %}Apply{% endblock %} – Girls of Steel{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+
+        {# --- Progress indicator --- #}
+        {% if current_step and total_steps %}
+            {% widthratio current_step total_steps 100 as progress_pct %}
+            <nav aria-label="Application progress" class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small text-muted">
+                        Step {{ current_step }} of {{ total_steps }}
+                    </span>
+                    {% if application and application.application_id %}
+                        <span class="small text-muted">
+                            Application ID:
+                            <code class="ms-1">{{ application.application_id }}</code>
+                        </span>
+                    {% endif %}
+                </div>
+                <div class="progress" style="height: 1.0rem;">
+                    <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         aria-label="Application progress"
+                         aria-valuenow="{{ current_step }}"
+                         aria-valuemin="0"
+                         aria-valuemax="{{ total_steps }}"
+                         style="width: {{ progress_pct }}%;">{{ progress_pct }}%</div>
+                </div>
+            </nav>
+        {% endif %}
+
+        <div class="card shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                {% if warnings %}
+                    {% for warning in warnings %}
+                        <div class="alert alert-warning">{{ warning }}</div>
+                    {% endfor %}
+                {% endif %}
+                <h1 class="h3 mb-4">{% block wizard_heading %}{% endblock %}</h1>
+                {% block wizard_body %}{% endblock %}
+            </div>
+        </div>
+
+        <p class="text-center text-muted small mt-3 mb-0">
+            Need help? Contact
+            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+            Be sure to include your application ID if you have one and what issue you are experiencing.
+        </p>
+    </div>
+</div>
+{% endblock %}

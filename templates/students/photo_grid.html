@@ -86,7 +86,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.team-badge, .crew-badge').forEach(function(badge) {
         var color = badge.getAttribute('data-color');

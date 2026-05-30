@@ -1,13 +1,13 @@
 from datetime import timedelta
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
-from programs.models import Enrollment, Program, Student
+from programs.models import Program, Student
 from programs.permission_views import can_user_read, can_user_write
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
@@ -440,7 +440,8 @@ class AttendanceImportView(View):
             if errors:
                 messages.warning(
                     request,
-                    f"Attendance import completed: {created} created, {updated} updated, {skipped} skipped, {errors} rows had errors.",
+                    f"Attendance import completed: {created} created, {updated} updated, "
+                    f"{skipped} skipped, {errors} rows had errors.",
                 )
             else:
                 messages.success(

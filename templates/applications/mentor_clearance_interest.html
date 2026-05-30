@@ -1,0 +1,37 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}PA Clearances{% endblock %}
+{% block wizard_heading %}Pennsylvania child-protection clearances{% endblock %}
+
+{% block wizard_body %}
+<p>
+    You can volunteer with Girls of Steel without clearances as we have many tasks
+    we need help with that don't involve the students. But if you would like to
+    work directly with youth, we can help you start the process to get clearances.
+    CMU will pay for the fees if you volunteer through us.
+</p>
+
+    <form method="post" novalidate>
+    {% csrf_token %}
+    <fieldset class="mb-3">
+        <legend class="visually-hidden">{{ form.interested.label }}</legend>
+        {% if form.interested.help_text %}
+            <div class="form-text mb-3">{{ form.interested.help_text }}</div>
+        {% endif %}
+        {% for choice in form.interested %}
+            {{ choice.tag }}
+        {% endfor %}
+        {% if form.interested.errors %}
+            <div class="invalid-feedback d-block" role="alert">
+                {{ form.interested.errors|join:" " }}
+            </div>
+        {% endif %}
+    </fieldset>
+    <div class="d-flex justify-content-between">
+        <a href="{% url 'apply_mentor_info' app_id=application.application_id %}" class="btn btn-link">
+            Back
+        </a>
+        <button type="submit" class="btn btn-primary">Continue</button>
+    </div>
+</form>
+{% endblock %}
