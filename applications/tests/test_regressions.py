@@ -21,7 +21,6 @@ class SubmittedNamesReproductionTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
             name="Girls of Steel Program",
-            year=2026,
             active=True,
         )
 
@@ -140,7 +139,6 @@ class WizardBackNavigationReproductionTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             start_date=timezone.localdate() + datetime.timedelta(days=60),
             active=True,
         )
@@ -283,7 +281,6 @@ class Step2LabelReproductionTest(TestCase):
     def test_step4_labels_not_duplicated(self):
         Program.objects.create(
             name="Test Program",
-            year=2026,
             active=True,
             start_date=timezone.now().date() + datetime.timedelta(days=30),
         )
@@ -298,7 +295,9 @@ class Step2LabelReproductionTest(TestCase):
         content = response.content.decode()
 
         # Count occurrences of label text "Test Program" within label tags.
-        program_labels = re.findall(r"<label[^>]*>\s*Test Program\s*</label>", content)
+        program_labels = re.findall(
+            r"<label[^>]*>\s*Test Program( \(\d{4}\))?\s*</label>", content
+        )
         # It should appear in the widget label.
         # Note: there is also an <h3>Test Program</h3> in the metadata section,
         # but we are only counting <label> tags.
@@ -488,7 +487,6 @@ class ParentNotificationOptInReproductionTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             start_date=timezone.localdate() + datetime.timedelta(days=60),
             active=True,
         )

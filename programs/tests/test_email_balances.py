@@ -13,9 +13,7 @@ class EmailBalancesTest(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.program = Program.objects.create(
-            name="Test Program", year=2024, active=True
-        )
+        self.program = Program.objects.create(name="Test Program", active=True)
 
         # Student 1: Zero balance
         self.s1 = Student.objects.create(first_name="Alice", last_name="Alpha")

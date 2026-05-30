@@ -129,9 +129,8 @@ class FormBehaviorTests(TestCase):
         # Student choices include only enrolled
         self.assertIn(self.enrolled_student, list(form.fields["student"].queryset))
         self.assertNotIn(self.not_enrolled, list(form.fields["student"].queryset))
-        # Fee choices include only fees for program
-        self.assertIn(self.fee_in_prog, list(form.fields["fee"].queryset))
-        self.assertNotIn(self.fee_other, list(form.fields["fee"].queryset))
+        # Fee field should not be in form.fields anymore
+        self.assertNotIn("fee", form.fields)
 
     def test_sliding_scale_form_percent_validation_and_queryset(self):
         form = SlidingScaleForm(

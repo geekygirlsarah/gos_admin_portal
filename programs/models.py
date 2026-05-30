@@ -280,13 +280,6 @@ class Program(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     active = models.BooleanField(default=True)
-    year = models.PositiveSmallIntegerField(
-        null=True,
-        blank=True,
-        db_index=True,
-        validators=[MinValueValidator(1900), MaxValueValidator(2200)],
-        help_text="Calendar year the program runs (e.g., 2025).",
-    )
     start_date = models.DateField(
         null=True, blank=True, db_index=True, help_text="Program start date"
     )
@@ -311,7 +304,22 @@ class Program(models.Model):
     class Meta:
         ordering = ["name"]
 
+    @property
+    def year_display(self):
+        if self.start_date and self.end_date:
+            if self.start_date.year == self.end_date.year:
+                return str(self.start_date.year)
+            return f"{self.start_date.year}-{self.end_date.year}"
+        if self.start_date:
+            return str(self.start_date.year)
+        if self.end_date:
+            return str(self.end_date.year)
+        return ""
+
     def __str__(self):
+        yr = self.year_display
+        if yr:
+            return f"{self.name} ({yr})"
         return self.name
 
     @property
@@ -955,9 +963,6 @@ class Payment(models.Model):
     program = models.ForeignKey(
         "Program", on_delete=models.CASCADE, related_name="payments"
     )
-    fee = models.ForeignKey(
-        "Fee", on_delete=models.SET_NULL, related_name="payments", blank=True, null=True
-    )
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     paid_on = models.DateField()
     paid_via = models.CharField(max_length=20, choices=PAID_VIA_CHOICES, default="cash")
@@ -1000,20 +1005,6 @@ class Payment(models.Model):
             raise ValidationError(
                 "Student must be enrolled in the selected program for this payment."
             )
-
-        # If a fee is specified, ensure it belongs to the same program and, if assigned, that the student is among assignees
-        if self.fee_id:
-            if self.fee.program_id != self.program_id:
-                raise ValidationError(
-                    "Selected fee does not belong to the chosen program."
-                )
-            if (
-                self.fee.assignments.exists()
-                and not self.fee.assignments.filter(student=self.student).exists()
-            ):
-                raise ValidationError(
-                    "This fee is only assigned to specific students, and this student is not assigned."
-                )
 
 
 class SlidingScale(models.Model):

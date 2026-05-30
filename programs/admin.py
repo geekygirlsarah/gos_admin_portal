@@ -48,7 +48,7 @@ class RolePermissionAdmin(admin.ModelAdmin):
 class ProgramAdmin(admin.ModelAdmin):
     list_display = (
         "name",
-        "year",
+        "year_display",
         "start_date",
         "end_date",
         "cost",
@@ -56,7 +56,7 @@ class ProgramAdmin(admin.ModelAdmin):
         "updated_at",
     )
     search_fields = ("name",)
-    list_filter = ("active", "year", "start_date", "end_date")
+    list_filter = ("active", "start_date", "end_date")
     filter_horizontal = ("features",)
     fieldsets = (
         (
@@ -66,7 +66,6 @@ class ProgramAdmin(admin.ModelAdmin):
                     "name",
                     "description",
                     "active",
-                    "year",
                     "start_date",
                     "end_date",
                     "cost",
@@ -97,7 +96,6 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = (
         "student",
         "program",
-        "fee",
         "amount",
         "paid_on",
         "paid_via",
@@ -109,9 +107,8 @@ class PaymentAdmin(admin.ModelAdmin):
         "student__first_name",
         "student__last_name",
         "program__name",
-        "fee__name",
     )
-    autocomplete_fields = ("student", "fee", "program")
+    autocomplete_fields = ("student", "program")
 
 
 class EnrollmentInline(admin.TabularInline):

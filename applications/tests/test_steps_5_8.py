@@ -35,7 +35,6 @@ class Step5StudentInfoTests(TestCase):
         today = timezone.localdate()
         self.program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             start_date=today + datetime.timedelta(days=60),
             end_date=today + datetime.timedelta(days=120),
             active=True,
@@ -283,7 +282,6 @@ class Step9ConfirmTests(TestCase):
         today = timezone.localdate()
         self.program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             start_date=today + datetime.timedelta(days=60),
             end_date=today + datetime.timedelta(days=120),
             active=True,
@@ -548,7 +546,6 @@ class Step7SwapBoxVisibilityTests(TestCase):
 
         self.program = Program.objects.create(
             name="Spring 2030",
-            year=2030,
             start_date=today + datetime.timedelta(days=60),
             end_date=today + datetime.timedelta(days=120),
             active=True,

@@ -60,7 +60,7 @@
         </div>
 
         <div class="mb-3">
-          <div><span class="fw-semibold">Program:</span> {{ program.name }} -- {{ program.year }}</div>
+          <div><span class="fw-semibold">Program:</span> {{ program.name }}{% if program.year_display %} -- {{ program.year_display }}{% endif %}</div>
           <div class="mb-2"><span class="fw-semibold">Participant's name:</span> {{ student.legal_first_name|default:student.first_name }} {{ student.last_name }}{% if student.date_of_birth %} <span class="text-muted small js-age" data-dob="{{ student.date_of_birth|date:'Y-m-d' }}">(Age: --)</span>{% endif %}</div>
             <div><span class="fw-semibold">Parent(s)/Guardian(s) names:</span>
                 {% if student.primary_contact or student.secondary_contact %}
@@ -83,9 +83,6 @@
           <div class="card">
             <div class="card-body">
               <dl class="row mb-0">
-                <dt class="col-sm-4">Fee</dt>
-                <dd class="col-sm-8">{% if payment.fee %}{{ payment.fee.name }}{% else %}<span class="text-muted">N/A</span>{% endif %}</dd>
-
                 <dt class="col-sm-4">Amount Paid</dt>
                 <dd class="col-sm-8">${{ payment.amount|floatformat:2 }}</dd>
 

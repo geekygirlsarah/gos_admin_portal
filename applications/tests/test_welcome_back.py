@@ -38,17 +38,15 @@ class LatestProgramHelpersTests(TestCase):
         s = Student.objects.create(legal_first_name="A", last_name="B")
         older = Program.objects.create(
             name="Summer 2024",
-            year=2024,
             start_date=datetime.date(2024, 6, 1),
         )
         newer = Program.objects.create(
             name="Summer 2025",
-            year=2025,
             start_date=datetime.date(2025, 6, 1),
         )
         Enrollment.objects.create(student=s, program=older)
         Enrollment.objects.create(student=s, program=newer)
-        self.assertEqual(str(latest_program_for_student(s)), "Summer 2025")
+        self.assertEqual(str(latest_program_for_student(s)), "Summer 2025 (2025)")
 
     def test_latest_program_for_adult_uses_their_students(self):
         adult = Adult.objects.create(
@@ -64,11 +62,10 @@ class LatestProgramHelpersTests(TestCase):
         )
         program = Program.objects.create(
             name="Spring 2024",
-            year=2024,
             start_date=datetime.date(2024, 3, 1),
         )
         Enrollment.objects.create(student=s, program=program)
-        self.assertEqual(str(latest_program_for_adult(adult)), "Spring 2024")
+        self.assertEqual(str(latest_program_for_adult(adult)), "Spring 2024 (2024)")
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
@@ -76,7 +73,6 @@ class Step5WelcomeBackBannerTests(TestCase):
     def test_banner_shown_when_prefilling_from_existing_student(self):
         program = Program.objects.create(
             name="Summer 2024",
-            year=2024,
             start_date=datetime.date(2024, 6, 1),
         )
         student = Student.objects.create(
@@ -114,7 +110,6 @@ class Step7WelcomeBackBannerTests(TestCase):
     def test_banner_shown_when_prefilling_from_existing_adult(self):
         program = Program.objects.create(
             name="Fall 2023",
-            year=2023,
             start_date=datetime.date(2023, 9, 1),
         )
         adult = Adult.objects.create(

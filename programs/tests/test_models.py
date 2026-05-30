@@ -21,13 +21,39 @@ from programs.models import (
 
 class ModelTests(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(name="Robotics 2025", year=2025)
+        self.program = Program.objects.create(name="Robotics 2025")
         self.school = School.objects.create(name="Carnegie High")
         self.student = Student.objects.create(
             legal_first_name="Alex",
             last_name="Smith",
             school=self.school,
         )
+
+    def test_program_year_display(self):
+        # Case 1: No dates
+        p = Program(name="Test")
+        self.assertEqual(p.year_display, "")
+        self.assertEqual(str(p), "Test")
+
+        # Case 2: Same year
+        p.start_date = datetime.date(2025, 1, 1)
+        p.end_date = datetime.date(2025, 12, 31)
+        self.assertEqual(p.year_display, "2025")
+        self.assertEqual(str(p), "Test (2025)")
+
+        # Case 3: Different years
+        p.end_date = datetime.date(2026, 1, 1)
+        self.assertEqual(p.year_display, "2025-2026")
+        self.assertEqual(str(p), "Test (2025-2026)")
+
+        # Case 4: Only start date
+        p.end_date = None
+        self.assertEqual(p.year_display, "2025")
+
+        # Case 5: Only end date
+        p.start_date = None
+        p.end_date = datetime.date(2026, 1, 1)
+        self.assertEqual(p.year_display, "2026")
 
     def test_program_has_feature(self):
         feat, _ = ProgramFeature.objects.get_or_create(
@@ -49,43 +75,6 @@ class ModelTests(TestCase):
             pay.full_clean()
         # Enroll and then validate
         Enrollment.objects.create(student=self.student, program=self.program)
-        pay.full_clean()  # no exception
-
-    def test_payment_clean_fee_program_must_match(self):
-        Enrollment.objects.create(student=self.student, program=self.program)
-        other_program = Program.objects.create(name="Other Program")
-        fee_other = Fee.objects.create(
-            program=other_program, name="Dues", amount=Decimal("25.00")
-        )
-        pay = Payment(
-            student=self.student,
-            program=self.program,
-            fee=fee_other,
-            amount=Decimal("10.00"),
-            paid_on=datetime.date.today(),
-        )
-        with self.assertRaises(ValidationError):
-            pay.full_clean()
-
-    def test_payment_clean_fee_assignments_enforced(self):
-        Enrollment.objects.create(student=self.student, program=self.program)
-        fee = Fee.objects.create(
-            program=self.program, name="Kit", amount=Decimal("100.00")
-        )
-        # Assign fee to a different student
-        other = Student.objects.create(legal_first_name="Jamie", last_name="Lee")
-        FeeAssignment.objects.create(fee=fee, student=other)
-        pay = Payment(
-            student=self.student,
-            program=self.program,
-            fee=fee,
-            amount=Decimal("20.00"),
-            paid_on=datetime.date.today(),
-        )
-        with self.assertRaises(ValidationError):
-            pay.full_clean()
-        # Assign also to target student -> should pass
-        FeeAssignment.objects.create(fee=fee, student=self.student)
         pay.full_clean()  # no exception
 
     def test_fee_assignment_clean_requires_enrollment(self):

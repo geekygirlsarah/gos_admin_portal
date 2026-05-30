@@ -9,9 +9,7 @@ from programs.models import Adult, Enrollment, Program, SlidingScale, Student, T
 
 class SlidingScaleTaxFormTests(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(
-            name="Test Program", year=2025, active=True
-        )
+        self.program = Program.objects.create(name="Test Program", active=True)
         self.student = Student.objects.create(
             legal_first_name="Test",
             last_name="Student",

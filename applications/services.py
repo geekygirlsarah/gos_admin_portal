@@ -221,7 +221,6 @@ def latest_program_for_student(student) -> Optional[Program]:
         .select_related("program")
         .order_by(
             "-program__start_date",
-            "-program__year",
             "-created_at",
         )
         .first()
@@ -243,7 +242,6 @@ def latest_program_for_adult(adult) -> Optional[Program]:
         .select_related("program")
         .order_by(
             "-program__start_date",
-            "-program__year",
             "-created_at",
         )
         .first()

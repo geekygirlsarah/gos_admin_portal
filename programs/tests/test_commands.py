@@ -14,9 +14,13 @@ class SeedDbCommandTest(TestCase):
         # Check Programs
         self.assertEqual(Program.objects.count(), 6)
         this_year = date.today().year
-        self.assertTrue(Program.objects.filter(year=this_year - 1).exists())
-        self.assertTrue(Program.objects.filter(year=this_year).exists())
-        self.assertTrue(Program.objects.filter(year=this_year + 1).exists())
+        self.assertTrue(
+            Program.objects.filter(name__contains=str(this_year - 1)).exists()
+        )
+        self.assertTrue(Program.objects.filter(name__contains=str(this_year)).exists())
+        self.assertTrue(
+            Program.objects.filter(name__contains=str(this_year + 1)).exists()
+        )
 
         # Check Schools
         self.assertEqual(School.objects.count(), 2)

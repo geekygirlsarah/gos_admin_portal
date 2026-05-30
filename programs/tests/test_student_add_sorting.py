@@ -10,7 +10,7 @@ from programs.models import Enrollment, Program, Student
 
 class StudentSortingTest(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(name="Test Program", year=2024)
+        self.program = Program.objects.create(name="Test Program")
         # Create students in unsorted order
         # Use a mix of None and empty string for first_name to test Coalesce behavior
         self.s1 = Student.objects.create(

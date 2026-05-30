@@ -11,7 +11,7 @@
 
 <div class="row">
   <div class="col-lg-10 col-xl-8">
-    <h1 class="h4">Schools — {{ program.name }}{% if program.year %} <small class="text-muted">({{ program.year }})</small>{% endif %}</h1>
+    <h1 class="h4">Schools — {{ program.name }}{% if program.year_display %} <small class="text-muted">({{ program.year_display }})</small>{% endif %}</h1>
 
     {% if grouped %}
       {% for label, items in grouped %}

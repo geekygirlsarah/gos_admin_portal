@@ -232,7 +232,7 @@
                             <label for="program_id" class="form-label">Program</label>
                             <select name="program_id" id="program_id" class="form-select" required>
                                 {% for prog in programs %}
-                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year }})</option>
+                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year_display }})</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -273,7 +273,7 @@
                                         <form method="post" class="d-flex gap-2 align-items-center m-0">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                                             <input type="hidden" name="action" value="update_crew">
                                             <input type="hidden" name="crew_id" value="{{ crew.id }}">
-                                            <div style="flex: 1;">{{ crew.program.name }} ({{ crew.program.year }})</div>
+                                            <div style="flex: 1;">{{ crew.program.name }} ({{ crew.program.year_display }})</div>
                                             <div style="flex: 2;">
                                                 <input type="text" name="name" value="{{ crew.name }}" class="form-control form-control-sm" placeholder="Crew Name" required>
                                             </div>
@@ -316,7 +316,7 @@
                             <label for="program_id_subteam" class="form-label">Program</label>
                             <select name="program_id" id="program_id_subteam" class="form-select" required>
                                 {% for prog in programs %}
-                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year }})</option>
+                                <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year_display }})</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -357,7 +357,7 @@
                                         <form method="post" class="d-flex gap-2 align-items-center m-0">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                                             <input type="hidden" name="action" value="update_subteam">
                                             <input type="hidden" name="subteam_id" value="{{ subteam.id }}">
-                                            <div style="flex: 1;">{{ subteam.program.name }} ({{ subteam.program.year }})</div>
+                                            <div style="flex: 1;">{{ subteam.program.name }} ({{ subteam.program.year_display }})</div>
                                             <div style="flex: 2;">
                                                 <input type="text" name="name" value="{{ subteam.name }}" class="form-control form-control-sm" placeholder="SubTeam Name" required>
                                             </div>
