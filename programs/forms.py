@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from django import forms
 from django.conf import settings
-from django.db.models.functions import Coalesce, Lower
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 
 from programs.utils import get_academic_year_ending
 
@@ -143,8 +144,12 @@ class AddExistingStudentToProgramForm(forms.Form):
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
         # Exclude students already enrolled in this program
+        # Also sort by first name (coalescing legal name) then last name
         self.fields["student"].queryset = Student.objects.exclude(
             id__in=program.students.values_list("id", flat=True)
+        ).order_by(
+            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower("last_name"),
         )
 
 
@@ -216,7 +221,12 @@ class PaymentForm(forms.ModelForm):
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
         # Restrict student choices to those enrolled in this program
-        self.fields["student"].queryset = Student.objects.filter(programs=program)
+        self.fields["student"].queryset = Student.objects.filter(
+            programs=program
+        ).order_by(
+            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower("last_name"),
+        )
         # Fee is optional; restrict choices to this program when present
         if "fee" in self.fields:
             self.fields["fee"].required = False
@@ -252,7 +262,12 @@ class SlidingScaleForm(forms.ModelForm):
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
         # Restrict to students in this program
-        self.fields["student"].queryset = Student.objects.filter(programs=program)
+        self.fields["student"].queryset = Student.objects.filter(
+            programs=program
+        ).order_by(
+            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower("last_name"),
+        )
 
     def clean_percent(self):
         p = self.cleaned_data.get("percent")
@@ -278,6 +293,7 @@ class ProgramForm(forms.ModelForm):
             "year",
             "start_date",
             "end_date",
+            "cost",
             "active",
             "features",
         ]
@@ -490,7 +506,8 @@ class ProgramEmailBalancesForm(forms.Form):
             self.fields["student"].queryset = Student.objects.filter(
                 enrollment__program=program
             ).order_by(
-                Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
+                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower("last_name"),
             )
 
     def clean(self):
@@ -518,7 +535,8 @@ class FeeAssignmentEditForm(forms.Form):
         self.fields["students"].queryset = Student.objects.filter(
             programs=program
         ).order_by(
-            Lower(Coalesce("first_name", "legal_first_name")), Lower("last_name")
+            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower("last_name"),
         )
         # Preselect currently assigned students (if any)
         self.fields["students"].initial = fee.assignments.values_list(
