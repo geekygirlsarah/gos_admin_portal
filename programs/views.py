@@ -2294,12 +2294,11 @@ class ProgramPaymentCreateView(
             else "anonymous"
         )
         forms_logger.info(
-            "FormSave: Payment[%s] create by %s | student=%s | program=%s | fee=%s | amount=%s | paid_via=%s | paid_on=%s",
+            "FormSave: Payment[%s] create by %s | student=%s | program=%s | amount=%s | paid_via=%s | paid_on=%s",
             obj.pk,
             user_repr,
             self._fmt_val(getattr(obj, "student", None)),
             self._fmt_val(getattr(obj, "program", None)),
-            self._fmt_val(getattr(obj, "fee", None)),
             self._fmt_val(getattr(obj, "amount", None)),
             self._fmt_val(getattr(obj, "paid_via", None)),
             self._fmt_val(getattr(obj, "paid_on", None)),

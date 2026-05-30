@@ -212,7 +212,6 @@ class PaymentForm(forms.ModelForm):
             "check_number",
             "camp_hours",
             "notes",
-            "fee",
         ]
         widgets = {
             "paid_on": forms.DateInput(attrs={"type": "date"}),
@@ -227,10 +226,6 @@ class PaymentForm(forms.ModelForm):
             Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
             Lower("last_name"),
         )
-        # Fee is optional; restrict choices to this program when present
-        if "fee" in self.fields:
-            self.fields["fee"].required = False
-            self.fields["fee"].queryset = Fee.objects.filter(program=program)
         # Store program for use in the view when saving
         self._program = program
 

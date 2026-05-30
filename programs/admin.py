@@ -96,7 +96,6 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = (
         "student",
         "program",
-        "fee",
         "amount",
         "paid_on",
         "paid_via",
@@ -108,9 +107,8 @@ class PaymentAdmin(admin.ModelAdmin):
         "student__first_name",
         "student__last_name",
         "program__name",
-        "fee__name",
     )
-    autocomplete_fields = ("student", "fee", "program")
+    autocomplete_fields = ("student", "program")
 
 
 class EnrollmentInline(admin.TabularInline):
