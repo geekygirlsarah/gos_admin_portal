@@ -345,13 +345,50 @@ def format_grade(grade: int | str | None) -> str:
     return f"{n}{suffix} Grade"
 
 
+def get_safe_url(request, url):
+    """
+    Return a safe URL, relativized if it's an absolute URL on the same host.
+    Returns None if the URL is unsafe or not present.
+    """
+    if not url:
+        return None
+
+    from django.utils.http import url_has_allowed_host_and_scheme
+    from urllib.parse import urlparse
+
+    # Try to relativize absolute URLs on the same host to satisfy restrictive CodeQL checks
+    if url.startswith(("http://", "https://", "//")):
+        try:
+            parsed = urlparse(url)
+            if parsed.netloc == request.get_host():
+                url = parsed.path
+                if parsed.query:
+                    url += "?" + parsed.query
+                if parsed.fragment:
+                    url += "#" + parsed.fragment
+        except Exception:
+            pass
+
+    if (
+        url
+        and url.startswith("/")
+        and not url.startswith("//")
+        and url_has_allowed_host_and_scheme(
+            url=url,
+            allowed_hosts=None,
+            require_https=request.is_secure(),
+        )
+    ):
+        return url
+    return None
+
+
 def redirect_back(request, default):
     """
     Safely redirect back to the referer or a 'next' parameter,
     falling back to the provided default if neither is safe or present.
     """
     from django.shortcuts import redirect
-    from django.utils.http import url_has_allowed_host_and_scheme
 
     # Priority 1: 'next' parameter in POST or GET
     next_url = request.POST.get("next") or request.GET.get("next")
@@ -360,11 +397,8 @@ def redirect_back(request, default):
     referer = request.META.get("HTTP_REFERER")
 
     for url in [next_url, referer]:
-        if url and url_has_allowed_host_and_scheme(
-            url=url,
-            allowed_hosts={request.get_host()},
-            require_https=request.is_secure(),
-        ):
-            return redirect(url)
+        safe_url = get_safe_url(request, url)
+        if safe_url:
+            return redirect(safe_url)
 
     return redirect(default)
