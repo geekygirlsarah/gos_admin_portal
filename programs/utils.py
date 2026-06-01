@@ -343,3 +343,28 @@ def format_grade(grade: int | str | None) -> str:
     else:
         suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix} Grade"
+
+
+def redirect_back(request, default):
+    """
+    Safely redirect back to the referer or a 'next' parameter,
+    falling back to the provided default if neither is safe or present.
+    """
+    from django.shortcuts import redirect
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    # Priority 1: 'next' parameter in POST or GET
+    next_url = request.POST.get("next") or request.GET.get("next")
+
+    # Priority 2: HTTP_REFERER
+    referer = request.META.get("HTTP_REFERER")
+
+    for url in [next_url, referer]:
+        if url and url_has_allowed_host_and_scheme(
+            url=url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(url)
+
+    return redirect(default)

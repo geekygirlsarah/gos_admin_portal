@@ -9,6 +9,7 @@ from django.views.decorators.http import require_http_methods
 
 from programs.models import Program, Student
 from programs.permission_views import can_user_read, can_user_write
+from programs.utils import redirect_back
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
 
@@ -240,30 +241,30 @@ class AttendanceImportView(View):
     def post(self, request):
         if not request.user.has_perm("programs.change_student"):
             messages.error(request, "You do not have permission to import attendance.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         file = request.FILES.get("file")
         program_id = request.POST.get("program_id")
         overwrite = request.POST.get("overwrite") == "1"
         if not program_id:
             messages.error(request, "Please select a program for this import.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         program = Program.objects.filter(id=program_id).first()
         if not program:
             messages.error(request, "Selected program was not found.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         if not program.has_feature("attendance"):
             messages.error(
                 request, "Attendance is not enabled for the selected program."
             )
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
 
         name = file.name.lower()
         if not name.endswith(".csv"):
             messages.error(request, "Unsupported file type. Please upload a CSV file.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
 
         import csv
         import io
@@ -458,4 +459,4 @@ class AttendanceImportView(View):
         except Exception as e:
             messages.error(request, f"Failed to import attendance: {e}")
 
-        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+        return redirect_back(request, "import_dashboard")

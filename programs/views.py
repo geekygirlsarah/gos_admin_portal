@@ -61,6 +61,7 @@ from .models import (
     Team,
 )
 from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
+from .utils import redirect_back
 
 cssutils.log.setLevel(logging.WARNING)
 
@@ -632,7 +633,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
         overwrite = request.POST.get("overwrite") == "1"
         created = 0
@@ -959,7 +960,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 messages.info(request, "No rows imported.")
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+        return redirect_back(request, "import_dashboard")
 
 
 class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -969,7 +970,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
         overwrite = request.POST.get("overwrite") == "1"
         created = 0
@@ -1037,7 +1038,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+        return redirect_back(request, "import_dashboard")
 
 
 class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1052,7 +1053,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
         dry_run = request.POST.get("dry_run") in ("1", "on", "true", "True")
         overwrite = request.POST.get("overwrite") == "1"
@@ -1354,7 +1355,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+        return redirect_back(request, "import_dashboard")
 
 
 class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1364,7 +1365,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
         overwrite = request.POST.get("overwrite") == "1"
         created = 0
@@ -1440,7 +1441,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+        return redirect_back(request, "import_dashboard")
 
 
 class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1450,7 +1451,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
         overwrite = request.POST.get("overwrite") == "1"
         created = 0
@@ -1531,7 +1532,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
+        return redirect_back(request, "import_dashboard")
 
 
 class MentorCreateView(
