@@ -21,6 +21,10 @@
               <input type="file" name="file" id="student-import-file" class="form-control" accept=".csv,.xlsx" />
               <button type="submit" class="btn btn-primary">Import</button>
             </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" value="1" id="student-overwrite" name="overwrite" />
+              <label class="form-check-label" for="student-overwrite">Overwrite existing data</label>
+            </div>
           </form>
           <div class="mt-2"><a href="{% url 'students_sample_csv' %}">Download CSV Template</a></div>
         </div>
@@ -39,6 +43,10 @@
             <div class="d-flex gap-2">
               <input type="file" name="file" id="parent-import-file" class="form-control" accept=".csv,.xlsx" />
               <button type="submit" class="btn btn-primary">Import</button>
+            </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" value="1" id="parent-overwrite" name="overwrite" />
+              <label class="form-check-label" for="parent-overwrite">Overwrite existing data</label>
             </div>
           </form>
           <div class="mt-2"><a href="{% url 'parents_sample_csv' %}">Download CSV Template</a></div>
@@ -59,9 +67,15 @@
               <input type="file" name="file" id="relationships-import-file" class="form-control" accept=".csv,.xlsx" />
               <button type="submit" class="btn btn-primary">Import</button>
             </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
-              <label class="form-check-label" for="relationships-dry-run">Dry run (report only)</label>
+            <div class="d-flex gap-3 mt-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
+                <label class="form-check-label" for="relationships-dry-run">Dry run</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1" id="relationships-overwrite" name="overwrite" />
+                <label class="form-check-label" for="relationships-overwrite">Overwrite existing data</label>
+              </div>
             </div>
           </form>
           <div class="mt-2"><a href="{% url 'relationships_sample_csv' %}">Download CSV Template</a></div>
@@ -82,6 +96,10 @@
               <input type="file" name="file" id="mentor-import-file" class="form-control" accept=".csv,.xlsx" />
               <button type="submit" class="btn btn-primary">Import</button>
             </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" value="1" id="mentor-overwrite" name="overwrite" />
+              <label class="form-check-label" for="mentor-overwrite">Overwrite existing data</label>
+            </div>
           </form>
           <div class="mt-2"><a href="{% url 'mentors_sample_csv' %}">Download CSV Template</a></div>
         </div>
@@ -100,6 +118,10 @@
             <div class="d-flex gap-2">
               <input type="file" name="file" id="school-import-file" class="form-control" accept=".csv,.xlsx" />
               <button type="submit" class="btn btn-primary">Import</button>
+            </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" value="1" id="school-overwrite" name="overwrite" />
+              <label class="form-check-label" for="school-overwrite">Overwrite existing data</label>
             </div>
           </form>
           <div class="mt-2"><a href="{% url 'schools_sample_csv' %}">Download CSV Template</a></div>
@@ -129,6 +151,10 @@
                                   <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" />
                                   <button type="submit" class="btn btn-primary">Import</button>
                               </div>
+                          </div>
+                          <div class="form-check mt-2">
+                              <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
+                              <label class="form-check-label" for="attendance-overwrite">Overwrite existing data</label>
                           </div>
                           <div class="form-text mt-2">Times should be in UTC (e.g., 2025-09-01T20:15:00Z). If time_out is blank, an open session will be created.</div>
                           <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>

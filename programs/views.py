@@ -632,8 +632,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -710,15 +711,16 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if email:
                     p = Adult.objects.filter(email__iexact=email).first()
                     if p:
-                        changed_parent = False
-                        if first and p.first_name != first:
-                            p.first_name = first
-                            changed_parent = True
-                        if last and p.last_name != last:
-                            p.last_name = last
-                            changed_parent = True
-                        if changed_parent:
-                            p.save()
+                        if overwrite:
+                            changed_parent = False
+                            if first and p.first_name != first:
+                                p.first_name = first
+                                changed_parent = True
+                            if last and p.last_name != last:
+                                p.last_name = last
+                                changed_parent = True
+                            if changed_parent:
+                                p.save()
                         return p
                 # Next try by name match
                 if first and last:
@@ -726,7 +728,11 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         first_name__iexact=first, last_name__iexact=last
                     ).first()
                     if p:
-                        if email and (p.email or "").lower() != (email or "").lower():
+                        if (
+                            overwrite
+                            and email
+                            and (p.email or "").lower() != (email or "").lower()
+                        ):
                             p.email = email
                             p.save()
                         return p
@@ -816,7 +822,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     # Strings and relations
                     for field, value in [
@@ -953,7 +959,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 messages.info(request, "No rows imported.")
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
 
 
 class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -963,8 +969,9 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -1014,7 +1021,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     if email and obj.email != email:
                         obj.email = email
@@ -1030,7 +1037,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
 
 
 class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1045,9 +1052,10 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
         name = file.name.lower()
         dry_run = request.POST.get("dry_run") in ("1", "on", "true", "True")
+        overwrite = request.POST.get("overwrite") == "1"
         can_create_parents = request.user.has_perm("programs.add_adult")
 
         linked = 0
@@ -1295,7 +1303,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     # Relationship type (global per Adult)
                     rel_key = normalize_rel(g["rel"])
                     if rel_key and adult.relationship_to_student != rel_key:
-                        if not dry_run:
+                        if not dry_run and overwrite:
                             adult.relationship_to_student = rel_key
                             adult.save(
                                 update_fields=["relationship_to_student", "updated_at"]
@@ -1312,13 +1320,13 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     # Optionally set primary/secondary contact
                     if g["role"] == "primary":
                         if student.primary_contact_id != adult.id:
-                            if not dry_run:
+                            if not dry_run and overwrite:
                                 student.primary_contact = adult
                                 updated_student_fields.add("primary_contact")
                             set_primary += 1
                     elif g["role"] == "secondary":
                         if student.secondary_contact_id != adult.id:
-                            if not dry_run:
+                            if not dry_run and overwrite:
                                 student.secondary_contact = adult
                                 updated_student_fields.add("secondary_contact")
                             set_secondary += 1
@@ -1346,7 +1354,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
 
 
 class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1356,8 +1364,9 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -1413,7 +1422,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     for field, value in [
                         ("personal_email", email),
@@ -1431,7 +1440,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
 
 
 class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1441,8 +1450,9 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -1501,7 +1511,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     for field, value in [
                         ("district", district),
@@ -1521,7 +1531,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect(request.META.get("HTTP_REFERER", "import_dashboard"))
 
 
 class MentorCreateView(
