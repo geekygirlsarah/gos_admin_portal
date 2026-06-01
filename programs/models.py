@@ -6,7 +6,6 @@ from io import BytesIO
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from PIL import ImageFile
 

@@ -6,18 +6,26 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0073_remove_payment_fee'),
+        ("programs", "0073_remove_payment_fee"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='program',
-            name='grade_range_end',
-            field=models.IntegerField(blank=True, help_text='Ending grade for this program (12 for 12th grade).', null=True),
+            model_name="program",
+            name="grade_range_end",
+            field=models.IntegerField(
+                blank=True,
+                help_text="Ending grade for this program (12 for 12th grade).",
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='program',
-            name='grade_range_start',
-            field=models.IntegerField(blank=True, help_text='Starting grade for this program (0 for K).', null=True),
+            model_name="program",
+            name="grade_range_start",
+            field=models.IntegerField(
+                blank=True,
+                help_text="Starting grade for this program (0 for K).",
+                null=True,
+            ),
         ),
     ]

@@ -5,7 +5,6 @@ from django import template
 from programs.utils import (
     calculate_grade,
     format_grade,
-    get_academic_year_ending,
 )
 
 register = template.Library()
@@ -52,6 +51,67 @@ FIELD_LABELS = {
     "shirt_size": "Shirt size",
     "notes": "Notes",
 }
+
+
+# Defines the order in which fields should be displayed on the review page.
+# Fields not in this list will appear at the end in their original order.
+PREFERRED_FIELD_ORDER = [
+    "legal_first_name",
+    "first_name",
+    "last_name",
+    "pronouns",
+    "date_of_birth",
+    "email",
+    "personal_email",
+    "andrew_email",
+    "phone",
+    "phone_number",
+    "cell_phone",
+    "cell_phone_number",
+    "home_phone",
+    "address",
+    "address_line_1",
+    "address_line_2",
+    "address_street",
+    "address_city",
+    "address_state",
+    "address_zip",
+    "city",
+    "state",
+    "zip_code",
+    "school_name",
+    "graduation_year",
+    "race_ethnicities",
+    "tshirt_size",
+    "shirt_size",
+    "discord_handle",
+    "discord_username",
+    "andrew_id",
+    "employer",
+]
+
+
+@register.filter(name="order_step_fields")
+def order_step_fields(step_data):
+    """Return a list of (field, value) pairs ordered by PREFERRED_FIELD_ORDER."""
+    if not isinstance(step_data, dict):
+        return []
+
+    # Identify fields that are in our preferred list and exist in step_data
+    ordered_items = []
+    seen_fields = set()
+
+    for field in PREFERRED_FIELD_ORDER:
+        if field in step_data:
+            ordered_items.append((field, step_data[field]))
+            seen_fields.add(field)
+
+    # Add any remaining fields that were not in the preferred list
+    for field, value in step_data.items():
+        if field not in seen_fields:
+            ordered_items.append((field, value))
+
+    return ordered_items
 
 
 @register.filter(name="humanize_field")

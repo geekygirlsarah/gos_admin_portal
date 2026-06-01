@@ -316,7 +316,7 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
 
     def _initial(self, application: Application):
         return {
-            "data_json": json.dumps(application.data or {}, indent=2, sort_keys=True),
+            "data_json": json.dumps(application.data or {}, indent=2),
             "email": application.email,
         }
 

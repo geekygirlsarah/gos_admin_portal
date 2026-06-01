@@ -631,6 +631,12 @@ class MentorInfoForm(forms.Form):
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
+    pronouns = forms.CharField(
+        label="Pronouns",
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs=_text_attrs),
+    )
     cell_phone = forms.CharField(
         label="Cell phone",
         max_length=30,
