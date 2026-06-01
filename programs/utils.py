@@ -353,8 +353,9 @@ def get_safe_url(request, url):
     if not url:
         return None
 
-    from django.utils.http import url_has_allowed_host_and_scheme
     from urllib.parse import urlparse
+
+    from django.utils.http import url_has_allowed_host_and_scheme
 
     # Try to relativize absolute URLs on the same host to satisfy restrictive CodeQL checks
     if url.startswith(("http://", "https://", "//")):
