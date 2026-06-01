@@ -119,6 +119,29 @@ class ModelTests(TestCase):
         parent.refresh_from_db()
         self.assertFalse(parent.email_updates)
 
+    def test_program_grade_range_fields(self):
+        program = Program.objects.create(
+            name="Test Program", grade_range_start=4, grade_range_end=6
+        )
+        self.assertEqual(program.grade_range_start, 4)
+        self.assertEqual(program.grade_range_end, 6)
+
+    def test_grade_range_display(self):
+        p1 = Program.objects.create(name="P1", grade_range_start=4, grade_range_end=6)
+        self.assertEqual(p1.grade_range_display, "4th–6th Grade")
+
+        p2 = Program.objects.create(name="P2", grade_range_start=9, grade_range_end=12)
+        self.assertEqual(p2.grade_range_display, "9th–12th Grade")
+
+        p3 = Program.objects.create(name="P3", grade_range_start=0, grade_range_end=2)
+        self.assertEqual(p3.grade_range_display, "K–2nd Grade")
+
+        p4 = Program.objects.create(name="P4", grade_range_start=1, grade_range_end=1)
+        self.assertEqual(p4.grade_range_display, "1st Grade")
+
+        p5 = Program.objects.create(name="P5")
+        self.assertEqual(p5.grade_range_display, "")
+
 
 class RolePermissionTests(TestCase):
     def test_unique_role_section(self):

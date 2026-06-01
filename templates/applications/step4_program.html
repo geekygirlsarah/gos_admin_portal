@@ -26,6 +26,9 @@
                     <label class="list-group-item">
                         <div class="d-flex gap-2 align-items-center mb-1">
                             <span class="fw-semibold">{{ choice.tag }}</span>
+                            {% if prog.grade_range_display %}
+                                <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
+                            {% endif %}
                         </div>
                         {% if prog.start_date %}
                             <div class="small text-muted">

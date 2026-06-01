@@ -291,6 +291,16 @@ class Program(models.Model):
         blank=True,
         help_text="Program cost (e.g., $300 or $200-500).",
     )
+    grade_range_start = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Starting grade for this program (0 for K).",
+    )
+    grade_range_end = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Ending grade for this program (12 for 12th grade).",
+    )
     # Feature toggles
     features = models.ManyToManyField(
         ProgramFeature,
@@ -315,6 +325,36 @@ class Program(models.Model):
         if self.end_date:
             return str(self.end_date.year)
         return ""
+
+    @property
+    def grade_range_display(self):
+        """Return a human-readable grade range: '4th–6th Grade', 'K–2nd Grade', etc."""
+        if self.grade_range_start is None or self.grade_range_end is None:
+            # If only one is set, we could still show it, but usually both are set.
+            # For now, if either is missing, return empty or handle individually.
+            if self.grade_range_start is not None:
+                from programs.utils import format_grade
+
+                return format_grade(self.grade_range_start)
+            if self.grade_range_end is not None:
+                from programs.utils import format_grade
+
+                return format_grade(self.grade_range_end)
+            return ""
+
+        from programs.utils import format_grade
+
+        if self.grade_range_start == self.grade_range_end:
+            return format_grade(self.grade_range_start)
+
+        start = format_grade(self.grade_range_start)
+        end = format_grade(self.grade_range_end)
+
+        # format_grade(0) returns 'K'. Others return 'Nth Grade'.
+        # We want '4th–6th Grade' or 'K–2nd Grade'.
+        # Remove ' Grade' from the start part if it exists.
+        start_label = start.replace(" Grade", "")
+        return f"{start_label}–{end}"
 
     def __str__(self):
         yr = self.year_display

@@ -35,6 +35,20 @@
               </div>
             </div>
           </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="id_grade_range_start" class="form-label">Min Grade</label>
+                {{ form.grade_range_start|add_class:"form-select" }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="id_grade_range_end" class="form-label">Max Grade</label>
+                {{ form.grade_range_end|add_class:"form-select" }}
+              </div>
+            </div>
+          </div>
           <div class="mb-3">
             <label for="id_cost" class="form-label">Cost</label>
             {{ form.cost|add_class:"form-control" }}

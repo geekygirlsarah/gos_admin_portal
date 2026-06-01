@@ -81,3 +81,53 @@ class ViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         # ensure context contains student
         self.assertIn("student", resp.context)
+
+    def test_program_update_view_saves_grade_range(self):
+        # Grant permission and login
+        perm = Permission.objects.get(codename="change_program")
+        self.user.user_permissions.add(perm)
+        # Add to LeadMentor group to satisfy role check in templates
+        from django.contrib.auth.models import Group
+
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+
+        self.client.login(username="tester", password="pass12345")  # nosec B106
+        program = Program.objects.create(
+            name="Robot Camp", start_date="2026-01-01", end_date="2026-01-31"
+        )
+
+        url = reverse("program_edit", args=[program.pk])
+        data = {
+            "name": "Updated Camp",
+            "description": "New description",
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-31",
+            "grade_range_start": 4,
+            "grade_range_end": 6,
+            "cost": "$300",
+            "active": True,
+        }
+        resp = self.client.post(url, data)
+        self.assertEqual(resp.status_code, 302)
+
+        program.refresh_from_db()
+        self.assertEqual(program.grade_range_start, 4)
+        self.assertEqual(program.grade_range_end, 6)
+
+    def test_program_detail_view_displays_grade_range(self):
+        # Add to LeadMentor group to satisfy can_user_read
+        from django.contrib.auth.models import Group
+
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+
+        self.client.login(username="tester", password="pass12345")  # nosec B106
+        program = Program.objects.create(
+            name="Robot Camp", grade_range_start=9, grade_range_end=12, active=True
+        )
+        url = reverse("program_detail", args=[program.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Grade Range:")
+        self.assertContains(resp, "9th–12th Grade")

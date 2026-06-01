@@ -6,7 +6,7 @@ from django.conf import settings
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
-from programs.utils import get_academic_year_ending
+from programs.utils import format_grade, get_academic_year_ending
 
 from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
 
@@ -287,6 +287,8 @@ class ProgramForm(forms.ModelForm):
             "description",
             "start_date",
             "end_date",
+            "grade_range_start",
+            "grade_range_end",
             "cost",
             "active",
             "features",
@@ -294,6 +296,12 @@ class ProgramForm(forms.ModelForm):
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
+            "grade_range_start": forms.Select(
+                choices=[("", "---")] + [(i, format_grade(i)) for i in range(13)]
+            ),
+            "grade_range_end": forms.Select(
+                choices=[("", "---")] + [(i, format_grade(i)) for i in range(13)]
+            ),
             "features": forms.CheckboxSelectMultiple(),
         }
 
