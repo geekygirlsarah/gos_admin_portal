@@ -19,6 +19,7 @@ from programs.models import Student
 from programs.utils import (
     calculate_grade,
     calculate_graduation_year,
+    format_grade,
     get_academic_year_ending,
 )
 
@@ -662,9 +663,25 @@ class Step5StudentInfoView(View):
                 "The birthdate seems a bit old for our programs,  please double-check the birthdate to continue."
             )
 
+        # Add warnings for grade range
+        if application.program:
+            grade_str = form.cleaned_data.get("grade")
+            if grade_str:
+                grade = int(grade_str)
+                p = application.program
+                if p.grade_range_start is not None and p.grade_range_end is not None:
+                    if grade < p.grade_range_start or grade > p.grade_range_end:
+                        warnings.append(
+                            f"The grade you entered ({format_grade(grade)}) seems to be outside the recommended grade range for this program ({p.grade_range_display}). Please double-check the grade to continue."
+                        )
+
         if warnings:
-            # If we have warnings, the user MUST confirm the birthdate.
-            form.fields["confirm_age"].required = True
+            # If we have warnings, the user MUST confirm the relevant fields.
+            if any("birthdate" in w or "age" in w for w in warnings):
+                form.fields["confirm_age"].required = True
+            if any("grade" in w for w in warnings):
+                form.fields["confirm_grade"].required = True
+
             form._errors = None  # Force re-validation
             if not form.is_valid():
                 return self._render(
@@ -674,6 +691,7 @@ class Step5StudentInfoView(View):
                     picker,
                     chosen_student,
                     warnings=warnings,
+                    program_start_date=program_start_date,
                 )
 
         payload = _sanitize_payload(form.cleaned_data)

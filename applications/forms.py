@@ -261,18 +261,18 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.EmailInput(attrs=_text_attrs),
     )
-    directory_consent = forms.BooleanField(
-        label="OK to share name, address, and phone for student directory and carpool map",
-        required=False,
-        initial=True,
-        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
-    )
     cell_phone_number = forms.CharField(
         label="Student's cell phone",
         max_length=30,
         required=False,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
+    )
+    directory_consent = forms.BooleanField(
+        label="OK to share name, address, and phone for student directory and carpool map",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     school_name = forms.ChoiceField(
         label="School",
@@ -283,6 +283,10 @@ class StudentInfoForm(forms.Form):
         label="Grade (K–12)",
         choices=[("", "—")] + [(str(v), label) for v, label in GRADE_CHOICES],
         required=True,
+    )
+    confirm_grade = forms.BooleanField(
+        label="I confirm this grade is correct",
+        required=False,
     )
     race_ethnicities = forms.ModelMultipleChoiceField(
         label="Race / Ethnicity",

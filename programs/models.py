@@ -508,7 +508,7 @@ class Student(models.Model):
     personal_email = models.EmailField(blank=True, null=True)
     directory_consent = models.BooleanField(
         default=True,
-        verbose_name="OK to share name, address, and phone for student directory",
+        verbose_name="OK to share name, address, email, and phone for student directory",
     )
 
     andrew_id = models.CharField(max_length=50, blank=True, null=True)
