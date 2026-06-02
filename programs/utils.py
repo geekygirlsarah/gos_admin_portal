@@ -347,41 +347,36 @@ def format_grade(grade: int | str | None) -> str:
 
 def get_safe_url(request, url):
     """
-    Return a safe URL, relativized if it's an absolute URL on the same host.
-    Returns None if the URL is unsafe or not present.
+    Return a safe local URL for redirects.
+    Accepts relative URLs and same-host absolute URLs, and always returns a
+    relative path (or None if unsafe/not present).
     """
+    url = str(url).strip()
     if not url:
         return None
 
-    from urllib.parse import urlparse
+    from urllib.parse import urlsplit
 
     from django.utils.http import url_has_allowed_host_and_scheme
 
-    # Try to relativize absolute URLs on the same host to satisfy restrictive CodeQL checks
-    if url.startswith(("http://", "https://", "//")):
-        try:
-            parsed = urlparse(url)
-            if parsed.netloc == request.get_host():
-                url = parsed.path
-                if parsed.query:
-                    url += "?" + parsed.query
-                if parsed.fragment:
-                    url += "#" + parsed.fragment
-        except Exception:
-            pass
-
-    if (
-        url
-        and url.startswith("/")
-        and not url.startswith("//")
-        and url_has_allowed_host_and_scheme(
-            url=url,
-            allowed_hosts=None,
-            require_https=request.is_secure(),
-        )
+    allowed_hosts = {request.get_host()}
+    if not url_has_allowed_host_and_scheme(
+        url=url,
+        allowed_hosts=allowed_hosts,
+        require_https=request.is_secure(),
     ):
-        return url
-    return None
+        return None
+
+    parsed = urlsplit(url)
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
+    if parsed.fragment:
+        path += "#" + parsed.fragment
+
+    if not path.startswith("/") or path.startswith("//"):
+        return None
+    return path
 
 
 def redirect_back(request, default):
