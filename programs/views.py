@@ -12,6 +12,7 @@ from django.contrib.auth.mixins import (
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.http import HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -534,20 +535,20 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         ids = request.POST.getlist("student_ids")
         year = request.POST.get("year")
 
-        # Validate year to prevent open redirect
+        # Validate and normalize year
         try:
             if year:
-                int(year)
+                year = str(int(year))
         except (ValueError, TypeError):
             year = None
 
         if not ids:
             messages.info(request, "No students selected.")
             if year:
-                redirect_url = f"{reverse('student_bulk_convert_select')}?year={year}"
-                safe_url = get_safe_url(request, redirect_url)
-                if safe_url:
-                    return redirect(safe_url)
+                base_url = reverse("student_bulk_convert_select")
+                query = QueryDict("", mutable=True)
+                query["year"] = year
+                return HttpResponseRedirect(f"{base_url}?{query.urlencode()}")
             return redirect("student_bulk_convert_select")
 
         qs = Student.objects.filter(pk__in=ids).order_by("last_name", "first_name")
