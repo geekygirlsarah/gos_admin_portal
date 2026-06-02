@@ -164,7 +164,7 @@
           <h2 class="h6 text-uppercase text-muted mt-3">{{ step_key }}</h2>
           {% if step_data.items %}
             <dl class="row mb-0">
-              {% for field, value in step_data.items %}
+              {% for field, value in step_data|order_step_fields %}
                 {% if not field|slice:":1" == "_" %}
                   {% if step_key == 'step5-student' and field == 'grade' %}
                   {% elif step_key == 'step5-student' and field == 'graduation_year' %}

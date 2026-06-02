@@ -12,11 +12,11 @@ from django.contrib.auth.mixins import (
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.http import HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import strip_tags
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import (
     CreateView,
     DetailView,
@@ -61,6 +61,7 @@ from .models import (
     Team,
 )
 from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
+from .utils import get_safe_url, redirect_back
 
 cssutils.log.setLevel(logging.WARNING)
 
@@ -495,15 +496,7 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 request,
                 f"{student} is now marked as Alumni. Student marked as graduated.",
             )
-        # Redirect back to list or provided next (only if it's a safe URL)
-        next_url = request.GET.get("next") or request.POST.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={request.get_host()},
-            require_https=request.is_secure(),
-        ):
-            return redirect(next_url)
-        return redirect("student_list")
+        return redirect_back(request, "student_list")
 
 
 class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -542,23 +535,20 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
         ids = request.POST.getlist("student_ids")
         year = request.POST.get("year")
 
-        # Validate year to prevent open redirect
+        # Validate and normalize year
         try:
             if year:
-                int(year)
+                year = str(int(year))
         except (ValueError, TypeError):
             year = None
 
         if not ids:
             messages.info(request, "No students selected.")
             if year:
-                redirect_url = f"{reverse('student_bulk_convert_select')}?year={year}"
-                if url_has_allowed_host_and_scheme(
-                    url=redirect_url,
-                    allowed_hosts={request.get_host()},
-                    require_https=request.is_secure(),
-                ):
-                    return redirect(redirect_url)
+                base_url = reverse("student_bulk_convert_select")
+                query = QueryDict("", mutable=True)
+                query["year"] = year
+                return HttpResponseRedirect(f"{base_url}?{query.urlencode()}")
             return redirect("student_bulk_convert_select")
 
         qs = Student.objects.filter(pk__in=ids).order_by("last_name", "first_name")
@@ -632,8 +622,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -710,15 +701,16 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if email:
                     p = Adult.objects.filter(email__iexact=email).first()
                     if p:
-                        changed_parent = False
-                        if first and p.first_name != first:
-                            p.first_name = first
-                            changed_parent = True
-                        if last and p.last_name != last:
-                            p.last_name = last
-                            changed_parent = True
-                        if changed_parent:
-                            p.save()
+                        if overwrite:
+                            changed_parent = False
+                            if first and p.first_name != first:
+                                p.first_name = first
+                                changed_parent = True
+                            if last and p.last_name != last:
+                                p.last_name = last
+                                changed_parent = True
+                            if changed_parent:
+                                p.save()
                         return p
                 # Next try by name match
                 if first and last:
@@ -726,7 +718,11 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         first_name__iexact=first, last_name__iexact=last
                     ).first()
                     if p:
-                        if email and (p.email or "").lower() != (email or "").lower():
+                        if (
+                            overwrite
+                            and email
+                            and (p.email or "").lower() != (email or "").lower()
+                        ):
                             p.email = email
                             p.save()
                         return p
@@ -816,7 +812,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     # Strings and relations
                     for field, value in [
@@ -953,7 +949,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 messages.info(request, "No rows imported.")
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect_back(request, "import_dashboard")
 
 
 class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -963,8 +959,9 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -1014,7 +1011,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     if email and obj.email != email:
                         obj.email = email
@@ -1030,7 +1027,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect_back(request, "import_dashboard")
 
 
 class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1045,9 +1042,10 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
         dry_run = request.POST.get("dry_run") in ("1", "on", "true", "True")
+        overwrite = request.POST.get("overwrite") == "1"
         can_create_parents = request.user.has_perm("programs.add_adult")
 
         linked = 0
@@ -1295,7 +1293,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     # Relationship type (global per Adult)
                     rel_key = normalize_rel(g["rel"])
                     if rel_key and adult.relationship_to_student != rel_key:
-                        if not dry_run:
+                        if not dry_run and overwrite:
                             adult.relationship_to_student = rel_key
                             adult.save(
                                 update_fields=["relationship_to_student", "updated_at"]
@@ -1312,13 +1310,13 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     # Optionally set primary/secondary contact
                     if g["role"] == "primary":
                         if student.primary_contact_id != adult.id:
-                            if not dry_run:
+                            if not dry_run and overwrite:
                                 student.primary_contact = adult
                                 updated_student_fields.add("primary_contact")
                             set_primary += 1
                     elif g["role"] == "secondary":
                         if student.secondary_contact_id != adult.id:
-                            if not dry_run:
+                            if not dry_run and overwrite:
                                 student.secondary_contact = adult
                                 updated_student_fields.add("secondary_contact")
                             set_secondary += 1
@@ -1346,7 +1344,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect_back(request, "import_dashboard")
 
 
 class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1356,8 +1354,9 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -1413,7 +1412,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     for field, value in [
                         ("personal_email", email),
@@ -1431,7 +1430,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect_back(request, "import_dashboard")
 
 
 class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -1441,8 +1440,9 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
         file = request.FILES.get("file")
         if not file:
             messages.error(request, "No file uploaded.")
-            return redirect("import_dashboard")
+            return redirect_back(request, "import_dashboard")
         name = file.name.lower()
+        overwrite = request.POST.get("overwrite") == "1"
         created = 0
         updated = 0
         errors = 0
@@ -1501,7 +1501,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                else:
+                elif overwrite:
                     changed = False
                     for field, value in [
                         ("district", district),
@@ -1521,7 +1521,7 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Import failed: {e}")
-        return redirect("import_dashboard")
+        return redirect_back(request, "import_dashboard")
 
 
 class MentorCreateView(
@@ -1555,12 +1555,9 @@ class MentorUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            return next_url
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("mentor_edit", args=[self.object.pk])
 
 
@@ -1594,12 +1591,9 @@ class SchoolUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            return next_url
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("school_edit", args=[self.object.pk])
 
 
@@ -1966,12 +1960,9 @@ class StudentUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            return next_url
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("student_edit", args=[self.object.pk])
 
 
@@ -2244,12 +2235,9 @@ class ParentUpdateView(
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            return next_url
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("parent_edit", args=[self.object.pk])
 
 
@@ -3616,12 +3604,9 @@ class AdultUpdateView(
 
     def get_success_url(self):
         nxt = self.request.GET.get("next")
-        if nxt and url_has_allowed_host_and_scheme(
-            url=nxt,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            return nxt
+        safe_url = get_safe_url(self.request, nxt)
+        if safe_url:
+            return safe_url
         return reverse("adult_list")
 
 

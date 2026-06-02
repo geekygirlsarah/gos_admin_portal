@@ -14,12 +14,21 @@
             <div class="form-text mb-3">{{ form.program.help_text }}</div>
         {% endif %}
 
+        <div class="form-text mb-3">
+            Girls of Steel Robotics believes strongly that every kid in our community should be able to learn about
+            robotics if it interests them. After applying, email
+            <a href="mailto:slidingscale@girlsofsteelrobotics.org">slidingscale@girlsofsteelrobotics.org</a> to learn
+            more about our sliding scale program, which can bring costs as low as $0.
+        </div>
         {% if future_programs %}
             <div class="list-group mb-3">
                 {% for choice, prog in program_choices %}
                     <label class="list-group-item">
                         <div class="d-flex gap-2 align-items-center mb-1">
                             <span class="fw-semibold">{{ choice.tag }}</span>
+                            {% if prog.grade_range_display %}
+                                <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
+                            {% endif %}
                         </div>
                         {% if prog.start_date %}
                             <div class="small text-muted">
@@ -27,10 +36,14 @@
                             </div>
                         {% endif %}
                         {% if prog.cost %}
-                            <div class="small mt-1">Cost: <strong>{{ prog.cost }}</strong></div>
+                            <div class="small mt-1">
+                                <abbr title="Program cost may be as low as $0 after applying for the sliding scale.">
+                                Cost: <strong>{{ prog.cost }}</strong>
+                                </abbr>
+                            </div>
                         {% endif %}
                         {% if prog.description %}
-                            <div class="small mt-1">{{ prog.description }}</div>
+                            <div class="small mt-1">{{ prog.description|linebreaksbr }}</div>
                         {% endif %}
                     </label>
                 {% endfor %}

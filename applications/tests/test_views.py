@@ -176,6 +176,24 @@ class WizardFlowTests(TestCase):
         app.refresh_from_db()
         self.assertEqual(app.program_id, self.future_program.pk)
 
+    def test_step4_displays_grade_range(self):
+        self.future_program.grade_range_start = 4
+        self.future_program.grade_range_end = 6
+        self.future_program.save()
+
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            current_step=4,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+        response = self.client.get(
+            reverse("apply_step4", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "4th–6th Grade")
+
     # --- Step 3 (Email Verify) -------------------------------------------
 
     def test_step3_get_issues_otp_and_emails_it(self):
