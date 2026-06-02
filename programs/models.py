@@ -234,6 +234,7 @@ class RolePermission(models.Model):
         ("Mentor", "Mentor"),
         ("Parent", "Parent"),
         ("Student", "Student"),
+        ("Alumni", "Alumni"),
     ]
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
@@ -605,23 +606,32 @@ class Student(models.Model):
         """
         Returns a list of unique Adult objects related to this student,
         including primary, secondary, and any additional M2M adults.
+        Each Adult object has an 'attached_rel' attribute representing their
+        relationship to THIS student.
         """
         seen_ids = set()
         result = []
 
-        if self.primary_contact_id:
-            result.append(self.primary_contact)
-            seen_ids.add(self.primary_contact_id)
+        # Helper to get relationship string
+        rels = {}
+        if self.pk:
+            rels = {
+                r.adult_id: r.relationship_to_student
+                for r in self.adultstudentrelationship_set.all()
+            }
 
-        if self.secondary_contact_id and self.secondary_contact_id not in seen_ids:
-            result.append(self.secondary_contact)
-            seen_ids.add(self.secondary_contact_id)
+        def add_adult(adult):
+            if adult and adult.id not in seen_ids:
+                adult.attached_rel = rels.get(adult.id, "parent")
+                result.append(adult)
+                seen_ids.add(adult.id)
+
+        add_adult(self.primary_contact)
+        add_adult(self.secondary_contact)
 
         if self.pk:
             for p in self.adults.all():
-                if p.id not in seen_ids:
-                    result.append(p)
-                    seen_ids.add(p.id)
+                add_adult(p)
 
         return result
 
@@ -795,6 +805,26 @@ class Enrollment(models.Model):
         return f"{self.student} → {self.program}"
 
 
+class AdultStudentRelationship(models.Model):
+    adult = models.ForeignKey("Adult", on_delete=models.CASCADE)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    relationship_to_student = models.CharField(
+        max_length=20, choices=RELATIONSHIP_CHOICES, default="parent"
+    )
+    specific_relationship = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Specific relationship, e.g. father, stepmom, foster parent, etc.",
+    )
+
+    class Meta:
+        unique_together = ("adult", "student")
+
+    def __str__(self):
+        return f"{self.adult} - {self.relationship_to_student} to {self.student}"
+
+
 class Adult(models.Model):
     # Role flags
     is_parent = models.BooleanField(
@@ -828,19 +858,9 @@ class Adult(models.Model):
     last_name = models.CharField(max_length=150)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
 
-    # Relationship to student (for parents/guardians)
-    relationship_to_student = models.CharField(
-        max_length=20, choices=RELATIONSHIP_CHOICES, default="parent"
-    )
-    specific_relationship = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Specific relationship, e.g. father, stepmom, foster parent, etc.",
-    )
 
     # Contact
-    email = models.EmailField(blank=True, null=True)
+    email = models.EmailField(blank=True, null=True, unique=True)
     phone_number = models.CharField(
         max_length=30, blank=True, null=True, validators=[validate_phone_number]
     )
@@ -921,6 +941,14 @@ class Adult(models.Model):
     active = models.BooleanField(default=True, db_index=True)
 
     # Alumni information (merged from Alumni)
+    student_record = models.OneToOneField(
+        "Student",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="alumni_profile",
+        help_text="The student record this alumni profile originated from.",
+    )
     alumni_email = models.EmailField(
         blank=True, null=True, help_text="Preferred contact email after graduation"
     )
@@ -934,7 +962,12 @@ class Adult(models.Model):
     notes = models.TextField(blank=True, null=True)
 
     # Relations
-    students = models.ManyToManyField(Student, related_name="adults", blank=True)
+    students = models.ManyToManyField(
+        Student,
+        related_name="adults",
+        blank=True,
+        through="AdultStudentRelationship",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -957,6 +990,21 @@ class Adult(models.Model):
     def __str__(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
+
+    def all_students(self):
+        """Return a list of Student objects related to this adult,
+        with an 'attached_rel' attribute for each student.
+        """
+        if not self.pk:
+            return []
+        rels = {
+            r.student_id: r.relationship_to_student
+            for r in self.adultstudentrelationship_set.all()
+        }
+        students = list(self.students.all())
+        for s in students:
+            s.attached_rel = rels.get(s.pk, "parent")
+        return students
 
     def save(self, *args, **kwargs):
         # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).

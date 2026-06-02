@@ -28,6 +28,8 @@ def get_user_role(user):
             return "Mentor"
         if adult.is_parent:
             return "Parent"
+        if adult.is_alumni:
+            return "Alumni"
     except (Adult.DoesNotExist, AttributeError):
         pass
 
@@ -82,6 +84,16 @@ def can_user_write(user, section, obj=None):
                 return obj in adult.students.all()
             if isinstance(obj, Adult):
                 return obj == adult
+        except (Adult.DoesNotExist, AttributeError):
+            return False
+    elif role == "Alumni" and obj:
+        try:
+            adult = user.adult_profile
+            if isinstance(obj, Adult):
+                return obj == adult
+            # Optionally allow alumni to see their own student record
+            if isinstance(obj, Student):
+                return adult.student_record == obj
         except (Adult.DoesNotExist, AttributeError):
             return False
     elif role == "Student" and obj:

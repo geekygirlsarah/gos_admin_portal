@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     "attendance",
     "api",
     "applications",
+    "portal",
 ]
 
 MIDDLEWARE = [

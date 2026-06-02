@@ -46,6 +46,7 @@ from .forms import (
 )
 from .models import (
     Adult,
+    AdultStudentRelationship,
     Crew,
     Enrollment,
     Fee,
@@ -1290,21 +1291,19 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         skipped += 1
                         continue
 
-                    # Relationship type (global per Adult)
+                    # Relationship type
                     rel_key = normalize_rel(g["rel"])
-                    if rel_key and adult.relationship_to_student != rel_key:
-                        if not dry_run and overwrite:
-                            adult.relationship_to_student = rel_key
-                            adult.save(
-                                update_fields=["relationship_to_student", "updated_at"]
+                    if rel_key:
+                        if not dry_run:
+                            AdultStudentRelationship.objects.update_or_create(
+                                adult=adult,
+                                student=student,
+                                defaults={"relationship_to_student": rel_key},
                             )
                         rel_updated += 1
 
-                    # Ensure Adult is linked to Student (M2M)
-                    if adult.id and not student.adults.filter(id=adult.id).exists():
-                        if not dry_run:
-                            student.adults.add(adult)
-                            adult.students.add(student)
+                    # Ensure Adult is linked to Student (M2M) - already handled by update_or_create above if not dry_run
+                    if dry_run and not student.adults.filter(id=adult.id).exists():
                         linked += 1
 
                     # Optionally set primary/secondary contact
@@ -1939,7 +1938,7 @@ class StudentUpdateView(
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Persist relationship selections for each selected parent (note: global per Parent)
+        # Persist relationship selections for each selected parent
         rel_map = {
             k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
@@ -1952,10 +1951,11 @@ class StudentUpdateView(
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                p = Adult.objects.filter(pk=pid).first()
-                if p and p.relationship_to_student != rel:
-                    p.relationship_to_student = rel
-                    p.save(update_fields=["relationship_to_student"])
+                AdultStudentRelationship.objects.update_or_create(
+                    adult_id=pid,
+                    student=self.object,
+                    defaults={"relationship_to_student": rel},
+                )
         return response
 
     def get_success_url(self):
@@ -1989,7 +1989,7 @@ class StudentCreateView(
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Persist relationship selections for each selected parent (note: global per Parent)
+        # Persist relationship selections for each selected parent
         rel_map = {
             k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
@@ -2002,10 +2002,11 @@ class StudentCreateView(
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                p = Adult.objects.filter(pk=pid).first()
-                if p and p.relationship_to_student != rel:
-                    p.relationship_to_student = rel
-                    p.save(update_fields=["relationship_to_student"])
+                AdultStudentRelationship.objects.update_or_create(
+                    adult_id=pid,
+                    student=self.object,
+                    defaults={"relationship_to_student": rel},
+                )
         return response
 
     def get_success_url(self):
