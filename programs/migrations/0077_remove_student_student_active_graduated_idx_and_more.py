@@ -7,26 +7,26 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0076_adult_student_record_alter_rolepermission_role'),
+        ("programs", "0076_adult_student_record_alter_rolepermission_role"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='student',
-            name='student_active_graduated_idx',
+            model_name="student",
+            name="student_active_graduated_idx",
         ),
         migrations.RemoveField(
-            model_name='student',
-            name='active',
+            model_name="student",
+            name="active",
         ),
         migrations.AddField(
-            model_name='enrollment',
-            name='active',
+            model_name="enrollment",
+            name="active",
             field=models.BooleanField(default=True),
         ),
         migrations.AddIndex(
-            model_name='student',
-            index=models.Index(fields=['graduated'], name='student_graduated_idx'),
+            model_name="student",
+            index=models.Index(fields=["graduated"], name="student_graduated_idx"),
         ),
     ]

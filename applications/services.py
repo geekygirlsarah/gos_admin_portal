@@ -280,14 +280,17 @@ def adult_to_prefill(adult, student=None) -> dict:
     """Convert an ``Adult`` model into a dict suitable for ``ParentInfoForm``."""
     if adult is None:
         return {}
-    
+
     relationship = ""
     if student:
         from programs.models import AdultStudentRelationship
-        asr = AdultStudentRelationship.objects.filter(adult=adult, student=student).first()
+
+        asr = AdultStudentRelationship.objects.filter(
+            adult=adult, student=student
+        ).first()
         if asr:
             relationship = asr.relationship
-            
+
     return {
         "first_name": adult.first_name or "",
         "last_name": adult.last_name or "",
@@ -723,6 +726,7 @@ def convert_application_to_student(application: Application, request=None):
 
         # Ensure bi-directional M2M relationship is also established with correct relationship type.
         from programs.models import AdultStudentRelationship
+
         if primary:
             rel_data = data.get("step7-primaryparent") or {}
             AdultStudentRelationship.objects.update_or_create(

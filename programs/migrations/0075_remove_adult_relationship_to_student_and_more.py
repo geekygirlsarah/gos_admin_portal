@@ -7,48 +7,98 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0074_program_grade_range_end_program_grade_range_start'),
+        ("programs", "0074_program_grade_range_end_program_grade_range_start"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='adult',
-            name='relationship_to_student',
+            model_name="adult",
+            name="relationship_to_student",
         ),
         migrations.RemoveField(
-            model_name='adult',
-            name='specific_relationship',
+            model_name="adult",
+            name="specific_relationship",
         ),
         migrations.AlterField(
-            model_name='adult',
-            name='email',
+            model_name="adult",
+            name="email",
             field=models.EmailField(blank=True, max_length=254, null=True, unique=True),
         ),
         migrations.AlterField(
-            model_name='student',
-            name='directory_consent',
-            field=models.BooleanField(default=True, verbose_name='OK to share name, address, email, and phone for student directory'),
+            model_name="student",
+            name="directory_consent",
+            field=models.BooleanField(
+                default=True,
+                verbose_name="OK to share name, address, email, and phone for student directory",
+            ),
         ),
         migrations.CreateModel(
-            name='AdultStudentRelationship',
+            name="AdultStudentRelationship",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('relationship_to_student', models.CharField(choices=[('parent', 'Parent'), ('grandparent', 'Grandparent'), ('pibling', 'Pibling (aunt/uncle)'), ('sibling', 'Sibling'), ('guardian', 'Guardian'), ('family_friend', 'Family Friend'), ('other', 'Other')], default='parent', max_length=20)),
-                ('specific_relationship', models.CharField(blank=True, help_text='Specific relationship, e.g. father, stepmom, foster parent, etc.', max_length=100, null=True)),
-                ('adult', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='programs.adult')),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='programs.student')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "relationship_to_student",
+                    models.CharField(
+                        choices=[
+                            ("parent", "Parent"),
+                            ("grandparent", "Grandparent"),
+                            ("pibling", "Pibling (aunt/uncle)"),
+                            ("sibling", "Sibling"),
+                            ("guardian", "Guardian"),
+                            ("family_friend", "Family Friend"),
+                            ("other", "Other"),
+                        ],
+                        default="parent",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "specific_relationship",
+                    models.CharField(
+                        blank=True,
+                        help_text="Specific relationship, e.g. father, stepmom, foster parent, etc.",
+                        max_length=100,
+                        null=True,
+                    ),
+                ),
+                (
+                    "adult",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to="programs.adult"
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="programs.student",
+                    ),
+                ),
             ],
             options={
-                'unique_together': {('adult', 'student')},
+                "unique_together": {("adult", "student")},
             },
         ),
         migrations.RemoveField(
-            model_name='adult',
-            name='students',
+            model_name="adult",
+            name="students",
         ),
         migrations.AddField(
-            model_name='adult',
-            name='students',
-            field=models.ManyToManyField(blank=True, related_name='adults', through='programs.AdultStudentRelationship', to='programs.student'),
+            model_name="adult",
+            name="students",
+            field=models.ManyToManyField(
+                blank=True,
+                related_name="adults",
+                through="programs.AdultStudentRelationship",
+                to="programs.student",
+            ),
         ),
     ]

@@ -28,6 +28,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 if adult.student_record:
                     # Get enrollments for the student record
                     from programs.models import Enrollment
+
                     context["enrollments"] = Enrollment.objects.filter(
                         student=adult.student_record
                     ).select_related("program", "team")

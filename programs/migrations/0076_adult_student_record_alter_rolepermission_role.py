@@ -7,18 +7,33 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0075_remove_adult_relationship_to_student_and_more'),
+        ("programs", "0075_remove_adult_relationship_to_student_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='adult',
-            name='student_record',
-            field=models.OneToOneField(blank=True, help_text='The student record this alumni profile originated from.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='alumni_profile', to='programs.student'),
+            model_name="adult",
+            name="student_record",
+            field=models.OneToOneField(
+                blank=True,
+                help_text="The student record this alumni profile originated from.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="alumni_profile",
+                to="programs.student",
+            ),
         ),
         migrations.AlterField(
-            model_name='rolepermission',
-            name='role',
-            field=models.CharField(choices=[('Mentor', 'Mentor'), ('Parent', 'Parent'), ('Student', 'Student'), ('Alumni', 'Alumni')], max_length=20),
+            model_name="rolepermission",
+            name="role",
+            field=models.CharField(
+                choices=[
+                    ("Mentor", "Mentor"),
+                    ("Parent", "Parent"),
+                    ("Student", "Student"),
+                    ("Alumni", "Alumni"),
+                ],
+                max_length=20,
+            ),
         ),
     ]

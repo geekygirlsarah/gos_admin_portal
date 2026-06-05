@@ -2,17 +2,15 @@
 
 A Django-based administrative portal for managing programs, students, parents, and mentors for GoS.
 
-## Features
-- Google login via django-allauth
-- Manage Programs (create/list/detail)
-- Manage Students, Parents, Mentors
-- Bootstrap 5 UI
+## Portal Goals
+1. Reduce the administrative burden for GoS by providing a centralized platform for everything.
+2. Increase transparency and accountability for parents and students of the programs.
+3. Increase the data reliability of our participant data.
 
 ## Prerequisites
 - Python 3.11+ (recommended)
 - pip
 - (Optional) virtualenv or venv
-- A Google OAuth client (for production Google login). For local development you can disable social login and use the Django admin/superuser.
 
 ## Getting Started (Local Development)
 
@@ -30,33 +28,17 @@ A Django-based administrative portal for managing programs, students, parents, a
 4. Apply database migrations
    python manage.py migrate
 
-5. Create a superuser (to access the admin and log in without Google during local dev)
+5. Create a superuser (to access the admin and log in during local dev)
    python manage.py createsuperuser
 
-6. Run the development server
+6. Seed the database with some sample data to play with (optional)
+   python manage.py seed_db
+
+7. Run the development server
    python manage.py runserver
 
-7. Open the app
-   Visit http://127.0.0.1:8000/ to view the portal. Log in using your superuser credentials (or set up Google OAuth as below).
-
-## Google OAuth (django-allauth)
-This project uses django-allauth for Google Sign-In.
-
-To enable Google login locally:
-- Create OAuth 2.0 credentials at https://console.cloud.google.com/apis/credentials
-- Authorized JavaScript origins: http://127.0.0.1:8000
-- Authorized redirect URIs: http://127.0.0.1:8000/accounts/google/login/callback/
-- Add a Social App in Django admin:
-  - Go to http://127.0.0.1:8000/admin/
-  - Sites -> ensure example.com or your local site is configured (or add 127.0.0.1:8000)
-  - Social applications -> Add a new app
-    - Provider: Google
-    - Name: GoS Admin Portal
-    - Client id: <your_client_id>
-    - Secret key: <your_client_secret>
-    - Sites: select your site
-
-If you prefer not to configure Google locally, log in with the superuser and navigate the portal.
+8. Open the app
+   Visit http://127.0.0.1:8000/ to view the portal. Log in using your superuser credentials.
 
 ## Project Structure
 - GoSAdminPortal/ ... Django project settings and URL routing
@@ -76,5 +58,4 @@ If tests are added later, they can be executed with:
 - Configure ALLOWED_HOSTS and DEBUG in settings.
 - Serve static files with whitenoise or via your web server.
 
-## License
-Proprietary/Internal (update as appropriate).
+Presently it's deployed on Render using a web service and their PostgreSQL database.

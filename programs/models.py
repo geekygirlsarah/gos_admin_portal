@@ -676,9 +676,7 @@ class Student(models.Model):
             models.Index(
                 fields=["school", "graduation_year"], name="student_school_grad_idx"
             ),
-            models.Index(
-                fields=["graduated"], name="student_graduated_idx"
-            ),
+            models.Index(fields=["graduated"], name="student_graduated_idx"),
         ]
 
     def __str__(self):
@@ -856,7 +854,6 @@ class Adult(models.Model):
     preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
     last_name = models.CharField(max_length=150)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
-
 
     # Contact
     email = models.EmailField(blank=True, null=True, unique=True)

@@ -3472,7 +3472,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
                 sort_last=Lower("last_name"),
             )
         )
-        students = list(base_qs.filter(graduated=False).order_by("sort_first", "sort_last"))
+        students = list(
+            base_qs.filter(graduated=False).order_by("sort_first", "sort_last")
+        )
         ctx = {
             "program": program,
             "students": students,
