@@ -1177,9 +1177,9 @@ class SwapParentsView(View):
             student = Student.objects.filter(pk=existing_student_id).first()
             if student:
                 if not step7 and student.primary_contact_id:
-                    step7 = adult_to_prefill(student.primary_contact)
+                    step7 = adult_to_prefill(student.primary_contact, student=student)
                 if not step8 and student.secondary_contact_id:
-                    step8 = adult_to_prefill(student.secondary_contact)
+                    step8 = adult_to_prefill(student.secondary_contact, student=student)
 
         # Only swap when both sides have content.
         if step7 or step8:
@@ -1293,7 +1293,7 @@ class Step8SecondaryParentView(View):
         if sid:
             student = Student.objects.filter(pk=sid).first()
             if student and student.secondary_contact_id:
-                return adult_to_prefill(student.secondary_contact)
+                return adult_to_prefill(student.secondary_contact, student=student)
         return {}
 
     def _render(self, request, application, form):

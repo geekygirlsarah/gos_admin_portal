@@ -660,8 +660,6 @@ class Student(models.Model):
         help_text="How did you hear about Girls of Steel Robotics?",
     )
 
-    active = models.BooleanField(default=True, db_index=True)
-    # Indicates the student has graduated from the program(s)
     graduated = models.BooleanField(
         default=False, db_index=True, help_text="Check if this student has graduated."
     )
@@ -679,7 +677,7 @@ class Student(models.Model):
                 fields=["school", "graduation_year"], name="student_school_grad_idx"
             ),
             models.Index(
-                fields=["active", "graduated"], name="student_active_graduated_idx"
+                fields=["graduated"], name="student_graduated_idx"
             ),
         ]
 
@@ -794,6 +792,7 @@ class Enrollment(models.Model):
         blank=True,
         related_name="enrollments",
     )
+    active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

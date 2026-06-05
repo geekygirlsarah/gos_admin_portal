@@ -209,7 +209,7 @@ def convert_student_to_alumni(student):
         ``alumni_email`` fields when needed.
       - Links the ``Adult`` record back to the ``Student`` via ``student_record``.
       - Transfers the ``User`` link from ``Student`` to ``Adult`` if applicable.
-      - Marks the student as ``graduated=True`` and ``active=False``.
+      - Marks the student as ``graduated=True``.
 
     Returns a tuple ``(adult, created, marked_graduated)``.
     """
@@ -274,14 +274,6 @@ def convert_student_to_alumni(student):
         if changed:
             adult.save()
 
-    # User transfer: if Student has a user but Adult doesn't, move it.
-    if student.user and not adult.user:
-        user = student.user
-        student.user = None
-        student.save(update_fields=["user"])
-        adult.user = user
-        adult.save(update_fields=["user"])
-
     marked_graduated = False
     student_changed = False
     if not student.graduated:
@@ -289,12 +281,15 @@ def convert_student_to_alumni(student):
         student_changed = True
         marked_graduated = True
 
-    if student.active:
-        student.active = False
+    if student.user and not adult.user:
+        user = student.user
+        student.user = None
         student_changed = True
+        adult.user = user
+        adult.save(update_fields=["user"])
 
     if student_changed:
-        student.save(update_fields=["graduated", "active", "updated_at"])
+        student.save(update_fields=["graduated", "user", "updated_at"])
 
     return adult, created, marked_graduated
 

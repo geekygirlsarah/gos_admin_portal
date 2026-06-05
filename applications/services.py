@@ -276,14 +276,22 @@ def student_to_prefill(student) -> dict:
     }
 
 
-def adult_to_prefill(adult) -> dict:
+def adult_to_prefill(adult, student=None) -> dict:
     """Convert an ``Adult`` model into a dict suitable for ``ParentInfoForm``."""
     if adult is None:
         return {}
+    
+    relationship = ""
+    if student:
+        from programs.models import AdultStudentRelationship
+        asr = AdultStudentRelationship.objects.filter(adult=adult, student=student).first()
+        if asr:
+            relationship = asr.relationship
+            
     return {
         "first_name": adult.first_name or "",
         "last_name": adult.last_name or "",
-        "relationship_to_student": adult.relationship_to_student or "",
+        "relationship_to_student": relationship,
         "email": adult.email or adult.personal_email or "",
         "cell_phone": adult.cell_phone or "",
         "home_phone": adult.home_phone or "",

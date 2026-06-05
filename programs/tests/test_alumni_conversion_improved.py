@@ -15,7 +15,6 @@ class AlumniConversionImprovedTests(TestCase):
             address='123 Grad St',
             pronouns='they/them'
         )
-        self.assertTrue(student.active)
         self.assertFalse(student.graduated)
         self.assertEqual(user.student_profile, student)
 
@@ -35,7 +34,6 @@ class AlumniConversionImprovedTests(TestCase):
         self.assertEqual(user.adult_profile, adult)
 
         # Verify status changes
-        self.assertFalse(student.active)
         self.assertTrue(student.graduated)
 
         # Verify field copying

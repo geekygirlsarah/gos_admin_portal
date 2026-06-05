@@ -25,7 +25,7 @@
             <th>Name</th>
             <th>School</th>
             <th>Graduation Year</th>
-            <th>Active</th>
+            <th>Graduated</th>
             <th></th>
           </tr>
         </thead>
@@ -41,7 +41,7 @@
               <td>{{ s.school|default:"" }}</td>
               <td>{{ s.graduation_year|default:"" }}</td>
               <td>
-                <span class="badge {% if s.active %}bg-success{% else %}bg-secondary{% endif %}">{{ s.active|yesno:"Yes,No" }}</span>
+                <span class="badge {% if s.graduated %}bg-info{% else %}bg-success{% endif %}">{{ s.graduated|yesno:"Yes,No" }}</span>
               </td>
               <td class="text-end">
                 {% can_read user 'attendance' as can_view_attendance %}

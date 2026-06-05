@@ -117,6 +117,7 @@ class PaymentAdmin(admin.ModelAdmin):
 class EnrollmentInline(admin.TabularInline):
     model = Enrollment
     extra = 1
+    fields = ("program", "team", "crew", "subteam", "active")
 
 
 class AdultStudentRelationshipInline(admin.TabularInline):
@@ -142,11 +143,10 @@ class StudentAdmin(admin.ModelAdmin):
         "graduation_year",
         "andrew_id",
         "on_discord",
-        "active",
         "graduated",
         "updated_at",
     )
-    list_filter = ("active", "graduated", "on_discord", "seen_once", "graduation_year")
+    list_filter = ("graduated", "on_discord", "seen_once", "graduation_year")
     search_fields = (
         "first_name",
         "legal_first_name",

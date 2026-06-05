@@ -329,7 +329,7 @@ class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(active=True)
+        qs = super().get_queryset().filter(graduated=False)
         return (
             qs.select_related("school", "primary_contact", "secondary_contact")
             .prefetch_related("adults")
@@ -354,7 +354,7 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(active=True)
+        qs = super().get_queryset().filter(graduated=False)
         return (
             qs.select_related("school")
             .annotate(
@@ -419,7 +419,7 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(active=True)
+        qs = super().get_queryset().filter(graduated=False)
         return (
             qs.select_related("school")
             .annotate(
@@ -512,9 +512,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
             year = int(year) if year else timezone.now().year
         except ValueError:
             year = timezone.now().year
-        # Default to seniors: graduation_year equals the selected year, and active
+        # Default to seniors: graduation_year equals the selected year, and active (non-graduated)
         students = (
-            Student.objects.filter(graduation_year=year, active=True)
+            Student.objects.filter(graduation_year=year, graduated=False)
             .annotate(
                 sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
             )
@@ -1627,7 +1627,7 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(programs=prog, active=True):
+                for s in Student.objects.filter(programs=prog, graduated=False):
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.andrew_email:
@@ -1834,10 +1834,10 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
                 base_qs = Enrollment.objects.none()
 
         # Split into active and inactive sections
-        ctx["active_enrollments"] = base_qs.filter(student__active=True).order_by(
+        ctx["active_enrollments"] = base_qs.filter(student__graduated=False).order_by(
             "sort_first", "sort_last"
         )
-        ctx["inactive_enrollments"] = base_qs.filter(student__active=False).order_by(
+        ctx["inactive_enrollments"] = base_qs.filter(student__graduated=True).order_by(
             "sort_first", "sort_last"
         )
 
@@ -3416,9 +3416,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Only active students enrolled in this program
+        # Only active (non-graduated) students enrolled in this program
         students = (
-            Student.objects.filter(enrollment__program=program, active=True)
+            Student.objects.filter(enrollment__program=program, graduated=False)
             .select_related("school")
             .order_by(
                 Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
@@ -3472,7 +3472,7 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
                 sort_last=Lower("last_name"),
             )
         )
-        students = list(base_qs.filter(active=True).order_by("sort_first", "sort_last"))
+        students = list(base_qs.filter(graduated=False).order_by("sort_first", "sort_last"))
         ctx = {
             "program": program,
             "students": students,
@@ -3488,9 +3488,9 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Active students enrolled in this program, grouped by school
+        # Active (non-graduated) students enrolled in this program, grouped by school
         students = (
-            Student.objects.filter(enrollment__program=program, active=True)
+            Student.objects.filter(enrollment__program=program, graduated=False)
             .select_related("school")
             .annotate(
                 sort_first=Coalesce(
@@ -3524,9 +3524,9 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Active students enrolled in this program with some address info
+        # Active (non-graduated) students enrolled in this program with some address info
         students = (
-            Student.objects.filter(programs=program, active=True)
+            Student.objects.filter(programs=program, graduated=False)
             .only(
                 "first_name",
                 "legal_first_name",
