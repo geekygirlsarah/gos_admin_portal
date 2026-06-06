@@ -19,7 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path, reverse_lazy
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
 from django.views.static import serve
 
 urlpatterns = [
@@ -31,6 +31,16 @@ urlpatterns = [
     path("portal/", include("portal.urls")),
     # Public application flow (new wizard lives in the `applications` app)
     path("apply/", include("applications.urls")),
+    path(
+        "privacy/",
+        TemplateView.as_view(template_name="privacy.html"),
+        name="privacy_policy",
+    ),
+    path(
+        "non-discrimination/",
+        TemplateView.as_view(template_name="non_discrimination.html"),
+        name="non_discrimination_policy",
+    ),
     # Root redirects to the programs list (home)
     path(
         "",
