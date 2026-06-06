@@ -17,6 +17,11 @@ urlpatterns = [
         name="application_review_list",
     ),
     path(
+        "review/cleanup-stale/",
+        review.ApplicationCleanupView.as_view(),
+        name="application_cleanup_stale",
+    ),
+    path(
         "review/<str:app_id>/",
         review.ApplicationReviewDetailView.as_view(),
         name="application_review_detail",
