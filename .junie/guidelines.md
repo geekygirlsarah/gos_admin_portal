@@ -6,7 +6,7 @@ These guidelines help contributors (and Junie) quickly understand the project, h
 
 ### Project Overview
 
-GoS Admin Portal is a Django 4.2 web application for managing:
+GoS Admin Portal is a Django 5 web application for managing:
 - Programs and student enrollments
 - Students (profiles, photos, school, graduation year, demographics)
 - Adults (Parents, Mentors, Volunteers, Alumni) and their relationships to students
@@ -18,7 +18,7 @@ GoS Admin Portal is a Django 4.2 web application for managing:
 - API access for external integrations (versioned at `/api/v1/`)
 
 Key features visible in the repository:
-- Authentication via Google (django-allauth). The root URL redirects to the programs list and requires login. For local development, you can log in with a Django superuser if Google OAuth isn’t configured. A custom `LoginRequiredMiddleware` (in `GoSAdminPortal/middleware.py`) enforces auth globally except for explicit exempt paths (`admin/`, allauth `accounts/`, `/apply/`, `MEDIA_URL`, `STATIC_URL`).
+- Authentication via Email OTP (django-allauth). The root URL redirects to the programs list and requires login. For local development, you can log in with a Django superuser or request a login code if your email is in the system. A custom `LoginRequiredMiddleware` (in `GoSAdminPortal/middleware.py`) enforces auth globally except for explicit exempt paths (`admin/`, allauth `accounts/`, `/apply/`, `MEDIA_URL`, `STATIC_URL`).
 - Custom allauth adapter in `GoSAdminPortal/adapter.py`.
 - Program detail view: enroll/remove students, quick-create a student, email program participants, manage fees and fee assignments, record payments, add sliding scale, manage program documents, view dues owed, signout sheets, maps, and settings.
 - Student management: list, photo grid, by-grade, by-school, attendance, dues-owed, detail, emergency contacts, convert-to-alumni workflow.
@@ -31,7 +31,7 @@ Key features visible in the repository:
 
 Technologies:
 - Django 4.2 (server-side MVC, Django Admin for data management)
-- django-allauth (Google OAuth login + custom adapter)
+- django-allauth (Email OTP login + custom adapter)
 - Bootstrap 5 (frontend styles/layout in templates)
 - Pillow (image handling for photos)
 - openpyxl (Excel import/export — verify views before use)
@@ -95,7 +95,7 @@ Technologies:
 Prerequisites:
 - Python 3.13+ (3.13 is in use in the active venv)
 - A virtual environment tool (venv)
-- (Optional) Google OAuth client credentials for django-allauth if you want Google login locally; otherwise use a Django superuser
+- (Optional) SMTP server for sending OTP codes locally; otherwise use the console backend (default)
 
 Steps:
 1) Create and activate a virtual environment
@@ -110,10 +110,9 @@ Steps:
     - `python manage.py createsuperuser`
 5) (Optional) Seed development data
     - `python manage.py seed_db`
-6) Configure environment variables (if using Google login locally)
-    - Set django-allauth social application for Google in Django Admin or via fixtures.
-    - Ensure the Sites framework SITE domain matches your callback URL.
-    - For local dev you can skip Google and sign in with the superuser.
+6) (Optional) Configure environment variables for email
+    - Set `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` if you want to test with a real SMTP server.
+    - For local dev you can skip this and codes will be printed to the console.
 7) Start the dev server
     - `python manage.py runserver`
 8) Access the app
@@ -209,7 +208,7 @@ Running tests:
 
 ### Security and Auth
 
-- Google OAuth via django-allauth is used for login. Ensure proper `SocialApp` configuration per environment.
+- Email OTP via django-allauth is used for login.
 - `LoginRequiredMiddleware` enforces login globally; only `admin/`, `accounts/` (allauth), `/apply/`, `MEDIA_URL`, and `STATIC_URL` are exempt. New public routes must be explicitly exempted.
 - Protect views with `@login_required` plus granular permission checks (as seen in templates).
 - API endpoints under `/api/v1/` authenticate via `ApiClientKey` (`api/auth.py`); manage keys at `/api-keys/`.
