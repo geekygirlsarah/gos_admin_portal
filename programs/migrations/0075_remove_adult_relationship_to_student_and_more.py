@@ -4,6 +4,18 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+
+def cleanup_duplicate_emails(apps, schema_editor):
+    Adult = apps.get_model("programs", "Adult")
+    emails_seen = set()
+    for adult in Adult.objects.exclude(email__isnull=True).exclude(email="").order_by("id"):
+        if adult.email in emails_seen:
+            adult.email = None
+            adult.save()
+        else:
+            emails_seen.add(adult.email)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,6 +23,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(cleanup_duplicate_emails),
         migrations.RemoveField(
             model_name="adult",
             name="relationship_to_student",
