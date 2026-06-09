@@ -259,20 +259,37 @@ class StudentListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(enrollment__program_id=program_id).distinct()
+
         from .permission_views import get_user_role
 
         role = get_user_role(self.request.user)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                qs = adult.students.all()
+                qs = qs.filter(adults=adult)
             except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(pk=student.pk)
+            except (Student.DoesNotExist, AttributeError):
                 qs = Student.objects.none()
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
             sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
         ).order_by(Lower("sort_first"), Lower("last_name"))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class StudentPhotoListView(LoginRequiredMixin, ListView):
@@ -452,12 +469,40 @@ class ParentListView(LoginRequiredMixin, ListView):
     context_object_name = "parents"
 
     def get_queryset(self):
-        # Prefetch related students to avoid N+1 queries and order by name
-        return (
-            Adult.objects.all()
+        qs = (
+            Adult.objects.filter(is_parent=True)
             .prefetch_related("students")
             .order_by("first_name", "last_name")
         )
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                student_ids = adult.students.values_list("id", flat=True)
+                qs = qs.filter(students__id__in=student_ids).distinct()
+            except:
+                qs = Adult.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(students=student).distinct()
+            except:
+                qs = Adult.objects.none()
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class MentorListView(LoginRequiredMixin, ListView):
@@ -466,7 +511,18 @@ class MentorListView(LoginRequiredMixin, ListView):
     context_object_name = "mentors"
 
     def get_queryset(self):
-        return Adult.objects.filter(is_mentor=True).order_by("last_name", "first_name")
+        qs = Adult.objects.filter(is_mentor=True).order_by("last_name", "first_name")
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class AlumniListView(LoginRequiredMixin, ListView):
@@ -475,8 +531,18 @@ class AlumniListView(LoginRequiredMixin, ListView):
     context_object_name = "alumni"
 
     def get_queryset(self):
-        # List Adults flagged as alumni
-        return Adult.objects.filter(is_alumni=True).order_by("last_name", "first_name")
+        qs = Adult.objects.filter(is_alumni=True).order_by("last_name", "first_name")
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -3575,20 +3641,28 @@ class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     def get_queryset(self):
         from .permission_views import get_user_role
 
+        qs = Adult.objects.all().prefetch_related("students")
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+
         role = get_user_role(self.request.user)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                return Adult.objects.filter(pk=adult.pk).prefetch_related("students")
+                return qs.filter(pk=adult.pk)
             except (Adult.DoesNotExist, AttributeError):
                 return Adult.objects.none()
-        return Adult.objects.all().prefetch_related("students")
+        return qs.order_by("last_name", "first_name")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
         return ctx
 
 

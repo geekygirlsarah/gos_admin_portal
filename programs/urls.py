@@ -282,6 +282,32 @@ urlpatterns = [
         name="mentor_edit",
     ),
     path("schools/", login_required(SchoolListView.as_view()), name="school_list"),
+    # Program-specific adults
+    path(
+        "<int:program_id>/adults/",
+        login_required(AdultsListView.as_view()),
+        name="program_adult_list",
+    ),
+    path(
+        "<int:program_id>/parents/",
+        login_required(ParentListView.as_view()),
+        name="program_parent_list",
+    ),
+    path(
+        "<int:program_id>/mentors/",
+        login_required(MentorListView.as_view()),
+        name="program_mentor_list",
+    ),
+    path(
+        "<int:program_id>/alumni/",
+        login_required(AlumniListView.as_view()),
+        name="program_alumni_list",
+    ),
+    path(
+        "<int:program_id>/students/",
+        login_required(StudentListView.as_view()),
+        name="program_student_list",
+    ),
     # Program-specific student management
     path(
         "<int:pk>/students/add/",
