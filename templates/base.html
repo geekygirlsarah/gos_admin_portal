@@ -31,56 +31,97 @@
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item"><a class="nav-link" href="{% url 'portal_dashboard' %}">My Portal</a></li>
-                    {% can_read user 'programs' as can_read_programs %}
-                    {% if can_read_programs %}
-                    <li class="nav-item"><a class="nav-link active" aria-current="page" href="/programs/">Programs</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'program_messaging' %}">Messaging</a></li>
+
+                    {% if current_program %}
+                        {# ── Program-scoped navigation ── #}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
+                        </li>
+
+                        {% can_read user 'student_info' as can_read_students %}
+                        {% if can_read_students %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#students">Students</a>
+                        </li>
+                        {% endif %}
+
+                        {% can_read user 'adult_info' as can_read_adults %}
+                        {% if can_read_adults %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#parents">Parents</a>
+                        </li>
+                        {% endif %}
+
+                        {% if navbar_role == 'LeadMentor' %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
+                        </li>
+                        {% endif %}
+
+                    {% else %}
+                        {# ── No program selected: show minimal nav ── #}
+                        {% if navbar_role == 'LeadMentor' %}
+                        <li class="nav-item"><a class="nav-link" href="/programs/">Programs</a></li>
+                        {% endif %}
                     {% endif %}
-                    {% can_read user 'student_info' as can_read_students %}
-                    {% if can_read_students %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="studentsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Students</a>
-                        <ul class="dropdown-menu" aria-labelledby="studentsDropdown">
-                            <li><a class="dropdown-item" href="/programs/students/">All Students</a></li>
-                            <li><a class="dropdown-item" href="{% url 'student_emergency_contacts' %}">Emergency Contacts</a></li>
-                            <li><a class="dropdown-item" href="{% url 'students_by_grade' %}">By Grade Level</a></li>
-                            <li><a class="dropdown-item" href="{% url 'students_by_school' %}">By School</a></li>
-                        </ul>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item"><a class="nav-link" href="/programs/schools/">Schools</a></li>
-                    {% can_read user 'adult_info' as can_read_adults %}
-                    {% if can_read_adults %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="adultsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Adults</a>
-                        <ul class="dropdown-menu" aria-labelledby="adultsDropdown">
-                            <li><a class="dropdown-item" href="{% url 'adult_list' %}">All Adults</a></li>
-                            <li><a class="dropdown-item" href="{% url 'parent_list' %}">Parents</a></li>
-                            <li><a class="dropdown-item" href="{% url 'mentor_list' %}">Mentors</a></li>
-                            <li><a class="dropdown-item" href="{% url 'alumni_list' %}">Alumni</a></li>
-                        </ul>
-                    </li>
-                    {% endif %}
-                    {% user_role user as role %}
-                    {% if perms.applications.review_application %}
-                    <li class="nav-item"><a class="nav-link" href="{% url 'application_review_list' %}">Applications</a></li>
-                    {% endif %}
-                    {% if role == 'LeadMentor' %}
-                    <li class="nav-item"><a class="nav-link" href="{% url 'portal_settings' %}">Settings</a></li>
+
+                    {# ── Admin dropdown for LeadMentors ── #}
+                    {% if navbar_role == 'LeadMentor' %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
+                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <li><a class="dropdown-item" href="/programs/">All Programs</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="/programs/students/">All Students</a></li>
+                                <li><a class="dropdown-item" href="{% url 'students_by_grade' %}">Students by Grade</a></li>
+                                <li><a class="dropdown-item" href="{% url 'students_by_school' %}">Students by School</a></li>
+                                <li><a class="dropdown-item" href="{% url 'student_emergency_contacts' %}">Emergency Contacts</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'adult_list' %}">All Adults</a></li>
+                                <li><a class="dropdown-item" href="{% url 'parent_list' %}">All Parents</a></li>
+                                <li><a class="dropdown-item" href="{% url 'mentor_list' %}">All Mentors</a></li>
+                                <li><a class="dropdown-item" href="{% url 'alumni_list' %}">All Alumni</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% if perms.applications.review_application %}
+                                    <li><a class="dropdown-item" href="{% url 'application_review_list' %}">All Applications</a></li>
+                                {% endif %}
+                                <li><a class="dropdown-item" href="/programs/schools/">Schools</a></li>
+                                <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Messaging</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'portal_settings' %}">Settings</a></li>
+                            </ul>
+                        </li>
                     {% endif %}
                 </ul>
-                <div class="d-lg-none">
+
+
+                {# ── Mobile account menu ── #}
+                <div class="d-lg-none border-top border-secondary mt-2 pt-2">
+                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'portal_dashboard' %}">My Account</a>
                     <a class="btn btn-outline-light w-100" href="/accounts/logout/">Logout</a>
                 </div>
             </div>
         {% endif %}
+
         <div class="d-flex gap-2 align-items-center">
             {% if not user.is_authenticated and "/apply" not in request.path %}
             <a class="btn btn-warning" href="/apply/">Apply to the Program</a>
             {% endif %}
             {% if user.is_authenticated %}
-                <a class="btn btn-outline-light d-none d-lg-inline-block" href="/accounts/logout/">Logout</a>
+            {# ── Desktop account dropdown ── #}
+            <div class="dropdown d-none d-lg-block">
+                <button class="btn btn-outline-light dropdown-toggle" type="button" id="accountMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    {{ user.email|default:user.username }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenuDropdown">
+                    <li><a class="dropdown-item" href="{% url 'portal_dashboard' %}">My Portal</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="/accounts/logout/">Logout</a></li>
+                </ul>
+            </div>
             {% endif %}
         </div>
     </div>

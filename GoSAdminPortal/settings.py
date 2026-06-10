@@ -132,6 +132,8 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 # CSP nonce for inline scripts
                 "csp.context_processors.nonce",
+                # Navbar context (current program, user role)
+                "GoSAdminPortal.context_processors.navbar_context",
             ],
         },
     },
