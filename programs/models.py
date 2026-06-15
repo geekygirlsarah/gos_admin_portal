@@ -856,7 +856,12 @@ class Adult(models.Model):
     pronouns = models.CharField(max_length=50, blank=True, null=True)
 
     # Contact
-    email = models.EmailField(blank=True, null=True, unique=True)
+    personal_email = models.EmailField(
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Primary contact email (e.g. Gmail). Used for login and notifications.",
+    )
     phone_number = models.CharField(
         max_length=30, blank=True, null=True, validators=[validate_phone_number]
     )
@@ -874,7 +879,6 @@ class Adult(models.Model):
     zip_code = models.CharField(
         max_length=20, blank=True, null=True, validators=[validate_zip_code]
     )
-    personal_email = models.EmailField(blank=True, null=True)
 
     # Mentor-like fields
     start_year = models.PositiveSmallIntegerField(blank=True, null=True)
@@ -883,16 +887,30 @@ class Adult(models.Model):
     )
     photo = models.ImageField(upload_to="photos/adults/", blank=True, null=True)
 
-    # Andrew ID details
-    andrew_id = models.CharField(max_length=50, blank=True, null=True)
-    andrew_email = models.EmailField(blank=True, null=True)
-    andrew_id_expiration = models.DateField(blank=True, null=True)
+    # Andrew ID details (mentors/CMU-affiliated staff only)
+    andrew_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="CMU Andrew ID. Assigned by lead mentors; only applies to mentors/CMU staff.",
+    )
+    andrew_email = models.EmailField(
+        blank=True,
+        null=True,
+        help_text="CMU Andrew email (andrew_id@andrew.cmu.edu). Assigned by lead mentors.",
+    )
+    andrew_id_expiration = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Expiration date of this Andrew ID.",
+    )
     andrew_id_sponsor = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="sponsored_andrew_ids",
+        help_text="The Adult (mentor) who sponsored this Andrew ID.",
     )
 
     # Discord
@@ -944,9 +962,6 @@ class Adult(models.Model):
         blank=True,
         related_name="alumni_profile",
         help_text="The student record this alumni profile originated from.",
-    )
-    alumni_email = models.EmailField(
-        blank=True, null=True, help_text="Preferred contact email after graduation"
     )
     college = models.CharField(max_length=200, blank=True, null=True)
     field_of_study = models.CharField(max_length=200, blank=True, null=True)

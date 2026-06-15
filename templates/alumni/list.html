@@ -26,7 +26,7 @@
             <tr>
               <td>{{ a.first_name }} {{ a.last_name }}</td>
               <td>
-                {% with e=a.alumni_email|default:a.email|default:a.personal_email %}
+                {% with e=a.personal_email %}
                   {% if e %}<a href="mailto:{{ e }}">{{ e }}</a>{% endif %}
                 {% endwith %}
               </td>

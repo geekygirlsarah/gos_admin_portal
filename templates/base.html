@@ -100,7 +100,7 @@
 
                 {# ── Mobile account menu ── #}
                 <div class="d-lg-none border-top border-secondary mt-2 pt-2">
-                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'portal_dashboard' %}">My Account</a>
+                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">My Account</a>
                     <a class="btn btn-outline-light w-100" href="/accounts/logout/">Logout</a>
                 </div>
             </div>
@@ -117,7 +117,7 @@
                     {{ user.email|default:user.username }}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenuDropdown">
-                    <li><a class="dropdown-item" href="{% url 'portal_dashboard' %}">My Portal</a></li>
+                    <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">My Profile</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="/accounts/logout/">Logout</a></li>
                 </ul>

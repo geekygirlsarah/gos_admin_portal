@@ -173,14 +173,12 @@ def find_student_by_email(email: str):
 
 
 def find_adult_by_email(email: str):
-    """Find an Adult whose email/personal_email/andrew_email/alumni_email matches."""
+    """Find an Adult whose personal_email or andrew_email (via MentorAndrewAccess) matches."""
     if not email:
         return None
     return Adult.objects.filter(
-        Q(email__iexact=email)
-        | Q(personal_email__iexact=email)
+        Q(personal_email__iexact=email)
         | Q(andrew_email__iexact=email)
-        | Q(alumni_email__iexact=email)
     ).first()
 
 
@@ -295,7 +293,7 @@ def adult_to_prefill(adult, student=None) -> dict:
         "first_name": adult.first_name or "",
         "last_name": adult.last_name or "",
         "relationship_to_student": relationship,
-        "email": adult.email or adult.personal_email or "",
+        "email": adult.personal_email or "",
         "cell_phone": adult.cell_phone or "",
         "home_phone": adult.home_phone or "",
         "email_updates": adult.email_updates,
@@ -522,12 +520,12 @@ def _adult_from_data(parent_data: dict):
 
     adult = None
     if email:
-        adult = Adult.objects.filter(email__iexact=email).first()
+        adult = Adult.objects.filter(personal_email__iexact=email).first()
     if adult is None:
         adult = Adult(
             first_name=first_name or "(unknown)",
             last_name=last_name or "(unknown)",
-            email=email or None,
+            personal_email=email or None,
             is_parent=True,
         )
 

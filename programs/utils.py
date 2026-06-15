@@ -152,9 +152,9 @@ def find_matching_alumni_adult(student):
 
     Match order:
       1. ``Adult.student_record`` matching the student.
-      2. ``Adult.alumni_email`` (case-insensitive) matching the student's
+      2. ``Adult.personal_email`` (case-insensitive) matching the student's
          personal or Andrew email.
-      3. ``Adult.email`` (case-insensitive) matching with name match.
+      3. ``MentorAndrewAccess.andrew_email`` (case-insensitive) matching the student's andrew_email.
       4. First/last name match with ``is_alumni=True``.
     Returns None if no match is found.
     """
@@ -180,17 +180,19 @@ def find_matching_alumni_adult(student):
     ]
     for e in emails:
         if e:
-            # Alumni email match is strong
-            a = Adult.objects.filter(alumni_email__iexact=e).first()
-            if a:
-                return a
-            # Regular email match: also require name match to avoid parent match
+            # personal_email match with name check to avoid false parent matches
             if first and last:
                 a = Adult.objects.filter(
-                    email__iexact=e, first_name__iexact=first, last_name__iexact=last
+                    personal_email__iexact=e,
+                    first_name__iexact=first,
+                    last_name__iexact=last,
                 ).first()
                 if a:
                     return a
+            # Andrew email match
+            a = Adult.objects.filter(andrew_email__iexact=e).first()
+            if a:
+                return a
 
     # 3. Name match if already flagged as alumni
     if first and last:
@@ -206,7 +208,7 @@ def convert_student_to_alumni(student):
     Side effects:
       - Creates a new ``Adult`` (with ``is_alumni=True``) when no matching
         record is found, or updates the existing one's ``is_alumni`` /
-        ``alumni_email`` fields when needed.
+        ``personal_email`` field when needed.
       - Links the ``Adult`` record back to the ``Student`` via ``student_record``.
       - Transfers the ``User`` link from ``Student`` to ``Adult`` if applicable.
       - Marks the student as ``graduated=True``.
@@ -228,14 +230,16 @@ def convert_student_to_alumni(student):
             state=student.state,
             zip_code=student.zip_code,
             cell_phone=student.cell_phone_number,
-            personal_email=student.personal_email,
-            andrew_id=student.andrew_id,
-            andrew_email=student.andrew_email,
-            alumni_email=student.personal_email or student.andrew_email,
+            personal_email=student.personal_email or student.andrew_email,
             is_alumni=True,
             student_record=student,
             photo=student.photo,
         )
+        # Copy Andrew ID details if the student had them
+        if student.andrew_id or student.andrew_email:
+            adult.andrew_id = adult.andrew_id or student.andrew_id or None
+            adult.andrew_email = adult.andrew_email or student.andrew_email or None
+            adult.save(update_fields=["andrew_id", "andrew_email", "updated_at"])
         created = True
     else:
         changed = False
@@ -245,8 +249,8 @@ def convert_student_to_alumni(student):
         if adult.student_record_id != student.id:
             adult.student_record = student
             changed = True
-        if not adult.alumni_email and (student.personal_email or student.andrew_email):
-            adult.alumni_email = student.personal_email or student.andrew_email
+        if not adult.personal_email and (student.personal_email or student.andrew_email):
+            adult.personal_email = student.personal_email or student.andrew_email
             changed = True
 
         # Copy missing fields from student to adult
@@ -259,12 +263,22 @@ def convert_student_to_alumni(student):
             "zip_code": "zip_code",
             "cell_phone": "cell_phone_number",
             "personal_email": "personal_email",
-            "andrew_id": "andrew_id",
-            "andrew_email": "andrew_email",
         }
         for adult_field, student_field in fields_to_copy.items():
             if not getattr(adult, adult_field) and getattr(student, student_field):
                 setattr(adult, adult_field, getattr(student, student_field))
+                changed = True
+
+        # Copy Andrew ID details if student had them and adult doesn't yet
+        if student.andrew_id or student.andrew_email:
+            access_changed = False
+            if not adult.andrew_id and student.andrew_id:
+                adult.andrew_id = student.andrew_id
+                access_changed = True
+            if not adult.andrew_email and student.andrew_email:
+                adult.andrew_email = student.andrew_email
+                access_changed = True
+            if access_changed:
                 changed = True
 
         if not adult.photo and student.photo:

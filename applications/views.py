@@ -981,8 +981,8 @@ class Step7PrimaryParentView(View):
             # so the student doesn't have to look it up; they just confirm.
             mode = "handoff"
             handoff_initial = {}
-            if existing_adult and existing_adult.email:
-                handoff_initial["parent_email"] = existing_adult.email
+            if existing_adult and existing_adult.personal_email:
+                handoff_initial["parent_email"] = existing_adult.personal_email
             if post:
                 handoff_form = ParentHandoffForm(post, student_emails=student_emails)
             else:
@@ -1004,7 +1004,7 @@ class Step7PrimaryParentView(View):
             if handoff_email:
                 initial = {"email": handoff_email}
             elif application.applicant_type == Application.Type.PARENT:
-                initial = {"email": application.email}
+                initial = {"email": application.email}  # application email field, not Adult.email
         # For new applications (no saved data), default primary to opted-in.
         if not saved and "email_updates" not in initial:
             initial["email_updates"] = True

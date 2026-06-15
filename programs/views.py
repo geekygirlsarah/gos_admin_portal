@@ -700,7 +700,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             def get_or_create_parent(first, last, email):
                 # Try to find by email first
                 if email:
-                    p = Adult.objects.filter(email__iexact=email).first()
+                    p = Adult.objects.filter(personal_email__iexact=email).first()
                     if p:
                         if overwrite:
                             changed_parent = False
@@ -1183,7 +1183,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 # Try resolve by email first
                 p = None
                 if email:
-                    p = Adult.objects.filter(email__iexact=email).first()
+                    p = Adult.objects.filter(personal_email__iexact=email).first()
                 if not p and first and last:
                     p = Adult.objects.filter(
                         first_name__iexact=first, last_name__iexact=last
@@ -1633,27 +1633,17 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if "parents" in groups:
-                parent_emails = (
-                    Adult.objects.filter(
-                        students__programs=prog, email_updates=True, active=True
-                    )
-                    .annotate(
-                        best_email=Coalesce("personal_email", "email", "andrew_email")
-                    )
-                    .values_list("email", flat=True)
-                )
-                for e in parent_emails:
+                for parent in Adult.objects.filter(
+                    students__programs=prog, email_updates=True, active=True
+                ).distinct():
+                    e = parent.personal_email or parent.andrew_email
                     if e:
                         recipients.add(e)
             if "mentors" in groups:
                 for m in Adult.objects.filter(is_mentor=True, active=True):
-                    # Prefer personal_email, then andrew_email, then email
-                    if m.personal_email:
-                        recipients.add(m.personal_email)
-                    elif m.andrew_email:
-                        recipients.add(m.andrew_email)
-                    elif m.email:
-                        recipients.add(m.email)
+                    e = m.personal_email or m.andrew_email
+                    if e:
+                        recipients.add(e)
 
             if not recipients and not test_email:
                 messages.error(request, "No recipients found for the selected groups.")
@@ -3217,7 +3207,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 if getattr(adult, "email_updates", False) and getattr(
                     adult, "active", True
                 ):
-                    email = adult.personal_email or adult.email or adult.andrew_email
+                    email = adult.personal_email or adult.andrew_email
                     if email:
                         emails.append(email)
             # Deduplicate while preserving order

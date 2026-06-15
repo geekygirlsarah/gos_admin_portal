@@ -44,14 +44,14 @@ class AlumniConversionImprovedTests(TestCase):
         self.assertEqual(adult.address, "123 Grad St")
         self.assertEqual(adult.pronouns, "they/them")
         self.assertEqual(adult.personal_email, "student@example.com")
-        self.assertEqual(adult.alumni_email, "student@example.com")
+        # alumni_email field removed; personal_email carries the value
 
     def test_conversion_updates_existing_adult_and_links(self):
         # Setup existing adult (maybe a mentor who was also a student?)
         existing_adult = Adult.objects.create(
             first_name="Grad",
             last_name="Student",
-            email="student@example.com",
+            personal_email="student@example.com",
             is_alumni=False,
         )
         student = Student.objects.create(
@@ -67,4 +67,4 @@ class AlumniConversionImprovedTests(TestCase):
         self.assertEqual(adult, existing_adult)
         self.assertTrue(adult.is_alumni)
         self.assertEqual(adult.student_record, student)
-        self.assertEqual(adult.alumni_email, "student@example.com")
+        self.assertEqual(adult.personal_email, "student@example.com")
