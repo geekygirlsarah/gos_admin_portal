@@ -32,9 +32,9 @@ def navbar_context(request):
         try:
             if role == "Student":
                 student = request.user.student_profile
-                enrollments = Enrollment.objects.filter(
-                    student=student
-                ).select_related("program")
+                enrollments = Enrollment.objects.filter(student=student).select_related(
+                    "program"
+                )
                 programs = [e.program for e in enrollments]
             elif role in ("Parent", "Alumni", "Mentor"):
                 adult = request.user.adult_profile
