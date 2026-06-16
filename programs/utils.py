@@ -249,7 +249,9 @@ def convert_student_to_alumni(student):
         if adult.student_record_id != student.id:
             adult.student_record = student
             changed = True
-        if not adult.personal_email and (student.personal_email or student.andrew_email):
+        if not adult.personal_email and (
+            student.personal_email or student.andrew_email
+        ):
             adult.personal_email = student.personal_email or student.andrew_email
             changed = True
 

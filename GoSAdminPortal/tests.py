@@ -122,9 +122,7 @@ class AdapterEmailProvisioningTest(TestCase):
         self.assertTrue(result)
         adult.refresh_from_db()
         self.assertIsNotNone(adult.user_id)
-        self.assertTrue(
-            User.objects.filter(email="parent@example.com").exists()
-        )
+        self.assertTrue(User.objects.filter(email="parent@example.com").exists())
 
     def test_adult_email_allowed_existing_user(self):
         """Adult already linked to a User: allowed without creating a new User."""
@@ -170,9 +168,7 @@ class AdapterEmailProvisioningTest(TestCase):
 
     def test_student_existing_user_not_duplicated(self):
         """Student already has a User: no new User created."""
-        user = User.objects.create_user(
-            username="stuuser", email="stu@personal.com"
-        )
+        user = User.objects.create_user(username="stuuser", email="stu@personal.com")
         from programs.models import Student
 
         student = self._make_student(personal_email="stu@personal.com")
@@ -205,4 +201,3 @@ class AdapterEmailProvisioningTest(TestCase):
         self.assertTrue(
             EmailAddress.objects.filter(email="newparent@example.com").exists()
         )
-

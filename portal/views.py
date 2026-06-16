@@ -25,13 +25,9 @@ def _compute_student_program_balance(student, program):
         discount = Decimal("0.00")
 
     # Payments made
-    total_paid = (
-        sum(
-            p.amount
-            for p in Payment.objects.filter(student=student, program=program)
-        )
-        or Decimal("0.00")
-    )
+    total_paid = sum(
+        p.amount for p in Payment.objects.filter(student=student, program=program)
+    ) or Decimal("0.00")
 
     return total_fees - discount - total_paid
 

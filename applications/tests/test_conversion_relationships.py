@@ -107,7 +107,9 @@ class ConversionRelationshipTests(TestCase):
         student = convert_application_to_student(app)
 
         self.assertEqual(student.primary_contact, existing_parent)
-        self.assertEqual(Adult.objects.filter(personal_email="pat@example.com").count(), 1)
+        self.assertEqual(
+            Adult.objects.filter(personal_email="pat@example.com").count(), 1
+        )
 
         # Verify relationship
         self.assertIn(student, existing_parent.primary_for.all())
@@ -153,7 +155,9 @@ class ConversionRelationshipTests(TestCase):
         student = convert_application_to_student(app)
 
         self.assertEqual(student.primary_contact, existing_parent)
-        self.assertEqual(Adult.objects.filter(personal_email="pat@example.com").count(), 1)
+        self.assertEqual(
+            Adult.objects.filter(personal_email="pat@example.com").count(), 1
+        )
 
         # Verify relationships for NEW student
         self.assertIn(student, existing_parent.primary_for.all())
@@ -208,7 +212,9 @@ class ConversionRelationshipTests(TestCase):
 
         # They should be the same record
         self.assertEqual(parent_a, parent_b)
-        self.assertEqual(Adult.objects.filter(personal_email="pat@example.com").count(), 1)
+        self.assertEqual(
+            Adult.objects.filter(personal_email="pat@example.com").count(), 1
+        )
 
         # Bi-directional checks for Student A
         self.assertIn(student_a, parent_a.primary_for.all())
@@ -268,4 +274,3 @@ class ConversionRelationshipTests(TestCase):
         self.assertCountEqual(parent.students.all(), [student_a, student_b])
         self.assertIn(student_a, parent.primary_for.all())
         self.assertIn(student_b, parent.primary_for.all())
-

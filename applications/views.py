@@ -1004,7 +1004,9 @@ class Step7PrimaryParentView(View):
             if handoff_email:
                 initial = {"email": handoff_email}
             elif application.applicant_type == Application.Type.PARENT:
-                initial = {"email": application.email}  # application email field, not Adult.email
+                initial = {
+                    "email": application.email
+                }  # application email field, not Adult.email
         # For new applications (no saved data), default primary to opted-in.
         if not saved and "email_updates" not in initial:
             initial["email_updates"] = True

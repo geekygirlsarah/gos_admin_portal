@@ -203,8 +203,6 @@ class AdultForm(forms.ModelForm):
         ]
 
 
-
-
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment

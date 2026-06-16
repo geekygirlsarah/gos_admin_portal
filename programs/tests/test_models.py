@@ -123,7 +123,9 @@ class ModelTests(TestCase):
         Adult.objects.create(first_name="A", last_name="B", email="test@example.com")
         # Second adult with same email should fail
         with self.assertRaises(Exception):
-            Adult.objects.create(first_name="C", last_name="D", email="test@example.com")
+            Adult.objects.create(
+                first_name="C", last_name="D", email="test@example.com"
+            )
 
     def test_adult_email_null_allowed_multiple_times(self):
         # Multiple adults with NULL email should be allowed

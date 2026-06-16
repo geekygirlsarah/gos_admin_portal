@@ -441,4 +441,3 @@ class ConvertToStudentTests(TestCase):
         self.assertIn(response.status_code, (302, 403))
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.APPROVED_SIGNED)
-

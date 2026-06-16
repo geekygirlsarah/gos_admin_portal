@@ -177,8 +177,7 @@ def find_adult_by_email(email: str):
     if not email:
         return None
     return Adult.objects.filter(
-        Q(personal_email__iexact=email)
-        | Q(andrew_email__iexact=email)
+        Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
     ).first()
 
 
