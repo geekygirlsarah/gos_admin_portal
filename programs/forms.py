@@ -176,7 +176,6 @@ class AdultForm(forms.ModelForm):
             "preferred_first_name",
             "last_name",
             "pronouns",
-            "email",
             "personal_email",
             "phone_number",
             "cell_phone",
@@ -191,7 +190,10 @@ class AdultForm(forms.ModelForm):
             "is_alumni",
             "students",
             "active",
-            "alumni_email",
+            "andrew_id",
+            "andrew_email",
+            "andrew_id_expiration",
+            "andrew_id_sponsor",
             "college",
             "field_of_study",
             "employer",
@@ -199,6 +201,8 @@ class AdultForm(forms.ModelForm):
             "ok_to_contact",
             "notes",
         ]
+
+
 
 
 class PaymentForm(forms.ModelForm):

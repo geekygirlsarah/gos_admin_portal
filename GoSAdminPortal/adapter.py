@@ -5,7 +5,96 @@ import threading
 from allauth.account.adapter import DefaultAccountAdapter
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils.crypto import get_random_string
+
+
+def _find_or_provision_user_for_email(email):
+    """
+    Look up a User by email across all registered email sources:
+      1. Django User.email (primary)
+      2. allauth EmailAddress records
+      3. Adult.email (parents, mentors, alumni, volunteers)
+      4. Student.personal_email or Student.andrew_email
+
+    If a matching Student or Adult is found but has no linked User, a new
+    inactive-until-first-login User is created and linked, and an allauth
+    EmailAddress record is added so the login-by-code flow can find it.
+
+    Returns True if the email is allowed (a matching record was found or
+    provisioned), False otherwise.
+    """
+    from allauth.account.models import EmailAddress
+
+    User = get_user_model()
+    email_lower = email.strip().lower()
+
+    # 1. Already a known User email
+    if User.objects.filter(email__iexact=email_lower).exists():
+        return True
+
+    # 2. Already a known allauth EmailAddress
+    if EmailAddress.objects.filter(email__iexact=email_lower).exists():
+        return True
+
+    # 3. Adult personal_email or andrew_email
+    from programs.models import Adult
+
+    adult = Adult.objects.filter(
+        Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
+    ).first()
+    if adult:
+        if adult.user_id:
+            _ensure_email_address(adult.user, email_lower)
+            return True
+        user = _provision_user(email_lower, adult.first_name, adult.last_name)
+        adult.user = user
+        adult.save(update_fields=["user"])
+        _ensure_email_address(user, email_lower)
+        return True
+
+    # 4. Student personal_email or andrew_email
+    from programs.models import Student
+
+    student = Student.objects.filter(personal_email__iexact=email_lower).first()
+    if not student:
+        student = Student.objects.filter(andrew_email__iexact=email_lower).first()
+    if student:
+        if student.user_id:
+            _ensure_email_address(student.user, email_lower)
+            return True
+        # Provision a new User for this student
+        first = student.first_name or student.legal_first_name
+        user = _provision_user(email_lower, first, student.last_name)
+        student.user = user
+        student.save(update_fields=["user"])
+        _ensure_email_address(user, email_lower)
+        return True
+
+    return False
+
+
+def _provision_user(email, first_name, last_name):
+    """Create a new active User with the given email and name."""
+    User = get_user_model()
+    user = User.objects.create_user(
+        username=email,
+        email=email,
+        first_name=first_name or "",
+        last_name=last_name or "",
+    )
+    return user
+
+
+def _ensure_email_address(user, email):
+    """Ensure an allauth EmailAddress record exists for this user+email."""
+    from allauth.account.models import EmailAddress
+
+    EmailAddress.objects.get_or_create(
+        user=user,
+        email=email.lower(),
+        defaults={"primary": True, "verified": True},
+    )
 
 
 class AccountAdapter(DefaultAccountAdapter):
@@ -17,10 +106,10 @@ class AccountAdapter(DefaultAccountAdapter):
 
     def is_email_allowed(self, email):
         """
-        Only allow emails that already exist in the system.
+        Allow login for any email registered to a User, Adult, or Student
+        in the system. Auto-provisions a User account if needed.
         """
-        User = get_user_model()
-        return User.objects.filter(email__iexact=email).exists()
+        return _find_or_provision_user_for_email(email)
 
     def generate_login_code(self) -> str:
         """

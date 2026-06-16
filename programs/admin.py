@@ -126,6 +126,8 @@ class AdultStudentRelationshipInline(admin.TabularInline):
     autocomplete_fields = ("student",)
 
 
+
+
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
     list_display = ("name", "district", "street_address", "city", "state", "zip_code")
@@ -302,7 +304,7 @@ class ParentAdmin(admin.ModelAdmin):
         "is_mentor",
         "is_alumni",
         "student_record",
-        "email",
+        "personal_email",
         "phone_number",
         "email_updates",
     )
@@ -311,7 +313,9 @@ class ParentAdmin(admin.ModelAdmin):
         "first_name",
         "preferred_first_name",
         "last_name",
-        "email",
+        "personal_email",
+        "andrew_email",
+        "andrew_id",
         "phone_number",
     )
     inlines = [AdultStudentRelationshipInline]

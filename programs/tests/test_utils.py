@@ -83,9 +83,9 @@ class AlumniConversionTests(TestCase):
         defaults.update(kwargs)
         return Student.objects.create(**defaults)
 
-    def test_find_matching_alumni_adult_by_alumni_email(self):
+    def test_find_matching_alumni_adult_by_personal_email(self):
         adult = Adult.objects.create(
-            first_name="X", last_name="Y", alumni_email="sam@example.com"
+            first_name="Sam", last_name="Jones", personal_email="sam@example.com"
         )
         student = self._make_student(personal_email="SAM@example.com")
         self.assertEqual(find_matching_alumni_adult(student), adult)
@@ -112,16 +112,16 @@ class AlumniConversionTests(TestCase):
         self.assertTrue(created)
         self.assertTrue(marked)
         self.assertTrue(adult.is_alumni)
-        self.assertEqual(adult.alumni_email, "sam@example.com")
+        self.assertEqual(adult.personal_email, "sam@example.com")
         student.refresh_from_db()
         self.assertTrue(student.graduated)
 
     def test_convert_student_to_alumni_updates_existing(self):
-        # Match by alumni_email so the existing Adult is found and updated.
+        # Match by personal_email so the existing Adult is found and updated.
         existing = Adult.objects.create(
             first_name="Sam",
             last_name="Jones",
-            alumni_email="sam@example.com",
+            personal_email="sam@example.com",
             is_alumni=False,
         )
         student = self._make_student(personal_email="sam@example.com")
@@ -130,7 +130,7 @@ class AlumniConversionTests(TestCase):
         self.assertEqual(adult.pk, existing.pk)
         existing.refresh_from_db()
         self.assertTrue(existing.is_alumni)
-        self.assertEqual(existing.alumni_email, "sam@example.com")
+        self.assertEqual(existing.personal_email, "sam@example.com")
         self.assertTrue(marked)
 
     def test_convert_student_to_alumni_is_idempotent(self):
@@ -140,5 +140,5 @@ class AlumniConversionTests(TestCase):
         self.assertFalse(created2)
         self.assertFalse(marked2)
         self.assertEqual(
-            Adult.objects.filter(alumni_email="sam@example.com").count(), 1
+            Adult.objects.filter(personal_email="sam@example.com").count(), 1
         )
