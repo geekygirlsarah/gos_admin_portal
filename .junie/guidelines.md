@@ -191,6 +191,7 @@ Running tests:
 - Follow PEP 8 for Python code style.
 - Code is formatted with **black** and imports sorted with **isort** (`--profile black`). Run them before committing — CI will fail otherwise.
 - Lint with **flake8**; security-scan with **bandit**.
+- **Python Dependencies:** When updating `requirements.txt` on Windows (PowerShell), avoid using `pip freeze > requirements.txt` as it may produce UTF-16 encoding which breaks some CI tools (like `safety`). Instead, use `pip freeze | Out-File -Encoding utf8 requirements.txt`. The CI scripts (`run_ci.ps1`, `run_ci.bat`, `run_ci.sh`) also include a defensive step to automatically convert `requirements.txt` to UTF-8 if UTF-16 is detected.
 - Use meaningful verbose names for fields and `help_text` for admin clarity (consistent with existing models).
 - Keep admin `list_display` and filters performant; use `select_related`/`prefetch_related` in `ModelAdmin` methods when adding computed columns.
 - Use `Meta.ordering` on models for predictable listings.
