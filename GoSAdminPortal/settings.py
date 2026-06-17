@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     "attendance",
     "api",
     "applications",
+    "portal",
 ]
 
 MIDDLEWARE = [
@@ -131,6 +132,8 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 # CSP nonce for inline scripts
                 "csp.context_processors.nonce",
+                # Navbar context (current program, user role)
+                "GoSAdminPortal.context_processors.navbar_context",
             ],
         },
     },
@@ -219,7 +222,7 @@ AUTHENTICATION_BACKENDS = (
     "allauth.account.auth_backends.AuthenticationBackend",
 )
 
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "/profile/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 LOGIN_URL = "/accounts/login/"
 

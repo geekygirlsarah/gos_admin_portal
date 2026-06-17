@@ -4,7 +4,7 @@
 {% block title %}Adults{% endblock %}
 {% block content %}
   <div class="row mb-3">
-    <div class="col"><h1 class="h3">Adults</h1></div>
+    <div class="col"><h1 class="h3">Adults{% if program %} for {{ program.name }}{% endif %}</h1></div>
     <div class="col-auto">
       {% can_write user 'adult_info' as can_add_adult %}
       {% if can_add_adult %}
@@ -13,7 +13,11 @@
     </div>
   </div>
   <div class="row mb-3">
-    <p class="text-muted">This is a combined list of all adults in the system, including Parents/Guardians, Mentors, and Alumni.</p>
+    {% if program %}
+        <p class="text-muted">These are adults (Parents, Mentors, Alumni) associated with <a href="{% url 'program_detail' program.id %}">{{ program.name }}</a>.</p>
+    {% else %}
+        <p class="text-muted">This is a combined list of all adults in the system, including Parents/Guardians, Mentors, and Alumni.</p>
+    {% endif %}
   </div>
   {% if adults %}
     <div class="table-responsive">
@@ -38,7 +42,7 @@
                 {{ a.first_name }} {{ a.last_name }}
               </td>
               <td>
-                {% with e=a.alumni_email|default:a.email|default:a.personal_email %}
+                {% with e=a.personal_email %}
                   {% if e %}<a href="mailto:{{ e }}">{{ e }}</a>{% endif %}
                 {% endwith %}
               </td>
@@ -58,7 +62,7 @@
               <td class="text-end">
                 {% can_write user 'adult_info' a as can_edit_adult %}
                 {% if can_edit_adult %}
-                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'adult_edit' a.id %}?next={% url 'adult_list' %}">Edit</a>
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'adult_edit' a.id %}?next={{ request.path }}">Edit</a>
                 {% endif %}
               </td>
             </tr>

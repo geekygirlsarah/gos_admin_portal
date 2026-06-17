@@ -83,25 +83,25 @@ class Command(BaseCommand):
         parent1, _ = Adult.objects.get_or_create(
             first_name="Alice",
             last_name="Smith",
-            email="swithee+parent1@andrew.cmu.edu",
+            personal_email="swithee+parent1@andrew.cmu.edu",
             is_parent=True,
         )
         parent2, _ = Adult.objects.get_or_create(
             first_name="Bob",
             last_name="Smith",
-            email="swithee+parent2@andrew.cmu.edu",
+            personal_email="swithee+parent2@andrew.cmu.edu",
             is_parent=True,
         )
         parent3, _ = Adult.objects.get_or_create(
             first_name="Charlie",
             last_name="Brown",
-            email="swithee+parent3@andrew.cmu.edu",
+            personal_email="swithee+parent3@andrew.cmu.edu",
             is_parent=True,
         )
         parent4, _ = Adult.objects.get_or_create(
             first_name="Dana",
             last_name="Brown",
-            email="swithee+parent4@andrew.cmu.edu",
+            personal_email="swithee+parent4@andrew.cmu.edu",
             is_parent=True,
         )
 
@@ -149,7 +149,7 @@ class Command(BaseCommand):
         Adult.objects.get_or_create(
             first_name="Lead",
             last_name="Mentor",
-            email="swithee+lead@andrew.cmu.edu",
+            personal_email="swithee+lead@andrew.cmu.edu",
             is_mentor=True,
             role="mentor",  # There isn't a "lead" role in MENTOR_ROLE_CHOICES, but description says "lead mentor"
         )
@@ -158,7 +158,7 @@ class Command(BaseCommand):
         Adult.objects.get_or_create(
             first_name="Passing",
             last_name="Mentor",
-            email="swithee+passing@andrew.cmu.edu",
+            personal_email="swithee+passing@andrew.cmu.edu",
             is_mentor=True,
             has_paca_clearance=True,
             has_patch_clearance=True,
@@ -170,7 +170,7 @@ class Command(BaseCommand):
         Adult.objects.get_or_create(
             first_name="Expiring",
             last_name="Mentor",
-            email="swithee+expiring@andrew.cmu.edu",
+            personal_email="swithee+expiring@andrew.cmu.edu",
             is_mentor=True,
             has_paca_clearance=True,
             has_patch_clearance=True,
@@ -182,14 +182,14 @@ class Command(BaseCommand):
         alumni1, _ = Adult.objects.get_or_create(
             first_name="Alumni",
             last_name="One",
-            email="swithee+alumni1@andrew.cmu.edu",
+            personal_email="swithee+alumni1@andrew.cmu.edu",
             is_alumni=True,
             active=False,
         )
         alumni2, _ = Adult.objects.get_or_create(
             first_name="Alumni",
             last_name="Two",
-            email="swithee+alumni2@andrew.cmu.edu",
+            personal_email="swithee+alumni2@andrew.cmu.edu",
             is_alumni=True,
             active=False,
         )

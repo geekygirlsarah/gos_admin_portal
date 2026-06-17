@@ -46,6 +46,7 @@ from .forms import (
 )
 from .models import (
     Adult,
+    AdultStudentRelationship,
     Crew,
     Enrollment,
     Fee,
@@ -258,20 +259,37 @@ class StudentListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(enrollment__program_id=program_id).distinct()
+
         from .permission_views import get_user_role
 
         role = get_user_role(self.request.user)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                qs = adult.students.all()
+                qs = qs.filter(adults=adult)
             except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(pk=student.pk)
+            except (Student.DoesNotExist, AttributeError):
                 qs = Student.objects.none()
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
             sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
         ).order_by(Lower("sort_first"), Lower("last_name"))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class StudentPhotoListView(LoginRequiredMixin, ListView):
@@ -328,7 +346,7 @@ class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(active=True)
+        qs = super().get_queryset().filter(graduated=False)
         return (
             qs.select_related("school", "primary_contact", "secondary_contact")
             .prefetch_related("adults")
@@ -353,7 +371,7 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(active=True)
+        qs = super().get_queryset().filter(graduated=False)
         return (
             qs.select_related("school")
             .annotate(
@@ -418,7 +436,7 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(active=True)
+        qs = super().get_queryset().filter(graduated=False)
         return (
             qs.select_related("school")
             .annotate(
@@ -451,12 +469,40 @@ class ParentListView(LoginRequiredMixin, ListView):
     context_object_name = "parents"
 
     def get_queryset(self):
-        # Prefetch related students to avoid N+1 queries and order by name
-        return (
-            Adult.objects.all()
+        qs = (
+            Adult.objects.filter(is_parent=True)
             .prefetch_related("students")
             .order_by("first_name", "last_name")
         )
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                student_ids = adult.students.values_list("id", flat=True)
+                qs = qs.filter(students__id__in=student_ids).distinct()
+            except:
+                qs = Adult.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(students=student).distinct()
+            except:
+                qs = Adult.objects.none()
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class MentorListView(LoginRequiredMixin, ListView):
@@ -465,7 +511,18 @@ class MentorListView(LoginRequiredMixin, ListView):
     context_object_name = "mentors"
 
     def get_queryset(self):
-        return Adult.objects.filter(is_mentor=True).order_by("last_name", "first_name")
+        qs = Adult.objects.filter(is_mentor=True).order_by("last_name", "first_name")
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class AlumniListView(LoginRequiredMixin, ListView):
@@ -474,8 +531,18 @@ class AlumniListView(LoginRequiredMixin, ListView):
     context_object_name = "alumni"
 
     def get_queryset(self):
-        # List Adults flagged as alumni
-        return Adult.objects.filter(is_alumni=True).order_by("last_name", "first_name")
+        qs = Adult.objects.filter(is_alumni=True).order_by("last_name", "first_name")
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
+        return ctx
 
 
 class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -511,9 +578,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin
             year = int(year) if year else timezone.now().year
         except ValueError:
             year = timezone.now().year
-        # Default to seniors: graduation_year equals the selected year, and active
+        # Default to seniors: graduation_year equals the selected year, and active (non-graduated)
         students = (
-            Student.objects.filter(graduation_year=year, active=True)
+            Student.objects.filter(graduation_year=year, graduated=False)
             .annotate(
                 sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
             )
@@ -699,7 +766,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
             def get_or_create_parent(first, last, email):
                 # Try to find by email first
                 if email:
-                    p = Adult.objects.filter(email__iexact=email).first()
+                    p = Adult.objects.filter(personal_email__iexact=email).first()
                     if p:
                         if overwrite:
                             changed_parent = False
@@ -721,9 +788,10 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         if (
                             overwrite
                             and email
-                            and (p.email or "").lower() != (email or "").lower()
+                            and (p.personal_email or "").lower()
+                            != (email or "").lower()
                         ):
-                            p.email = email
+                            p.personal_email = email
                             p.save()
                         return p
                 # If we have at least one of name or email, create
@@ -732,7 +800,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
-                        email=email or None,
+                        personal_email=email or None,
                         is_parent=True,
                     )
                 return None
@@ -1007,14 +1075,14 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 obj, created_flag = Adult.objects.get_or_create(
                     first_name=first,
                     last_name=last,
-                    defaults={"email": email, "phone_number": phone},
+                    defaults={"personal_email": email, "phone_number": phone},
                 )
                 if created_flag:
                     created += 1
                 elif overwrite:
                     changed = False
-                    if email and obj.email != email:
-                        obj.email = email
+                    if email and obj.personal_email != email:
+                        obj.personal_email = email
                         changed = True
                     if phone and obj.phone_number != phone:
                         obj.phone_number = phone
@@ -1182,7 +1250,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 # Try resolve by email first
                 p = None
                 if email:
-                    p = Adult.objects.filter(email__iexact=email).first()
+                    p = Adult.objects.filter(personal_email__iexact=email).first()
                 if not p and first and last:
                     p = Adult.objects.filter(
                         first_name__iexact=first, last_name__iexact=last
@@ -1195,7 +1263,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
-                        email=email or None,
+                        personal_email=email or None,
                         is_parent=True,
                     )
                     created = True
@@ -1290,21 +1358,19 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         skipped += 1
                         continue
 
-                    # Relationship type (global per Adult)
+                    # Relationship type
                     rel_key = normalize_rel(g["rel"])
-                    if rel_key and adult.relationship_to_student != rel_key:
-                        if not dry_run and overwrite:
-                            adult.relationship_to_student = rel_key
-                            adult.save(
-                                update_fields=["relationship_to_student", "updated_at"]
+                    if rel_key:
+                        if not dry_run:
+                            AdultStudentRelationship.objects.update_or_create(
+                                adult=adult,
+                                student=student,
+                                defaults={"relationship_to_student": rel_key},
                             )
                         rel_updated += 1
 
-                    # Ensure Adult is linked to Student (M2M)
-                    if adult.id and not student.adults.filter(id=adult.id).exists():
-                        if not dry_run:
-                            student.adults.add(adult)
-                            adult.students.add(student)
+                    # Ensure Adult is linked to Student (M2M) - already handled by update_or_create above if not dry_run
+                    if dry_run and not student.adults.filter(id=adult.id).exists():
                         linked += 1
 
                     # Optionally set primary/secondary contact
@@ -1628,33 +1694,23 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(programs=prog, active=True):
+                for s in Student.objects.filter(programs=prog, graduated=False):
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if "parents" in groups:
-                parent_emails = (
-                    Adult.objects.filter(
-                        students__programs=prog, email_updates=True, active=True
-                    )
-                    .annotate(
-                        best_email=Coalesce("personal_email", "email", "andrew_email")
-                    )
-                    .values_list("email", flat=True)
-                )
-                for e in parent_emails:
+                for parent in Adult.objects.filter(
+                    students__programs=prog, email_updates=True, active=True
+                ).distinct():
+                    e = parent.personal_email or parent.andrew_email
                     if e:
                         recipients.add(e)
             if "mentors" in groups:
                 for m in Adult.objects.filter(is_mentor=True, active=True):
-                    # Prefer personal_email, then andrew_email, then email
-                    if m.personal_email:
-                        recipients.add(m.personal_email)
-                    elif m.andrew_email:
-                        recipients.add(m.andrew_email)
-                    elif m.email:
-                        recipients.add(m.email)
+                    e = m.personal_email or m.andrew_email
+                    if e:
+                        recipients.add(e)
 
             if not recipients and not test_email:
                 messages.error(request, "No recipients found for the selected groups.")
@@ -1835,10 +1891,10 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
                 base_qs = Enrollment.objects.none()
 
         # Split into active and inactive sections
-        ctx["active_enrollments"] = base_qs.filter(student__active=True).order_by(
+        ctx["active_enrollments"] = base_qs.filter(student__graduated=False).order_by(
             "sort_first", "sort_last"
         )
-        ctx["inactive_enrollments"] = base_qs.filter(student__active=False).order_by(
+        ctx["inactive_enrollments"] = base_qs.filter(student__graduated=True).order_by(
             "sort_first", "sort_last"
         )
 
@@ -1939,7 +1995,7 @@ class StudentUpdateView(
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Persist relationship selections for each selected parent (note: global per Parent)
+        # Persist relationship selections for each selected parent
         rel_map = {
             k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
@@ -1952,10 +2008,11 @@ class StudentUpdateView(
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                p = Adult.objects.filter(pk=pid).first()
-                if p and p.relationship_to_student != rel:
-                    p.relationship_to_student = rel
-                    p.save(update_fields=["relationship_to_student"])
+                AdultStudentRelationship.objects.update_or_create(
+                    adult_id=pid,
+                    student=self.object,
+                    defaults={"relationship_to_student": rel},
+                )
         return response
 
     def get_success_url(self):
@@ -1989,7 +2046,7 @@ class StudentCreateView(
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Persist relationship selections for each selected parent (note: global per Parent)
+        # Persist relationship selections for each selected parent
         rel_map = {
             k[len("parent_rel_") :]: v  # noqa: E203
             for k, v in self.request.POST.items()
@@ -2002,10 +2059,11 @@ class StudentCreateView(
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                p = Adult.objects.filter(pk=pid).first()
-                if p and p.relationship_to_student != rel:
-                    p.relationship_to_student = rel
-                    p.save(update_fields=["relationship_to_student"])
+                AdultStudentRelationship.objects.update_or_create(
+                    adult_id=pid,
+                    student=self.object,
+                    defaults={"relationship_to_student": rel},
+                )
         return response
 
     def get_success_url(self):
@@ -3216,7 +3274,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
                 if getattr(adult, "email_updates", False) and getattr(
                     adult, "active", True
                 ):
-                    email = adult.personal_email or adult.email or adult.andrew_email
+                    email = adult.personal_email or adult.andrew_email
                     if email:
                         emails.append(email)
             # Deduplicate while preserving order
@@ -3415,9 +3473,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Only active students enrolled in this program
+        # Only active (non-graduated) students enrolled in this program
         students = (
-            Student.objects.filter(enrollment__program=program, active=True)
+            Student.objects.filter(enrollment__program=program, graduated=False)
             .select_related("school")
             .order_by(
                 Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
@@ -3471,7 +3529,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
                 sort_last=Lower("last_name"),
             )
         )
-        students = list(base_qs.filter(active=True).order_by("sort_first", "sort_last"))
+        students = list(
+            base_qs.filter(graduated=False).order_by("sort_first", "sort_last")
+        )
         ctx = {
             "program": program,
             "students": students,
@@ -3487,9 +3547,9 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Active students enrolled in this program, grouped by school
+        # Active (non-graduated) students enrolled in this program, grouped by school
         students = (
-            Student.objects.filter(enrollment__program=program, active=True)
+            Student.objects.filter(enrollment__program=program, graduated=False)
             .select_related("school")
             .annotate(
                 sort_first=Coalesce(
@@ -3523,9 +3583,9 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Active students enrolled in this program with some address info
+        # Active (non-graduated) students enrolled in this program with some address info
         students = (
-            Student.objects.filter(programs=program, active=True)
+            Student.objects.filter(programs=program, graduated=False)
             .only(
                 "first_name",
                 "legal_first_name",
@@ -3572,20 +3632,28 @@ class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     def get_queryset(self):
         from .permission_views import get_user_role
 
+        qs = Adult.objects.all().prefetch_related("students")
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            qs = qs.filter(students__enrollment__program_id=program_id).distinct()
+
         role = get_user_role(self.request.user)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                return Adult.objects.filter(pk=adult.pk).prefetch_related("students")
+                return qs.filter(pk=adult.pk)
             except (Adult.DoesNotExist, AttributeError):
                 return Adult.objects.none()
-        return Adult.objects.all().prefetch_related("students")
+        return qs.order_by("last_name", "first_name")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
+        program_id = self.kwargs.get("program_id")
+        if program_id:
+            ctx["program"] = get_object_or_404(Program, pk=program_id)
         return ctx
 
 

@@ -173,14 +173,11 @@ def find_student_by_email(email: str):
 
 
 def find_adult_by_email(email: str):
-    """Find an Adult whose email/personal_email/andrew_email/alumni_email matches."""
+    """Find an Adult whose personal_email or andrew_email (via MentorAndrewAccess) matches."""
     if not email:
         return None
     return Adult.objects.filter(
-        Q(email__iexact=email)
-        | Q(personal_email__iexact=email)
-        | Q(andrew_email__iexact=email)
-        | Q(alumni_email__iexact=email)
+        Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
     ).first()
 
 
@@ -276,15 +273,26 @@ def student_to_prefill(student) -> dict:
     }
 
 
-def adult_to_prefill(adult) -> dict:
+def adult_to_prefill(adult, student=None) -> dict:
     """Convert an ``Adult`` model into a dict suitable for ``ParentInfoForm``."""
     if adult is None:
         return {}
+
+    relationship = ""
+    if student:
+        from programs.models import AdultStudentRelationship
+
+        asr = AdultStudentRelationship.objects.filter(
+            adult=adult, student=student
+        ).first()
+        if asr:
+            relationship = asr.relationship
+
     return {
         "first_name": adult.first_name or "",
         "last_name": adult.last_name or "",
-        "relationship_to_student": adult.relationship_to_student or "",
-        "email": adult.email or adult.personal_email or "",
+        "relationship_to_student": relationship,
+        "email": adult.personal_email or "",
         "cell_phone": adult.cell_phone or "",
         "home_phone": adult.home_phone or "",
         "email_updates": adult.email_updates,
@@ -511,12 +519,12 @@ def _adult_from_data(parent_data: dict):
 
     adult = None
     if email:
-        adult = Adult.objects.filter(email__iexact=email).first()
+        adult = Adult.objects.filter(personal_email__iexact=email).first()
     if adult is None:
         adult = Adult(
             first_name=first_name or "(unknown)",
             last_name=last_name or "(unknown)",
-            email=email or None,
+            personal_email=email or None,
             is_parent=True,
         )
 
@@ -543,18 +551,6 @@ def _adult_from_data(parent_data: dict):
     if parent_data.get("email_updates") and not adult.email_updates:
         adult.email_updates = True
 
-    rel = (parent_data.get("relationship_to_student") or "").strip().lower()
-    if rel:
-        # Only set if blank/default ("parent"); we don't try to map free-form
-        # values against RELATIONSHIP_CHOICES.
-        if (
-            not adult.relationship_to_student
-            or adult.relationship_to_student == "parent"
-        ):
-            adult.relationship_to_student = rel[:20]
-    specific_rel = (parent_data.get("specific_relationship") or "").strip()
-    if specific_rel and not adult.specific_relationship:
-        adult.specific_relationship = specific_rel[:100]
     adult.is_parent = True
     adult.save()
     return adult
@@ -725,11 +721,37 @@ def convert_application_to_student(application: Application, request=None):
         if changed:
             student.save()
 
-        # Ensure bi-directional M2M relationship is also established.
+        # Ensure bi-directional M2M relationship is also established with correct relationship type.
+        from programs.models import AdultStudentRelationship
+
         if primary:
-            student.adults.add(primary)
+            rel_data = data.get("step7-primaryparent") or {}
+            AdultStudentRelationship.objects.update_or_create(
+                adult=primary,
+                student=student,
+                defaults={
+                    "relationship_to_student": (
+                        rel_data.get("relationship_to_student") or "parent"
+                    )[:20],
+                    "specific_relationship": (
+                        rel_data.get("specific_relationship") or ""
+                    )[:100],
+                },
+            )
         if secondary:
-            student.adults.add(secondary)
+            rel_data = data.get("step8-secondaryparent") or {}
+            AdultStudentRelationship.objects.update_or_create(
+                adult=secondary,
+                student=student,
+                defaults={
+                    "relationship_to_student": (
+                        rel_data.get("relationship_to_student") or "parent"
+                    )[:20],
+                    "specific_relationship": (
+                        rel_data.get("specific_relationship") or ""
+                    )[:100],
+                },
+            )
 
         Enrollment.objects.get_or_create(student=student, program=application.program)
 

@@ -29,6 +29,28 @@ echo "--- Static Analysis (semgrep) ---"
 semgrep --config auto . || echo "semgrep static analysis reported findings. Proceeding..."
 
 echo "--- Security Scan (safety) ---"
+# Ensure requirements.txt is UTF-8 to avoid safety failure if exported from PowerShell
+python3 -c "
+import os
+if os.path.exists('requirements.txt'):
+    with open('requirements.txt', 'rb') as f:
+        if f.read(2) == b'\xff\xfe':
+            print('Converting requirements.txt from UTF-16 to UTF-8...')
+            with open('requirements.txt', 'r', encoding='utf-16') as f2:
+                content = f2.read()
+            with open('requirements.txt', 'w', encoding='utf-8') as f3:
+                f3.write(content)
+" 2>/dev/null || python -c "
+import os
+if os.path.exists('requirements.txt'):
+    with open('requirements.txt', 'rb') as f:
+        if f.read(2) == b'\xff\xfe':
+            print('Converting requirements.txt from UTF-16 to UTF-8...')
+            with open('requirements.txt', 'r', encoding='utf-16') as f2:
+                content = f2.read()
+            with open('requirements.txt', 'w', encoding='utf-8') as f3:
+                f3.write(content)
+"
 safety check || echo "Safety check failed. It may require an API key or found vulnerabilities."
 
 echo "--- Django System Check ---"

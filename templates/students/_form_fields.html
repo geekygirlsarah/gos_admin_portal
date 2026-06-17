@@ -130,23 +130,7 @@
       {% can_write user 'other_details' form.instance as can_write_other %}
       <div class="col-md-6">{% if can_write_other %}{% render_field form.race_ethnicities %}{% else %}{% render_field form.race_ethnicities disabled=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_other %}{% render_field form.seen_once %}{% else %}{% render_field form.seen_once disabled=True %}{% endif %}</div>
-      {% user_role user as role %}
-      {% if role == 'LeadMentor' %}
-        <div class="col-md-3">{% render_field form.active %}</div>
-      {% else %}
-        <div class="col-md-3">
-          <label class="form-label">Active</label>
-          <p class="form-control-plaintext">
-            <span class="badge {% if form.instance.active %}bg-success{% else %}bg-secondary{% endif %}">
-              {{ form.instance.active|yesno:"Yes,No" }}
-            </span>
-          </p>
-          {% if form.active.errors %}
-            <div class="invalid-feedback d-block">{{ form.active.errors|join:", " }}</div>
-          {% endif %}
-          <input type="hidden" name="active" value="{% if form.instance.active %}on{% endif %}">
-        </div>
-      {% endif %}
+      <div class="col-md-3">{% if can_write_other %}{% render_field form.graduated %}{% else %}{% render_field form.graduated disabled=True %}{% endif %}</div>
     </div>
   </div>
 </div>
@@ -227,7 +211,7 @@
                   <label class="form-label mb-0 small">Relationship</label>
                   <select class="form-select form-select-sm parent-rel" data-parent-id="{{ p.id }}" {% if not can_write_parents %}disabled{% endif %}>
                     {% for k,v in RELATIONSHIP_CHOICES %}
-                      <option value="{{ k }}" {% if p.relationship_to_student == k %}selected{% endif %}>{{ v }}</option>
+                      <option value="{{ k }}" {% if p.attached_rel == k %}selected{% endif %}>{{ v }}</option>
                     {% endfor %}
                   </select>
                 </div>

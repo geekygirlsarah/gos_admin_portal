@@ -377,6 +377,25 @@ class ApplicationDeleteView(_ReviewerRequiredMixin, View):
         return redirect("application_review_list")
 
 
+class ApplicationCleanupView(_ReviewerRequiredMixin, View):
+    """POST: Delete all applications older than 30 days."""
+
+    def post(self, request):
+        cutoff = timezone.now() - timezone.timedelta(days=30)
+        stale_apps = Application.objects.filter(created_at__lt=cutoff)
+        count = stale_apps.count()
+        stale_apps.delete()
+
+        if count > 0:
+            messages.success(
+                request, f"Deleted {count} applications older than 30 days."
+            )
+        else:
+            messages.info(request, "No applications older than 30 days were found.")
+
+        return redirect("application_review_list")
+
+
 class ApplicationConvertView(_ReviewerRequiredMixin, View):
     """POST: convert an APPROVED_SIGNED application into a real Student.
 

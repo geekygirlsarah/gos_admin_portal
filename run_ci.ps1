@@ -29,6 +29,14 @@ Write-Host "--- Static Analysis (semgrep) ---" -ForegroundColor Cyan
 semgrep --config auto .
 
 Write-Host "--- Security Scan (safety) ---" -ForegroundColor Cyan
+# Ensure requirements.txt is UTF-8 (no BOM) to avoid safety failure if exported from PowerShell
+if (Test-Path "requirements.txt") {
+    $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path "requirements.txt"))
+    if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xff -and $bytes[1] -eq 0xfe) {
+        Write-Host "Converting requirements.txt from UTF-16 to UTF-8..." -ForegroundColor Yellow
+        [System.IO.File]::WriteAllLines((Resolve-Path "requirements.txt"), (Get-Content "requirements.txt"), (New-Object System.Text.UTF8Encoding($false)))
+    }
+}
 safety check
 
 Write-Host "--- Django System Check ---" -ForegroundColor Cyan

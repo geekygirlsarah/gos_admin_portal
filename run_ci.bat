@@ -34,6 +34,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo --- Security Scan (safety) ---
+powershell -Command "if (Test-Path 'requirements.txt') { $b = [System.IO.File]::ReadAllBytes((Resolve-Path 'requirements.txt')); if ($b.Length -ge 2 -and $b[0] -eq 0xff -and $b[1] -eq 0xfe) { Write-Host 'Converting requirements.txt to UTF-8...'; [System.IO.File]::WriteAllLines((Resolve-Path 'requirements.txt'), (Get-Content 'requirements.txt'), (New-Object System.Text.UTF8Encoding($false))) } }"
 safety check || echo safety check failed.
 
 echo --- Static Analysis (semgrep) ---

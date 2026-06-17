@@ -358,9 +358,9 @@ class ConvertToStudentTests(TestCase):
         self.assertEqual(student.last_name, "Lovelace")
         # Primary + secondary contacts wired up.
         self.assertIsNotNone(student.primary_contact)
-        self.assertEqual(student.primary_contact.email, "parent@example.com")
+        self.assertEqual(student.primary_contact.personal_email, "parent@example.com")
         self.assertIsNotNone(student.secondary_contact)
-        self.assertEqual(student.secondary_contact.email, "sam@example.com")
+        self.assertEqual(student.secondary_contact.personal_email, "sam@example.com")
         # School created.
         self.assertIsNotNone(student.school)
         self.assertEqual(student.school.name, "Allderdice High School")

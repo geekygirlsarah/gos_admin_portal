@@ -63,7 +63,7 @@ class MentorFlowTests(TestCase):
         Adult.objects.create(
             first_name="Pat",
             last_name="Mentor",
-            email="onfile@example.com",
+            personal_email="onfile@example.com",
             is_mentor=True,
         )
         app = Application.objects.create(
@@ -85,7 +85,7 @@ class MentorFlowTests(TestCase):
         Adult.objects.create(
             first_name="Pat",
             last_name="Mentor",
-            email="onfile@example.com",
+            personal_email="onfile@example.com",
             is_mentor=True,
         )
         app = _make_verified_mentor_app(email="onfile@example.com")

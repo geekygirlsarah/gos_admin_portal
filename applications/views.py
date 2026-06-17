@@ -981,8 +981,8 @@ class Step7PrimaryParentView(View):
             # so the student doesn't have to look it up; they just confirm.
             mode = "handoff"
             handoff_initial = {}
-            if existing_adult and existing_adult.email:
-                handoff_initial["parent_email"] = existing_adult.email
+            if existing_adult and existing_adult.personal_email:
+                handoff_initial["parent_email"] = existing_adult.personal_email
             if post:
                 handoff_form = ParentHandoffForm(post, student_emails=student_emails)
             else:
@@ -1004,7 +1004,9 @@ class Step7PrimaryParentView(View):
             if handoff_email:
                 initial = {"email": handoff_email}
             elif application.applicant_type == Application.Type.PARENT:
-                initial = {"email": application.email}
+                initial = {
+                    "email": application.email
+                }  # application email field, not Adult.email
         # For new applications (no saved data), default primary to opted-in.
         if not saved and "email_updates" not in initial:
             initial["email_updates"] = True
@@ -1177,9 +1179,9 @@ class SwapParentsView(View):
             student = Student.objects.filter(pk=existing_student_id).first()
             if student:
                 if not step7 and student.primary_contact_id:
-                    step7 = adult_to_prefill(student.primary_contact)
+                    step7 = adult_to_prefill(student.primary_contact, student=student)
                 if not step8 and student.secondary_contact_id:
-                    step8 = adult_to_prefill(student.secondary_contact)
+                    step8 = adult_to_prefill(student.secondary_contact, student=student)
 
         # Only swap when both sides have content.
         if step7 or step8:
@@ -1293,7 +1295,7 @@ class Step8SecondaryParentView(View):
         if sid:
             student = Student.objects.filter(pk=sid).first()
             if student and student.secondary_contact_id:
-                return adult_to_prefill(student.secondary_contact)
+                return adult_to_prefill(student.secondary_contact, student=student)
         return {}
 
     def _render(self, request, application, form):

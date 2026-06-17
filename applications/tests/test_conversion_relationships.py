@@ -46,8 +46,8 @@ class ConversionRelationshipTests(TestCase):
         student = convert_application_to_student(app)
 
         # Check FKs
-        self.assertEqual(student.primary_contact.email, "pat@example.com")
-        self.assertEqual(student.secondary_contact.email, "sam@example.com")
+        self.assertEqual(student.primary_contact.personal_email, "pat@example.com")
+        self.assertEqual(student.secondary_contact.personal_email, "sam@example.com")
 
         # Check bi-directional via FK related names
         self.assertIn(student, student.primary_contact.primary_for.all())
@@ -85,7 +85,7 @@ class ConversionRelationshipTests(TestCase):
         existing_parent = Adult.objects.create(
             first_name="Pat",
             last_name="Parent",
-            email="pat@example.com",
+            personal_email="pat@example.com",
             is_parent=True,
         )
 
@@ -107,7 +107,9 @@ class ConversionRelationshipTests(TestCase):
         student = convert_application_to_student(app)
 
         self.assertEqual(student.primary_contact, existing_parent)
-        self.assertEqual(Adult.objects.filter(email="pat@example.com").count(), 1)
+        self.assertEqual(
+            Adult.objects.filter(personal_email="pat@example.com").count(), 1
+        )
 
         # Verify relationship
         self.assertIn(student, existing_parent.primary_for.all())
@@ -123,7 +125,7 @@ class ConversionRelationshipTests(TestCase):
         existing_parent = Adult.objects.create(
             first_name="Pat",
             last_name="Parent",
-            email="pat@example.com",
+            personal_email="pat@example.com",
             is_parent=True,
         )
         other_student = Student.objects.create(
@@ -153,7 +155,9 @@ class ConversionRelationshipTests(TestCase):
         student = convert_application_to_student(app)
 
         self.assertEqual(student.primary_contact, existing_parent)
-        self.assertEqual(Adult.objects.filter(email="pat@example.com").count(), 1)
+        self.assertEqual(
+            Adult.objects.filter(personal_email="pat@example.com").count(), 1
+        )
 
         # Verify relationships for NEW student
         self.assertIn(student, existing_parent.primary_for.all())
@@ -208,7 +212,9 @@ class ConversionRelationshipTests(TestCase):
 
         # They should be the same record
         self.assertEqual(parent_a, parent_b)
-        self.assertEqual(Adult.objects.filter(email="pat@example.com").count(), 1)
+        self.assertEqual(
+            Adult.objects.filter(personal_email="pat@example.com").count(), 1
+        )
 
         # Bi-directional checks for Student A
         self.assertIn(student_a, parent_a.primary_for.all())

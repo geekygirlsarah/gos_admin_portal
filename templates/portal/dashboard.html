@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - {{ block.super }}{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Welcome, {{ user.first_name|default:user.username }}!</h1>
+
+{# ── No profile linked ─────────────────────────────────────────────────────── #}
+{% if not student and not adult %}
+    <div class="alert alert-warning">
+        We couldn't find a profile linked to your account. Please contact a lead mentor.
+    </div>
+{% endif %}
+
+{% comment %}
+══════════════════════════════════════════════════════════════════════════════
+STUDENT DASHBOARD
+══════════════════════════════════════════════════════════════════════════════
+{% endcomment %}
+{% if student %}
+<section class="mb-5">
+    <h2 class="h4 mb-3">My Programs</h2>
+
+    {% if student_enrollments %}
+        {% for enrollment in student_enrollments %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <strong>{{ enrollment.program.name }}</strong>
+                {% if enrollment.program.active %}
+                    <span class="badge bg-success">Active</span>
+                {% else %}
+                    <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if enrollment.program.start_date or enrollment.program.end_date %}
+                <p class="mb-2">
+                    <strong>Dates:</strong>
+                    {% if enrollment.program.start_date %}{{ enrollment.program.start_date|date:"N j, Y" }}{% endif %}
+                    {% if enrollment.program.start_date and enrollment.program.end_date %} – {% endif %}
+                    {% if enrollment.program.end_date %}{{ enrollment.program.end_date|date:"N j, Y" }}{% endif %}
+                </p>
+                {% endif %}
+
+                <div class="row g-3 mt-1">
+                    {# Attendance hours #}
+                    <div class="col-md-6">
+                        <div class="card border-secondary h-100">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Attendance &amp; Outreach Hours</h6>
+                                {% if enrollment.program.active %}
+                                    <p class="text-muted fst-italic mb-0">
+                                        <span class="badge bg-secondary">Coming Soon</span>
+                                        Hour tracking will be available here once enabled for this program.
+                                    </p>
+                                {% else %}
+                                    <p class="text-muted mb-0">Not available for inactive programs.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Outreach events #}
+                    <div class="col-md-6">
+                        <div class="card border-secondary h-100">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Upcoming Outreach Events</h6>
+                                {% if enrollment.program.active %}
+                                    <p class="text-muted fst-italic mb-0">
+                                        <span class="badge bg-secondary">Coming Soon</span>
+                                        Outreach event sign-ups will appear here once enabled for this program.
+                                    </p>
+                                {% else %}
+                                    <p class="text-muted mb-0">Not available for inactive programs.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">You are not currently enrolled in any programs.</div>
+    {% endif %}
+</section>
+{% endif %}
+
+{% comment %}
+══════════════════════════════════════════════════════════════════════════════
+PARENT DASHBOARD
+══════════════════════════════════════════════════════════════════════════════
+{% endcomment %}
+{% if adult and is_parent %}
+<section class="mb-5">
+    <h2 class="h4 mb-3">My Students</h2>
+
+    {% if parent_data %}
+        {% for entry in parent_data %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <strong>{{ entry.student }}</strong>
+                {% if entry.student.attached_rel %}
+                    <span class="text-white-50 ms-2 small">({{ entry.student.attached_rel|title }})</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if entry.program_rows %}
+                    {% for row in entry.program_rows %}
+                    <div class="mb-4">
+                        <h6 class="d-flex justify-content-between align-items-center">
+                            {{ row.enrollment.program.name }}
+                            {% if row.enrollment.program.active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </h6>
+
+                        {% if row.enrollment.program.start_date or row.enrollment.program.end_date %}
+                        <p class="text-muted small mb-2">
+                            {% if row.enrollment.program.start_date %}{{ row.enrollment.program.start_date|date:"N j, Y" }}{% endif %}
+                            {% if row.enrollment.program.start_date and row.enrollment.program.end_date %} – {% endif %}
+                            {% if row.enrollment.program.end_date %}{{ row.enrollment.program.end_date|date:"N j, Y" }}{% endif %}
+                        </p>
+                        {% endif %}
+
+                        <p class="mb-2">
+                            <strong>Balance Owed:</strong>
+                            {% if row.balance > 0 %}
+                                <span class="text-danger fw-bold">${{ row.balance|floatformat:2 }}</span>
+                            {% elif row.balance < 0 %}
+                                <span class="text-success fw-bold">Credit: ${{ row.balance|floatformat:2|slice:"1:" }}</span>
+                            {% else %}
+                                <span class="text-success fw-bold">Paid in full</span>
+                            {% endif %}
+                        </p>
+
+                        <div class="row g-3">
+                            {# Attendance hours #}
+                            <div class="col-md-6">
+                                <div class="card border-secondary h-100">
+                                    <div class="card-body py-2">
+                                        <h6 class="card-title text-muted small mb-1">Attendance &amp; Outreach Hours</h6>
+                                        {% if row.enrollment.program.active %}
+                                            <p class="text-muted fst-italic mb-0 small">
+                                                <span class="badge bg-secondary">Coming Soon</span>
+                                            </p>
+                                        {% else %}
+                                            <p class="text-muted mb-0 small">N/A</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {# Outreach events #}
+                            <div class="col-md-6">
+                                <div class="card border-secondary h-100">
+                                    <div class="card-body py-2">
+                                        <h6 class="card-title text-muted small mb-1">Upcoming Outreach Events</h6>
+                                        {% if row.enrollment.program.active %}
+                                            <p class="text-muted fst-italic mb-0 small">
+                                                <span class="badge bg-secondary">Coming Soon</span>
+                                            </p>
+                                        {% else %}
+                                            <p class="text-muted mb-0 small">N/A</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% if not forloop.last %}<hr>{% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">{{ entry.student }} is not enrolled in any programs.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">No students are linked to your account.</div>
+    {% endif %}
+</section>
+{% endif %}
+
+{% comment %}
+══════════════════════════════════════════════════════════════════════════════
+MENTOR DASHBOARD
+══════════════════════════════════════════════════════════════════════════════
+{% endcomment %}
+{% if adult and is_mentor %}
+<section class="mb-5">
+    <div class="card border-info">
+        <div class="card-header bg-info text-white">Mentor Dashboard</div>
+        <div class="card-body">
+            <p>You are logged in as a Mentor. You can access student rosters and program info via the main menu.</p>
+            <a href="/programs/" class="btn btn-outline-info">View Programs</a>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% comment %}
+══════════════════════════════════════════════════════════════════════════════
+ALUMNI DASHBOARD
+══════════════════════════════════════════════════════════════════════════════
+{% endcomment %}
+{% if adult and is_alumni %}
+<section class="mb-5">
+    <div class="card border-success">
+        <div class="card-header bg-success text-white">Alumni Profile</div>
+        <div class="card-body">
+            <p>Welcome back! Keep your post-graduation information up to date here.</p>
+            <dl class="row mb-3">
+                <dt class="col-sm-4">College</dt>
+                <dd class="col-sm-8">{{ adult.college|default:"Not set" }}</dd>
+                <dt class="col-sm-4">Field of Study</dt>
+                <dd class="col-sm-8">{{ adult.field_of_study|default:"Not set" }}</dd>
+                <dt class="col-sm-4">Employer</dt>
+                <dd class="col-sm-8">{{ adult.employer|default:"Not set" }}</dd>
+            </dl>
+            <button class="btn btn-outline-success btn-sm" disabled>Edit Profile (Coming Soon)</button>
+
+            {% if enrollments %}
+                <hr>
+                <h5>My Program History</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Program</th>
+                                <th>Year</th>
+                                <th>Team</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in enrollments %}
+                                <tr>
+                                    <td>{{ e.program.name }}</td>
+                                    <td>{{ e.program.year_display }}</td>
+                                    <td>{{ e.team.name|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% comment %}
+══════════════════════════════════════════════════════════════════════════════
+ACCOUNT INFO SIDEBAR (shown when an adult profile exists)
+══════════════════════════════════════════════════════════════════════════════
+{% endcomment %}
+{% if adult %}
+<section class="mb-4">
+    <div class="card">
+        <div class="card-header">Your Contact Information</div>
+        <div class="card-body">
+            <p><strong>Name:</strong> {{ adult.first_name }} {{ adult.last_name }}</p>
+            <p><strong>Email:</strong> {{ adult.email }}</p>
+            {% if adult.phone_number %}
+                <p><strong>Phone:</strong> {{ adult.phone_number }}</p>
+            {% endif %}
+            <hr>
+            <p class="small text-muted mb-0">To update your contact information, please contact a lead mentor.</p>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% endblock %}

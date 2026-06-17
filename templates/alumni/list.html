@@ -3,10 +3,14 @@
 {% block title %}Alumni{% endblock %}
 {% block content %}
   <div class="row mb-3">
-    <div class="col"><h1 class="h3">Alumni</h1></div>
+    <div class="col"><h1 class="h3">Alumni{% if program %} for {{ program.name }}{% endif %}</h1></div>
   </div>
     <div class="row mb-3">
-        <p class="text-muted">These are all the alumni in the system. To convert students to alumni, go through the bottom of the <a href="{% url 'student_list' %}">Students</a> page.</p>
+        {% if program %}
+            <p class="text-muted">These are alumni who were associated with students in <a href="{% url 'program_detail' program.id %}">{{ program.name }}</a>.</p>
+        {% else %}
+            <p class="text-muted">These are all the alumni in the system. To convert students to alumni, go through the bottom of the <a href="{% url 'student_list' %}">Students</a> page.</p>
+        {% endif %}
     </div>
   {% if alumni %}
     <div class="table-responsive">
@@ -26,7 +30,7 @@
             <tr>
               <td>{{ a.first_name }} {{ a.last_name }}</td>
               <td>
-                {% with e=a.alumni_email|default:a.email|default:a.personal_email %}
+                {% with e=a.personal_email %}
                   {% if e %}<a href="mailto:{{ e }}">{{ e }}</a>{% endif %}
                 {% endwith %}
               </td>
