@@ -12,10 +12,13 @@ def add_andrew_columns_if_missing(apps, schema_editor):
     """Add andrew_id / andrew_email / andrew_id_expiration / andrew_id_sponsor_id
     to programs_adult if they don't already exist (idempotent)."""
     db = schema_editor.connection
-    cols = [
-        r[1]
-        for r in db.cursor().execute("PRAGMA table_info(programs_adult)").fetchall()
-    ]
+    with db.cursor() as cursor:
+        cols = [
+            column.name
+            for column in db.introspection.get_table_description(
+                cursor, "programs_adult"
+            )
+        ]
     cur = db.cursor()
     if "andrew_id" not in cols:
         cur.execute("ALTER TABLE programs_adult ADD COLUMN andrew_id varchar(50) NULL")
