@@ -30,7 +30,7 @@ class ActiveProgramMiddleware(MiddlewareMixin):
                     request.session["active_program_id"] = str(view_kwargs["pk"])
             elif "program_id" in view_kwargs:
                 request.session["active_program_id"] = str(view_kwargs["program_id"])
-        except:
+        except Exception:  # nosec B110
             pass
 
         # 2. Auto-select if not set

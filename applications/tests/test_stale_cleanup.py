@@ -11,11 +11,13 @@ from applications.models import Application
 class StaleApplicationCleanupTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username="reviewer", password="password")
+        self.user = User.objects.create_user(
+            username="reviewer", password="password"
+        )  # nosec B106
         # Assign review permission
         perm = Permission.objects.get(codename="review_application")
         self.user.user_permissions.add(perm)
-        self.client.login(username="reviewer", password="password")
+        self.client.login(username="reviewer", password="password")  # nosec B106
 
         self.url = reverse("application_cleanup_stale")
 
@@ -50,8 +52,8 @@ class StaleApplicationCleanupTests(TestCase):
     def test_cleanup_requires_permission(self):
         self.client.logout()
         # Non-privileged user
-        User.objects.create_user(username="random", password="password")
-        self.client.login(username="random", password="password")
+        User.objects.create_user(username="random", password="password")  # nosec B106
+        self.client.login(username="random", password="password")  # nosec B106
 
         response = self.client.post(self.url)
         # Should be forbidden (403) for logged-in user without permission
