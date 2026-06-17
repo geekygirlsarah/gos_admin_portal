@@ -788,9 +788,10 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         if (
                             overwrite
                             and email
-                            and (p.email or "").lower() != (email or "").lower()
+                            and (p.personal_email or "").lower()
+                            != (email or "").lower()
                         ):
-                            p.email = email
+                            p.personal_email = email
                             p.save()
                         return p
                 # If we have at least one of name or email, create
@@ -799,7 +800,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
-                        email=email or None,
+                        personal_email=email or None,
                         is_parent=True,
                     )
                 return None
@@ -1074,14 +1075,14 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 obj, created_flag = Adult.objects.get_or_create(
                     first_name=first,
                     last_name=last,
-                    defaults={"email": email, "phone_number": phone},
+                    defaults={"personal_email": email, "phone_number": phone},
                 )
                 if created_flag:
                     created += 1
                 elif overwrite:
                     changed = False
-                    if email and obj.email != email:
-                        obj.email = email
+                    if email and obj.personal_email != email:
+                        obj.personal_email = email
                         changed = True
                     if phone and obj.phone_number != phone:
                         obj.phone_number = phone
@@ -1262,7 +1263,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
-                        email=email or None,
+                        personal_email=email or None,
                         is_parent=True,
                     )
                     created = True

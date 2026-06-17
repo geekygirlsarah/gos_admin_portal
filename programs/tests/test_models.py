@@ -120,17 +120,19 @@ class ModelTests(TestCase):
         self.assertFalse(parent.email_updates)
 
     def test_adult_email_uniqueness(self):
-        Adult.objects.create(first_name="A", last_name="B", email="test@example.com")
+        Adult.objects.create(
+            first_name="A", last_name="B", personal_email="test@example.com"
+        )
         # Second adult with same email should fail
         with self.assertRaises(Exception):
             Adult.objects.create(
-                first_name="C", last_name="D", email="test@example.com"
+                first_name="C", last_name="D", personal_email="test@example.com"
             )
 
     def test_adult_email_null_allowed_multiple_times(self):
         # Multiple adults with NULL email should be allowed
-        Adult.objects.create(first_name="A", last_name="B", email=None)
-        Adult.objects.create(first_name="C", last_name="D", email=None)
+        Adult.objects.create(first_name="A", last_name="B", personal_email=None)
+        Adult.objects.create(first_name="C", last_name="D", personal_email=None)
         # Succeeded if no exception
 
     def test_program_grade_range_fields(self):

@@ -52,7 +52,7 @@ class LatestProgramHelpersTests(TestCase):
         adult = Adult.objects.create(
             first_name="P",
             last_name="Q",
-            email="p@example.com",
+            personal_email="p@example.com",
             is_parent=True,
         )
         s = Student.objects.create(
@@ -115,7 +115,7 @@ class Step7WelcomeBackBannerTests(TestCase):
         adult = Adult.objects.create(
             first_name="Pat",
             last_name="Parent",
-            email="parent@example.com",
+            personal_email="parent@example.com",
             is_parent=True,
         )
         student = Student.objects.create(

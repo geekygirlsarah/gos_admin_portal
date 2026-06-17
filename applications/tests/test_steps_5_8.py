@@ -119,7 +119,7 @@ class Step5StudentInfoTests(TestCase):
         adult = Adult.objects.create(
             first_name="Pat",
             last_name="Parent",
-            email="parent@example.com",
+            personal_email="parent@example.com",
             is_parent=True,
         )
         student_a = Student.objects.create(
@@ -192,7 +192,7 @@ class Step7PrimaryParentTests(TestCase):
         Adult.objects.create(
             first_name="Pat",
             last_name="Parent",
-            email="parent@example.com",
+            personal_email="parent@example.com",
             cell_phone="555-444-1212",
             is_parent=True,
         )
@@ -484,10 +484,10 @@ class SwapParentsViewTests(TestCase):
         # the user hasn't submitted those forms — data lives only in the
         # Student record.  Swap should still work by reading from the record.
         primary = Adult.objects.create(
-            first_name="Joe", last_name="Primary", email="joe@example.com"
+            first_name="Joe", last_name="Primary", personal_email="joe@example.com"
         )
         secondary = Adult.objects.create(
-            first_name="Jane", last_name="Secondary", email="jane@example.com"
+            first_name="Jane", last_name="Secondary", personal_email="jane@example.com"
         )
         student = Student.objects.create(
             legal_first_name="Ada",
@@ -551,10 +551,10 @@ class Step7SwapBoxVisibilityTests(TestCase):
             active=True,
         )
         self.primary = Adult.objects.create(
-            first_name="Joe", last_name="Primary", email="joe@example.com"
+            first_name="Joe", last_name="Primary", personal_email="joe@example.com"
         )
         self.secondary = Adult.objects.create(
-            first_name="Jane", last_name="Secondary", email="jane@example.com"
+            first_name="Jane", last_name="Secondary", personal_email="jane@example.com"
         )
         self.student = Student.objects.create(
             legal_first_name="Ada",
