@@ -7,8 +7,8 @@ class PortalDashboardTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="testuser", password="password123"
-        )
-        self.client.login(username="testuser", password="password123")
+        )  # nosec B106
+        self.client.login(username="testuser", password="password123")  # nosec B106
 
     def test_dashboard_comments_not_rendered(self):
         url = reverse("profile_dashboard")
