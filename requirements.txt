@@ -26,6 +26,8 @@ Django==5.2.15
 django-allauth==65.17.0
 django-csp==4.0
 django-formtools==2.6.1
+django-pghistory==3.9.2
+django-pgtrigger==4.17.0
 docopt==0.6.2
 dparse==0.6.4
 et_xmlfile==2.0.0

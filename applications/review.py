@@ -20,6 +20,9 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
+from audit.events import AuditEvent
+from audit.service import log_event
+
 from .models import Application
 from .services import (
     ApplicationConversionError,
@@ -225,6 +228,7 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
                 "application_review_detail", app_id=application.application_id
             )
 
+        old_status = application.status
         application.status = Application.Status.APPROVED
         application.reviewed_at = timezone.now()
         application.reviewed_by = request.user
@@ -233,6 +237,15 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
         # the signed-document upload page next time they resume.
         application.current_step = max(application.current_step, 9)
         application.save()
+
+        log_event(
+            request=request,
+            event=AuditEvent.ADMISSION_DECISION,
+            resource=application,
+            before={"status": old_status},
+            after={"status": Application.Status.APPROVED},
+            notes=f"Application approved by {request.user}.",
+        )
 
         try:
             send_application_approved_email(application, request=request)
@@ -282,11 +295,21 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
                 {"application": application, "form": form},
             )
         reason = form.cleaned_data.get("reason") or ""
+        old_status = application.status
         application.status = Application.Status.DECLINED
         application.decline_reason = reason
         application.reviewed_at = timezone.now()
         application.reviewed_by = request.user
         application.save()
+
+        log_event(
+            request=request,
+            event=AuditEvent.ADMISSION_DECISION,
+            resource=application,
+            before={"status": old_status},
+            after={"status": Application.Status.DECLINED},
+            notes=f"Application declined by {request.user}. Reason: {reason}",
+        )
 
         try:
             send_application_declined_email(application, reason=reason, request=request)
@@ -344,11 +367,24 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
                 self.template_name,
                 {"application": application, "form": form},
             )
+        old_data = application.data
         application.data = form.cleaned_data["data_json"]
         new_email = (form.cleaned_data.get("email") or "").strip()
         if new_email:
             application.email = new_email
         application.save()
+
+        log_event(
+            request=request,
+            event=AuditEvent.CONTACT_INFO_UPDATED,
+            resource=application,
+            before={
+                "data": old_data,
+                "email": application.email if not new_email else "changed",
+            },
+            after={"data": application.data, "email": application.email},
+            notes=f"Application data edited by {request.user}.",
+        )
         messages.success(
             request,
             f"Updated application {application.application_id}.",

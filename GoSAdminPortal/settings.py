@@ -100,6 +100,9 @@ INSTALLED_APPS = [
     "api",
     "applications",
     "portal",
+    "pghistory",
+    "pgtrigger",
+    "audit",
 ]
 
 MIDDLEWARE = [
@@ -115,6 +118,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
+    # Must come AFTER SessionMiddleware and AuthenticationMiddleware:
+    "audit.middleware.AuditHistoryMiddleware",
 ]
 
 ROOT_URLCONF = "GoSAdminPortal.urls"
@@ -328,6 +333,10 @@ LOGGING = {
         "simple": {
             "format": "%(levelname)s %(message)s",
         },
+        "audit_json": {
+            # Each audit record is already a JSON string — emit as-is.
+            "format": "%(message)s",
+        },
     },
     "handlers": {
         "console": {
@@ -340,6 +349,14 @@ LOGGING = {
             "level": "ERROR",
             "filters": ["require_debug_false"],
             "include_html": True,
+        },
+        "audit_stdout": {
+            "()": "audit.logging_handlers.AuditStdoutHandler",
+            "formatter": "audit_json",
+        },
+        "audit_stderr": {
+            "()": "audit.logging_handlers.AuditStderrHandler",
+            "formatter": "audit_json",
         },
     },
     "loggers": {
@@ -369,6 +386,11 @@ LOGGING = {
             "handlers": ["console"],
             "level": "WARNING",
             "propagate": False,
+        },
+        "audit": {
+            "handlers": ["audit_stdout", "audit_stderr"],
+            "level": "INFO",
+            "propagate": True,
         },
     },
 }

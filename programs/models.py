@@ -3,6 +3,7 @@ import datetime
 import logging
 from io import BytesIO
 
+import pghistory
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -460,6 +461,7 @@ class RaceEthnicity(models.Model):
         return cls.objects.filter(key__in=keys)
 
 
+@pghistory.track()
 class Student(models.Model):
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
@@ -766,6 +768,7 @@ class Student(models.Model):
         return program.end_date >= b18 and program.start_date <= program.end_date
 
 
+@pghistory.track()
 class Enrollment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     program = models.ForeignKey(Program, on_delete=models.CASCADE)
@@ -802,6 +805,7 @@ class Enrollment(models.Model):
         return f"{self.student} → {self.program}"
 
 
+@pghistory.track()
 class AdultStudentRelationship(models.Model):
     adult = models.ForeignKey("Adult", on_delete=models.CASCADE)
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
@@ -822,6 +826,7 @@ class AdultStudentRelationship(models.Model):
         return f"{self.adult} - {self.relationship_to_student} to {self.student}"
 
 
+@pghistory.track()
 class Adult(models.Model):
     # Role flags
     is_parent = models.BooleanField(

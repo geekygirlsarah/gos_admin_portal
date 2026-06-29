@@ -14,6 +14,8 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from audit.events import AuditEvent
+from audit.service import log_event
 from programs.models import Adult, Enrollment, Program, Student
 
 from .models import Application
@@ -726,7 +728,7 @@ def convert_application_to_student(application: Application, request=None):
 
         if primary:
             rel_data = data.get("step7-primaryparent") or {}
-            AdultStudentRelationship.objects.update_or_create(
+            _, created = AdultStudentRelationship.objects.update_or_create(
                 adult=primary,
                 student=student,
                 defaults={
@@ -738,9 +740,21 @@ def convert_application_to_student(application: Application, request=None):
                     )[:100],
                 },
             )
+            if created:
+                log_event(
+                    request=request,
+                    event=AuditEvent.GUARDIAN_ADDED,
+                    resource=student,
+                    after={
+                        "guardian": str(primary),
+                        "relationship": rel_data.get("relationship_to_student"),
+                    },
+                    notes=f"Primary guardian added via application conversion.",
+                )
+
         if secondary:
             rel_data = data.get("step8-secondaryparent") or {}
-            AdultStudentRelationship.objects.update_or_create(
+            _, created = AdultStudentRelationship.objects.update_or_create(
                 adult=secondary,
                 student=student,
                 defaults={
@@ -752,8 +766,27 @@ def convert_application_to_student(application: Application, request=None):
                     )[:100],
                 },
             )
+            if created:
+                log_event(
+                    request=request,
+                    event=AuditEvent.GUARDIAN_ADDED,
+                    resource=student,
+                    after={
+                        "guardian": str(secondary),
+                        "relationship": rel_data.get("relationship_to_student"),
+                    },
+                    notes=f"Secondary guardian added via application conversion.",
+                )
 
         Enrollment.objects.get_or_create(student=student, program=application.program)
+
+        log_event(
+            request=request,
+            event=AuditEvent.ENROLLMENT_CHANGED,
+            resource=student,
+            after={"program": application.program.name},
+            notes=f"Student enrolled via application conversion ({application.application_id}).",
+        )
 
         application.converted_student = student
         application.converted_at = timezone.now()

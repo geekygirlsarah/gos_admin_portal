@@ -26,6 +26,9 @@ from django.views.generic import (
 )
 from premailer import transform
 
+from audit.events import AuditEvent
+from audit.mixins import SensitiveDataViewMixin
+from audit.service import log_event
 from programs.constants import RELATIONSHIP_CHOICES
 
 from .forms import (
@@ -169,6 +172,34 @@ class LogFormSaveMixin:
         )
         action = "create" if is_create else "update"
         if changes:
+            # Map model/action to high-level AuditEvent
+            event_map = {
+                "Student": AuditEvent.CONTACT_INFO_UPDATED,
+                "Adult": AuditEvent.CONTACT_INFO_UPDATED,
+                "Enrollment": AuditEvent.ENROLLMENT_CHANGED,
+                "AdultStudentRelationship": (
+                    AuditEvent.GUARDIAN_ADDED
+                    if is_create
+                    else AuditEvent.CONTACT_INFO_UPDATED
+                ),
+            }
+            event = event_map.get(str(model_name))
+            if event:
+                try:
+                    before_dict = {str(f): self._fmt_val(old) for f, old, new in changes}
+                    after_dict = {str(f): self._fmt_val(new) for f, old, new in changes}
+                    log_event(
+                        request=getattr(self, "request", None),
+                        event=event,
+                        resource=form.instance,
+                        before=before_dict,
+                        after=after_dict,
+                        notes=f"{model_name} {action}ed via form save.",
+                    )
+                except Exception:
+                    # Never crash the main flow for audit logging
+                    pass
+
             for f, old, new in changes:
                 forms_logger.info(
                     "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
@@ -711,7 +742,13 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 rows = []
                 for r in ws.iter_rows(min_row=2, values_only=True):
-                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+                    rows.append(
+                        {
+                            str(headers[i]): r[i]
+                            for i in range(len(headers))
+                            if headers[i] is not None
+                        }
+                    )
             else:
                 messages.error(
                     request, "Unsupported file type. Please upload CSV or XLSX."
@@ -1049,7 +1086,13 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 rows = []
                 for r in ws.iter_rows(min_row=2, values_only=True):
-                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+                    rows.append(
+                        {
+                            str(headers[i]): r[i]
+                            for i in range(len(headers))
+                            if headers[i] is not None
+                        }
+                    )
             else:
                 messages.error(
                     request, "Unsupported file type. Please upload CSV or XLSX."
@@ -1142,7 +1185,13 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 rows = []
                 for r in ws.iter_rows(min_row=2, values_only=True):
-                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+                    rows.append(
+                        {
+                            str(headers[i]): r[i]
+                            for i in range(len(headers))
+                            if headers[i] is not None
+                        }
+                    )
             else:
                 messages.error(
                     request, "Unsupported file type. Please upload CSV or XLSX."
@@ -1442,7 +1491,13 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 rows = []
                 for r in ws.iter_rows(min_row=2, values_only=True):
-                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+                    rows.append(
+                        {
+                            str(headers[i]): r[i]
+                            for i in range(len(headers))
+                            if headers[i] is not None
+                        }
+                    )
             else:
                 messages.error(
                     request, "Unsupported file type. Please upload CSV or XLSX."
@@ -1528,7 +1583,13 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
                 rows = []
                 for r in ws.iter_rows(min_row=2, values_only=True):
-                    rows.append({headers[i]: r[i] for i in range(len(headers))})
+                    rows.append(
+                        {
+                            str(headers[i]): r[i]
+                            for i in range(len(headers))
+                            if headers[i] is not None
+                        }
+                    )
             else:
                 messages.error(
                     request, "Unsupported file type. Please upload CSV or XLSX."
@@ -1612,7 +1673,7 @@ class MentorCreateView(
 
 
 class MentorUpdateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
+    SensitiveDataViewMixin, LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
 ):
     model = Adult
     form_class = AdultForm
@@ -1959,9 +2020,9 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
 
 # --- Student edit ---
 class StudentUpdateView(
+    SensitiveDataViewMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
     DynamicWritePermissionMixin,
     UpdateView,
 ):
@@ -2071,7 +2132,7 @@ class StudentCreateView(
         return reverse("student_list")
 
 
-class StudentDetailView(LoginRequiredMixin, DetailView):
+class StudentDetailView(SensitiveDataViewMixin, LoginRequiredMixin, DetailView):
     model = Student
     template_name = "students/detail.html"
     context_object_name = "student"
@@ -2284,7 +2345,7 @@ class ParentCreateView(
 
 
 class ParentUpdateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
+    SensitiveDataViewMixin, LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
 ):
     model = Adult
     form_class = ParentForm
@@ -3658,9 +3719,9 @@ class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
 
 class AdultUpdateView(
+    SensitiveDataViewMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
     DynamicWritePermissionMixin,
     UpdateView,
 ):
