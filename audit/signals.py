@@ -1,16 +1,21 @@
 import logging
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+from django.contrib.auth.signals import (
+    user_logged_in,
+    user_logged_out,
+    user_login_failed,
+)
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-
-# We use standard Django signals for login/logout to ensure we catch 
-# both allauth and standard Django auth events.
 
 from .events import AuditEvent
 from .models import AuditLog
 from .service import log_event
+
+# We use standard Django signals for login/logout to ensure we catch
+# both allauth and standard Django auth events.
+
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -101,9 +106,12 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
     # If user doesn't exist, resource=None might be tricky for log_event.
     # log_event requires a resource. I'll use the User model class or a placeholder if needed.
     # Actually, AuditLog.resource_id is a string.
-    
-    user = User.objects.filter(email=email).first() or User.objects.filter(username=email).first()
-    
+
+    user = (
+        User.objects.filter(email=email).first()
+        or User.objects.filter(username=email).first()
+    )
+
     if user:
         log_event(
             event=AuditEvent.LOGIN_FAILED,
@@ -114,26 +122,27 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
         )
     else:
         # For non-existent users, we still want to log it.
-        # I'll log against the User model class if log_event supports it, 
+        # I'll log against the User model class if log_event supports it,
         # or just create a log entry manually if not.
         # log_event(..., resource=User, ...) might not work if it expects an instance.
-        
+
         # Let's check audit/service.py again.
         # It does resource_type=type(resource).__name__, resource_id=str(resource.pk)
-        
+
         # If I don't have a user, I can't easily use log_event without a dummy.
         # I'll just use a dummy user or just log it without an actor.
-        
+
         # Actually, let's just log it as a system event if no user.
         # But log_event needs a resource.
-        
+
         # I'll try to find a system-wide resource or just skip linking to a specific user.
         # Maybe use the anonymous user?
-        
+
         from django.contrib.auth.models import AnonymousUser
+
         dummy_resource = AnonymousUser()
         # AnonymousUser has no pk. log_event will fail on resource.pk.
-        
+
         # I'll just log it manually to AuditLog if log_event is too restrictive.
         AuditLog.objects.create(
             event=AuditEvent.LOGIN_FAILED,

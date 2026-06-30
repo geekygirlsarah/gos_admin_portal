@@ -80,6 +80,7 @@ python-dotenv==1.2.2
 python-multipart==0.0.32
 python3-openid==3.2.0
 pytokens==0.4.1
+pywin32==311
 PyYAML==6.0.3
 referencing==0.37.0
 regex==2026.5.9

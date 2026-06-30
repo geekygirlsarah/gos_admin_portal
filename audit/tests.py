@@ -9,7 +9,7 @@ from applications.models import Application
 from audit.events import AuditEvent
 from audit.models import AuditLog
 from audit.service import log_event
-from programs.models import Enrollment, Program, Student, Adult
+from programs.models import Adult, Enrollment, Program, Student
 
 User = get_user_model()
 
@@ -20,14 +20,14 @@ class AuditLogTest(TestCase):
         # Admin user
         self.admin_user = User.objects.create_superuser(
             username="admin", email="admin@example.com", password="password"
-        )
+        )  # nosec B106
         # Lead mentor user
         self.lead_user = User.objects.create_user(
             username="lead",
             email="lead@example.com",
             password="password",
             is_staff=True,
-        )
+        )  # nosec B106
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(self.lead_group)
 
@@ -128,13 +128,13 @@ class AuthenticationAuditLogTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="testuser", email="testuser@example.com", password="password123"
-        )
+        )  # nosec B106
         self.mentor = User.objects.create_user(
             username="mentor",
             email="mentor@example.com",
             password="password123",
             is_staff=True,
-        )
+        )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.mentor.groups.add(lm_group)
 
@@ -148,7 +148,7 @@ class AuthenticationAuditLogTest(TestCase):
         self.parent = Adult.objects.create(first_name="John", last_name="Doe")
 
     def test_login_logging(self):
-        self.client.login(username="testuser", password="password123")
+        self.client.login(username="testuser", password="password123")  # nosec B106
         log = AuditLog.objects.filter(
             event=AuditEvent.USER_LOGIN, actor=self.user
         ).first()
@@ -156,7 +156,7 @@ class AuthenticationAuditLogTest(TestCase):
         self.assertEqual(log.outcome, AuditLog.SUCCESS)
 
     def test_logout_logging(self):
-        self.client.login(username="testuser", password="password123")
+        self.client.login(username="testuser", password="password123")  # nosec B106
         self.client.logout()
         log = AuditLog.objects.filter(
             event=AuditEvent.USER_LOGOUT, actor=self.user
@@ -164,7 +164,7 @@ class AuthenticationAuditLogTest(TestCase):
         self.assertIsNotNone(log, "Logout should be logged")
 
     def test_login_failure_logging(self):
-        self.client.login(username="testuser", password="wrongpassword")
+        self.client.login(username="testuser", password="wrongpassword")  # nosec B106
         log = AuditLog.objects.filter(event=AuditEvent.LOGIN_FAILED).first()
         self.assertIsNotNone(log, "Failed login should be logged")
         self.assertEqual(log.outcome, AuditLog.FAILURE)

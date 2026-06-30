@@ -64,7 +64,12 @@ from .models import (
     TaxForm,
     Team,
 )
-from .permission_views import LeadMentorRequiredMixin, can_user_read, can_user_write
+from .permission_views import (
+    LeadMentorRequiredMixin,
+    PassUserToFormMixin,
+    can_user_read,
+    can_user_write,
+)
 from .utils import get_safe_url, redirect_back
 
 cssutils.log.setLevel(logging.WARNING)
@@ -186,7 +191,9 @@ class LogFormSaveMixin:
             event = event_map.get(str(model_name))
             if event:
                 try:
-                    before_dict = {str(f): self._fmt_val(old) for f, old, new in changes}
+                    before_dict = {
+                        str(f): self._fmt_val(old) for f, old, new in changes
+                    }
                     after_dict = {str(f): self._fmt_val(new) for f, old, new in changes}
                     log_event(
                         request=getattr(self, "request", None),
@@ -196,7 +203,7 @@ class LogFormSaveMixin:
                         after=after_dict,
                         notes=f"{model_name} {action}ed via form save.",
                     )
-                except Exception:
+                except Exception:  # nosec B110
                     # Never crash the main flow for audit logging
                     pass
 
@@ -1652,7 +1659,11 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 class MentorCreateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView
+    PassUserToFormMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
 ):
     model = Adult
     form_class = AdultForm
@@ -1673,7 +1684,12 @@ class MentorCreateView(
 
 
 class MentorUpdateView(
-    SensitiveDataViewMixin, LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
+    PassUserToFormMixin,
+    SensitiveDataViewMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UpdateView,
 ):
     model = Adult
     form_class = AdultForm
@@ -2303,7 +2319,11 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
 # --- Parent create/edit ---
 class ParentCreateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView
+    PassUserToFormMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
 ):
     model = Adult
     form_class = ParentForm
@@ -2345,7 +2365,12 @@ class ParentCreateView(
 
 
 class ParentUpdateView(
-    SensitiveDataViewMixin, LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
+    PassUserToFormMixin,
+    SensitiveDataViewMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UpdateView,
 ):
     model = Adult
     form_class = ParentForm
@@ -3719,6 +3744,7 @@ class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
 
 class AdultUpdateView(
+    PassUserToFormMixin,
     SensitiveDataViewMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,

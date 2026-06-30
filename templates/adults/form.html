@@ -40,7 +40,23 @@
               <div class="col-md-4">{% render_field form.phone_number %}</div>
               <div class="col-md-4">{% render_field form.cell_phone %}</div>
               <div class="col-md-4">{% render_field form.home_phone %}</div>
+              <div class="col-12">{% render_field form.address %}</div>
+              <div class="col-md-6">{% render_field form.city %}</div>
+              <div class="col-md-3">{% render_field form.state %}</div>
+              <div class="col-md-3">{% render_field form.zip_code %}</div>
               <div class="col-12">{% render_field form.email_updates %}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">Andrew ID (Mentors/Staff)</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">{% render_field form.andrew_id %}</div>
+              <div class="col-md-6">{% render_field form.andrew_email %}</div>
+              <div class="col-md-6">{% render_field form.andrew_id_expiration %}</div>
+              <div class="col-md-6">{% render_field form.andrew_id_sponsor %}</div>
             </div>
           </div>
         </div>
