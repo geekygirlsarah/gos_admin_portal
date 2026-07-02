@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-01
+
+### Changed
+- Unified the layout and styling of login and account management pages (Login, Sign In, Verify Identity, and Sign Out).
+- Updated all authentication pages to use a consistent "Girls of Steel Portal" branding and wider card layout (720px).
+- Added error message displays and support contact information to all authentication screens for better user assistance.
+
 ## 2026-06-29
 
 ### Fixed

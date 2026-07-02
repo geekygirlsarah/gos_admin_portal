@@ -60,14 +60,21 @@
         </div>
       </form>
 
-      <div class="mt-4 text-center">
-        <form method="POST" action="{% url 'account_logout' %}">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{% url 'account_login' %}">
-          <button type="submit" class="btn btn-link btn-sm text-decoration-none p-0">
-            &larr; Back to login / Change email
-          </button>
-        </form>
+      <hr class="my-4">
+
+      <div class="text-center pt-3">
+        <div class="mb-2">
+          <form method="POST" action="{% url 'account_logout' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'account_login' %}">
+            <button type="submit" class="btn btn-link btn-sm text-decoration-none p-0">
+              &larr; Back to login / Change email
+            </button>
+          </form>
+        </div>
+        <div class="small text-muted">
+          Issues with your account? Please email <a href="mailto:leads@girlsofsteelrobotics.org" class="text-secondary small text-decoration-none">leads@girlsofsteelrobotics.org</a>.
+        </div>
       </div>
     </div>
   </div>
