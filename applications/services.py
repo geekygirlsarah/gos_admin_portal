@@ -122,19 +122,21 @@ def get_program_buckets():
     # Applications are open if:
     # 1. Any application date is set AND today is within the range.
     # 2. NO application date is set AND the program hasn't started yet.
-    has_dates_q = Q(applications_open__isnull=False) | Q(applications_close__isnull=False)
-    dates_match_q = (Q(applications_open__isnull=True) | Q(applications_open__lte=today)) & (
-        Q(applications_close__isnull=True) | Q(applications_close__gte=today)
+    has_dates_q = Q(applications_open__isnull=False) | Q(
+        applications_close__isnull=False
     )
+    dates_match_q = (
+        Q(applications_open__isnull=True) | Q(applications_open__lte=today)
+    ) & (Q(applications_close__isnull=True) | Q(applications_close__gte=today))
     fallback_q = (
         Q(applications_open__isnull=True)
         & Q(applications_close__isnull=True)
         & Q(start_date__gt=today)
     )
 
-    future = active_programs.filter((has_dates_q & dates_match_q) | fallback_q).order_by(
-        "-start_date", "name"
-    )
+    future = active_programs.filter(
+        (has_dates_q & dates_match_q) | fallback_q
+    ).order_by("-start_date", "name")
 
     current = (
         active_programs.filter(start_date__lte=today)

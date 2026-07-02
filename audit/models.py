@@ -155,15 +155,16 @@ class AuditLog(models.Model):
 
         if isinstance(value, dict):
             return {
-                k: cls._redact_value(v, parent_key=str(k))
-                for k, v in value.items()
+                k: cls._redact_value(v, parent_key=str(k)) for k, v in value.items()
             }
 
         if isinstance(value, list):
             return [cls._redact_value(item, parent_key=parent_key) for item in value]
 
         if isinstance(value, tuple):
-            return tuple(cls._redact_value(item, parent_key=parent_key) for item in value)
+            return tuple(
+                cls._redact_value(item, parent_key=parent_key) for item in value
+            )
 
         return value
 

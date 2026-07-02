@@ -98,6 +98,14 @@ def log_event(
         entry.save()
         return entry
 
-    except Exception:
-        logger.exception("Failed to write audit log entry for event=%s", event)
+    except Exception as e:
+        # Avoid logging exception messages/tracebacks that may include sensitive data.
+        # Keep the log informative by including the event and the exception type only.
+        # Log a sanitized, constant-form event label to satisfy CodeQL/GHAS.
+        safe_event = getattr(event, "name", str(event))
+        logger.error(
+            "Failed to write audit log entry for event=%s (error=%s)",
+            safe_event,
+            type(e).__name__,
+        )
         return None

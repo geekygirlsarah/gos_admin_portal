@@ -156,7 +156,7 @@ class WizardFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         # Contains an accordion/collapse control to reveal details
-        self.assertContains(response, "data-bs-toggle=\"collapse\"")
+        self.assertContains(response, 'data-bs-toggle="collapse"')
         # Expect an accordion container for grouping
         self.assertContains(response, "accordion")
         # The description should be present within the HTML (likely inside the collapsed area)
