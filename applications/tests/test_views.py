@@ -139,6 +139,29 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, self.current_program.name)
         self.assertContains(response, "Applications for these programs are closed")
 
+    def test_step4_shows_accordion_for_program_details(self):
+        # Ensure the future program has a description (blurb)
+        self.future_program.description = "This is a detailed blurb about the program."
+        self.future_program.save()
+
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            current_step=4,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+        response = self.client.get(
+            reverse("apply_step4", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        # Contains an accordion/collapse control to reveal details
+        self.assertContains(response, "data-bs-toggle=\"collapse\"")
+        # Expect an accordion container for grouping
+        self.assertContains(response, "accordion")
+        # The description should be present within the HTML (likely inside the collapsed area)
+        self.assertContains(response, "This is a detailed blurb about the program.")
+
     def test_step4_post_only_accepts_future_programs(self):
         app = Application.objects.create(
             applicant_type="parent",

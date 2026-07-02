@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Updated the application wizard to look at explicit application dates for program availability.
 - Application open and close dates now default to the program's start and end dates.
+- Application wizard Step 4 UI: Program blurbs are now inside collapsible accordions so applicants can quickly scan programs and expand for more details.
 
 ## 2026-06-29
 
