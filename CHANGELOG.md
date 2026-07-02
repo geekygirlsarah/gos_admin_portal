@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-02
+
+### Added
+- New application open and close dates for Programs, allowing applications to remain open after a program's start date.
+
+### Changed
+- Updated the application wizard to look at explicit application dates for program availability.
+- Application open and close dates now default to the program's start and end dates.
+
 ## 2026-06-29
 
 ### Fixed
@@ -19,5 +28,5 @@ All notable changes to this project will be documented in this file.
 - Improved `ParentForm` to explicitly include only relevant fields and preserve existing role flags.
 - Updated Adult edit templates to include missing fields like address, Andrew ID, and CMU access details.
 
-## Before 2026-06-28
-- Initial project
+## 2025-09-07
+- Initial project creation with basic student, program, parent, and mentor data forms

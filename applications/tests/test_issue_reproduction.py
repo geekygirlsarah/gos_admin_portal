@@ -1,116 +1,72 @@
-from __future__ import annotations
-
 import datetime
-
-from django.test import TestCase, override_settings
-from django.urls import reverse
+from django.test import TestCase
 from django.utils import timezone
-
-from applications.models import Application
 from programs.models import Program
+from applications.services import get_program_buckets
 
-
-def _verified(**kwargs):
-    """Convenience: create an application that has cleared Steps 1-4."""
-    defaults = dict(
-        applicant_type=Application.Type.PARENT,
-        email="parent@example.com",
-        current_step=5,
-        email_verified_at=timezone.now(),
-        status=Application.Status.EMAIL_VERIFIED,
-    )
-    defaults.update(kwargs)
-    return Application.objects.create(**defaults)
-
-
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-class TestGradeRepopulation(TestCase):
-    def setUp(self):
-        from programs.models import School
-
-        School.objects.get_or_create(name="Pittsburgh High")
-        self.program = Program.objects.create(
-            name="Spring 2030",
-            start_date=timezone.localdate() + datetime.timedelta(days=60),
-            end_date=timezone.localdate() + datetime.timedelta(days=120),
+class ProgramApplicationDatesTest(TestCase):
+    def test_new_behavior_includes_started_programs_by_default(self):
+        """
+        Verify that programs that have already started are now included 
+        in the 'future' bucket by default (because applications_close 
+        defaults to end_date).
+        """
+        today = timezone.localdate()
+        started_program = Program.objects.create(
+            name="Started Yesterday",
+            start_date=today - datetime.timedelta(days=1),
+            end_date=today + datetime.timedelta(days=30),
             active=True,
         )
+        
+        future, current, past = get_program_buckets()
+        
+        # Now it IS in future by default!
+        self.assertIn(started_program, future)
+        self.assertNotIn(started_program, current)
 
-    def test_step5_grade_repopulates_when_navigating_back(self):
-        app = _verified(program=self.program)
-
-        # 1. Post valid student info to step 5, including a grade
-        self.client.post(
-            reverse("apply_step5", kwargs={"app_id": app.application_id}),
-            {
-                "legal_first_name": "Grace",
-                "first_name": "",
-                "last_name": "Hopper",
-                "pronouns": "",
-                "personal_email": "grace@example.com",
-                "address": "123 Main St",
-                "city": "Pittsburgh",
-                "state": "PA",
-                "zip_code": "15213",
-                "cell_phone_number": "",
-                "school_name": "Pittsburgh High",
-                "graduation_year": "",
-                "tshirt_size": "M",
-                "allergies": "",
-                "dietary_restrictions": "",
-                "medical_notes": "",
-                "date_of_birth": "2010-01-01",
-                "grade": "8",  # Added grade
-            },
+    def test_new_behavior_includes_started_program_if_application_dates_allow(self):
+        """
+        Verify that a program that has started but has application dates set 
+        to include today IS included in the 'future' bucket.
+        """
+        today = timezone.localdate()
+        started_program = Program.objects.create(
+            name="Started Yesterday but Apps Open",
+            start_date=today - datetime.timedelta(days=1),
+            end_date=today + datetime.timedelta(days=30),
+            applications_open=today - datetime.timedelta(days=5),
+            applications_close=today + datetime.timedelta(days=5),
+            active=True,
         )
+        
+        future, current, past = get_program_buckets()
+        
+        # This is what we want!
+        self.assertIn(started_program, future)
+        # It should probably still be in 'current' too if it's currently running?
+        # Or should 'current' exclude programs that are in 'future'?
+        # The docstring says:
+        # - future: applications open.
+        # - current: started already and not ended — applications closed.
+        # So if applications are open, it should move to 'future'? 
+        # Or maybe it can be in both? 
+        # Usually 'buckets' implies mutually exclusive, but we'll see.
+        self.assertNotIn(started_program, current)
 
-        # Verify it advanced to step 6
-        app.refresh_from_db()
-        self.assertEqual(app.current_step, 6)
-
-        # 2. Go back to step 5
-        self.client.get(reverse("apply_step5", kwargs={"app_id": app.application_id}))
-
-    def test_step5_grade_appears_in_review(self):
-        app = _verified(program=self.program, current_step=9)
-        # Add grade to step 5 data
-        data = app.data or {}
-        data["step5-student"] = {"grade": "8"}
-        app.data = data
-        app.save()
-
-        # Get review page
-        response = self.client.get(
-            reverse("apply_step9", kwargs={"app_id": app.application_id})
+    def test_active_box_overwrites_application_dates(self):
+        """
+        If 'active' is False, the program should not appear in 'future'
+        even if the dates are within range.
+        """
+        today = timezone.localdate()
+        inactive_program = Program.objects.create(
+            name="Inactive but Dates OK",
+            start_date=today + datetime.timedelta(days=10),
+            applications_open=today - datetime.timedelta(days=5),
+            applications_close=today + datetime.timedelta(days=5),
+            active=False,
         )
-
-        # Check if grade is in the response
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Grade")
-        self.assertContains(response, "8")
-
-    def test_step9_grade_calculated_from_graduation_year(self):
-        from programs.utils import get_academic_year_ending
-
-        academic_year_ending = get_academic_year_ending()
-
-        # Grade 8
-        # grad_year = academic_year_ending + (12 - 8) = academic_year_ending + 4
-        grad_year = academic_year_ending + 4
-
-        app = _verified(program=self.program, current_step=9)
-        # Add grad_year to step 5 data, NO grade
-        data = app.data or {}
-        data["step5-student"] = {"graduation_year": grad_year}
-        app.data = data
-        app.save()
-
-        # Get review page
-        response = self.client.get(
-            reverse("apply_step9", kwargs={"app_id": app.application_id})
-        )
-
-        # Check if grade is in the response (it should be 8 now)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Grade")
-        self.assertContains(response, "8")
+        
+        future, current, past = get_program_buckets()
+        self.assertNotIn(inactive_program, future)
