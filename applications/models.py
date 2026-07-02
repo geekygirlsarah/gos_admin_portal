@@ -14,6 +14,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
+from programs.models import EncryptedFileField
 from programs.constants import (
     APP_ID_ALPHABET,
     APP_ID_LENGTH,
@@ -92,6 +93,7 @@ class Application(models.Model):
         STUDENT = "student", "Student"
         PARENT = "parent", "Parent / Guardian"
         MENTOR = "mentor", "Mentor / Volunteer"
+        SLIDING_SCALE = "sliding_scale", "Sliding Scale"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"  # in progress, email not yet verified
@@ -384,3 +386,48 @@ class ApplicationDocumentSubmission(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"Submission for {self.document} on {self.application.application_id}"
+
+
+# --- Sliding Scale Application Documents ------------------------------------
+
+
+def _ss_doc_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/ss_application_docs/<application_id>/<filename>."""
+    aid = (
+        instance.application.application_id if instance.application_id else "unassigned"
+    )
+    return f"ss_application_docs/{aid}/{filename}"
+
+
+class SlidingScaleApplicationDocument(models.Model):
+    """An encrypted proof-of-income document uploaded during a sliding scale application.
+
+    Uses ``EncryptedFileField`` so the file is stored encrypted at rest,
+    matching the existing ``TaxForm`` pattern in ``programs``.
+    """
+
+    class DocumentType(models.TextChoices):
+        PRIMARY = "primary", "Primary (1040 / 1040-EZ / similar)"
+        SUPPLEMENTAL = "supplemental", "Supplemental proof of income"
+
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="ss_documents",
+    )
+    document_type = models.CharField(
+        max_length=16,
+        choices=DocumentType.choices,
+        default=DocumentType.PRIMARY,
+    )
+    file = EncryptedFileField(
+        upload_to=_ss_doc_upload_to,
+        help_text="Encrypted proof-of-income document. Stored encrypted at rest.",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["document_type", "uploaded_at"]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.get_document_type_display()} for {self.application.application_id}"

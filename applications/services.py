@@ -820,3 +820,155 @@ def send_lead_notification_email(application: Application, request=None) -> None
         html_body=html_body,
         recipients=[recipient],
     )
+
+
+# ---------------------------------------------------------------------------
+# Sliding scale wizard services
+# ---------------------------------------------------------------------------
+
+
+def get_students_and_programs_for_email(email: str) -> List[dict]:
+    """Return a list of {student, programs} dicts for the adult matching email.
+
+    Used in Step 3 of the sliding scale wizard to show the parent which
+    students and active program enrollments will be covered.
+    """
+    adult = find_adult_by_email(email)
+    if adult is None:
+        return []
+    students = students_for_adult(adult)
+    result = []
+    for student in students:
+        enrollments = (
+            Enrollment.objects.filter(student=student)
+            .select_related("program")
+            .order_by("-program__start_date")
+        )
+        programs = [e.program for e in enrollments if e.program]
+        if programs:
+            result.append({"student": student, "programs": programs})
+    return result
+
+
+def send_sliding_scale_submitted_email(application: Application, request=None) -> None:
+    """Send confirmation to the applicant and notification to lead mentors."""
+    # Confirmation to applicant
+    if application.email:
+        ctx = {"application": application}
+        text_body = render_to_string(
+            "applications/email/sliding_scale_submitted.txt", ctx
+        )
+        html_body = render_to_string(
+            "applications/email/sliding_scale_submitted.html", ctx
+        )
+        _send_html_email(
+            subject="Your Girls of Steel sliding scale application has been submitted",
+            text_body=text_body,
+            html_body=html_body,
+            recipients=[application.email],
+        )
+
+    # Notification to lead mentors
+    recipient = _lead_mentor_email()
+    if recipient:
+        ctx = {"application": application, "applicant_data": application.data or {}}
+        text_body = render_to_string(
+            "applications/email/sliding_scale_lead_notification.txt", ctx
+        )
+        html_body = render_to_string(
+            "applications/email/sliding_scale_lead_notification.html", ctx
+        )
+        _send_html_email(
+            subject=f"New sliding scale application: {application.application_id}",
+            text_body=text_body,
+            html_body=html_body,
+            recipients=[recipient],
+        )
+
+
+def send_sliding_scale_approved_email(application: Application, request=None) -> None:
+    """Notify the applicant that their sliding scale application was approved."""
+    if not application.email:
+        return
+    ctx = {"application": application}
+    text_body = render_to_string(
+        "applications/email/sliding_scale_approved.txt", ctx
+    )
+    html_body = render_to_string(
+        "applications/email/sliding_scale_approved.html", ctx
+    )
+    _send_html_email(
+        subject="Your Girls of Steel sliding scale application has been reviewed",
+        text_body=text_body,
+        html_body=html_body,
+        recipients=[application.email],
+    )
+
+
+def approve_sliding_scale_application(
+    application: Application, request=None
+) -> List:
+    """On approval of a sliding scale application, create pending SlidingScale
+    records for each student+program linked to the applicant's email.
+
+    Returns the list of SlidingScale objects created or updated.
+    """
+    from programs.models import SlidingScale
+
+    data = application.data or {}
+    income_data = data.get("ss_income", {})
+    agi = income_data.get("adjusted_gross_income") or None
+    monthly = income_data.get("adjusted_monthly_income") or None
+    family_size = income_data.get("family_size") or None
+    effective_date_str = income_data.get("effective_date") or None
+
+    effective_date = None
+    if effective_date_str:
+        try:
+            from datetime import date
+
+            effective_date = date.fromisoformat(effective_date_str)
+        except (ValueError, TypeError):
+            pass
+
+    # Convert income to Decimal for storage
+    from decimal import Decimal, InvalidOperation
+
+    def _to_decimal(val):
+        if val is None:
+            return None
+        try:
+            return Decimal(str(val))
+        except InvalidOperation:
+            return None
+
+    agi_decimal = _to_decimal(agi)
+    family_size_int = None
+    if family_size:
+        try:
+            family_size_int = int(family_size)
+        except (ValueError, TypeError):
+            pass
+
+    student_programs = get_students_and_programs_for_email(application.email)
+    created = []
+    for entry in student_programs:
+        student = entry["student"]
+        for program in entry["programs"]:
+            ss, _ = SlidingScale.objects.update_or_create(
+                student=student,
+                program=program,
+                defaults={
+                    "adjusted_gross_income": agi_decimal,
+                    "family_size": family_size_int,
+                    "date": effective_date,
+                    "is_pending": True,
+                    "notes": (
+                        f"Applied via sliding scale application {application.application_id}. "
+                        f"Monthly income: {monthly}" if monthly else
+                        f"Applied via sliding scale application {application.application_id}."
+                    ),
+                },
+            )
+            created.append(ss)
+    return created

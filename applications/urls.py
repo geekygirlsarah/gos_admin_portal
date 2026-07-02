@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from django.urls import path
 
-from . import review, views
+from . import review, sliding_scale_views, views
 
 urlpatterns = [
     # --- Lead-mentor review pages (gated by applications.review_application) ---
@@ -161,5 +161,41 @@ urlpatterns = [
         "<str:app_id>/mentor/confirm/",
         views.MentorConfirmView.as_view(),
         name="apply_mentor_confirm",
+    ),
+    # --- Sliding scale application wizard ---
+    path(
+        "sliding-scale/",
+        sliding_scale_views.SlidingScaleStartView.as_view(),
+        name="sliding_scale_start",
+    ),
+    path(
+        "sliding-scale/<str:app_id>/verify/",
+        sliding_scale_views.SlidingScaleVerifyView.as_view(),
+        name="sliding_scale_verify",
+    ),
+    path(
+        "sliding-scale/<str:app_id>/resend/",
+        sliding_scale_views.SlidingScaleResendView.as_view(),
+        name="sliding_scale_resend",
+    ),
+    path(
+        "sliding-scale/<str:app_id>/programs/",
+        sliding_scale_views.SlidingScaleProgramsView.as_view(),
+        name="sliding_scale_programs",
+    ),
+    path(
+        "sliding-scale/<str:app_id>/income/",
+        sliding_scale_views.SlidingScaleIncomeView.as_view(),
+        name="sliding_scale_income",
+    ),
+    path(
+        "sliding-scale/<str:app_id>/upload/",
+        sliding_scale_views.SlidingScaleUploadView.as_view(),
+        name="sliding_scale_upload",
+    ),
+    path(
+        "sliding-scale/<str:app_id>/submitted/",
+        sliding_scale_views.SlidingScaleSubmittedView.as_view(),
+        name="sliding_scale_submitted",
     ),
 ]

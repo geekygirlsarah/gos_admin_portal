@@ -724,3 +724,96 @@ class DocumentSubmissionForm(forms.Form):
         ),
         help_text="PDF preferred. Images (PNG/JPEG) are also accepted.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Sliding scale wizard forms
+# ---------------------------------------------------------------------------
+
+_file_attrs = {"class": "form-control", "accept": ".pdf,.png,.jpg,.jpeg"}
+
+
+class SlidingScaleEmailForm(forms.Form):
+    """Step 1 of the sliding scale wizard: collect the parent's email."""
+
+    email = forms.EmailField(
+        label="Email address",
+        widget=forms.EmailInput(
+            attrs={
+                "class": "form-control",
+                "autocomplete": "email",
+                "placeholder": "you@example.com",
+            }
+        ),
+        help_text="We'll send a verification code to this address.",
+    )
+
+    def clean_email(self):
+        return normalize_email(self.cleaned_data["email"])
+
+
+class SlidingScaleIncomeForm(forms.Form):
+    """Step 4 of the sliding scale wizard: income and family size."""
+
+    adjusted_gross_income = forms.DecimalField(
+        label="Annual adjusted gross income (from tax return)",
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(
+            attrs={"class": "form-control", "placeholder": "e.g. 45000.00"}
+        ),
+        help_text="Enter the adjusted gross income from your most recent 1040 or 1040-EZ.",
+    )
+    adjusted_monthly_income = forms.DecimalField(
+        label="Adjusted monthly income (if tax return doesn't reflect current situation)",
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(
+            attrs={"class": "form-control", "placeholder": "e.g. 3000.00"}
+        ),
+        help_text="If your tax return doesn't reflect your current income, enter your monthly income here.",
+    )
+    family_size = forms.IntegerField(
+        label="Number of family members (including yourself)",
+        min_value=1,
+        widget=forms.NumberInput(attrs={"class": "form-control", "placeholder": "e.g. 4"}),
+    )
+    effective_date = forms.DateField(
+        label="Date these figures took effect (optional)",
+        required=False,
+        widget=forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+        help_text="Leave blank if not applicable.",
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        agi = cleaned.get("adjusted_gross_income")
+        monthly = cleaned.get("adjusted_monthly_income")
+        if not agi and not monthly:
+            raise forms.ValidationError(
+                "Please enter either an annual adjusted gross income or a monthly income."
+            )
+        return cleaned
+
+
+class SlidingScaleUploadForm(forms.Form):
+    """Step 5 of the sliding scale wizard: upload proof-of-income documents."""
+
+    primary_document = forms.FileField(
+        label="Primary proof of income (1040, 1040-EZ, or similar)",
+        widget=forms.ClearableFileInput(attrs=_file_attrs),
+        help_text="Upload your most recent tax form or equivalent document.",
+    )
+    supplemental_document = forms.FileField(
+        label="Supplemental proof of income (optional)",
+        required=False,
+        widget=forms.ClearableFileInput(attrs=_file_attrs),
+        help_text=(
+            "If your tax return doesn't fully reflect your current income, "
+            "you may upload an additional document here."
+        ),
+    )
