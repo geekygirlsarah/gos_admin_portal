@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 from django.conf import settings
 from django.db import models
@@ -138,6 +139,34 @@ class AuditLog(models.Model):
     # Stdout / stderr mirroring
     # ------------------------------------------------------------------
 
+    _SENSITIVE_KEY_RE = re.compile(
+        r"(pass(word)?|passwd|pwd|secret|token|api[_-]?key|authorization|session|cookie)",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _is_sensitive_key(cls, key: str) -> bool:
+        return bool(cls._SENSITIVE_KEY_RE.search(str(key)))
+
+    @classmethod
+    def _redact_value(cls, value, parent_key: str | None = None):
+        if parent_key is not None and cls._is_sensitive_key(parent_key):
+            return "***REDACTED***"
+
+        if isinstance(value, dict):
+            return {
+                k: cls._redact_value(v, parent_key=str(k))
+                for k, v in value.items()
+            }
+
+        if isinstance(value, list):
+            return [cls._redact_value(item, parent_key=parent_key) for item in value]
+
+        if isinstance(value, tuple):
+            return tuple(cls._redact_value(item, parent_key=parent_key) for item in value)
+
+        return value
+
     def _emit_to_logger(self):
         payload = {
             "audit": True,
@@ -148,11 +177,11 @@ class AuditLog(models.Model):
             "resource_id": self.resource_id,
             "resource_repr": self.resource_repr,
             "ip_address": str(self.ip_address or ""),
-            "session_id": self.session_id,
+            "session_id": "***REDACTED***" if self.session_id else "",
             "outcome": self.outcome,
-            "before": self.before,
-            "after": self.after,
-            "notes": self.notes,
+            "before": self._redact_value(self.before),
+            "after": self._redact_value(self.after),
+            "notes": self._redact_value(self.notes, parent_key="notes"),
         }
         level = logging.INFO if self.outcome == self.SUCCESS else logging.WARNING
         logger.log(level, json.dumps(payload))
