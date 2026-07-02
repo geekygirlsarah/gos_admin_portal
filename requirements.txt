@@ -72,7 +72,7 @@ psycopg2-binary==2.9.11
 pycodestyle==2.14.0
 pycparser==3.0
 pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 pydantic_core==2.46.4
 pyflakes==3.4.0
 Pygments==2.20.0
