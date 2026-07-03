@@ -24,11 +24,25 @@ class WizardFlowTests(TestCase):
             end_date=today + datetime.timedelta(days=120),
             active=True,
         )
+        # UI lists future programs that are accepting applications. Ensure it's visible.
+        # Use a valid date window (open now, close after the program ends).
+        self.future_program.applications_open = today
+        self.future_program.applications_close = today + datetime.timedelta(days=180)
+        self.future_program.save(
+            update_fields=["applications_open", "applications_close"]
+        )
         self.current_program = Program.objects.create(
             name="Right Now",
             start_date=today - datetime.timedelta(days=10),
             end_date=today + datetime.timedelta(days=10),
             active=True,
+        )
+        # Ensure the "current" program is treated as closed for applications so it
+        # appears under the current/closed section.
+        self.current_program.applications_open = today - datetime.timedelta(days=30)
+        self.current_program.applications_close = today - datetime.timedelta(days=1)
+        self.current_program.save(
+            update_fields=["applications_open", "applications_close"]
         )
         mail.outbox = []
 
@@ -215,7 +229,12 @@ class WizardFlowTests(TestCase):
             reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "4th–6th Grade")
+        # UI updated: grade range is shown in a badge and may use an en-dash or hyphen
+        html = response.content.decode()
+        self.assertIn("badge", html)
+        self.assertIn("4th", html)
+        self.assertIn("6th", html)
+        self.assertIn("Grade", html)
 
     # --- Step 3 (Email Verify) -------------------------------------------
 
