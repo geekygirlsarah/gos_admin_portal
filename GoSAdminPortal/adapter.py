@@ -76,12 +76,21 @@ def _find_or_provision_user_for_email(email):
 
 def _provision_user(email, first_name, last_name):
     """Create a new active User with the given email and name."""
+    from audit.events import AuditEvent
+    from audit.service import log_event
+
     User = get_user_model()
     user = User.objects.create_user(
         username=email,
         email=email,
         first_name=first_name or "",
         last_name=last_name or "",
+    )
+    log_event(
+        event=AuditEvent.ACCOUNT_CREATED,
+        resource=user,
+        after={"email": email, "first_name": first_name, "last_name": last_name},
+        notes="Auto-provisioned via AccountAdapter.",
     )
     return user
 

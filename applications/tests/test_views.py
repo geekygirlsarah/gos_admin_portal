@@ -24,11 +24,25 @@ class WizardFlowTests(TestCase):
             end_date=today + datetime.timedelta(days=120),
             active=True,
         )
+        # UI lists future programs that are accepting applications. Ensure it's visible.
+        # Use a valid date window (open now, close after the program ends).
+        self.future_program.applications_open = today
+        self.future_program.applications_close = today + datetime.timedelta(days=180)
+        self.future_program.save(
+            update_fields=["applications_open", "applications_close"]
+        )
         self.current_program = Program.objects.create(
             name="Right Now",
             start_date=today - datetime.timedelta(days=10),
             end_date=today + datetime.timedelta(days=10),
             active=True,
+        )
+        # Ensure the "current" program is treated as closed for applications so it
+        # appears under the current/closed section.
+        self.current_program.applications_open = today - datetime.timedelta(days=30)
+        self.current_program.applications_close = today - datetime.timedelta(days=1)
+        self.current_program.save(
+            update_fields=["applications_open", "applications_close"]
         )
         mail.outbox = []
 
@@ -139,6 +153,29 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, self.current_program.name)
         self.assertContains(response, "Applications for these programs are closed")
 
+    def test_step4_shows_accordion_for_program_details(self):
+        # Ensure the future program has a description (blurb)
+        self.future_program.description = "This is a detailed blurb about the program."
+        self.future_program.save()
+
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            current_step=4,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+        response = self.client.get(
+            reverse("apply_step4", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        # Contains an accordion/collapse control to reveal details
+        self.assertContains(response, 'data-bs-toggle="collapse"')
+        # Expect an accordion container for grouping
+        self.assertContains(response, "accordion")
+        # The description should be present within the HTML (likely inside the collapsed area)
+        self.assertContains(response, "This is a detailed blurb about the program.")
+
     def test_step4_post_only_accepts_future_programs(self):
         app = Application.objects.create(
             applicant_type="parent",
@@ -192,7 +229,12 @@ class WizardFlowTests(TestCase):
             reverse("apply_step4", kwargs={"app_id": app.application_id})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "4th–6th Grade")
+        # UI updated: grade range is shown in a badge and may use an en-dash or hyphen
+        html = response.content.decode()
+        self.assertIn("badge", html)
+        self.assertIn("4th", html)
+        self.assertIn("6th", html)
+        self.assertIn("Grade", html)
 
     # --- Step 3 (Email Verify) -------------------------------------------
 

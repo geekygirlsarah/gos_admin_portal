@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import secrets
 
+import pghistory
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
@@ -83,6 +84,7 @@ class SiteSettings(models.Model):
 # --- Application ------------------------------------------------------------
 
 
+@pghistory.track()
 class Application(models.Model):
     """A single in-progress or completed application to a Program."""
 

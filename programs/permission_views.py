@@ -115,6 +115,18 @@ class LeadMentorRequiredMixin(UserPassesTestMixin):
         )
 
 
+class PassUserToFormMixin:
+    """
+    Mixin to pass the current user to the form's kwargs.
+    Used by AdultForm and ParentForm to restrict field access.
+    """
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+
 class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/settings.html"
 

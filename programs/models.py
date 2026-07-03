@@ -3,6 +3,7 @@ import datetime
 import logging
 from io import BytesIO
 
+import pghistory
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -286,6 +287,16 @@ class Program(models.Model):
     end_date = models.DateField(
         null=True, blank=True, db_index=True, help_text="Program end date"
     )
+    applications_open = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when applications open for this program. Defaults to program start date.",
+    )
+    applications_close = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when applications close for this program. Defaults to program end date.",
+    )
     cost = models.CharField(
         max_length=100,
         blank=True,
@@ -369,6 +380,13 @@ class Program(models.Model):
 
     def has_feature(self, key: str) -> bool:
         return key in self.feature_keys
+
+    def save(self, *args, **kwargs):
+        if not self.applications_open and self.start_date:
+            self.applications_open = self.start_date
+        if not self.applications_close and self.end_date:
+            self.applications_close = self.end_date
+        super().save(*args, **kwargs)
 
 
 class School(models.Model):
@@ -460,6 +478,7 @@ class RaceEthnicity(models.Model):
         return cls.objects.filter(key__in=keys)
 
 
+@pghistory.track()
 class Student(models.Model):
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
@@ -766,6 +785,7 @@ class Student(models.Model):
         return program.end_date >= b18 and program.start_date <= program.end_date
 
 
+@pghistory.track()
 class Enrollment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     program = models.ForeignKey(Program, on_delete=models.CASCADE)
@@ -802,6 +822,7 @@ class Enrollment(models.Model):
         return f"{self.student} → {self.program}"
 
 
+@pghistory.track()
 class AdultStudentRelationship(models.Model):
     adult = models.ForeignKey("Adult", on_delete=models.CASCADE)
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
@@ -822,6 +843,7 @@ class AdultStudentRelationship(models.Model):
         return f"{self.adult} - {self.relationship_to_student} to {self.student}"
 
 
+@pghistory.track()
 class Adult(models.Model):
     # Role flags
     is_parent = models.BooleanField(

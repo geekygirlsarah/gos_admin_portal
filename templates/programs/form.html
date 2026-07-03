@@ -38,6 +38,20 @@
           <div class="row">
             <div class="col-md-6">
               <div class="mb-3">
+                <label for="id_applications_open" class="form-label">Applications open</label>
+                {{ form.applications_open|add_class:"form-control" }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="id_applications_close" class="form-label">Applications close</label>
+                {{ form.applications_close|add_class:"form-control" }}
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
                 <label for="id_grade_range_start" class="form-label">Min Grade</label>
                 {{ form.grade_range_start|add_class:"form-select" }}
               </div>

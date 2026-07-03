@@ -69,6 +69,8 @@ class ProgramAdmin(admin.ModelAdmin):
                     "active",
                     "start_date",
                     "end_date",
+                    "applications_open",
+                    "applications_close",
                     "grade_range_start",
                     "grade_range_end",
                     "cost",

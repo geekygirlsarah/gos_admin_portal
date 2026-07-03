@@ -283,6 +283,9 @@ class Step2LabelReproductionTest(TestCase):
             name="Test Program",
             active=True,
             start_date=timezone.now().date() + datetime.timedelta(days=30),
+            # applications are open starting today so it shows up in the future list
+            applications_open=timezone.now().date(),
+            applications_close=timezone.now().date() + datetime.timedelta(days=60),
         )
         app = Application.objects.create(
             email="test@example.com",
@@ -295,8 +298,12 @@ class Step2LabelReproductionTest(TestCase):
         content = response.content.decode()
 
         # Count occurrences of label text "Test Program" within label tags.
+        # UI change: each radio option's <label> also wraps the <input>, so the
+        # label contains additional markup. Match labels that CONTAIN the text
+        # rather than matching text-only labels.
         program_labels = re.findall(
-            r"<label[^>]*>\s*Test Program( \(\d{4}\))?\s*</label>", content
+            r"<label[^>]*>[\s\S]*?Test Program( \(\d{4}\))?[\s\S]*?</label>",
+            content,
         )
         # It should appear in the widget label.
         # Note: there is also an <h3>Test Program</h3> in the metadata section,

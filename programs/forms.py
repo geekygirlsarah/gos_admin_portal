@@ -160,15 +160,58 @@ class QuickCreateStudentForm(forms.ModelForm):
 
 
 class ParentForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+
+        # Protect students list and active status from non-Lead Mentors/Admins
+        is_privileged = user and (
+            user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+        )
+
+        if not is_privileged:
+            protected_fields = ["active", "students"]
+            for field in protected_fields:
+                if field in self.fields:
+                    del self.fields[field]
+
     class Meta:
         model = Adult
-        # Exclude mentor-specific "role" so the Parent form doesn't require it (not rendered in the UI).
-        # The model default ('mentor') is irrelevant for parents and caused validation to fail when missing.
-        fields = "__all__"
-        exclude = ["role"]
+        # Exclude flags (is_parent, is_mentor, is_alumni, active)
+        # to ensure they are preserved if not explicitly rendered in the template.
+        fields = [
+            "first_name",
+            "preferred_first_name",
+            "last_name",
+            "personal_email",
+            "phone_number",
+            "email_updates",
+            "students",
+        ]
 
 
 class AdultForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+
+        # Protect role flags, active status, and students list from non-Lead Mentors/Admins
+        is_privileged = user and (
+            user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+        )
+
+        if not is_privileged:
+            protected_fields = [
+                "is_parent",
+                "is_mentor",
+                "is_alumni",
+                "active",
+                "students",
+            ]
+            for field in protected_fields:
+                if field in self.fields:
+                    del self.fields[field]
+
     class Meta:
         model = Adult
         fields = [
@@ -289,6 +332,8 @@ class ProgramForm(forms.ModelForm):
             "description",
             "start_date",
             "end_date",
+            "applications_open",
+            "applications_close",
             "grade_range_start",
             "grade_range_end",
             "cost",
@@ -298,6 +343,8 @@ class ProgramForm(forms.ModelForm):
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
+            "applications_open": forms.DateInput(attrs={"type": "date"}),
+            "applications_close": forms.DateInput(attrs={"type": "date"}),
             "grade_range_start": forms.Select(
                 choices=[("", "---")] + [(i, format_grade(i)) for i in range(13)]
             ),
