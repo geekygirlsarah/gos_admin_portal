@@ -67,12 +67,11 @@ pillow_heif==1.1.1
 platformdirs==4.10.0
 premailer==3.10.0
 protobuf==6.33.6
-psycopg==3.3.2
-psycopg2-binary==2.9.11
+psycopg[binary]>=3.1.8,<4
 pycodestyle==2.14.0
 pycparser==3.0
 pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 pydantic_core==2.46.4
 pyflakes==3.4.0
 Pygments==2.20.0
@@ -80,7 +79,6 @@ python-dotenv==1.2.2
 python-multipart==0.0.32
 python3-openid==3.2.0
 pytokens==0.4.1
-pywin32==311
 PyYAML==6.0.3
 referencing==0.37.0
 regex==2026.5.9

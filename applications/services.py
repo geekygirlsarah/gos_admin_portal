@@ -110,21 +110,41 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
 def get_program_buckets():
     """Return (future, current, past) program querysets for the wizard.
 
-    - future: start_date in the future or unknown active programs that haven't
-      started yet — applications open.
+    - future: applications open based on applications_open/close dates,
+      or falling back to start_date in the future.
     - current: started already and not ended — applications closed.
     - past: ended.
     """
 
     today = timezone.localdate()
-    future = Program.objects.filter(active=True, start_date__gt=today).order_by(
-        "-start_date", "name"
+    active_programs = Program.objects.filter(active=True)
+
+    # Applications are open if:
+    # 1. Any application date is set AND today is within the range.
+    # 2. NO application date is set AND the program hasn't started yet.
+    has_dates_q = Q(applications_open__isnull=False) | Q(
+        applications_close__isnull=False
     )
+    dates_match_q = (
+        Q(applications_open__isnull=True) | Q(applications_open__lte=today)
+    ) & (Q(applications_close__isnull=True) | Q(applications_close__gte=today))
+    fallback_q = (
+        Q(applications_open__isnull=True)
+        & Q(applications_close__isnull=True)
+        & Q(start_date__gt=today)
+    )
+
+    future = active_programs.filter(
+        (has_dates_q & dates_match_q) | fallback_q
+    ).order_by("-start_date", "name")
+
     current = (
-        Program.objects.filter(active=True, start_date__lte=today)
+        active_programs.filter(start_date__lte=today)
         .exclude(end_date__lt=today)
+        .exclude(pk__in=future)
         .order_by("-end_date", "name")
     )
+
     past = Program.objects.filter(end_date__lt=today).order_by("-end_date", "name")
     return future, current, past
 

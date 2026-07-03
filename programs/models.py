@@ -287,6 +287,16 @@ class Program(models.Model):
     end_date = models.DateField(
         null=True, blank=True, db_index=True, help_text="Program end date"
     )
+    applications_open = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when applications open for this program. Defaults to program start date.",
+    )
+    applications_close = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when applications close for this program. Defaults to program end date.",
+    )
     cost = models.CharField(
         max_length=100,
         blank=True,
@@ -370,6 +380,13 @@ class Program(models.Model):
 
     def has_feature(self, key: str) -> bool:
         return key in self.feature_keys
+
+    def save(self, *args, **kwargs):
+        if not self.applications_open and self.start_date:
+            self.applications_open = self.start_date
+        if not self.applications_close and self.end_date:
+            self.applications_close = self.end_date
+        super().save(*args, **kwargs)
 
 
 class School(models.Model):

@@ -21,11 +21,12 @@
             more about our sliding scale program, which can bring costs as low as $0.
         </div>
         {% if future_programs %}
-            <div class="list-group mb-3">
+            <div class="list-group mb-3 accordion" id="programsAccordion">
                 {% for choice, prog in program_choices %}
                     <label class="list-group-item">
                         <div class="d-flex gap-2 align-items-center mb-1">
-                            <span class="fw-semibold">{{ choice.tag }}</span>
+                            {{ choice.tag }}
+                            <span class="fw-semibold ms-2">{{ choice.choice_label }}</span>
                             {% if prog.grade_range_display %}
                                 <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
                             {% endif %}
@@ -43,7 +44,21 @@
                             </div>
                         {% endif %}
                         {% if prog.description %}
-                            <div class="small mt-1">{{ prog.description|linebreaksbr }}</div>
+                            <div class="mt-2">
+                                <button
+                                    class="btn btn-sm btn-outline-secondary"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#prog-details-{{ prog.pk }}"
+                                    aria-expanded="false"
+                                    aria-controls="prog-details-{{ prog.pk }}"
+                                >
+                                    Details
+                                </button>
+                                <div id="prog-details-{{ prog.pk }}" class="collapse mt-2" data-bs-parent="#programsAccordion">
+                                    <div class="small">{{ prog.description|linebreaksbr }}</div>
+                                </div>
+                            </div>
                         {% endif %}
                     </label>
                 {% endfor %}

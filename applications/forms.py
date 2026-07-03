@@ -539,13 +539,10 @@ class ParentInfoForm(forms.Form):
         email = self.cleaned_data.get("email")
         if not email:
             return email
-        normalized = normalize_email(email)
+        # Only block exact (case-insensitive) matches with the student's email.
+        # Do NOT strip subaddressing (+tag). name@email.com != name+tag@email.com
         raw_email = email.strip().lower()
-        # We block if the parent email matches a student email exactly, OR
-        # if the parent is a "forged" version of a student email (e.g. parent
-        # is base+tag@ and student is base@).
-        # We allow the reverse: student is base+tag@ and parent is base@.
-        if raw_email in self.student_emails or normalized in self.student_emails:
+        if raw_email in self.student_emails:
             raise forms.ValidationError(
                 "This email address is already used by the student."
             )
@@ -575,9 +572,9 @@ class ParentHandoffForm(forms.Form):
         email = self.cleaned_data.get("parent_email")
         if not email:
             return email
-        normalized = normalize_email(email)
+        # Only block exact (case-insensitive) matches with the student's email.
         raw_email = email.strip().lower()
-        if raw_email in self.student_emails or normalized in self.student_emails:
+        if raw_email in self.student_emails:
             raise forms.ValidationError(
                 "You cannot use your own email address for your parent/guardian."
             )

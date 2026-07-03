@@ -214,3 +214,36 @@ class AuthenticationAuditLogTest(TestCase):
             log,
             "Regular user viewing data should not be logged under SENSITIVE_DATA_VIEW",
         )
+
+
+class AuditLoggingPrivacyTest(TestCase):
+    def test_audit_failure_does_not_log_sensitive_values(self):
+        # Simulate an exception during save that includes sensitive-looking content
+        from unittest.mock import patch
+
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
+        sensitive_msg = "ValueError: password=secret123 should not appear"
+
+        with patch("audit.models.AuditLog.save", side_effect=Exception(sensitive_msg)):
+            # Use a real model instance as the resource to avoid unrelated AttributeError
+            from django.contrib.auth import get_user_model
+
+            User = get_user_model()
+            dummy = User.objects.create_user(username="dummy", email="d@e.co")
+
+            # Capture logs from the 'audit' logger
+            with self.assertLogs("audit", level="ERROR") as cm:
+                result = log_event(event=AuditEvent.PASSWORD_RESET, resource=dummy)
+
+        output = "\n".join(cm.output)
+        # Ensure function swallowed the error and returned None
+        self.assertIsNone(result)
+        # Ensure the sensitive content is not present in logs
+        self.assertNotIn("password=secret123", output)
+        # Ensure no traceback leaked
+        self.assertNotIn("Traceback (most recent call last)", output)
+        # Event should be logged as its enum name label only, not as raw object
+        self.assertIn("event=PASSWORD_RESET", output)
+        self.assertNotRegex(output, r"<AuditEvent\\.PASSWORD_RESET>")

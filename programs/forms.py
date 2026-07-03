@@ -332,6 +332,8 @@ class ProgramForm(forms.ModelForm):
             "description",
             "start_date",
             "end_date",
+            "applications_open",
+            "applications_close",
             "grade_range_start",
             "grade_range_end",
             "cost",
@@ -341,6 +343,8 @@ class ProgramForm(forms.ModelForm):
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
+            "applications_open": forms.DateInput(attrs={"type": "date"}),
+            "applications_close": forms.DateInput(attrs={"type": "date"}),
             "grade_range_start": forms.Select(
                 choices=[("", "---")] + [(i, format_grade(i)) for i in range(13)]
             ),
