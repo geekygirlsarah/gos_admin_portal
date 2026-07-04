@@ -30,7 +30,9 @@ class AccountAdapterLoggingTests(TestCase):
         email = "student@example.com"
         context = {"code": "654321"}
 
-        with mock.patch.dict(os.environ, {"PRINT_LOGIN_CODE_ALWAYS": "true"}, clear=False):
+        with mock.patch.dict(
+            os.environ, {"PRINT_LOGIN_CODE_ALWAYS": "true"}, clear=False
+        ):
             with self.assertLogs(level="INFO") as cm:
                 adapter.send_mail(template, email, context)
 

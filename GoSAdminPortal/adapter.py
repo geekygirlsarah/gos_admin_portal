@@ -11,39 +11,55 @@ from django.utils.crypto import get_random_string
 
 def _find_or_provision_user_for_email(email):
     """
-    Look up a User by email across all registered email sources:
-      1. Django User.email (primary)
-      2. allauth EmailAddress records
-      3. Adult.email (parents, mentors, alumni, volunteers)
-      4. Student.personal_email or Student.andrew_email
+    Role-aware login policy and auto-provisioning.
 
-    If a matching Student or Adult is found but has no linked User, a new
-    inactive-until-first-login User is created and linked, and an allauth
-    EmailAddress record is added so the login-by-code flow can find it.
+    Sources checked in this order (with role enforcement when applicable):
+      A. Adult.personal_email or Adult.andrew_email — enforce per-role rules
+         - Mentors (incl. Lead Mentors): andrew_email ONLY
+         - Parents: personal_email ONLY
+         - Alumni: personal_email ONLY
+         - Others/unspecified adults: personal_email ONLY
+      B. Student.personal_email or Student.andrew_email — both allowed
+      C. Existing User/EmailAddress fallback — allow for non-modeled accounts
 
-    Returns True if the email is allowed (a matching record was found or
-    provisioned), False otherwise.
+    If a matching Student or Adult is found and allowed but has no linked User,
+    a new User is created and linked; an allauth EmailAddress is ensured.
+
+    Returns True if login should proceed for this email (found or provisioned),
+    False otherwise.
     """
     from allauth.account.models import EmailAddress
 
     User = get_user_model()
     email_lower = email.strip().lower()
 
-    # 1. Already a known User email
-    if User.objects.filter(email__iexact=email_lower).exists():
-        return True
-
-    # 2. Already a known allauth EmailAddress
-    if EmailAddress.objects.filter(email__iexact=email_lower).exists():
-        return True
-
-    # 3. Adult personal_email or andrew_email
+    # A. Adult personal_email or andrew_email (role-enforced)
     from programs.models import Adult
 
-    adult = Adult.objects.filter(
-        Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
-    ).first()
+    adult_personal = Adult.objects.filter(personal_email__iexact=email_lower).first()
+    adult_andrew = Adult.objects.filter(andrew_email__iexact=email_lower).first()
+    adult = adult_personal or adult_andrew
     if adult:
+        is_personal = adult_personal is not None
+        is_andrew = adult_andrew is not None
+
+        # Determine allow/deny based on role + which address matched
+        allow = False
+        if adult.is_mentor:
+            # Mentors (and Lead Mentors by extension) must use Andrew email
+            allow = is_andrew
+        elif (
+            adult.is_parent
+            or adult.is_alumni
+            or (not adult.is_parent and not adult.is_alumni and not adult.is_mentor)
+        ):
+            # Parents/Alumni/Other adults: personal email only
+            allow = is_personal
+
+        if not allow:
+            return False
+
+        # Allowed: ensure/link user and EmailAddress
         if adult.user_id:
             _ensure_email_address(adult.user, email_lower)
             return True
@@ -53,7 +69,7 @@ def _find_or_provision_user_for_email(email):
         _ensure_email_address(user, email_lower)
         return True
 
-    # 4. Student personal_email or andrew_email
+    # B. Student personal_email or andrew_email (both allowed)
     from programs.models import Student
 
     student = Student.objects.filter(personal_email__iexact=email_lower).first()
@@ -69,6 +85,12 @@ def _find_or_provision_user_for_email(email):
         student.user = user
         student.save(update_fields=["user"])
         _ensure_email_address(user, email_lower)
+        return True
+
+    # C. Fallback: known User/EmailAddress (non-modeled accounts, e.g., admins)
+    if User.objects.filter(email__iexact=email_lower).exists():
+        return True
+    if EmailAddress.objects.filter(email__iexact=email_lower).exists():
         return True
 
     return False
@@ -99,10 +121,17 @@ def _ensure_email_address(user, email):
     """Ensure an allauth EmailAddress record exists for this user+email."""
     from allauth.account.models import EmailAddress
 
-    EmailAddress.objects.get_or_create(
+    email_l = email.lower()
+    # If already present, nothing to do
+    if EmailAddress.objects.filter(user=user, email__iexact=email_l).exists():
+        return
+    # Only one primary per user: set primary=True only if none exists yet
+    has_primary = EmailAddress.objects.filter(user=user, primary=True).exists()
+    EmailAddress.objects.create(
         user=user,
-        email=email.lower(),
-        defaults={"primary": True, "verified": True},
+        email=email_l,
+        primary=not has_primary,
+        verified=True,
     )
 
 

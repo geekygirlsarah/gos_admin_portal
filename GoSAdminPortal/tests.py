@@ -185,6 +185,7 @@ class AdapterEmailProvisioningTest(TestCase):
         Adult.objects.create(
             first_name="Mentor",
             last_name="Smith",
+            is_mentor=True,
             andrew_email="msmith@andrew.cmu.edu",
             active=True,
         )
@@ -201,3 +202,94 @@ class AdapterEmailProvisioningTest(TestCase):
         self.assertTrue(
             EmailAddress.objects.filter(email="newparent@example.com").exists()
         )
+
+
+class LoginPolicyByRoleTest(TestCase):
+    """TDD for role-based login identifier rules.
+
+    Matrix to enforce:
+      - Students: Andrew or personal email allowed
+      - Parents: personal email only (Andrew email denied)
+      - Mentors: Andrew email only (personal email denied)
+      - Alumni: personal email only (Andrew email denied)
+      - Lead Mentors: same as mentors (Andrew email only)
+    """
+
+    def _make_adult(self, **kwargs):
+        from programs.models import Adult
+
+        defaults = dict(
+            first_name="Ada",
+            last_name="Lovelace",
+        )
+        defaults.update(kwargs)
+        return Adult.objects.create(**defaults)
+
+    def _make_student(self, **kwargs):
+        from programs.models import Student
+
+        defaults = dict(
+            legal_first_name="Grace",
+            last_name="Hopper",
+            date_of_birth=datetime.date(2010, 1, 1),
+        )
+        defaults.update(kwargs)
+        return Student.objects.create(**defaults)
+
+    # ── Mentors ─────────────────────────────────────────────────────────────
+
+    def test_mentor_personal_email_denied(self):
+        self._make_adult(is_mentor=True, personal_email="mentor.personal@example.com")
+        allowed = _find_or_provision_user_for_email("mentor.personal@example.com")
+        self.assertFalse(allowed)
+
+    def test_mentor_andrew_email_allowed(self):
+        self._make_adult(is_mentor=True, andrew_email="mentor1@andrew.cmu.edu")
+        allowed = _find_or_provision_user_for_email("mentor1@andrew.cmu.edu")
+        self.assertTrue(allowed)
+
+    # ── Lead Mentors (same rule as mentors) ─────────────────────────────────
+
+    def test_lead_mentor_andrew_only(self):
+        # Represent lead mentor as a mentor adult; group membership is handled separately.
+        self._make_adult(
+            is_mentor=True,
+            andrew_email="leadmentor@andrew.cmu.edu",
+            personal_email="leadmentor.personal@example.com",
+        )
+        self.assertTrue(_find_or_provision_user_for_email("leadmentor@andrew.cmu.edu"))
+        self.assertFalse(
+            _find_or_provision_user_for_email("leadmentor.personal@example.com")
+        )
+
+    # ── Parents ─────────────────────────────────────────────────────────────
+
+    def test_parent_personal_email_allowed(self):
+        self._make_adult(is_parent=True, personal_email="parent@example.com")
+        self.assertTrue(_find_or_provision_user_for_email("parent@example.com"))
+
+    def test_parent_andrew_email_denied(self):
+        self._make_adult(is_parent=True, andrew_email="parent1@andrew.cmu.edu")
+        self.assertFalse(_find_or_provision_user_for_email("parent1@andrew.cmu.edu"))
+
+    # ── Alumni ──────────────────────────────────────────────────────────────
+
+    def test_alumni_personal_email_allowed(self):
+        self._make_adult(is_alumni=True, personal_email="alumni@example.com")
+        self.assertTrue(_find_or_provision_user_for_email("alumni@example.com"))
+
+    def test_alumni_andrew_email_denied(self):
+        self._make_adult(is_alumni=True, andrew_email="grad@andrew.cmu.edu")
+        self.assertFalse(_find_or_provision_user_for_email("grad@andrew.cmu.edu"))
+
+    # ── Students ────────────────────────────────────────────────────────────
+
+    def test_student_allows_personal_and_andrew(self):
+        self._make_student(
+            personal_email="student.personal@example.com",
+            andrew_email="student1@andrew.cmu.edu",
+        )
+        self.assertTrue(
+            _find_or_provision_user_for_email("student.personal@example.com")
+        )
+        self.assertTrue(_find_or_provision_user_for_email("student1@andrew.cmu.edu"))

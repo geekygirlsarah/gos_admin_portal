@@ -10,6 +10,14 @@ All notable changes to this project will be documented in this file.
 ### Added
 - New env var `PRINT_LOGIN_CODE_ALWAYS` to aid debugging OTP logins. When set (e.g., `1`/`true`), the adapter logs an INFO line with the login code (or `(none)`) and email for all login email attempts, including the `unknown_account` path. Existing behavior for `DEBUG`/staging remains unchanged.
 
+### Changed
+- Login policy updated to enable anyone with a modeled role to sign in via OTP with role-specific identifiers:
+  - Students: may sign in with their Andrew email or personal email.
+  - Parents: may sign in with their personal email only (Andrew email not accepted).
+  - Mentors (including Lead Mentors): may sign in with their Andrew email only (personal email not accepted).
+  - Alumni: may sign in with their personal email only (Andrew email not accepted).
+- The authentication adapter now enforces these rules and still auto-provisions a `User` account and `EmailAddress` when a matching Student/Adult exists but no user has been linked yet.
+
 ## 2026-07-02
 
 ### Added
