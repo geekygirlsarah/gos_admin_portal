@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Resolved Django Admin error when editing a Student: removed a stale `active` field reference from `StudentAdmin` to align with the current `Student` model. Added a unit test to prevent regressions.
 
+### Added
+- New env var `PRINT_LOGIN_CODE_ALWAYS` to aid debugging OTP logins. When set (e.g., `1`/`true`), the adapter logs an INFO line with the login code (or `(none)`) and email for all login email attempts, including the `unknown_account` path. Existing behavior for `DEBUG`/staging remains unchanged.
+
 ## 2026-07-02
 
 ### Added

@@ -135,14 +135,27 @@ class AccountAdapter(DefaultAccountAdapter):
         logging.debug(
             f"DEBUG: send_mail called with template_prefix={template_prefix}, email={email}"
         )
+        # Opt-in: always print attempted login details when explicitly enabled.
+        print_always = os.getenv("PRINT_LOGIN_CODE_ALWAYS", "False")
         if template_prefix == "account/email/unknown_account":
+            # If explicitly requested, emit a helpful log even for unknown accounts.
+            if print_always:
+                code = context.get("code")
+                code_str = code if code else "(none)"
+                logging.info(
+                    f"PRINT_LOGIN_CODE_ALWAYS: Attempted login for {email}; template={template_prefix}; code={code_str}"
+                )
             return
 
         # Check if we are in a safe environment to expose the code in logs
         is_staging = "staging" in os.getenv("RENDER_EXTERNAL_HOSTNAME", "")
         code = context.get("code")
 
-        if (settings.DEBUG or is_staging) and code:
+        if print_always:
+            logging.info(
+                f"PRINT_LOGIN_CODE_ALWAYS: Login code for {email} is {code or '(none)'}; template={template_prefix}"
+            )
+        elif (settings.DEBUG or is_staging) and code:
             logging.info(f"DEBUG/STAGING: Login code for {email} is {code}")
 
         def _send():
