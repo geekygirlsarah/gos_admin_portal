@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-04
+
+### Fixed
+- Resolved Django Admin error when editing a Student: removed a stale `active` field reference from `StudentAdmin` to align with the current `Student` model. Added a unit test to prevent regressions.
+
 ## 2026-07-02
 
 ### Added

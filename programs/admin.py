@@ -236,7 +236,6 @@ class StudentAdmin(admin.ModelAdmin):
             "System",
             {
                 "fields": (
-                    "active",
                     "graduated",
                     "created_at",
                     "updated_at",
