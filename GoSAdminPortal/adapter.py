@@ -3,6 +3,7 @@ import os
 import threading
 
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.account.forms import RequestLoginCodeForm
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -60,9 +61,10 @@ def _find_or_provision_user_for_email(email):
     student_allowed = student is not None
 
     # C. Fallback check
-    fallback_allowed = User.objects.filter(
-        email__iexact=email_lower
-    ).exists() or EmailAddress.objects.filter(email__iexact=email_lower).exists()
+    fallback_allowed = (
+        User.objects.filter(email__iexact=email_lower).exists()
+        or EmailAddress.objects.filter(email__iexact=email_lower).exists()
+    )
 
     # Determine final allowance
     if not (adult_allowed or student_allowed or fallback_allowed):
@@ -238,3 +240,23 @@ class AccountAdapter(DefaultAccountAdapter):
         if name and "<" not in email:
             return f'"{name}" <{email}>'
         return email
+
+
+class ProvisioningRequestLoginCodeForm(RequestLoginCodeForm):
+    """
+    Extends allauth's RequestLoginCodeForm to auto-provision a Django User account
+    for known Students and Adults (parents, alumni, volunteers) before allauth's
+    standard user lookup runs.
+
+    Without this, allauth's filter_users_by_email() finds no User for a student
+    who has never logged in before, and sends an 'unknown_account' email instead
+    of a login code.
+    """
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email", "")
+        if email:
+            # Provision a User (and link to Student/Adult) if the email belongs
+            # to a known person in the system but has no User account yet.
+            _find_or_provision_user_for_email(email)
+        return super().clean_email()

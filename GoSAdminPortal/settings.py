@@ -237,6 +237,9 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"  # We don't need verification if we use OTP
 ACCOUNT_ADAPTER = "GoSAdminPortal.adapter.AccountAdapter"
+ACCOUNT_FORMS = {
+    "request_login_code": "GoSAdminPortal.adapter.ProvisioningRequestLoginCodeForm",
+}
 
 # Email (SMTP) configuration via environment variables
 # Default to console backend if no user is provided to avoid crashes in staging/dev
