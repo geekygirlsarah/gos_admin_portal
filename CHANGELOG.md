@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-04
 
 ### Fixed
+- Resolved login issue for Students whose email addresses were also present in an `Adult` record with restricted login rules (e.g., a parent record with an Andrew email). The adapter now checks both Adult and Student roles before denying access.
+- Fixed a bug where `PRINT_LOGIN_CODE_ALWAYS` was always treated as true regardless of its value.
 - Resolved Django Admin error when editing a Student: removed a stale `active` field reference from `StudentAdmin` to align with the current `Student` model. Added a unit test to prevent regressions.
 
 ### Added

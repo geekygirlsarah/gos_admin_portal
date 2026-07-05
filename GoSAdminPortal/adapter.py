@@ -13,87 +13,98 @@ def _find_or_provision_user_for_email(email):
     """
     Role-aware login policy and auto-provisioning.
 
-    Sources checked in this order (with role enforcement when applicable):
-      A. Adult.personal_email or Adult.andrew_email — enforce per-role rules
-         - Mentors (incl. Lead Mentors): andrew_email ONLY
-         - Parents: personal_email ONLY
-         - Alumni: personal_email ONLY
-         - Others/unspecified adults: personal_email ONLY
-      B. Student.personal_email or Student.andrew_email — both allowed
-      C. Existing User/EmailAddress fallback — allow for non-modeled accounts
+    Sources checked (with role enforcement when applicable):
+      - Adult.personal_email or Adult.andrew_email
+        * Mentors: andrew_email only
+        * Others: personal_email only
+      - Student.personal_email or Student.andrew_email (both allowed)
+      - Existing User/EmailAddress fallback (non-modeled accounts)
 
-    If a matching Student or Adult is found and allowed but has no linked User,
-    a new User is created and linked; an allauth EmailAddress is ensured.
+    If a match is found and allowed by any source, the login proceeds.
+    If multiple sources match (e.g. both a Student and an Adult), both are linked
+    to the User if possible.
 
-    Returns True if login should proceed for this email (found or provisioned),
-    False otherwise.
+    Returns True if login should proceed for this email, False otherwise.
     """
     from allauth.account.models import EmailAddress
 
     User = get_user_model()
     email_lower = email.strip().lower()
 
-    # A. Adult personal_email or andrew_email (role-enforced)
-    from programs.models import Adult
+    # Find candidate modeled accounts
+    from programs.models import Adult, Student
 
+    # A. Adult check
     adult_personal = Adult.objects.filter(personal_email__iexact=email_lower).first()
     adult_andrew = Adult.objects.filter(andrew_email__iexact=email_lower).first()
     adult = adult_personal or adult_andrew
+    adult_allowed = False
     if adult:
         is_personal = adult_personal is not None
         is_andrew = adult_andrew is not None
-
-        # Determine allow/deny based on role + which address matched
-        allow = False
         if adult.is_mentor:
-            # Mentors (and Lead Mentors by extension) must use Andrew email
-            allow = is_andrew
+            adult_allowed = is_andrew
         elif (
             adult.is_parent
             or adult.is_alumni
             or (not adult.is_parent and not adult.is_alumni and not adult.is_mentor)
         ):
-            # Parents/Alumni/Other adults: personal email only
-            allow = is_personal
+            adult_allowed = is_personal
 
-        if not allow:
-            return False
-
-        # Allowed: ensure/link user and EmailAddress
-        if adult.user_id:
-            _ensure_email_address(adult.user, email_lower)
-            return True
-        user = _provision_user(email_lower, adult.first_name, adult.last_name)
-        adult.user = user
-        adult.save(update_fields=["user"])
-        _ensure_email_address(user, email_lower)
-        return True
-
-    # B. Student personal_email or andrew_email (both allowed)
-    from programs.models import Student
-
+    # B. Student check
     student = Student.objects.filter(personal_email__iexact=email_lower).first()
     if not student:
         student = Student.objects.filter(andrew_email__iexact=email_lower).first()
-    if student:
-        if student.user_id:
-            _ensure_email_address(student.user, email_lower)
-            return True
-        # Provision a new User for this student
-        first = student.first_name or student.legal_first_name
-        user = _provision_user(email_lower, first, student.last_name)
+    student_allowed = student is not None
+
+    # C. Fallback check
+    fallback_allowed = User.objects.filter(
+        email__iexact=email_lower
+    ).exists() or EmailAddress.objects.filter(email__iexact=email_lower).exists()
+
+    # Determine final allowance
+    if not (adult_allowed or student_allowed or fallback_allowed):
+        return False
+
+    # Allowed! Now ensure User and link sources.
+    # We need a User object. Find existing one from adult, student, or email.
+    user = None
+    if adult and adult.user_id:
+        user = adult.user
+    elif student and student.user_id:
+        user = student.user
+    else:
+        user = User.objects.filter(email__iexact=email_lower).first()
+        if not user:
+            # Check allauth EmailAddress too
+            ea = EmailAddress.objects.filter(email__iexact=email_lower).first()
+            if ea:
+                user = ea.user
+
+    # If still no user, provision one
+    if not user:
+        first = ""
+        last = ""
+        if student:
+            first = student.first_name or student.legal_first_name
+            last = student.last_name
+        elif adult:
+            first = adult.first_name
+            last = adult.last_name
+        user = _provision_user(email_lower, first, last)
+
+    # Link Student if matched
+    if student and not student.user_id:
         student.user = user
         student.save(update_fields=["user"])
-        _ensure_email_address(user, email_lower)
-        return True
 
-    # C. Fallback: known User/EmailAddress (non-modeled accounts, e.g., admins)
-    if User.objects.filter(email__iexact=email_lower).exists():
-        return True
-    if EmailAddress.objects.filter(email__iexact=email_lower).exists():
-        return True
+    # Link Adult if matched AND ALLOWED (we only link if the login identifier is valid for the role)
+    if adult and adult_allowed and not adult.user_id:
+        adult.user = user
+        adult.save(update_fields=["user"])
 
-    return False
+    _ensure_email_address(user, email_lower)
+    return True
 
 
 def _provision_user(email, first_name, last_name):
@@ -165,7 +176,11 @@ class AccountAdapter(DefaultAccountAdapter):
             f"DEBUG: send_mail called with template_prefix={template_prefix}, email={email}"
         )
         # Opt-in: always print attempted login details when explicitly enabled.
-        print_always = os.getenv("PRINT_LOGIN_CODE_ALWAYS", "False")
+        print_always = os.getenv("PRINT_LOGIN_CODE_ALWAYS", "False").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
         if template_prefix == "account/email/unknown_account":
             # If explicitly requested, emit a helpful log even for unknown accounts.
             if print_always:
