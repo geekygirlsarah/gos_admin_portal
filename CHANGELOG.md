@@ -5,9 +5,12 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-04
 
 ### Fixed
-- Resolved login issue for Students whose email addresses were also present in an `Adult` record with restricted login rules (e.g., a parent record with an Andrew email). The adapter now checks both Adult and Student roles before denying access.
-- Fixed a bug where `PRINT_LOGIN_CODE_ALWAYS` was always treated as true regardless of its value.
-- Resolved Django Admin error when editing a Student: removed a stale `active` field reference from `StudentAdmin` to align with the current `Student` model. Added a unit test to prevent regressions.
+- Resolved login issues for Students and Mentors converted from applications. Verified emails are now correctly saved to Student/Adult records even if the form fields were left blank in the application wizard.
+- Fixed a bug where mentor applications were incorrectly processed as student applications during conversion. Mentors now correctly result in an `Adult` record with the mentor flag set.
+- Fixed several field name and name handling bugs in the application conversion service (`preferred_name` instead of `preferred_first_name`, handling of `legal_first_name` and `andrew_id` for mentors).
+- Relaxed the mentor login policy to allow any email ending in `@andrew.cmu.edu` if it belongs to the mentor's record, supporting tagged email addresses (e.g., `name+tag@andrew.cmu.edu`) for testing and flexibility.
+- Fixed a bug in `AccountAdapter.send_mail` where the `PRINT_LOGIN_CODE_ALWAYS` environment variable was incorrectly interpreted.
+- Resolved Django Admin error when editing a Student: removed a stale `active` field reference from `StudentAdmin`.
 
 ### Added
 - New env var `PRINT_LOGIN_CODE_ALWAYS` to aid debugging OTP logins. When set (e.g., `1`/`true`), the adapter logs an INFO line with the login code (or `(none)`) and email for all login email attempts, including the `unknown_account` path. Existing behavior for `DEBUG`/staging remains unchanged.

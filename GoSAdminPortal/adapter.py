@@ -43,7 +43,9 @@ def _find_or_provision_user_for_email(email):
         is_personal = adult_personal is not None
         is_andrew = adult_andrew is not None
         if adult.is_mentor:
-            adult_allowed = is_andrew
+            # Mentors (and Lead Mentors by extension) must use Andrew email.
+            # We allow any email ending in @andrew.cmu.edu if it matched this adult.
+            adult_allowed = email_lower.endswith("@andrew.cmu.edu")
         elif (
             adult.is_parent
             or adult.is_alumni
