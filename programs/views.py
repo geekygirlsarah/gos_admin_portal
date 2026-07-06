@@ -2036,6 +2036,7 @@ class ProgramUpdateView(LogFormSaveMixin, UpdateView):
 
 # --- Student edit ---
 class StudentUpdateView(
+    PassUserToFormMixin,
     SensitiveDataViewMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
@@ -2101,6 +2102,7 @@ class StudentUpdateView(
 
 
 class StudentCreateView(
+    PassUserToFormMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
     PermissionRequiredMixin,

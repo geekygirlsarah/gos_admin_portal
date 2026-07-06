@@ -660,7 +660,7 @@ def _student_from_application(application: Application):
     _fill("pronouns", step5.get("pronouns"))
     if step5.get("date_of_birth") and not student.date_of_birth:
         student.date_of_birth = step5["date_of_birth"]
-    
+
     # Use verified application email as fallback for personal_email if not provided in step 5
     personal_email = step5.get("personal_email")
     if not personal_email and application.applicant_type == Application.Type.STUDENT:

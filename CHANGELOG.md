@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Fixed a bug where Students and Parents could not log in via the OTP email code, even if their email was on file. The login system now correctly creates an account for them on first login, instead of saying "no account found."
+- Resolved "disconnected student info" issue:
+  - Implemented automatic name synchronization between `Student`/`Adult` profiles and their linked `User` accounts. Profiles are now the authoritative source for names.
+  - Protected the `user` field in student edit forms to prevent accidental disconnection or unauthorized changes by non-admins.
+- Fixed a crash in Django Admin when editing Student profiles (KeyError 'user').
 
 ## 2026-07-04
 
