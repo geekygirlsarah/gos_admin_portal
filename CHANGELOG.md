@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-07
+
+### Added
+- Implemented custom error handling for 403 (Forbidden), 400 (Bad Request), and 500 (Internal Server Error):
+  - Added dedicated error pages (`403.html`, `400.html`, `500.html`) with consistent site branding and helpful messages.
+  - Configured custom handlers in `views.py` and registered them in `urls.py`.
+- Implemented custom 404 error handling:
+  - Users visiting non-existent pages are now redirected to the home page with a "that page doesn't exist" message.
+  - Visitors to the application wizard who encounter a 404 (e.g., due to an expired session or invalid application ID) are redirected back to the main `/apply/` page with a specific "that application doesn't exist or timed out" message.
+- Configured Django message tags to map to Bootstrap 5 alert classes (e.g., `error` maps to `danger`), ensuring error messages appear in the appropriate red "error boxes."
+
+### Changed
+- Updated `LoginRequiredMiddleware` to allow 404 errors to pass through to the custom handler even for unauthenticated users, ensuring consistent redirection behavior across the site.
+
 ## 2026-07-05
 
 ### Fixed

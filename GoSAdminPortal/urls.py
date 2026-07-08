@@ -22,6 +22,11 @@ from django.urls import include, path, re_path, reverse_lazy
 from django.views.generic import RedirectView, TemplateView
 from django.views.static import serve
 
+handler404 = "GoSAdminPortal.views.handler404"
+handler403 = "GoSAdminPortal.views.handler403"
+handler400 = "GoSAdminPortal.views.handler400"
+handler500 = "GoSAdminPortal.views.handler500"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),

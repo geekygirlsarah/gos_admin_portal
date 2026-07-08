@@ -16,6 +16,7 @@ from pathlib import Path
 
 import dj_database_url
 from csp import constants
+from django.contrib.messages import constants as message_constants
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -145,6 +146,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "GoSAdminPortal.wsgi.application"
+
+MESSAGE_TAGS = {
+    message_constants.DEBUG: "secondary",
+    message_constants.INFO: "info",
+    message_constants.SUCCESS: "success",
+    message_constants.WARNING: "warning",
+    message_constants.ERROR: "danger",
+}
 
 
 # Database
