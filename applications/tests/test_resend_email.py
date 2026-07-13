@@ -116,6 +116,23 @@ class ResendEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("application has been submitted", mail.outbox[0].subject.lower())
 
+    def test_resend_handoff_email_student_initiated(self):
+        # Student initiated, no parent email in Step 7 yet, but handoff email is known
+        self.app.applicant_type = Application.Type.STUDENT
+        self.app.email = "student@example.com"
+        self.app.data = {"step7_handoff": {"parent_email": "real-parent@example.com"}}
+        self.app.status = Application.Status.AWAITING_PARENT
+        self.app.save()
+
+        url = reverse(
+            "application_review_resend_email",
+            kwargs={"app_id": self.app.application_id},
+        )
+        response = self.client.post(url, {"type": "handoff"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("real-parent@example.com", mail.outbox[0].to)
+
     def test_invalid_type_error(self):
         url = reverse(
             "application_review_resend_email",

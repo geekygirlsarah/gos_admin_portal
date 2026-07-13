@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-12
 
 ### Fixed
+- Fixed a bug where the "Resend Parent Handoff" email was sent to the student's email address instead of the parent's email. It now correctly uses the parent email provided during the application process (Step 7).
 - Fixed GitHub Actions CI failure in `test_student_login_provisioning.py` where `contextvars.Token` was incorrectly used as a context manager. Switched to `allauth.core.context.request_context(request)`.
 - Fixed GitHub Actions `safety` check failure caused by `requirements.txt` being in UTF-16 encoding (often caused by `pip freeze` on Windows). Added an automatic conversion step to the CI workflow.
 
