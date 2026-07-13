@@ -51,6 +51,11 @@ urlpatterns = [
         review.ApplicationConvertView.as_view(),
         name="application_review_convert",
     ),
+    path(
+        "review/<str:app_id>/resend-email/",
+        review.ApplicationResendEmailView.as_view(),
+        name="application_review_resend_email",
+    ),
     # Step 1: welcome / start / resume
     path("", views.WelcomeView.as_view(), name="apply_start"),
     path("resume/", views.ResumeView.as_view(), name="apply_resume"),

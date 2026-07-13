@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-12
+
+### Added
+- Added a "Communications" section to the application review detail page, allowing lead mentors to resend system emails:
+  - Resend OTP/Verification email (for resuming applications).
+  - Resend Parent Handoff email (for students handing off to parents).
+  - Resend Submission Confirmation email.
+  - Resend Approval and Decline emails.
+- This helps resolve issues where applicants miss or lose their application wizard emails.
+
 ## 2026-07-08
 
 ### Added

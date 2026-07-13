@@ -29,6 +29,9 @@ from .services import (
     convert_application_to_student,
     send_application_approved_email,
     send_application_declined_email,
+    send_application_submitted_email,
+    send_otp_email,
+    send_parent_handoff_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -430,6 +433,73 @@ class ApplicationCleanupView(_ReviewerRequiredMixin, View):
             messages.info(request, "No applications older than 30 days were found.")
 
         return redirect("application_review_list")
+
+
+class ApplicationResendEmailView(_ReviewerRequiredMixin, View):
+    """POST: resend various system emails (OTP, handoff, etc.)"""
+
+    def post(self, request, app_id: str):
+        application = get_object_or_404(
+            Application, application_id=(app_id or "").upper()
+        )
+        email_type = request.POST.get("type")
+
+        try:
+            self._handle_resend(request, application, email_type)
+        except Exception:
+            logger.exception(
+                "Failed to resend %s email for %s",
+                email_type,
+                application.application_id,
+            )
+            messages.error(
+                request, f"Failed to resend {email_type} email. Please check logs."
+            )
+
+        return redirect("application_review_detail", app_id=application.application_id)
+
+    def _handle_resend(self, request, application: Application, email_type: str):
+        if email_type == "otp":
+            code = application.issue_otp()
+            send_otp_email(application, code, request=request)
+            messages.success(
+                request, f"Resent OTP verification email to {application.email}."
+            )
+        elif email_type == "handoff":
+            parent_email = application.email
+            if not parent_email:
+                messages.error(request, "No email address found for this application.")
+            else:
+                send_parent_handoff_email(application, parent_email, request=request)
+                messages.success(
+                    request, f"Resent parent handoff email to {parent_email}."
+                )
+        elif email_type == "submitted":
+            if not application.submitted_at:
+                messages.error(request, "This application has not been submitted yet.")
+            else:
+                send_application_submitted_email(application, request=request)
+                messages.success(request, "Resent submission confirmation email.")
+        elif email_type == "approved":
+            if application.status not in (
+                Application.Status.APPROVED,
+                Application.Status.APPROVED_SIGNED,
+                Application.Status.CONVERTED,
+            ):
+                messages.error(request, "This application has not been approved yet.")
+            else:
+                send_application_approved_email(application, request=request)
+                messages.success(request, "Resent approval email.")
+        elif email_type == "declined":
+            if application.status != Application.Status.DECLINED:
+                messages.error(request, "This application has not been declined.")
+            else:
+                send_application_declined_email(
+                    application, application.decline_reason, request=request
+                )
+                messages.success(request, "Resent decline email.")
+        else:
+            messages.error(request, f"Unknown email type: {email_type}")
 
 
 class ApplicationConvertView(_ReviewerRequiredMixin, View):
