@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-08
+
+### Added
+- Duplicate application detection in the application wizard:
+  - When an applicant verifies their email, the system now checks for existing draft applications with the same email.
+  - If a duplicate is found, the user is presented with a choice to resume the previous application or start over with a fresh one.
+  - Choosing to resume deletes the current temporary application and redirects the user to their previous progress.
+  - Choosing to start over deletes the previous draft application(s) and continues with the current one.
+  - This prevents students from inadvertently creating multiple duplicate applications.
+
 ## 2026-07-07
 
 ### Added

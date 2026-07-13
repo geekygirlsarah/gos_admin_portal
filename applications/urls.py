@@ -78,6 +78,11 @@ urlpatterns = [
         name="apply_step3",
     ),
     path(
+        "<str:app_id>/step3/duplicate-found/",
+        views.Step3DuplicateFoundView.as_view(),
+        name="apply_duplicate_found",
+    ),
+    path(
         "<str:app_id>/step4/",
         views.Step4ProgramView.as_view(),
         name="apply_step4",
