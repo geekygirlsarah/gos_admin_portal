@@ -396,6 +396,26 @@ def send_parent_handoff_email(
     )
 
 
+def get_primary_parent_email(application: Application) -> Optional[str]:
+    """Return the primary parent's email address from Step 7 data.
+    Falls back to handoff email, then application email if applicant is a parent.
+    """
+    data = application.data or {}
+    step7 = data.get("step7-primaryparent") or {}
+    parent_email = (step7.get("email") or "").strip()
+    if parent_email:
+        return parent_email
+
+    handoff_email = (data.get("step7_handoff") or {}).get("parent_email")
+    if handoff_email:
+        return handoff_email.strip()
+
+    if application.applicant_type == Application.Type.PARENT:
+        return (application.email or "").strip() or None
+
+    return None
+
+
 def _collect_applicant_recipients(application: Application) -> List[str]:
     """Return the list of email addresses for the submission-confirmation
     email: the student's email (if any) and the primary parent/guardian's
@@ -822,7 +842,7 @@ def convert_application_to_student(application: Application, request=None):
                         "guardian": str(primary),
                         "relationship": rel_data.get("relationship_to_student"),
                     },
-                    notes=f"Primary guardian added via application conversion.",
+                    notes="Primary guardian added via application conversion.",
                 )
 
         if secondary:
@@ -848,7 +868,7 @@ def convert_application_to_student(application: Application, request=None):
                         "guardian": str(secondary),
                         "relationship": rel_data.get("relationship_to_student"),
                     },
-                    notes=f"Secondary guardian added via application conversion.",
+                    notes="Secondary guardian added via application conversion.",
                 )
 
         Enrollment.objects.get_or_create(student=student, program=application.program)

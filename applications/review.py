@@ -27,6 +27,7 @@ from .models import Application
 from .services import (
     ApplicationConversionError,
     convert_application_to_student,
+    get_primary_parent_email,
     send_application_approved_email,
     send_application_declined_email,
     send_application_submitted_email,
@@ -466,9 +467,13 @@ class ApplicationResendEmailView(_ReviewerRequiredMixin, View):
                 request, f"Resent OTP verification email to {application.email}."
             )
         elif email_type == "handoff":
-            parent_email = application.email
+            parent_email = get_primary_parent_email(application)
             if not parent_email:
-                messages.error(request, "No email address found for this application.")
+                messages.error(
+                    request,
+                    "No parent email address found. "
+                    "This application might not have reached the handoff step yet.",
+                )
             else:
                 send_parent_handoff_email(application, parent_email, request=request)
                 messages.success(
