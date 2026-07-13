@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-12
 
+### Fixed
+- Fixed GitHub Actions `safety` check failure caused by `requirements.txt` being in UTF-16 encoding (often caused by `pip freeze` on Windows). Added an automatic conversion step to the CI workflow.
+
 ### Added
 - Added a "Communications" section to the application review detail page, allowing lead mentors to resend system emails:
   - Resend OTP/Verification email (for resuming applications).
