@@ -70,7 +70,7 @@ class StudentLoginProvisioningTests(TestCase):
         # Patch context.request used by allauth ratelimit
         from allauth.core import context as allauth_context
 
-        with allauth_context._request_var.set(request):
+        with allauth_context.request_context(request):
             is_valid = form.is_valid()
 
         self.assertTrue(is_valid, form.errors)
@@ -88,7 +88,7 @@ class StudentLoginProvisioningTests(TestCase):
         form = ProvisioningRequestLoginCodeForm(data={"email": "nobody@example.com"})
         from allauth.core import context as allauth_context
 
-        with allauth_context._request_var.set(request):
+        with allauth_context.request_context(request):
             is_valid = form.is_valid()
 
         # With PREVENT_ENUMERATION (allauth default), the form is still valid for
