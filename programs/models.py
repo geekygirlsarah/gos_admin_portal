@@ -727,6 +727,19 @@ class Student(models.Model):
         self._prune_dangling_contacts()
         super().save(*args, **kwargs)
 
+        # Sync Student name to User account if linked
+        if self.user:
+            target_first = self.first_name or self.legal_first_name
+            changed = False
+            if self.user.first_name != target_first:
+                self.user.first_name = target_first
+                changed = True
+            if self.user.last_name != self.last_name:
+                self.user.last_name = self.last_name
+                changed = True
+            if changed:
+                self.user.save()
+
     def eighteenth_birthday(self):
         """Return the date this student turns 18, or None if DOB unknown."""
         dob = self.date_of_birth
@@ -1045,6 +1058,20 @@ class Adult(models.Model):
 
         normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)
+
+        # Sync Adult name to User account if linked
+        if self.user:
+            # Prefer preferred_first_name if set
+            target_first = self.preferred_first_name or self.first_name
+            changed = False
+            if self.user.first_name != target_first:
+                self.user.first_name = target_first
+                changed = True
+            if self.user.last_name != self.last_name:
+                self.user.last_name = self.last_name
+                changed = True
+            if changed:
+                self.user.save()
 
 
 class Fee(models.Model):

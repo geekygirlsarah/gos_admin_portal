@@ -141,6 +141,15 @@ def _redirect_to_current_step(application: Application):
     return redirect("apply_start")
 
 
+def _redirect_after_email_verified(application: Application):
+    """Determine where to send the user immediately after email verification."""
+    if _is_mentor(application):
+        if find_existing_mentor_by_email(application.email):
+            return redirect("apply_mentor_blocked", app_id=application.application_id)
+        return redirect("apply_mentor_info", app_id=application.application_id)
+    return redirect("apply_step4", app_id=application.application_id)
+
+
 # ---------------------------------------------------------------------------
 # Step 1: welcome + resume
 # ---------------------------------------------------------------------------
@@ -377,16 +386,27 @@ class Step3VerifyEmailView(View):
             return self._render(request, application, form)
         application.current_step = max(application.current_step, 4)
         application.save(update_fields=["current_step", "updated_at"])
+
+        # Check for existing draft applications with the same email.
+        # If found, redirect to a page that lets them resume the old one or start over.
+        existing_exists = (
+            Application.objects.filter(
+                email__iexact=application.email,
+                status__in=[
+                    Application.Status.DRAFT,
+                    Application.Status.EMAIL_VERIFIED,
+                    Application.Status.AWAITING_PARENT,
+                ],
+            )
+            .exclude(pk=application.pk)
+            .exists()
+        )
+
+        if existing_exists:
+            return redirect("apply_duplicate_found", app_id=application.application_id)
+
         messages.success(request, "Email verified — thanks!")
-        # Mentor branch: block if the email already belongs to a mentor,
-        # otherwise jump into the mentor info step.
-        if _is_mentor(application):
-            if find_existing_mentor_by_email(application.email):
-                return redirect(
-                    "apply_mentor_blocked", app_id=application.application_id
-                )
-            return redirect("apply_mentor_info", app_id=application.application_id)
-        return redirect("apply_step4", app_id=application.application_id)
+        return _redirect_after_email_verified(application)
 
     def _issue_and_send(self, application: Application, request) -> None:
         try:
@@ -412,6 +432,75 @@ class Step3VerifyEmailView(View):
                 "total_steps": total_steps,
             },
         )
+
+
+@method_decorator(never_cache, name="dispatch")
+class Step3DuplicateFoundView(View):
+    template_name = "applications/step3_duplicate_found.html"
+
+    def get(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        # Find other applications with the same email that are in progress
+        existing = (
+            Application.objects.filter(
+                email__iexact=application.email,
+                status__in=[
+                    Application.Status.DRAFT,
+                    Application.Status.EMAIL_VERIFIED,
+                    Application.Status.AWAITING_PARENT,
+                ],
+            )
+            .exclude(pk=application.pk)
+            .order_by("-updated_at")
+        )
+
+        if not existing.exists():
+            return _redirect_after_email_verified(application)
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "existing": existing.first(),
+                "count": existing.count(),
+                "current_step": 3,
+                "total_steps": TOTAL_STEPS,
+            },
+        )
+
+    def post(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        action = request.POST.get("action")
+
+        existing_query = Application.objects.filter(
+            email__iexact=application.email,
+            status__in=[
+                Application.Status.DRAFT,
+                Application.Status.EMAIL_VERIFIED,
+                Application.Status.AWAITING_PARENT,
+            ],
+        ).exclude(pk=application.pk)
+
+        if action == "resume":
+            # Resume existing: delete current, redirect to the most recent old one
+            oldest_existing = existing_query.order_by("-updated_at").first()
+            if oldest_existing:
+                application.delete()
+                messages.info(
+                    request,
+                    f"Resuming your previous application ({oldest_existing.application_id}).",
+                )
+                return _redirect_to_current_step(oldest_existing)
+            return _redirect_after_email_verified(application)
+
+        elif action == "start_over":
+            # Start over: delete all old ones, continue with current
+            existing_query.delete()
+            messages.info(request, "Previous application(s) cleared. Starting fresh.")
+            return _redirect_after_email_verified(application)
+
+        return self.get(request, app_id)
 
 
 @method_decorator(never_cache, name="dispatch")

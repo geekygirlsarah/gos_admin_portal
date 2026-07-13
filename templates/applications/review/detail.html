@@ -42,7 +42,7 @@
       </div>
     </div>
     <div class="col-md-4">
-      <div class="card">
+      <div class="card mb-3">
         <div class="card-header">Actions</div>
         <div class="card-body d-grid gap-2">
           <form method="post" action="{% url 'application_review_approve' application.application_id %}">
@@ -84,6 +84,62 @@
              href="{% url 'application_review_delete' application.application_id %}">
             Delete…
           </a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Communications</div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">Resend system emails if the applicant missed them.</p>
+          <div class="d-grid gap-2">
+            <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
+              {% csrf_token %}
+              <input type="hidden" name="type" value="otp">
+              <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+                Resend OTP / Verification
+              </button>
+            </form>
+
+            {% if application.status == 'awaiting_parent' %}
+              <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="type" value="handoff">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+                  Resend Parent Handoff
+                </button>
+              </form>
+            {% endif %}
+
+            {% if application.submitted_at %}
+              <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="type" value="submitted">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+                  Resend Submission Confirmation
+                </button>
+              </form>
+            {% endif %}
+
+            {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}
+              <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="type" value="approved">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+                  Resend Approval Email
+                </button>
+              </form>
+            {% endif %}
+
+            {% if application.status == 'declined' %}
+              <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="type" value="declined">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+                  Resend Decline Email
+                </button>
+              </form>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>

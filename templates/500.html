@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Server Error – Girls of Steel{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card shadow-sm mt-5">
+            <div class="card-body p-5 text-center">
+                <div class="mb-4">
+                    <img src="/static/img/rosie_icon.png" alt="Rosie Icon" width="80" height="80">
+                </div>
+                <h1 class="display-5 mb-3">500 Server Error</h1>
+                <p class="lead text-muted mb-4">Something went wrong on our end. We've been notified and are looking into it.</p>
+                <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                    <a href="/" class="btn btn-primary btn-lg px-4 gap-3">Back to Home</a>
+                </div>
+            </div>
+        </div>
+        <p class="text-center text-muted small mt-4">
+            If this issue persists, please contact <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

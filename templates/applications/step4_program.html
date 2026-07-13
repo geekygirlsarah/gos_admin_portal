@@ -25,8 +25,7 @@
                 {% for choice, prog in program_choices %}
                     <label class="list-group-item">
                         <div class="d-flex gap-2 align-items-center mb-1">
-                            {{ choice.tag }}
-                            <span class="fw-semibold ms-2">{{ choice.choice_label }}</span>
+                            <span class="fw-semibold ms-2">{{ choice.tag }}</span>
                             {% if prog.grade_range_display %}
                                 <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
                             {% endif %}

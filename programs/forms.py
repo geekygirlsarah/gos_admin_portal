@@ -42,7 +42,19 @@ class StudentForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+
+        # Protect user field from non-Lead Mentors/Admins to avoid accidental disconnection
+        # Only apply protection if user is explicitly provided (e.g. from portal views)
+        if user is not None:
+            is_privileged = (
+                user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+            )
+            if not is_privileged:
+                if "user" in self.fields:
+                    del self.fields["user"]
+
         # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
         qs_adults = Adult.objects.filter(is_parent=True).order_by(
             "first_name", "last_name"
@@ -165,15 +177,17 @@ class ParentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # Protect students list and active status from non-Lead Mentors/Admins
-        is_privileged = user and (
-            user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-        )
+        # Only apply protection if user is explicitly provided (e.g. from portal views)
+        if user is not None:
+            is_privileged = (
+                user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+            )
 
-        if not is_privileged:
-            protected_fields = ["active", "students"]
-            for field in protected_fields:
-                if field in self.fields:
-                    del self.fields[field]
+            if not is_privileged:
+                protected_fields = ["active", "students"]
+                for field in protected_fields:
+                    if field in self.fields:
+                        del self.fields[field]
 
     class Meta:
         model = Adult
@@ -196,21 +210,23 @@ class AdultForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # Protect role flags, active status, and students list from non-Lead Mentors/Admins
-        is_privileged = user and (
-            user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-        )
+        # Only apply protection if user is explicitly provided (e.g. from portal views)
+        if user is not None:
+            is_privileged = (
+                user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+            )
 
-        if not is_privileged:
-            protected_fields = [
-                "is_parent",
-                "is_mentor",
-                "is_alumni",
-                "active",
-                "students",
-            ]
-            for field in protected_fields:
-                if field in self.fields:
-                    del self.fields[field]
+            if not is_privileged:
+                protected_fields = [
+                    "is_parent",
+                    "is_mentor",
+                    "is_alumni",
+                    "active",
+                    "students",
+                ]
+                for field in protected_fields:
+                    if field in self.fields:
+                        del self.fields[field]
 
     class Meta:
         model = Adult

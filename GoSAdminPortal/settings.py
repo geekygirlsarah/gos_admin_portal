@@ -16,6 +16,7 @@ from pathlib import Path
 
 import dj_database_url
 from csp import constants
+from django.contrib.messages import constants as message_constants
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -146,6 +147,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "GoSAdminPortal.wsgi.application"
 
+MESSAGE_TAGS = {
+    message_constants.DEBUG: "secondary",
+    message_constants.INFO: "info",
+    message_constants.SUCCESS: "success",
+    message_constants.WARNING: "warning",
+    message_constants.ERROR: "danger",
+}
+
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -237,6 +246,9 @@ ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"  # We don't need verification if we use OTP
 ACCOUNT_ADAPTER = "GoSAdminPortal.adapter.AccountAdapter"
+ACCOUNT_FORMS = {
+    "request_login_code": "GoSAdminPortal.adapter.ProvisioningRequestLoginCodeForm",
+}
 
 # Email (SMTP) configuration via environment variables
 # Default to console backend if no user is provided to avoid crashes in staging/dev

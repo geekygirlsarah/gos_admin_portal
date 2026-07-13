@@ -1,0 +1,48 @@
+{% extends "applications/_wizard_base.html" %}
+
+{% block wizard_title %}Existing Application Found{% endblock %}
+{% block wizard_heading %}We found an application in progress{% endblock %}
+
+{% block wizard_body %}
+<p>
+    An application for <strong>{{ application.email }}</strong> is already in progress
+    (Application ID: <strong>{{ existing.application_id }}</strong>, 
+    last updated {{ existing.updated_at|timesince }} ago).
+</p>
+
+{% if count > 1 %}
+<p class="text-muted small">
+    Note: You actually have {{ count }} applications in progress with this email. 
+    If you choose to start over, all of them will be cleared.
+</p>
+{% endif %}
+
+<div class="card mb-4 border-primary">
+    <div class="card-body">
+        <h5 class="card-title">What would you like to do?</h5>
+        
+        <form method="post" class="mt-4">
+            {% csrf_token %}
+            
+            <div class="d-grid gap-3">
+                <button type="submit" name="action" value="resume" class="btn btn-primary btn-lg">
+                    Resume my previous application ({{ existing.application_id }})
+                </button>
+                
+                <div class="text-center text-muted fw-bold small">OR</div>
+                
+                <button type="submit" name="action" value="start_over" class="btn btn-outline-danger" 
+                        onclick="return confirm('Are you sure? This will permanently delete your previous application data.')">
+                    Start over and delete previous application(s)
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<p class="text-center">
+    <a href="{% url 'apply_step2' app_id=application.application_id %}" class="btn btn-link">
+        Go back
+    </a>
+</p>
+{% endblock %}

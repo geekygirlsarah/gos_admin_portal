@@ -534,20 +534,40 @@ def _adult_from_data(parent_data: dict):
     if not parent_data:
         return None
     email = (parent_data.get("email") or "").strip()
-    first_name = (parent_data.get("first_name") or "").strip()
+    # Handle both Parent (first_name) and Mentor (legal_first_name) styles
+    legal_first = (parent_data.get("legal_first_name") or "").strip()
+    first_name = (legal_first or parent_data.get("first_name") or "").strip()
     last_name = (parent_data.get("last_name") or "").strip()
-    if not email and not (first_name and last_name):
+
+    # Preferred name: if legal_first was used for first_name, then first_name is preferred
+    preferred = ""
+    if legal_first and parent_data.get("first_name"):
+        preferred = parent_data.get("first_name").strip()
+
+    # Andrew ID -> andrew_email
+    andrew_id = (parent_data.get("andrew_id") or "").strip()
+    andrew_email = (parent_data.get("andrew_email_fallback") or "").strip()
+    if andrew_id:
+        if "@" in andrew_id:
+            andrew_email = andrew_id
+        else:
+            andrew_email = f"{andrew_id}@andrew.cmu.edu"
+
+    if not email and not andrew_email and not (first_name and last_name):
         return None
 
     adult = None
     if email:
         adult = Adult.objects.filter(personal_email__iexact=email).first()
+    if adult is None and andrew_email:
+        adult = Adult.objects.filter(andrew_email__iexact=andrew_email).first()
+
     if adult is None:
         adult = Adult(
             first_name=first_name or "(unknown)",
             last_name=last_name or "(unknown)",
             personal_email=email or None,
-            is_parent=True,
+            andrew_email=andrew_email or None,
         )
 
     # Fill in any missing fields from the captured data, without
@@ -558,9 +578,10 @@ def _adult_from_data(parent_data: dict):
             setattr(adult, field, value)
 
     _fill("first_name", first_name)
-    _fill("preferred_first_name", parent_data.get("preferred_first_name"))
+    _fill("preferred_name", preferred)
     _fill("last_name", last_name)
-    _fill("email", email)
+    _fill("personal_email", email)
+    _fill("andrew_email", andrew_email)
     _fill("cell_phone", parent_data.get("cell_phone"))
     _fill("home_phone", parent_data.get("home_phone"))
     _fill("address", parent_data.get("address"))
@@ -639,7 +660,13 @@ def _student_from_application(application: Application):
     _fill("pronouns", step5.get("pronouns"))
     if step5.get("date_of_birth") and not student.date_of_birth:
         student.date_of_birth = step5["date_of_birth"]
-    _fill("personal_email", step5.get("personal_email"))
+
+    # Use verified application email as fallback for personal_email if not provided in step 5
+    personal_email = step5.get("personal_email")
+    if not personal_email and application.applicant_type == Application.Type.STUDENT:
+        personal_email = application.email
+    _fill("personal_email", personal_email)
+
     if "directory_consent" in step5:
         student.directory_consent = bool(step5["directory_consent"])
     _fill("cell_phone_number", step5.get("cell_phone_number"))
@@ -727,6 +754,32 @@ def convert_application_to_student(application: Application, request=None):
 
     data = application.data or {}
     with transaction.atomic():
+        if application.applicant_type == Application.Type.MENTOR:
+            mentor_data = (data.get("mentor_info") or {}).copy()
+            # Ensure the verified email is used as personal_email if none provided in the form
+            if not mentor_data.get("email"):
+                mentor_data["email"] = application.email
+
+            # If the verified email is an Andrew email, also use it as andrew_email fallback
+            if application.email.lower().endswith("@andrew.cmu.edu"):
+                mentor_data["andrew_email_fallback"] = application.email
+
+            adult = _adult_from_data(mentor_data)
+            adult.is_mentor = True
+            adult.save()
+
+            application.status = Application.Status.CONVERTED
+            application.converted_at = timezone.now()
+            application.save()
+
+            log_event(
+                request=request,
+                event=AuditEvent.ACCOUNT_CREATED,
+                resource=adult,
+                notes=f"Mentor account provisioned via application conversion ({application.application_id}).",
+            )
+            return adult
+
         primary = _adult_from_data(data.get("step7-primaryparent") or {})
         secondary = _adult_from_data(data.get("step8-secondaryparent") or {})
 

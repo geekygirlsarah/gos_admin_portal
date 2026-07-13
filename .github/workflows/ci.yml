@@ -51,6 +51,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+    - name: Ensure requirements.txt is UTF-8
+      run: |
+        if [ -f requirements.txt ]; then
+          python3 -c "content = open('requirements.txt', 'rb').read(); open('requirements.txt', 'wb').write(content.decode('utf-16' if content.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig').encode('utf-8'))"
+        fi
     - name: Security Scan (safety)
       uses: pyupio/safety-action@v1
       with:

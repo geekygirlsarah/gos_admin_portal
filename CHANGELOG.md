@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-12
+
+### Fixed
+- Fixed GitHub Actions CI failure in `test_student_login_provisioning.py` where `contextvars.Token` was incorrectly used as a context manager. Switched to `allauth.core.context.request_context(request)`.
+- Fixed GitHub Actions `safety` check failure caused by `requirements.txt` being in UTF-16 encoding (often caused by `pip freeze` on Windows). Added an automatic conversion step to the CI workflow.
+
+### Added
+- Added a "Communications" section to the application review detail page, allowing lead mentors to resend system emails:
+  - Resend OTP/Verification email (for resuming applications).
+  - Resend Parent Handoff email (for students handing off to parents).
+  - Resend Submission Confirmation email.
+  - Resend Approval and Decline emails.
+- This helps resolve issues where applicants miss or lose their application wizard emails.
+
+## 2026-07-08
+
+### Added
+- Duplicate application detection in the application wizard:
+  - When an applicant verifies their email, the system now checks for existing draft applications with the same email.
+  - If a duplicate is found, the user is presented with a choice to resume the previous application or start over with a fresh one.
+  - Choosing to resume deletes the current temporary application and redirects the user to their previous progress.
+  - Choosing to start over deletes the previous draft application(s) and continues with the current one.
+  - This prevents students from inadvertently creating multiple duplicate applications.
+
+## 2026-07-07
+
+### Added
+- Implemented custom error handling for 403 (Forbidden), 400 (Bad Request), and 500 (Internal Server Error):
+  - Added dedicated error pages (`403.html`, `400.html`, `500.html`) with consistent site branding and helpful messages.
+  - Configured custom handlers in `views.py` and registered them in `urls.py`.
+- Implemented custom 404 error handling:
+  - Users visiting non-existent pages are now redirected to the home page with a "that page doesn't exist" message.
+  - Visitors to the application wizard who encounter a 404 (e.g., due to an expired session or invalid application ID) are redirected back to the main `/apply/` page with a specific "that application doesn't exist or timed out" message.
+- Configured Django message tags to map to Bootstrap 5 alert classes (e.g., `error` maps to `danger`), ensuring error messages appear in the appropriate red "error boxes."
+
+### Changed
+- Updated `LoginRequiredMiddleware` to allow 404 errors to pass through to the custom handler even for unauthenticated users, ensuring consistent redirection behavior across the site.
+
+## 2026-07-05
+
+### Fixed
+- Fixed a bug where Students and Parents could not log in via the OTP email code, even if their email was on file. The login system now correctly creates an account for them on first login, instead of saying "no account found."
+- Resolved "disconnected student info" issue:
+  - Implemented automatic name synchronization between `Student`/`Adult` profiles and their linked `User` accounts. Profiles are now the authoritative source for names.
+  - Protected the `user` field in student edit forms to prevent accidental disconnection or unauthorized changes by non-admins.
+- Fixed a crash in Django Admin when editing Student profiles (KeyError 'user').
+
+## 2026-07-04
+
+### Fixed
+- Resolved login issues for Students and Mentors converted from applications. Verified emails are now correctly saved to Student/Adult records even if the form fields were left blank in the application wizard.
+- Fixed a bug where mentor applications were incorrectly processed as student applications during conversion. Mentors now correctly result in an `Adult` record with the mentor flag set.
+- Fixed several field name and name handling bugs in the application conversion service (`preferred_name` instead of `preferred_first_name`, handling of `legal_first_name` and `andrew_id` for mentors).
+- Relaxed the mentor login policy to allow any email ending in `@andrew.cmu.edu` if it belongs to the mentor's record, supporting tagged email addresses (e.g., `name+tag@andrew.cmu.edu`) for testing and flexibility.
+- Fixed a bug in `AccountAdapter.send_mail` where the `PRINT_LOGIN_CODE_ALWAYS` environment variable was incorrectly interpreted.
+- Resolved Django Admin error when editing a Student: removed a stale `active` field reference from `StudentAdmin`.
+
+### Added
+- New env var `PRINT_LOGIN_CODE_ALWAYS` to aid debugging OTP logins. When set (e.g., `1`/`true`), the adapter logs an INFO line with the login code (or `(none)`) and email for all login email attempts, including the `unknown_account` path. Existing behavior for `DEBUG`/staging remains unchanged.
+
+### Changed
+- Login policy updated to enable anyone with a modeled role to sign in via OTP with role-specific identifiers:
+  - Students: may sign in with their Andrew email or personal email.
+  - Parents: may sign in with their personal email only (Andrew email not accepted).
+  - Mentors (including Lead Mentors): may sign in with their Andrew email only (personal email not accepted).
+  - Alumni: may sign in with their personal email only (Andrew email not accepted).
+- The authentication adapter now enforces these rules and still auto-provisions a `User` account and `EmailAddress` when a matching Student/Adult exists but no user has been linked yet.
+
 ## 2026-07-02
 
 ### Added

@@ -51,7 +51,9 @@ class LoginRequiredMiddleware(MiddlewareMixin):
             if match.view_name in EXEMPT_URL_NAMES:
                 return True
         except Resolver404:
-            pass
+            # If the path doesn't resolve to any URL, let it through so the
+            # handler404 can handle it (and potentially redirect with a message).
+            return True
         except Exception:
             logger.debug("Unexpected error resolving path %s", path, exc_info=True)
         return False
