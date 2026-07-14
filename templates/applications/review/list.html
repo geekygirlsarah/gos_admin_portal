@@ -1,4 +1,5 @@
 {% extends 'applications/review/_base.html' %}
+{% load sorting_tags %}
 {% block review_title %}Applications{% endblock %}
 {% block review_heading %}Applications{% endblock %}
 {% block review_body %}
@@ -47,13 +48,13 @@
       <table class="table table-sm align-middle">
         <thead>
           <tr>
-            <th>Application ID</th>
-            <th>Type</th>
-            <th>Email</th>
-            <th>Program</th>
-            <th>Status</th>
-            <th>Started</th>
-            <th>Submitted</th>
+            <th><a href="{% sort_url 'id' %}" class="text-decoration-none text-dark">Application ID{% sort_icon 'id' %}</a></th>
+            <th><a href="{% sort_url 'type' %}" class="text-decoration-none text-dark">Type{% sort_icon 'type' %}</a></th>
+            <th><a href="{% sort_url 'email' %}" class="text-decoration-none text-dark">Email{% sort_icon 'email' %}</a></th>
+            <th><a href="{% sort_url 'program' %}" class="text-decoration-none text-dark">Program{% sort_icon 'program' %}</a></th>
+            <th><a href="{% sort_url 'status' %}" class="text-decoration-none text-dark">Status{% sort_icon 'status' %}</a></th>
+            <th><a href="{% sort_url 'started' %}" class="text-decoration-none text-dark">Started{% sort_icon 'started' %}</a></th>
+            <th><a href="{% sort_url 'submitted' %}" class="text-decoration-none text-dark">Submitted{% sort_icon 'submitted' %}</a></th>
             <th></th>
           </tr>
         </thead>

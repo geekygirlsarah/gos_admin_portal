@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load sorting_tags %}
 {% block title %}Parents{% endblock %}
 {% block nav_parents_active %} active{% endblock %}
 {% block content %}
@@ -30,10 +31,10 @@
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>Name</th>
+            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
             <th>Student(s)</th>
-            <th>Email</th>
-            <th>Phone</th>
+            <th><a href="{% sort_url 'email' %}" class="text-decoration-none text-dark">Email{% sort_icon 'email' %}</a></th>
+            <th><a href="{% sort_url 'phone' %}" class="text-decoration-none text-dark">Phone{% sort_icon 'phone' %}</a></th>
             <th class="text-end"></th>
           </tr>
         </thead>
@@ -49,10 +50,10 @@
                 {% endfor %}
               </td>
               <td>
-                  {% if p.email and p.email_updates %}
+                  {% if p.personal_email and p.email_updates %}
                       <span class="ms-2" title="This parent receives email updates">✔️</span>
                   {% endif %}
-                {% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}
+                {% if p.personal_email %}<a href="mailto:{{ p.personal_email }}">{{ p.personal_email }}</a>{% endif %}
               </td>
               <td>{% if p.phone_number %}<a href="tel:{{ p.phone_number }}">{{ p.phone_number }}</a>{% endif %}</td>
               <td class="text-end">

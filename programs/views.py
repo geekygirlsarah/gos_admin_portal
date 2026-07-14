@@ -169,6 +169,9 @@ class LogFormSaveMixin:
         except Exception:
             # Never fail the request due to logging
             changes = []
+        except Exception:
+            # Never fail the request due to logging
+            changes = []
 
         response = super().form_valid(form)
 
@@ -227,6 +230,70 @@ class LogFormSaveMixin:
                 user_repr,
             )
         return response
+
+
+class SortableListViewMixin:
+    """Mixin for ListView to support sorting by columns."""
+
+    sort_fields = {}  # Map of field names to actual queryset order_by values
+    default_sort_field = None
+    default_sort_dir = "asc"
+
+    def get_sort_field(self):
+        sort = self.request.GET.get("sort")
+        if sort in self.sort_fields:
+            return sort
+        return self.default_sort_field
+
+    def get_sort_dir(self):
+        d = self.request.GET.get("dir", self.default_sort_dir)
+        return "desc" if d == "desc" else "asc"
+
+    def apply_sorting(self, queryset):
+        sort = self.get_sort_field()
+        if not sort:
+            return queryset
+
+        direction = self.get_sort_dir()
+        order_by_value = self.sort_fields[sort]
+
+        if isinstance(order_by_value, str):
+            if direction == "desc":
+                if order_by_value.startswith("-"):
+                    order_by_value = order_by_value[1:]
+                else:
+                    order_by_value = f"-{order_by_value}"
+            return queryset.order_by(order_by_value)
+        elif isinstance(order_by_value, (list, tuple)):
+            final_order = []
+            for item in order_by_value:
+                if isinstance(item, str):
+                    if direction == "desc":
+                        if item.startswith("-"):
+                            final_order.append(item[1:])
+                        else:
+                            final_order.append(f"-{item}")
+                    else:
+                        final_order.append(item)
+                else:
+                    # Handle expressions like Lower('field')
+                    if direction == "desc":
+                        final_order.append(item.desc())
+                    else:
+                        final_order.append(item.asc())
+            return queryset.order_by(*final_order)
+        else:
+            # Handle expressions like Lower('field')
+            if direction == "desc":
+                return queryset.order_by(order_by_value.desc())
+            else:
+                return queryset.order_by(order_by_value.asc())
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["current_sort"] = self.get_sort_field()
+        ctx["current_dir"] = self.get_sort_dir()
+        return ctx
 
 
 class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
@@ -289,11 +356,21 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         return ctx
 
 
-class StudentListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
+class StudentListView(
+    LoginRequiredMixin, DynamicReadPermissionMixin, SortableListViewMixin, ListView
+):
     model = Student
     template_name = "students/list.html"
     context_object_name = "students"
     section = "student_info"
+
+    sort_fields = {
+        "name": (Lower("sort_first"), Lower("last_name")),
+        "school": Lower("school__name"),
+        "graduation_year": "graduation_year",
+        "graduated": "graduated",
+    }
+    default_sort_field = "name"
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -318,9 +395,10 @@ class StudentListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
                 qs = Student.objects.none()
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
-        return qs.annotate(
+        qs = qs.annotate(
             sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
-        ).order_by(Lower("sort_first"), Lower("last_name"))
+        )
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -378,14 +456,20 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
+class StudentEmergencyContactsView(LoginRequiredMixin, SortableListViewMixin, ListView):
     model = Student
     template_name = "students/emergency_contacts.html"
     context_object_name = "students"
 
+    sort_fields = {
+        "name": (Lower("sort_first"), Lower("last_name")),
+        "school": Lower("school__name"),
+    }
+    default_sort_field = "name"
+
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
-        return (
+        qs = (
             qs.select_related("school", "primary_contact", "secondary_contact")
             .prefetch_related("adults")
             .annotate(
@@ -393,8 +477,8 @@ class StudentEmergencyContactsView(LoginRequiredMixin, ListView):
                     NullIf("first_name", Value("")), "legal_first_name"
                 ),
             )
-            .order_by(Lower("sort_first"), Lower("last_name"))
         )
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -501,17 +585,20 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class ParentListView(LoginRequiredMixin, ListView):
+class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     model = Adult
     template_name = "parents/list.html"
     context_object_name = "parents"
 
+    sort_fields = {
+        "name": (Lower("first_name"), Lower("last_name")),
+        "email": Lower("personal_email"),
+        "phone": "phone_number",
+    }
+    default_sort_field = "name"
+
     def get_queryset(self):
-        qs = (
-            Adult.objects.filter(is_parent=True)
-            .prefetch_related("students")
-            .order_by("first_name", "last_name")
-        )
+        qs = Adult.objects.filter(is_parent=True).prefetch_related("students")
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -533,7 +620,7 @@ class ParentListView(LoginRequiredMixin, ListView):
             except:
                 qs = Adult.objects.none()
 
-        return qs
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -543,17 +630,24 @@ class ParentListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class MentorListView(LoginRequiredMixin, ListView):
+class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     model = Adult
     template_name = "mentors/list.html"
     context_object_name = "mentors"
 
+    sort_fields = {
+        "name": (Lower("first_name"), Lower("last_name")),
+        "role": "role",
+        "active": "active",
+    }
+    default_sort_field = "name"
+
     def get_queryset(self):
-        qs = Adult.objects.filter(is_mentor=True).order_by("last_name", "first_name")
+        qs = Adult.objects.filter(is_mentor=True)
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
-        return qs
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -563,17 +657,27 @@ class MentorListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class AlumniListView(LoginRequiredMixin, ListView):
+class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     model = Adult
     template_name = "alumni/list.html"
     context_object_name = "alumni"
 
+    sort_fields = {
+        "name": (Lower("first_name"), Lower("last_name")),
+        "email": Lower("personal_email"),
+        "phone": "phone_number",
+        "college": Lower("college"),
+        "employer": Lower("employer"),
+        "ok_to_contact": "ok_to_contact",
+    }
+    default_sort_field = "name"
+
     def get_queryset(self):
-        qs = Adult.objects.filter(is_alumni=True).order_by("last_name", "first_name")
+        qs = Adult.objects.filter(is_alumni=True)
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
-        return qs
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1705,10 +1809,21 @@ class MentorUpdateView(
 
 
 # --- Schools list/create/edit ---
-class SchoolListView(LoginRequiredMixin, ListView):
+class SchoolListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     model = School
     template_name = "schools/list.html"
     context_object_name = "schools"
+
+    sort_fields = {
+        "name": Lower("name"),
+        "district": Lower("district"),
+        "city": Lower("city"),
+        "state": "state",
+    }
+    default_sort_field = "name"
+
+    def get_queryset(self):
+        return self.apply_sorting(super().get_queryset())
 
 
 class SchoolCreateView(
@@ -3711,11 +3826,20 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
         )
 
 
-class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
+class AdultsListView(
+    LoginRequiredMixin, DynamicReadPermissionMixin, SortableListViewMixin, ListView
+):
     model = Adult
     template_name = "adults/list.html"
     context_object_name = "adults"
     section = "adult_info"
+
+    sort_fields = {
+        "name": (Lower("first_name"), Lower("last_name")),
+        "email": Lower("personal_email"),
+        "phone": "phone_number",
+    }
+    default_sort_field = "name"
 
     def get_queryset(self):
         from .permission_views import get_user_role
@@ -3729,10 +3853,10 @@ class AdultsListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
-                return qs.filter(pk=adult.pk)
+                qs = qs.filter(pk=adult.pk)
             except (Adult.DoesNotExist, AttributeError):
-                return Adult.objects.none()
-        return qs.order_by("last_name", "first_name")
+                qs = Adult.objects.none()
+        return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

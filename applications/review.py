@@ -15,6 +15,7 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -142,6 +143,29 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
         if program_id.isdigit():
             qs = qs.filter(program_id=int(program_id))
 
+        # Sorting
+        sort = (request.GET.get("sort") or "submitted").strip()
+        direction = (request.GET.get("dir") or "desc").strip()
+
+        sort_map = {
+            "id": "application_id",
+            "type": "applicant_type",
+            "email": Lower("email"),
+            "program": "program__name",
+            "status": "status",
+            "started": "created_at",
+            "submitted": "submitted_at",
+        }
+
+        if sort in sort_map:
+            order_by_val = sort_map[sort]
+            if direction == "desc":
+                if isinstance(order_by_val, str):
+                    order_by_val = f"-{order_by_val}"
+                else:
+                    order_by_val = order_by_val.desc()
+            qs = qs.order_by(order_by_val)
+
         return render(
             request,
             self.template_name,
@@ -152,6 +176,8 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
                 "current_status": status,
                 "current_type": applicant_type,
                 "current_program": program_id,
+                "current_sort": sort,
+                "current_dir": direction,
             },
         )
 

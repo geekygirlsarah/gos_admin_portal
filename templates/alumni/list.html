@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load sorting_tags %}
 {% block title %}Alumni{% endblock %}
 {% block content %}
   <div class="row mb-3">
@@ -17,12 +18,12 @@
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>College</th>
-            <th>Employer</th>
-            <th>OK to Contact</th>
+            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
+            <th><a href="{% sort_url 'email' %}" class="text-decoration-none text-dark">Email{% sort_icon 'email' %}</a></th>
+            <th><a href="{% sort_url 'phone' %}" class="text-decoration-none text-dark">Phone{% sort_icon 'phone' %}</a></th>
+            <th><a href="{% sort_url 'college' %}" class="text-decoration-none text-dark">College{% sort_icon 'college' %}</a></th>
+            <th><a href="{% sort_url 'employer' %}" class="text-decoration-none text-dark">Employer{% sort_icon 'employer' %}</a></th>
+            <th><a href="{% sort_url 'ok_to_contact' %}" class="text-decoration-none text-dark">OK to Contact{% sort_icon 'ok_to_contact' %}</a></th>
           </tr>
         </thead>
         <tbody>

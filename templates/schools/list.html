@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load sorting_tags %}
 {% block title %}Schools{% endblock %}
 {% block nav_schools_active %} active{% endblock %}
 {% block content %}
@@ -18,11 +19,11 @@
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>District</th>
+            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
+            <th><a href="{% sort_url 'district' %}" class="text-decoration-none text-dark">District{% sort_icon 'district' %}</a></th>
             <th>Street</th>
-            <th>City</th>
-            <th>State</th>
+            <th><a href="{% sort_url 'city' %}" class="text-decoration-none text-dark">City{% sort_icon 'city' %}</a></th>
+            <th><a href="{% sort_url 'state' %}" class="text-decoration-none text-dark">State{% sort_icon 'state' %}</a></th>
             <th>ZIP</th>
             <th class="text-end">Actions</th>
           </tr>
