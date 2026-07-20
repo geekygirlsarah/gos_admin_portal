@@ -21,16 +21,13 @@ STUDENT DASHBOARD
 <section class="mb-5">
     <h2 class="h4 mb-3">My Programs</h2>
 
-    {% if student_enrollments %}
-        {% for enrollment in student_enrollments %}
-        <div class="card mb-4">
+    {% if active_enrollments or other_enrollments %}
+        {# 1. Active Programs #}
+        {% for enrollment in active_enrollments %}
+        <div class="card mb-4 shadow-sm border-primary">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <strong>{{ enrollment.program.name }}</strong>
-                {% if enrollment.program.active %}
-                    <span class="badge bg-success">Active</span>
-                {% else %}
-                    <span class="badge bg-secondary">Inactive</span>
-                {% endif %}
+                <span class="badge bg-success border border-light">Active</span>
             </div>
             <div class="card-body">
                 {% if enrollment.program.start_date or enrollment.program.end_date %}
@@ -80,6 +77,47 @@ STUDENT DASHBOARD
             </div>
         </div>
         {% endfor %}
+
+        {# 2. Past & Upcoming Programs (Collapsible) #}
+        {% if other_enrollments %}
+        <div class="accordion mb-4" id="otherProgramsAccordion">
+            <div class="accordion-item border-secondary">
+                <h2 class="accordion-header" id="headingOthers">
+                    <button class="accordion-button collapsed bg-light text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOthers" aria-expanded="false" aria-controls="collapseOthers">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Past & Upcoming Programs ({{ other_enrollments|length }})
+                    </button>
+                </h2>
+                <div id="collapseOthers" class="accordion-collapse collapse" aria-labelledby="headingOthers" data-bs-parent="#otherProgramsAccordion">
+                    <div class="accordion-body p-0">
+                        <div class="list-group list-group-flush">
+                        {% for enrollment in other_enrollments %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                <div>
+                                    <strong class="d-block">{{ enrollment.program.name }}</strong>
+                                    <small class="text-muted">
+                                        {% if enrollment.program.start_date %}{{ enrollment.program.start_date|date:"N j, Y" }}{% endif %}
+                                        {% if enrollment.program.start_date and enrollment.program.end_date %} – {% endif %}
+                                        {% if enrollment.program.end_date %}{{ enrollment.program.end_date|date:"N j, Y" }}{% endif %}
+                                    </small>
+                                </div>
+                                <div>
+                                    {% if not enrollment.active %}
+                                        <span class="badge bg-danger">Withdrawn</span>
+                                    {% elif enrollment.program.status == 'Upcoming' %}
+                                        <span class="badge bg-warning text-dark">Upcoming</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     {% else %}
         <div class="alert alert-info">You are not currently enrolled in any programs.</div>
     {% endif %}
@@ -105,16 +143,12 @@ PARENT DASHBOARD
                 {% endif %}
             </div>
             <div class="card-body">
-                {% if entry.program_rows %}
-                    {% for row in entry.program_rows %}
+                {% if entry.active_rows %}
+                    {% for row in entry.active_rows %}
                     <div class="mb-4">
                         <h6 class="d-flex justify-content-between align-items-center">
                             {{ row.enrollment.program.name }}
-                            {% if row.enrollment.program.active %}
-                                <span class="badge bg-success">Active</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
-                            {% endif %}
+                            <span class="badge bg-success">Active</span>
                         </h6>
 
                         {% if row.enrollment.program.start_date or row.enrollment.program.end_date %}
@@ -170,9 +204,48 @@ PARENT DASHBOARD
                             </div>
                         </div>
                     </div>
-                    {% if not forloop.last %}<hr>{% endif %}
+                    {% if not forloop.last or entry.other_rows %}<hr>{% endif %}
                     {% endfor %}
-                {% else %}
+                {% endif %}
+
+                {% if entry.other_rows %}
+                    <div class="accordion accordion-flush" id="otherProgramsAccordion{{ entry.student.pk }}">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingOther{{ entry.student.pk }}">
+                                <button class="accordion-button collapsed py-2 px-0 text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOther{{ entry.student.pk }}" aria-expanded="false" aria-controls="collapseOther{{ entry.student.pk }}">
+                                    Past & Upcoming Programs ({{ entry.other_rows|length }})
+                                </button>
+                            </h2>
+                            <div id="collapseOther{{ entry.student.pk }}" class="accordion-collapse collapse" aria-labelledby="headingOther{{ entry.student.pk }}" data-bs-parent="#otherProgramsAccordion{{ entry.student.pk }}">
+                                <div class="accordion-body px-0 py-2">
+                                    {% for row in entry.other_rows %}
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div>
+                                                <strong>{{ row.enrollment.program.name }}</strong>
+                                                {% if not row.enrollment.active %}
+                                                    <span class="badge bg-danger ms-1 small">Withdrawn</span>
+                                                {% else %}
+                                                    <span class="badge {% if row.enrollment.program.status == 'Upcoming' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 small">
+                                                        {{ row.enrollment.program.status }}
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="small">
+                                                {% if row.balance > 0 %}
+                                                    <span class="text-danger fw-bold">${{ row.balance|floatformat:2 }}</span>
+                                                {% else %}
+                                                    <span class="text-success">Paid</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                {% if not entry.active_rows and not entry.other_rows %}
                     <p class="text-muted">{{ entry.student }} is not enrolled in any programs.</p>
                 {% endif %}
             </div>
@@ -191,13 +264,38 @@ MENTOR DASHBOARD
 {% endcomment %}
 {% if adult and is_mentor %}
 <section class="mb-5">
-    <div class="card border-info">
-        <div class="card-header bg-info text-white">Mentor Dashboard</div>
-        <div class="card-body">
-            <p>You are logged in as a Mentor. You can access student rosters and program info via the main menu.</p>
-            <a href="/programs/" class="btn btn-outline-info">View Programs</a>
+    <h2 class="h4 mb-3">Active Programs</h2>
+    {% if mentor_active_programs %}
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for prog in mentor_active_programs %}
+                <div class="col">
+                    <div class="card h-100 border-primary shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">{{ prog.name }}</h5>
+                            {% if prog.start_date or prog.end_date %}
+                                <p class="card-text small text-muted mb-2">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    {% if prog.start_date %}{{ prog.start_date|date:"N j, Y" }}{% endif %}
+                                    {% if prog.start_date and prog.end_date %} – {% endif %}
+                                    {% if prog.end_date %}{{ prog.end_date|date:"N j, Y" }}{% endif %}
+                                </p>
+                            {% endif %}
+                            <p class="card-text">{{ prog.description|truncatewords:20 }}</p>
+                        </div>
+                        <div class="card-footer bg-transparent border-top-0">
+                            <a href="{% url 'program_detail' prog.pk %}" class="btn btn-sm btn-outline-primary">View Roster & Details</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
         </div>
-    </div>
+    {% else %}
+        <div class="alert alert-primary shadow-sm">
+            <p class="mb-0">No active programs found at this time. You can view past programs or manage your account below.</p>
+            <hr>
+            <a href="{% url 'program_list' %}" class="btn btn-sm btn-outline-primary">View All Programs</a>
+        </div>
+    {% endif %}
 </section>
 {% endif %}
 

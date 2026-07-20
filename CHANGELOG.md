@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-20
 
+### Changed
+- Darkened the Mentor dashboard card colors from "info" (light blue) to "primary" (dark blue) to improve visibility against the white background.
+- Improved Mentor dashboard by replacing the generic "View Programs" button with a list of currently active programs, providing direct access to rosters and details.
+- Improved Student and Parent dashboards to show a "Withdrawn" status for students who are no longer active in a program.
+- Updated `DashboardView` to move withdrawn enrollments to the "Past & Upcoming Programs" section to reduce clutter while maintaining visibility.
+- Improved Student and Parent dashboards by grouping inactive and upcoming programs into collapsible Bootstrap accordions, reducing clutter while keeping program history accessible.
+- Updated `DashboardView` to provide pre-grouped enrollment data for optimized dashboard rendering.
+- Updated the Student and Parent dashboards to conditionally show program details:
+  - Active programs are now expanded to show balance info, attendance tracking, and outreach sign-ups.
+  - Inactive and Upcoming programs are now collapsed, showing only their name and a status badge.
+- Added a new `status` property to programs and an "Upcoming" badge for programs starting in the future.
+
 ### Fixed
 - Resolved Bandit security findings and cleaned up unused `# nosec` suppressions:
   - Fixed hardcoded password in `programs/tests/test_list_sorting.py` by adding appropriate suppression for test code.
