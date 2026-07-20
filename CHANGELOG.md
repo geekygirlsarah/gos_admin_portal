@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-20
+
+### Added
+- Implemented automatic email notifications for parents when important financial actions occur:
+  - Notifications sent when a new fee is added to a program (respecting individual fee assignments).
+  - Notifications sent when a payment is recorded, including the payment details and the student's updated remaining balance.
+  - Notifications sent when a sliding scale discount is assigned to a student.
+- Created a standardized, responsive HTML email template system for these notifications, ensuring a professional look with consistent branding.
+- Centralized student balance calculation logic into reusable utility functions to ensure consistency across the portal and email notifications.
+
 ## 2026-07-12
 
 ### Fixed

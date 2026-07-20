@@ -48,6 +48,13 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertIn("Registration Fee", mail.outbox[0].subject)
         self.assertIn("50.00", mail.outbox[0].body)
 
+        # Assert HTML version exists
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_content, mimetype = mail.outbox[0].alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn("New Fee Added</h1>", html_content)
+        self.assertIn("$50.00", html_content)
+
     def test_payment_added_sends_email(self):
         # Add a fee first so balance is interesting
         Fee.objects.create(
@@ -76,6 +83,14 @@ class AutoEmailNotificationsTest(TestCase):
         # Balance should be 100 - 40 = 60
         self.assertIn("60.00", mail.outbox[0].body)
 
+        # Assert HTML version exists
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_content, mimetype = mail.outbox[0].alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn("$40.00", html_content)
+        self.assertIn("Initial payment", html_content)
+        self.assertIn("$60.00", html_content)
+
     def test_sliding_scale_added_sends_email(self):
         # Clear outbox
         mail.outbox = []
@@ -90,6 +105,13 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertEqual(mail.outbox[0].to, [self.parent.personal_email])
         self.assertIn("Sliding Scale Added", mail.outbox[0].subject)
         self.assertIn("50.00%", mail.outbox[0].body)
+
+        # Assert HTML version exists
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_content, mimetype = mail.outbox[0].alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn("50.00%", html_content)
+        self.assertIn("Sliding Scale Added</h1>", html_content)
 
     def test_no_email_if_email_updates_false(self):
         self.parent.email_updates = False

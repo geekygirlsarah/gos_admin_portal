@@ -1,0 +1,17 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}New Fee: {{ fee.name }}{% endblock %}
+
+{% block header %}New Fee Added{% endblock %}
+
+{% block content %}
+<p>A new fee has been added to the program <strong>{{ program.name }}</strong> for <strong>{{ student }}</strong>:</p>
+
+<ul>
+    <li><strong>Fee Name:</strong> {{ fee.name }}</li>
+    <li><strong>Amount:</strong> ${{ fee.amount }}</li>
+    <li><strong>Date:</strong> {{ fee.date|default:fee.created_at.date }}</li>
+</ul>
+
+<p>Log in to the portal to view the full balance sheet.</p>
+{% endblock %}

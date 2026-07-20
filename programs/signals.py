@@ -138,6 +138,7 @@ def notify_parents_on_fee_added(sender, instance, created, **kwargs):
 
     from django.conf import settings
     from django.core.mail import send_mail
+    from django.template.loader import render_to_string
 
     from .models import Enrollment
 
@@ -161,6 +162,12 @@ def notify_parents_on_fee_added(sender, instance, created, **kwargs):
             continue
 
         subject = f"New Fee Added: {instance.name} for {program.name}"
+        context = {
+            "program": program,
+            "student": student,
+            "fee": instance,
+        }
+        html_message = render_to_string("programs/emails/fee_added.html", context)
         message = (
             f"A new fee has been added to the program {program.name} for {student}:\n\n"
             f"Fee Name: {instance.name}\n"
@@ -173,7 +180,9 @@ def notify_parents_on_fee_added(sender, instance, created, **kwargs):
 
         # Send individual emails to avoid leaking other parents' emails if they were grouped
         for parent_email in recipient_list:
-            send_mail(subject, message, from_email, [parent_email])
+            send_mail(
+                subject, message, from_email, [parent_email], html_message=html_message
+            )
 
 
 @receiver(post_save, sender="programs.Payment")
@@ -183,6 +192,7 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
 
     from django.conf import settings
     from django.core.mail import send_mail
+    from django.template.loader import render_to_string
 
     from .utils import get_student_balance_data
 
@@ -206,6 +216,15 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
         details += f" — {instance.notes}"
 
     subject = f"Payment Recorded for {student} - {program.name}"
+    context = {
+        "student": student,
+        "program": program,
+        "payment": instance,
+        "via": via,
+        "details": details,
+        "balance": balance,
+    }
+    html_message = render_to_string("programs/emails/payment_recorded.html", context)
     message = (
         f"A payment has been recorded for {student} in the program {program.name}:\n\n"
         f"Amount: ${instance.amount}\n"
@@ -217,7 +236,9 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
     )
     from_email = settings.DEFAULT_FROM_EMAIL
     for p in parents:
-        send_mail(subject, message, from_email, [p.personal_email])
+        send_mail(
+            subject, message, from_email, [p.personal_email], html_message=html_message
+        )
 
 
 @receiver(post_save, sender="programs.SlidingScale")
@@ -227,6 +248,7 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
 
     from django.conf import settings
     from django.core.mail import send_mail
+    from django.template.loader import render_to_string
 
     student = instance.student
     program = instance.program
@@ -236,6 +258,12 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
         return
 
     subject = f"Sliding Scale Added for {student} - {program.name}"
+    context = {
+        "student": student,
+        "program": program,
+        "sliding_scale": instance,
+    }
+    html_message = render_to_string("programs/emails/sliding_scale_added.html", context)
     message = (
         f"A sliding scale reduction has been added for {student} in the program {program.name}:\n\n"
         f"Reduction Percentage: {instance.percent}%\n"
@@ -244,4 +272,6 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
     )
     from_email = settings.DEFAULT_FROM_EMAIL
     for p in parents:
-        send_mail(subject, message, from_email, [p.personal_email])
+        send_mail(
+            subject, message, from_email, [p.personal_email], html_message=html_message
+        )
