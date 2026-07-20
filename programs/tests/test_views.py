@@ -131,3 +131,20 @@ class ViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Grade Range:")
         self.assertContains(resp, "9th–12th Grade")
+
+    def test_program_student_map_view_has_referrer_policy(self):
+        # Add to LeadMentor group to satisfy permission checks
+        from django.contrib.auth.models import Group
+
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+
+        self.client.login(username="tester", password="pass12345")  # nosec B106
+        program = Program.objects.create(name="Map Test Program")
+        url = reverse("program_student_map", args=[program.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        # Check if referrerPolicy is in the script for TileLayer
+        self.assertContains(resp, "referrerPolicy: 'no-referrer-when-downgrade'")
+        # Check if referrerPolicy is in the fetch call for Nominatim
+        self.assertContains(resp, "referrerPolicy: 'no-referrer-when-downgrade'")
