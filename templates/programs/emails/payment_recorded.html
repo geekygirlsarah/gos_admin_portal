@@ -1,0 +1,22 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Payment Recorded: {{ student }}{% endblock %}
+
+{% block header %}Payment Recorded{% endblock %}
+
+{% block content %}
+<p>A payment has been recorded for <strong>{{ student }}</strong> in the program <strong>{{ program.name }}</strong>:</p>
+
+<ul>
+    <li><strong>Amount:</strong> ${{ payment.amount }}</li>
+    <li><strong>Paid on:</strong> {{ payment.paid_on }}</li>
+    <li><strong>Paid via:</strong> {{ via }}{{ details }}</li>
+    {% if payment.notes %}
+    <li><strong>Notes:</strong> {{ payment.notes }}</li>
+    {% endif %}
+</ul>
+
+<p>Your remaining balance for this program is: <strong>${{ balance|floatformat:2 }}</strong></p>
+
+<p>Thank you!</p>
+{% endblock %}

@@ -13,10 +13,10 @@ class BalanceSheetSlidingScaleTest(TestCase):
         password = "password"  # nosec B105
         self.user = User.objects.create_superuser(
             username="admin",
-            password=password,  # nosec B105
+            password=password,
             email="admin@example.com",
         )
-        self.client.login(username="admin", password=password)  # nosec B105
+        self.client.login(username="admin", password=password)
 
     def test_adjusted_rate_column_presence_and_values(self):
         """

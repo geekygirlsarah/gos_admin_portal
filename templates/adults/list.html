@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load permission_tags %}
+{% load sorting_tags %}
 {% block title %}Adults{% endblock %}
 {% block content %}
   <div class="row mb-3">
@@ -24,9 +25,9 @@
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
+            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
+            <th><a href="{% sort_url 'email' %}" class="text-decoration-none text-dark">Email{% sort_icon 'email' %}</a></th>
+            <th><a href="{% sort_url 'phone' %}" class="text-decoration-none text-dark">Phone{% sort_icon 'phone' %}</a></th>
             <th>Roles</th>
             <th>Student(s)</th>
             <th class="text-end"></th>

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load permission_tags %}
+{% load sorting_tags %}
 {% block title %}Students{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
@@ -26,10 +27,10 @@
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>School</th>
-            <th>Graduation Year</th>
-            <th>Graduated</th>
+            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
+            <th><a href="{% sort_url 'school' %}" class="text-decoration-none text-dark">School{% sort_icon 'school' %}</a></th>
+            <th><a href="{% sort_url 'graduation_year' %}" class="text-decoration-none text-dark">Graduation Year{% sort_icon 'graduation_year' %}</a></th>
+            <th><a href="{% sort_url 'graduated' %}" class="text-decoration-none text-dark">Graduated{% sort_icon 'graduated' %}</a></th>
             <th></th>
           </tr>
         </thead>

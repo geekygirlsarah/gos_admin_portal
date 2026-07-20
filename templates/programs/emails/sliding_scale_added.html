@@ -1,0 +1,16 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Sliding Scale Added: {{ student }}{% endblock %}
+
+{% block header %}Sliding Scale Added{% endblock %}
+
+{% block content %}
+<p>A sliding scale reduction has been added for <strong>{{ student }}</strong> in the program <strong>{{ program.name }}</strong>:</p>
+
+<ul>
+    <li><strong>Reduction Percentage:</strong> {{ sliding_scale.percent }}%</li>
+    <li><strong>Effective Date:</strong> {{ sliding_scale.date|default:sliding_scale.created_at.date }}</li>
+</ul>
+
+<p>This discount will be applied to applicable fees in your balance sheet.</p>
+{% endblock %}
