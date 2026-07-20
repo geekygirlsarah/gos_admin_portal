@@ -70,7 +70,12 @@ from .permission_views import (
     can_user_read,
     can_user_write,
 )
-from .utils import get_safe_url, redirect_back
+from .utils import (
+    compute_sliding_discount_rounded,
+    get_safe_url,
+    get_student_balance_data,
+    redirect_back,
+)
 
 cssutils.log.setLevel(logging.WARNING)
 
@@ -104,22 +109,6 @@ class DynamicReadPermissionMixin(DynamicPermissionMixin):
 
 class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
-
-
-def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> Decimal:
-    """Compute sliding-scale discount as a positive Decimal rounded to the nearest dollar.
-
-    The discount is percent of total_fees, then rounded to whole dollars using half-down rounding
-    (exactly .50 rounds down; above .50 rounds up; below .50 rounds down). If inputs are missing, returns 0.
-    """
-    if total_fees is None or percent is None:
-        return Decimal("0")
-    try:
-        amount = (total_fees * percent) / Decimal("100")
-    except Exception:
-        return Decimal("0")
-    # Round to the nearest whole dollar (e.g., 12.49 -> 12, 12.50 -> 12)
-    return amount.quantize(Decimal("1."), rounding=ROUND_HALF_DOWN)
 
 
 class LogFormSaveMixin:
@@ -2859,111 +2848,12 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
             messages.error(request, f"{student} is not enrolled in {program}.")
             return redirect("program_detail", pk=program.pk)
 
-        # Gather entries: fees (program), sliding scale (if exists), and payments (student for program's fees)
-        entries = []
-        # Sliding scale: include if exists and user has permission
         from .permission_views import can_user_read
 
         can_view_sliding = can_user_read(request.user, "sliding_scale")
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
-
-        # Fees: positive amounts
-        # Use the editable fee.date when provided; otherwise fall back to created_at
-        fees = Fee.objects.filter(program=program)
-        for fee in fees:
-            # If this fee has explicit assignments, include only if this student is assigned
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
-            adjusted_amount = fee.amount
-            if sliding and sliding.percent is not None and can_view_sliding:
-                if not sliding.date or (fee_date and fee_date >= sliding.date):
-                    discount = compute_sliding_discount_rounded(
-                        fee.amount, sliding.percent
-                    )
-                    adjusted_amount = fee.amount - discount
-
-            entries.append(
-                {
-                    "date": fee_date,
-                    "type": "Fee",
-                    "name": fee.name,
-                    "amount": fee.amount,
-                    "adjusted_amount": adjusted_amount,
-                }
-            )
-
-        # Compute total fees for discount: ONLY include fees applicable to this student
-        # and on or after the sliding scale's effective date.
-        applicable_fees_for_discount = []
-        for fee in Fee.objects.filter(program=program):
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-
-            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
-            if sliding and sliding.date and fee_date and fee_date < sliding.date:
-                continue
-
-            applicable_fees_for_discount.append(fee.amount)
-
-        total_fees_for_discount = sum(
-            applicable_fees_for_discount,
-            start=Decimal("0"),
+        balance_data = get_student_balance_data(
+            student, program, can_view_sliding=can_view_sliding
         )
-        if sliding and sliding.percent is not None and can_view_sliding:
-            discount = compute_sliding_discount_rounded(
-                total_fees_for_discount, sliding.percent
-            )
-            entries.append(
-                {
-                    "date": sliding.date or sliding.created_at.date(),
-                    "type": "Sliding Scale",
-                    "name": f"Sliding scale (owes {sliding.percent}%)",
-                    "amount": Decimal("0.00"),
-                    "adjusted_amount": Decimal("0.00"),
-                }
-            )
-        else:
-            discount = Decimal("0")
-
-        # Payments: negative amounts
-        payments = Payment.objects.filter(student=student, program=program)
-        for p in payments:
-            via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
-            details = (
-                f" (check #{p.check_number})"
-                if (p.paid_via == "check" and p.check_number)
-                else ""
-            )
-            if p.paid_via == "other" and p.notes:
-                details += f" — {p.notes}"
-            entries.append(
-                {
-                    "date": p.paid_on,
-                    "type": "Payment",
-                    "name": f"Payment via {via}{details}",
-                    "amount": -p.amount,
-                    "adjusted_amount": -p.amount,
-                    "payment_id": p.id,
-                }
-            )
-
-        # Sort by date (editable fee date, sliding scale created_at, payment paid_on)
-        # Ensure None dates sort last
-        entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
-
-        total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
-        total_sliding = discount
-        total_payments = -sum(
-            [e["amount"] for e in entries if e["type"] == "Payment"]
-        )  # positive figure
-        balance = total_fees - total_sliding - total_payments
 
         from django.shortcuts import render
 
@@ -2973,12 +2863,12 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
             {
                 "program": program,
                 "student": student,
-                "entries": entries,
-                "total_fees": total_fees,
-                "total_sliding": total_sliding,
-                "total_payments": total_payments,
-                "balance": balance,
-                "sliding_scale": sliding,
+                "entries": balance_data["entries"],
+                "total_fees": balance_data["total_fees"],
+                "total_sliding": balance_data["total_sliding"],
+                "total_payments": balance_data["total_payments"],
+                "balance": balance_data["balance"],
+                "sliding_scale": balance_data["sliding_scale"],
             },
         )
 
@@ -3014,102 +2904,12 @@ class ProgramStudentBalancePrintView(
             messages.error(request, f"{student} is not enrolled in {program}.")
             return redirect("program_detail", pk=program.pk)
 
-        # Gather entries similar to balance sheet
-        entries = []
-        # Sliding scale: include if exists and user has permission
         from .permission_views import can_user_read
 
         can_view_sliding = can_user_read(request.user, "sliding_scale")
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
-
-        fees = Fee.objects.filter(program=program)
-        for fee in fees:
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
-            adjusted_amount = fee.amount
-            if sliding and sliding.percent is not None and can_view_sliding:
-                if not sliding.date or (fee_date and fee_date >= sliding.date):
-                    discount = compute_sliding_discount_rounded(
-                        fee.amount, sliding.percent
-                    )
-                    adjusted_amount = fee.amount - discount
-
-            entries.append(
-                {
-                    "date": fee_date,
-                    "type": "Fee",
-                    "name": fee.name,
-                    "amount": fee.amount,
-                    "adjusted_amount": adjusted_amount,
-                }
-            )
-
-        # Compute total fees for discount: ONLY include fees applicable to this student
-        # and on or after the sliding scale's effective date.
-        applicable_fees_for_discount = []
-        for fee in Fee.objects.filter(program=program):
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-
-            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
-            if sliding and sliding.date and fee_date and fee_date < sliding.date:
-                continue
-
-            applicable_fees_for_discount.append(fee.amount)
-
-        total_fees_for_discount = sum(
-            applicable_fees_for_discount,
-            start=Decimal("0"),
+        balance_data = get_student_balance_data(
+            student, program, can_view_sliding=can_view_sliding
         )
-        if sliding and sliding.percent is not None and can_view_sliding:
-            discount = compute_sliding_discount_rounded(
-                total_fees_for_discount, sliding.percent
-            )
-            entries.append(
-                {
-                    "date": sliding.date or sliding.created_at.date(),
-                    "type": "Sliding Scale",
-                    "name": f"Sliding scale (owes {sliding.percent}%)",
-                    "amount": Decimal("0.00"),
-                    "adjusted_amount": Decimal("0.00"),
-                }
-            )
-        else:
-            discount = Decimal("0")
-
-        payments = Payment.objects.filter(student=student, program=program)
-        for p in payments:
-            via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
-            details = (
-                f" (check #{p.check_number})"
-                if (p.paid_via == "check" and p.check_number)
-                else ""
-            )
-            if p.paid_via == "other" and p.notes:
-                details += f" — {p.notes}"
-            entries.append(
-                {
-                    "date": p.paid_on,
-                    "type": "Payment",
-                    "name": f"Payment via {via}{details}",
-                    "amount": -p.amount,
-                    "adjusted_amount": -p.amount,
-                }
-            )
-
-        entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
-
-        total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
-        total_sliding = discount
-        total_payments = -sum([e["amount"] for e in entries if e["type"] == "Payment"])
-        balance = total_fees - total_sliding - total_payments
 
         from django.shortcuts import render
 
@@ -3119,12 +2919,12 @@ class ProgramStudentBalancePrintView(
             {
                 "program": program,
                 "student": student,
-                "entries": entries,
-                "total_fees": total_fees,
-                "total_sliding": total_sliding,
-                "total_payments": total_payments,
-                "balance": balance,
-                "sliding_scale": sliding,
+                "entries": balance_data["entries"],
+                "total_fees": balance_data["total_fees"],
+                "total_sliding": balance_data["total_sliding"],
+                "total_payments": balance_data["total_payments"],
+                "balance": balance_data["balance"],
+                "sliding_scale": balance_data["sliding_scale"],
             },
         )
 
@@ -3349,120 +3149,22 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             Lower("last_name"),
         )
 
-        # Helper to compute balance and entries like ProgramStudentBalanceView
-        from decimal import Decimal
-
         from .permission_views import can_user_read
 
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
 
-        def compute_entries_and_balance(student):
-            entries = []
-            sliding = SlidingScale.objects.filter(
-                student=student, program=program
-            ).first()
-
-            fees = Fee.objects.filter(program=program)
-            for fee in fees:
-                if (
-                    fee.assignments.exists()
-                    and not fee.assignments.filter(student=student).exists()
-                ):
-                    continue
-                fee_date = fee.date or (
-                    fee.created_at.date() if fee.created_at else None
-                )
-                adjusted_amount = fee.amount
-                if sliding and sliding.percent is not None and can_view_sliding:
-                    if not sliding.date or (fee_date and fee_date >= sliding.date):
-                        discount = compute_sliding_discount_rounded(
-                            fee.amount, sliding.percent
-                        )
-                        adjusted_amount = fee.amount - discount
-
-                entries.append(
-                    {
-                        "date": fee_date,
-                        "type": "Fee",
-                        "name": fee.name,
-                        "amount": fee.amount,
-                        "adjusted_amount": adjusted_amount,
-                    }
-                )
-
-            # Compute total fees for discount: ONLY include fees applicable to this student
-            # and on or after the sliding scale's effective date.
-            applicable_fees_for_discount = []
-            for fee in Fee.objects.filter(program=program):
-                if (
-                    fee.assignments.exists()
-                    and not fee.assignments.filter(student=student).exists()
-                ):
-                    continue
-
-                fee_date = fee.date or (
-                    fee.created_at.date() if fee.created_at else None
-                )
-                if sliding and sliding.date and fee_date and fee_date < sliding.date:
-                    continue
-
-                applicable_fees_for_discount.append(fee.amount)
-
-            total_fees_for_discount = sum(
-                applicable_fees_for_discount,
-                start=Decimal("0"),
-            )
-            if sliding and sliding.percent is not None and can_view_sliding:
-                discount = compute_sliding_discount_rounded(
-                    total_fees_for_discount, sliding.percent
-                )
-                entries.append(
-                    {
-                        "date": sliding.date or sliding.created_at.date(),
-                        "type": "Sliding Scale",
-                        "name": f"Sliding scale (owes {sliding.percent}%)",
-                        "amount": Decimal("0.00"),
-                        "adjusted_amount": Decimal("0.00"),
-                    }
-                )
-            else:
-                discount = Decimal("0")
-
-            payments = Payment.objects.filter(student=student, program=program)
-            for p in payments:
-                via = dict(Payment.PAID_VIA_CHOICES).get(p.paid_via, p.paid_via)
-                details = (
-                    f" (check #{p.check_number})"
-                    if (p.paid_via == "check" and p.check_number)
-                    else ""
-                )
-                if p.paid_via == "other" and p.notes:
-                    details += f" — {p.notes}"
-                entries.append(
-                    {
-                        "date": p.paid_on,
-                        "type": "Payment",
-                        "name": f"Payment via {via}{details}",
-                        "amount": -p.amount,
-                        "adjusted_amount": -p.amount,
-                        "payment_id": p.id,
-                    }
-                )
-            entries.sort(key=lambda e: (e["date"] is None, e["date"], e["type"]))
-            total_fees = sum([e["amount"] for e in entries if e["type"] == "Fee"])
-            total_sliding = discount
-            total_payments = -sum(
-                [e["amount"] for e in entries if e["type"] == "Payment"]
-            )
-            balance = total_fees - total_sliding - total_payments
-            return entries, total_fees, total_sliding, total_payments, balance, sliding
-
         # Build list of targets with non-empty recipient emails
         targets = []
         for s in students:
-            entries, total_fees, total_sliding, total_payments, balance, sliding = (
-                compute_entries_and_balance(s)
+            balance_data = get_student_balance_data(
+                s, program, can_view_sliding=can_view_sliding
             )
+            entries = balance_data["entries"]
+            total_fees = balance_data["total_fees"]
+            total_sliding = balance_data["total_sliding"]
+            total_payments = balance_data["total_payments"]
+            balance = balance_data["balance"]
+            sliding = balance_data["sliding_scale"]
 
             # Apply recipient filters
             if recipient_filter == "non_zero" and balance == 0:
