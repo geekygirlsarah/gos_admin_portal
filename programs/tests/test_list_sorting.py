@@ -9,7 +9,9 @@ from programs.models import Adult, Program, School, Student
 class ListSortingTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser(
-            username="admin", password="password", email="admin@example.com"
+            username="admin",
+            password="password",
+            email="admin@example.com",  # nosec B106
         )
         self.client = Client()
         self.client.force_login(self.user)

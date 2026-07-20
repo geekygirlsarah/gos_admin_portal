@@ -51,14 +51,16 @@ def render_field(field, **kwargs):
                 if field.label
                 else ""
             )
-            content = f'<div class="form-check">{input_html}{label_html}</div>'
+            content = format_html(
+                '<div class="form-check">{}{}</div>', input_html, label_html
+            )
         elif isinstance(widget, widgets.CheckboxSelectMultiple):
             # Group of checkboxes
             label_html = (
                 field.label_tag(attrs={"class": "form-label"}) if field.label else ""
             )
             input_html = field.as_widget(attrs=attrs)
-            content = f"{label_html}{input_html}"
+            content = format_html("{}{}", label_html, input_html)
         else:
             # Selects get form-select, others form-control
             if isinstance(widget, (widgets.Select, widgets.SelectMultiple)):
@@ -71,7 +73,7 @@ def render_field(field, **kwargs):
             label_html = (
                 field.label_tag(attrs={"class": "form-label"}) if field.label else ""
             )
-            content = f"{label_html}{input_html}"
+            content = format_html("{}{}", label_html, input_html)
 
         # Help text and errors
         help_html = (
@@ -90,7 +92,7 @@ def render_field(field, **kwargs):
             errors_html = error_items
         return format_html(
             '<div class="mb-3">{}{}{}</div>',
-            mark_safe(content),  # nosec B308 B703
+            content,
             help_html,
             errors_html,
         )

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-20
 
+### Fixed
+- Resolved Bandit security findings and cleaned up unused `# nosec` suppressions:
+  - Fixed hardcoded password in `programs/tests/test_list_sorting.py` by adding appropriate suppression for test code.
+  - Resolved `mark_safe` warnings in `programs/templatetags/sorting_tags.py` for static HTML entities.
+  - Refactored `programs/templatetags/form_tags.py` to use `format_html` instead of `mark_safe`, improving security and eliminating redundant suppressions.
+  - Cleaned up unnecessary `# nosec` comments in `programs/tests/test_balance_sheet.py`.
+
 ### Added
 - Implemented automatic email notifications for parents when important financial actions occur:
   - Notifications sent when a new fee is added to a program (respecting individual fee assignments).

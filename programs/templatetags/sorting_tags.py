@@ -30,7 +30,7 @@ def sort_icon(context, field):
 
     if current_sort == field:
         if current_dir == "asc":
-            return mark_safe("&nbsp;&uarr;")
+            return mark_safe("&nbsp;&uarr;")  # nosec B308
         else:
-            return mark_safe("&nbsp;&darr;")
+            return mark_safe("&nbsp;&darr;")  # nosec B308
     return ""
