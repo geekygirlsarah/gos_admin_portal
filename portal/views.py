@@ -50,7 +50,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 .select_related("program")
                 .order_by("-program__start_date")
             )
-            context["student_enrollments"] = enrollments
+            # Separate active from non-active programs for a cleaner dashboard
+            active_enrollments = []
+            other_enrollments = []
+            for e in enrollments:
+                if e.program.status == "Active" and e.active:
+                    active_enrollments.append(e)
+                else:
+                    other_enrollments.append(e)
+
+            context["active_enrollments"] = active_enrollments
+            context["other_enrollments"] = other_enrollments
+            context["student_enrollments"] = enrollments  # Keep for compatibility
 
         # ── Adult profile (parent / mentor / alumni) ─────────────────────────
         adult = getattr(user, "adult_profile", None)
@@ -72,17 +83,33 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         .select_related("program")
                         .order_by("-program__start_date")
                     )
-                    program_rows = []
+                    active_rows = []
+                    other_rows = []
                     for e in enrollments:
                         balance = _compute_student_program_balance(s, e.program)
-                        program_rows.append({"enrollment": e, "balance": balance})
+                        row = {"enrollment": e, "balance": balance}
+                        if e.program.status == "Active" and e.active:
+                            active_rows.append(row)
+                        else:
+                            other_rows.append(row)
                     parent_data.append(
                         {
                             "student": s,
-                            "program_rows": program_rows,
+                            "active_rows": active_rows,
+                            "other_rows": other_rows,
+                            "program_rows": active_rows
+                            + other_rows,  # Keep for compatibility
                         }
                     )
                 context["parent_data"] = parent_data
+
+            if adult.is_mentor:
+                from programs.models import Program
+
+                # Get all programs that are currently Active
+                all_active = Program.objects.filter(active=True).order_by("name")
+                mentor_active_programs = [p for p in all_active if p.status == "Active"]
+                context["mentor_active_programs"] = mentor_active_programs
 
             if adult.is_alumni:
                 from programs.models import Enrollment

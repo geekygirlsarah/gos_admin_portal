@@ -381,6 +381,20 @@ class Program(models.Model):
     def has_feature(self, key: str) -> bool:
         return key in self.feature_keys
 
+    @property
+    def status(self) -> str:
+        """Return 'Active', 'Upcoming', or 'Inactive' based on active flag and dates."""
+        from django.utils import timezone
+
+        today = timezone.now().date()
+        if not self.active:
+            return "Inactive"
+        if self.start_date and self.start_date > today:
+            return "Upcoming"
+        if self.end_date and self.end_date < today:
+            return "Inactive"
+        return "Active"
+
     def save(self, *args, **kwargs):
         if not self.applications_open and self.start_date:
             self.applications_open = self.start_date
