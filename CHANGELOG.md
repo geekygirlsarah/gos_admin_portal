@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-21
+
+### Added
+- Implemented automatic email notifications for applicants (students and parents) when their application is converted to a program enrollment.
+- Created new email templates for conversion notifications, informing them of their enrollment and that further program information will follow soon.
+- Added a "Resend Conversion Email" button to the application review screen for lead mentors to resend enrollment notifications.
+
 ## 2026-07-20
 
 ### Changed
