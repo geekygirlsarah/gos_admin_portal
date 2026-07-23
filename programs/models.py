@@ -1093,10 +1093,13 @@ class Fee(models.Model):
     name = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     # Editable date for when the fee is considered received/posted
-    date = models.DateField(
+    effective_date = models.DateField(
         blank=True,
         null=True,
-        help_text="Date the fee was posted/received (used for balance sheet sorting).",
+        help_text="Effective date the fee was posted/received (used for balance sheet sorting).",
+    )
+    due_date = models.DateField(
+        blank=True, null=True, help_text="Optional due date for the fee."
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

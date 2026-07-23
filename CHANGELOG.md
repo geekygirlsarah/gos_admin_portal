@@ -4,10 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-23
 
+### Added
+- Added an optional `due_date` field to Fees to help parents track payment deadlines.
+- Displayed Fee due dates on student balance sheets (web and printable versions) and in the mentor's fee management list.
+- Included Fee due dates in automated email notifications when a new fee is added and in payment confirmation notifications.
+
+### Fixed
+- Fixed a broken HTML tag in the payment recording email template.
+
 ### Changed
+- Renamed the Fee's "date" field to "effective date" to improve clarity and distinguish it from due dates.
 - Refactored email notification logic for fees, payments, and sliding scale discounts.
 - Centralized email sending into a reusable `send_templated_notification` utility that automatically generates plain-text versions from HTML templates.
 - Removed redundant hardcoded message strings from the codebase, ensuring email content is managed exclusively through templates.
+- Reworded parts of the fee and payment emails to be more clear on next steps for parents.
 
 ## 2026-07-21
 

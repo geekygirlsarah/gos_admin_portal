@@ -204,6 +204,7 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
         "via": via,
         "details": details,
         "balance": balance,
+        "entries": balance_data["entries"],
     }
     recipient_list = [p.personal_email for p in parents]
     send_templated_notification(

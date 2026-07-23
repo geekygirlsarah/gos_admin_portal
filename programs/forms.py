@@ -632,10 +632,11 @@ class FeeAssignmentEditForm(forms.Form):
 class FeeForm(forms.ModelForm):
     class Meta:
         model = Fee
-        fields = ["program", "name", "amount", "date"]
+        fields = ["program", "name", "amount", "effective_date", "due_date"]
         widgets = {
             "program": forms.HiddenInput(),
-            "date": forms.DateInput(attrs={"type": "date"}),
+            "effective_date": forms.DateInput(attrs={"type": "date"}),
+            "due_date": forms.DateInput(attrs={"type": "date"}),
         }
 
     def __init__(self, *args, program: Program = None, **kwargs):

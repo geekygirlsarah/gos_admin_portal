@@ -23,7 +23,8 @@
                   <tr>
                     <th>Name</th>
                     <th>Amount</th>
-                    <th>Date</th>
+                    <th>Effective Date</th>
+                    <th>Due Date</th>
                     <th class="text-end">Actions</th>
                   </tr>
                 </thead>
@@ -32,7 +33,8 @@
                     <tr>
                       <td>{{ f.name }}</td>
                       <td>${{ f.amount }}</td>
-                      <td>{{ f.date|default:'—' }}</td>
+                      <td>{{ f.effective_date|default:'—' }}</td>
+                      <td>{{ f.due_date|default:'—' }}</td>
                       <td class="text-end">
                         <a class="btn btn-sm btn-outline-primary" href="{% url 'program_fee_edit' program.id f.id %}">Edit</a>
                         <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_fee_assignments' program.id f.id %}">Applicability</a>

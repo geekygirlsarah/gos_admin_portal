@@ -30,7 +30,7 @@ class SlidingScaleTimeRestrictedtest(TestCase):
             program=program,
             name="Past Fee",
             amount=Decimal("100.00"),
-            date=datetime.date(2026, 1, 1),
+            effective_date=datetime.date(2026, 1, 1),
         )
 
         # Fee 2: "Future" fee (Mar 1)
@@ -38,7 +38,7 @@ class SlidingScaleTimeRestrictedtest(TestCase):
             program=program,
             name="Future Fee",
             amount=Decimal("100.00"),
-            date=datetime.date(2026, 3, 1),
+            effective_date=datetime.date(2026, 3, 1),
         )
 
         # Sliding scale: 50% discount starting Feb 1
@@ -80,13 +80,13 @@ class SlidingScaleTimeRestrictedtest(TestCase):
             program=program,
             name="Fee 1",
             amount=Decimal("100.00"),
-            date=datetime.date(2026, 1, 1),
+            effective_date=datetime.date(2026, 1, 1),
         )
         Fee.objects.create(
             program=program,
             name="Fee 2",
             amount=Decimal("100.00"),
-            date=datetime.date(2026, 3, 1),
+            effective_date=datetime.date(2026, 3, 1),
         )
 
         SlidingScale.objects.create(

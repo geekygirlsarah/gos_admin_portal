@@ -3346,7 +3346,7 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             ):
                 continue
 
-            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            fee_date = fee.effective_date or (fee.created_at.date() if fee.created_at else None)
             if sliding and sliding.date and fee_date and fee_date < sliding.date:
                 continue
 
