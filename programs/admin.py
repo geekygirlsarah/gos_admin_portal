@@ -91,7 +91,14 @@ class ProgramAdmin(admin.ModelAdmin):
 
 @admin.register(Fee)
 class FeeAdmin(admin.ModelAdmin):
-    list_display = ("program", "name", "amount", "effective_date", "due_date", "updated_at")
+    list_display = (
+        "program",
+        "name",
+        "amount",
+        "effective_date",
+        "due_date",
+        "updated_at",
+    )
     list_filter = ("program", "effective_date", "due_date")
     search_fields = ("name", "program__name")
 

@@ -560,7 +560,9 @@ def get_student_balance_data(student, program, can_view_sliding=True):
             and not fee.assignments.filter(student=student).exists()
         ):
             continue
-        fee_date = fee.effective_date or (fee.created_at.date() if fee.created_at else None)
+        fee_date = fee.effective_date or (
+            fee.created_at.date() if fee.created_at else None
+        )
         adjusted_amount = fee.amount
         if sliding and sliding.percent is not None and can_view_sliding:
             if not sliding.date or (fee_date and fee_date >= sliding.date):
@@ -588,7 +590,9 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         ):
             continue
 
-        fee_date = fee.effective_date or (fee.created_at.date() if fee.created_at else None)
+        fee_date = fee.effective_date or (
+            fee.created_at.date() if fee.created_at else None
+        )
         if sliding and sliding.date and fee_date and fee_date < sliding.date:
             continue
 
