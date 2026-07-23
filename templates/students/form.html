@@ -19,6 +19,53 @@
           <a class="btn btn-secondary" href="{{ request.GET.next|default:'/' }}">Cancel</a>
         </div>
       </form>
+
+      {% if enrollments %}
+      <hr class="my-5">
+      <h2 class="h4 mb-3">Program Enrollments</h2>
+      <div class="card mb-4">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Program</th>
+                <th>Status</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in enrollments %}
+              <tr>
+                <td>{{ e.program }}</td>
+                <td>
+                  {% if e.active %}
+                    <span class="badge bg-success">Active</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Inactive</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <form action="{% url 'program_enrollment_update' e.program.id %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="enrollment_id" value="{{ e.id }}">
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    {% if e.active %}
+                      <input type="hidden" name="active" value="false">
+                      <button type="submit" class="btn btn-sm btn-warning">Mark Inactive</button>
+                    {% else %}
+                      <input type="hidden" name="active" value="true">
+                      <button type="submit" class="btn btn-sm btn-success">Mark Active</button>
+                    {% endif %}
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
       <script nonce="{{ request.csp_nonce }}">
         (function(){
           function calcGraduationYearFromGrade(grade){

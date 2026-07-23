@@ -30,6 +30,7 @@ from .services import (
     convert_application_to_student,
     get_primary_parent_email,
     send_application_approved_email,
+    send_application_converted_email,
     send_application_declined_email,
     send_application_submitted_email,
     send_otp_email,
@@ -529,6 +530,12 @@ class ApplicationResendEmailView(_ReviewerRequiredMixin, View):
                     application, application.decline_reason, request=request
                 )
                 messages.success(request, "Resent decline email.")
+        elif email_type == "converted":
+            if application.status != Application.Status.CONVERTED:
+                messages.error(request, "This application has not been converted yet.")
+            else:
+                send_application_converted_email(application, request=request)
+                messages.success(request, "Resent conversion enrollment email.")
         else:
             messages.error(request, f"Unknown email type: {email_type}")
 

@@ -537,6 +537,29 @@ def send_application_declined_email(
     )
 
 
+def send_application_converted_email(application: Application, request=None) -> None:
+    """Notify the applicant that their application was converted to a student.
+
+    Recipients are the student + primary parent/guardian (or just the
+    parent when the student has no email), matching the submission
+    confirmation behavior. Called when an application is CONVERTED.
+    """
+    recipients = _collect_applicant_recipients(application)
+    if not recipients:
+        return
+    ctx = {
+        "application": application,
+    }
+    text_body = render_to_string("applications/email/application_converted.txt", ctx)
+    html_body = render_to_string("applications/email/application_converted.html", ctx)
+    _send_html_email(
+        subject="Welcome to Girls of Steel Robotics!",
+        text_body=text_body,
+        html_body=html_body,
+        recipients=recipients,
+    )
+
+
 class ApplicationConversionError(Exception):
     """Raised when an application cannot be converted to a Student."""
 
@@ -892,6 +915,9 @@ def convert_application_to_student(application: Application, request=None):
                 "updated_at",
             ]
         )
+
+    # Send notification email outside the transaction
+    send_application_converted_email(application, request=request)
 
     return student
 

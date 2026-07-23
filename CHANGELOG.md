@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-23
+
+### Added
+- Added an optional `due_date` field to Fees to help parents track payment deadlines.
+- Displayed Fee due dates on student balance sheets (web and printable versions) and in the mentor's fee management list.
+- Included Fee due dates in automated email notifications when a new fee is added and in payment confirmation notifications.
+
+### Fixed
+- Fixed a broken HTML tag in the payment recording email template.
+- Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
+
+### Changed
+- Renamed the Fee's "date" field to "effective date" to improve clarity and distinguish it from due dates.
+- Refactored email notification logic for fees, payments, and sliding scale discounts.
+- Centralized email sending into a reusable `send_templated_notification` utility that automatically generates plain-text versions from HTML templates.
+- Removed redundant hardcoded message strings from the codebase, ensuring email content is managed exclusively through templates.
+- Reworded parts of the fee and payment emails to be more clear on next steps for parents.
+- Updated program roster views (Signout sheet, Schools view, Map view) to only show students currently marked as active in the program.
+- Updated program emails to automatically exclude students (and their parents) who are marked as inactive in that program.
+- Re-added the ability for admins to mark a student as inactive within a specific program. This is useful for tracking students who have dropped out without removing their history or graduation status.
+- Added a "Program Enrollments" section to the student edit page to allow managing a student's active status in specific programs.
+
+## 2026-07-21
+
+### Added
+- Implemented automatic email notifications for applicants (students and parents) when their application is converted to a program enrollment.
+- Created new email templates for conversion notifications, informing them of their enrollment and that further program information will follow soon.
+- Added a "Resend Conversion Email" button to the application review screen for lead mentors to resend enrollment notifications.
+
 ## 2026-07-20
 
 ### Changed

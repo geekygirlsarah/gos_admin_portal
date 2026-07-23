@@ -46,6 +46,9 @@
                       {% endif %}
                     {% else %}
                       {{ e.name }}
+                      {% if e.due_date %}
+                        <div class="text-danger small">Due: {{ e.due_date }}</div>
+                      {% endif %}
                     {% endif %}
                   </td>
                   <td class="text-end">${{ e.amount|floatformat:2 }}</td>

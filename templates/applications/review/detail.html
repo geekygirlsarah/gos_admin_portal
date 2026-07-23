@@ -130,6 +130,16 @@
               </form>
             {% endif %}
 
+            {% if application.status == 'converted' %}
+              <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="type" value="converted">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
+                  Resend Conversion Email
+                </button>
+              </form>
+            {% endif %}
+
             {% if application.status == 'declined' %}
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}

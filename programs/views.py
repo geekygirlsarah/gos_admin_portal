@@ -1875,14 +1875,19 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(programs=prog, graduated=False):
+                for s in Student.objects.filter(
+                    enrollment__program=prog, enrollment__active=True, graduated=False
+                ).distinct():
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if "parents" in groups:
                 for parent in Adult.objects.filter(
-                    students__programs=prog, email_updates=True, active=True
+                    students__enrollment__program=prog,
+                    students__enrollment__active=True,
+                    email_updates=True,
+                    active=True,
                 ).distinct():
                     e = parent.personal_email or parent.andrew_email
                     if e:
@@ -2072,12 +2077,12 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
                 base_qs = Enrollment.objects.none()
 
         # Split into active and inactive sections
-        ctx["active_enrollments"] = base_qs.filter(student__graduated=False).order_by(
-            "sort_first", "sort_last"
-        )
-        ctx["inactive_enrollments"] = base_qs.filter(student__graduated=True).order_by(
-            "sort_first", "sort_last"
-        )
+        ctx["active_enrollments"] = base_qs.filter(
+            active=True, student__graduated=False
+        ).order_by("sort_first", "sort_last")
+        ctx["inactive_enrollments"] = base_qs.exclude(
+            active=True, student__graduated=False
+        ).order_by("sort_first", "sort_last")
 
         # Backwards compatibility (old templates may rely on a single list)
         ctx["active_students"] = [e.student for e in ctx["active_enrollments"]]
@@ -2173,6 +2178,8 @@ class StudentUpdateView(
             else set()
         )
         ctx["program_feature_keys"] = keys
+        if student:
+            ctx["enrollments"] = student.enrollment_set.all().select_related("program")
         return ctx
 
     def form_valid(self, form):
@@ -2312,9 +2319,16 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         team_id = request.POST.get("team_id")
         crew_id = request.POST.get("crew_id")
         subteam_id = request.POST.get("subteam_id")
+        active = request.POST.get("active")
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
 
         updated_fields = []
+        if active is not None:
+            new_active = active.lower() == "true"
+            if enrollment.active != new_active:
+                enrollment.active = new_active
+                updated_fields.append("Active status")
+
         if team_id is not None:
             if team_id:
                 team = get_object_or_404(Team, id=team_id)
@@ -2345,6 +2359,10 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 request,
                 f"{' and '.join(updated_fields)} updated for {enrollment.student}.",
             )
+        next_url = request.POST.get("next")
+        safe_url = get_safe_url(request, next_url)
+        if safe_url:
+            return redirect(safe_url)
         return redirect("program_detail", pk=pk)
 
 
@@ -3346,7 +3364,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             ):
                 continue
 
-            fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+            fee_date = fee.effective_date or (
+                fee.created_at.date() if fee.created_at else None
+            )
             if sliding and sliding.date and fee_date and fee_date < sliding.date:
                 continue
 
@@ -3378,29 +3398,43 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Only active (non-graduated) students enrolled in this program
-        students = (
-            Student.objects.filter(enrollment__program=program, graduated=False)
-            .select_related("school")
+        # Fetch all enrollments for this program.
+        enrollments = (
+            Enrollment.objects.filter(program=program)
+            .select_related("student", "student__school")
             .order_by(
-                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
-                Lower("last_name"),
+                Lower(
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                Lower("student__last_name"),
             )
         )
 
-        rows = []
+        active_rows = []
+        inactive_rows = []
         grand_total = 0
         filter_owed = request.GET.get("filter") == "owed"
-        for s in students:
+        for e in enrollments:
+            s = e.student
             balance_sum = self._program_balance_for_student(s, program)
             if filter_owed and balance_sum <= 0:
                 continue
-            rows.append(
-                {
-                    "student": s,
-                    "amount_owed": balance_sum,
-                }
-            )
+
+            row = {
+                "student": s,
+                "amount_owed": balance_sum,
+            }
+
+            # A student is inactive if their enrollment is marked inactive,
+            # or if the student record itself is marked graduated.
+            if not e.active or s.graduated:
+                inactive_rows.append(row)
+            else:
+                active_rows.append(row)
+
             grand_total += balance_sum
 
         return render(
@@ -3408,7 +3442,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             self.template_name,
             {
                 "program": program,
-                "rows": rows,
+                "active_rows": active_rows,
+                "inactive_rows": inactive_rows,
+                "rows": active_rows + inactive_rows,
                 "grand_total": grand_total,
                 "filter_owed": filter_owed,
             },
@@ -3435,7 +3471,11 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
             )
         )
         students = list(
-            base_qs.filter(graduated=False).order_by("sort_first", "sort_last")
+            base_qs.filter(
+                enrollment__program=program, enrollment__active=True, graduated=False
+            )
+            .distinct()
+            .order_by("sort_first", "sort_last")
         )
         ctx = {
             "program": program,
@@ -3454,7 +3494,10 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         program = get_object_or_404(Program, pk=pk)
         # Active (non-graduated) students enrolled in this program, grouped by school
         students = (
-            Student.objects.filter(enrollment__program=program, graduated=False)
+            Student.objects.filter(
+                enrollment__program=program, enrollment__active=True, graduated=False
+            )
+            .distinct()
             .select_related("school")
             .annotate(
                 sort_first=Coalesce(
@@ -3490,7 +3533,10 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
         program = get_object_or_404(Program, pk=pk)
         # Active (non-graduated) students enrolled in this program with some address info
         students = (
-            Student.objects.filter(programs=program, graduated=False)
+            Student.objects.filter(
+                enrollment__program=program, enrollment__active=True, graduated=False
+            )
+            .distinct()
             .only(
                 "first_name",
                 "legal_first_name",

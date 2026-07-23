@@ -31,6 +31,41 @@ def send_otp_email(email, otp):
     send_mail(subject, message, from_email, [email])
 
 
+def send_templated_notification(
+    subject, template_name, context, recipient_list, from_email=None
+):
+    """
+    Renders an HTML template and sends it as an email with a plain-text fallback
+    generated from the HTML content.
+    """
+    import html
+    import re
+
+    from django.template.loader import render_to_string
+    from django.utils.html import strip_tags
+
+    if from_email is None:
+        from_email = settings.DEFAULT_FROM_EMAIL
+        name = getattr(settings, "DEFAULT_FROM_NAME", None)
+        if name:
+            from_email = f'"{name}" <{from_email}>'
+
+    html_message = render_to_string(template_name, context)
+    # Generate a reasonable plain text version from the HTML by stripping tags and unescaping
+    plain_message = html.unescape(strip_tags(html_message)).strip()
+    # Normalize excessive whitespace/newlines
+    plain_message = re.sub(r"\n\s*\n", "\n\n", plain_message)
+
+    for recipient in recipient_list:
+        send_mail(
+            subject,
+            plain_message,
+            from_email,
+            [recipient],
+            html_message=html_message,
+        )
+
+
 def generate_signed_parent_url(application_id):
     signer = TimestampSigner()
     token = signer.sign(str(application_id))
@@ -525,7 +560,9 @@ def get_student_balance_data(student, program, can_view_sliding=True):
             and not fee.assignments.filter(student=student).exists()
         ):
             continue
-        fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+        fee_date = fee.effective_date or (
+            fee.created_at.date() if fee.created_at else None
+        )
         adjusted_amount = fee.amount
         if sliding and sliding.percent is not None and can_view_sliding:
             if not sliding.date or (fee_date and fee_date >= sliding.date):
@@ -535,6 +572,7 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         entries.append(
             {
                 "date": fee_date,
+                "due_date": fee.due_date,
                 "type": "Fee",
                 "name": fee.name,
                 "amount": fee.amount,
@@ -552,7 +590,9 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         ):
             continue
 
-        fee_date = fee.date or (fee.created_at.date() if fee.created_at else None)
+        fee_date = fee.effective_date or (
+            fee.created_at.date() if fee.created_at else None
+        )
         if sliding and sliding.date and fee_date and fee_date < sliding.date:
             continue
 
