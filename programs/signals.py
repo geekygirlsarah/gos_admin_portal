@@ -137,7 +137,6 @@ def notify_parents_on_fee_added(sender, instance, created, **kwargs):
         return
 
     from .models import Enrollment
-    from .utils import send_templated_notification
 
     program = instance.program
     # Find all students enrolled in this program
@@ -152,22 +151,58 @@ def notify_parents_on_fee_added(sender, instance, created, **kwargs):
         ):
             continue
 
-        parents = [
-            p for p in student.all_parents if p.email_updates and p.personal_email
-        ]
-        if not parents:
+        _send_fee_notification(student, program, instance)
+
+
+@receiver(post_save, sender="programs.Enrollment")
+def notify_parents_on_enrollment(sender, instance, created, **kwargs):
+    if not created:
+        return
+
+    from .models import Fee
+
+    student = instance.student
+    program = instance.program
+
+    # Find all fees for this program
+    fees = Fee.objects.filter(program=program)
+
+    for fee in fees:
+        # If the fee is assigned to specific students, only notify if this student is one of them
+        if (
+            fee.assignments.exists()
+            and not fee.assignments.filter(student=student).exists()
+        ):
             continue
 
-        subject = f"New Fee Added: {instance.name} for {program.name}"
-        context = {
-            "program": program,
-            "student": student,
-            "fee": instance,
-        }
-        recipient_list = [p.personal_email for p in parents]
-        send_templated_notification(
-            subject, "programs/emails/fee_added.html", context, recipient_list
-        )
+        _send_fee_notification(student, program, fee)
+
+
+@receiver(post_save, sender="programs.FeeAssignment")
+def notify_parents_on_fee_assignment(sender, instance, created, **kwargs):
+    if not created:
+        return
+
+    _send_fee_notification(instance.student, instance.fee.program, instance.fee)
+
+
+def _send_fee_notification(student, program, fee):
+    from .utils import send_templated_notification
+
+    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    if not parents:
+        return
+
+    subject = f"New Fee Added: {fee.name} for {program.name}"
+    context = {
+        "program": program,
+        "student": student,
+        "fee": fee,
+    }
+    recipient_list = [p.personal_email for p in parents]
+    send_templated_notification(
+        subject, "programs/emails/fee_added.html", context, recipient_list
+    )
 
 
 @receiver(post_save, sender="programs.Payment")

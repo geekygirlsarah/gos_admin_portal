@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-23
 
 ### Added
+- Automatically send fee information emails to parents when a student is enrolled in a program that has existing fees.
+- Added a notification for specific fee assignments, ensuring parents are notified when a student is assigned to a non-global fee.
 - Added an optional `due_date` field to Fees to help parents track payment deadlines.
 - Displayed Fee due dates on student balance sheets (web and printable versions) and in the mentor's fee management list.
 - Included Fee due dates in automated email notifications when a new fee is added and in payment confirmation notifications.
 
 ### Fixed
+- Fixed the "Edit Fee" and "Add Fee" pages where input fields for name, amount, and date were missing or incorrectly rendered. Also made the page look nicer.
 - Fixed a broken HTML tag in the payment recording email template.
 - Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
