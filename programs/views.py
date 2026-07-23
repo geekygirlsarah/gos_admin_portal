@@ -3378,29 +3378,43 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         from django.shortcuts import render
 
         program = get_object_or_404(Program, pk=pk)
-        # Only active (non-graduated) students enrolled in this program
-        students = (
-            Student.objects.filter(enrollment__program=program, graduated=False)
-            .select_related("school")
+        # Fetch all enrollments for this program.
+        enrollments = (
+            Enrollment.objects.filter(program=program)
+            .select_related("student", "student__school")
             .order_by(
-                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
-                Lower("last_name"),
+                Lower(
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                Lower("student__last_name"),
             )
         )
 
-        rows = []
+        active_rows = []
+        inactive_rows = []
         grand_total = 0
         filter_owed = request.GET.get("filter") == "owed"
-        for s in students:
+        for e in enrollments:
+            s = e.student
             balance_sum = self._program_balance_for_student(s, program)
             if filter_owed and balance_sum <= 0:
                 continue
-            rows.append(
-                {
-                    "student": s,
-                    "amount_owed": balance_sum,
-                }
-            )
+
+            row = {
+                "student": s,
+                "amount_owed": balance_sum,
+            }
+
+            # A student is inactive if their enrollment is marked inactive,
+            # or if the student record itself is marked graduated.
+            if not e.active or s.graduated:
+                inactive_rows.append(row)
+            else:
+                active_rows.append(row)
+
             grand_total += balance_sum
 
         return render(
@@ -3408,7 +3422,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             self.template_name,
             {
                 "program": program,
-                "rows": rows,
+                "active_rows": active_rows,
+                "inactive_rows": inactive_rows,
+                "rows": active_rows + inactive_rows,
                 "grand_total": grand_total,
                 "filter_owed": filter_owed,
             },

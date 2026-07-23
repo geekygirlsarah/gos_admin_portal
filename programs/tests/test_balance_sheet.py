@@ -34,7 +34,7 @@ class BalanceSheetSlidingScaleTest(TestCase):
             program=program,
             name="Early Fee",
             amount=Decimal("100.00"),
-            date=datetime.date(2026, 1, 1),
+            effective_date=datetime.date(2026, 1, 1),
         )
 
         # Fee 2: After sliding scale (Mar 1)
@@ -42,7 +42,7 @@ class BalanceSheetSlidingScaleTest(TestCase):
             program=program,
             name="Late Fee",
             amount=Decimal("200.00"),
-            date=datetime.date(2026, 3, 1),
+            effective_date=datetime.date(2026, 3, 1),
         )
 
         # Sliding scale: 50% discount starting Feb 1
