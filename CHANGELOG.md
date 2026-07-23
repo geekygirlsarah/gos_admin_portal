@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-23
+
+### Changed
+- Refactored email notification logic for fees, payments, and sliding scale discounts.
+- Centralized email sending into a reusable `send_templated_notification` utility that automatically generates plain-text versions from HTML templates.
+- Removed redundant hardcoded message strings from the codebase, ensuring email content is managed exclusively through templates.
+
 ## 2026-07-21
 
 ### Added

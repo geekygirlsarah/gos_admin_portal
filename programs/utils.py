@@ -31,6 +31,41 @@ def send_otp_email(email, otp):
     send_mail(subject, message, from_email, [email])
 
 
+def send_templated_notification(
+    subject, template_name, context, recipient_list, from_email=None
+):
+    """
+    Renders an HTML template and sends it as an email with a plain-text fallback
+    generated from the HTML content.
+    """
+    import html
+    import re
+
+    from django.template.loader import render_to_string
+    from django.utils.html import strip_tags
+
+    if from_email is None:
+        from_email = settings.DEFAULT_FROM_EMAIL
+        name = getattr(settings, "DEFAULT_FROM_NAME", None)
+        if name:
+            from_email = f'"{name}" <{from_email}>'
+
+    html_message = render_to_string(template_name, context)
+    # Generate a reasonable plain text version from the HTML by stripping tags and unescaping
+    plain_message = html.unescape(strip_tags(html_message)).strip()
+    # Normalize excessive whitespace/newlines
+    plain_message = re.sub(r"\n\s*\n", "\n\n", plain_message)
+
+    for recipient in recipient_list:
+        send_mail(
+            subject,
+            plain_message,
+            from_email,
+            [recipient],
+            html_message=html_message,
+        )
+
+
 def generate_signed_parent_url(application_id):
     signer = TimestampSigner()
     token = signer.sign(str(application_id))
