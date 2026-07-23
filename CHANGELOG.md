@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Fixed a broken HTML tag in the payment recording email template.
+- Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Changed
 - Renamed the Fee's "date" field to "effective date" to improve clarity and distinguish it from due dates.

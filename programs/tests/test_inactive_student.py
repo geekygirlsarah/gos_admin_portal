@@ -8,9 +8,11 @@ from programs.models import Enrollment, Program, Student
 class InactiveStudentTest(TestCase):
     def setUp(self):
         self.admin_user = User.objects.create_superuser(
-            username="admin", password="password", email="admin@example.com"
+            username="admin",
+            password="password",
+            email="admin@example.com",  # nosec B106
         )
-        self.client.login(username="admin", password="password")
+        self.client.login(username="admin", password="password")  # nosec B106
 
         self.program = Program.objects.create(
             name="Test Program",

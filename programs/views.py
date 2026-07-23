@@ -2360,8 +2360,9 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 f"{' and '.join(updated_fields)} updated for {enrollment.student}.",
             )
         next_url = request.POST.get("next")
-        if next_url:
-            return redirect(next_url)
+        safe_url = get_safe_url(request, next_url)
+        if safe_url:
+            return redirect(safe_url)
         return redirect("program_detail", pk=pk)
 
 
