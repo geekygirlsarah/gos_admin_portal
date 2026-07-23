@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 - Centralized email sending into a reusable `send_templated_notification` utility that automatically generates plain-text versions from HTML templates.
 - Removed redundant hardcoded message strings from the codebase, ensuring email content is managed exclusively through templates.
 - Reworded parts of the fee and payment emails to be more clear on next steps for parents.
+- Updated program roster views (Signout sheet, Schools view, Map view) to only show students currently marked as active in the program.
+- Updated program emails to automatically exclude students (and their parents) who are marked as inactive in that program.
+- Re-added the ability for admins to mark a student as inactive within a specific program. This is useful for tracking students who have dropped out without removing their history or graduation status.
+- Added a "Program Enrollments" section to the student edit page to allow managing a student's active status in specific programs.
 
 ## 2026-07-21
 

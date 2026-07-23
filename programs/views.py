@@ -1875,14 +1875,19 @@ class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(programs=prog, graduated=False):
+                for s in Student.objects.filter(
+                    enrollment__program=prog, enrollment__active=True, graduated=False
+                ).distinct():
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if "parents" in groups:
                 for parent in Adult.objects.filter(
-                    students__programs=prog, email_updates=True, active=True
+                    students__enrollment__program=prog,
+                    students__enrollment__active=True,
+                    email_updates=True,
+                    active=True,
                 ).distinct():
                     e = parent.personal_email or parent.andrew_email
                     if e:
@@ -2072,12 +2077,12 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
                 base_qs = Enrollment.objects.none()
 
         # Split into active and inactive sections
-        ctx["active_enrollments"] = base_qs.filter(student__graduated=False).order_by(
-            "sort_first", "sort_last"
-        )
-        ctx["inactive_enrollments"] = base_qs.filter(student__graduated=True).order_by(
-            "sort_first", "sort_last"
-        )
+        ctx["active_enrollments"] = base_qs.filter(
+            active=True, student__graduated=False
+        ).order_by("sort_first", "sort_last")
+        ctx["inactive_enrollments"] = base_qs.exclude(
+            active=True, student__graduated=False
+        ).order_by("sort_first", "sort_last")
 
         # Backwards compatibility (old templates may rely on a single list)
         ctx["active_students"] = [e.student for e in ctx["active_enrollments"]]
@@ -2173,6 +2178,8 @@ class StudentUpdateView(
             else set()
         )
         ctx["program_feature_keys"] = keys
+        if student:
+            ctx["enrollments"] = student.enrollment_set.all().select_related("program")
         return ctx
 
     def form_valid(self, form):
@@ -2312,9 +2319,16 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         team_id = request.POST.get("team_id")
         crew_id = request.POST.get("crew_id")
         subteam_id = request.POST.get("subteam_id")
+        active = request.POST.get("active")
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
 
         updated_fields = []
+        if active is not None:
+            new_active = active.lower() == "true"
+            if enrollment.active != new_active:
+                enrollment.active = new_active
+                updated_fields.append("Active status")
+
         if team_id is not None:
             if team_id:
                 team = get_object_or_404(Team, id=team_id)
@@ -2345,6 +2359,9 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 request,
                 f"{' and '.join(updated_fields)} updated for {enrollment.student}.",
             )
+        next_url = request.POST.get("next")
+        if next_url:
+            return redirect(next_url)
         return redirect("program_detail", pk=pk)
 
 
@@ -3451,7 +3468,11 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
             )
         )
         students = list(
-            base_qs.filter(graduated=False).order_by("sort_first", "sort_last")
+            base_qs.filter(
+                enrollment__program=program, enrollment__active=True, graduated=False
+            )
+            .distinct()
+            .order_by("sort_first", "sort_last")
         )
         ctx = {
             "program": program,
@@ -3470,7 +3491,10 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         program = get_object_or_404(Program, pk=pk)
         # Active (non-graduated) students enrolled in this program, grouped by school
         students = (
-            Student.objects.filter(enrollment__program=program, graduated=False)
+            Student.objects.filter(
+                enrollment__program=program, enrollment__active=True, graduated=False
+            )
+            .distinct()
             .select_related("school")
             .annotate(
                 sort_first=Coalesce(
@@ -3506,7 +3530,10 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
         program = get_object_or_404(Program, pk=pk)
         # Active (non-graduated) students enrolled in this program with some address info
         students = (
-            Student.objects.filter(programs=program, graduated=False)
+            Student.objects.filter(
+                enrollment__program=program, enrollment__active=True, graduated=False
+            )
+            .distinct()
             .only(
                 "first_name",
                 "legal_first_name",
