@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-23
 
+### Fixed
+- Fixed a bug where converting an application to a student record could create a duplicate student if the applicant's last name was entered in a different case (e.g., "Smith" vs. "SMITH"). The system now matches existing students by name and date of birth in a case-insensitive way before creating a new record.
+- Fixed a confusing experience where saving a student's record appeared to do nothing — the page now redirects to the student's profile after saving, and shows a confirmation message so you know the save was successful.
+
 ### Added
 - Automatically send fee information emails to parents when a student is enrolled in a program that has existing fees.
 - Added a notification for specific fee assignments, ensuring parents are notified when a student is assigned to a non-global fee.

@@ -685,6 +685,19 @@ def _student_from_application(application: Application):
                 "Cannot create a Student: date of birth is required in the "
                 "application data (step 5)."
             )
+        # Try a case-insensitive name + DOB match before creating a new record.
+        # This prevents duplicates when the same student re-applies with a
+        # differently-cased name (e.g. "SMITH" vs "Smith") or a different email.
+        student = Student.objects.filter(
+            legal_first_name__iexact=legal_first,
+            last_name__iexact=last_name,
+            date_of_birth=dob,
+        ).first()
+
+    if student is None:
+        legal_first = (step5.get("legal_first_name") or "").strip()
+        last_name = (step5.get("last_name") or "").strip()
+        dob = step5.get("date_of_birth")
         student = Student(
             legal_first_name=legal_first,
             last_name=last_name,

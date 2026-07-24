@@ -2202,6 +2202,7 @@ class StudentUpdateView(
                     student=self.object,
                     defaults={"relationship_to_student": rel},
                 )
+        messages.success(self.request, "Student record saved successfully.")
         return response
 
     def get_success_url(self):
@@ -2209,7 +2210,7 @@ class StudentUpdateView(
         safe_url = get_safe_url(self.request, next_url)
         if safe_url:
             return safe_url
-        return reverse("student_edit", args=[self.object.pk])
+        return reverse("student_detail", args=[self.object.pk])
 
 
 class StudentCreateView(
