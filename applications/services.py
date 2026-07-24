@@ -195,12 +195,22 @@ def find_student_by_email(email: str):
 
 
 def find_adult_by_email(email: str):
-    """Find an Adult whose personal_email or andrew_email (via MentorAndrewAccess) matches."""
+    """Find an Adult whose personal_email or andrew_email (via MentorAndrewAccess) matches.
+
+    When multiple Adults share the same email (e.g. a mother and father), prefer
+    the one who is already a primary_contact for at least one student, since the
+    person filling out the application is most likely the primary contact.
+    """
     if not email:
         return None
-    return Adult.objects.filter(
+    qs = Adult.objects.filter(
         Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
-    ).first()
+    )
+    # Prefer primary contacts over secondary/unlinked adults.
+    primary = qs.filter(primary_for__isnull=False).first()
+    if primary is not None:
+        return primary
+    return qs.first()
 
 
 def find_existing_mentor_by_email(email: str):

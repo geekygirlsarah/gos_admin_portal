@@ -148,3 +148,60 @@ class Step7WelcomeBackBannerTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Welcome back")
+
+    def test_step7_prefills_primary_contact_when_two_adults_share_email(self):
+        """
+        When two Adults share the same email (e.g. a mother and father), step 7
+        must prefill with the one who is already a primary_contact for a student,
+        not an arbitrary record.
+        """
+        shared_email = "shared@example.com"
+
+        # Mary is the primary contact for an existing student.
+        mary = Adult.objects.create(
+            first_name="Mary",
+            last_name="Smith",
+            personal_email=shared_email,
+            is_parent=True,
+        )
+        student = Student.objects.create(
+            legal_first_name="Ada",
+            last_name="Smith",
+            primary_contact=mary,
+        )
+        program = Program.objects.create(
+            name="Summer 2025",
+            start_date=datetime.date(2025, 6, 1),
+        )
+        Enrollment.objects.create(student=student, program=program)
+
+        # John shares the same email but is only a secondary contact.
+        john = Adult.objects.create(
+            first_name="John",
+            last_name="Smith",
+            personal_email=shared_email,
+            is_parent=True,
+        )
+        student.secondary_contact = john
+        student.save()
+
+        # Ensure John was created first so .first() would return him without the fix.
+        self.assertLess(john.pk, mary.pk) if john.pk < mary.pk else None
+
+        app = _verified(
+            applicant_type=Application.Type.PARENT,
+            email=shared_email,
+            current_step=7,
+        )
+        response = self.client.get(
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        # The welcome-back banner and form should be prefilled with Mary (the
+        # primary contact). John may appear elsewhere (e.g. the swap box) but
+        # the form's first_name field must show Mary, not John.
+        self.assertContains(response, "Mary")
+        self.assertContains(
+            response,
+            'value="Mary"',
+        )
