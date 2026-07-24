@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Changed
+- Optimized GitHub Actions workflows (ci.yml and codeql.yml) to prevent duplicate runs when multiple events (like a push and a pull request) are triggered simultaneously for the same branch.
 - Renamed the Fee's "date" field to "effective date" to improve clarity and distinguish it from due dates.
 - Refactored email notification logic for fees, payments, and sliding scale discounts.
 - Centralized email sending into a reusable `send_templated_notification` utility that automatically generates plain-text versions from HTML templates.
