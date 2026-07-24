@@ -119,15 +119,20 @@ class ModelTests(TestCase):
         parent.refresh_from_db()
         self.assertFalse(parent.email_updates)
 
-    def test_adult_email_uniqueness(self):
+    def test_adult_email_shared_allowed(self):
+        # Two adults (e.g. a mother and father) may share the same personal
+        # email address — the unique constraint was intentionally removed to
+        # support this real-world case.
         Adult.objects.create(
-            first_name="A", last_name="B", personal_email="test@example.com"
+            first_name="Mary", last_name="Smith", personal_email="shared@example.com"
         )
-        # Second adult with same email should fail
-        with self.assertRaises(Exception):
-            Adult.objects.create(
-                first_name="C", last_name="D", personal_email="test@example.com"
-            )
+        # Should NOT raise — different person, same email
+        Adult.objects.create(
+            first_name="John", last_name="Smith", personal_email="shared@example.com"
+        )
+        self.assertEqual(
+            Adult.objects.filter(personal_email="shared@example.com").count(), 2
+        )
 
     def test_adult_email_null_allowed_multiple_times(self):
         # Multiple adults with NULL email should be allowed

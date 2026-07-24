@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-23
 
+### Fixed
+- Verified that converting one application does not affect other pending or incomplete applications that share the same student or parent email. Each application's data, status, and email fields remain untouched; Adult and Student records are correctly reused (not duplicated) when a second application with the same details is later converted.
+- Fixed a bug where the application wizard's "primary contact" step could prefill with the wrong parent's information when two adults share the same email address. The system now correctly identifies and prefills the parent who is already on file as a primary contact, rather than picking one arbitrarily.
+- Fixed a bug where two parents or guardians sharing the same email address (e.g. a mother and father) would have their records incorrectly merged during application conversion. The system now creates separate contact records for each person, matched by both name and email, so both parents are correctly linked to the student.
+- Removed the restriction that prevented two adults from having the same personal email address, allowing households where multiple guardians share one email to be properly represented in the system.
+- Fixed a bug where converting an application to a student record could create a duplicate student if the applicant's last name was entered in a different case (e.g., "Smith" vs. "SMITH"). The system now matches existing students by name and date of birth in a case-insensitive way before creating a new record.
+- Fixed a confusing experience where saving a student's record appeared to do nothing — the page now redirects to the student's profile after saving, and shows a confirmation message so you know the save was successful.
+
 ### Added
 - Automatically send fee information emails to parents when a student is enrolled in a program that has existing fees.
 - Added a notification for specific fee assignments, ensuring parents are notified when a student is assigned to a non-global fee.
@@ -17,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Changed
+- Optimized GitHub Actions workflows (ci.yml and codeql.yml) to prevent duplicate runs when multiple events (like a push and a pull request) are triggered simultaneously for the same branch.
 - Renamed the Fee's "date" field to "effective date" to improve clarity and distinguish it from due dates.
 - Refactored email notification logic for fees, payments, and sliding scale discounts.
 - Centralized email sending into a reusable `send_templated_notification` utility that automatically generates plain-text versions from HTML templates.

@@ -908,7 +908,6 @@ class Adult(models.Model):
     personal_email = models.EmailField(
         blank=True,
         null=True,
-        unique=True,
         help_text="Primary contact email (e.g. Gmail). Used for login and notifications.",
     )
     phone_number = models.CharField(
