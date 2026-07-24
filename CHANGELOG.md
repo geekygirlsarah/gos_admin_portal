@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-23
 
 ### Fixed
+- Verified that converting one application does not affect other pending or incomplete applications that share the same student or parent email. Each application's data, status, and email fields remain untouched; Adult and Student records are correctly reused (not duplicated) when a second application with the same details is later converted.
 - Fixed a bug where the application wizard's "primary contact" step could prefill with the wrong parent's information when two adults share the same email address. The system now correctly identifies and prefills the parent who is already on file as a primary contact, rather than picking one arbitrarily.
 - Fixed a bug where two parents or guardians sharing the same email address (e.g. a mother and father) would have their records incorrectly merged during application conversion. The system now creates separate contact records for each person, matched by both name and email, so both parents are correctly linked to the student.
 - Removed the restriction that prevented two adults from having the same personal email address, allowing households where multiple guardians share one email to be properly represented in the system.

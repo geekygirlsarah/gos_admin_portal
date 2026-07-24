@@ -317,3 +317,132 @@ class ConversionRelationshipTests(TestCase):
         self.assertCountEqual(parent.students.all(), [student_a, student_b])
         self.assertIn(student_a, parent.primary_for.all())
         self.assertIn(student_b, parent.primary_for.all())
+
+
+class DuplicateApplicationConversionTests(TestCase):
+    """
+    Verify that converting one application does not corrupt or break other
+    pending/incomplete applications that share the same student or parent email.
+    """
+
+    def setUp(self):
+        self.program = Program.objects.create(name="Test Program")
+
+    def _make_app(self, student_email, parent_email, student_first, status=None):
+        return Application.objects.create(
+            program=self.program,
+            email=student_email,
+            status=status or Application.Status.APPROVED_SIGNED,
+            data={
+                "step5-student": {
+                    "legal_first_name": student_first,
+                    "last_name": "Doe",
+                    "personal_email": student_email,
+                    "date_of_birth": "2010-06-15",
+                },
+                "step7-primaryparent": {
+                    "first_name": "Jane",
+                    "last_name": "Doe",
+                    "email": parent_email,
+                },
+            },
+        )
+
+    def test_converting_one_app_leaves_sibling_app_intact(self):
+        """
+        Two applications share the same student email and parent email.
+        Converting the first must not alter the second application's data,
+        status, or email fields.
+        """
+        app1 = self._make_app("student@example.com", "parent@example.com", "Alice")
+        app2 = self._make_app("student@example.com", "parent@example.com", "Alice")
+
+        # Convert only app1
+        convert_application_to_student(app1)
+
+        # app2 must be completely untouched
+        app2.refresh_from_db()
+        self.assertEqual(app2.status, Application.Status.APPROVED_SIGNED)
+        self.assertEqual(app2.email, "student@example.com")
+        self.assertIsNone(app2.converted_student_id)
+
+    def test_second_app_still_converts_correctly_after_first(self):
+        """
+        After converting app1, converting app2 (same student email) must
+        succeed and reuse the already-created Student and Adult records
+        rather than creating duplicates.
+        """
+        app1 = self._make_app("student@example.com", "parent@example.com", "Alice")
+        app2 = self._make_app("student@example.com", "parent@example.com", "Alice")
+
+        student1 = convert_application_to_student(app1)
+        student2 = convert_application_to_student(app2)
+
+        # Same student record reused (idempotent)
+        self.assertEqual(student1.pk, student2.pk)
+
+        # No duplicate Adults created
+        self.assertEqual(
+            Adult.objects.filter(personal_email="parent@example.com").count(), 1
+        )
+        # No duplicate Students created
+        self.assertEqual(
+            Student.objects.filter(personal_email="student@example.com").count(), 1
+        )
+
+    def test_incomplete_app_unaffected_when_approved_sibling_converted(self):
+        """
+        An incomplete (IN_PROGRESS) application sharing the same parent email
+        must remain untouched after a different approved application is converted.
+        """
+        approved_app = self._make_app(
+            "student_a@example.com", "parent@example.com", "Alice"
+        )
+        incomplete_app = Application.objects.create(
+            program=self.program,
+            email="student_b@example.com",
+            status=Application.Status.DRAFT,
+            data={
+                "step7-primaryparent": {
+                    "first_name": "Jane",
+                    "last_name": "Doe",
+                    "email": "parent@example.com",
+                },
+            },
+        )
+
+        convert_application_to_student(approved_app)
+
+        incomplete_app.refresh_from_db()
+        self.assertEqual(incomplete_app.status, Application.Status.DRAFT)
+        self.assertIsNone(incomplete_app.converted_student_id)
+        # Data blob must be unchanged
+        self.assertEqual(
+            incomplete_app.data["step7-primaryparent"]["email"], "parent@example.com"
+        )
+
+    def test_two_apps_same_parent_email_different_students_both_convert(self):
+        """
+        Two different students whose parent shares the same email address.
+        Both applications must convert successfully, reusing the single
+        Adult record for the parent and linking it to both students.
+        """
+        app1 = self._make_app("alice@example.com", "parent@example.com", "Alice")
+        app2 = self._make_app("bob@example.com", "parent@example.com", "Bob")
+        # Give app2 a distinct student name so a new Student is created
+        app2.data["step5-student"]["legal_first_name"] = "Bob"
+        app2.data["step5-student"]["personal_email"] = "bob@example.com"
+        app2.save()
+
+        student_a = convert_application_to_student(app1)
+        student_b = convert_application_to_student(app2)
+
+        self.assertNotEqual(student_a.pk, student_b.pk)
+
+        # Only one Adult for the shared parent email
+        self.assertEqual(
+            Adult.objects.filter(personal_email="parent@example.com").count(), 1
+        )
+        parent = Adult.objects.get(personal_email="parent@example.com")
+        self.assertIn(student_a, parent.primary_for.all())
+        self.assertIn(student_b, parent.primary_for.all())
