@@ -601,7 +601,16 @@ def _adult_from_data(parent_data: dict):
 
     adult = None
     if email:
-        adult = Adult.objects.filter(personal_email__iexact=email).first()
+        qs = Adult.objects.filter(personal_email__iexact=email)
+        if first_name and last_name:
+            # Prefer an exact name+email match so that two people sharing
+            # the same email (e.g. a mother and father) get separate records.
+            exact = qs.filter(
+                first_name__iexact=first_name, last_name__iexact=last_name
+            ).first()
+            adult = exact if exact is not None else None
+        else:
+            adult = qs.first()
     if adult is None and andrew_email:
         adult = Adult.objects.filter(andrew_email__iexact=andrew_email).first()
 

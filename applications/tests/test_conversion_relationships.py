@@ -224,6 +224,49 @@ class ConversionRelationshipTests(TestCase):
         self.assertIn(student_b, parent_a.primary_for.all())
         self.assertIn(student_b, parent_a.students.all())
 
+    def test_two_parents_same_email_different_names(self):
+        """
+        When a mother and father share the same email address, conversion
+        must create two separate Adult records (matched by email + name),
+        not collapse them into one.
+        """
+        data = {
+            "step5-student": {
+                "legal_first_name": "Ada",
+                "last_name": "Lovelace",
+                "personal_email": "ada@example.com",
+                "date_of_birth": "2010-01-01",
+            },
+            "step7-primaryparent": {
+                "first_name": "Mary",
+                "last_name": "Smith",
+                "email": "shared@example.com",
+            },
+            "step8-secondaryparent": {
+                "first_name": "John",
+                "last_name": "Smith",
+                "email": "shared@example.com",
+            },
+        }
+        app = self._create_app(data)
+        student = convert_application_to_student(app)
+
+        primary = student.primary_contact
+        secondary = student.secondary_contact
+
+        # Both contacts must exist and be distinct records
+        self.assertIsNotNone(primary)
+        self.assertIsNotNone(secondary)
+        self.assertNotEqual(primary.pk, secondary.pk)
+
+        # Names must be preserved correctly
+        self.assertEqual(primary.first_name, "Mary")
+        self.assertEqual(secondary.first_name, "John")
+
+        # Both should be linked to the student
+        self.assertIn(student, primary.primary_for.all())
+        self.assertIn(student, secondary.secondary_for.all())
+
     def test_parent_signing_up_two_students_different_programs(self):
         """
         Test that parent reuse works correctly across different programs.
