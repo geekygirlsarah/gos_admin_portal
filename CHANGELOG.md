@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-23
 
 ### Fixed
+- Fixed a bug where adding a new parent or adult with an email address already on file would be incorrectly rejected. Two adults (such as a mother and father) can now share the same email address without any errors in the Add or Edit forms.
+- Added a new "Add Adult" page (`/programs/adults/new/`) so staff can create any adult record directly without going through the role-specific Parent or Mentor routes.
+- The Add/Edit Adult form now shows mentor-specific sections (Mentor Details, Clearances, Access & Platforms) and an Alumni Details section. The mentor and alumni sections are automatically shown or hidden based on the role checkboxes selected.
 - Verified that converting one application does not affect other pending or incomplete applications that share the same student or parent email. Each application's data, status, and email fields remain untouched; Adult and Student records are correctly reused (not duplicated) when a second application with the same details is later converted.
 - Fixed a bug where the application wizard's "primary contact" step could prefill with the wrong parent's information when two adults share the same email address. The system now correctly identifies and prefills the parent who is already on file as a primary contact, rather than picking one arbitrarily.
 - Fixed a bug where two parents or guardians sharing the same email address (e.g. a mother and father) would have their records incorrectly merged during application conversion. The system now creates separate contact records for each person, matched by both name and email, so both parents are correctly linked to the student.

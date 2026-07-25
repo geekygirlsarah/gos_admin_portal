@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
 {% load form_tags %}
-{% block title %}{% if object %}Edit Adult{% else %}Edit Adult{% endif %}{% endblock %}
+{% block title %}{% if object %}Edit Adult{% else %}Add Adult{% endif %}{% endblock %}
 {% block content %}
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/' }}">← Back</a>
+      <a class="link-secondary" href="{{ request.GET.next|default:back_url|default:'/' }}">← Back</a>
     </div>
   </div>
   <div class="row">
     <div class="col-lg-9 col-xl-8">
-      <h1 class="h3 mb-3">Edit Adult</h1>
+      <h1 class="h3 mb-3">{% if object %}Edit Adult{% else %}Add Adult{% endif %}</h1>
       <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         {% if form.non_field_errors %}
@@ -28,6 +28,7 @@
               <div class="col-md-4">{% render_field form.preferred_first_name %}</div>
               <div class="col-md-4">{% render_field form.last_name %}</div>
               <div class="col-md-4">{% render_field form.pronouns %}</div>
+              {% if form.photo %}<div class="col-md-4">{% render_field form.photo %}</div>{% endif %}
             </div>
           </div>
         </div>
@@ -49,6 +50,68 @@
           </div>
         </div>
 
+        {% if form.is_parent or form.is_mentor or form.is_alumni %}
+        <div class="card mb-4">
+          <div class="card-header">Roles</div>
+          <div class="card-body">
+            <div class="row g-3">
+              {% if form.is_parent %}<div class="col-md-4">{% render_field form.is_parent %}</div>{% endif %}
+              {% if form.is_mentor %}<div class="col-md-4">{% render_field form.is_mentor %}</div>{% endif %}
+              {% if form.is_alumni %}<div class="col-md-4">{% render_field form.is_alumni %}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if form.students %}
+        <div class="card mb-4">
+          <div class="card-header">Associated Students</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-12">{% render_field form.students %}</div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if form.has_paca_clearance or form.emergency_contact_name or form.start_year %}
+        <div class="card mb-4" id="mentor-section">
+          <div class="card-header">Mentor / Volunteer Details</div>
+          <div class="card-body">
+            <div class="row g-3">
+              {% if form.start_year %}<div class="col-md-4">{% render_field form.start_year %}</div>{% endif %}
+              {% if form.role %}<div class="col-md-4">{% render_field form.role %}</div>{% endif %}
+              {% if form.emergency_contact_name %}<div class="col-md-6">{% render_field form.emergency_contact_name %}</div>{% endif %}
+              {% if form.emergency_contact_phone %}<div class="col-md-6">{% render_field form.emergency_contact_phone %}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4" id="clearances-section">
+          <div class="card-header">Clearances</div>
+          <div class="card-body">
+            <div class="row g-3">
+              {% if form.has_paca_clearance %}<div class="col-md-4">{% render_field form.has_paca_clearance %}</div>{% endif %}
+              {% if form.has_patch_clearance %}<div class="col-md-4">{% render_field form.has_patch_clearance %}</div>{% endif %}
+              {% if form.has_fbi_clearance %}<div class="col-md-4">{% render_field form.has_fbi_clearance %}</div>{% endif %}
+              {% if form.pa_clearances_expiration_date %}<div class="col-md-6">{% render_field form.pa_clearances_expiration_date %}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4" id="access-section">
+          <div class="card-header">Access &amp; Platforms</div>
+          <div class="card-body">
+            <div class="row g-3">
+              {% if form.on_discord %}<div class="col-md-4">{% render_field form.on_discord %}</div>{% endif %}
+              {% if form.discord_username %}<div class="col-md-4">{% render_field form.discord_username %}</div>{% endif %}
+              {% if form.has_cmu_id_card %}<div class="col-md-4">{% render_field form.has_cmu_id_card %}</div>{% endif %}
+              {% if form.has_cmu_building_access %}<div class="col-md-4">{% render_field form.has_cmu_building_access %}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
         <div class="card mb-4">
           <div class="card-header">Andrew ID (Mentors/Staff)</div>
           <div class="card-body">
@@ -61,27 +124,7 @@
           </div>
         </div>
 
-        <div class="card mb-4">
-          <div class="card-header">Roles</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-4">{% render_field form.is_parent %}</div>
-              <div class="col-md-4">{% render_field form.is_mentor %}</div>
-              <div class="col-md-4">{% render_field form.is_alumni %}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card mb-4">
-          <div class="card-header">Associated Students</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-12">{% render_field form.students %}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card mb-4">
+        <div class="card mb-4" id="alumni-section">
           <div class="card-header">Alumni Details</div>
           <div class="card-body">
             <div class="row g-3">
@@ -95,6 +138,7 @@
           </div>
         </div>
 
+        {% if form.active %}
         <div class="card mb-4">
           <div class="card-header">Status</div>
           <div class="card-body">
@@ -103,6 +147,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
 
         <div class="d-flex gap-2">
           <button class="btn btn-primary" type="submit">Save</button>
@@ -111,4 +156,31 @@
       </form>
     </div>
   </div>
+
+  {% if form.is_mentor or form.is_alumni %}
+  <script>
+    (function () {
+      var isMentorCb = document.getElementById('id_is_mentor');
+      var isAlumniCb = document.getElementById('id_is_alumni');
+      var mentorSections = ['mentor-section', 'clearances-section', 'access-section'];
+      var alumniSection = document.getElementById('alumni-section');
+
+      function toggle() {
+        var mentorOn = isMentorCb && isMentorCb.checked;
+        var alumniOn = isAlumniCb && isAlumniCb.checked;
+        mentorSections.forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.style.display = mentorOn ? '' : 'none';
+        });
+        if (alumniSection) alumniSection.style.display = alumniOn ? '' : 'none';
+      }
+
+      // Initial state
+      toggle();
+
+      if (isMentorCb) isMentorCb.addEventListener('change', toggle);
+      if (isAlumniCb) isAlumniCb.addEventListener('change', toggle);
+    })();
+  </script>
+  {% endif %}
 {% endblock %}

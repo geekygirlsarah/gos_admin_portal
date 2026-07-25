@@ -3618,6 +3618,27 @@ class AdultsListView(
         return ctx
 
 
+class AdultCreateView(
+    PassUserToFormMixin,
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    CreateView,
+):
+    model = Adult
+    form_class = AdultForm
+    template_name = "adults/form.html"
+    permission_required = "programs.add_adult"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
+
+    def get_success_url(self):
+        return reverse("adult_list")
+
+
 class AdultUpdateView(
     PassUserToFormMixin,
     SensitiveDataViewMixin,
@@ -3631,6 +3652,11 @@ class AdultUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
 
     def get_success_url(self):
         nxt = self.request.GET.get("next")

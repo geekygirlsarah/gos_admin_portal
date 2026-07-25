@@ -6,6 +6,7 @@ from attendance.views import AttendanceImportView, student_attendance_view
 
 from .permission_views import PortalSettingsView
 from .views import (
+    AdultCreateView,
     AdultsListView,
     AdultUpdateView,
     AlumniListView,
@@ -256,6 +257,11 @@ urlpatterns = [
     path("alumni/", login_required(AlumniListView.as_view()), name="alumni_list"),
     # Adults
     path("adults/", login_required(AdultsListView.as_view()), name="adult_list"),
+    path(
+        "adults/new/",
+        permission_required("programs.add_adult")(AdultCreateView.as_view()),
+        name="adult_create",
+    ),
     path(
         "adults/<int:pk>/edit/",
         permission_required("programs.change_adult")(AdultUpdateView.as_view()),
