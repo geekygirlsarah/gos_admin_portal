@@ -32,12 +32,31 @@ class AdultAccordionTest(TestCase):
         self.assertContains(response, 'id="accordionMentor"')
         self.assertContains(response, 'id="accordionAlumni"')
 
-    def test_mentor_accordion_expanded_when_is_mentor_true(self):
-        # This might be hard to test just via HTML if it depends on JS for initial state,
-        # but we can check the 'show' class in the template if we render it server-side.
+    def test_accordion_visibility(self):
         url = reverse("adult_edit", args=[self.adult.pk])
         response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
 
-        # If is_mentor=True, mentor accordion should have 'show' class or be expanded
-        # We'll see how I implement it.
-        pass
+        # Adult section should be visible
+        self.assertContains(response, 'id="accordionAdult"')
+        self.assertNotContains(response, 'accordion-item d-none" id="accordionAdult"')
+
+        # Mentor section should be visible (is_mentor=True)
+        self.assertContains(response, 'id="accordionMentor"')
+        self.assertNotContains(response, 'accordion-item d-none" id="accordionMentor"')
+
+        # Parent section should be hidden (is_parent=False)
+        self.assertContains(response, 'accordion-item d-none" id="accordionParent"')
+
+        # Alumni section should be hidden (is_alumni=False)
+        self.assertContains(response, 'accordion-item d-none" id="accordionAlumni"')
+
+    def test_csp_nonce_present(self):
+        url = reverse("adult_edit", args=[self.adult.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        # Check for the script tag with nonce
+        # Note: In tests, the nonce might be a dummy value depending on how django-csp is configured for testing,
+        # but the attribute should be present.
+        self.assertContains(response, '<script nonce="')

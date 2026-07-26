@@ -749,7 +749,9 @@ class Student(models.Model):
                 others = others.exclude(pk=self.pk)
             if others.exists():
                 raise ValidationError(
-                    {"personal_email": "This email is already in use by another student."}
+                    {
+                        "personal_email": "This email is already in use by another student."
+                    }
                 )
 
             # Check parents/mentors

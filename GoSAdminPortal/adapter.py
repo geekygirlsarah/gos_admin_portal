@@ -40,18 +40,22 @@ def _find_or_provision_user_for_email(email):
     # to avoid UNIQUE constraint conflicts if duplicates exist.
     # We also prefer the "primary" adult (one who is a primary_contact for a student)
     # as requested by the user.
-    adult_qs = Adult.objects.filter(
-        Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
-    ).annotate(
-        is_primary_contact=Count("primary_for")
-    ).order_by("-is_primary_contact", "last_name", "first_name")
-    
+    adult_qs = (
+        Adult.objects.filter(
+            Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
+        )
+        .annotate(is_primary_contact=Count("primary_for"))
+        .order_by("-is_primary_contact", "last_name", "first_name")
+    )
+
     adult = adult_qs.filter(user__isnull=False).first() or adult_qs.first()
 
     adult_allowed = False
     if adult:
         # For role allowance, we still need to know which email field matched.
-        is_personal = adult.personal_email and adult.personal_email.lower() == email_lower
+        is_personal = (
+            adult.personal_email and adult.personal_email.lower() == email_lower
+        )
         is_andrew = adult.andrew_email and adult.andrew_email.lower() == email_lower
         if adult.is_mentor:
             # Mentors (and Lead Mentors by extension) must use Andrew email.

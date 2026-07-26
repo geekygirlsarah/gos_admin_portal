@@ -88,7 +88,7 @@
           </div>
 
           <!-- Parent Section -->
-          <div class="accordion-item" id="accordionParent">
+          <div class="accordion-item {% if not form.is_parent.value %}d-none{% endif %}" id="accordionParent">
             <h2 class="accordion-header" id="headingParent">
               <button class="accordion-button {% if not form.is_parent.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseParent" aria-expanded="{% if form.is_parent.value %}true{% else %}false{% endif %}" aria-controls="collapseParent">
                 Parent Details
@@ -113,7 +113,7 @@
           </div>
 
           <!-- Mentor Section -->
-          <div class="accordion-item" id="accordionMentor">
+          <div class="accordion-item {% if not form.is_mentor.value %}d-none{% endif %}" id="accordionMentor">
             <h2 class="accordion-header" id="headingMentor">
               <button class="accordion-button {% if not form.is_mentor.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMentor" aria-expanded="{% if form.is_mentor.value %}true{% else %}false{% endif %}" aria-controls="collapseMentor">
                 Mentor Details
@@ -173,7 +173,7 @@
           </div>
 
           <!-- Alumni Section -->
-          <div class="accordion-item" id="accordionAlumni">
+          <div class="accordion-item {% if not form.is_alumni.value %}d-none{% endif %}" id="accordionAlumni">
             <h2 class="accordion-header" id="headingAlumni">
               <button class="accordion-button {% if not form.is_alumni.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAlumni" aria-expanded="{% if form.is_alumni.value %}true{% else %}false{% endif %}" aria-controls="collapseAlumni">
                 Alumni Details
@@ -207,28 +207,53 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ request.csp_nonce }}">
     (function () {
-      var isParentCb = document.getElementById('id_is_parent');
-      var isMentorCb = document.getElementById('id_is_mentor');
-      var isAlumniCb = document.getElementById('id_is_alumni');
+      function init() {
+        var isParentCb = document.getElementById('id_is_parent');
+        var isMentorCb = document.getElementById('id_is_mentor');
+        var isAlumniCb = document.getElementById('id_is_alumni');
 
-      function toggleAccordion(id, show) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        var bsCollapse = bootstrap.Collapse.getOrCreateInstance(el, {toggle: false});
-        if (show) bsCollapse.show(); else bsCollapse.hide();
+        function toggleAccordion(itemId, collapseId, show) {
+          var item = document.getElementById(itemId);
+          if (!item) return;
+
+          if (show) {
+            item.classList.remove('d-none');
+            var collapseEl = document.getElementById(collapseId);
+            if (collapseEl) {
+              var bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, {toggle: false});
+              bsCollapse.show();
+            }
+          } else {
+            item.classList.add('d-none');
+            var collapseEl = document.getElementById(collapseId);
+            if (collapseEl) {
+              var bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, {toggle: false});
+              bsCollapse.hide();
+            }
+          }
+        }
+
+        function updateAccordions() {
+          if (isParentCb) toggleAccordion('accordionParent', 'collapseParent', isParentCb.checked);
+          if (isMentorCb) toggleAccordion('accordionMentor', 'collapseMentor', isMentorCb.checked);
+          if (isAlumniCb) toggleAccordion('accordionAlumni', 'collapseAlumni', isAlumniCb.checked);
+        }
+
+        if (isParentCb) isParentCb.addEventListener('change', updateAccordions);
+        if (isMentorCb) isMentorCb.addEventListener('change', updateAccordions);
+        if (isAlumniCb) isAlumniCb.addEventListener('change', updateAccordions);
+
+        // Initial sync
+        updateAccordions();
       }
 
-      function updateAccordions() {
-        if (isParentCb) toggleAccordion('collapseParent', isParentCb.checked);
-        if (isMentorCb) toggleAccordion('collapseMentor', isMentorCb.checked);
-        if (isAlumniCb) toggleAccordion('collapseAlumni', isAlumniCb.checked);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
       }
-
-      if (isParentCb) isParentCb.addEventListener('change', updateAccordions);
-      if (isMentorCb) isMentorCb.addEventListener('change', updateAccordions);
-      if (isAlumniCb) isAlumniCb.addEventListener('change', updateAccordions);
     })();
   </script>
 {% endblock %}

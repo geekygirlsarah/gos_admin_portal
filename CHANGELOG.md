@@ -5,11 +5,12 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-25
 
 ### Fixed
+- Fixed the Adult Add/Edit form JavaScript not working in some browsers (like Firefox) due to a missing Content Security Policy (CSP) nonce on inline scripts.
 - Fixed a crash (`IntegrityError`) that occurred during student or adult login when multiple profile records shared the same email address. The system now correctly identifies and prefers the profile already linked to a user account, preventing duplicate link attempts that violated database constraints.
 
 ### Changed
-- Reorganized the Adult Add/Edit form into collapsible Bootstrap accordions for better organization and clarity. Fields are now grouped into four main sections: Adult Details (Identity, Contact, Roles, Status), Parent Details (Associated Students), Mentor Details (Mentor/Volunteer Details, Clearances, Access, Andrew ID), and Alumni Details.
-- Sections for Parent, Mentor, and Alumni are automatically expanded or collapsed based on the role checkboxes selected, allowing users to focus on the information relevant to their current roles while keeping other data accessible but tucked away.
+- Reorganized the Adult Add/Edit form into collapsible Bootstrap accordions for better organization and clarity.
+- Updated role-specific sections (Parent, Mentor, Alumni) to be completely hidden when their corresponding role is unchecked, and automatically show/expand "in the moment" when the role is selected.
 
 ## 2026-07-23
 
