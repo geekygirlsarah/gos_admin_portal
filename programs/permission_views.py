@@ -5,7 +5,19 @@ from django.views import View
 
 from programs.constants import TEAM_TYPES
 
-from .models import Adult, Crew, Program, RolePermission, Student, SubTeam, Team
+from .models import (
+    Adult,
+    Crew,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    RolePermission,
+    SlidingScale,
+    Student,
+    SubTeam,
+    Team,
+)
 
 try:
     from api.models import ApiClientKey
@@ -78,7 +90,12 @@ def can_user_read(user, section, obj=None):
     perm = RolePermission.objects.filter(role=role, section=section).first()
     can_read_section = perm.can_read if perm else True  # Default to True for read
 
-    if role == "Mentor" and section in ["payments", "sliding_scale", "fees", "attendance"]:
+    # Only Lead Mentors and Parents can view payments/fees/sliding scale
+    if section in ["payments", "sliding_scale", "fees"]:
+        if role not in ["LeadMentor", "Parent"]:
+            return False
+
+    if role == "Mentor" and section == "attendance":
         return False
 
     if not can_read_section:
@@ -94,6 +111,14 @@ def can_user_read(user, section, obj=None):
             if isinstance(obj, Adult):
                 # Parents can only read their own profile
                 return obj == adult
+            if isinstance(obj, (Payment, SlidingScale)):
+                # Parents can only read their own students' payments/sliding scale
+                return obj.student in adult.students.all()
+            if isinstance(obj, Fee):
+                # Parents can see fees for programs their students are enrolled in
+                return Enrollment.objects.filter(
+                    student__adults=adult, program=obj.program
+                ).exists()
             if isinstance(obj, Program):
                 # Parents cannot view programs directly
                 return False
@@ -163,7 +188,12 @@ def can_user_write(user, section, obj=None):
     perm = RolePermission.objects.filter(role=role, section=section).first()
     can_write_section = perm.can_write if perm else False
 
-    if role == "Mentor" and section in ["payments", "sliding_scale", "fees", "attendance", "student_info"]:
+    # Only Lead Mentors can write to payments/fees/sliding scale
+    if section in ["payments", "sliding_scale", "fees"]:
+        if role != "LeadMentor":
+            return False
+
+    if role == "Mentor" and section in ["attendance", "student_info"]:
         return False
 
     if not can_write_section:
@@ -206,6 +236,14 @@ class LeadMentorRequiredMixin(UserPassesTestMixin):
             self.request.user.is_superuser
             or self.request.user.groups.filter(name="LeadMentor").exists()
         )
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            messages.error(
+                self.request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+        return super().handle_no_permission()
 
 
 class PassUserToFormMixin:

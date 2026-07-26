@@ -1967,8 +1967,7 @@ class SchoolUpdateView(
         return reverse("school_edit", args=[self.object.pk])
 
 
-class ProgramEmailView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = "programs.view_program"  # basic permission to access
+class ProgramEmailView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/email_form.html"
 
     def get(self, request, pk=None):
@@ -2671,14 +2670,12 @@ class ParentUpdateView(
 class ProgramPaymentCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
     DynamicWritePermissionMixin,
     CreateView,
 ):
     model = Payment
     form_class = PaymentForm
     template_name = "programs/payment_form.html"
-    permission_required = "programs.add_payment"
     section = "payments"
 
     def dispatch(self, request, *args, **kwargs):
@@ -2721,7 +2718,11 @@ class ProgramPaymentCreateView(
         return redirect("program_detail", pk=self.program.pk)
 
 
-class ProgramPaymentDetailView(LoginRequiredMixin, View):
+class ProgramPaymentDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    section = "payments"
+    def get_object(self):
+        return get_object_or_404(Payment, pk=self.kwargs["payment_id"])
+
     def get(self, request, pk, payment_id):
         program = get_object_or_404(Program, pk=pk)
         payment = get_object_or_404(Payment, pk=payment_id)
@@ -2747,7 +2748,11 @@ class ProgramPaymentDetailView(LoginRequiredMixin, View):
         )
 
 
-class ProgramPaymentPrintView(LoginRequiredMixin, View):
+class ProgramPaymentPrintView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    section = "payments"
+    def get_object(self):
+        return get_object_or_404(Payment, pk=self.kwargs["payment_id"])
+
     def get(self, request, pk, payment_id):
         program = get_object_or_404(Program, pk=pk)
         payment = get_object_or_404(Payment, pk=payment_id)
@@ -2774,14 +2779,12 @@ class ProgramPaymentPrintView(LoginRequiredMixin, View):
 class ProgramSlidingScaleCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
     DynamicWritePermissionMixin,
     CreateView,
 ):
     model = SlidingScale
     form_class = SlidingScaleForm
     template_name = "programs/sliding_scale_form.html"
-    permission_required = "programs.add_slidingscale"
     section = "sliding_scale"
 
     def dispatch(self, request, *args, **kwargs):
@@ -2857,14 +2860,12 @@ class ProgramSlidingScaleCreateView(
 class ProgramSlidingScaleUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
     DynamicWritePermissionMixin,
     UpdateView,
 ):
     model = SlidingScale
     form_class = SlidingScaleForm
     template_name = "programs/sliding_scale_form.html"
-    permission_required = "programs.change_slidingscale"
     section = "sliding_scale"
 
     def dispatch(self, request, *args, **kwargs):
@@ -2920,8 +2921,9 @@ class ProgramSlidingScaleUpdateView(
 
 
 class ProgramSlidingScaleTaxFormDeleteView(
-    LoginRequiredMixin, PermissionRequiredMixin, View
+    LoginRequiredMixin, DynamicWritePermissionMixin, View
 ):
+    section = "sliding_scale"
     permission_required = "programs.change_slidingscale"
 
     def post(self, request, pk, sliding_id, form_id):
@@ -2945,33 +2947,10 @@ class ProgramSlidingScaleParentUploadView(LoginRequiredMixin, View):
         # Object level check for Parents
         from .permission_views import get_user_role
 
-        if get_user_role(request.user) == "Parent":
-            try:
-                # Check if user has an adult profile and it's linked to this student
-                if not hasattr(request.user, "adult_profile"):
-                    messages.error(request, "Parent profile not found.")
-                    return redirect("home")
-
-                adult = request.user.adult_profile
-                if student not in adult.students.all():
-                    messages.error(
-                        request,
-                        "You do not have permission to upload for this student.",
-                    )
-                    return redirect("home")
-            except Exception as e:
-                messages.error(request, f"Error verifying permission: {str(e)}")
-                return redirect("home")
-        elif not request.user.is_superuser and not (
-            request.user.is_authenticated
-            and (
-                request.user.groups.filter(name="LeadMentor").exists()
-                or request.user.user_permissions.filter(
-                    codename="change_slidingscale"
-                ).exists()
-            )
-        ):
-            messages.error(request, "Only parents or lead mentors can use this upload.")
+        if get_user_role(request.user) == "LeadMentor" or request.user.is_superuser:
+            pass
+        else:
+            messages.error(request, "Only lead mentors can manage tax form uploads.")
             return redirect("home")
 
         # Get or create sliding scale for this student/program
@@ -3053,6 +3032,8 @@ class ProgramStudentBalancePrintView(
     LoginRequiredMixin, DynamicReadPermissionMixin, View
 ):
     section = "payments"
+    def get_object(self):
+        return get_object_or_404(Student, pk=self.kwargs["student_id"])
 
     def get(self, request, pk, student_id):
         program = get_object_or_404(Program, pk=pk)
@@ -3105,8 +3086,7 @@ class ProgramStudentBalancePrintView(
         )
 
 
-class ProgramFeeSelectView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = "programs.change_fee"
+class ProgramFeeSelectView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/fee_select.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -3122,9 +3102,9 @@ class ProgramFeeSelectView(LoginRequiredMixin, PermissionRequiredMixin, View):
         )
 
 
-class ProgramFeeAssignmentEditView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = "programs.change_fee"
+class ProgramFeeAssignmentEditView(LoginRequiredMixin, DynamicWritePermissionMixin, View):
     template_name = "programs/fee_assignment_form.html"
+    section = "fees"
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs["pk"])
@@ -3243,9 +3223,7 @@ class ProgramFeeUpdateView(
         )
 
 
-class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
-    section = "programs"
-    permission_required = "programs.view_program"
+class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/email_balances_form.html"
 
     def get(self, request, pk):
@@ -3483,7 +3461,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, DynamicReadPermissionMixin, V
         )
 
 
-class ProgramDuesOwedView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """
     Lists all students enrolled in a specific program and the total amount each currently owes
     for that program, using the same balance computation as the per-program balance sheet.

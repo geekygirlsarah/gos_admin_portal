@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - Extended the permission system to allow parents to view and edit the information of their associated children, ensuring full access for families while maintaining strict security for non-related students.
 - Added a "Students" link to the navigation menu for parents and "View Profile" / "Edit Profile" buttons to the dashboard, making it easier for families to manage student records.
 - Restricted direct program access to Lead Mentors and Mentors (Active programs only), while blocking Students and Parents from accessing program details directly.
+- Implemented strict role-based access control for all financial data: Restricted payments, fees, and sliding scale management to Lead Mentors only.
+- Enabled parents to view their own children's balance sheets and payment details, while ensuring they are blocked from accessing other students' financial records.
+- Restricted aggregated financial reports ("Dues Owed" and "Email Balances") to Lead Mentors only.
+- Updated the permission system to handle object-level security for Payments, Fees, and Sliding Scale records.
 - Hard-coded Mentor permissions to prevent them from viewing or managing payments, attendance, and fees, ensuring they only have access to the student roster.
 - Updated the main navigation and program detail templates to hide management actions and role-inappropriate links for Mentors and other non-admin users.
 
