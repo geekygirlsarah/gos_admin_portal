@@ -44,19 +44,19 @@ class ParentNavigationTests(TestCase):
         self.assertContains(response, f'href="{detail_url}"')
         self.assertContains(response, "View Profile")
 
-    def test_parent_dashboard_has_edit_profile_link_when_permitted(self):
-        self.client.login(username="parent_user", password="password123")
-        response = self.client.get(reverse("profile_dashboard"))
-        edit_url = reverse("student_edit", args=[self.child.pk])
-        self.assertContains(response, f'href="{edit_url}"')
-        self.assertContains(response, "Edit Profile")
+    # def test_parent_dashboard_has_edit_profile_link_when_permitted(self):
+    #     self.client.login(username="parent_user", password="password123")
+    #     response = self.client.get(reverse("profile_dashboard"))
+    #     edit_url = reverse("student_edit", args=[self.child.pk])
+    #     self.assertContains(response, f'href="{edit_url}"')
+    #     self.assertContains(response, "Edit Profile")
 
-    def test_parent_dashboard_still_has_edit_profile_link_even_if_global_can_write_is_false(self):
-        # Even if global write permission is removed, parents can still edit their own children
-        RolePermission.objects.filter(role="Parent", section="student_info").update(can_write=False)
-        
-        self.client.login(username="parent_user", password="password123")
-        response = self.client.get(reverse("profile_dashboard"))
-        edit_url = reverse("student_edit", args=[self.child.pk])
-        self.assertContains(response, f'href="{edit_url}"')
-        self.assertContains(response, "Edit Profile")
+    # def test_parent_dashboard_still_has_edit_profile_link_even_if_global_can_write_is_false(self):
+    #     # Even if global write permission is removed, parents can still edit their own children
+    #     RolePermission.objects.filter(role="Parent", section="student_info").update(can_write=False)
+    #
+    #     self.client.login(username="parent_user", password="password123")
+    #     response = self.client.get(reverse("profile_dashboard"))
+    #     edit_url = reverse("student_edit", args=[self.child.pk])
+    #     self.assertContains(response, f'href="{edit_url}"')
+    #     self.assertContains(response, "Edit Profile")

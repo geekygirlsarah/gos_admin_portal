@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - Enabled object-level self-editing for students and adults by moving permission checks from the URL level to the view level, ensuring that users can manage their own data while remaining securely blocked from others.
 - Extended the permission system to allow parents to view and edit the information of their associated children, ensuring full access for families while maintaining strict security for non-related students.
 - Added a "Students" link to the navigation menu for parents and "View Profile" / "Edit Profile" buttons to the dashboard, making it easier for families to manage student records.
+- Restricted direct program access to Lead Mentors and Mentors (Active programs only), while blocking Students and Parents from accessing program details directly.
+- Hard-coded Mentor permissions to prevent them from viewing or managing payments, attendance, and fees, ensuring they only have access to the student roster.
+- Updated the main navigation and program detail templates to hide management actions and role-inappropriate links for Mentors and other non-admin users.
 
 ## 2026-07-25
 

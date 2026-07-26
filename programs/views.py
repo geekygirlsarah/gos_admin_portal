@@ -306,7 +306,25 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
     def get_queryset(self):
         # Keep a base queryset; ordering will be handled in context via grouping
-        return Program.objects.all()
+        qs = Program.objects.all()
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Mentor":
+            # Only show active programs to Mentors
+            from django.db.models import Q
+            from django.utils import timezone
+
+            today = timezone.localdate()
+            qs = (
+                qs.filter(active=True)
+                .filter(Q(start_date__isnull=True) | Q(start_date__lte=today))
+                .filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
+            )
+        elif role in ("Student", "Parent", "Alumni"):
+            # Students and Parents should not see the program list
+            return Program.objects.none()
+        return qs
 
     def get_context_data(self, **kwargs):
         from django.utils import timezone
@@ -2197,12 +2215,21 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["teams"] = Team.objects.all()
         ctx["crews"] = program.crews.all()
 
-        ctx["can_manage_students"] = can_user_write(self.request.user, "student_info")
-        ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
-        ctx["can_add_sliding_scale"] = can_user_write(self.request.user, "payments")
-        ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
-        ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
-        ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+        if role == "Mentor":
+            ctx["can_manage_students"] = False
+            ctx["can_add_payment"] = False
+            ctx["can_add_sliding_scale"] = False
+            ctx["can_manage_fees"] = False
+            ctx["can_view_payments"] = False
+            ctx["can_view_attendance"] = False
+        else:
+            ctx["can_manage_students"] = can_user_write(self.request.user, "student_info")
+            ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
+            ctx["can_add_sliding_scale"] = can_user_write(self.request.user, "payments")
+            ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
+            ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
+            ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+
         # Document management: any user who can edit the program can manage
         # the blank documents attached to it (used by the application wizard
         # Step 9 signed-document upload flow).

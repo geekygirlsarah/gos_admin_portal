@@ -78,6 +78,9 @@ def can_user_read(user, section, obj=None):
     perm = RolePermission.objects.filter(role=role, section=section).first()
     can_read_section = perm.can_read if perm else True  # Default to True for read
 
+    if role == "Mentor" and section in ["payments", "sliding_scale", "fees", "attendance"]:
+        return False
+
     if not can_read_section:
         return False
 
@@ -91,6 +94,9 @@ def can_user_read(user, section, obj=None):
             if isinstance(obj, Adult):
                 # Parents can only read their own profile
                 return obj == adult
+            if isinstance(obj, Program):
+                # Parents cannot view programs directly
+                return False
         except (Adult.DoesNotExist, AttributeError):
             return False
     elif role == "Alumni" and obj:
@@ -101,6 +107,9 @@ def can_user_read(user, section, obj=None):
             if isinstance(obj, Student):
                 # Alumni can see their own student record
                 return adult.student_record == obj
+            if isinstance(obj, Program):
+                # Alumni cannot view programs directly
+                return False
         except (Adult.DoesNotExist, AttributeError):
             return False
     elif role == "Student" and obj:
@@ -113,8 +122,15 @@ def can_user_read(user, section, obj=None):
                 # Students can read their own parents?
                 # For now, let's say they can't read adult profiles directly
                 return False
+            if isinstance(obj, Program):
+                # Students cannot view programs directly
+                return False
         except (Student.DoesNotExist, AttributeError):
             return False
+    elif role == "Mentor" and obj:
+        if isinstance(obj, Program):
+            # Mentors can only view active programs
+            return obj.status == "Active"
 
     return can_read_section
 
@@ -146,6 +162,9 @@ def can_user_write(user, section, obj=None):
     # Section specific write permission
     perm = RolePermission.objects.filter(role=role, section=section).first()
     can_write_section = perm.can_write if perm else False
+
+    if role == "Mentor" and section in ["payments", "sliding_scale", "fees", "attendance", "student_info"]:
+        return False
 
     if not can_write_section:
         return False

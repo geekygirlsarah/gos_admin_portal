@@ -37,37 +37,38 @@
                     </li>
                     {% endif %}
 
-                    {% if current_program %}
+                    {% can_read user 'programs' current_program as can_view_program %}
+                    {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
                         </li>
-
+ 
                         {% can_read user 'student_info' as can_read_students %}
                         {% if can_read_students %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#students">Students</a>
                         </li>
                         {% endif %}
-
-                        {% can_read user 'adult_info' as can_read_adults %}
-                        {% if can_read_adults %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#parents">Parents</a>
-                        </li>
-                        {% endif %}
-
+ 
                         {% if navbar_role == 'LeadMentor' %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
-                        </li>
+                            {% can_read user 'adult_info' as can_read_adults %}
+                            {% if can_read_adults %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#parents">Parents</a>
+                            </li>
+                            {% endif %}
+ 
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
+                            </li>
                         {% endif %}
-
+ 
                     {% else %}
-                        {# ── No program selected: show minimal nav ── #}
+                        {# ── No program selected or no access: show minimal nav ── #}
                         {% if navbar_role == 'LeadMentor' %}
                         <li class="nav-item"><a class="nav-link" href="/programs/">Programs</a></li>
                         {% endif %}
