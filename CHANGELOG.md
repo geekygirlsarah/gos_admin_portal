@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-25
+
+### Changed
+- Reorganized the Adult Add/Edit form into collapsible Bootstrap accordions for better organization and clarity. Fields are now grouped into four main sections: Adult Details (Identity, Contact, Roles, Status), Parent Details (Associated Students), Mentor Details (Mentor/Volunteer Details, Clearances, Access, Andrew ID), and Alumni Details.
+- Sections for Parent, Mentor, and Alumni are automatically expanded or collapsed based on the role checkboxes selected, allowing users to focus on the information relevant to their current roles while keeping other data accessible but tucked away.
+
 ## 2026-07-23
 
 ### Fixed
