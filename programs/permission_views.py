@@ -58,20 +58,22 @@ def can_user_read(user, section, obj=None):
     if role is None:
         return False
 
-    # Always allow reading own profile
+    # Always allow reading own profile and children
     if obj:
-        if (
-            isinstance(obj, Student)
-            and hasattr(user, "student_profile")
-            and obj == user.student_profile
-        ):
-            return True
-        if (
-            isinstance(obj, Adult)
-            and hasattr(user, "adult_profile")
-            and obj == user.adult_profile
-        ):
-            return True
+        if isinstance(obj, Student):
+            # Own student profile
+            if hasattr(user, "student_profile") and obj == user.student_profile:
+                return True
+            # Own child
+            try:
+                if user.adult_profile.students.filter(pk=obj.pk).exists():
+                    return True
+            except (Adult.DoesNotExist, AttributeError):
+                pass
+        if isinstance(obj, Adult):
+            # Own adult profile
+            if hasattr(user, "adult_profile") and obj == user.adult_profile:
+                return True
 
     perm = RolePermission.objects.filter(role=role, section=section).first()
     can_read_section = perm.can_read if perm else True  # Default to True for read
@@ -124,20 +126,22 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
-    # Always allow writing own profile
+    # Always allow writing own profile and children
     if obj:
-        if (
-            isinstance(obj, Student)
-            and hasattr(user, "student_profile")
-            and obj == user.student_profile
-        ):
-            return True
-        if (
-            isinstance(obj, Adult)
-            and hasattr(user, "adult_profile")
-            and obj == user.adult_profile
-        ):
-            return True
+        if isinstance(obj, Student):
+            # Own student profile
+            if hasattr(user, "student_profile") and obj == user.student_profile:
+                return True
+            # Own child
+            try:
+                if user.adult_profile.students.filter(pk=obj.pk).exists():
+                    return True
+            except (Adult.DoesNotExist, AttributeError):
+                pass
+        if isinstance(obj, Adult):
+            # Own adult profile
+            if hasattr(user, "adult_profile") and obj == user.adult_profile:
+                return True
 
     # Section specific write permission
     perm = RolePermission.objects.filter(role=role, section=section).first()
