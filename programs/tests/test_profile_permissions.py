@@ -1,7 +1,9 @@
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import Permission, User
 from django.test import TestCase
 from django.urls import reverse
-from programs.models import Adult, Student, RolePermission, AdultStudentRelationship
+
+from programs.models import Adult, AdultStudentRelationship, RolePermission, Student
+
 
 class ProfilePermissionsTests(TestCase):
     def setUp(self):
@@ -10,8 +12,10 @@ class ProfilePermissionsTests(TestCase):
             username="student_user", password="password123", email="student@example.com"
         )
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Student", last_name="One",
-            personal_email="student@example.com"
+            user=self.student_user,
+            first_name="Student",
+            last_name="One",
+            personal_email="student@example.com",
         )
 
         # Create another Student
@@ -39,7 +43,10 @@ class ProfilePermissionsTests(TestCase):
             username="other_parent", password="password123"
         )
         self.other_parent = Adult.objects.create(
-            user=self.other_parent_user, first_name="Other", last_name="Parent", is_parent=True
+            user=self.other_parent_user,
+            first_name="Other",
+            last_name="Parent",
+            is_parent=True,
         )
 
         # Create a Mentor
@@ -55,8 +62,11 @@ class ProfilePermissionsTests(TestCase):
             username="alumni_user", password="password123"
         )
         self.alumni = Adult.objects.create(
-            user=self.alumni_user, first_name="Alumni", last_name="One", is_alumni=True,
-            student_record=self.other_student # Alumni of 'other_student' record
+            user=self.alumni_user,
+            first_name="Alumni",
+            last_name="One",
+            is_alumni=True,
+            student_record=self.other_student,  # Alumni of 'other_student' record
         )
 
         # Create a Lead Mentor
@@ -65,13 +75,37 @@ class ProfilePermissionsTests(TestCase):
         )
 
         # Ensure RolePermission exists
-        RolePermission.objects.update_or_create(role="Student", section="student_info", defaults={"can_read": True, "can_write": True})
-        RolePermission.objects.update_or_create(role="Parent", section="student_info", defaults={"can_read": True, "can_write": True})
-        RolePermission.objects.update_or_create(role="Parent", section="adult_info", defaults={"can_read": True, "can_write": True})
-        RolePermission.objects.update_or_create(role="Mentor", section="adult_info", defaults={"can_read": True, "can_write": True})
-        RolePermission.objects.update_or_create(role="Alumni", section="adult_info", defaults={"can_read": True, "can_write": True})
-        RolePermission.objects.update_or_create(role="Alumni", section="student_info", defaults={"can_read": True, "can_write": True})
-        
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="student_info",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Parent",
+            section="student_info",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Parent",
+            section="adult_info",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="adult_info",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Alumni",
+            section="adult_info",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Alumni",
+            section="student_info",
+            defaults={"can_read": True, "can_write": True},
+        )
+
         # Give necessary Django permissions for the views that require them
         self.change_student_perm = Permission.objects.get(codename="change_student")
         self.change_adult_perm = Permission.objects.get(codename="change_adult")
@@ -152,7 +186,7 @@ class ProfilePermissionsTests(TestCase):
         self.client.login(username="mentor_user", password="password123")
         url = reverse("adult_detail", args=[self.other_parent.pk])
         response = self.client.get(url)
-        # Default for Mentor might allow read depending on RolePermission, 
+        # Default for Mentor might allow read depending on RolePermission,
         # but AdultDetailView uses DynamicPermissionMixin which checks object-level
         # Wait, Mentor role in can_user_read:
         # if role == "LeadMentor": return True
@@ -162,7 +196,7 @@ class ProfilePermissionsTests(TestCase):
         # (object-level restriction for Parents, Alumni, Students) -> Mentor is not in this list!
         # So Mentor can read other Adults by default if RolePermission allows.
         # Let's verify this.
-        self.assertEqual(response.status_code, 200) # Mentor can see others by default
+        self.assertEqual(response.status_code, 200)  # Mentor can see others by default
 
     def test_alumni_can_view_own_profile(self):
         self.client.login(username="alumni_user", password="password123")
@@ -184,12 +218,12 @@ class ProfilePermissionsTests(TestCase):
 
     def test_lead_mentor_can_view_any_profile(self):
         self.client.login(username="lead_mentor", password="password123")
-        
+
         # Can view any student
         url = reverse("student_detail", args=[self.student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        
+
         # Can view any adult
         url = reverse("adult_detail", args=[self.parent.pk])
         response = self.client.get(url)

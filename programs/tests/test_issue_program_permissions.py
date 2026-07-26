@@ -1,28 +1,45 @@
-from django.contrib.auth.models import User, Group
+from datetime import timedelta
+
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from datetime import timedelta
-from programs.models import Adult, Student, Program, RolePermission, Enrollment
+
+from programs.models import Adult, Enrollment, Program, RolePermission, Student
+
 
 class ProgramPermissionTests(TestCase):
     def setUp(self):
         # Create a Lead Mentor
-        self.lead_mentor_user = User.objects.create_user(username="lead_mentor", password="password123")
+        self.lead_mentor_user = User.objects.create_user(
+            username="lead_mentor", password="password123"
+        )
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(lm_group)
 
         # Create a Mentor
-        self.mentor_user = User.objects.create_user(username="mentor_user", password="password123")
-        self.mentor_adult = Adult.objects.create(user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True)
+        self.mentor_user = User.objects.create_user(
+            username="mentor_user", password="password123"
+        )
+        self.mentor_adult = Adult.objects.create(
+            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+        )
 
         # Create a Parent
-        self.parent_user = User.objects.create_user(username="parent_user", password="password123")
-        self.parent_adult = Adult.objects.create(user=self.parent_user, first_name="Parent", last_name="User", is_parent=True)
+        self.parent_user = User.objects.create_user(
+            username="parent_user", password="password123"
+        )
+        self.parent_adult = Adult.objects.create(
+            user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
+        )
 
         # Create a Student
-        self.student_user = User.objects.create_user(username="student_user", password="password123")
-        self.student_profile = Student.objects.create(user=self.student_user, first_name="Student", last_name="User")
+        self.student_user = User.objects.create_user(
+            username="student_user", password="password123"
+        )
+        self.student_profile = Student.objects.create(
+            user=self.student_user, first_name="Student", last_name="User"
+        )
 
         # Create programs
         today = timezone.now().date()
@@ -30,25 +47,25 @@ class ProgramPermissionTests(TestCase):
             name="Active Program",
             active=True,
             start_date=today - timedelta(days=10),
-            end_date=today + timedelta(days=10)
+            end_date=today + timedelta(days=10),
         )
         self.past_program = Program.objects.create(
             name="Past Program",
             active=True,
             start_date=today - timedelta(days=30),
-            end_date=today - timedelta(days=10)
+            end_date=today - timedelta(days=10),
         )
         self.upcoming_program = Program.objects.create(
             name="Upcoming Program",
             active=True,
             start_date=today + timedelta(days=10),
-            end_date=today + timedelta(days=30)
+            end_date=today + timedelta(days=30),
         )
         self.inactive_program = Program.objects.create(
             name="Inactive Program",
             active=False,
             start_date=today - timedelta(days=10),
-            end_date=today + timedelta(days=10)
+            end_date=today + timedelta(days=10),
         )
 
         # Ensure RolePermissions exist with defaults
@@ -103,23 +120,42 @@ class ProgramPermissionTests(TestCase):
 
     def test_lead_mentor_can_view_all_programs(self):
         self.client.login(username="lead_mentor", password="password123")
-        for prog in [self.active_program, self.past_program, self.upcoming_program, self.inactive_program]:
+        for prog in [
+            self.active_program,
+            self.past_program,
+            self.upcoming_program,
+            self.inactive_program,
+        ]:
             url = reverse("program_detail", args=[prog.pk])
             response = self.client.get(url)
-            self.assertEqual(response.status_code, 200, f"Lead mentor should view {prog.name}")
+            self.assertEqual(
+                response.status_code, 200, f"Lead mentor should view {prog.name}"
+            )
 
     def test_mentor_restricted_actions_in_context(self):
         self.client.login(username="mentor_user", password="password123")
         url = reverse("program_detail", args=[self.active_program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        
+
         # Check context variables that should be False for mentors
-        self.assertFalse(response.context.get("can_add_payment"), "Mentor should not add payments")
-        self.assertFalse(response.context.get("can_view_payments"), "Mentor should not view payments")
-        self.assertFalse(response.context.get("can_view_attendance"), "Mentor should not view attendance")
-        self.assertFalse(response.context.get("can_manage_fees"), "Mentor should not manage fees")
-        self.assertFalse(response.context.get("can_manage_students"), "Mentor should not manage students")
+        self.assertFalse(
+            response.context.get("can_add_payment"), "Mentor should not add payments"
+        )
+        self.assertFalse(
+            response.context.get("can_view_payments"), "Mentor should not view payments"
+        )
+        self.assertFalse(
+            response.context.get("can_view_attendance"),
+            "Mentor should not view attendance",
+        )
+        self.assertFalse(
+            response.context.get("can_manage_fees"), "Mentor should not manage fees"
+        )
+        self.assertFalse(
+            response.context.get("can_manage_students"),
+            "Mentor should not manage students",
+        )
 
     def test_program_list_filtered_for_mentor(self):
         self.client.login(username="mentor_user", password="password123")

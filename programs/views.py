@@ -490,18 +490,15 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
             except (Student.DoesNotExist, AttributeError):
                 qs = Enrollment.objects.none()
 
-        return (
-            qs.annotate(
-                sort_first=Lower(
-                    Coalesce(
-                        NullIf("student__first_name", Value("")),
-                        "student__legal_first_name",
-                    )
-                ),
-                sort_last=Lower("student__last_name"),
-            )
-            .order_by("sort_first", "sort_last")
-        )
+        return qs.annotate(
+            sort_first=Lower(
+                Coalesce(
+                    NullIf("student__first_name", Value("")),
+                    "student__legal_first_name",
+                )
+            ),
+            sort_last=Lower("student__last_name"),
+        ).order_by("sort_first", "sort_last")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -2222,7 +2219,9 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
         else:
-            ctx["can_manage_students"] = can_user_write(self.request.user, "student_info")
+            ctx["can_manage_students"] = can_user_write(
+                self.request.user, "student_info"
+            )
             ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
             ctx["can_add_sliding_scale"] = can_user_write(self.request.user, "payments")
             ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
@@ -2720,6 +2719,7 @@ class ProgramPaymentCreateView(
 
 class ProgramPaymentDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "payments"
+
     def get_object(self):
         return get_object_or_404(Payment, pk=self.kwargs["payment_id"])
 
@@ -2750,6 +2750,7 @@ class ProgramPaymentDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 
 class ProgramPaymentPrintView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "payments"
+
     def get_object(self):
         return get_object_or_404(Payment, pk=self.kwargs["payment_id"])
 
@@ -3032,6 +3033,7 @@ class ProgramStudentBalancePrintView(
     LoginRequiredMixin, DynamicReadPermissionMixin, View
 ):
     section = "payments"
+
     def get_object(self):
         return get_object_or_404(Student, pk=self.kwargs["student_id"])
 
@@ -3102,7 +3104,9 @@ class ProgramFeeSelectView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         )
 
 
-class ProgramFeeAssignmentEditView(LoginRequiredMixin, DynamicWritePermissionMixin, View):
+class ProgramFeeAssignmentEditView(
+    LoginRequiredMixin, DynamicWritePermissionMixin, View
+):
     template_name = "programs/fee_assignment_form.html"
     section = "fees"
 
