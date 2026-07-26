@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Improved the navigation menu to display the user's full name instead of their email address.
 - Renamed the account menu link that pointed to the Dashboard from "My Profile" to "Dashboard" for better clarity.
+- Updated the system to redirect users back to their dashboard with a descriptive error message when attempting to access non-existent or unauthorized student and adult records, instead of showing a generic 404 error page.
+- Enabled object-level self-editing for students and adults by moving permission checks from the URL level to the view level, ensuring that users can manage their own data while remaining securely blocked from others.
 
 ## 2026-07-25
 

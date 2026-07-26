@@ -12,7 +12,7 @@ from django.contrib.auth.mixins import (
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import HttpResponseRedirect, QueryDict
+from django.http import Http404, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -94,6 +94,10 @@ class DynamicPermissionMixin(UserPassesTestMixin):
         if not obj and hasattr(self, "get_object"):
             try:
                 obj = self.get_object()
+            except Http404:
+                # If object doesn't exist, we treat it as a permission failure
+                # so it redirects to dashboard with an error instead of 404ing
+                return False
             except Exception:  # nosec B110
                 pass
         if self.permission_type == "write":
@@ -101,8 +105,13 @@ class DynamicPermissionMixin(UserPassesTestMixin):
         return can_user_read(self.request.user, self.section, obj)
 
     def handle_no_permission(self):
+        model_name = "record"
+        if hasattr(self, "model") and self.model:
+            model_name = self.model._meta.verbose_name.lower()
+
         messages.error(
-            self.request, "You do not have permission to access this section."
+            self.request,
+            f"You do not have permission to view that {model_name}, or it does not exist.",
         )
         return redirect("home")
 

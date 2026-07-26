@@ -270,7 +270,7 @@ urlpatterns = [
     ),
     path(
         "adults/<int:pk>/edit/",
-        permission_required("programs.change_adult")(AdultUpdateView.as_view()),
+        login_required(AdultUpdateView.as_view()),
         name="adult_edit",
     ),
     path(
@@ -290,7 +290,7 @@ urlpatterns = [
     ),
     path(
         "mentors/<int:pk>/edit/",
-        permission_required("programs.change_adult")(MentorUpdateView.as_view()),
+        login_required(MentorUpdateView.as_view()),
         name="mentor_edit",
     ),
     path("schools/", login_required(SchoolListView.as_view()), name="school_list"),
@@ -449,7 +449,7 @@ urlpatterns = [
     # Student edit
     path(
         "students/<int:pk>/edit/",
-        permission_required("programs.change_student")(StudentUpdateView.as_view()),
+        login_required(StudentUpdateView.as_view()),
         name="student_edit",
     ),
     path(
@@ -467,7 +467,7 @@ urlpatterns = [
     ),
     path(
         "parents/<int:pk>/edit/",
-        permission_required("programs.change_adult")(ParentUpdateView.as_view()),
+        login_required(ParentUpdateView.as_view()),
         name="parent_edit",
     ),
     # School add/edit
