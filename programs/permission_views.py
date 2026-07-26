@@ -51,15 +51,70 @@ def get_user_role(user):
     return None
 
 
-def can_user_read(user, section):
+def can_user_read(user, section, obj=None):
     role = get_user_role(user)
     if role == "LeadMentor":
         return True
     if role is None:
         return False
 
+    # Always allow reading own profile
+    if obj:
+        if (
+            isinstance(obj, Student)
+            and hasattr(user, "student_profile")
+            and obj == user.student_profile
+        ):
+            return True
+        if (
+            isinstance(obj, Adult)
+            and hasattr(user, "adult_profile")
+            and obj == user.adult_profile
+        ):
+            return True
+
     perm = RolePermission.objects.filter(role=role, section=section).first()
-    return perm.can_read if perm else True  # Default to True for read if not specified
+    can_read_section = perm.can_read if perm else True  # Default to True for read
+
+    if not can_read_section:
+        return False
+
+    # Object-level restriction for Parents, Alumni, and Students
+    if role == "Parent" and obj:
+        try:
+            adult = user.adult_profile
+            if isinstance(obj, Student):
+                # Parents can only read their own students
+                return obj in adult.students.all()
+            if isinstance(obj, Adult):
+                # Parents can only read their own profile
+                return obj == adult
+        except (Adult.DoesNotExist, AttributeError):
+            return False
+    elif role == "Alumni" and obj:
+        try:
+            adult = user.adult_profile
+            if isinstance(obj, Adult):
+                return obj == adult
+            if isinstance(obj, Student):
+                # Alumni can see their own student record
+                return adult.student_record == obj
+        except (Adult.DoesNotExist, AttributeError):
+            return False
+    elif role == "Student" and obj:
+        try:
+            student = user.student_profile
+            if isinstance(obj, Student):
+                # Students can only read their own profile
+                return obj == student
+            if isinstance(obj, Adult):
+                # Students can read their own parents?
+                # For now, let's say they can't read adult profiles directly
+                return False
+        except (Student.DoesNotExist, AttributeError):
+            return False
+
+    return can_read_section
 
 
 def can_user_write(user, section, obj=None):
@@ -68,6 +123,21 @@ def can_user_write(user, section, obj=None):
         return True
     if role is None:
         return False
+
+    # Always allow writing own profile
+    if obj:
+        if (
+            isinstance(obj, Student)
+            and hasattr(user, "student_profile")
+            and obj == user.student_profile
+        ):
+            return True
+        if (
+            isinstance(obj, Adult)
+            and hasattr(user, "adult_profile")
+            and obj == user.adult_profile
+        ):
+            return True
 
     # Section specific write permission
     perm = RolePermission.objects.filter(role=role, section=section).first()

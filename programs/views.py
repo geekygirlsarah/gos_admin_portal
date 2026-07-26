@@ -90,11 +90,15 @@ class DynamicPermissionMixin(UserPassesTestMixin):
     def test_func(self):
         if not self.section:
             return True
+        obj = getattr(self, "object", None)
+        if not obj and hasattr(self, "get_object"):
+            try:
+                obj = self.get_object()
+            except Exception:  # nosec B110
+                pass
         if self.permission_type == "write":
-            return can_user_write(
-                self.request.user, self.section, getattr(self, "object", None)
-            )
-        return can_user_read(self.request.user, self.section)
+            return can_user_write(self.request.user, self.section, obj)
+        return can_user_read(self.request.user, self.section, obj)
 
     def handle_no_permission(self):
         messages.error(
@@ -405,6 +409,23 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                qs = qs.filter(adults=adult)
+            except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(pk=student.pk)
+            except (Student.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
             sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
@@ -422,10 +443,28 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
+        qs = Enrollment.objects.filter(program=self.program).select_related(
+            "student", "team"
+        )
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                qs = qs.filter(student__adults=adult)
+            except (Adult.DoesNotExist, AttributeError):
+                qs = Enrollment.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(student=student)
+            except (Student.DoesNotExist, AttributeError):
+                qs = Enrollment.objects.none()
+
         return (
-            Enrollment.objects.filter(program=self.program)
-            .select_related("student", "team")
-            .annotate(
+            qs.annotate(
                 sort_first=Lower(
                     Coalesce(
                         NullIf("student__first_name", Value("")),
@@ -458,6 +497,23 @@ class StudentEmergencyContactsView(LoginRequiredMixin, SortableListViewMixin, Li
 
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                qs = qs.filter(adults=adult)
+            except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(pk=student.pk)
+            except (Student.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+
         qs = (
             qs.select_related("school", "primary_contact", "secondary_contact")
             .prefetch_related("adults")
@@ -483,6 +539,23 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                qs = qs.filter(adults=adult)
+            except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(pk=student.pk)
+            except (Student.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+
         return (
             qs.select_related("school")
             .annotate(
@@ -548,6 +621,23 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
+
+        from .permission_views import get_user_role
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                qs = qs.filter(adults=adult)
+            except (Adult.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                qs = qs.filter(pk=student.pk)
+            except (Student.DoesNotExist, AttributeError):
+                qs = Student.objects.none()
+
         return (
             qs.select_related("school")
             .annotate(
@@ -1781,13 +1871,19 @@ class MentorUpdateView(
     SensitiveDataViewMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    DynamicWritePermissionMixin,
     UpdateView,
 ):
     model = Adult
     form_class = AdultForm
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
+    section = "adult_info"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")
@@ -2262,10 +2358,29 @@ class StudentCreateView(
         return reverse("student_list")
 
 
-class StudentDetailView(SensitiveDataViewMixin, LoginRequiredMixin, DetailView):
+class AdultDetailView(
+    DynamicPermissionMixin, SensitiveDataViewMixin, LoginRequiredMixin, DetailView
+):
+    model = Adult
+    template_name = "adults/detail.html"
+    context_object_name = "adult"
+    section = "adult_info"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from .permission_views import get_user_role
+
+        ctx["role"] = get_user_role(self.request.user)
+        return ctx
+
+
+class StudentDetailView(
+    DynamicPermissionMixin, SensitiveDataViewMixin, LoginRequiredMixin, DetailView
+):
     model = Student
     template_name = "students/detail.html"
     context_object_name = "student"
+    section = "student_info"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -2494,13 +2609,19 @@ class ParentUpdateView(
     SensitiveDataViewMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    DynamicWritePermissionMixin,
     UpdateView,
 ):
     model = Adult
     form_class = ParentForm
     template_name = "parents/form.html"
     permission_required = "programs.change_adult"
+    section = "adult_info"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")

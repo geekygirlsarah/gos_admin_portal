@@ -102,7 +102,8 @@
 
                 {# ── Mobile account menu ── #}
                 <div class="d-lg-none border-top border-secondary mt-2 pt-2">
-                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">My Account</a>
+                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">Dashboard</a>
+                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'my_profile' %}">My Profile</a>
                     <a class="btn btn-outline-light w-100" href="/accounts/logout/">Logout</a>
                 </div>
             </div>
@@ -116,10 +117,11 @@
             {# ── Desktop account dropdown ── #}
             <div class="dropdown d-none d-lg-block">
                 <button class="btn btn-outline-light dropdown-toggle" type="button" id="accountMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    {{ user.email|default:user.username }}
+                    {{ user.get_full_name|default:user.email|default:user.username }}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenuDropdown">
-                    <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">My Profile</a></li>
+                    <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">Dashboard</a></li>
+                    <li><a class="dropdown-item" href="{% url 'my_profile' %}">My Profile</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="/accounts/logout/">Logout</a></li>
                 </ul>

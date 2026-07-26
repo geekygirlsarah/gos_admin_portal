@@ -1,6 +1,9 @@
 from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.views import View
 from django.views.generic import TemplateView
 
 
@@ -30,6 +33,21 @@ def _compute_student_program_balance(student, program):
     ) or Decimal("0.00")
 
     return total_fees - discount - total_paid
+
+
+class MyProfileView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        student = getattr(user, "student_profile", None)
+        if student:
+            return redirect("student_detail", pk=student.pk)
+
+        adult = getattr(user, "adult_profile", None)
+        if adult:
+            return redirect("adult_detail", pk=adult.pk)
+
+        # Fallback to dashboard if no profile found (e.g. superuser without profile)
+        return redirect("profile_dashboard")
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):

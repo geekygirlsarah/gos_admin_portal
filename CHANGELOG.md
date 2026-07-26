@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-26
+
+### Added
+- Added a "My Profile" page for adults (mentors, parents, alumni), allowing them to view their personal information and linked students in one place.
+- Added a "My Profile" link to the user account menu for quick access to personal records.
+- Implemented object-level security: users (students and adults) can now view and edit their own profiles, but are restricted from accessing or modifying profiles of others unless they have administrative permissions.
+
+### Changed
+- Improved the navigation menu to display the user's full name instead of their email address.
+- Renamed the account menu link that pointed to the Dashboard from "My Profile" to "Dashboard" for better clarity.
+
 ## 2026-07-25
 
 ### Fixed
