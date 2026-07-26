@@ -6,7 +6,7 @@ from allauth.account.adapter import DefaultAccountAdapter
 from allauth.account.forms import RequestLoginCodeForm
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils.crypto import get_random_string
 
 
@@ -38,9 +38,14 @@ def _find_or_provision_user_for_email(email):
     # A. Adult check
     # We check for any Adult with this email, but prefer one already linked to a User
     # to avoid UNIQUE constraint conflicts if duplicates exist.
+    # We also prefer the "primary" adult (one who is a primary_contact for a student)
+    # as requested by the user.
     adult_qs = Adult.objects.filter(
         Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
-    )
+    ).annotate(
+        is_primary_contact=Count("primary_for")
+    ).order_by("-is_primary_contact", "last_name", "first_name")
+    
     adult = adult_qs.filter(user__isnull=False).first() or adult_qs.first()
 
     adult_allowed = False
