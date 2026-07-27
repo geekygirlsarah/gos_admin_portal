@@ -40,6 +40,8 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - `attendance/` — Student check-in/out logic and RFID management
 - `api/` — Versioned API and key management
 - `templates/` — Django templates organized by app/role
+- `audit/` — Audit log app (inspect models before assuming it's fully wired up)
+- `portal/` — Inspect before use; may contain legacy or shared views
 
 ## Local Development
 
@@ -75,24 +77,30 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 
 ## Security and Permissions
 
-- **Global Auth**: `LoginRequiredMiddleware` enforces login except for `admin/`, `accounts/`, `/apply/`, and static/media.
-- **Dynamic Roles**: `RolePermission` checks for Mentor/Parent/Student UI sections.
+- **Global Auth**: `LoginRequiredMiddleware` in `GoSAdminPortal/middleware.py` enforces login globally. Unknown paths redirect to login (not bypass it).
+- **Exempt URLs**: `/apply/`, `/accounts/*`, `admin/`, `privacy_policy`, `non_discrimination_policy`, and static/media. These are listed in `EXEMPT_URL_NAMES` inside the middleware.
+- **Roles**: Determined by `get_user_role(user)` in `programs/permission_views.py`. Priority order: `LeadMentor` (superuser or `LeadMentor` group) → `Mentor` → `Parent` → `Alumni` → `Student` → `Staff`/None.
+- **Dynamic Permissions**: `RolePermission` model lets Lead Mentors configure per-section read/write access for each role. Check with `can_user_read(user, section, obj=None)` and `can_user_write(user, section, obj=None)`.
+- **View Mixins**: Use `LeadMentorRequiredMixin`, `DynamicReadPermissionMixin`, or `DynamicWritePermissionMixin` (all in `programs/permission_views.py`). Do NOT use raw `has_perm()` checks for portal views.
+- **Object-Level Access**: `can_user_read`/`can_user_write` accept an `obj` argument for per-object checks (e.g., a Parent can only read their own students). Always pass `obj` when checking access to a specific record.
+- **Mentor Adult Access**: Mentors can only view Adults with `is_parent=True` who have a student in an active program. This is enforced in both the queryset and `can_user_read`.
 - **API Keys**: Authenticate via `ApiClientKey` in `api/auth.py`.
-- Sanitize all user input and use existing auth middleware.
+- **One Lead Mentor group**: There is only `"LeadMentor"` (no space). A single membership grants access to all Lead Mentor features including application review.
 
 ## Testing Strategy and Contribution
 
-- **Location**: Tests live in `programs/tests/`, `applications/tests/`, and `attendance/tests.py`.
+- **Location**: Tests live in `programs/tests/`, `applications/tests/`, `attendance/tests.py`, and `attendance/test_attendance_permissions.py`.
 - **TDD Requirement**: When fixing bugs, add a reproducer test file (e.g., `test_issue_reproduction.py`) before applying the fix.
 - **Scope**: Include model validation, forms, services, and view logic.
-- **Bandit**: If adding new tests that have hard-coded passwords, ensure Bandit will pass despite this.
+- **Bandit**: If adding new tests that have hard-coded passwords, add `# nosec B106` on the line with the password string.
+- **Groups in tests**: Use `Group.objects.get_or_create(name="LeadMentor")` (no space). Do not create a `"Lead Mentors"` group — it no longer exists.
 - Add unit tests for new business logic.
 - Keep changes minimal and avoid large refactors in feature tasks.
 - Do not rename files without a valid technical reason.
 - Make small, targeted changes instead of building for hypothetical future needs.
-- If you want to speed up tests, run `python manage.py test` commands with the `--parallel=16` option. (Tracebacks may not work properly with this though.)
+- Try to run parallized tests (`python manage.py test` commands with the `--parallel=16` option) to speed up work. If traces are needed, run without parallelization.
 
-# UI and architecture guidelines
+## UI and Architecture Guidelines
 - Use Bootstrap to ensure a consistent appearance.
 - Avoid inline styles if possible.
 - Ensure pages remain accessible and responsive.
@@ -104,3 +112,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - The `applications` app supersedes legacy models in `programs`.
 - Use `run_ci.ps1` (or equivalent) before finishing a task.
 - Search the codebase to infer structure; `programs/permission_views.py`, `signals.py`, and `utils.py` have important reusable code blocks. Reuse those whenever possible, or add similar code blocks into these files.
+- When adding a new view, pick the right mixin from `programs/permission_views.py`: `LeadMentorRequiredMixin` for Lead Mentor-only actions, `DynamicReadPermissionMixin` / `DynamicWritePermissionMixin` (with `permission_section`) for role-configurable pages, `LoginRequiredMixin` for any authenticated user.
+- When filtering querysets by role, use `StudentQuerysetRoleMixin.filter_students_by_role()` (in `programs/views.py`) instead of duplicating the Parent/Student filter pattern.
+- `signals.py` uses string-based lazy senders (`sender="programs.Adult"`) — not lambdas. Follow this pattern for any new signal receivers.
+- The `PortalSettingsView` handles GET only. Permission updates, team, crew, and subteam changes each have their own dedicated view (`PortalPermissionsUpdateView`, `PortalTeamView`, `PortalCrewView`, `PortalSubteamView`).
