@@ -77,6 +77,22 @@ class MiddlewareAsyncTest(TestCase):
         response = await middleware(request)
         self.assertEqual(response.status_code, 200)
 
+    def test_sync_middleware_unknown_path_redirects_to_login(self):
+        """TDD for Issue 8: an unresolvable path should redirect anonymous
+        users to login instead of being treated as exempt (which previously
+        let the 404 handler take over without asking the user to log in).
+        """
+
+        def get_response(request):
+            return HttpResponse("OK")
+
+        middleware = LoginRequiredMiddleware(get_response)
+        request = self.factory.get("/this-path-does-not-exist/")
+        request.user = AnonymousUser()
+        response = middleware(request)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
 
 class AdapterEmailProvisioningTest(TestCase):
     """Tests for _find_or_provision_user_for_email in GoSAdminPortal/adapter.py."""

@@ -140,7 +140,7 @@ urlpatterns = [
     ),
     path(
         "attendance/import/",
-        permission_required("programs.change_student")(AttendanceImportView.as_view()),
+        login_required(AttendanceImportView.as_view()),
         name="attendance_import",
     ),
     # CSV template downloads served via templates to avoid static collection issues

@@ -183,20 +183,13 @@ class ProfilePermissionsTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_mentor_cannot_view_other_adult_profile(self):
+        # Mentors are restricted to Parents who have a student enrolled in an
+        # active program. ``other_parent`` has no students at all, so the
+        # Mentor must not be able to view this profile.
         self.client.login(username="mentor_user", password="password123")
         url = reverse("adult_detail", args=[self.other_parent.pk])
         response = self.client.get(url)
-        # Default for Mentor might allow read depending on RolePermission,
-        # but AdultDetailView uses DynamicPermissionMixin which checks object-level
-        # Wait, Mentor role in can_user_read:
-        # if role == "LeadMentor": return True
-        # if role is None: return False
-        # (checks own profile) -> True
-        # (checks RolePermission) -> True by default
-        # (object-level restriction for Parents, Alumni, Students) -> Mentor is not in this list!
-        # So Mentor can read other Adults by default if RolePermission allows.
-        # Let's verify this.
-        self.assertEqual(response.status_code, 200)  # Mentor can see others by default
+        self.assertEqual(response.status_code, 302)
 
     def test_alumni_can_view_own_profile(self):
         self.client.login(username="alumni_user", password="password123")

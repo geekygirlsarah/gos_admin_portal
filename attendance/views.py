@@ -28,27 +28,9 @@ def _week_bounds(now=None):
 def student_attendance_view(request, pk):
     student = get_object_or_404(Student, pk=pk)
 
-    if not can_user_read(request.user, "attendance"):
+    if not can_user_read(request.user, "attendance", obj=student):
         messages.error(request, "You do not have permission to view attendance.")
         return redirect("home")
-
-    # Object level check for Parents
-    from programs.permission_views import get_user_role
-
-    if get_user_role(request.user) == "Parent":
-        try:
-            adult = request.user.adult_profile
-            if student not in adult.students.all():
-                messages.error(
-                    request,
-                    "You do not have permission to view this student's attendance.",
-                )
-                return redirect("home")
-        except Exception:
-            messages.error(
-                request, "You do not have permission to view this student's attendance."
-            )
-            return redirect("home")
 
     # Optional program filter
     program_id = request.GET.get("program_id") or request.POST.get("program_id")
@@ -239,7 +221,7 @@ def student_attendance_view(request, pk):
 
 class AttendanceImportView(View):
     def post(self, request):
-        if not request.user.has_perm("programs.change_student"):
+        if not can_user_write(request.user, "attendance"):
             messages.error(request, "You do not have permission to import attendance.")
             return redirect_back(request, "import_dashboard")
         file = request.FILES.get("file")

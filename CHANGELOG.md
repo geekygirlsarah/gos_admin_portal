@@ -7,6 +7,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Resolved a permissions gap where Lead Mentors added to the main system group could not access the application review pages, because two separate "Lead Mentor" groups existed in the system. These have been merged into one unified group so a Lead Mentor only needs to be added once to gain access everywhere.
 - Fixed a silent bug where user accounts were not automatically added to the correct role groups (Mentor, Parent, Student) when their profile was saved. Group assignments now work correctly on profile creation and update.
+- Fixed the attendance import page to use the same role-based permission system as the rest of the site, so Lead Mentors and Mentors can import attendance while Students and Parents are correctly blocked.
+- Simplified and corrected the attendance viewing check so a Parent can only view their own children's attendance records, removing a duplicate and inconsistent permission check.
+- Fixed a security gap where an unknown web address could show a plain "page not found" message to a signed-out visitor instead of asking them to log in first.
+- Restricted Mentors so they can only view Parent contacts who currently have a student enrolled in an active program, instead of being able to see every adult record in the system.
 
 ### Added
 - Added a "My Profile" page for adults (mentors, parents, alumni), allowing them to view their personal information and linked students in one place.

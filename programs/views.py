@@ -3729,6 +3729,10 @@ class AdultsListView(
                 qs = qs.filter(pk=adult.pk)
             except (Adult.DoesNotExist, AttributeError):
                 qs = Adult.objects.none()
+        elif role == "Mentor":
+            qs = qs.filter(
+                is_parent=True, students__enrollment__program__active=True
+            ).distinct()
         return self.apply_sorting(qs)
 
     def get_context_data(self, **kwargs):

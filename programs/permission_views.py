@@ -156,6 +156,11 @@ def can_user_read(user, section, obj=None):
         if isinstance(obj, Program):
             # Mentors can only view active programs
             return obj.status == "Active"
+        if isinstance(obj, Adult):
+            # Mentors can only view Parents with a student in an active program
+            if not obj.is_parent:
+                return False
+            return obj.students.filter(enrollment__program__active=True).exists()
 
     return can_read_section
 
@@ -193,7 +198,7 @@ def can_user_write(user, section, obj=None):
         if role != "LeadMentor":
             return False
 
-    if role == "Mentor" and section in ["attendance", "student_info"]:
+    if role == "Mentor" and section == "student_info":
         return False
 
     if not can_write_section:
