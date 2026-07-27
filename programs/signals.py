@@ -70,7 +70,8 @@ def assign_default_permissions():
     parent = ensure_group("Parent")
     student_group = ensure_group("Student")
 
-    # Lead mentors: all perms
+    # Lead mentors: all perms. The LeadMentor group also carries the
+    # review_application permission (granted by applications migration 0011).
     lead.permissions.add(*program_perms.values())
     if student_perms:
         lead.permissions.add(*student_perms.values())

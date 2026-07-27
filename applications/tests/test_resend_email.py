@@ -13,7 +13,7 @@ from applications.models import Application
 
 User = get_user_model()
 
-LEAD_MENTORS_GROUP = "Lead Mentors"
+LEAD_MENTORS_GROUP = "LeadMentor"
 REVIEW_PERM_CODENAME = "review_application"
 
 

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-26
 
+### Fixed
+- Resolved a permissions gap where Lead Mentors added to the main system group could not access the application review pages, because two separate "Lead Mentor" groups existed in the system. These have been merged into one unified group so a Lead Mentor only needs to be added once to gain access everywhere.
+
 ### Added
 - Added a "My Profile" page for adults (mentors, parents, alumni), allowing them to view their personal information and linked students in one place.
 - Added a "My Profile" link to the user account menu for quick access to personal records.
