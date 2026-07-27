@@ -36,6 +36,9 @@ urlpatterns = [
     path("profile/", include("portal.urls")),
     # Public application flow (new wizard lives in the `applications` app)
     path("apply/", include("applications.urls")),
+    # Public kiosk attendance sign-in pages (no login required)
+    path("kiosk/", include("attendance.kiosk_urls")),
+    path("attendance/", include("attendance.urls")),
     path(
         "privacy/",
         TemplateView.as_view(template_name="privacy.html"),

@@ -2,6 +2,39 @@ from django.db import models
 from django.utils import timezone
 
 
+class KioskConfig(models.Model):
+    """Configuration for a public kiosk sign-in page.
+
+    A kiosk config links a program to a public sign-in page at /kiosk/<id>/.
+    Access is controlled via a server-side HttpOnly cookie set when a mentor
+    unlocks the kiosk — no API key is stored or sent to the browser.
+    """
+
+    label = models.CharField(
+        max_length=100,
+        help_text="Human-readable name for this kiosk (e.g. 'Build Space Entry').",
+    )
+    program = models.ForeignKey(
+        "programs.Program",
+        on_delete=models.PROTECT,
+        related_name="kiosk_configs",
+        help_text="Program that attendance will be recorded under.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive kiosks return a 404 page.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["label"]
+        verbose_name = "Kiosk Configuration"
+        verbose_name_plural = "Kiosk Configurations"
+
+    def __str__(self):
+        return f"{self.label} ({self.program})"
+
+
 class KioskDevice(models.Model):
     name = models.CharField(max_length=100)
     program = models.ForeignKey("programs.Program", on_delete=models.PROTECT)
@@ -47,6 +80,11 @@ class AttendanceEvent(models.Model):
         "programs.Student", on_delete=models.PROTECT, null=True, blank=True
     )
     visitor_name = models.CharField(max_length=120, blank=True)
+    visitor_team_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="FRC/FTC/FLL team number for visiting teams.",
+    )
     rfid_uid = models.CharField(max_length=64, blank=True)
     kiosk = models.ForeignKey(
         KioskDevice, on_delete=models.SET_NULL, null=True, blank=True
@@ -74,6 +112,11 @@ class AttendanceSession(models.Model):
         "programs.Student", on_delete=models.PROTECT, null=True, blank=True
     )
     visitor_name = models.CharField(max_length=120, blank=True)
+    visitor_team_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="FRC/FTC/FLL team number for visiting teams.",
+    )
     check_in = models.DateTimeField(db_index=True)
     check_out = models.DateTimeField(null=True, blank=True, db_index=True)
     duration_minutes = models.PositiveIntegerField(default=0)

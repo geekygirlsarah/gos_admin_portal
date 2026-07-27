@@ -15,7 +15,7 @@ def resolve_student_by_uid(uid: str):
 
 
 def auto_in_or_out(
-    program, student=None, visitor_name: str = "", now=None
+    program, student=None, visitor_name: str = "", visitor_team_number=None, now=None
 ) -> Tuple[str, Optional[AttendanceSession]]:
     """Determine whether the next event should be IN or OUT for the person and apply it.
     Returns (event_type, session).
@@ -41,6 +41,7 @@ def auto_in_or_out(
             program=program,
             student=student,
             visitor_name=visitor_name,
+            visitor_team_number=visitor_team_number,
             check_in=now,
         )
         return AttendanceEvent.IN, session
@@ -53,6 +54,7 @@ def record_tap(
     kiosk=None,
     rfid_uid: str = "",
     visitor_name: str = "",
+    visitor_team_number=None,
     event_type: str = "AUTO",
     occurred_at=None,
     source="kiosk",
@@ -82,6 +84,7 @@ def record_tap(
         program=program,
         student=student,
         visitor_name="" if student else (visitor_name or ""),
+        visitor_team_number=None if student else visitor_team_number,
         rfid_uid=rfid_uid or "",
         kiosk=kiosk,
         event_type=event_type,
@@ -90,10 +93,16 @@ def record_tap(
         notes=notes,
     )
 
+    team_num = evt.visitor_team_number
+
     # Apply to session layer
     if event_type == AttendanceEvent.AUTO:
         decided, session = auto_in_or_out(
-            program, student=student, visitor_name=evt.visitor_name, now=occurred_at
+            program,
+            student=student,
+            visitor_name=evt.visitor_name,
+            visitor_team_number=team_num,
+            now=occurred_at,
         )
         evt.event_type = decided
         evt.save(update_fields=["event_type"])
@@ -106,23 +115,39 @@ def record_tap(
     elif event_type == AttendanceEvent.IN:
         # Open a new session, closing any dangling open one first by policy
         decided, session = auto_in_or_out(
-            program, student=student, visitor_name=evt.visitor_name, now=occurred_at
+            program,
+            student=student,
+            visitor_name=evt.visitor_name,
+            visitor_team_number=team_num,
+            now=occurred_at,
         )
         if decided == AttendanceEvent.OUT:
             # If an open session existed, we closed it; now open a new one too
             decided, session = auto_in_or_out(
-                program, student=student, visitor_name=evt.visitor_name, now=occurred_at
+                program,
+                student=student,
+                visitor_name=evt.visitor_name,
+                visitor_team_number=team_num,
+                now=occurred_at,
             )
         session.opened_by_event = evt
         session.save(update_fields=["opened_by_event"])
     else:  # OUT
         decided, session = auto_in_or_out(
-            program, student=student, visitor_name=evt.visitor_name, now=occurred_at
+            program,
+            student=student,
+            visitor_name=evt.visitor_name,
+            visitor_team_number=team_num,
+            now=occurred_at,
         )
         # If we ended up opening a session (no prior open), immediately close it (zero duration)
         if decided == AttendanceEvent.IN:
             decided, session = auto_in_or_out(
-                program, student=student, visitor_name=evt.visitor_name, now=occurred_at
+                program,
+                student=student,
+                visitor_name=evt.visitor_name,
+                visitor_team_number=team_num,
+                now=occurred_at,
             )
         session.closed_by_event = evt
         session.save(update_fields=["closed_by_event"])

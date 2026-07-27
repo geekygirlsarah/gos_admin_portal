@@ -460,3 +460,63 @@ class AttendanceImportView(View):
             messages.error(request, f"Failed to import attendance: {e}")
 
         return redirect_back(request, "import_dashboard")
+
+
+@login_required
+def active_manifest_view(request):
+    if not can_user_read(request.user, "attendance"):
+        messages.error(request, "You do not have permission to view attendance.")
+        return redirect("home")
+
+    # Filter by program if provided
+    program_id = request.GET.get("program_id")
+    active_sessions = AttendanceSession.objects.filter(
+        check_out__isnull=True
+    ).select_related("student", "program")
+    if program_id and program_id.isdigit():
+        active_sessions = active_sessions.filter(program_id=program_id)
+
+    programs = Program.objects.filter(features__key="attendance").distinct()
+
+    return render(
+        request,
+        "attendance/active_manifest.html",
+        {
+            "active_sessions": active_sessions,
+            "programs": programs,
+            "selected_program_id": (
+                int(program_id) if program_id and program_id.isdigit() else None
+            ),
+        },
+    )
+
+
+@login_required
+def attendance_summary_view(request):
+    if not can_user_read(request.user, "attendance"):
+        messages.error(request, "You do not have permission to view attendance.")
+        return redirect("home")
+
+    # Basic summary: total hours per student in current week
+    start, end = _week_bounds()
+    sessions = AttendanceSession.objects.filter(
+        check_in__gte=start, check_in__lt=end
+    ).select_related("student", "program")
+
+    # Aggregate by student/visitor
+    summary = {}
+    for s in sessions:
+        key = s.student.full_name if s.student else (s.visitor_name or "Unknown")
+        summary[key] = summary.get(key, 0) + s.duration_minutes
+
+    sorted_summary = sorted(summary.items(), key=lambda x: x[1], reverse=True)
+
+    return render(
+        request,
+        "attendance/summary.html",
+        {
+            "summary": [(name, mins // 60, mins % 60) for name, mins in sorted_summary],
+            "start": start,
+            "end": end,
+        },
+    )

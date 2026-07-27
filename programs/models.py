@@ -712,10 +712,13 @@ class Student(models.Model):
             models.Index(fields=["graduated"], name="student_graduated_idx"),
         ]
 
-    def __str__(self):
+    @property
+    def full_name(self):
         pref = self.first_name or self.legal_first_name
-        full = f"{pref} {self.last_name}".strip()
-        return full or f"Student #{self.pk}"
+        return f"{pref} {self.last_name}".strip()
+
+    def __str__(self):
+        return self.full_name or f"Student #{self.pk}"
 
     def _prune_dangling_contacts(self):
         """Clear dangling primary/secondary contact FKs in a single query."""
@@ -1046,9 +1049,13 @@ class Adult(models.Model):
             ),
         ]
 
-    def __str__(self):
+    @property
+    def full_name(self):
         pref = self.preferred_first_name or self.first_name
         return f"{pref} {self.last_name}".strip()
+
+    def __str__(self):
+        return self.full_name
 
     def all_students(self):
         """Return a list of Student objects related to this adult,

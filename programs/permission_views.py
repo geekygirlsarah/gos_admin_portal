@@ -12,6 +12,11 @@ try:
 except ImportError:
     ApiClientKey = None
 
+try:
+    from attendance.models import KioskConfig
+except ImportError:
+    KioskConfig = None
+
 
 def get_user_role(user):
     """
@@ -172,6 +177,10 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         if ApiClientKey and request.user.has_perm("api.view_apiclientkey"):
             api_keys = ApiClientKey.objects.all()
 
+        kiosk_configs = None
+        if KioskConfig:
+            kiosk_configs = KioskConfig.objects.select_related("program").all()
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -181,6 +190,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "programs": programs,
             "attendance_programs": attendance_programs,
             "api_keys": api_keys,
+            "kiosk_configs": kiosk_configs,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
@@ -295,5 +305,34 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     subteam.save()
                     messages.success(request, "SubTeam updated.")
             return redirect("/programs/settings/?tab=subteams")
+
+        elif action == "add_kiosk_config" and KioskConfig:
+            label = request.POST.get("label", "").strip()
+            program_id = request.POST.get("program_id")
+            if label and program_id:
+                KioskConfig.objects.create(
+                    label=label,
+                    program_id=program_id,
+                )
+                messages.success(request, f"Kiosk '{label}' added.")
+            return redirect("/programs/settings/?tab=kiosk_configs")
+
+        elif action == "delete_kiosk_config" and KioskConfig:
+            kiosk_config_id = request.POST.get("kiosk_config_id")
+            if kiosk_config_id:
+                KioskConfig.objects.filter(id=kiosk_config_id).delete()
+                messages.success(request, "Kiosk configuration deleted.")
+            return redirect("/programs/settings/?tab=kiosk_configs")
+
+        elif action == "toggle_kiosk_config" and KioskConfig:
+            kiosk_config_id = request.POST.get("kiosk_config_id")
+            if kiosk_config_id:
+                kiosk = KioskConfig.objects.filter(id=kiosk_config_id).first()
+                if kiosk:
+                    kiosk.is_active = not kiosk.is_active
+                    kiosk.save(update_fields=["is_active"])
+                    state = "activated" if kiosk.is_active else "deactivated"
+                    messages.success(request, f"Kiosk '{kiosk.label}' {state}.")
+            return redirect("/programs/settings/?tab=kiosk_configs")
 
         return redirect("portal_settings")

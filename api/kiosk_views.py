@@ -1,0 +1,198 @@
+import json
+import logging
+from django.contrib.auth import authenticate
+from django.core.cache import cache
+from django.db.models import Q
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET, require_POST
+
+from programs.models import Student
+from attendance.models import RFIDCard
+from attendance.services import record_tap
+from attendance.kiosk_utils import (
+    _get_kiosk_or_404,
+    _is_unlocked,
+    _cookie_name,
+    _CODE_EXPIRY,
+    _COOKIE_MAX_AGE,
+)
+
+logger = logging.getLogger(__name__)
+
+@require_POST
+def kiosk_request_code(request, kiosk_id):
+    """POST /api/v1/kiosk/<id>/request_code/
+    Accepts JSON {"email": "..."}.
+    Generates a 6-digit code, stores it in cache, and sends it via email.
+    """
+    _get_kiosk_or_404(kiosk_id)
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"success": False, "error": "Invalid JSON."}, status=400)
+
+    email = body.get("email", "").strip().lower()
+    if not email:
+        return JsonResponse({"success": False, "error": "Email is required."}, status=400)
+
+    # Use the portal's provisioning logic to ensure the user exists if they are allowed
+    from allauth.account.adapter import get_adapter
+    from GoSAdminPortal.adapter import _find_or_provision_user_for_email
+
+    if not _find_or_provision_user_for_email(email):
+        return JsonResponse(
+            {"success": False, "error": "This email is not authorized to unlock kiosks."},
+            status=403,
+        )
+
+    # Generate a 6-digit code
+    adapter = get_adapter()
+    code = adapter.generate_login_code()
+
+    # Store in cache
+    cache_key = f"kiosk_otp_{kiosk_id}_{email}"
+    cache.set(cache_key, code, _CODE_EXPIRY)
+
+    # Send the email
+    adapter.send_mail("account/email/login_code", email, {"code": code})
+
+    return JsonResponse({"success": True})
+
+@require_POST
+def kiosk_unlock(request, kiosk_id):
+    """POST /api/v1/kiosk/<id>/unlock/
+    Accepts JSON {"email": "...", "code": "..."}.
+    Verifies the code and sets a HttpOnly cookie to "unlock" the kiosk.
+    """
+    _get_kiosk_or_404(kiosk_id)
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"success": False, "error": "Invalid JSON."}, status=400)
+
+    email = body.get("email", "").strip().lower()
+    code = body.get("code", "").strip()
+
+    if not email or not code:
+        return JsonResponse({"success": False, "error": "Email and code are required."}, status=400)
+
+    cache_key = f"kiosk_otp_{kiosk_id}_{email}"
+    stored_code = cache.get(cache_key)
+
+    if not stored_code or stored_code != code:
+        return JsonResponse({"success": False, "error": "Invalid or expired code."}, status=403)
+
+    # Clear the code from cache
+    cache.delete(cache_key)
+
+    # Set the unlock cookie
+    response = JsonResponse({"success": True})
+    response.set_cookie(
+        _cookie_name(kiosk_id),
+        "1",
+        max_age=_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+    )
+    return response
+
+@require_POST
+def kiosk_lock(request, kiosk_id):
+    """POST /api/v1/kiosk/<id>/lock/
+    Clears the unlock cookie.
+    """
+    _get_kiosk_or_404(kiosk_id)
+    response = JsonResponse({"success": True})
+    response.delete_cookie(_cookie_name(kiosk_id))
+    return response
+
+@require_POST
+def kiosk_tap(request, kiosk_id):
+    """POST /api/v1/kiosk/<id>/tap/
+    Records an attendance tap. Requires the unlock cookie.
+    """
+    config = _get_kiosk_or_404(kiosk_id)
+    if not _is_unlocked(request, kiosk_id):
+        return JsonResponse({"error": "Kiosk is locked."}, status=403)
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON."}, status=400)
+
+    rfid_uid = body.get("rfid_uid", "")
+    visitor_name = body.get("visitor_name", "")
+    visitor_team_number = body.get("visitor_team_number")
+    event_type = body.get("event_type", "AUTO")
+
+    try:
+        evt = record_tap(
+            program=config.program,
+            rfid_uid=rfid_uid,
+            visitor_name=visitor_name,
+            visitor_team_number=visitor_team_number,
+            event_type=event_type,
+            source="kiosk",
+        )
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    student_name = None
+    if evt.student:
+        student_name = str(evt.student)
+    elif evt.visitor_name:
+        student_name = evt.visitor_name
+
+    return JsonResponse(
+        {
+            "event_type": evt.event_type,
+            "occurred_at": evt.occurred_at.isoformat(),
+            "student": student_name,
+        }
+    )
+
+@require_GET
+def kiosk_lookup(request, kiosk_id):
+    """GET /api/v1/kiosk/<id>/lookup/
+    Student lookup by name or RFID. Requires the unlock cookie.
+    """
+    _get_kiosk_or_404(kiosk_id)
+    if not _is_unlocked(request, kiosk_id):
+        return JsonResponse({"error": "Kiosk is locked."}, status=403)
+
+    rfid = request.GET.get("rfid", "").strip()
+    name = request.GET.get("name", "").strip()
+
+    students = []
+    if rfid:
+        try:
+            card = RFIDCard.objects.select_related("student").get(
+                uid=rfid, is_active=True
+            )
+            s = card.student
+            students = [
+                {
+                    "id": s.pk,
+                    "name": getattr(s, "preferred_full_name", str(s)),
+                }
+            ]
+        except RFIDCard.DoesNotExist:
+            students = []
+    elif name:
+        parts = name.split()
+        qs = Student.objects.all()
+        for part in parts:
+            qs = qs.filter(
+                Q(first_name__icontains=part)
+                | Q(last_name__icontains=part)
+                | Q(legal_first_name__icontains=part)
+            )
+        students = [
+            {
+                "id": s.pk,
+                "name": getattr(s, "preferred_full_name", str(s)),
+            }
+            for s in qs[:20]
+        ]
+
+    return JsonResponse({"students": students})

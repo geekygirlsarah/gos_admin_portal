@@ -30,6 +30,9 @@
             <button class="nav-link {% if active_tab == 'api_keys' %}active{% endif %}" id="api_keys-tab" data-bs-toggle="tab" data-bs-target="#api_keys" type="button" role="tab" aria-controls="api_keys" aria-selected="{% if active_tab == 'api_keys' %}true{% else %}false{% endif %}">API Keys</button>
         </li>
         {% endif %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="tab" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">Kiosk Sign-In</button>
+        </li>
     </ul>
 
     <div class="tab-content" id="settingsTabsContent">
@@ -551,7 +554,87 @@
             </div>
         </div>
 
-        <!-- API Keys Tab -->
+        <!-- Kiosk Sign-In Tab -->
+        <div class="tab-pane fade {% if active_tab == 'kiosk_configs' %}show active{% endif %}" id="kiosk_configs" role="tabpanel" aria-labelledby="kiosk_configs-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Kiosk Sign-In Pages</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Each kiosk configuration creates a public sign-in page at
+                        <code>/kiosk/&lt;id&gt;/</code> that students and visitors can use
+                        to tap in and out without logging in to the portal.
+                        Set a PC or tablet to kiosk mode and point it at the URL shown below.
+                    </p>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Label</th>
+                                    <th>Program</th>
+                                    <th>Active</th>
+                                    <th>Kiosk URL</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for k in kiosk_configs %}
+                                <tr>
+                                    <td>{{ k.label }}</td>
+                                    <td>{{ k.program.name }}</td>
+                                    <td><span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ k.is_active|yesno:"Active,Inactive" }}</span></td>
+                                    <td><a href="/kiosk/{{ k.pk }}/" target="_blank"><code>/kiosk/{{ k.pk }}/</code></a></td>
+                                    <td class="text-end d-flex gap-2 justify-content-end">
+                                        <form action="{% url 'portal_settings' %}" method="post" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="toggle_kiosk_config">
+                                            <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
+                                            <button class="btn btn-sm {% if k.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                {% if k.is_active %}Deactivate{% else %}Activate{% endif %}
+                                            </button>
+                                        </form>
+                                        <form action="{% url 'portal_settings' %}" method="post" class="d-inline js-confirm" data-confirm="Delete this kiosk configuration?">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_kiosk_config">
+                                            <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
+                                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-4 text-muted">No kiosk configurations yet. Add one below.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add Kiosk Form -->
+                    <h6 class="mb-3">Create New Kiosk</h6>
+                    <form method="post" class="row g-3 align-items-end">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_kiosk_config">
+                        <div class="col-md-5">
+                            <label for="kioskLabel" class="form-label">Label</label>
+                            <input type="text" id="kioskLabel" name="label" class="form-control" placeholder="e.g. Build Space Entry" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="kioskProgram" class="form-label">Program</label>
+                            <select id="kioskProgram" name="program_id" class="form-select" required>
+                                <option value="">Select program…</option>
+                                {% for p in attendance_programs %}
+                                <option value="{{ p.pk }}">{{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Add Kiosk</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         {% if perms.api.view_apiclientkey %}
         <div class="tab-pane fade {% if active_tab == 'api_keys' %}show active{% endif %}" id="api_keys" role="tabpanel" aria-labelledby="api_keys-tab">
             <div class="card shadow-sm">

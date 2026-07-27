@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from api.auth import require_api_key
-from attendance.models import AttendanceSession
+from attendance.models import AttendanceSession, RFIDCard
 from attendance.services import record_tap
 from programs.models import Program, Student
 
@@ -46,6 +46,7 @@ def attendance_tap(request):
     program_id = payload.get("program_id")
     rfid_uid = payload.get("rfid_uid", "")
     visitor_name = payload.get("visitor_name", "")
+    visitor_team_number = payload.get("visitor_team_number") or None
     event_type = payload.get("event_type", "AUTO")
     occurred_at = payload.get("occurred_at")
 
@@ -62,6 +63,7 @@ def attendance_tap(request):
         program=program,
         rfid_uid=rfid_uid,
         visitor_name=visitor_name,
+        visitor_team_number=visitor_team_number,
         event_type=event_type,
         occurred_at=dt,
         source="api",
@@ -74,10 +76,72 @@ def attendance_tap(request):
             "program_id": evt.program_id,
             "student_id": evt.student_id,
             "visitor_name": evt.visitor_name,
+            "visitor_team_number": evt.visitor_team_number,
             "occurred_at": evt.occurred_at.isoformat(),
         },
         status=201,
     )
+
+
+@require_api_key(scope_required="read")
+def student_lookup(request):
+    """Look up students by RFID UID or name fragment.
+
+    GET /api/v1/attendance/student/lookup?rfid=<uid>
+    GET /api/v1/attendance/student/lookup?name=<text>
+
+    Returns {"students": [{"id": ..., "name": ...}, ...]}
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "GET required"}, status=405)
+
+    rfid = request.GET.get("rfid", "").strip()
+    name = request.GET.get("name", "").strip()
+
+    if not rfid and not name:
+        return JsonResponse({"students": []})
+
+    if rfid:
+        # Exact match on active RFID card
+        try:
+            card = RFIDCard.objects.select_related("student").get(
+                uid=rfid, is_active=True
+            )
+            student = card.student
+            return JsonResponse(
+                {
+                    "students": [
+                        {
+                            "id": student.id,
+                            "name": student.first_name or student.legal_first_name,
+                            "full_name": f"{student.first_name or student.legal_first_name} {student.last_name}",
+                        }
+                    ]
+                }
+            )
+        except RFIDCard.DoesNotExist:
+            return JsonResponse({"students": []})
+
+    # Name search: match on legal_first_name, first_name, or last_name
+    terms = name.split()
+    qs = Student.objects.all()
+    for term in terms:
+        qs = qs.filter(
+            Q(legal_first_name__icontains=term)
+            | Q(first_name__icontains=term)
+            | Q(last_name__icontains=term)
+        )
+    qs = qs.order_by("last_name", "legal_first_name")[:20]
+
+    results = [
+        {
+            "id": s.id,
+            "name": s.first_name or s.legal_first_name,
+            "full_name": f"{s.first_name or s.legal_first_name} {s.last_name}",
+        }
+        for s in qs
+    ]
+    return JsonResponse({"students": results})
 
 
 @require_api_key(scope_required="read")

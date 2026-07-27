@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Summary{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h1 class="h3">Attendance Summary</h1>
+        <p class="text-muted">Weekly hours summary ({{ start|date:"M d" }} - {{ end|date:"M d, Y" }}).</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">Weekly Totals (by Person)</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th class="text-end">Total Hours</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, hours, mins in summary %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td class="text-end">
+                                <strong>{{ hours }}h {{ mins }}m</strong>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="2" class="text-center py-4 text-muted">No attendance recorded for this week yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center py-4">
+                <h6 class="text-uppercase text-muted small mb-2">Total People Active</h6>
+                <div class="h2 mb-0">{{ summary|length }}</div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title">Exports</h6>
+                <p class="small text-muted">Download detailed attendance reports.</p>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'attendance_import' %}" class="btn btn-outline-primary btn-sm">Import Data</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

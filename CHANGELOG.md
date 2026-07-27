@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-27
+
+### Changed
+- **Kiosk security improvement — no API key required**: Kiosk sign-in pages no longer embed an API key in the browser. Instead, a mentor visits the kiosk URL once and enters their portal credentials to "unlock" the kiosk. After unlocking, the kiosk runs without any login for 7 days. All attendance recording and student lookups now happen through secure server-side calls — nothing sensitive is ever sent to the browser. Staff can Activate or Deactivate individual kiosks from the Settings → Kiosk Sign-In tab.
+- **Visitor sign-in now tracks team number**: The kiosk Visitor / Guest tab now includes an optional "Team Number" field so visiting FRC/FTC/FLL teams can log their team number when signing in. The team number is stored alongside the visit record for reporting.
+- **API Key creation simplified**: When creating a new API key, you no longer need to enter or generate a key manually. Just give it a name, pick a scope (read or read/write), and save — a secure key is generated automatically. The key is displayed read-only on the edit page so you can copy it at any time.
+
+### Added
+- **Kiosk Sign-In**: Added a new public kiosk attendance page at `/kiosk/<id>/` that students and visitors can use to tap in and out without logging in to the portal. The page is designed for a PC or tablet running in kiosk mode and supports:
+  - **Member sign-in**: Students tap their RFID card (or type their full name) to automatically log an IN or OUT event.
+  - **Visitor / Guest sign-in**: Non-members (other teams, visitors) can sign their name in a separate tab to log their visit.
+  - A loading overlay and Bootstrap toast notifications (green for welcome, red for errors) provide instant visual feedback.
+- **Kiosk Configuration**: Staff can create and manage kiosk pages from the portal settings screen (Settings → Kiosk Sign-In tab). Each configuration links a program and an API key so attendance is recorded in the right place.
+- **Student Lookup API**: Added a new `GET /api/v1/attendance/student/lookup` endpoint that allows kiosks (and other integrations) to search for students by RFID card UID or by name. This endpoint is authenticated with an API key.
+- **API middleware fix**: The `/api/v1/` path is now correctly exempt from the portal's login-required middleware, allowing external tools and kiosks to reach API endpoints using their API key without being redirected to the login page.
+
 ## 2026-07-23
 
 ### Fixed
