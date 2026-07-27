@@ -69,6 +69,7 @@ from .permission_views import (
     PassUserToFormMixin,
     can_user_read,
     can_user_write,
+    get_user_role,
 )
 from .utils import (
     compute_sliding_discount_rounded,
@@ -122,6 +123,36 @@ class DynamicReadPermissionMixin(DynamicPermissionMixin):
 
 class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
+
+
+class StudentQuerysetRoleMixin:
+    """Mixin for views that list Students (or querysets related to a
+    Student) which need to be restricted based on the requesting user's
+    role: Parents only see their own students, Students only see
+    themselves, and other roles see the queryset unrestricted.
+    """
+
+    def filter_students_by_role(
+        self, qs, adults_field="adults", student_field="pk", empty_queryset=None
+    ):
+        if empty_queryset is None:
+            empty_queryset = Student.objects.none()
+
+        role = get_user_role(self.request.user)
+        if role == "Parent":
+            try:
+                adult = self.request.user.adult_profile
+                qs = qs.filter(**{adults_field: adult})
+            except (Adult.DoesNotExist, AttributeError):
+                qs = empty_queryset
+        elif role == "Student":
+            try:
+                student = self.request.user.student_profile
+                value = student.pk if student_field == "pk" else student
+                qs = qs.filter(**{student_field: value})
+            except (Student.DoesNotExist, AttributeError):
+                qs = empty_queryset
+        return qs
 
 
 class LogFormSaveMixin:
@@ -307,7 +338,6 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     def get_queryset(self):
         # Keep a base queryset; ordering will be handled in context via grouping
         qs = Program.objects.all()
-        from .permission_views import get_user_role
 
         role = get_user_role(self.request.user)
         if role == "Mentor":
@@ -330,7 +360,6 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         from django.utils import timezone
 
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         today = timezone.localdate()
@@ -377,7 +406,11 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
 
 class StudentListView(
-    LoginRequiredMixin, DynamicReadPermissionMixin, SortableListViewMixin, ListView
+    LoginRequiredMixin,
+    DynamicReadPermissionMixin,
+    SortableListViewMixin,
+    StudentQuerysetRoleMixin,
+    ListView,
 ):
     model = Student
     template_name = "students/list.html"
@@ -398,21 +431,7 @@ class StudentListView(
         if program_id:
             qs = qs.filter(enrollment__program_id=program_id).distinct()
 
-        from .permission_views import get_user_role
-
-        role = get_user_role(self.request.user)
-        if role == "Parent":
-            try:
-                adult = self.request.user.adult_profile
-                qs = qs.filter(adults=adult)
-            except (Adult.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
-        elif role == "Student":
-            try:
-                student = self.request.user.student_profile
-                qs = qs.filter(pk=student.pk)
-            except (Student.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
+        qs = self.filter_students_by_role(qs)
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         qs = qs.annotate(
@@ -428,7 +447,7 @@ class StudentListView(
         return ctx
 
 
-class StudentPhotoListView(LoginRequiredMixin, ListView):
+class StudentPhotoListView(LoginRequiredMixin, StudentQuerysetRoleMixin, ListView):
     model = Student
     template_name = "students/photo_grid.html"
     context_object_name = "students"
@@ -437,21 +456,7 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         qs = super().get_queryset()
 
-        from .permission_views import get_user_role
-
-        role = get_user_role(self.request.user)
-        if role == "Parent":
-            try:
-                adult = self.request.user.adult_profile
-                qs = qs.filter(adults=adult)
-            except (Adult.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
-        elif role == "Student":
-            try:
-                student = self.request.user.student_profile
-                qs = qs.filter(pk=student.pk)
-            except (Student.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
+        qs = self.filter_students_by_role(qs)
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
@@ -459,7 +464,9 @@ class StudentPhotoListView(LoginRequiredMixin, ListView):
         ).order_by(Lower("sort_first"), Lower("last_name"))
 
 
-class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
+class ProgramStudentPhotoListView(
+    LoginRequiredMixin, StudentQuerysetRoleMixin, ListView
+):
     model = Enrollment
     template_name = "students/photo_grid.html"
     context_object_name = "enrollments"
@@ -474,21 +481,12 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
             "student", "team"
         )
 
-        from .permission_views import get_user_role
-
-        role = get_user_role(self.request.user)
-        if role == "Parent":
-            try:
-                adult = self.request.user.adult_profile
-                qs = qs.filter(student__adults=adult)
-            except (Adult.DoesNotExist, AttributeError):
-                qs = Enrollment.objects.none()
-        elif role == "Student":
-            try:
-                student = self.request.user.student_profile
-                qs = qs.filter(student=student)
-            except (Student.DoesNotExist, AttributeError):
-                qs = Enrollment.objects.none()
+        qs = self.filter_students_by_role(
+            qs,
+            adults_field="student__adults",
+            student_field="student",
+            empty_queryset=Enrollment.objects.none(),
+        )
 
         return qs.annotate(
             sort_first=Lower(
@@ -508,7 +506,9 @@ class ProgramStudentPhotoListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class StudentEmergencyContactsView(LoginRequiredMixin, SortableListViewMixin, ListView):
+class StudentEmergencyContactsView(
+    LoginRequiredMixin, SortableListViewMixin, StudentQuerysetRoleMixin, ListView
+):
     model = Student
     template_name = "students/emergency_contacts.html"
     context_object_name = "students"
@@ -522,21 +522,7 @@ class StudentEmergencyContactsView(LoginRequiredMixin, SortableListViewMixin, Li
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
 
-        from .permission_views import get_user_role
-
-        role = get_user_role(self.request.user)
-        if role == "Parent":
-            try:
-                adult = self.request.user.adult_profile
-                qs = qs.filter(adults=adult)
-            except (Adult.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
-        elif role == "Student":
-            try:
-                student = self.request.user.student_profile
-                qs = qs.filter(pk=student.pk)
-            except (Student.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
+        qs = self.filter_students_by_role(qs)
 
         qs = (
             qs.select_related("school", "primary_contact", "secondary_contact")
@@ -556,7 +542,7 @@ class StudentEmergencyContactsView(LoginRequiredMixin, SortableListViewMixin, Li
         return ctx
 
 
-class StudentsByGradeView(LoginRequiredMixin, ListView):
+class StudentsByGradeView(LoginRequiredMixin, StudentQuerysetRoleMixin, ListView):
     model = Student
     template_name = "students/by_grade.html"
     context_object_name = "students"
@@ -564,21 +550,7 @@ class StudentsByGradeView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
 
-        from .permission_views import get_user_role
-
-        role = get_user_role(self.request.user)
-        if role == "Parent":
-            try:
-                adult = self.request.user.adult_profile
-                qs = qs.filter(adults=adult)
-            except (Adult.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
-        elif role == "Student":
-            try:
-                student = self.request.user.student_profile
-                qs = qs.filter(pk=student.pk)
-            except (Student.DoesNotExist, AttributeError):
-                qs = Student.objects.none()
+        qs = self.filter_students_by_role(qs)
 
         return (
             qs.select_related("school")
@@ -646,8 +618,6 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         qs = super().get_queryset().filter(graduated=False)
 
-        from .permission_views import get_user_role
-
         role = get_user_role(self.request.user)
         if role == "Parent":
             try:
@@ -674,7 +644,6 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         grouped = {}
@@ -705,8 +674,6 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
-
-        from .permission_views import get_user_role
 
         role = get_user_role(self.request.user)
         if role == "Parent":
@@ -2161,7 +2128,6 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         program = self.object
@@ -2290,7 +2256,6 @@ class StudentUpdateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
@@ -2359,7 +2324,6 @@ class StudentCreateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
@@ -2402,7 +2366,6 @@ class AdultDetailView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         return ctx
@@ -2418,7 +2381,6 @@ class StudentDetailView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         student = self.object
@@ -2952,7 +2914,6 @@ class ProgramSlidingScaleParentUploadView(LoginRequiredMixin, View):
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents
-        from .permission_views import get_user_role
 
         user_role = get_user_role(request.user)
         if user_role == "Parent":
@@ -3011,7 +2972,6 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents
-        from .permission_views import get_user_role
 
         if get_user_role(request.user) == "Parent":
             try:
@@ -3070,7 +3030,6 @@ class ProgramStudentBalancePrintView(
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents
-        from .permission_views import get_user_role
 
         if get_user_role(request.user) == "Parent":
             try:
@@ -3194,7 +3153,6 @@ class ProgramFeeCreateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         ctx["program"] = self.program
@@ -3758,7 +3716,6 @@ class AdultsListView(
     default_sort_field = "name"
 
     def get_queryset(self):
-        from .permission_views import get_user_role
 
         qs = Adult.objects.all().prefetch_related("students")
         program_id = self.kwargs.get("program_id")
@@ -3776,7 +3733,6 @@ class AdultsListView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from .permission_views import get_user_role
 
         ctx["role"] = get_user_role(self.request.user)
         program_id = self.kwargs.get("program_id")

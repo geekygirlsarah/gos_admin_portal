@@ -90,6 +90,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - Keep changes minimal and avoid large refactors in feature tasks.
 - Do not rename files without a valid technical reason.
 - Make small, targeted changes instead of building for hypothetical future needs.
+- If you want to speed up tests, run `python manage.py test` commands with the `--parallel=16` option. (Tracebacks may not work properly with this though.)
 
 # UI and architecture guidelines
 - Use Bootstrap to ensure a consistent appearance.

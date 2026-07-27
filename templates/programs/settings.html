@@ -37,7 +37,7 @@
         <div class="tab-pane fade {% if active_tab == 'permissions' %}show active{% endif %}" id="permissions" role="tabpanel" aria-labelledby="permissions-tab">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <form method="post">
+                    <form method="post" action="{% url 'portal_permissions_update' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update_permissions">
                         <div class="table-responsive">
@@ -126,7 +126,7 @@
                     <h5 class="mb-0">Add New Team</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" class="row g-3">
+                    <form method="post" class="row g-3" action="{% url 'portal_team' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_team">
                         <div class="col-md-2">
@@ -175,7 +175,7 @@
                             <tbody>
                                 {% for team in teams %}
                                 <tr>
-                                    <form method="post" class="d-inline">
+                                    <form method="post" class="d-inline" action="{% url 'portal_team' %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="action" value="update_team">
                                         <input type="hidden" name="team_id" value="{{ team.id }}">
@@ -200,7 +200,7 @@
                                             <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-team-{{ team.id }}">Delete</button>
                                         </td>
                                     </form>
-                                    <form id="delete-team-{{ team.id }}" method="post" style="display:none;">
+                                    <form id="delete-team-{{ team.id }}" method="post" style="display:none;" action="{% url 'portal_team' %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="action" value="delete_team">
                                         <input type="hidden" name="team_id" value="{{ team.id }}">
@@ -225,7 +225,7 @@
                     <h5 class="mb-0">Add New Crew/Project</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" class="row g-3">
+                    <form method="post" class="row g-3" action="{% url 'portal_crew' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_crew">
                         <div class="col-md-4">
@@ -270,7 +270,7 @@
                                 {% for crew in crews %}
                                 <tr>
                                     <td colspan="4">
-                                        <form method="post" class="d-flex gap-2 align-items-center m-0">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+                                        <form method="post" class="d-flex gap-2 align-items-center m-0" action="{% url 'portal_crew' %}">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                                             <input type="hidden" name="action" value="update_crew">
                                             <input type="hidden" name="crew_id" value="{{ crew.id }}">
                                             <div style="flex: 1;">{{ crew.program.name }} ({{ crew.program.year_display }})</div>
@@ -283,7 +283,7 @@
                                             <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-crew-{{ crew.id }}">Delete</button>
                                         </form>
-                                        <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;">
+                                        <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;" action="{% url 'portal_crew' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="delete_crew">
                                             <input type="hidden" name="crew_id" value="{{ crew.id }}">
@@ -309,7 +309,7 @@
                     <h5 class="mb-0">Add New SubTeam</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" class="row g-3">
+                    <form method="post" class="row g-3" action="{% url 'portal_subteam' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_subteam">
                         <div class="col-md-4">
@@ -354,7 +354,7 @@
                                 {% for subteam in subteams %}
                                 <tr>
                                     <td colspan="4">
-                                        <form method="post" class="d-flex gap-2 align-items-center m-0">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+                                        <form method="post" class="d-flex gap-2 align-items-center m-0" action="{% url 'portal_subteam' %}">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                                             <input type="hidden" name="action" value="update_subteam">
                                             <input type="hidden" name="subteam_id" value="{{ subteam.id }}">
                                             <div style="flex: 1;">{{ subteam.program.name }} ({{ subteam.program.year_display }})</div>
@@ -367,7 +367,7 @@
                                             <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-subteam-{{ subteam.id }}">Delete</button>
                                         </form>
-                                        <form id="delete-subteam-{{ subteam.id }}" method="post" style="display:none;">
+                                        <form id="delete-subteam-{{ subteam.id }}" method="post" style="display:none;" action="{% url 'portal_subteam' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="delete_subteam">
                                             <input type="hidden" name="subteam_id" value="{{ subteam.id }}">

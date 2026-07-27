@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Resolved a permissions gap where Lead Mentors added to the main system group could not access the application review pages, because two separate "Lead Mentor" groups existed in the system. These have been merged into one unified group so a Lead Mentor only needs to be added once to gain access everywhere.
+- Fixed a silent bug where user accounts were not automatically added to the correct role groups (Mentor, Parent, Student) when their profile was saved. Group assignments now work correctly on profile creation and update.
 
 ### Added
 - Added a "My Profile" page for adults (mentors, parents, alumni), allowing them to view their personal information and linked students in one place.
@@ -26,6 +27,8 @@ All notable changes to this project will be documented in this file.
 - Updated the permission system to handle object-level security for Payments, Fees, and Sliding Scale records.
 - Hard-coded Mentor permissions to prevent them from viewing or managing payments, attendance, and fees, ensuring they only have access to the student roster.
 - Updated the main navigation and program detail templates to hide management actions and role-inappropriate links for Mentors and other non-admin users.
+- Split the Portal Settings page into focused sub-sections internally, making each category of settings (role permissions, teams, crews, sub-teams) independently manageable and easier to maintain.
+- Cleaned up internal code duplication in student list views by centralizing role-based filtering logic into a shared helper, ensuring consistent behavior across all student-related pages.
 
 ## 2026-07-25
 
@@ -49,6 +52,9 @@ All notable changes to this project will be documented in this file.
 - Removed the restriction that prevented two adults from having the same personal email address, allowing households where multiple guardians share one email to be properly represented in the system.
 - Fixed a bug where converting an application to a student record could create a duplicate student if the applicant's last name was entered in a different case (e.g., "Smith" vs. "SMITH"). The system now matches existing students by name and date of birth in a case-insensitive way before creating a new record.
 - Fixed a confusing experience where saving a student's record appeared to do nothing — the page now redirects to the student's profile after saving, and shows a confirmation message so you know the save was successful.
+- Fixed the "Edit Fee" and "Add Fee" pages where input fields for name, amount, and date were missing or incorrectly rendered. Also made the page look nicer.
+- Fixed a broken HTML tag in the payment recording email template.
+- Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Added
 - Automatically send fee information emails to parents when a student is enrolled in a program that has existing fees.
@@ -56,11 +62,6 @@ All notable changes to this project will be documented in this file.
 - Added an optional `due_date` field to Fees to help parents track payment deadlines.
 - Displayed Fee due dates on student balance sheets (web and printable versions) and in the mentor's fee management list.
 - Included Fee due dates in automated email notifications when a new fee is added and in payment confirmation notifications.
-
-### Fixed
-- Fixed the "Edit Fee" and "Add Fee" pages where input fields for name, amount, and date were missing or incorrectly rendered. Also made the page look nicer.
-- Fixed a broken HTML tag in the payment recording email template.
-- Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Changed
 - Optimized GitHub Actions workflows (ci.yml and codeql.yml) to prevent duplicate runs when multiple events (like a push and a pull request) are triggered simultaneously for the same branch.

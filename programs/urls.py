@@ -4,7 +4,13 @@ from django.views.generic import TemplateView
 
 from attendance.views import AttendanceImportView, student_attendance_view
 
-from .permission_views import PortalSettingsView
+from .permission_views import (
+    PortalCrewView,
+    PortalPermissionsUpdateView,
+    PortalSettingsView,
+    PortalSubteamView,
+    PortalTeamView,
+)
 from .views import (
     AdultCreateView,
     AdultDetailView,
@@ -491,5 +497,25 @@ urlpatterns = [
         "settings/permissions/",
         PortalSettingsView.as_view(),
         name="role_permission_settings",
+    ),
+    path(
+        "settings/permissions/update/",
+        PortalPermissionsUpdateView.as_view(),
+        name="portal_permissions_update",
+    ),
+    path(
+        "settings/teams/",
+        PortalTeamView.as_view(),
+        name="portal_team",
+    ),
+    path(
+        "settings/crews/",
+        PortalCrewView.as_view(),
+        name="portal_crew",
+    ),
+    path(
+        "settings/subteams/",
+        PortalSubteamView.as_view(),
+        name="portal_subteam",
     ),
 ]
