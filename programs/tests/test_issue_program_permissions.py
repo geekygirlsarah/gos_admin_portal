@@ -13,14 +13,14 @@ class ProgramPermissionTests(TestCase):
         # Create a Lead Mentor
         self.lead_mentor_user = User.objects.create_user(
             username="lead_mentor", password="password123"
-        )
+        )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(lm_group)
 
         # Create a Mentor
         self.mentor_user = User.objects.create_user(
             username="mentor_user", password="password123"
-        )
+        )  # nosec B106
         self.mentor_adult = Adult.objects.create(
             user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
         )
@@ -28,7 +28,7 @@ class ProgramPermissionTests(TestCase):
         # Create a Parent
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
-        )
+        )  # nosec B106
         self.parent_adult = Adult.objects.create(
             user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
         )
@@ -36,7 +36,7 @@ class ProgramPermissionTests(TestCase):
         # Create a Student
         self.student_user = User.objects.create_user(
             username="student_user", password="password123"
-        )
+        )  # nosec B106
         self.student_profile = Student.objects.create(
             user=self.student_user, first_name="Student", last_name="User"
         )
@@ -76,7 +76,7 @@ class ProgramPermissionTests(TestCase):
                 RolePermission.objects.get_or_create(role=role, section=section_code)
 
     def test_student_cannot_view_program_detail(self):
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.active_program.pk])
         response = self.client.get(url)
         # Should redirect to home/dashboard with error
@@ -84,7 +84,7 @@ class ProgramPermissionTests(TestCase):
         self.assertEqual(response.url, reverse("home"))
 
     def test_parent_cannot_view_program_detail(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.active_program.pk])
         response = self.client.get(url)
         # Should redirect to home/dashboard with error
@@ -92,34 +92,34 @@ class ProgramPermissionTests(TestCase):
         self.assertEqual(response.url, reverse("home"))
 
     def test_mentor_can_view_active_program(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.active_program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_mentor_cannot_view_past_program(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.past_program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
 
     def test_mentor_cannot_view_upcoming_program(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.upcoming_program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
 
     def test_mentor_cannot_view_inactive_program(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.inactive_program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
 
     def test_lead_mentor_can_view_all_programs(self):
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
         for prog in [
             self.active_program,
             self.past_program,
@@ -133,7 +133,7 @@ class ProgramPermissionTests(TestCase):
             )
 
     def test_mentor_restricted_actions_in_context(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.active_program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -158,7 +158,7 @@ class ProgramPermissionTests(TestCase):
         )
 
     def test_program_list_filtered_for_mentor(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -169,7 +169,7 @@ class ProgramPermissionTests(TestCase):
         self.assertNotIn(self.inactive_program, programs)
 
     def test_program_list_empty_for_student(self):
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("program_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)

@@ -10,7 +10,7 @@ class ParentStudentEditTests(TestCase):
         # Create a parent user
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
-        )
+        )  # nosec B106
         self.parent_adult = Adult.objects.create(
             user=self.parent_user, first_name="Parent", last_name="One", is_parent=True
         )
@@ -36,13 +36,13 @@ class ParentStudentEditTests(TestCase):
         )
 
     def test_parent_can_view_child_detail(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.child.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_parent_cannot_view_other_student_detail(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.other_student.pk])
         response = self.client.get(url)
         # Should redirect to home because they don't have permission for other students
@@ -50,7 +50,7 @@ class ParentStudentEditTests(TestCase):
         self.assertEqual(response.url, reverse("home"))
 
     def test_parent_can_edit_child_student_even_if_can_write_is_false(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_edit", args=[self.child.pk])
         response = self.client.get(url)
         # Should now be 200 because it's their child (Always allow override)
@@ -62,7 +62,7 @@ class ParentStudentEditTests(TestCase):
             can_write=True
         )
 
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_edit", args=[self.child.pk])
         response = self.client.get(url)
         # Should be 200 now
@@ -74,7 +74,7 @@ class ParentStudentEditTests(TestCase):
             can_write=True
         )
 
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_edit", args=[self.other_student.pk])
         response = self.client.get(url)
         # Should still redirect to home because of object-level restriction

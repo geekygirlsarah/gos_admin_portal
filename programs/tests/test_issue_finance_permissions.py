@@ -10,14 +10,14 @@ class FinancePermissionTests(TestCase):
         # Lead Mentor
         self.lead_mentor_user = User.objects.create_user(
             username="lead_mentor", password="password123"
-        )
+        )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(lm_group)
 
         # Mentor
         self.mentor_user = User.objects.create_user(
             username="mentor_user", password="password123"
-        )
+        )  # nosec B106
         Adult.objects.create(
             user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
         )
@@ -25,7 +25,7 @@ class FinancePermissionTests(TestCase):
         # Parent
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
-        )
+        )  # nosec B106
         self.parent_adult = Adult.objects.create(
             user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
         )
@@ -33,7 +33,7 @@ class FinancePermissionTests(TestCase):
         # Student
         self.student_user = User.objects.create_user(
             username="student_user", password="password123"
-        )
+        )  # nosec B106
         self.student_profile = Student.objects.create(
             user=self.student_user, first_name="Student", last_name="User"
         )
@@ -41,7 +41,7 @@ class FinancePermissionTests(TestCase):
         # Alumni
         self.alumni_user = User.objects.create_user(
             username="alumni_user", password="password123"
-        )
+        )  # nosec B106
         Adult.objects.create(
             user=self.alumni_user, first_name="Alumni", last_name="User", is_alumni=True
         )
@@ -65,7 +65,7 @@ class FinancePermissionTests(TestCase):
         )
 
     def test_mentor_cannot_view_balance_sheet(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse(
             "program_student_balance", args=[self.program.pk, self.student_profile.pk]
         )
@@ -75,7 +75,7 @@ class FinancePermissionTests(TestCase):
 
     def test_student_cannot_view_own_balance_sheet(self):
         # Current implementation might allow this if 'payments' can_read defaults to True for Students
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse(
             "program_student_balance", args=[self.program.pk, self.student_profile.pk]
         )
@@ -84,7 +84,7 @@ class FinancePermissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
     def test_alumni_cannot_view_balance_sheet(self):
-        self.client.login(username="alumni_user", password="password123")
+        self.client.login(username="alumni_user", password="password123")  # nosec B106
         url = reverse(
             "program_student_balance", args=[self.program.pk, self.student_profile.pk]
         )
@@ -93,7 +93,7 @@ class FinancePermissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
     def test_parent_can_view_child_balance_sheet(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse(
             "program_student_balance", args=[self.program.pk, self.student_profile.pk]
         )
@@ -103,7 +103,7 @@ class FinancePermissionTests(TestCase):
 
     def test_parent_cannot_view_other_student_balance_sheet(self):
         other_student = Student.objects.create(first_name="Other", last_name="Student")
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse(
             "program_student_balance", args=[self.program.pk, other_student.pk]
         )
@@ -111,20 +111,20 @@ class FinancePermissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
     def test_mentor_cannot_view_payments_create(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_payment_create", args=[self.program.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_mentor_cannot_view_dues_owed(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_dues_owed", args=[self.program.pk])
         response = self.client.get(url)
         # Should be blocked
         self.assertEqual(response.status_code, 302)
 
     def test_mentor_cannot_view_email_balances(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_dues_email", args=[self.program.pk])
         response = self.client.get(url)
         # Should be blocked

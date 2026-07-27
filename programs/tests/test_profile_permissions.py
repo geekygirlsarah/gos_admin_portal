@@ -10,7 +10,7 @@ class ProfilePermissionsTests(TestCase):
         # Create a Student
         self.student_user = User.objects.create_user(
             username="student_user", password="password123", email="student@example.com"
-        )
+        )  # nosec B106
         self.student = Student.objects.create(
             user=self.student_user,
             first_name="Student",
@@ -21,7 +21,7 @@ class ProfilePermissionsTests(TestCase):
         # Create another Student
         self.other_student_user = User.objects.create_user(
             username="other_student", password="password123"
-        )
+        )  # nosec B106
         self.other_student = Student.objects.create(
             user=self.other_student_user, first_name="Other", last_name="Student"
         )
@@ -29,7 +29,7 @@ class ProfilePermissionsTests(TestCase):
         # Create a Parent
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
-        )
+        )  # nosec B106
         self.parent = Adult.objects.create(
             user=self.parent_user, first_name="Parent", last_name="One", is_parent=True
         )
@@ -41,7 +41,7 @@ class ProfilePermissionsTests(TestCase):
         # Create another Parent
         self.other_parent_user = User.objects.create_user(
             username="other_parent", password="password123"
-        )
+        )  # nosec B106
         self.other_parent = Adult.objects.create(
             user=self.other_parent_user,
             first_name="Other",
@@ -52,7 +52,7 @@ class ProfilePermissionsTests(TestCase):
         # Create a Mentor
         self.mentor_user = User.objects.create_user(
             username="mentor_user", password="password123"
-        )
+        )  # nosec B106
         self.mentor = Adult.objects.create(
             user=self.mentor_user, first_name="Mentor", last_name="One", is_mentor=True
         )
@@ -60,7 +60,7 @@ class ProfilePermissionsTests(TestCase):
         # Create an Alumni
         self.alumni_user = User.objects.create_user(
             username="alumni_user", password="password123"
-        )
+        )  # nosec B106
         self.alumni = Adult.objects.create(
             user=self.alumni_user,
             first_name="Alumni",
@@ -72,7 +72,7 @@ class ProfilePermissionsTests(TestCase):
         # Create a Lead Mentor
         self.lead_mentor_user = User.objects.create_superuser(
             username="lead_mentor", password="password123"
-        )
+        )  # nosec B106
 
         # Ensure RolePermission exists
         RolePermission.objects.update_or_create(
@@ -111,14 +111,14 @@ class ProfilePermissionsTests(TestCase):
         self.change_adult_perm = Permission.objects.get(codename="change_adult")
 
     def test_student_can_view_own_profile(self):
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Student One")
 
     def test_student_cannot_view_other_student_profile(self):
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.other_student.pk])
         response = self.client.get(url)
         # Redirects to home/dashboard on failure
@@ -126,58 +126,58 @@ class ProfilePermissionsTests(TestCase):
 
     def test_student_can_edit_own_profile(self):
         self.student_user.user_permissions.add(self.change_student_perm)
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("student_edit", args=[self.student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_student_cannot_edit_other_student_profile(self):
         self.student_user.user_permissions.add(self.change_student_perm)
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("student_edit", args=[self.other_student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_parent_can_view_own_profile(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("adult_detail", args=[self.parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_parent_cannot_view_other_adult_profile(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("adult_detail", args=[self.other_parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_parent_can_edit_own_profile(self):
         self.parent_user.user_permissions.add(self.change_adult_perm)
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("parent_edit", args=[self.parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_parent_cannot_edit_other_adult_profile(self):
         self.parent_user.user_permissions.add(self.change_adult_perm)
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("parent_edit", args=[self.other_parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_parent_can_view_linked_student(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_parent_cannot_view_unlinked_student(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.other_student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_mentor_can_view_own_profile(self):
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("adult_detail", args=[self.mentor.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -186,31 +186,31 @@ class ProfilePermissionsTests(TestCase):
         # Mentors are restricted to Parents who have a student enrolled in an
         # active program. ``other_parent`` has no students at all, so the
         # Mentor must not be able to view this profile.
-        self.client.login(username="mentor_user", password="password123")
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("adult_detail", args=[self.other_parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_alumni_can_view_own_profile(self):
-        self.client.login(username="alumni_user", password="password123")
+        self.client.login(username="alumni_user", password="password123")  # nosec B106
         url = reverse("adult_detail", args=[self.alumni.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_alumni_cannot_view_other_adult_profile(self):
-        self.client.login(username="alumni_user", password="password123")
+        self.client.login(username="alumni_user", password="password123")  # nosec B106
         url = reverse("adult_detail", args=[self.parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
     def test_alumni_can_view_own_student_record(self):
-        self.client.login(username="alumni_user", password="password123")
+        self.client.login(username="alumni_user", password="password123")  # nosec B106
         url = reverse("student_detail", args=[self.other_student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
     def test_lead_mentor_can_view_any_profile(self):
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
 
         # Can view any student
         url = reverse("student_detail", args=[self.student.pk])
@@ -223,7 +223,7 @@ class ProfilePermissionsTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_student_list_is_filtered_for_parent(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -231,7 +231,7 @@ class ProfilePermissionsTests(TestCase):
         self.assertNotContains(response, "Other Student")
 
     def test_student_list_is_filtered_for_student(self):
-        self.client.login(username="student_user", password="password123")
+        self.client.login(username="student_user", password="password123")  # nosec B106
         url = reverse("student_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -239,7 +239,7 @@ class ProfilePermissionsTests(TestCase):
         self.assertNotContains(response, "Other Student")
 
     def test_emergency_contacts_is_filtered_for_parent(self):
-        self.client.login(username="parent_user", password="password123")
+        self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse("student_emergency_contacts")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)

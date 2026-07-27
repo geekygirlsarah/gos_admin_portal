@@ -9,7 +9,7 @@ class Redirect404Tests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="testuser", password="password123"
-        )
+        )  # nosec B106
         # Give them Parent role so they have general permission to view student_info section
         RolePermission.objects.update_or_create(
             role="Parent",
@@ -29,7 +29,7 @@ class Redirect404Tests(TestCase):
         )
 
     def test_non_existent_student_redirects_to_home(self):
-        self.client.login(username="testuser", password="password123")
+        self.client.login(username="testuser", password="password123")  # nosec B106
         # Student with ID 9999 does not exist
         url = reverse("student_detail", args=[9999])
         response = self.client.get(url)
@@ -45,7 +45,7 @@ class Redirect404Tests(TestCase):
         )
 
     def test_non_existent_adult_redirects_to_home(self):
-        self.client.login(username="testuser", password="password123")
+        self.client.login(username="testuser", password="password123")  # nosec B106
         # Adult with ID 9999 does not exist
         url = reverse("adult_detail", args=[9999])
         response = self.client.get(url)
@@ -62,7 +62,7 @@ class Redirect404Tests(TestCase):
 
     def test_unauthorized_student_redirects(self):
         other_student = Student.objects.create(first_name="Other", last_name="Student")
-        self.client.login(username="testuser", password="password123")
+        self.client.login(username="testuser", password="password123")  # nosec B106
         url = reverse("student_detail", args=[other_student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
@@ -77,7 +77,7 @@ class Redirect404Tests(TestCase):
         )
 
     def test_non_existent_student_edit_redirects_to_home(self):
-        self.client.login(username="testuser", password="password123")
+        self.client.login(username="testuser", password="password123")  # nosec B106
         # Student with ID 9999 does not exist
         url = reverse("student_edit", args=[9999])
         response = self.client.get(url)

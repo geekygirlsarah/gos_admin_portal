@@ -7,7 +7,7 @@ from programs.models import Adult, RolePermission
 
 class PortalPermissionsUpdateTests(TestCase):
     def setUp(self):
-        self.password = "password123"  # nosec B106
+        self.password = "password123"  # nosec B105
 
         # Lead Mentor
         self.lead_mentor = User.objects.create_user(
@@ -29,9 +29,7 @@ class PortalPermissionsUpdateTests(TestCase):
         self.url = reverse("portal_permissions_update")
 
     def test_lead_mentor_can_update_permissions(self):
-        self.client.login(
-            username="lead_mentor_user", password=self.password
-        )  # nosec B106
+        self.client.login(username="lead_mentor_user", password=self.password)
 
         perm, _ = RolePermission.objects.get_or_create(
             role="Mentor", section="attendance"
@@ -69,9 +67,7 @@ class PortalPermissionsUpdateTests(TestCase):
         self.assertTrue(perm.can_write)
 
     def test_non_lead_mentor_cannot_update_permissions(self):
-        self.client.login(
-            username="mentor_user_perm", password=self.password
-        )  # nosec B106
+        self.client.login(username="mentor_user_perm", password=self.password)
 
         perm, _ = RolePermission.objects.get_or_create(
             role="Mentor", section="attendance"
