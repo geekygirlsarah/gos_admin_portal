@@ -6,8 +6,8 @@ register = template.Library()
 
 
 @register.simple_tag
-def can_read(user, section):
-    return can_user_read(user, section)
+def can_read(user, section, obj=None):
+    return can_user_read(user, section, obj)
 
 
 @register.simple_tag

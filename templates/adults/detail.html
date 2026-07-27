@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% load form_tags %}
+{% load permission_tags %}
+{% block title %}Adult: {{ adult.first_name }} {{ adult.last_name }}{% endblock %}
+{% block nav_adults_active %} active{% endblock %}
+{% block content %}
+  {% can_write user 'adult_info' adult as can_edit_adult %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% firstof request.GET.next '/' %}">← Back</a>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      {% if can_edit_adult %}
+        <a class="btn btn-outline-primary" href="{% url 'adult_edit' adult.pk %}?next={{ request.path }}">Edit</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-9 col-xl-8">
+      <h1 class="h3 mb-4">{{ adult.first_name }} {{ adult.last_name }}</h1>
+
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Identity & Roles</span>
+          <div>
+            {% if adult.is_parent %}<span class="badge bg-info">Parent</span>{% endif %}
+            {% if adult.is_mentor %}<span class="badge bg-primary">Mentor</span>{% endif %}
+            {% if adult.is_alumni %}<span class="badge bg-success">Alumni</span>{% endif %}
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 align-items-center">
+            <div class="col-md-3 text-center">
+              {% if adult.photo %}
+                <img src="{{ adult.photo.url }}" alt="{{ adult }}" class="img-thumbnail" style="max-width: 160px;">
+              {% else %}
+                <div class="text-muted border rounded p-3">No photo</div>
+              {% endif %}
+            </div>
+            <div class="col-md-9">
+              <div class="row g-2">
+                <div class="col-md-4"><div class="fw-semibold">First name</div><div>{{ adult.first_name }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ adult.preferred_first_name|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ adult.last_name }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ adult.pronouns|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Active</div><div><span class="badge {% if adult.active %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.active|yesno:"Yes,No" }}</span></div></div>
+                {% if adult.andrew_id %}
+                <div class="col-md-4"><div class="fw-semibold">Andrew ID</div><div>{{ adult.andrew_id }}</div></div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header">Contact & Address</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6"><div class="fw-semibold">Email</div><div>{{ adult.personal_email|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Phone</div><div>{{ adult.phone_number|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Cell phone</div><div>{{ adult.cell_phone|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Home phone</div><div>{{ adult.home_phone|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Address</div><div>{{ adult.address|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ adult.city|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ adult.state|default:'—' }}</div></div>
+            <div class="col-md-3"><div class="fw-semibold">Zip</div><div>{{ adult.zip_code|default:'—' }}</div></div>
+          </div>
+        </div>
+      </div>
+
+      {% if adult.is_parent %}
+      <div class="card mb-4">
+        <div class="card-header">Linked Students</div>
+        <div class="card-body">
+          {% with students=adult.all_students %}
+            {% if students %}
+              <ul class="list-group list-group-flush">
+                {% for s in students %}
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <a href="{% url 'student_detail' s.pk %}">{{ s }}</a>
+                    <span class="badge bg-secondary rounded-pill">{{ s.attached_rel|title }}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="text-muted mb-0">No linked students found.</p>
+            {% endif %}
+          {% endwith %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if adult.notes %}
+      <div class="card mb-4">
+        <div class="card-header">Notes</div>
+        <div class="card-body">
+          {{ adult.notes|linebreaks }}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

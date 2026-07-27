@@ -81,7 +81,7 @@ class AdultCreateViewTest(TestCase):
 
     def setUp(self):
         self.user, self.password = _make_staff()
-        self.client.login(username="staff", password=self.password)  # nosec B106
+        self.client.login(username="staff", password=self.password)
 
     def test_get_adult_create_view(self):
         url = reverse("adult_create")
@@ -182,7 +182,7 @@ class AdultEditViewRoleFieldsTest(TestCase):
 
     def setUp(self):
         self.user, self.password = _make_staff()
-        self.client.login(username="staff", password=self.password)  # nosec B106
+        self.client.login(username="staff", password=self.password)
         self.adult = Adult.objects.create(
             first_name="Test",
             last_name="Adult",

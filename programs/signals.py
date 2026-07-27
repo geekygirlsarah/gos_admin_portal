@@ -70,7 +70,8 @@ def assign_default_permissions():
     parent = ensure_group("Parent")
     student_group = ensure_group("Student")
 
-    # Lead mentors: all perms
+    # Lead mentors: all perms. The LeadMentor group also carries the
+    # review_application permission (granted by applications migration 0011).
     lead.permissions.add(*program_perms.values())
     if student_perms:
         lead.permissions.add(*student_perms.values())
@@ -107,7 +108,7 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
         pass  # nosec B110
 
 
-@receiver(post_save, sender=lambda: apps.get_model("programs", "Adult"))
+@receiver(post_save, sender="programs.Adult")
 def ensure_user_in_adult_group(sender, instance, created, **kwargs):
     try:
         if instance.user_id:
@@ -121,7 +122,7 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Adult groups", exc_info=True)
 
 
-@receiver(post_save, sender=lambda: apps.get_model("programs", "Student"))
+@receiver(post_save, sender="programs.Student")
 def ensure_user_in_student_group(sender, instance, created, **kwargs):
     try:
         if instance.user_id:

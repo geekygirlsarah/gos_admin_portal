@@ -4,9 +4,17 @@ from django.views.generic import TemplateView
 
 from attendance.views import AttendanceImportView, student_attendance_view
 
-from .permission_views import PortalSettingsView
+from .permission_views import (
+    PortalCrewView,
+    PortalKioskView,
+    PortalPermissionsUpdateView,
+    PortalSettingsView,
+    PortalSubteamView,
+    PortalTeamView,
+)
 from .views import (
     AdultCreateView,
+    AdultDetailView,
     AdultsListView,
     AdultUpdateView,
     AlumniListView,
@@ -133,7 +141,7 @@ urlpatterns = [
     ),
     path(
         "attendance/import/",
-        permission_required("programs.change_student")(AttendanceImportView.as_view()),
+        login_required(AttendanceImportView.as_view()),
         name="attendance_import",
     ),
     # CSV template downloads served via templates to avoid static collection issues
@@ -263,8 +271,13 @@ urlpatterns = [
         name="adult_create",
     ),
     path(
+        "adults/<int:pk>/",
+        login_required(AdultDetailView.as_view()),
+        name="adult_detail",
+    ),
+    path(
         "adults/<int:pk>/edit/",
-        permission_required("programs.change_adult")(AdultUpdateView.as_view()),
+        login_required(AdultUpdateView.as_view()),
         name="adult_edit",
     ),
     path(
@@ -284,7 +297,7 @@ urlpatterns = [
     ),
     path(
         "mentors/<int:pk>/edit/",
-        permission_required("programs.change_adult")(MentorUpdateView.as_view()),
+        login_required(MentorUpdateView.as_view()),
         name="mentor_edit",
     ),
     path("schools/", login_required(SchoolListView.as_view()), name="school_list"),
@@ -443,7 +456,7 @@ urlpatterns = [
     # Student edit
     path(
         "students/<int:pk>/edit/",
-        permission_required("programs.change_student")(StudentUpdateView.as_view()),
+        login_required(StudentUpdateView.as_view()),
         name="student_edit",
     ),
     path(
@@ -461,7 +474,7 @@ urlpatterns = [
     ),
     path(
         "parents/<int:pk>/edit/",
-        permission_required("programs.change_adult")(ParentUpdateView.as_view()),
+        login_required(ParentUpdateView.as_view()),
         name="parent_edit",
     ),
     # School add/edit
@@ -485,5 +498,30 @@ urlpatterns = [
         "settings/permissions/",
         PortalSettingsView.as_view(),
         name="role_permission_settings",
+    ),
+    path(
+        "settings/permissions/update/",
+        PortalPermissionsUpdateView.as_view(),
+        name="portal_permissions_update",
+    ),
+    path(
+        "settings/teams/",
+        PortalTeamView.as_view(),
+        name="portal_team",
+    ),
+    path(
+        "settings/crews/",
+        PortalCrewView.as_view(),
+        name="portal_crew",
+    ),
+    path(
+        "settings/subteams/",
+        PortalSubteamView.as_view(),
+        name="portal_subteam",
+    ),
+    path(
+        "settings/kiosks/",
+        PortalKioskView.as_view(),
+        name="portal_kiosk",
     ),
 ]

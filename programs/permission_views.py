@@ -5,7 +5,19 @@ from django.views import View
 
 from programs.constants import TEAM_TYPES
 
-from .models import Adult, Crew, Program, RolePermission, Student, SubTeam, Team
+from .models import (
+    Adult,
+    Crew,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    RolePermission,
+    SlidingScale,
+    Student,
+    SubTeam,
+    Team,
+)
 
 try:
     from api.models import ApiClientKey
@@ -38,7 +50,11 @@ def get_user_role(user):
     except (Adult.DoesNotExist, AttributeError):
         pass
 
-    # Check if the user is linked to a Student profile
+    # Check if the user is linked to a Student profile.
+    # The profile is accessed without assignment intentionally: if the attribute
+    # exists the reverse accessor succeeds and we return "Student"; if not,
+    # it raises DoesNotExist (or AttributeError for anonymous users) and we fall
+    # through to the group-based fallback below.
     try:
         user.student_profile
         return "Student"
@@ -56,15 +72,108 @@ def get_user_role(user):
     return None
 
 
-def can_user_read(user, section):
+def can_user_read(user, section, obj=None):
     role = get_user_role(user)
     if role == "LeadMentor":
         return True
     if role is None:
         return False
 
+    # Always allow reading own profile and children
+    if obj:
+        if isinstance(obj, Student):
+            # Own student profile
+            if hasattr(user, "student_profile") and obj == user.student_profile:
+                return True
+            # Own child
+            try:
+                if user.adult_profile.students.filter(pk=obj.pk).exists():
+                    return True
+            except (Adult.DoesNotExist, AttributeError):
+                pass
+        if isinstance(obj, Adult):
+            # Own adult profile
+            if hasattr(user, "adult_profile") and obj == user.adult_profile:
+                return True
+
     perm = RolePermission.objects.filter(role=role, section=section).first()
-    return perm.can_read if perm else True  # Default to True for read if not specified
+    can_read_section = perm.can_read if perm else True  # Default to True for read
+
+    # Only Lead Mentors and Parents can view payments/fees/sliding scale
+    if section in ["payments", "sliding_scale", "fees"]:
+        if role not in ["LeadMentor", "Parent"]:
+            return False
+
+    if role == "Mentor" and section == "attendance":
+        return False
+
+    if not can_read_section:
+        return False
+
+    # Object-level restriction for Parents, Alumni, and Students
+    if role == "Parent" and obj:
+        try:
+            adult = user.adult_profile
+            if isinstance(obj, Student):
+                # Parents can only read their own students
+                return obj in adult.students.all()
+            if isinstance(obj, Adult):
+                # Parents can only read their own profile
+                return obj == adult
+            if isinstance(obj, (Payment, SlidingScale)):
+                # Parents can only read their own students' payments/sliding scale
+                return obj.student in adult.students.all()
+            if isinstance(obj, Fee):
+                # Parents can see fees for programs their students are enrolled in
+                return Enrollment.objects.filter(
+                    student__adults=adult, program=obj.program
+                ).exists()
+            if isinstance(obj, Program):
+                # Parents cannot view programs directly
+                return False
+        except (Adult.DoesNotExist, AttributeError):
+            return False
+    elif role == "Alumni" and obj:
+        try:
+            adult = user.adult_profile
+            if isinstance(obj, Adult):
+                return obj == adult
+            if isinstance(obj, Student):
+                # Alumni can see their own student record
+                return adult.student_record == obj
+            if isinstance(obj, Program):
+                # Alumni cannot view programs directly
+                return False
+        except (Adult.DoesNotExist, AttributeError):
+            return False
+    elif role == "Student" and obj:
+        try:
+            student = user.student_profile
+            if isinstance(obj, Student):
+                # Students can only read their own profile
+                return obj == student
+            if isinstance(obj, Adult):
+                # TODO: Design decision — students cannot view adult profiles
+                # directly (even their own parents') to keep adult contact
+                # information private. Revisit if a "view my guardians" feature
+                # is ever added.
+                return False
+            if isinstance(obj, Program):
+                # Students cannot view programs directly
+                return False
+        except (Student.DoesNotExist, AttributeError):
+            return False
+    elif role == "Mentor" and obj:
+        if isinstance(obj, Program):
+            # Mentors can only view active programs
+            return obj.status == "Active"
+        if isinstance(obj, Adult):
+            # Mentors can only view Parents with a student in an active program
+            if not obj.is_parent:
+                return False
+            return obj.students.filter(enrollment__program__active=True).exists()
+
+    return can_read_section
 
 
 def can_user_write(user, section, obj=None):
@@ -74,9 +183,34 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
+    # Always allow writing own profile and children
+    if obj:
+        if isinstance(obj, Student):
+            # Own student profile
+            if hasattr(user, "student_profile") and obj == user.student_profile:
+                return True
+            # Own child
+            try:
+                if user.adult_profile.students.filter(pk=obj.pk).exists():
+                    return True
+            except (Adult.DoesNotExist, AttributeError):
+                pass
+        if isinstance(obj, Adult):
+            # Own adult profile
+            if hasattr(user, "adult_profile") and obj == user.adult_profile:
+                return True
+
     # Section specific write permission
     perm = RolePermission.objects.filter(role=role, section=section).first()
     can_write_section = perm.can_write if perm else False
+
+    # Only Lead Mentors can write to payments/fees/sliding scale
+    if section in ["payments", "sliding_scale", "fees"]:
+        if role != "LeadMentor":
+            return False
+
+    if role == "Mentor" and section == "student_info":
+        return False
 
     if not can_write_section:
         return False
@@ -118,6 +252,14 @@ class LeadMentorRequiredMixin(UserPassesTestMixin):
             self.request.user.is_superuser
             or self.request.user.groups.filter(name="LeadMentor").exists()
         )
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            messages.error(
+                self.request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+        return super().handle_no_permission()
 
 
 class PassUserToFormMixin:
@@ -197,22 +339,30 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         }
         return render(request, self.template_name, context)
 
+
+class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles the 'update_permissions' action from the settings page."""
+
+    def post(self, request):
+        permissions = RolePermission.objects.all()
+        for perm in permissions:
+            read_key = f"read_{perm.id}"
+            write_key = f"write_{perm.id}"
+
+            perm.can_read = read_key in request.POST
+            perm.can_write = write_key in request.POST
+            perm.save()
+        messages.success(request, "Permissions updated successfully.")
+        return redirect("/programs/settings/?tab=permissions")
+
+
+class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/update actions for Teams from the settings page."""
+
     def post(self, request):
         action = request.POST.get("action")
 
-        if action == "update_permissions":
-            permissions = RolePermission.objects.all()
-            for perm in permissions:
-                read_key = f"read_{perm.id}"
-                write_key = f"write_{perm.id}"
-
-                perm.can_read = read_key in request.POST
-                perm.can_write = write_key in request.POST
-                perm.save()
-            messages.success(request, "Permissions updated successfully.")
-            return redirect("/programs/settings/?tab=permissions")
-
-        elif action == "add_team":
+        if action == "add_team":
             team_type = request.POST.get("team_type")
             number = request.POST.get("number")
             name = request.POST.get("name")
@@ -248,7 +398,16 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, "Team updated.")
             return redirect("/programs/settings/?tab=teams")
 
-        elif action == "add_crew":
+        return redirect("/programs/settings/?tab=teams")
+
+
+class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/update actions for Crews from the settings page."""
+
+    def post(self, request):
+        action = request.POST.get("action")
+
+        if action == "add_crew":
             program_id = request.POST.get("program_id")
             name = request.POST.get("name")
             color = request.POST.get("color")
@@ -277,7 +436,16 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, "Crew updated.")
             return redirect("/programs/settings/?tab=crews")
 
-        elif action == "add_subteam":
+        return redirect("/programs/settings/?tab=crews")
+
+
+class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/update actions for SubTeams from the settings page."""
+
+    def post(self, request):
+        action = request.POST.get("action")
+
+        if action == "add_subteam":
             program_id = request.POST.get("program_id")
             name = request.POST.get("name")
             color = request.POST.get("color")
@@ -306,7 +474,16 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, "SubTeam updated.")
             return redirect("/programs/settings/?tab=subteams")
 
-        elif action == "add_kiosk_config" and KioskConfig:
+        return redirect("portal_settings")
+
+
+class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/toggle actions for Kiosks from the settings page."""
+
+    def post(self, request):
+        action = request.POST.get("action")
+
+        if action == "add_kiosk_config" and KioskConfig:
             label = request.POST.get("label", "").strip()
             program_id = request.POST.get("program_id")
             if label and program_id:
@@ -335,4 +512,4 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, f"Kiosk '{kiosk.label}' {state}.")
             return redirect("/programs/settings/?tab=kiosk_configs")
 
-        return redirect("portal_settings")
+        return redirect("/programs/settings/?tab=kiosk_configs")

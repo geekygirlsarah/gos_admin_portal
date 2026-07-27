@@ -736,6 +736,60 @@ class Student(models.Model):
         except Exception:
             logger.debug("Unexpected error in contact cleanup", exc_info=True)
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        from django.db.models import Q
+
+        # Students shouldn't have duplicate emails with each other or with parents.
+        if self.personal_email:
+            email = self.personal_email.strip().lower()
+            # Check other students
+            others = Student.objects.filter(
+                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+            )
+            if self.pk:
+                others = others.exclude(pk=self.pk)
+            if others.exists():
+                raise ValidationError(
+                    {
+                        "personal_email": "This email is already in use by another student."
+                    }
+                )
+
+            # Check parents/mentors
+            if Adult.objects.filter(
+                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+            ).exists():
+                raise ValidationError(
+                    {
+                        "personal_email": "This email is already in use by a parent or mentor."
+                    }
+                )
+
+        if self.andrew_email:
+            email = self.andrew_email.strip().lower()
+            # Check other students
+            others = Student.objects.filter(
+                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+            )
+            if self.pk:
+                others = others.exclude(pk=self.pk)
+            if others.exists():
+                raise ValidationError(
+                    {"andrew_email": "This email is already in use by another student."}
+                )
+
+            # Check parents/mentors
+            if Adult.objects.filter(
+                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+            ).exists():
+                raise ValidationError(
+                    {
+                        "andrew_email": "This email is already in use by a parent or mentor."
+                    }
+                )
+
     def save(self, *args, **kwargs):
         # Normalize any new photo upload to RGB JPEG in-memory (fixes EXIF orientation, handles HEIC).
         from .utils import normalize_image_field
@@ -1071,6 +1125,30 @@ class Adult(models.Model):
         for s in students:
             s.attached_rel = rels.get(s.pk, "parent")
         return students
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        from django.db.models import Q
+
+        # Parents can have duplicate emails with each other, but not with students.
+        if self.personal_email:
+            email = self.personal_email.strip().lower()
+            if Student.objects.filter(
+                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+            ).exists():
+                raise ValidationError(
+                    {"personal_email": "This email is already in use by a student."}
+                )
+
+        if self.andrew_email:
+            email = self.andrew_email.strip().lower()
+            if Student.objects.filter(
+                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+            ).exists():
+                raise ValidationError(
+                    {"andrew_email": "This email is already in use by a student."}
+                )
 
     def save(self, *args, **kwargs):
         # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).

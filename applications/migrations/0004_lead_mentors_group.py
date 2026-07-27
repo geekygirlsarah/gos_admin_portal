@@ -1,6 +1,9 @@
 """Create the 'Lead Mentors' group and grant it the
 ``applications.review_application`` permission so members can use the
 custom Applications review pages.
+
+NOTE: Migration 0011 supersedes this by merging 'Lead Mentors' into the
+unified 'LeadMentor' group used throughout the rest of the portal.
 """
 
 from __future__ import annotations

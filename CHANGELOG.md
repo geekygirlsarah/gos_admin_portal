@@ -11,12 +11,55 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Kiosk Sign-In**: Added a new public kiosk attendance page at `/kiosk/<id>/` that students and visitors can use to tap in and out without logging in to the portal. The page is designed for a PC or tablet running in kiosk mode and supports:
-  - **Member sign-in**: Students tap their RFID card (or type their full name) to automatically log an IN or OUT event.
-  - **Visitor / Guest sign-in**: Non-members (other teams, visitors) can sign their name in a separate tab to log their visit.
-  - A loading overlay and Bootstrap toast notifications (green for welcome, red for errors) provide instant visual feedback.
+    - **Member sign-in**: Students tap their RFID card (or type their full name) to automatically log an IN or OUT event.
+    - **Visitor / Guest sign-in**: Non-members (other teams, visitors) can sign their name in a separate tab to log their visit.
+    - A loading overlay and Bootstrap toast notifications (green for welcome, red for errors) provide instant visual feedback.
 - **Kiosk Configuration**: Staff can create and manage kiosk pages from the portal settings screen (Settings → Kiosk Sign-In tab). Each configuration links a program and an API key so attendance is recorded in the right place.
 - **Student Lookup API**: Added a new `GET /api/v1/attendance/student/lookup` endpoint that allows kiosks (and other integrations) to search for students by RFID card UID or by name. This endpoint is authenticated with an API key.
 - **API middleware fix**: The `/api/v1/` path is now correctly exempt from the portal's login-required middleware, allowing external tools and kiosks to reach API endpoints using their API key without being redirected to the login page.
+
+## 2026-07-26
+
+### Fixed
+- Resolved a permissions gap where Lead Mentors added to the main system group could not access the application review pages, because two separate "Lead Mentor" groups existed in the system. These have been merged into one unified group so a Lead Mentor only needs to be added once to gain access everywhere.
+- Fixed a silent bug where user accounts were not automatically added to the correct role groups (Mentor, Parent, Student) when their profile was saved. Group assignments now work correctly on profile creation and update.
+- Fixed the attendance import page to use the same role-based permission system as the rest of the site, so Lead Mentors and Mentors can import attendance while Students and Parents are correctly blocked.
+- Simplified and corrected the attendance viewing check so a Parent can only view their own children's attendance records, removing a duplicate and inconsistent permission check.
+- Fixed a security gap where an unknown web address could show a plain "page not found" message to a signed-out visitor instead of asking them to log in first.
+- Restricted Mentors so they can only view Parent contacts who currently have a student enrolled in an active program, instead of being able to see every adult record in the system.
+
+### Added
+- Added comprehensive test coverage for attendance view permissions by role, login-required middleware URL exemptions, the role-permissions settings page, and multi-role edge cases in role detection.
+- Added a "My Profile" page for adults (mentors, parents, alumni), allowing them to view their personal information and linked students in one place.
+- Added a "My Profile" link to the user account menu for quick access to personal records.
+- Implemented object-level security: users (students and adults) can now view and edit their own profiles, but are restricted from accessing or modifying profiles of others unless they have administrative permissions.
+
+### Changed
+- Improved the navigation menu to display the user's full name instead of their email address.
+- Renamed the account menu link that pointed to the Dashboard from "My Profile" to "Dashboard" for better clarity.
+- Updated the system to redirect users back to their dashboard with a descriptive error message when attempting to access non-existent or unauthorized student and adult records, instead of showing a generic 404 error page.
+- Enabled object-level self-editing for students and adults by moving permission checks from the URL level to the view level, ensuring that users can manage their own data while remaining securely blocked from others.
+- Extended the permission system to allow parents to view and edit the information of their associated children, ensuring full access for families while maintaining strict security for non-related students.
+- Added a "Students" link to the navigation menu for parents and "View Profile" / "Edit Profile" buttons to the dashboard, making it easier for families to manage student records.
+- Restricted direct program access to Lead Mentors and Mentors (Active programs only), while blocking Students and Parents from accessing program details directly.
+- Implemented strict role-based access control for all financial data: Restricted payments, fees, and sliding scale management to Lead Mentors only.
+- Enabled parents to view their own children's balance sheets and payment details, while ensuring they are blocked from accessing other students' financial records.
+- Restricted aggregated financial reports ("Dues Owed" and "Email Balances") to Lead Mentors only.
+- Updated the permission system to handle object-level security for Payments, Fees, and Sliding Scale records.
+- Hard-coded Mentor permissions to prevent them from viewing or managing payments, attendance, and fees, ensuring they only have access to the student roster.
+- Updated the main navigation and program detail templates to hide management actions and role-inappropriate links for Mentors and other non-admin users.
+- Split the Portal Settings page into focused sub-sections internally, making each category of settings (role permissions, teams, crews, sub-teams) independently manageable and easier to maintain.
+- Cleaned up internal code duplication in student list views by centralizing role-based filtering logic into a shared helper, ensuring consistent behavior across all student-related pages.
+
+## 2026-07-25
+
+### Fixed
+- Fixed the Adult Add/Edit form JavaScript not working in some browsers (like Firefox) due to a missing Content Security Policy (CSP) nonce on inline scripts.
+- Fixed a crash (`IntegrityError`) that occurred during student or adult login when multiple profile records shared the same email address. The system now correctly identifies and prefers the profile already linked to a user account, preventing duplicate link attempts that violated database constraints.
+
+### Changed
+- Reorganized the Adult Add/Edit form into collapsible Bootstrap accordions for better organization and clarity.
+- Updated role-specific sections (Parent, Mentor, Alumni) to be completely hidden when their corresponding role is unchecked, and automatically show/expand "in the moment" when the role is selected.
 
 ## 2026-07-23
 
@@ -30,6 +73,9 @@ All notable changes to this project will be documented in this file.
 - Removed the restriction that prevented two adults from having the same personal email address, allowing households where multiple guardians share one email to be properly represented in the system.
 - Fixed a bug where converting an application to a student record could create a duplicate student if the applicant's last name was entered in a different case (e.g., "Smith" vs. "SMITH"). The system now matches existing students by name and date of birth in a case-insensitive way before creating a new record.
 - Fixed a confusing experience where saving a student's record appeared to do nothing — the page now redirects to the student's profile after saving, and shows a confirmation message so you know the save was successful.
+- Fixed the "Edit Fee" and "Add Fee" pages where input fields for name, amount, and date were missing or incorrectly rendered. Also made the page look nicer.
+- Fixed a broken HTML tag in the payment recording email template.
+- Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Added
 - Automatically send fee information emails to parents when a student is enrolled in a program that has existing fees.
@@ -37,11 +83,6 @@ All notable changes to this project will be documented in this file.
 - Added an optional `due_date` field to Fees to help parents track payment deadlines.
 - Displayed Fee due dates on student balance sheets (web and printable versions) and in the mentor's fee management list.
 - Included Fee due dates in automated email notifications when a new fee is added and in payment confirmation notifications.
-
-### Fixed
-- Fixed the "Edit Fee" and "Add Fee" pages where input fields for name, amount, and date were missing or incorrectly rendered. Also made the page look nicer.
-- Fixed a broken HTML tag in the payment recording email template.
-- Resolved Bandit security findings (B106) in `programs/tests/test_inactive_student.py` by adding appropriate suppression for test-only hardcoded passwords.
 
 ### Changed
 - Optimized GitHub Actions workflows (ci.yml and codeql.yml) to prevent duplicate runs when multiple events (like a push and a pull request) are triggered simultaneously for the same branch.

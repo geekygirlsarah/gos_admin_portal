@@ -22,7 +22,7 @@ class TeamSettingsTests(TestCase):
         self.assertTemplateUsed(resp, "programs/settings.html")
 
     def test_add_team(self):
-        url = reverse("portal_settings")
+        url = reverse("portal_team")
         resp = self.client.post(
             url,
             {
@@ -47,7 +47,7 @@ class TeamSettingsTests(TestCase):
         team = Team.objects.create(
             team_type="FTC", number=9820, name="Original Name", color="#0000ff"
         )
-        url = reverse("portal_settings")
+        url = reverse("portal_team")
         resp = self.client.post(
             url,
             {
@@ -68,7 +68,7 @@ class TeamSettingsTests(TestCase):
         team = Team.objects.create(
             team_type="FLL_CHALLENGE", number=1234, color="#0000ff"
         )
-        url = reverse("portal_settings")
+        url = reverse("portal_team")
         resp = self.client.post(url, {"action": "delete_team", "team_id": team.id})
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(Team.objects.filter(id=team.id).exists())
@@ -86,20 +86,3 @@ class TeamSettingsTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.team, team)
-
-    def test_permissions_update(self):
-        # Ensure at least one RolePermission exists
-        perm, _ = RolePermission.objects.get_or_create(
-            role="Mentor", section="student_info"
-        )
-        perm.can_read = False
-        perm.save()
-
-        url = reverse("portal_settings")
-        resp = self.client.post(
-            url, {"action": "update_permissions", f"read_{perm.id}": "on"}
-        )
-        self.assertEqual(resp.status_code, 302)
-        perm.refresh_from_db()
-        self.assertTrue(perm.can_read)
-        self.assertFalse(perm.can_write)

@@ -73,7 +73,12 @@ class ViewTests(TestCase):
         )
 
     def test_student_detail_view_renders(self):
-        # Login without special permissions
+        # Add to LeadMentor group to satisfy can_user_read
+        from django.contrib.auth.models import Group
+
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+
         self.client.login(username="tester", password="pass12345")  # nosec B106
         student = Student.objects.create(legal_first_name="Riley", last_name="Jones")
         url = reverse("student_detail", args=[student.pk])

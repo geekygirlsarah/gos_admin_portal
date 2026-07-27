@@ -575,7 +575,7 @@ class KioskConfigSettingsTests(TestCase):
     def test_add_kiosk_config(self):
         """Staff can add a new kiosk config via the settings page (no api_key needed)."""
         response = self.client.post(
-            "/programs/settings/",
+            reverse("portal_kiosk"),
             {
                 "action": "add_kiosk_config",
                 "label": "New Kiosk",
@@ -593,7 +593,7 @@ class KioskConfigSettingsTests(TestCase):
             program=self.program,
         )
         response = self.client.post(
-            "/programs/settings/",
+            reverse("portal_kiosk"),
             {
                 "action": "delete_kiosk_config",
                 "kiosk_config_id": config.pk,
@@ -610,7 +610,7 @@ class KioskConfigSettingsTests(TestCase):
             is_active=True,
         )
         response = self.client.post(
-            "/programs/settings/",
+            reverse("portal_kiosk"),
             {
                 "action": "toggle_kiosk_config",
                 "kiosk_config_id": config.pk,

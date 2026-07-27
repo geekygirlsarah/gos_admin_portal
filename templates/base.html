@@ -31,38 +31,44 @@
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    {% if navbar_role == 'Parent' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'student_list' %}">Students</a>
+                    </li>
+                    {% endif %}
 
-                    {% if current_program %}
+                    {% can_read user 'programs' current_program as can_view_program %}
+                    {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
                         </li>
-
+ 
                         {% can_read user 'student_info' as can_read_students %}
                         {% if can_read_students %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#students">Students</a>
                         </li>
                         {% endif %}
-
-                        {% can_read user 'adult_info' as can_read_adults %}
-                        {% if can_read_adults %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#parents">Parents</a>
-                        </li>
-                        {% endif %}
-
+ 
                         {% if navbar_role == 'LeadMentor' %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
-                        </li>
+                            {% can_read user 'adult_info' as can_read_adults %}
+                            {% if can_read_adults %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#parents">Parents</a>
+                            </li>
+                            {% endif %}
+ 
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
+                            </li>
                         {% endif %}
-
+ 
                     {% else %}
-                        {# ── No program selected: show minimal nav ── #}
+                        {# ── No program selected or no access: show minimal nav ── #}
                         {% if navbar_role == 'LeadMentor' %}
                         <li class="nav-item"><a class="nav-link" href="/programs/">Programs</a></li>
                         {% endif %}
@@ -115,7 +121,8 @@
 
                 {# ── Mobile account menu ── #}
                 <div class="d-lg-none border-top border-secondary mt-2 pt-2">
-                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">My Account</a>
+                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">Dashboard</a>
+                    <a class="btn btn-outline-light w-100 mb-1" href="{% url 'my_profile' %}">My Profile</a>
                     <a class="btn btn-outline-light w-100" href="/accounts/logout/">Logout</a>
                 </div>
             </div>
@@ -129,10 +136,11 @@
             {# ── Desktop account dropdown ── #}
             <div class="dropdown d-none d-lg-block">
                 <button class="btn btn-outline-light dropdown-toggle" type="button" id="accountMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    {{ user.email|default:user.username }}
+                    {{ user.get_full_name|default:user.email|default:user.username }}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenuDropdown">
-                    <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">My Profile</a></li>
+                    <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">Dashboard</a></li>
+                    <li><a class="dropdown-item" href="{% url 'my_profile' %}">My Profile</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="/accounts/logout/">Logout</a></li>
                 </ul>
