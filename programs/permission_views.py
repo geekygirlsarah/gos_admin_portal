@@ -318,22 +318,30 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         }
         return render(request, self.template_name, context)
 
+
+class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles the 'update_permissions' action from the settings page."""
+
+    def post(self, request):
+        permissions = RolePermission.objects.all()
+        for perm in permissions:
+            read_key = f"read_{perm.id}"
+            write_key = f"write_{perm.id}"
+
+            perm.can_read = read_key in request.POST
+            perm.can_write = write_key in request.POST
+            perm.save()
+        messages.success(request, "Permissions updated successfully.")
+        return redirect("/programs/settings/?tab=permissions")
+
+
+class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/update actions for Teams from the settings page."""
+
     def post(self, request):
         action = request.POST.get("action")
 
-        if action == "update_permissions":
-            permissions = RolePermission.objects.all()
-            for perm in permissions:
-                read_key = f"read_{perm.id}"
-                write_key = f"write_{perm.id}"
-
-                perm.can_read = read_key in request.POST
-                perm.can_write = write_key in request.POST
-                perm.save()
-            messages.success(request, "Permissions updated successfully.")
-            return redirect("/programs/settings/?tab=permissions")
-
-        elif action == "add_team":
+        if action == "add_team":
             team_type = request.POST.get("team_type")
             number = request.POST.get("number")
             name = request.POST.get("name")
@@ -369,7 +377,16 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, "Team updated.")
             return redirect("/programs/settings/?tab=teams")
 
-        elif action == "add_crew":
+        return redirect("/programs/settings/?tab=teams")
+
+
+class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/update actions for Crews from the settings page."""
+
+    def post(self, request):
+        action = request.POST.get("action")
+
+        if action == "add_crew":
             program_id = request.POST.get("program_id")
             name = request.POST.get("name")
             color = request.POST.get("color")
@@ -398,7 +415,16 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, "Crew updated.")
             return redirect("/programs/settings/?tab=crews")
 
-        elif action == "add_subteam":
+        return redirect("/programs/settings/?tab=crews")
+
+
+class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/delete/update actions for SubTeams from the settings page."""
+
+    def post(self, request):
+        action = request.POST.get("action")
+
+        if action == "add_subteam":
             program_id = request.POST.get("program_id")
             name = request.POST.get("name")
             color = request.POST.get("color")
@@ -427,4 +453,4 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     messages.success(request, "SubTeam updated.")
             return redirect("/programs/settings/?tab=subteams")
 
-        return redirect("portal_settings")
+        return redirect("/programs/settings/?tab=subteams")
