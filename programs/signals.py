@@ -108,7 +108,7 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
         pass  # nosec B110
 
 
-@receiver(post_save, sender=lambda: apps.get_model("programs", "Adult"))
+@receiver(post_save, sender="programs.Adult")
 def ensure_user_in_adult_group(sender, instance, created, **kwargs):
     try:
         if instance.user_id:
@@ -122,7 +122,7 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Adult groups", exc_info=True)
 
 
-@receiver(post_save, sender=lambda: apps.get_model("programs", "Student"))
+@receiver(post_save, sender="programs.Student")
 def ensure_user_in_student_group(sender, instance, created, **kwargs):
     try:
         if instance.user_id:
