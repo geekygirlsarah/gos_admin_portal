@@ -12,7 +12,6 @@ EXEMPT_URL_NAMES = {
     "account_logout",
     "account_signup",
     "account_confirm_email",
-    "home",  # home requires login via decorator, but keep to avoid loops
     "admin:login",
     "privacy_policy",
     "non_discrimination_policy",

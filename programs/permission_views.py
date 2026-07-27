@@ -45,7 +45,11 @@ def get_user_role(user):
     except (Adult.DoesNotExist, AttributeError):
         pass
 
-    # Check if the user is linked to a Student profile
+    # Check if the user is linked to a Student profile.
+    # The profile is accessed without assignment intentionally: if the attribute
+    # exists the reverse accessor succeeds and we return "Student"; if not,
+    # it raises DoesNotExist (or AttributeError for anonymous users) and we fall
+    # through to the group-based fallback below.
     try:
         user.student_profile
         return "Student"
@@ -144,8 +148,10 @@ def can_user_read(user, section, obj=None):
                 # Students can only read their own profile
                 return obj == student
             if isinstance(obj, Adult):
-                # Students can read their own parents?
-                # For now, let's say they can't read adult profiles directly
+                # TODO: Design decision — students cannot view adult profiles
+                # directly (even their own parents') to keep adult contact
+                # information private. Revisit if a "view my guardians" feature
+                # is ever added.
                 return False
             if isinstance(obj, Program):
                 # Students cannot view programs directly
