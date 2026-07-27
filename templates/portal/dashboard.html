@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load permission_tags %}
 
 {% block title %}Dashboard - {{ block.super }}{% endblock %}
 
@@ -136,11 +137,20 @@ PARENT DASHBOARD
     {% if parent_data %}
         {% for entry in parent_data %}
         <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                <strong>{{ entry.student }}</strong>
-                {% if entry.student.attached_rel %}
-                    <span class="text-white-50 ms-2 small">({{ entry.student.attached_rel|title }})</span>
-                {% endif %}
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ entry.student }}</strong>
+                    {% if entry.student.attached_rel %}
+                        <span class="text-white-50 ms-2 small">({{ entry.student.attached_rel|title }})</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'student_detail' entry.student.pk %}" class="btn btn-sm btn-light">View Profile</a>
+                    {% can_write user 'student_info' entry.student as can_edit_student %}
+{#                    {% if can_edit_student %}#}
+{#                    <a href="{% url 'student_edit' entry.student.pk %}" class="btn btn-sm btn-outline-light">Edit Profile</a>#}
+{#                    {% endif %}#}
+                </div>
             </div>
             <div class="card-body">
                 {% if entry.active_rows %}

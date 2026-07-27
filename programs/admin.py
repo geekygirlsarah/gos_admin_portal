@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .forms import StudentForm
+from .forms import AdultForm, StudentForm
 from .models import (
     Adult,
     AdultStudentRelationship,
@@ -302,6 +302,7 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(Adult)
 class ParentAdmin(admin.ModelAdmin):
+    form = AdultForm
     list_display = (
         "first_name",
         "preferred_first_name",
@@ -314,7 +315,7 @@ class ParentAdmin(admin.ModelAdmin):
         "phone_number",
         "email_updates",
     )
-    list_filter = ("email_updates", "is_parent", "is_mentor", "is_alumni")
+    list_filter = ("email_updates", "is_parent", "is_mentor", "is_alumni", "active")
     search_fields = (
         "first_name",
         "preferred_first_name",
@@ -325,6 +326,108 @@ class ParentAdmin(admin.ModelAdmin):
         "phone_number",
     )
     inlines = [AdultStudentRelationshipInline]
+    fieldsets = (
+        (
+            "Name",
+            {
+                "fields": (
+                    "first_name",
+                    "preferred_first_name",
+                    "last_name",
+                    "pronouns",
+                )
+            },
+        ),
+        (
+            "Contact",
+            {
+                "fields": (
+                    "personal_email",
+                    "phone_number",
+                    "email_updates",
+                )
+            },
+        ),
+        (
+            "Roles",
+            {
+                "fields": (
+                    "is_parent",
+                    "is_mentor",
+                    "is_alumni",
+                    "active",
+                )
+            },
+        ),
+        (
+            "Mentor / Volunteer Details",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "start_year",
+                    "role",
+                    "photo",
+                    "emergency_contact_name",
+                    "emergency_contact_phone",
+                ),
+            },
+        ),
+        (
+            "Clearances",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "has_paca_clearance",
+                    "has_patch_clearance",
+                    "has_fbi_clearance",
+                    "pa_clearances_expiration_date",
+                ),
+            },
+        ),
+        (
+            "Access & Platforms",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "on_discord",
+                    "discord_username",
+                    "has_cmu_id_card",
+                    "has_cmu_building_access",
+                ),
+            },
+        ),
+        (
+            "Andrew ID (Mentors/Staff)",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "andrew_id",
+                    "andrew_email",
+                    "andrew_id_expiration",
+                    "andrew_id_sponsor",
+                ),
+            },
+        ),
+        (
+            "Alumni Details",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "college",
+                    "field_of_study",
+                    "employer",
+                    "job_title",
+                    "ok_to_contact",
+                ),
+            },
+        ),
+        (
+            "Notes",
+            {
+                "fields": ("notes",),
+            },
+        ),
+    )
 
 
 @admin.register(SlidingScale)

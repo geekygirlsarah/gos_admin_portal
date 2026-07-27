@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
 {% load form_tags %}
-{% block title %}{% if object %}Edit Adult{% else %}Edit Adult{% endif %}{% endblock %}
+{% block title %}{% if object %}Edit Adult{% else %}Add Adult{% endif %}{% endblock %}
 {% block content %}
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/' }}">← Back</a>
+      <a class="link-secondary" href="{{ request.GET.next|default:back_url|default:'/' }}">← Back</a>
     </div>
   </div>
   <div class="row">
     <div class="col-lg-9 col-xl-8">
-      <h1 class="h3 mb-3">Edit Adult</h1>
+      <h1 class="h3 mb-3">{% if object %}Edit Adult{% else %}Add Adult{% endif %}</h1>
       <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         {% if form.non_field_errors %}
@@ -20,95 +20,240 @@
           </div>
         {% endif %}
 
-        <div class="card mb-4">
-          <div class="card-header">Identity</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-4">{% render_field form.first_name %}</div>
-              <div class="col-md-4">{% render_field form.preferred_first_name %}</div>
-              <div class="col-md-4">{% render_field form.last_name %}</div>
-              <div class="col-md-4">{% render_field form.pronouns %}</div>
+        <div class="accordion mb-4" id="adultFormAccordion">
+          <!-- Adult Section -->
+          <div class="accordion-item" id="accordionAdult">
+            <h2 class="accordion-header" id="headingAdult">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdult" aria-expanded="true" aria-controls="collapseAdult">
+                Adult Details
+              </button>
+            </h2>
+            <div id="collapseAdult" class="accordion-collapse collapse show" aria-labelledby="headingAdult">
+              <div class="accordion-body">
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Identity</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-4">{% render_field form.first_name %}</div>
+                      <div class="col-md-4">{% render_field form.preferred_first_name %}</div>
+                      <div class="col-md-4">{% render_field form.last_name %}</div>
+                      <div class="col-md-4">{% render_field form.pronouns %}</div>
+                      {% if form.photo %}<div class="col-md-4">{% render_field form.photo %}</div>{% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Contact</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-6">{% render_field form.personal_email %}</div>
+                      <div class="col-md-4">{% render_field form.phone_number %}</div>
+                      <div class="col-md-4">{% render_field form.cell_phone %}</div>
+                      <div class="col-md-4">{% render_field form.home_phone %}</div>
+                      <div class="col-12">{% render_field form.address %}</div>
+                      <div class="col-md-6">{% render_field form.city %}</div>
+                      <div class="col-md-3">{% render_field form.state %}</div>
+                      <div class="col-md-3">{% render_field form.zip_code %}</div>
+                      <div class="col-12">{% render_field form.email_updates %}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {% if form.is_parent or form.is_mentor or form.is_alumni %}
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Roles</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      {% if form.is_parent %}<div class="col-md-4">{% render_field form.is_parent %}</div>{% endif %}
+                      {% if form.is_mentor %}<div class="col-md-4">{% render_field form.is_mentor %}</div>{% endif %}
+                      {% if form.is_alumni %}<div class="col-md-4">{% render_field form.is_alumni %}</div>{% endif %}
+                    </div>
+                  </div>
+                </div>
+                {% endif %}
+
+                {% if form.active %}
+                <div class="card">
+                  <div class="card-header bg-light">Status</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-3">{% render_field form.active %}</div>
+                    </div>
+                  </div>
+                </div>
+                {% endif %}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="card mb-4">
-          <div class="card-header">Contact</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-6">{% render_field form.personal_email %}</div>
-              <div class="col-md-4">{% render_field form.phone_number %}</div>
-              <div class="col-md-4">{% render_field form.cell_phone %}</div>
-              <div class="col-md-4">{% render_field form.home_phone %}</div>
-              <div class="col-12">{% render_field form.address %}</div>
-              <div class="col-md-6">{% render_field form.city %}</div>
-              <div class="col-md-3">{% render_field form.state %}</div>
-              <div class="col-md-3">{% render_field form.zip_code %}</div>
-              <div class="col-12">{% render_field form.email_updates %}</div>
+          <!-- Parent Section -->
+          <div class="accordion-item {% if not form.is_parent.value %}d-none{% endif %}" id="accordionParent">
+            <h2 class="accordion-header" id="headingParent">
+              <button class="accordion-button {% if not form.is_parent.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseParent" aria-expanded="{% if form.is_parent.value %}true{% else %}false{% endif %}" aria-controls="collapseParent">
+                Parent Details
+              </button>
+            </h2>
+            <div id="collapseParent" class="accordion-collapse collapse {% if form.is_parent.value %}show{% endif %}" aria-labelledby="headingParent">
+              <div class="accordion-body">
+                {% if form.students %}
+                <div class="card">
+                  <div class="card-header bg-light">Associated Students</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-12">{% render_field form.students %}</div>
+                    </div>
+                  </div>
+                </div>
+                {% else %}
+                <p class="text-muted">Associated student management is available in the student profile or main adult list.</p>
+                {% endif %}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="card mb-4">
-          <div class="card-header">Andrew ID (Mentors/Staff)</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-6">{% render_field form.andrew_id %}</div>
-              <div class="col-md-6">{% render_field form.andrew_email %}</div>
-              <div class="col-md-6">{% render_field form.andrew_id_expiration %}</div>
-              <div class="col-md-6">{% render_field form.andrew_id_sponsor %}</div>
+          <!-- Mentor Section -->
+          <div class="accordion-item {% if not form.is_mentor.value %}d-none{% endif %}" id="accordionMentor">
+            <h2 class="accordion-header" id="headingMentor">
+              <button class="accordion-button {% if not form.is_mentor.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMentor" aria-expanded="{% if form.is_mentor.value %}true{% else %}false{% endif %}" aria-controls="collapseMentor">
+                Mentor Details
+              </button>
+            </h2>
+            <div id="collapseMentor" class="accordion-collapse collapse {% if form.is_mentor.value %}show{% endif %}" aria-labelledby="headingMentor">
+              <div class="accordion-body">
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Mentor / Volunteer Details</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      {% if form.start_year %}<div class="col-md-4">{% render_field form.start_year %}</div>{% endif %}
+                      {% if form.role %}<div class="col-md-4">{% render_field form.role %}</div>{% endif %}
+                      {% if form.emergency_contact_name %}<div class="col-md-6">{% render_field form.emergency_contact_name %}</div>{% endif %}
+                      {% if form.emergency_contact_phone %}<div class="col-md-6">{% render_field form.emergency_contact_phone %}</div>{% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Clearances</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      {% if form.has_paca_clearance %}<div class="col-md-4">{% render_field form.has_paca_clearance %}</div>{% endif %}
+                      {% if form.has_patch_clearance %}<div class="col-md-4">{% render_field form.has_patch_clearance %}</div>{% endif %}
+                      {% if form.has_fbi_clearance %}<div class="col-md-4">{% render_field form.has_fbi_clearance %}</div>{% endif %}
+                      {% if form.pa_clearances_expiration_date %}<div class="col-md-6">{% render_field form.pa_clearances_expiration_date %}</div>{% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Access & Platforms</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      {% if form.on_discord %}<div class="col-md-4">{% render_field form.on_discord %}</div>{% endif %}
+                      {% if form.discord_username %}<div class="col-md-4">{% render_field form.discord_username %}</div>{% endif %}
+                      {% if form.has_cmu_id_card %}<div class="col-md-4">{% render_field form.has_cmu_id_card %}</div>{% endif %}
+                      {% if form.has_cmu_building_access %}<div class="col-md-4">{% render_field form.has_cmu_building_access %}</div>{% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-header bg-light">Andrew ID (Mentors/Staff)</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-6">{% render_field form.andrew_id %}</div>
+                      <div class="col-md-6">{% render_field form.andrew_email %}</div>
+                      <div class="col-md-6">{% render_field form.andrew_id_expiration %}</div>
+                      <div class="col-md-6">{% render_field form.andrew_id_sponsor %}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="card mb-4">
-          <div class="card-header">Roles</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-4">{% render_field form.is_parent %}</div>
-              <div class="col-md-4">{% render_field form.is_mentor %}</div>
-              <div class="col-md-4">{% render_field form.is_alumni %}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card mb-4">
-          <div class="card-header">Associated Students</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-12">{% render_field form.students %}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card mb-4">
-          <div class="card-header">Alumni Details</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-6">{% render_field form.ok_to_contact %}</div>
-              <div class="col-md-6">{% render_field form.college %}</div>
-              <div class="col-md-6">{% render_field form.field_of_study %}</div>
-              <div class="col-md-6">{% render_field form.employer %}</div>
-              <div class="col-md-6">{% render_field form.job_title %}</div>
-              <div class="col-12">{% render_field form.notes %}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card mb-4">
-          <div class="card-header">Status</div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-3">{% render_field form.active %}</div>
+          <!-- Alumni Section -->
+          <div class="accordion-item {% if not form.is_alumni.value %}d-none{% endif %}" id="accordionAlumni">
+            <h2 class="accordion-header" id="headingAlumni">
+              <button class="accordion-button {% if not form.is_alumni.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAlumni" aria-expanded="{% if form.is_alumni.value %}true{% else %}false{% endif %}" aria-controls="collapseAlumni">
+                Alumni Details
+              </button>
+            </h2>
+            <div id="collapseAlumni" class="accordion-collapse collapse {% if form.is_alumni.value %}show{% endif %}" aria-labelledby="headingAlumni">
+              <div class="accordion-body">
+                <div class="card">
+                  <div class="card-header bg-light">Alumni Details</div>
+                  <div class="card-body">
+                    <div class="row g-3">
+                      <div class="col-md-6">{% render_field form.ok_to_contact %}</div>
+                      <div class="col-md-6">{% render_field form.college %}</div>
+                      <div class="col-md-6">{% render_field form.field_of_study %}</div>
+                      <div class="col-md-6">{% render_field form.employer %}</div>
+                      <div class="col-md-6">{% render_field form.job_title %}</div>
+                      <div class="col-12">{% render_field form.notes %}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="d-flex gap-2">
           <button class="btn btn-primary" type="submit">Save</button>
-          <a class="btn btn-secondary" href="{{ request.GET.next|default:'/' }}">Cancel</a>
+          <a class="btn btn-secondary" href="{{ request.GET.next|default:back_url|default:'/' }}">Cancel</a>
         </div>
       </form>
     </div>
   </div>
+
+  <script nonce="{{ request.csp_nonce }}">
+    (function () {
+      function init() {
+        var isParentCb = document.getElementById('id_is_parent');
+        var isMentorCb = document.getElementById('id_is_mentor');
+        var isAlumniCb = document.getElementById('id_is_alumni');
+
+        function toggleAccordion(itemId, collapseId, show) {
+          var item = document.getElementById(itemId);
+          if (!item) return;
+
+          if (show) {
+            item.classList.remove('d-none');
+            var collapseEl = document.getElementById(collapseId);
+            if (collapseEl) {
+              var bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, {toggle: false});
+              bsCollapse.show();
+            }
+          } else {
+            item.classList.add('d-none');
+            var collapseEl = document.getElementById(collapseId);
+            if (collapseEl) {
+              var bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl, {toggle: false});
+              bsCollapse.hide();
+            }
+          }
+        }
+
+        function updateAccordions() {
+          if (isParentCb) toggleAccordion('accordionParent', 'collapseParent', isParentCb.checked);
+          if (isMentorCb) toggleAccordion('accordionMentor', 'collapseMentor', isMentorCb.checked);
+          if (isAlumniCb) toggleAccordion('accordionAlumni', 'collapseAlumni', isAlumniCb.checked);
+        }
+
+        if (isParentCb) isParentCb.addEventListener('change', updateAccordions);
+        if (isMentorCb) isMentorCb.addEventListener('change', updateAccordions);
+        if (isAlumniCb) isAlumniCb.addEventListener('change', updateAccordions);
+
+        // Initial sync
+        updateAccordions();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
 {% endblock %}

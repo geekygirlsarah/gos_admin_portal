@@ -19,7 +19,13 @@
         {% if program %}
             <p class="text-muted">These are students enrolled in <a href="{% url 'program_detail' program.id %}">{{ program.name }}</a>.</p>
         {% else %}
-            <p class="text-muted">These are all the students in the system. To see students specific to a program, or edit program-specific data, go through the <a href="{% url 'program_list' %}">Programs</a> page.</p>
+            {% if navbar_role == 'Parent' %}
+                <p class="text-muted">These are the students linked to your account.</p>
+            {% elif navbar_role == 'Student' %}
+                <p class="text-muted">This is your student profile.</p>
+            {% else %}
+                <p class="text-muted">These are all the students in the system. To see students specific to a program, or edit program-specific data, go through the <a href="{% url 'program_list' %}">Programs</a> page.</p>
+            {% endif %}
         {% endif %}
     </div>
   {% if students %}

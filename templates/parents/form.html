@@ -5,7 +5,7 @@
 {% block content %}
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'/' }}">← Back</a>
+      <a class="link-secondary" href="{{ request.GET.next|default:back_url|default:'/' }}">← Back</a>
     </div>
   </div>
   <div class="row">

@@ -1,9 +1,8 @@
 """Lead-mentor review pages for applications.
 
 Provides custom views (list / detail / approve / decline / edit / delete)
-gated by the ``applications.review_application`` permission. The default
-``Lead Mentors`` group bootstrapped in migration ``0004`` carries that
-permission.
+gated by the ``applications.review_application`` permission. The
+``LeadMentor`` group (unified in migration ``0011``) carries that permission.
 """
 
 from __future__ import annotations

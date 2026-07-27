@@ -17,7 +17,7 @@ from programs.models import Program
 
 User = get_user_model()
 
-LEAD_MENTORS_GROUP = "Lead Mentors"
+LEAD_MENTORS_GROUP = "LeadMentor"
 REVIEW_PERM_CODENAME = "review_application"
 
 
@@ -79,7 +79,7 @@ def _reviewer_user(username="lead"):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class LeadMentorsGroupTests(TestCase):
-    """After bootstrap, the Lead Mentors group exists with the review perm."""
+    """After bootstrap, the LeadMentor group exists with the review perm."""
 
     def test_bootstrap_creates_group_with_review_permission(self):
         group = _ensure_lead_mentors_group()

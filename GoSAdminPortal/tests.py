@@ -3,6 +3,7 @@ import datetime
 from django.contrib.auth.models import AnonymousUser, User
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 
 from GoSAdminPortal.adapter import _find_or_provision_user_for_email
 from GoSAdminPortal.middleware import LoginRequiredMiddleware
@@ -75,6 +76,54 @@ class MiddlewareAsyncTest(TestCase):
         request = self.factory.get("/accounts/login/")
         request.user = AnonymousUser()
         response = await middleware(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_sync_middleware_unknown_path_redirects_to_login(self):
+        """TDD for Issue 8: an unresolvable path should redirect anonymous
+        users to login instead of being treated as exempt (which previously
+        let the 404 handler take over without asking the user to log in).
+        """
+
+        def get_response(request):
+            return HttpResponse("OK")
+
+        middleware = LoginRequiredMiddleware(get_response)
+        request = self.factory.get("/this-path-does-not-exist/")
+        request.user = AnonymousUser()
+        response = middleware(request)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+
+class MiddlewareExemptionTests(TestCase):
+    def test_apply_is_exempt(self):
+        # Anonymous user hitting /apply/ (apply_start)
+        response = self.client.get(reverse("apply_start"))
+        # Should NOT be redirected to login
+        self.assertNotEqual(response.status_code, 302)
+        # It might be 200 or 302 (if it redirects to another step), but NOT to login
+        if response.status_code == 302:
+            self.assertNotIn("/accounts/login/", response.url)
+
+    def test_login_is_exempt(self):
+        # Anonymous user hitting /accounts/login/
+        response = self.client.get(reverse("account_login"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_regular_page_is_not_exempt(self):
+        # Anonymous user hitting /programs/students/
+        response = self.client.get(reverse("student_list"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
+
+    def test_privacy_policy_is_exempt(self):
+        # Anonymous user hitting /privacy/
+        response = self.client.get(reverse("privacy_policy"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_discrimination_policy_is_exempt(self):
+        # Anonymous user hitting /non-discrimination/
+        response = self.client.get(reverse("non_discrimination_policy"))
         self.assertEqual(response.status_code, 200)
 
 

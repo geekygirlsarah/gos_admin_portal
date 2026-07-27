@@ -24,7 +24,7 @@ class CrewTests(TestCase):
         )
 
     def test_add_crew(self):
-        url = reverse("portal_settings")
+        url = reverse("portal_crew")
         response = self.client.post(
             url,
             {
@@ -43,7 +43,7 @@ class CrewTests(TestCase):
         crew = Crew.objects.create(
             name="Old Name", program=self.program, color="#000000"
         )
-        url = reverse("portal_settings")
+        url = reverse("portal_crew")
         response = self.client.post(
             url,
             {
@@ -60,7 +60,7 @@ class CrewTests(TestCase):
 
     def test_delete_crew(self):
         crew = Crew.objects.create(name="Delete Me", program=self.program)
-        url = reverse("portal_settings")
+        url = reverse("portal_crew")
         response = self.client.post(url, {"action": "delete_crew", "crew_id": crew.id})
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Crew.objects.filter(id=crew.id).exists())

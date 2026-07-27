@@ -189,6 +189,16 @@ class ParentForm(forms.ModelForm):
                     if field in self.fields:
                         del self.fields[field]
 
+    def validate_unique(self):
+        # personal_email is intentionally non-unique (two adults may share one
+        # email, e.g. a mother and father). Skip the email uniqueness check.
+        exclude = self._get_validation_exclusions()
+        exclude.add("personal_email")
+        try:
+            self.instance.validate_unique(exclude=exclude)
+        except forms.ValidationError as e:
+            self._update_errors(e)
+
     class Meta:
         model = Adult
         # Exclude flags (is_parent, is_mentor, is_alumni, active)
@@ -209,6 +219,10 @@ class AdultForm(forms.ModelForm):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
+        # role has a model-level default so it should not be required in the form
+        if "role" in self.fields:
+            self.fields["role"].required = False
+
         # Protect role flags, active status, and students list from non-Lead Mentors/Admins
         # Only apply protection if user is explicitly provided (e.g. from portal views)
         if user is not None:
@@ -227,6 +241,16 @@ class AdultForm(forms.ModelForm):
                 for field in protected_fields:
                     if field in self.fields:
                         del self.fields[field]
+
+    def validate_unique(self):
+        # personal_email is intentionally non-unique (two adults may share one
+        # email, e.g. a mother and father). Skip the email uniqueness check.
+        exclude = self._get_validation_exclusions()
+        exclude.add("personal_email")
+        try:
+            self.instance.validate_unique(exclude=exclude)
+        except forms.ValidationError as e:
+            self._update_errors(e)
 
     class Meta:
         model = Adult
@@ -249,10 +273,26 @@ class AdultForm(forms.ModelForm):
             "is_alumni",
             "students",
             "active",
+            # Mentor-specific
+            "start_year",
+            "role",
+            "photo",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+            "has_paca_clearance",
+            "has_patch_clearance",
+            "has_fbi_clearance",
+            "pa_clearances_expiration_date",
+            "on_discord",
+            "discord_username",
+            "has_cmu_id_card",
+            "has_cmu_building_access",
+            # Andrew ID
             "andrew_id",
             "andrew_email",
             "andrew_id_expiration",
             "andrew_id_sponsor",
+            # Alumni-specific
             "college",
             "field_of_study",
             "employer",
@@ -260,6 +300,10 @@ class AdultForm(forms.ModelForm):
             "ok_to_contact",
             "notes",
         ]
+        widgets = {
+            "pa_clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
+            "andrew_id_expiration": forms.DateInput(attrs={"type": "date"}),
+        }
 
 
 class PaymentForm(forms.ModelForm):
