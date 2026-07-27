@@ -120,3 +120,55 @@ class StudentAttendanceObjectPermissionTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
+
+
+class StudentAttendanceRoleTests(TestCase):
+    def setUp(self):
+        # Mentor
+        self.mentor_user = User.objects.create_user(
+            username="mentor_user3", password="password123"  # nosec B106
+        )
+        Adult.objects.create(
+            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+        )
+
+        # Student 1
+        self.student_user1 = User.objects.create_user(
+            username="student_user1", password="password123"  # nosec B106
+        )
+        self.student1 = Student.objects.create(
+            user=self.student_user1, first_name="Student", last_name="One"
+        )
+
+        # Student 2
+        self.student_user2 = User.objects.create_user(
+            username="student_user2", password="password123"  # nosec B106
+        )
+        self.student2 = Student.objects.create(
+            user=self.student_user2, first_name="Student", last_name="Two"
+        )
+
+    def test_mentor_cannot_view_attendance(self):
+        self.client.login(username="mentor_user3", password="password123")  # nosec B106
+        url = reverse("student_attendance", args=[self.student1.pk])
+        response = self.client.get(url)
+        # Should be redirected to home
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+    def test_student_can_view_own_attendance(self):
+        self.client.login(
+            username="student_user1", password="password123"
+        )  # nosec B106
+        url = reverse("student_attendance", args=[self.student1.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_student_cannot_view_other_attendance(self):
+        self.client.login(
+            username="student_user1", password="password123"
+        )  # nosec B106
+        url = reverse("student_attendance", args=[self.student2.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))

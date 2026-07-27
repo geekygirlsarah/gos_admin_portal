@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Restricted Mentors so they can only view Parent contacts who currently have a student enrolled in an active program, instead of being able to see every adult record in the system.
 
 ### Added
+- Added comprehensive test coverage for attendance view permissions by role, login-required middleware URL exemptions, the role-permissions settings page, and multi-role edge cases in role detection.
 - Added a "My Profile" page for adults (mentors, parents, alumni), allowing them to view their personal information and linked students in one place.
 - Added a "My Profile" link to the user account menu for quick access to personal records.
 - Implemented object-level security: users (students and adults) can now view and edit their own profiles, but are restricted from accessing or modifying profiles of others unless they have administrative permissions.

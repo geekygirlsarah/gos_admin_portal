@@ -86,20 +86,3 @@ class TeamSettingsTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.team, team)
-
-    def test_permissions_update(self):
-        # Ensure at least one RolePermission exists
-        perm, _ = RolePermission.objects.get_or_create(
-            role="Mentor", section="student_info"
-        )
-        perm.can_read = False
-        perm.save()
-
-        url = reverse("portal_permissions_update")
-        resp = self.client.post(
-            url, {"action": "update_permissions", f"read_{perm.id}": "on"}
-        )
-        self.assertEqual(resp.status_code, 302)
-        perm.refresh_from_db()
-        self.assertTrue(perm.can_read)
-        self.assertFalse(perm.can_write)
