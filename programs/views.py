@@ -2927,6 +2927,12 @@ class ProgramSlidingScaleTaxFormDeleteView(
     section = "sliding_scale"
     permission_required = "programs.change_slidingscale"
 
+    def test_func(self):
+        # Allow users with change_slidingscale permission in addition to LeadMentors
+        if self.request.user.has_perm("programs.change_slidingscale"):
+            return True
+        return super().test_func()
+
     def post(self, request, pk, sliding_id, form_id):
         tax_form = get_object_or_404(
             TaxForm,
@@ -2948,10 +2954,32 @@ class ProgramSlidingScaleParentUploadView(LoginRequiredMixin, View):
         # Object level check for Parents
         from .permission_views import get_user_role
 
-        if get_user_role(request.user) == "LeadMentor" or request.user.is_superuser:
-            pass
-        else:
-            messages.error(request, "Only lead mentors can manage tax form uploads.")
+        user_role = get_user_role(request.user)
+        if user_role == "Parent":
+            try:
+                adult = request.user.adult_profile
+                if student not in adult.students.all():
+                    messages.error(
+                        request,
+                        "You do not have permission to upload tax forms for this student.",
+                    )
+                    return redirect("home")
+            except Exception:
+                messages.error(
+                    request,
+                    "You do not have permission to upload tax forms for this student.",
+                )
+                return redirect("home")
+        elif not request.user.is_superuser and not (
+            request.user.is_authenticated
+            and (
+                user_role == "LeadMentor"
+                or request.user.user_permissions.filter(
+                    codename="change_slidingscale"
+                ).exists()
+            )
+        ):
+            messages.error(request, "Only parents or lead mentors can use this upload.")
             return redirect("home")
 
         # Get or create sliding scale for this student/program
