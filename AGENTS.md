@@ -73,7 +73,8 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - **Formatting**: Use `black` and `isort --profile black`.
 - **Linting**: Use `flake8` and `bandit` for security.
 - **Admin**: Use meaningful `verbose_name` and `help_text`. Keep `list_display` performant with `select_related`/`prefetch_related`.
-- **Migrations**: Maintain validators and preserve unique constraints.
+- **Migrations**: Maintain validators and preserve unique constraints. Do not remove or modify existing migrations without careful consideration.
+- **Documentation**: Update `AGENTS.md` with any significant changes to the project architecture.
 
 ## Security and Permissions
 
@@ -98,13 +99,14 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - Keep changes minimal and avoid large refactors in feature tasks.
 - Do not rename files without a valid technical reason.
 - Make small, targeted changes instead of building for hypothetical future needs.
-- Try to run parallized tests (`python manage.py test` commands with the `--parallel=16` option) to speed up work. If traces are needed, run without parallelization.
+- Try to run parallelized tests (`python manage.py test` commands with the `--parallel=16` option) to speed up work. If traces are needed, run without parallelization.
 
 ## UI and Architecture Guidelines
 - Use Bootstrap to ensure a consistent appearance.
 - Avoid inline styles if possible.
 - Ensure pages remain accessible and responsive.
 - Add to `CHANGELOG.md` for user-facing changes, and describe them in a way that general users can understand. Keep entries already in there and just add on to it.
+- Update `AGENTS.md` with any significant changes to the project architecture.
 
 ## Junie-Specific Tips
 

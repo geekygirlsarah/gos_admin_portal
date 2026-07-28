@@ -32,7 +32,6 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("programs/", include("programs.urls")),
     path("api/v1/", include("api.urls")),
-    path("api-keys/", include("api.manage_urls")),
     path("profile/", include("portal.urls")),
     # Public application flow (new wizard lives in the `applications` app)
     path("apply/", include("applications.urls")),

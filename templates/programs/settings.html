@@ -25,11 +25,6 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="tab" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">Imports</button>
         </li>
-        {% if perms.api.view_apiclientkey %}
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'api_keys' %}active{% endif %}" id="api_keys-tab" data-bs-toggle="tab" data-bs-target="#api_keys" type="button" role="tab" aria-controls="api_keys" aria-selected="{% if active_tab == 'api_keys' %}true{% else %}false{% endif %}">API Keys</button>
-        </li>
-        {% endif %}
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="tab" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">Kiosk Sign-In</button>
         </li>
@@ -634,61 +629,6 @@
                 </div>
             </div>
         </div>
-
-        {% if perms.api.view_apiclientkey %}
-        <div class="tab-pane fade {% if active_tab == 'api_keys' %}show active{% endif %}" id="api_keys" role="tabpanel" aria-labelledby="api_keys-tab">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">API Keys</h5>
-                    {% if perms.api.add_apiclientkey %}
-                    <a href="{% url 'api_key_create' %}" class="btn btn-sm btn-primary">New API Key</a>
-                    {% endif %}
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Scope</th>
-                                    <th>Active</th>
-                                    <th>Key</th>
-                                    <th>Created</th>
-                                    <th>Last used</th>
-                                    <th class="text-end">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for k in api_keys %}
-                                <tr>
-                                    <td>{{ k.name }}</td>
-                                    <td><span class="badge {% if k.scope == 'write' %}bg-primary{% else %}bg-secondary{% endif %}">{{ k.get_scope_display }}</span></td>
-                                    <td><span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ k.is_active|yesno:"Yes,No" }}</span></td>
-                                    <td><code>{{ k.key }}</code></td>
-                                    <td>{{ k.created_at|date:'Y-m-d H:i' }}</td>
-                                    <td>{{ k.last_used_at|date:'Y-m-d H:i'|default:'—' }}</td>
-                                    <td class="text-end">
-                                        {% if perms.api.change_apiclientkey %}
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'api_key_edit' k.pk %}">Edit</a>
-                                        {% endif %}
-                                        {% if perms.api.delete_apiclientkey %}
-                                        <form action="{% url 'api_key_delete' k.pk %}" method="post" class="d-inline js-confirm" data-confirm="Delete this API key? This cannot be undone.">
-                                            {% csrf_token %}
-                                            <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                        </form>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr><td colspan="7" class="text-center py-4 text-muted">No API keys yet.</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -1,6 +1,6 @@
 from django.urls import include, path
 
-from . import kiosk_views, views
+from . import kiosk_views
 
 kiosk_patterns = [
     path(
@@ -13,21 +13,5 @@ kiosk_patterns = [
 ]
 
 urlpatterns = [
-    path("attendance/tap", views.attendance_tap, name="api_attendance_tap"),
-    path(
-        "attendance/student/lookup",
-        views.student_lookup,
-        name="api_student_lookup",
-    ),
-    path(
-        "attendance/student/<int:student_id>/weekly",
-        views.student_weekly_hours,
-        name="api_student_weekly_hours",
-    ),
-    path(
-        "attendance/program/<int:program_id>/weekly",
-        views.program_weekly_hours,
-        name="api_program_weekly_hours",
-    ),
     path("kiosk/<int:kiosk_id>/", include(kiosk_patterns)),
 ]

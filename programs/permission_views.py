@@ -20,11 +20,6 @@ from .models import (
 )
 
 try:
-    from api.models import ApiClientKey
-except ImportError:
-    ApiClientKey = None
-
-try:
     from attendance.models import KioskConfig
 except ImportError:
     KioskConfig = None
@@ -315,10 +310,6 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         programs = Program.objects.all().order_by("name")
         attendance_programs = [p for p in programs if p.has_feature("attendance")]
 
-        api_keys = None
-        if ApiClientKey and request.user.has_perm("api.view_apiclientkey"):
-            api_keys = ApiClientKey.objects.all()
-
         kiosk_configs = None
         if KioskConfig:
             kiosk_configs = KioskConfig.objects.select_related("program").all()
@@ -331,7 +322,6 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "subteams": subteams,
             "programs": programs,
             "attendance_programs": attendance_programs,
-            "api_keys": api_keys,
             "kiosk_configs": kiosk_configs,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
