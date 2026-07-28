@@ -171,47 +171,6 @@ class QuickCreateStudentForm(forms.ModelForm):
         fields = ["first_name", "last_name"]
 
 
-class ParentForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop("user", None)
-        super().__init__(*args, **kwargs)
-
-        # Protect students list and active status from non-Lead Mentors/Admins
-        # Only apply protection if user is explicitly provided (e.g. from portal views)
-        if user is not None:
-            is_privileged = (
-                user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-            )
-
-            if not is_privileged:
-                protected_fields = ["active", "students"]
-                for field in protected_fields:
-                    if field in self.fields:
-                        del self.fields[field]
-
-    def validate_unique(self):
-        # personal_email is intentionally non-unique (two adults may share one
-        # email, e.g. a mother and father). Skip the email uniqueness check.
-        exclude = self._get_validation_exclusions()
-        exclude.add("personal_email")
-        try:
-            self.instance.validate_unique(exclude=exclude)
-        except forms.ValidationError as e:
-            self._update_errors(e)
-
-    class Meta:
-        model = Adult
-        # Exclude flags (is_parent, is_mentor, is_alumni, active)
-        # to ensure they are preserved if not explicitly rendered in the template.
-        fields = [
-            "first_name",
-            "preferred_first_name",
-            "last_name",
-            "personal_email",
-            "phone_number",
-            "email_updates",
-            "students",
-        ]
 
 
 class AdultForm(forms.ModelForm):

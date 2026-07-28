@@ -36,7 +36,6 @@ from .forms import (
     AdultForm,
     FeeAssignmentEditForm,
     FeeForm,
-    ParentForm,
     PaymentForm,
     ProgramDocumentForm,
     ProgramEmailBalancesForm,
@@ -2562,9 +2561,14 @@ class ParentCreateView(
     CreateView,
 ):
     model = Adult
-    form_class = ParentForm
-    template_name = "parents/form.html"
+    form_class = AdultForm
+    template_name = "adults/form.html"
     permission_required = "programs.add_adult"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
 
     def form_valid(self, form):
         # Ensure adults created via this view are flagged as parents
@@ -2609,8 +2613,8 @@ class ParentUpdateView(
     UpdateView,
 ):
     model = Adult
-    form_class = ParentForm
-    template_name = "parents/form.html"
+    form_class = AdultForm
+    template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
 
