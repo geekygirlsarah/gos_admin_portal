@@ -14,8 +14,8 @@ from attendance.kiosk_utils import (
     _get_kiosk_or_404,
     _is_unlocked,
 )
-from attendance.models import RFIDCard, AttendanceSession, AttendanceEvent
-from attendance.services import record_tap, get_attendance_stats
+from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
+from attendance.services import get_attendance_stats, record_tap
 from programs.models import Adult, Student
 
 logger = logging.getLogger(__name__)
