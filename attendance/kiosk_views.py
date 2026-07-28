@@ -3,8 +3,8 @@ import logging
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from .models import KioskConfig
 from .kiosk_utils import _get_kiosk_or_404, _is_unlocked
+from .models import KioskConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def kiosk_index(request):
     kiosks = KioskConfig.objects.filter(is_active=True).select_related("program")
     # Also filter by programs that have attendance feature enabled
     kiosks = kiosks.filter(program__features__key="attendance").distinct()
-    
+
     return render(
         request,
         "kiosk/index.html",
@@ -46,7 +46,3 @@ def kiosk_signin(request, kiosk_id):
             "is_unlocked": is_unlocked,
         },
     )
-
-
-
-

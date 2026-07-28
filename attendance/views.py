@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
-from programs.models import Program, Student
+from programs.models import Adult, Program, Student
 from programs.permission_views import can_user_read, can_user_write
 from programs.utils import redirect_back
 
@@ -500,5 +500,97 @@ def attendance_summary_view(request):
             "summary": [(name, mins // 60, mins % 60) for name, mins in sorted_summary],
             "start": start,
             "end": end,
+        },
+    )
+
+
+@login_required
+def rfid_management_view(request):
+    if not can_user_write(request.user, "attendance"):
+        messages.error(request, "You do not have permission to manage RFID cards.")
+        return redirect("home")
+
+    from django.db.models import Q
+
+    search_query = request.GET.get("q", "").strip()
+    results = []
+    if search_query:
+        # Search students
+        student_qs = Student.objects.filter(
+            Q(first_name__icontains=search_query)
+            | Q(last_name__icontains=search_query)
+            | Q(legal_first_name__icontains=search_query)
+        ).prefetch_related("rfid_cards")
+        for s in student_qs[:10]:
+            results.append(
+                {
+                    "person": s,
+                    "type": "student",
+                    "rfid": s.rfid_cards.filter(is_active=True).first(),
+                }
+            )
+
+        # Search mentors
+        adult_qs = (
+            Adult.objects.filter(is_mentor=True)
+            .filter(
+                Q(first_name__icontains=search_query)
+                | Q(last_name__icontains=search_query)
+            )
+            .prefetch_related("rfid_cards")
+        )
+        for a in adult_qs[:10]:
+            results.append(
+                {
+                    "person": a,
+                    "type": "mentor",
+                    "rfid": a.rfid_cards.filter(is_active=True).first(),
+                }
+            )
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "assign":
+            person_type = request.POST.get("person_type")
+            person_id = request.POST.get("person_id")
+            uid = request.POST.get("uid", "").strip()
+
+            if not uid:
+                messages.error(request, "RFID UID cannot be empty.")
+            else:
+                try:
+                    # Deactivate old cards for this person
+                    if person_type == "student":
+                        person = get_object_or_404(Student, pk=person_id)
+                        RFIDCard.objects.filter(student=person, is_active=True).update(
+                            is_active=False
+                        )
+                        RFIDCard.objects.create(uid=uid, student=person)
+                    else:
+                        person = get_object_or_404(Adult, pk=person_id)
+                        RFIDCard.objects.filter(adult=person, is_active=True).update(
+                            is_active=False
+                        )
+                        RFIDCard.objects.create(uid=uid, adult=person)
+
+                    messages.success(request, f"Assigned RFID {uid} to {person}")
+                except Exception as e:
+                    messages.error(request, f"Error assigning RFID: {e}")
+            return redirect(f"{request.path}?q={search_query}")
+
+        elif action == "deactivate":
+            card_id = request.POST.get("card_id")
+            card = get_object_or_404(RFIDCard, id=card_id)
+            card.is_active = False
+            card.save()
+            messages.success(request, f"Deactivated RFID {card.uid}")
+            return redirect(f"{request.path}?q={search_query}")
+
+    return render(
+        request,
+        "attendance/rfid_management.html",
+        {
+            "results": results,
+            "q": search_query,
         },
     )

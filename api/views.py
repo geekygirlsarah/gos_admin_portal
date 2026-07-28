@@ -15,7 +15,7 @@ from django.views.generic import CreateView, ListView, UpdateView, View
 from api.auth import require_api_key
 from attendance.models import AttendanceSession, RFIDCard
 from attendance.services import record_tap
-from programs.models import Program, Student
+from programs.models import Adult, Program, Student
 
 from .forms import ApiClientKeyForm
 from .models import ApiClientKey
@@ -75,6 +75,7 @@ def attendance_tap(request):
             "event_type": evt.event_type,
             "program_id": evt.program_id,
             "student_id": evt.student_id,
+            "adult_id": evt.adult_id,
             "visitor_name": evt.visitor_name,
             "visitor_team_number": evt.visitor_team_number,
             "occurred_at": evt.occurred_at.isoformat(),
@@ -104,17 +105,17 @@ def student_lookup(request):
     if rfid:
         # Exact match on active RFID card
         try:
-            card = RFIDCard.objects.select_related("student").get(
+            card = RFIDCard.objects.select_related("student", "adult").get(
                 uid=rfid, is_active=True
             )
-            student = card.student
+            person = card.student or card.adult
             return JsonResponse(
                 {
                     "students": [
                         {
-                            "id": student.id,
-                            "name": student.first_name or student.legal_first_name,
-                            "full_name": f"{student.first_name or student.legal_first_name} {student.last_name}",
+                            "id": person.pk,
+                            "name": getattr(person, "preferred_full_name", str(person)),
+                            "type": "student" if card.student else "mentor",
                         }
                     ]
                 }
@@ -124,23 +125,40 @@ def student_lookup(request):
 
     # Name search: match on legal_first_name, first_name, or last_name
     terms = name.split()
-    qs = Student.objects.all()
+    results = []
+
+    # Search students
+    student_qs = Student.objects.all()
     for term in terms:
-        qs = qs.filter(
+        student_qs = student_qs.filter(
             Q(legal_first_name__icontains=term)
             | Q(first_name__icontains=term)
             | Q(last_name__icontains=term)
         )
-    qs = qs.order_by("last_name", "legal_first_name")[:20]
+    for s in student_qs.order_by("last_name", "legal_first_name")[:10]:
+        results.append(
+            {
+                "id": s.id,
+                "name": getattr(s, "preferred_full_name", str(s)),
+                "type": "student",
+            }
+        )
 
-    results = [
-        {
-            "id": s.id,
-            "name": s.first_name or s.legal_first_name,
-            "full_name": f"{s.first_name or s.legal_first_name} {s.last_name}",
-        }
-        for s in qs
-    ]
+    # Search mentors/adults
+    adult_qs = Adult.objects.filter(is_mentor=True)
+    for term in terms:
+        adult_qs = adult_qs.filter(
+            Q(first_name__icontains=term) | Q(last_name__icontains=term)
+        )
+    for a in adult_qs.order_by("last_name", "first_name")[:10]:
+        results.append(
+            {
+                "id": a.id,
+                "name": str(a),
+                "type": "mentor",
+            }
+        )
+
     return JsonResponse({"students": results})
 
 

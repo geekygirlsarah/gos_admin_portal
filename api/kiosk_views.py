@@ -1,23 +1,25 @@
 import json
 import logging
+
 from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
-from programs.models import Student
-from attendance.models import RFIDCard
-from attendance.services import record_tap
 from attendance.kiosk_utils import (
-    _get_kiosk_or_404,
-    _is_unlocked,
-    _cookie_name,
     _CODE_EXPIRY,
     _COOKIE_MAX_AGE,
+    _cookie_name,
+    _get_kiosk_or_404,
+    _is_unlocked,
 )
+from attendance.models import RFIDCard
+from attendance.services import record_tap
+from programs.models import Adult, Student
 
 logger = logging.getLogger(__name__)
+
 
 @require_POST
 def kiosk_request_code(request, kiosk_id):
@@ -33,15 +35,21 @@ def kiosk_request_code(request, kiosk_id):
 
     email = body.get("email", "").strip().lower()
     if not email:
-        return JsonResponse({"success": False, "error": "Email is required."}, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Email is required."}, status=400
+        )
 
     # Use the portal's provisioning logic to ensure the user exists if they are allowed
     from allauth.account.adapter import get_adapter
+
     from GoSAdminPortal.adapter import _find_or_provision_user_for_email
 
     if not _find_or_provision_user_for_email(email):
         return JsonResponse(
-            {"success": False, "error": "This email is not authorized to unlock kiosks."},
+            {
+                "success": False,
+                "error": "This email is not authorized to unlock kiosks.",
+            },
             status=403,
         )
 
@@ -57,6 +65,7 @@ def kiosk_request_code(request, kiosk_id):
     adapter.send_mail("account/email/login_code", email, {"code": code})
 
     return JsonResponse({"success": True})
+
 
 @require_POST
 def kiosk_unlock(request, kiosk_id):
@@ -74,13 +83,17 @@ def kiosk_unlock(request, kiosk_id):
     code = body.get("code", "").strip()
 
     if not email or not code:
-        return JsonResponse({"success": False, "error": "Email and code are required."}, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Email and code are required."}, status=400
+        )
 
     cache_key = f"kiosk_otp_{kiosk_id}_{email}"
     stored_code = cache.get(cache_key)
 
     if not stored_code or stored_code != code:
-        return JsonResponse({"success": False, "error": "Invalid or expired code."}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Invalid or expired code."}, status=403
+        )
 
     # Clear the code from cache
     cache.delete(cache_key)
@@ -96,6 +109,7 @@ def kiosk_unlock(request, kiosk_id):
     )
     return response
 
+
 @require_POST
 def kiosk_lock(request, kiosk_id):
     """POST /api/v1/kiosk/<id>/lock/
@@ -105,6 +119,7 @@ def kiosk_lock(request, kiosk_id):
     response = JsonResponse({"success": True})
     response.delete_cookie(_cookie_name(kiosk_id))
     return response
+
 
 @require_POST
 def kiosk_tap(request, kiosk_id):
@@ -140,6 +155,8 @@ def kiosk_tap(request, kiosk_id):
     student_name = None
     if evt.student:
         student_name = str(evt.student)
+    elif evt.adult:
+        student_name = str(evt.adult)
     elif evt.visitor_name:
         student_name = evt.visitor_name
 
@@ -150,6 +167,7 @@ def kiosk_tap(request, kiosk_id):
             "student": student_name,
         }
     )
+
 
 @require_GET
 def kiosk_lookup(request, kiosk_id):
@@ -163,36 +181,54 @@ def kiosk_lookup(request, kiosk_id):
     rfid = request.GET.get("rfid", "").strip()
     name = request.GET.get("name", "").strip()
 
-    students = []
+    results = []
     if rfid:
         try:
-            card = RFIDCard.objects.select_related("student").get(
+            card = RFIDCard.objects.select_related("student", "adult").get(
                 uid=rfid, is_active=True
             )
-            s = card.student
-            students = [
+            person = card.student or card.adult
+            results = [
                 {
-                    "id": s.pk,
-                    "name": getattr(s, "preferred_full_name", str(s)),
+                    "id": person.pk,
+                    "name": getattr(person, "preferred_full_name", str(person)),
+                    "type": "student" if card.student else "mentor",
                 }
             ]
         except RFIDCard.DoesNotExist:
-            students = []
+            results = []
     elif name:
         parts = name.split()
-        qs = Student.objects.all()
+        # Search students
+        student_qs = Student.objects.all()
         for part in parts:
-            qs = qs.filter(
+            student_qs = student_qs.filter(
                 Q(first_name__icontains=part)
                 | Q(last_name__icontains=part)
                 | Q(legal_first_name__icontains=part)
             )
-        students = [
-            {
-                "id": s.pk,
-                "name": getattr(s, "preferred_full_name", str(s)),
-            }
-            for s in qs[:20]
-        ]
+        for s in student_qs[:10]:
+            results.append(
+                {
+                    "id": s.pk,
+                    "name": getattr(s, "preferred_full_name", str(s)),
+                    "type": "student",
+                }
+            )
 
-    return JsonResponse({"students": students})
+        # Search mentors/adults
+        adult_qs = Adult.objects.filter(is_mentor=True)
+        for part in parts:
+            adult_qs = adult_qs.filter(
+                Q(first_name__icontains=part) | Q(last_name__icontains=part)
+            )
+        for a in adult_qs[:10]:
+            results.append(
+                {
+                    "id": a.pk,
+                    "name": str(a),
+                    "type": "mentor",
+                }
+            )
+
+    return JsonResponse({"students": results})

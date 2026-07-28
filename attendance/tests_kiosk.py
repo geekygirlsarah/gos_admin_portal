@@ -268,13 +268,11 @@ class KioskUnlockEndpointTests(TestCase):
         # Mock a code in cache
         cache_key = f"kiosk_otp_{self.kiosk_config.pk}_mentor@example.com"
         cache.set(cache_key, "654321", 600)
-        
+
         url = reverse("api_kiosk_unlock", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
-            data=json.dumps(
-                {"email": "mentor@example.com", "code": "654321"}
-            ),
+            data=json.dumps({"email": "mentor@example.com", "code": "654321"}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
@@ -288,9 +286,7 @@ class KioskUnlockEndpointTests(TestCase):
         url = reverse("api_kiosk_unlock", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
-            data=json.dumps(
-                {"email": "mentor@example.com", "code": "WrongCode"}
-            ),
+            data=json.dumps({"email": "mentor@example.com", "code": "WrongCode"}),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 403)

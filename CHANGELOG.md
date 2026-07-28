@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-28
+
+### Added
+- **Dashboard attendance & outreach hours**: Student and Parent dashboards now show the number of attendance hours logged this week and total hours logged since the program started. If a program does not have attendance or outreach tracking enabled, a clear "No hours tracked" message is displayed instead of a placeholder.
+
 ## 2026-07-27
 
 ### Changed
@@ -17,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - **Kiosk Configuration**: Staff can create and manage kiosk pages from the portal settings screen (Settings → Kiosk Sign-In tab). Each configuration links a program and an API key so attendance is recorded in the right place.
 - **Student Lookup API**: Added a new `GET /api/v1/attendance/student/lookup` endpoint that allows kiosks (and other integrations) to search for students by RFID card UID or by name. This endpoint is authenticated with an API key.
 - **API middleware fix**: The `/api/v1/` path is now correctly exempt from the portal's login-required middleware, allowing external tools and kiosks to reach API endpoints using their API key without being redirected to the login page.
+- **RFID Management Page**: Added a new administrative page at `/attendance/rfid/` that allows staff to easily associate RFID tags with students and mentors. Staff can search for a person by name, see their currently active RFID card (if any), and assign a new UID by scanning or typing.
 
 ## 2026-07-26
 

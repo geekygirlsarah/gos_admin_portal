@@ -46,13 +46,15 @@ STUDENT DASHBOARD
                         <div class="card border-secondary h-100">
                             <div class="card-body">
                                 <h6 class="card-title text-muted">Attendance &amp; Outreach Hours</h6>
-                                {% if enrollment.program.active %}
-                                    <p class="text-muted fst-italic mb-0">
-                                        <span class="badge bg-secondary">Coming Soon</span>
-                                        Hour tracking will be available here once enabled for this program.
-                                    </p>
-                                {% else %}
-                                    <p class="text-muted mb-0">Not available for inactive programs.</p>
+                                {% if enrollment.has_attendance or enrollment.has_outreach %}
+                                    <p class="mb-1"><strong>{{ enrollment.attendance_stats.week_hours|default:"0.0" }}</strong> hours logged this week</p>
+                                    <p class="mb-0 text-muted small"><strong>{{ enrollment.attendance_stats.total_hours|default:"0.0" }}</strong> hours logged since program started</p>
+                                {% endif %}
+                                {% if not enrollment.has_attendance %}
+                                    <p class="text-muted mb-0 small">No attendance hours are tracked.</p>
+                                {% endif %}
+                                {% if not enrollment.has_outreach %}
+                                    <p class="text-muted mb-0 small">No outreach hours are tracked.</p>
                                 {% endif %}
                             </div>
                         </div>
@@ -186,12 +188,15 @@ PARENT DASHBOARD
                                 <div class="card border-secondary h-100">
                                     <div class="card-body py-2">
                                         <h6 class="card-title text-muted small mb-1">Attendance &amp; Outreach Hours</h6>
-                                        {% if row.enrollment.program.active %}
-                                            <p class="text-muted fst-italic mb-0 small">
-                                                <span class="badge bg-secondary">Coming Soon</span>
-                                            </p>
-                                        {% else %}
-                                            <p class="text-muted mb-0 small">N/A</p>
+                                        {% if row.enrollment.has_attendance or row.enrollment.has_outreach %}
+                                            <p class="mb-1 small"><strong>{{ row.enrollment.attendance_stats.week_hours|default:"0.0" }}</strong> hours logged this week</p>
+                                            <p class="mb-0 text-muted small"><strong>{{ row.enrollment.attendance_stats.total_hours|default:"0.0" }}</strong> hours logged since program started</p>
+                                        {% endif %}
+                                        {% if not row.enrollment.has_attendance %}
+                                            <p class="text-muted mb-0 small">No attendance hours are tracked.</p>
+                                        {% endif %}
+                                        {% if not row.enrollment.has_outreach %}
+                                            <p class="text-muted mb-0 small">No outreach hours are tracked.</p>
                                         {% endif %}
                                     </div>
                                 </div>

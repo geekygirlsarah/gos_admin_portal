@@ -71,8 +71,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             # Separate active from non-active programs for a cleaner dashboard
             active_enrollments = []
             other_enrollments = []
+            from attendance.services import get_student_attendance_stats
+
             for e in enrollments:
                 if e.program.status == "Active" and e.active:
+                    e.has_attendance = e.program.has_feature("attendance")
+                    e.has_outreach = e.program.has_feature("outreach")
+                    if e.has_attendance:
+                        e.attendance_stats = get_student_attendance_stats(
+                            student, e.program
+                        )
                     active_enrollments.append(e)
                 else:
                     other_enrollments.append(e)
@@ -95,6 +103,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 linked_students = adult.all_students()
                 # Attach per-program balance info to each student
                 parent_data = []
+                from attendance.services import get_student_attendance_stats
+
                 for s in linked_students:
                     enrollments = (
                         Enrollment.objects.filter(student=s)
@@ -105,6 +115,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     other_rows = []
                     for e in enrollments:
                         balance = _compute_student_program_balance(s, e.program)
+
+                        # Add attendance/outreach info
+                        e.has_attendance = e.program.has_feature("attendance")
+                        e.has_outreach = e.program.has_feature("outreach")
+                        if e.has_attendance:
+                            e.attendance_stats = get_student_attendance_stats(
+                                s, e.program
+                            )
+
                         row = {"enrollment": e, "balance": balance}
                         if e.program.status == "Active" and e.active:
                             active_rows.append(row)

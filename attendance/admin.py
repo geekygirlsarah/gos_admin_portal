@@ -12,9 +12,15 @@ class KioskDeviceAdmin(admin.ModelAdmin):
 
 @admin.register(RFIDCard)
 class RFIDCardAdmin(admin.ModelAdmin):
-    list_display = ("uid", "student", "is_active", "assigned_at")
+    list_display = ("uid", "student", "adult", "is_active", "assigned_at")
     list_filter = ("is_active",)
-    search_fields = ("uid", "student__first_name", "student__last_name")
+    search_fields = (
+        "uid",
+        "student__first_name",
+        "student__last_name",
+        "adult__first_name",
+        "adult__last_name",
+    )
 
 
 @admin.register(AttendanceEvent)
@@ -24,6 +30,7 @@ class AttendanceEventAdmin(admin.ModelAdmin):
         "event_type",
         "program",
         "student",
+        "adult",
         "visitor_name",
         "rfid_uid",
         "kiosk",
@@ -35,6 +42,8 @@ class AttendanceEventAdmin(admin.ModelAdmin):
         "rfid_uid",
         "student__first_name",
         "student__last_name",
+        "adult__first_name",
+        "adult__last_name",
     )
     date_hierarchy = "occurred_at"
 
@@ -47,9 +56,16 @@ class AttendanceSessionAdmin(admin.ModelAdmin):
         "duration_minutes",
         "program",
         "student",
+        "adult",
         "visitor_name",
         "is_open",
     )
     list_filter = ("program",)
-    search_fields = ("visitor_name", "student__first_name", "student__last_name")
+    search_fields = (
+        "visitor_name",
+        "student__first_name",
+        "student__last_name",
+        "adult__first_name",
+        "adult__last_name",
+    )
     date_hierarchy = "check_in"
