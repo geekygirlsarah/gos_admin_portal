@@ -1,8 +1,10 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_http_methods
@@ -578,7 +580,9 @@ def rfid_management_view(request):
                     messages.success(request, f"Assigned RFID {uid} to {person}")
                 except Exception as e:
                     messages.error(request, f"Error assigning RFID: {e}")
-            return redirect(f"{request.path}?q={search_query}")
+            return redirect(
+                f"{reverse('rfid_management')}?{urlencode({'q': search_query})}"
+            )
 
         elif action == "deactivate":
             card_id = request.POST.get("card_id")
@@ -586,7 +590,9 @@ def rfid_management_view(request):
             card.is_active = False
             card.save()
             messages.success(request, f"Deactivated RFID {card.uid}")
-            return redirect(f"{request.path}?q={search_query}")
+            return redirect(
+                f"{reverse('rfid_management')}?{urlencode({'q': search_query})}"
+            )
 
     return render(
         request,
