@@ -182,7 +182,8 @@ def kiosk_tap(request, kiosk_id):
         )
 
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
+        logger.exception("Error recording kiosk tap: %s", exc)
+        return JsonResponse({"error": "Unable to process tap request."}, status=400)
 
     student_name = None
     person_type = "visitor"
