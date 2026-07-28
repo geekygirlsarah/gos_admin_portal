@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Dashboard attendance & outreach hours**: Student and Parent dashboards now show the number of attendance hours logged this week and total hours logged since the program started. If a program does not have attendance or outreach tracking enabled, a clear "No hours tracked" message is displayed instead of a placeholder.
 
 ### Changed
+- **Kiosk Member Sign-In robustness**: Improved the Member Sign-In tab to strictly require a registered member. If a name or RFID card is not recognized, the kiosk now provides a clear error message instead of incorrectly recording the tap as a visitor. This ensures that attendance data for students and mentors remains accurate and prevents accidental guest records.
 - **Personalized Kiosk Sign-Out message**: The kiosk goodbye message is now personalized by role. Students still see their session and weekly hours for motivation. Mentors and other adults now see a simple, appreciative "Thank you for volunteering today!" message without hour stats, as their contribution is valued beyond time tracking.
 
 ## 2026-07-27

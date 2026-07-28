@@ -5,6 +5,7 @@ from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.db.models import Q
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET, require_POST
 
 from attendance.kiosk_utils import (
@@ -138,17 +139,47 @@ def kiosk_tap(request, kiosk_id):
     rfid_uid = body.get("rfid_uid", "")
     visitor_name = body.get("visitor_name", "")
     visitor_team_number = body.get("visitor_team_number")
+    student_id = body.get("student_id")
+    adult_id = body.get("adult_id")
     event_type = body.get("event_type", "AUTO")
+
+    student = None
+    adult = None
+    if student_id:
+        try:
+            student = Student.objects.get(pk=student_id)
+        except Student.DoesNotExist:
+            return JsonResponse({"error": "Student not found."}, status=404)
+    if adult_id:
+        try:
+            adult = Adult.objects.get(pk=adult_id)
+        except Adult.DoesNotExist:
+            return JsonResponse({"error": "Adult not found."}, status=404)
+
+    # If rfid_uid or specific IDs are provided, we MUST resolve to a member.
+    # This assumes Member Sign-In tab usage.
+    if rfid_uid or student or adult:
+        if not (student or adult) and rfid_uid:
+            from attendance.services import resolve_person_by_uid
+            person = resolve_person_by_uid(rfid_uid)
+            student = person if isinstance(person, Student) else None
+            adult = person if isinstance(person, Adult) else None
+        
+        if not (student or adult):
+            return JsonResponse({"error": "Member not found."}, status=400)
 
     try:
         evt = record_tap(
             program=config.program,
             rfid_uid=rfid_uid,
+            student=student,
+            adult=adult,
             visitor_name=visitor_name,
             visitor_team_number=visitor_team_number,
             event_type=event_type,
             source="kiosk",
         )
+
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 

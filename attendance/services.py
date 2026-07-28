@@ -110,6 +110,8 @@ def record_tap(
     program,
     kiosk=None,
     rfid_uid: str = "",
+    student=None,
+    adult=None,
     visitor_name: str = "",
     visitor_team_number=None,
     event_type: str = "AUTO",
@@ -132,14 +134,12 @@ def record_tap(
         raise PermissionDenied("Attendance is not enabled for this program.")
 
     occurred_at = occurred_at or timezone.now()
-    person = None
-    if rfid_uid:
+    if not (student or adult) and rfid_uid:
         person = resolve_person_by_uid(rfid_uid)
+        from programs.models import Adult, Student
 
-    from programs.models import Adult, Student
-
-    student = person if isinstance(person, Student) else None
-    adult = person if isinstance(person, Adult) else None
+        student = person if isinstance(person, Student) else None
+        adult = person if isinstance(person, Adult) else None
 
     # Create event first (audit trail)
     evt = AttendanceEvent.objects.create(

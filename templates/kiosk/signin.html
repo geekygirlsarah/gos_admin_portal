@@ -501,32 +501,35 @@
         } else {
             lookupParams.name = query;
         }
-
+        
+        var payload = {};
+        
         lookupStudent(lookupParams)
             .then(function (data) {
                 var students = (data && data.students) || [];
-                var payload = {};
 
                 if (students.length > 0) {
                     if (lookupParams.rfid) {
                         payload.rfid_uid = lookupParams.rfid;
                     } else {
-                        payload.visitor_name = query;
+                        if (students[0].type === 'student') {
+                            payload.student_id = students[0].id;
+                        } else {
+                            payload.adult_id = students[0].id;
+                        }
                     }
                 } else {
+                    hideOverlay();
+                    input.readOnly = false;
+                    document.getElementById("memberSignInBtn").disabled = false;
+                    input.focus();
                     if (!lookupParams.rfid) {
-                        // No student found by name — still log as visitor
-                        payload.visitor_name = query;
+                        showToast("Member not found. If you are a visitor, please use the Visitor tab.", false);
                     } else {
-                        // RFID not found
-                        hideOverlay();
-                        input.readOnly = false;
                         input.value = "";
-                        document.getElementById("memberSignInBtn").disabled = false;
-                        input.focus();
                         showToast("RFID card not recognized. Please try typing your full name.", false);
-                        return;
                     }
+                    return;
                 }
 
                 return recordTap(payload).then(function (res) {
