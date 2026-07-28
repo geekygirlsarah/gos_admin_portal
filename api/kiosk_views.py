@@ -287,3 +287,46 @@ def kiosk_lookup(request, kiosk_id):
             )
 
     return JsonResponse({"students": results})
+
+
+@require_GET
+def kiosk_manifest(request, kiosk_id):
+    """GET /api/v1/kiosk/<id>/manifest/
+    Returns list of people currently signed in. Requires the unlock cookie.
+    """
+    config = _get_kiosk_or_404(kiosk_id)
+    if not _is_unlocked(request, kiosk_id):
+        return JsonResponse({"error": "Kiosk is locked."}, status=403)
+
+    sessions = AttendanceSession.objects.filter(
+        program=config.program, check_out__isnull=True
+    ).select_related("student", "adult")
+
+    results = []
+    for s in sessions:
+        name = ""
+        person_type = ""
+        if s.student:
+            name = getattr(s.student, "preferred_full_name", str(s.student))
+            person_type = "student"
+        elif s.adult:
+            name = str(s.adult)
+            person_type = "mentor"
+        else:
+            name = s.visitor_name
+            if s.visitor_team_number:
+                name += f" (Team {s.visitor_team_number})"
+            person_type = "visitor"
+
+        results.append(
+            {
+                "name": name,
+                "type": person_type,
+                "check_in": s.check_in.isoformat(),
+            }
+        )
+
+    # Sort by name
+    results.sort(key=lambda x: x["name"])
+
+    return JsonResponse({"manifest": results})
