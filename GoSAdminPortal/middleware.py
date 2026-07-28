@@ -1,8 +1,10 @@
 import logging
+import zoneinfo
 
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve
+from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,8 @@ EXEMPT_PATH_PREFIXES = (
     "/accounts/",
     "/admin/",
     "/apply/",  # public application wizard
+    "/api/v1/",  # API endpoints use X-API-KEY header auth, not session auth
+    "/kiosk/",  # public kiosk attendance sign-in pages
     settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,
 )
@@ -58,3 +62,19 @@ class LoginRequiredMiddleware(MiddlewareMixin):
         except Exception:
             logger.debug("Unexpected error resolving path %s", path, exc_info=True)
         return False
+
+
+class TimezoneMiddleware(MiddlewareMixin):
+    """
+    Middleware to activate the user's preferred timezone from the session.
+    """
+
+    def process_request(self, request):
+        tzname = request.session.get("django_timezone")
+        if tzname:
+            try:
+                timezone.activate(zoneinfo.ZoneInfo(tzname))
+            except Exception:
+                timezone.deactivate()
+        else:
+            timezone.deactivate()

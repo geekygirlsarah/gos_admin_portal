@@ -25,11 +25,9 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="tab" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">Imports</button>
         </li>
-        {% if perms.api.view_apiclientkey %}
         <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'api_keys' %}active{% endif %}" id="api_keys-tab" data-bs-toggle="tab" data-bs-target="#api_keys" type="button" role="tab" aria-controls="api_keys" aria-selected="{% if active_tab == 'api_keys' %}true{% else %}false{% endif %}">API Keys</button>
+            <button class="nav-link {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="tab" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">Kiosk Sign-In</button>
         </li>
-        {% endif %}
     </ul>
 
     <div class="tab-content" id="settingsTabsContent">
@@ -539,7 +537,7 @@
                                     <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
                                     <label class="form-check-label" for="attendance-overwrite">Overwrite existing data</label>
                                 </div>
-                                <div class="form-text mt-2">Times should be in UTC (e.g., 2025-09-01T20:15:00Z). If time_out is blank, an open session will be created.</div>
+                                <div class="form-text mt-2">Times can be in local time (e.g., 2025-09-01 20:15) or ISO format with timezone shifts (e.g., 2025-09-01T20:15:00-04:00). If time_out is blank, an open session will be created.</div>
                                 <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>
                               </form>
                             </div>
@@ -551,61 +549,86 @@
             </div>
         </div>
 
-        <!-- API Keys Tab -->
-        {% if perms.api.view_apiclientkey %}
-        <div class="tab-pane fade {% if active_tab == 'api_keys' %}show active{% endif %}" id="api_keys" role="tabpanel" aria-labelledby="api_keys-tab">
-            <div class="card shadow-sm">
+        <!-- Kiosk Sign-In Tab -->
+        <div class="tab-pane fade {% if active_tab == 'kiosk_configs' %}show active{% endif %}" id="kiosk_configs" role="tabpanel" aria-labelledby="kiosk_configs-tab">
+            <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">API Keys</h5>
-                    {% if perms.api.add_apiclientkey %}
-                    <a href="{% url 'api_key_create' %}" class="btn btn-sm btn-primary">New API Key</a>
-                    {% endif %}
+                    <h5 class="mb-0">Kiosk Sign-In Pages</h5>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
+                <div class="card-body">
+                    <p class="text-muted">
+                        Each kiosk configuration creates a public sign-in page at
+                        <code>/kiosk/&lt;id&gt;/</code> that students and visitors can use
+                        to tap in and out without logging in to the portal.
+                        Set a PC or tablet to kiosk mode and point it at the URL shown below.
+                    </p>
+                    <div class="table-responsive mb-4">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Scope</th>
+                                    <th>Label</th>
+                                    <th>Program</th>
                                     <th>Active</th>
-                                    <th>Key</th>
-                                    <th>Created</th>
-                                    <th>Last used</th>
+                                    <th>Kiosk URL</th>
                                     <th class="text-end">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for k in api_keys %}
+                                {% for k in kiosk_configs %}
                                 <tr>
-                                    <td>{{ k.name }}</td>
-                                    <td><span class="badge {% if k.scope == 'write' %}bg-primary{% else %}bg-secondary{% endif %}">{{ k.get_scope_display }}</span></td>
-                                    <td><span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ k.is_active|yesno:"Yes,No" }}</span></td>
-                                    <td><code>{{ k.key }}</code></td>
-                                    <td>{{ k.created_at|date:'Y-m-d H:i' }}</td>
-                                    <td>{{ k.last_used_at|date:'Y-m-d H:i'|default:'—' }}</td>
-                                    <td class="text-end">
-                                        {% if perms.api.change_apiclientkey %}
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'api_key_edit' k.pk %}">Edit</a>
-                                        {% endif %}
-                                        {% if perms.api.delete_apiclientkey %}
-                                        <form action="{% url 'api_key_delete' k.pk %}" method="post" class="d-inline js-confirm" data-confirm="Delete this API key? This cannot be undone.">
+                                    <td>{{ k.label }}</td>
+                                    <td>{{ k.program.name }}</td>
+                                    <td><span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ k.is_active|yesno:"Active,Inactive" }}</span></td>
+                                    <td><a href="/kiosk/{{ k.pk }}/" target="_blank"><code>/kiosk/{{ k.pk }}/</code></a></td>
+                                    <td class="text-end d-flex gap-2 justify-content-end">
+                                        <form action="{% url 'portal_kiosk' %}" method="post" class="d-inline">
                                             {% csrf_token %}
+                                            <input type="hidden" name="action" value="toggle_kiosk_config">
+                                            <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
+                                            <button class="btn btn-sm {% if k.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                {% if k.is_active %}Deactivate{% else %}Activate{% endif %}
+                                            </button>
+                                        </form>
+                                        <form action="{% url 'portal_kiosk' %}" method="post" class="d-inline js-confirm" data-confirm="Delete this kiosk configuration?">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_kiosk_config">
+                                            <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
                                             <button class="btn btn-sm btn-outline-danger">Delete</button>
                                         </form>
-                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="7" class="text-center py-4 text-muted">No API keys yet.</td></tr>
+                                <tr><td colspan="5" class="text-center py-4 text-muted">No kiosk configurations yet. Add one below.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Add Kiosk Form -->
+                    <h6 class="mb-3">Create New Kiosk</h6>
+                    <form method="post" action="{% url 'portal_kiosk' %}" class="row g-3 align-items-end">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_kiosk_config">
+                        <div class="col-md-5">
+                            <label for="kioskLabel" class="form-label">Label</label>
+                            <input type="text" id="kioskLabel" name="label" class="form-control" placeholder="e.g. Build Space Entry" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="kioskProgram" class="form-label">Program</label>
+                            <select id="kioskProgram" name="program_id" class="form-select" required>
+                                <option value="">Select program…</option>
+                                {% for p in attendance_programs %}
+                                <option value="{{ p.pk }}">{{ p.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Add Kiosk</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

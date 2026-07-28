@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-28
+
+### Changed
+- **Kiosk UI Enlargement**: Significantly increased the size of text, inputs, buttons, and badges on the attendance kiosk to ensure it is easily readable and usable on large touchscreens.
+- **Improved Kiosk Notifications**: Moved the attendance feedback notifications (Welcome/Goodbye messages) from the bottom-right corner to a prominent top-center position. The notification text and boxes have also been enlarged for better visibility across the room.
+- **Kiosk Member Sign-In robustness**: Improved the Member Sign-In tab to strictly require a registered member. If a name or RFID card is not recognized, the kiosk now provides a clear error message instead of incorrectly recording the tap as a visitor. This ensures that attendance data for students and mentors remains accurate and prevents accidental guest records.
+- **Personalized Kiosk Sign-Out message**: The kiosk goodbye message is now personalized by role. Students still see their session and weekly hours for motivation. Mentors and other adults now see a simple, appreciative "Thank you for volunteering today!" message without hour stats, as their contribution is valued beyond time tracking.
+
+### Added
+- **Kiosk "Who's here?" Manifest**: Added a new "Who's here?" button to the kiosk screen that displays a live manifest of everyone currently signed in. This allows students and mentors to quickly see who is in the building via a modal without leaving the main sign-in page.
+- **Dashboard attendance & outreach hours**: Student and Parent dashboards now show the number of attendance hours logged this week and total hours logged since the program started. If a program does not have attendance or outreach tracking enabled, a clear "No hours tracked" message is displayed instead of a placeholder.
+
+## 2026-07-27
+
+### Changed
+- **Kiosk security improvement — no API key required**: Kiosk sign-in pages no longer embed an API key in the browser. Instead, a mentor visits the kiosk URL once and enters their portal credentials to "unlock" the kiosk. After unlocking, the kiosk runs without any login for 7 days. All attendance recording and student lookups now happen through secure server-side calls — nothing sensitive is ever sent to the browser. Staff can Activate or Deactivate individual kiosks from the Settings → Kiosk Sign-In tab.
+- **Visitor sign-in now tracks team number**: The kiosk Visitor / Guest tab now includes an optional "Team Number" field so visiting FRC/FTC/FLL teams can log their team number when signing in. The team number is stored alongside the visit record for reporting.
+- **API Key creation simplified**: When creating a new API key, you no longer need to enter or generate a key manually. Just give it a name, pick a scope (read or read/write), and save — a secure key is generated automatically. The key is displayed read-only on the edit page so you can copy it at any time.
+
+### Added
+- **Kiosk Sign-In**: Added a new public kiosk attendance page at `/kiosk/<id>/` that students and visitors can use to tap in and out without logging in to the portal. The page is designed for a PC or tablet running in kiosk mode and supports:
+    - **Member sign-in**: Students tap their RFID card (or type their full name) to automatically log an IN or OUT event.
+    - **Visitor / Guest sign-in**: Non-members (other teams, visitors) can sign their name in a separate tab to log their visit.
+    - A loading overlay and Bootstrap toast notifications (green for welcome, red for errors) provide instant visual feedback.
+- **Kiosk Configuration**: Staff can create and manage kiosk pages from the portal settings screen (Settings → Kiosk Sign-In tab). Each configuration links a program and an API key so attendance is recorded in the right place.
+- **Student Lookup API**: Added a new `GET /api/v1/attendance/student/lookup` endpoint that allows kiosks (and other integrations) to search for students by RFID card UID or by name. This endpoint is authenticated with an API key.
+- **API middleware fix**: The `/api/v1/` path is now correctly exempt from the portal's login-required middleware, allowing external tools and kiosks to reach API endpoints using their API key without being redirected to the login page.
+- **RFID Management Page**: Added a new administrative page at `/attendance/rfid/` that allows staff to easily associate RFID tags with students and mentors. Staff can search for a person by name, see their currently active RFID card (if any), and assign a new UID by scanning or typing.
+
 ## 2026-07-26
 
 ### Fixed

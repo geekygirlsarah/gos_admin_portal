@@ -2,6 +2,39 @@ from django.db import models
 from django.utils import timezone
 
 
+class KioskConfig(models.Model):
+    """Configuration for a public kiosk sign-in page.
+
+    A kiosk config links a program to a public sign-in page at /kiosk/<id>/.
+    Access is controlled via a server-side HttpOnly cookie set when a mentor
+    unlocks the kiosk — no API key is stored or sent to the browser.
+    """
+
+    label = models.CharField(
+        max_length=100,
+        help_text="Human-readable name for this kiosk (e.g. 'Build Space Entry').",
+    )
+    program = models.ForeignKey(
+        "programs.Program",
+        on_delete=models.PROTECT,
+        related_name="kiosk_configs",
+        help_text="Program that attendance will be recorded under.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive kiosks return a 404 page.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["label"]
+        verbose_name = "Kiosk Configuration"
+        verbose_name_plural = "Kiosk Configurations"
+
+    def __str__(self):
+        return f"{self.label} ({self.program})"
+
+
 class KioskDevice(models.Model):
     name = models.CharField(max_length=100)
     program = models.ForeignKey("programs.Program", on_delete=models.PROTECT)
@@ -20,16 +53,37 @@ class KioskDevice(models.Model):
 class RFIDCard(models.Model):
     uid = models.CharField(max_length=64, unique=True)
     student = models.ForeignKey(
-        "programs.Student", on_delete=models.CASCADE, related_name="rfid_cards"
+        "programs.Student",
+        on_delete=models.CASCADE,
+        related_name="rfid_cards",
+        null=True,
+        blank=True,
+    )
+    adult = models.ForeignKey(
+        "programs.Adult",
+        on_delete=models.CASCADE,
+        related_name="rfid_cards",
+        null=True,
+        blank=True,
     )
     is_active = models.BooleanField(default=True)
     assigned_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["uid"]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(student__isnull=False, adult__isnull=True)
+                    | models.Q(student__isnull=True, adult__isnull=False)
+                ),
+                name="rfid_card_owner_check",
+            )
+        ]
 
     def __str__(self):
-        return f"{self.uid} → {self.student}"
+        owner = self.student or self.adult
+        return f"{self.uid} → {owner}"
 
 
 class AttendanceEvent(models.Model):
@@ -46,7 +100,15 @@ class AttendanceEvent(models.Model):
     student = models.ForeignKey(
         "programs.Student", on_delete=models.PROTECT, null=True, blank=True
     )
+    adult = models.ForeignKey(
+        "programs.Adult", on_delete=models.PROTECT, null=True, blank=True
+    )
     visitor_name = models.CharField(max_length=120, blank=True)
+    visitor_team_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="FRC/FTC/FLL team number for visiting teams.",
+    )
     rfid_uid = models.CharField(max_length=64, blank=True)
     kiosk = models.ForeignKey(
         KioskDevice, on_delete=models.SET_NULL, null=True, blank=True
@@ -60,11 +122,18 @@ class AttendanceEvent(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["program", "student", "occurred_at"]),
+            models.Index(fields=["program", "adult", "occurred_at"]),
         ]
         ordering = ["-occurred_at", "-id"]
 
     def __str__(self):
-        person = self.student or self.visitor_name or self.rfid_uid or "Unknown"
+        person = (
+            self.student
+            or self.adult
+            or self.visitor_name
+            or self.rfid_uid
+            or "Unknown"
+        )
         return f"{self.event_type} {person} @ {self.occurred_at:%Y-%m-%d %H:%M}"
 
 
@@ -73,7 +142,15 @@ class AttendanceSession(models.Model):
     student = models.ForeignKey(
         "programs.Student", on_delete=models.PROTECT, null=True, blank=True
     )
+    adult = models.ForeignKey(
+        "programs.Adult", on_delete=models.PROTECT, null=True, blank=True
+    )
     visitor_name = models.CharField(max_length=120, blank=True)
+    visitor_team_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="FRC/FTC/FLL team number for visiting teams.",
+    )
     check_in = models.DateTimeField(db_index=True)
     check_out = models.DateTimeField(null=True, blank=True, db_index=True)
     duration_minutes = models.PositiveIntegerField(default=0)
@@ -97,6 +174,7 @@ class AttendanceSession(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["program", "student", "check_in"]),
+            models.Index(fields=["program", "adult", "check_in"]),
         ]
         ordering = ["-check_in"]
 

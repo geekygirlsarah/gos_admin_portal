@@ -6,6 +6,7 @@ from attendance.views import AttendanceImportView, student_attendance_view
 
 from .permission_views import (
     PortalCrewView,
+    PortalKioskView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSubteamView,
@@ -517,5 +518,10 @@ urlpatterns = [
         "settings/subteams/",
         PortalSubteamView.as_view(),
         name="portal_subteam",
+    ),
+    path(
+        "settings/kiosks/",
+        PortalKioskView.as_view(),
+        name="portal_kiosk",
     ),
 ]

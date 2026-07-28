@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}RFID Management{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h1 class="h3">RFID Management</h1>
+        <p class="text-muted">Associate RFID tags with students and mentors.</p>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-10">
+                <input type="text" name="q" class="form-control" placeholder="Search for a student or mentor by name..." value="{{ q }}">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary">Search</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if q %}
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0">Search Results for "{{ q }}"</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Current RFID</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in results %}
+                <tr>
+                    <td>
+                        <strong>{{ result.person }}</strong>
+                    </td>
+                    <td>
+                        <span class="badge {% if result.type == 'student' %}bg-info{% else %}bg-success{% endif %}">
+                            {{ result.type|title }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if result.rfid %}
+                        <code>{{ result.rfid.uid }}</code>
+                        <form method="post" class="d-inline ms-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="deactivate">
+                            <input type="hidden" name="card_id" value="{{ result.rfid.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to deactivate this card?')">
+                                Deactivate
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted">No active card</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" class="row g-2 align-items-center">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="assign">
+                            <input type="hidden" name="person_type" value="{{ result.type }}">
+                            <input type="hidden" name="person_id" value="{{ result.person.pk }}">
+                            <div class="col-auto">
+                                <input type="text" name="uid" class="form-control form-control-sm" placeholder="Scan or type RFID UID" required>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-sm btn-primary">Assign</button>
+                            </div>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-muted">No students or mentors found matching "{{ q }}".</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    Use the search bar above to find a student or mentor to manage their RFID tags.
+</div>
+{% endif %}
+
+<div class="mt-4">
+    <a href="{% url 'attendance_summary' %}" class="btn btn-link">Back to Attendance Summary</a>
+</div>
+{% endblock %}

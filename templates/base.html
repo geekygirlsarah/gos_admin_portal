@@ -74,6 +74,17 @@
                         {% endif %}
                     {% endif %}
 
+                    {# ── Attendance dropdown ── #}
+                    {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="attendanceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Attendance</a>
+                            <ul class="dropdown-menu" aria-labelledby="attendanceDropdown">
+                                <li><a class="dropdown-item" href="{% url 'attendance_manifest' %}">Active Manifest</a></li>
+                                <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
+                            </ul>
+                        </li>
+                    {% endif %}
+
                     {# ── Admin dropdown for LeadMentors ── #}
                     {% if navbar_role == 'LeadMentor' %}
                         <li class="nav-item dropdown">

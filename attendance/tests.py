@@ -105,6 +105,31 @@ class AttendanceServiceTests(TestCase):
         session = AttendanceSession.objects.get(opened_by_event=evt)
         self.assertEqual(session.visitor_name, "John Doe")
 
+    def test_visitor_tap_with_team_number(self):
+        now = timezone.now()
+        evt = record_tap(
+            program=self.program,
+            visitor_name="Jane Smith",
+            visitor_team_number=1234,
+            event_type="IN",
+            occurred_at=now,
+        )
+        self.assertEqual(evt.visitor_name, "Jane Smith")
+        self.assertEqual(evt.visitor_team_number, 1234)
+
+        session = AttendanceSession.objects.get(opened_by_event=evt)
+        self.assertEqual(session.visitor_team_number, 1234)
+
+    def test_visitor_tap_without_team_number(self):
+        now = timezone.now()
+        evt = record_tap(
+            program=self.program,
+            visitor_name="No Team",
+            event_type="IN",
+            occurred_at=now,
+        )
+        self.assertIsNone(evt.visitor_team_number)
+
     def test_recompute_duration(self):
         now = timezone.now()
         session = AttendanceSession.objects.create(
