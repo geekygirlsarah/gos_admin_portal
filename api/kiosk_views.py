@@ -14,8 +14,8 @@ from attendance.kiosk_utils import (
     _get_kiosk_or_404,
     _is_unlocked,
 )
-from attendance.models import RFIDCard
-from attendance.services import record_tap
+from attendance.models import RFIDCard, AttendanceSession, AttendanceEvent
+from attendance.services import record_tap, get_attendance_stats
 from programs.models import Adult, Student
 
 logger = logging.getLogger(__name__)
@@ -153,20 +153,44 @@ def kiosk_tap(request, kiosk_id):
         return JsonResponse({"error": str(exc)}, status=400)
 
     student_name = None
+    person_type = "visitor"
     if evt.student:
         student_name = str(evt.student)
+        person_type = "student"
     elif evt.adult:
         student_name = str(evt.adult)
+        person_type = "mentor"
     elif evt.visitor_name:
         student_name = evt.visitor_name
 
-    return JsonResponse(
-        {
-            "event_type": evt.event_type,
-            "occurred_at": evt.occurred_at.isoformat(),
-            "student": student_name,
-        }
-    )
+    res_data = {
+        "event_type": evt.event_type,
+        "occurred_at": evt.occurred_at.isoformat(),
+        "student": student_name,
+        "person_type": person_type,
+    }
+
+    if evt.event_type == AttendanceEvent.OUT:
+        # Try to find the session that was just closed
+        session = AttendanceSession.objects.filter(closed_by_event=evt).first()
+        if session:
+            res_data["session_hours"] = round(session.duration_minutes / 60.0, 1)
+
+        # Also get weekly stats
+        stats = get_attendance_stats(
+            program=config.program,
+            student=evt.student,
+            adult=evt.adult,
+            visitor_name=evt.visitor_name,
+        )
+        res_data["week_hours"] = stats["week_hours"]
+
+        # If it's not a student, we don't want to gamify (remove hours)
+        if person_type != "student":
+            res_data.pop("session_hours", None)
+            res_data.pop("week_hours", None)
+
+    return JsonResponse(res_data)
 
 
 @require_GET

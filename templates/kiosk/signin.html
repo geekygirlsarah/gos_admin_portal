@@ -532,7 +532,18 @@
                 return recordTap(payload).then(function (res) {
                     var name = (students.length > 0) ? students[0].name : query;
                     var action = (res.event_type === "IN") ? "Welcome" : "Goodbye";
-                    showToast(action + ", " + name + "!", true);
+                    var msg = action + ", " + name + "!";
+                    if (res.event_type === "OUT") {
+                        if (res.person_type === "mentor") {
+                            msg = "Thank you for volunteering today, " + name + "!";
+                        } else if (res.person_type === "visitor") {
+                            msg = "Thank you for visiting today, " + name + "!";
+                        } else {
+                            msg += " You logged " + (res.session_hours || 0) + " hours this session";
+                            msg += " and " + (res.week_hours || 0) + " hours this week.";
+                        }
+                    }
+                    showToast(msg, true);
                 });
             })
             .catch(function (err) {
@@ -576,7 +587,18 @@
             .then(function (res) {
                 var action = (res.event_type === "IN") ? "Welcome" : "Goodbye";
                 var teamSuffix = teamNumber ? " (Team " + teamNumber + ")" : " (visitor)";
-                showToast(action + ", " + name + "!" + teamSuffix, true);
+                var msg = action + ", " + name + "!" + teamSuffix;
+                if (res.event_type === "OUT") {
+                    if (res.person_type === "mentor") {
+                        msg = "Thank you for volunteering today, " + name + "!";
+                    } else if (res.person_type === "visitor") {
+                        msg = "Thank you for visiting today, " + name + "!";
+                    } else {
+                        msg += " You logged " + (res.session_hours || 0) + " hours this session";
+                        msg += " and " + (res.week_hours || 0) + " hours this week.";
+                    }
+                }
+                showToast(msg, true);
             })
             .catch(function (err) {
                 showToast("Error: " + err.message, false);

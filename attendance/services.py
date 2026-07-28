@@ -67,25 +67,29 @@ def auto_in_or_out(
         return AttendanceEvent.IN, session
 
 
-def get_student_attendance_stats(student, program):
-    """Return a dict with total_hours and week_hours for a student in a program."""
+def get_attendance_stats(program, student=None, adult=None, visitor_name=None):
+    """Return a dict with total_hours and week_hours for a person in a program."""
     now = timezone.now()
     # Week starts on Monday
     start_of_week = (now - datetime.timedelta(days=now.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    total_mins = (
-        AttendanceSession.objects.filter(student=student, program=program).aggregate(
-            total=Sum("duration_minutes")
-        )["total"]
-        or 0
-    )
+    qs = AttendanceSession.objects.filter(program=program)
+    if student:
+        qs = qs.filter(student=student)
+    elif adult:
+        qs = qs.filter(adult=adult)
+    elif visitor_name:
+        qs = qs.filter(visitor_name=visitor_name)
+    else:
+        return {"total_hours": 0, "week_hours": 0}
 
+    total_mins = qs.aggregate(total=Sum("duration_minutes"))["total"] or 0
     week_mins = (
-        AttendanceSession.objects.filter(
-            student=student, program=program, check_in__gte=start_of_week
-        ).aggregate(total=Sum("duration_minutes"))["total"]
+        qs.filter(check_in__gte=start_of_week).aggregate(total=Sum("duration_minutes"))[
+            "total"
+        ]
         or 0
     )
 
@@ -93,6 +97,11 @@ def get_student_attendance_stats(student, program):
         "total_hours": round(total_mins / 60.0, 1),
         "week_hours": round(week_mins / 60.0, 1),
     }
+
+
+def get_student_attendance_stats(student, program):
+    """Return a dict with total_hours and week_hours for a student in a program."""
+    return get_attendance_stats(program, student=student)
 
 
 @transaction.atomic
