@@ -1,8 +1,10 @@
 import logging
+import zoneinfo
 
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve
+from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
@@ -60,3 +62,19 @@ class LoginRequiredMiddleware(MiddlewareMixin):
         except Exception:
             logger.debug("Unexpected error resolving path %s", path, exc_info=True)
         return False
+
+
+class TimezoneMiddleware(MiddlewareMixin):
+    """
+    Middleware to activate the user's preferred timezone from the session.
+    """
+
+    def process_request(self, request):
+        tzname = request.session.get("django_timezone")
+        if tzname:
+            try:
+                timezone.activate(zoneinfo.ZoneInfo(tzname))
+            except Exception:
+                timezone.deactivate()
+        else:
+            timezone.deactivate()

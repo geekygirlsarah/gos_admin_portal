@@ -1,6 +1,7 @@
 import json
 
 from django.test import Client, TestCase
+
 from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
 from attendance.services import record_tap
 from programs.models import Adult, Program, ProgramFeature

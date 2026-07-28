@@ -161,10 +161,11 @@ def kiosk_tap(request, kiosk_id):
     if rfid_uid or student or adult:
         if not (student or adult) and rfid_uid:
             from attendance.services import resolve_person_by_uid
+
             person = resolve_person_by_uid(rfid_uid)
             student = person if isinstance(person, Student) else None
             adult = person if isinstance(person, Adult) else None
-        
+
         if not (student or adult):
             return JsonResponse({"error": "Member not found."}, status=400)
 

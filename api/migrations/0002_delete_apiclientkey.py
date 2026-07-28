@@ -6,12 +6,12 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0001_initial'),
-        ('attendance', '0005_remove_kioskconfig_api_key'),
+        ("api", "0001_initial"),
+        ("attendance", "0005_remove_kioskconfig_api_key"),
     ]
 
     operations = [
         migrations.DeleteModel(
-            name='ApiClientKey',
+            name="ApiClientKey",
         ),
     ]

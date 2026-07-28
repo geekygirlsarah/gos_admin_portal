@@ -15,7 +15,7 @@ from .models import AttendanceEvent, AttendanceSession, RFIDCard
 
 
 def _week_bounds(now=None):
-    now = now or timezone.now()
+    now = now or timezone.localtime()
     start = (now - timedelta(days=now.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
@@ -276,9 +276,11 @@ class AttendanceImportView(View):
             if not dt:
                 return None
             if is_naive(dt):
-                # Treat naive as UTC per spec
-                return make_aware(dt, timezone=utc)
-            # Ensure in UTC
+                # Treat naive as local time per system settings
+                return make_aware(
+                    dt, timezone=timezone.get_current_timezone()
+                ).astimezone(utc)
+            # Ensure in UTC for storage consistency
             return dt.astimezone(utc)
 
         def find_student(first_name, last_name, rfid):
