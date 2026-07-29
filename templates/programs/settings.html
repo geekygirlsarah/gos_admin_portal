@@ -636,7 +636,7 @@
 {% block extra_scripts %}
 <script nonce="{{ request.csp_nonce }}">
     // Maintain tab state after POST
-    var activeTab = "{{ active_tab }}";
+    var activeTab = "{{ active_tab|escapejs }}";
     if (activeTab) {
         var tabElement = document.getElementById(activeTab + '-tab');
         if (tabElement) {

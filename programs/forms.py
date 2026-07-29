@@ -9,6 +9,7 @@ from django.db.models.functions import Coalesce, Lower, NullIf
 from programs.utils import format_grade, get_academic_year_ending
 
 from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
+from .widgets import DualListboxWidget
 
 
 class StudentForm(forms.ModelForm):
@@ -17,6 +18,10 @@ class StudentForm(forms.ModelForm):
         queryset=Adult.objects.filter(is_parent=True),
         required=False,
         help_text="Select the parents/guardians for this student.",
+        widget=DualListboxWidget(
+            available_label="Available Parents",
+            selected_label="Selected Parents",
+        ),
     )
     # Non-model field used to pick K–12 and auto-calc graduation year
     GRADE_CHOICES = [(0, "K")] + [(i, str(i)) for i in range(1, 13)]
@@ -57,7 +62,8 @@ class StudentForm(forms.ModelForm):
 
         # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
         qs_adults = Adult.objects.filter(is_parent=True).order_by(
-            "first_name", "last_name"
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
         )
         # Parents (multi-select used for custom picker)
         self.fields["parents"].queryset = qs_adults
@@ -200,6 +206,13 @@ class AdultForm(forms.ModelForm):
                 for field in protected_fields:
                     if field in self.fields:
                         del self.fields[field]
+        
+        # Sort students by first name (Preferred, then legal if no preferred)
+        if "students" in self.fields:
+            self.fields["students"].queryset = Student.objects.all().order_by(
+                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower("last_name"),
+            )
 
     def validate_unique(self):
         # personal_email is intentionally non-unique (two adults may share one
@@ -262,6 +275,10 @@ class AdultForm(forms.ModelForm):
         widgets = {
             "pa_clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
             "andrew_id_expiration": forms.DateInput(attrs={"type": "date"}),
+            "students": DualListboxWidget(
+                available_label="Available Students",
+                selected_label="Selected Students",
+            ),
         }
 
 

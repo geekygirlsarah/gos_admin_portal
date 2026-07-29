@@ -278,7 +278,7 @@ CONTENT_SECURITY_POLICY = {
         "base-uri": ["'self'"],
         "connect-src": ["'self'", "https://nominatim.openstreetmap.org"],
         "default-src": ["'self'"],
-        "font-src": ["'self'", "data:"],
+        "font-src": ["'self'", "https://cdn.jsdelivr.net", "data:"],
         "frame-ancestors": ["'self'"],
         "img-src": ["'self'", "data:", "*.tile.openstreetmap.org"],
         "object-src": ["'none'"],
