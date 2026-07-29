@@ -662,3 +662,12 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         "balance": balance,
         "sliding_scale": sliding,
     }
+
+
+def get_student_program_balance(student, program, can_view_sliding=True):
+    """Return a student's current balance for one program."""
+    return get_student_balance_data(
+        student,
+        program,
+        can_view_sliding=can_view_sliding,
+    )["balance"]

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-29
+
+### Added
+- Added a new parent-only **Payments** page in the main navigation that shows each student first, the programs under that student, and a total owed at the bottom, with direct **View Balance** links from that page.
+- Added a **How to Pay** modal (including check instructions and a direct link to the online payment portal).
+
+### Changed
+- Reused and centralized student-program balance calculations so parent dashboards, parent payments pages, and dues reports all use the same underlying balance logic.
+- Restricted the new parent Payments pages to Parents only, while keeping Students, Mentors, and Lead Mentors blocked from those parent-specific screens.
+- Modify the seed_db command to reflect the latest changes to the data structures.
+- Add links to Parent entries from the Student entries.
+- Add an easier to manage Student-Parent relationship editor on both the Student and Parent side to ease editing and accidental breakage.
+
 ## 2026-07-28
 
 ### Changed

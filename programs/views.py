@@ -73,6 +73,7 @@ from .permission_views import (
 from .utils import (
     compute_sliding_discount_rounded,
     get_safe_url,
+    get_student_program_balance,
     get_student_balance_data,
     redirect_back,
 )
@@ -3476,64 +3477,14 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     section = "programs"
 
     def _program_balance_for_student(self, student, program):
-        # Reproduce ProgramStudentBalanceView totals for a given student+program
-        from decimal import Decimal
-
-        # Fees applicable to the student (respect fee assignments)
-        applicable_fees = []
-        for fee in Fee.objects.filter(program=program):
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-            applicable_fees.append(fee.amount)
-        total_fees = sum(applicable_fees, start=Decimal("0"))
-
-        # Sliding scale percent discount based on total program fees (per balance sheet logic)
         from .permission_views import can_user_read
 
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
-        # Compute total fees for discount: ONLY include fees applicable to this student
-        # and on or after the sliding scale's effective date.
-        applicable_fees_for_discount = []
-        for fee in Fee.objects.filter(program=program):
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-
-            fee_date = fee.effective_date or (
-                fee.created_at.date() if fee.created_at else None
-            )
-            if sliding and sliding.date and fee_date and fee_date < sliding.date:
-                continue
-
-            applicable_fees_for_discount.append(fee.amount)
-
-        total_fees_for_discount = sum(
-            applicable_fees_for_discount,
-            start=Decimal("0"),
+        return get_student_program_balance(
+            student,
+            program,
+            can_view_sliding=can_view_sliding,
         )
-        total_sliding = Decimal("0")
-        if sliding and sliding.percent is not None and can_view_sliding:
-            total_sliding = compute_sliding_discount_rounded(
-                total_fees_for_discount, sliding.percent
-            )
-
-        # Payments made by student for this program
-        total_payments = sum(
-            [
-                p.amount
-                for p in Payment.objects.filter(student=student, program=program)
-            ],
-            start=Decimal("0"),
-        )
-
-        balance = total_fees - total_sliding - total_payments
-        return balance
 
     def get(self, request, pk):
         from django.shortcuts import render

@@ -36,6 +36,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'student_list' %}">Students</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.view_name == 'parent_payments' %} active{% endif %}" href="{% url 'parent_payments' %}">Payments</a>
+                    </li>
                     {% endif %}
 
                     {% can_read user 'programs' current_program as can_view_program %}
