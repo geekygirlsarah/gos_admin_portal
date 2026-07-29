@@ -12,6 +12,7 @@ from PIL import ImageFile
 
 from programs.constants import (
     MENTOR_ROLE_CHOICES,
+    PHONE_TYPE_CHOICES,
     RELATIONSHIP_CHOICES,
     STATE_CHOICES,
     TEAM_TYPES,
@@ -535,9 +536,14 @@ class Student(models.Model):
         max_length=20, blank=True, null=True, validators=[validate_zip_code]
     )
 
-    cell_phone_number = models.CharField(
+    phone_number = models.CharField(
         max_length=30, blank=True, null=True, validators=[validate_phone_number]
     )
+    phone_type = models.CharField(
+        max_length=20, choices=PHONE_TYPE_CHOICES, default="cell", blank=True, null=True
+    )
+    can_receive_texts = models.BooleanField(default=False)
+
     personal_email = models.EmailField(blank=True, null=True)
     directory_consent = models.BooleanField(
         default=True,
@@ -970,12 +976,10 @@ class Adult(models.Model):
     phone_number = models.CharField(
         max_length=30, blank=True, null=True, validators=[validate_phone_number]
     )
-    cell_phone = models.CharField(
-        max_length=30, blank=True, null=True, validators=[validate_phone_number]
+    phone_type = models.CharField(
+        max_length=20, choices=PHONE_TYPE_CHOICES, default="cell", blank=True, null=True
     )
-    home_phone = models.CharField(
-        max_length=30, blank=True, null=True, validators=[validate_phone_number]
-    )
+    can_receive_texts = models.BooleanField(default=False)
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(

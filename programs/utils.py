@@ -265,7 +265,9 @@ def convert_student_to_alumni(student):
             city=student.city,
             state=student.state,
             zip_code=student.zip_code,
-            cell_phone=student.cell_phone_number,
+            phone_number=student.phone_number,
+            phone_type=student.phone_type,
+            can_receive_texts=student.can_receive_texts,
             personal_email=student.personal_email or student.andrew_email,
             is_alumni=True,
             student_record=student,
@@ -299,7 +301,9 @@ def convert_student_to_alumni(student):
             "city": "city",
             "state": "state",
             "zip_code": "zip_code",
-            "cell_phone": "cell_phone_number",
+            "phone_number": "phone_number",
+            "phone_type": "phone_type",
+            "can_receive_texts": "can_receive_texts",
             "personal_email": "personal_email",
         }
         for adult_field, student_field in fields_to_copy.items():

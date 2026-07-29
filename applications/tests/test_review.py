@@ -328,7 +328,8 @@ class ConvertToStudentTests(TestCase):
                     "first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
-                    "cell_phone": "555-444-0100",
+                    "phone_number": "555-444-0100",
+                    "phone_type": "cell",
                 },
                 "step8-secondaryparent": {
                     "first_name": "Sam",

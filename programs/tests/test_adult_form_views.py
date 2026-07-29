@@ -42,7 +42,6 @@ class ParentFormDuplicateEmailTest(TestCase):
                 "first_name": "John",
                 "last_name": "Smith",
                 "personal_email": "shared@example.com",
-                "phone_number": "",
                 "email_updates": False,
                 "is_parent": True,
                 "is_mentor": False,

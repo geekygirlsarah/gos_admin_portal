@@ -59,9 +59,7 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-md-6"><div class="fw-semibold">Email</div><div>{{ adult.personal_email|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Phone</div><div>{{ adult.phone_number|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Cell phone</div><div>{{ adult.cell_phone|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Home phone</div><div>{{ adult.home_phone|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Phone</div><div>{{ adult.phone_number|default:'—' }} ({{ adult.get_phone_type_display|default:'cell' }}){% if adult.can_receive_texts %} <span class="badge bg-info text-dark">Texts OK</span>{% endif %}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Address</div><div>{{ adult.address|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ adult.city|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ adult.state|default:'—' }}</div></div>

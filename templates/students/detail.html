@@ -70,7 +70,7 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-md-6"><div class="fw-semibold">Email</div><div>{{ student.personal_email|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Cell phone</div><div>{{ student.cell_phone_number|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Phone</div><div>{{ student.phone_number|default:'—' }} ({{ student.get_phone_type_display|default:'cell' }}){% if student.can_receive_texts %} <span class="badge bg-info text-dark">Texts OK</span>{% endif %}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Address</div><div>{{ student.address|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ student.city|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ student.state|default:'—' }}</div></div>

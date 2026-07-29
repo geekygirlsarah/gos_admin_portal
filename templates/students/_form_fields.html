@@ -61,10 +61,12 @@
     <div class="row g-3">
       {% can_write user 'contact_address' form.instance as can_write_contact %}
       <div class="col-md-6">{% if can_write_contact %}{% render_field form.personal_email %}{% else %}{% render_field form.personal_email readonly=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_contact %}{% render_field form.cell_phone_number %}{% else %}{% render_field form.cell_phone_number readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_contact %}{% render_field form.phone_number %}{% else %}{% render_field form.phone_number readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_contact %}{% render_field form.phone_type %}{% else %}{% render_field form.phone_type disabled=True %}{% endif %}</div>
+      <div class="col-md-4 mt-4">{% if can_write_contact %}{% render_field form.can_receive_texts %}{% else %}{% render_field form.can_receive_texts disabled=True %}{% endif %}</div>
       <div class="col-md-6">{% if can_write_contact %}{% render_field form.address %}{% else %}{% render_field form.address readonly=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.city %}{% else %}{% render_field form.city readonly=True %}{% endif %}</div>
-      <div class="col-md-3">{% if can_write_contact %}{% render_field form.state %}{% else %}{% render_field form.state readonly=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_contact %}{% render_field form.state %}{% else %}{% render_field form.state disabled=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.zip_code %}{% else %}{% render_field form.zip_code readonly=True %}{% endif %}</div>
       <div class="col-md-6">{% if can_write_contact %}{% render_field form.directory_consent %}{% else %}{% render_field form.directory_consent disabled=True %}{% endif %}</div>
     </div>

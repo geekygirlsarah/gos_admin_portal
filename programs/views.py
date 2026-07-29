@@ -1082,7 +1082,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         "city": city,
                         "state": state,
                         "zip_code": zip_code,
-                        "cell_phone_number": cell_phone,
+                        "phone_number": cell_phone,
+                        "phone_type": "cell",
+                        "can_receive_texts": True,
                         "personal_email": personal_email,
                         "andrew_id": andrew_id,
                         "andrew_email": andrew_email,
@@ -1107,7 +1109,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         ("city", city),
                         ("state", state),
                         ("zip_code", zip_code),
-                        ("cell_phone_number", cell_phone),
+                        ("phone_number", cell_phone),
+                        ("phone_type", "cell"),
+                        ("can_receive_texts", True),
                         ("personal_email", personal_email),
                         ("andrew_id", andrew_id),
                         ("andrew_email", andrew_email),
@@ -1294,11 +1298,16 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     errors += 1
                     continue
                 email = val(d, "email", "Email")
-                phone = val(d, "phone_number", "Phone", "Phone Number")
+                phone = val(d, "cell_phone", "Cell Phone", "Cell Phone Number", "Phone", "Phone Number")
                 obj, created_flag = Adult.objects.get_or_create(
                     first_name=first,
                     last_name=last,
-                    defaults={"personal_email": email, "phone_number": phone},
+                    defaults={
+                        "personal_email": email,
+                        "phone_number": phone,
+                        "phone_type": "cell",
+                        "can_receive_texts": True,
+                    },
                 )
                 if created_flag:
                     created += 1
@@ -1309,6 +1318,8 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         changed = True
                     if phone and obj.phone_number != phone:
                         obj.phone_number = phone
+                        obj.phone_type = "cell"
+                        obj.can_receive_texts = True
                         changed = True
                     if changed:
                         obj.save()

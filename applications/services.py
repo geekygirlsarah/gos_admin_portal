@@ -295,7 +295,9 @@ def student_to_prefill(student) -> dict:
         "state": student.state or "PA",
         "zip_code": student.zip_code or "",
         "personal_email": student.personal_email or "",
-        "cell_phone_number": student.cell_phone_number or "",
+        "phone_number": student.phone_number or "",
+        "phone_type": student.phone_type or "cell",
+        "can_receive_texts": student.can_receive_texts,
         "school_name": student.school.name if student.school_id else "",
         "graduation_year": student.graduation_year,
         "tshirt_size": student.tshirt_size or "",
@@ -325,8 +327,9 @@ def adult_to_prefill(adult, student=None) -> dict:
         "last_name": adult.last_name or "",
         "relationship_to_student": relationship,
         "email": adult.personal_email or "",
-        "cell_phone": adult.cell_phone or "",
-        "home_phone": adult.home_phone or "",
+        "phone_number": adult.phone_number or "",
+        "phone_type": adult.phone_type or "cell",
+        "can_receive_texts": adult.can_receive_texts,
         "email_updates": adult.email_updates,
     }
 
@@ -644,8 +647,10 @@ def _adult_from_data(parent_data: dict):
     _fill("last_name", last_name)
     _fill("personal_email", email)
     _fill("andrew_email", andrew_email)
-    _fill("cell_phone", parent_data.get("cell_phone"))
-    _fill("home_phone", parent_data.get("home_phone"))
+    _fill("phone_number", parent_data.get("phone_number"))
+    _fill("phone_type", parent_data.get("phone_type"))
+    if parent_data.get("can_receive_texts") and not adult.can_receive_texts:
+        adult.can_receive_texts = True
     _fill("address", parent_data.get("address"))
     _fill("city", parent_data.get("city"))
     _fill("state", parent_data.get("state"))
@@ -744,7 +749,10 @@ def _student_from_application(application: Application):
 
     if "directory_consent" in step5:
         student.directory_consent = bool(step5["directory_consent"])
-    _fill("cell_phone_number", step5.get("cell_phone_number"))
+    _fill("phone_number", step5.get("phone_number"))
+    _fill("phone_type", step5.get("phone_type"))
+    if "can_receive_texts" in step5:
+        student.can_receive_texts = bool(step5["can_receive_texts"])
     _fill("address", step5.get("address"))
     _fill("city", step5.get("city"))
     _fill("state", step5.get("state"))

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-28
 
 ### Changed
+- **Unified Phone Numbers**: Simplified contact information for both Adults (Parents, Mentors, Alumni) and Students by replacing multiple phone fields with a single phone number, a phone type (home, cell, work, other), and an optional SMS text message consent. Existing data was automatically migrated, and the application wizard now collects this unified information.
 - **Kiosk UI Enlargement**: Significantly increased the size of text, inputs, buttons, and badges on the attendance kiosk to ensure it is easily readable and usable on large touchscreens.
 - **Improved Kiosk Notifications**: Moved the attendance feedback notifications (Welcome/Goodbye messages) from the bottom-right corner to a prominent top-center position. The notification text and boxes have also been enlarged for better visibility across the room.
 - **Kiosk Member Sign-In robustness**: Improved the Member Sign-In tab to strictly require a registered member. If a name or RFID card is not recognized, the kiosk now provides a clear error message instead of incorrectly recording the tap as a visitor. This ensures that attendance data for students and mentors remains accurate and prevents accidental guest records.

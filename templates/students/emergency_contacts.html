@@ -39,7 +39,7 @@
                 <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
               </td>
               <td>{{ s.school|default:"" }}</td>
-              <td>{% if s.cell_phone_number %}<a href="tel:{{ s.cell_phone_number }}">{{ s.cell_phone_number }}</a>{% else %}{% endif %}</td>
+              <td>{% if s.phone_number %}<a href="tel:{{ s.phone_number }}">{{ s.phone_number }}</a>{% endif %}</td>
               <td>
                 {% if s.personal_email %}<div><a href="mailto:{{ s.personal_email }}">{{ s.personal_email }}</a></div>{% endif %}
                 {% if s.andrew_email %}<div class="text-muted small"><a href="mailto:{{ s.andrew_email }}">{{ s.andrew_email }}</a></div>{% endif %}
@@ -78,8 +78,8 @@
               </div>
 
               <div class="mt-2">
-                {% if s.cell_phone_number %}
-                  <div><span class="text-muted">Student Phone: </span><a href="tel:{{ s.cell_phone_number }}">{{ s.cell_phone_number }}</a></div>
+                {% if s.phone_number %}
+                  <div><span class="text-muted">Student Phone: </span><a href="tel:{{ s.phone_number }}">{{ s.phone_number }}</a></div>
                 {% endif %}
                 {% if s.personal_email %}
                   <div><span class="text-muted">Student Email: </span><a href="mailto:{{ s.personal_email }}">{{ s.personal_email }}</a></div>

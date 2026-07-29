@@ -34,9 +34,10 @@
           <div class="card-header">Contact</div>
           <div class="card-body">
             <div class="row g-3">
-              <div class="col-md-4">{% render_field form.personal_email %}</div>
-              <div class="col-md-4">{% render_field form.cell_phone %}</div>
-              <div class="col-md-4">{% render_field form.home_phone %}</div>
+              <div class="col-md-3">{% render_field form.personal_email %}</div>
+              <div class="col-md-3">{% render_field form.phone_number %}</div>
+              <div class="col-md-3">{% render_field form.phone_type %}</div>
+              <div class="col-md-3 mt-4">{% render_field form.can_receive_texts %}</div>
             </div>
           </div>
         </div>

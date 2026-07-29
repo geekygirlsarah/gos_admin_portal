@@ -193,7 +193,9 @@ class StudentAdmin(admin.ModelAdmin):
                     "city",
                     "state",
                     "zip_code",
-                    "cell_phone_number",
+                    "phone_number",
+                    "phone_type",
+                    "can_receive_texts",
                     "personal_email",
                 )
             },
@@ -313,6 +315,7 @@ class ParentAdmin(admin.ModelAdmin):
         "student_record",
         "personal_email",
         "phone_number",
+        "phone_type",
         "email_updates",
     )
     list_filter = ("email_updates", "is_parent", "is_mentor", "is_alumni", "active")
@@ -344,6 +347,8 @@ class ParentAdmin(admin.ModelAdmin):
                 "fields": (
                     "personal_email",
                     "phone_number",
+                    "phone_type",
+                    "can_receive_texts",
                     "email_updates",
                 )
             },

@@ -51,7 +51,8 @@ class TestStep8Repopulation(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "123-456-7890",
+                "phone_number": "123-456-7890",
+                "phone_type": "cell",
             },
         )
 

@@ -93,7 +93,7 @@ class Step5StudentInfoTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone_number": "",
+                "phone_number": "",
                 "school_name": "Pittsburgh High",
                 "grade": "9",
                 "graduation_year": "",
@@ -193,7 +193,8 @@ class Step7PrimaryParentTests(TestCase):
             first_name="Pat",
             last_name="Parent",
             personal_email="parent@example.com",
-            cell_phone="555-444-1212",
+            phone_number="555-444-1212",
+            phone_type="cell",
             is_parent=True,
         )
         app = _verified(email="parent@example.com", current_step=7)
@@ -218,8 +219,8 @@ class Step7PrimaryParentTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "555-444-1212",
-                "home_phone": "",
+                "phone_number": "555-444-1212",
+                "phone_type": "cell",
             },
         )
         self.assertRedirects(
@@ -261,8 +262,8 @@ class Step8SecondaryParentTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "555-444-1212",
-                "home_phone": "",
+                "phone_number": "555-444-1212",
+                "phone_type": "cell",
             },
         )
         self.assertRedirects(
