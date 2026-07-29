@@ -177,8 +177,6 @@ class QuickCreateStudentForm(forms.ModelForm):
         fields = ["first_name", "last_name"]
 
 
-
-
 class AdultForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
@@ -206,7 +204,7 @@ class AdultForm(forms.ModelForm):
                 for field in protected_fields:
                     if field in self.fields:
                         del self.fields[field]
-        
+
         # Sort students by first name (Preferred, then legal if no preferred)
         if "students" in self.fields:
             self.fields["students"].queryset = Student.objects.all().order_by(

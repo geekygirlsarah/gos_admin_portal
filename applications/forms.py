@@ -10,10 +10,10 @@ from programs.constants import (
     APP_ID_ALPHABET,
     APP_ID_LENGTH,
     GRADE_CHOICES,
+    PHONE_TYPE_CHOICES,
     RELATIONSHIP_CHOICES,
     STATE_CHOICES,
     TSHIRT_SIZE_CHOICES,
-    PHONE_TYPE_CHOICES,
 )
 from programs.models import Program, RaceEthnicity, School, Student
 from programs.validators import validate_phone_number, validate_zip_code

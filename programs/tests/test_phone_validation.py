@@ -132,12 +132,22 @@ class PhoneValidationTestCase(TestCase):
 
         # MentorInfoForm
         form = MentorInfoForm(
-            data={"legal_first_name": "A", "last_name": "B", "phone_number": "123", "phone_type": "cell"}
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "phone_number": "123",
+                "phone_type": "cell",
+            }
         )
         self.assertFalse(form.is_valid())
         self.assertIn("phone_number", form.errors)
 
         form = MentorInfoForm(
-            data={"legal_first_name": "A", "last_name": "B", "phone_number": "1234567890", "phone_type": "cell"}
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "phone_number": "1234567890",
+                "phone_type": "cell",
+            }
         )
         self.assertTrue(form.is_valid())

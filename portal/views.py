@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
+
 class MyProfileView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         user = request.user
@@ -146,12 +147,16 @@ class ParentPaymentsAccessMixin(LoginRequiredMixin):
         from programs.permission_views import get_user_role
 
         if get_user_role(request.user) != "Parent":
-            messages.error(request, "You do not have permission to access that section.")
+            messages.error(
+                request, "You do not have permission to access that section."
+            )
             return redirect("home")
 
         self.parent_adult = getattr(request.user, "adult_profile", None)
         if not self.parent_adult or not self.parent_adult.is_parent:
-            messages.error(request, "You do not have permission to access that section.")
+            messages.error(
+                request, "You do not have permission to access that section."
+            )
             return redirect("home")
 
         return super().dispatch(request, *args, **kwargs)
@@ -211,9 +216,7 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
             key=lambda row: (
                 (row["student"].last_name or "").lower(),
                 (
-                    row["student"].first_name
-                    or row["student"].legal_first_name
-                    or ""
+                    row["student"].first_name or row["student"].legal_first_name or ""
                 ).lower(),
             ),
         )

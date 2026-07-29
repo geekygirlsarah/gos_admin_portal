@@ -1,10 +1,12 @@
-from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from programs.models import Adult, Student
+from django.test import TestCase
+
 from programs.forms import AdultForm, StudentForm
+from programs.models import Adult, Student
 
 User = get_user_model()
+
 
 class DualListboxRenderingTest(TestCase):
     def setUp(self):
@@ -13,7 +15,7 @@ class DualListboxRenderingTest(TestCase):
         self.user.groups.add(self.lead_mentor_group)
         self.user.is_staff = True
         self.user.save()
-        
+
         # Create some students
         self.s1 = Student.objects.create(first_name="Alice", last_name="Alpha")
         self.s2 = Student.objects.create(first_name="Bob", last_name="Bravo")
@@ -25,21 +27,21 @@ class DualListboxRenderingTest(TestCase):
         """
         form = AdultForm(user=self.user)
         html = form.as_p()
-        
+
         # Should have the dual-listbox class
         self.assertIn('class="dual-listbox"', html)
-        
+
         # Should have two select boxes: available and selected
         self.assertIn('class="form-select dual-listbox-available"', html)
         self.assertIn('class="form-select dual-listbox-selected"', html)
-        
+
         # The selected one should have the name attribute
         self.assertIn('name="students"', html)
-        
+
         # Buttons should be present
-        self.assertIn('dual-listbox-add', html)
-        self.assertIn('dual-listbox-remove', html)
-        
+        self.assertIn("dual-listbox-add", html)
+        self.assertIn("dual-listbox-remove", html)
+
         # Check if students are in the options
         self.assertIn(str(self.s1), html)
         self.assertIn(str(self.s2), html)
@@ -51,17 +53,17 @@ class DualListboxRenderingTest(TestCase):
         """
         form = StudentForm(user=self.user)
         html = form.as_p()
-        
+
         # Should have the dual-listbox class
         self.assertIn('class="dual-listbox"', html)
-        
+
         # Should have the name attribute
         self.assertIn('name="parents"', html)
-        
+
         # Should have the custom labels
-        self.assertIn('Available Parents', html)
-        self.assertIn('Selected Parents', html)
-        
+        self.assertIn("Available Parents", html)
+        self.assertIn("Selected Parents", html)
+
         # Search box should be present
-        self.assertIn('dual-listbox-search-available', html)
-        self.assertIn('dual-listbox-search-selected', html)
+        self.assertIn("dual-listbox-search-available", html)
+        self.assertIn("dual-listbox-search-selected", html)

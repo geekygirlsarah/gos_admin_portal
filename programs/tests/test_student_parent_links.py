@@ -1,13 +1,18 @@
 import datetime
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
-from programs.models import Student, Adult, AdultStudentRelationship
+
+from programs.models import Adult, AdultStudentRelationship, Student
+
 
 class StudentParentLinksTest(TestCase):
     def setUp(self):
         # Create LeadMentor user
-        self.user = User.objects.create_user(username="leadmentor", password="password123")  # nosec B106
+        self.user = User.objects.create_user(
+            username="leadmentor", password="password123"
+        )  # nosec B106
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
         self.client.login(username="leadmentor", password="password123")  # nosec B106
@@ -43,7 +48,7 @@ class StudentParentLinksTest(TestCase):
         url = reverse("student_detail", args=[self.student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        
+
         # Check for link to adult detail
         parent_detail_url = reverse("adult_detail", args=[self.parent.pk])
         self.assertContains(response, f'href="{parent_detail_url}"')
@@ -62,7 +67,9 @@ class StudentParentLinksTest(TestCase):
     def test_student_detail_no_links_for_unauthorized_user(self):
         """Users without permission to view adult info should not see links."""
         # Create a student user
-        student_user = User.objects.create_user(username="student_user", password="password123")  # nosec B106
+        student_user = User.objects.create_user(
+            username="student_user", password="password123"
+        )  # nosec B106
         student_profile = Student.objects.create(
             user=student_user,
             legal_first_name="Jane",

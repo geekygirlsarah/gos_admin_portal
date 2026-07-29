@@ -73,8 +73,8 @@ from .permission_views import (
 from .utils import (
     compute_sliding_discount_rounded,
     get_safe_url,
-    get_student_program_balance,
     get_student_balance_data,
+    get_student_program_balance,
     redirect_back,
 )
 
@@ -1299,7 +1299,14 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     errors += 1
                     continue
                 email = val(d, "email", "Email")
-                phone = val(d, "cell_phone", "Cell Phone", "Cell Phone Number", "Phone", "Phone Number")
+                phone = val(
+                    d,
+                    "cell_phone",
+                    "Cell Phone",
+                    "Cell Phone Number",
+                    "Phone",
+                    "Phone Number",
+                )
                 obj, created_flag = Adult.objects.get_or_create(
                     first_name=first,
                     last_name=last,

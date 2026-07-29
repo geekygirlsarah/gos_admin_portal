@@ -460,7 +460,9 @@ class Command(BaseCommand):
     def _seed_enrollments(self, programs, students, today):
         past_programs = [p for p in programs if p.end_date and p.end_date < today]
         current_programs = [
-            p for p in programs if p.start_date and p.end_date and p.start_date <= today <= p.end_date
+            p
+            for p in programs
+            if p.start_date and p.end_date and p.start_date <= today <= p.end_date
         ]
         future_programs = [p for p in programs if p.start_date and p.start_date > today]
 
@@ -476,7 +478,9 @@ class Command(BaseCommand):
                 enrollment, _ = Enrollment.objects.get_or_create(
                     student=student,
                     program=program,
-                    defaults={"active": program.start_date <= today <= program.end_date},
+                    defaults={
+                        "active": program.start_date <= today <= program.end_date
+                    },
                 )
                 enrollments.append(enrollment)
 
@@ -511,7 +515,9 @@ class Command(BaseCommand):
 
     def _seed_sliding_scales(self, programs, students, today):
         current_programs = [
-            p for p in programs if p.start_date and p.end_date and p.start_date <= today <= p.end_date
+            p
+            for p in programs
+            if p.start_date and p.end_date and p.start_date <= today <= p.end_date
         ]
         if not current_programs:
             return
@@ -541,9 +547,13 @@ class Command(BaseCommand):
 
     def _seed_payments(self, enrollments, programs, today):
         current_program_ids = {
-            p.id for p in programs if p.start_date and p.end_date and p.start_date <= today <= p.end_date
+            p.id
+            for p in programs
+            if p.start_date and p.end_date and p.start_date <= today <= p.end_date
         }
-        future_program_ids = {p.id for p in programs if p.start_date and p.start_date > today}
+        future_program_ids = {
+            p.id for p in programs if p.start_date and p.start_date > today
+        }
 
         for idx, enrollment in enumerate(enrollments):
             if (

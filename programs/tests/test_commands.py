@@ -5,7 +5,16 @@ from django.core.management import call_command
 from django.db import models
 from django.test import TestCase
 
-from programs.models import Adult, Enrollment, Fee, Payment, Program, School, SlidingScale, Student
+from programs.models import (
+    Adult,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    School,
+    SlidingScale,
+    Student,
+)
 
 
 class SeedDbCommandTest(TestCase):
@@ -43,17 +52,13 @@ class SeedDbCommandTest(TestCase):
         # Ensure payment states include paid-off, partially paid, and unpaid
         balance_profiles = {"paid": 0, "partial": 0, "unpaid": 0}
         for enrollment in Enrollment.objects.select_related("student", "program"):
-            total_fees = (
-                Fee.objects.filter(program=enrollment.program).aggregate(total=models.Sum("amount"))["total"]
-                or Decimal("0")
-            )
-            total_payments = (
-                Payment.objects.filter(
-                    student=enrollment.student,
-                    program=enrollment.program,
-                ).aggregate(total=models.Sum("amount"))["total"]
-                or Decimal("0")
-            )
+            total_fees = Fee.objects.filter(program=enrollment.program).aggregate(
+                total=models.Sum("amount")
+            )["total"] or Decimal("0")
+            total_payments = Payment.objects.filter(
+                student=enrollment.student,
+                program=enrollment.program,
+            ).aggregate(total=models.Sum("amount"))["total"] or Decimal("0")
 
             if total_fees == Decimal("0"):
                 continue

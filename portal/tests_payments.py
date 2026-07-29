@@ -5,7 +5,15 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
-from programs.models import Adult, AdultStudentRelationship, Enrollment, Fee, Payment, Program, Student
+from programs.models import (
+    Adult,
+    AdultStudentRelationship,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    Student,
+)
 
 
 class ParentPaymentsViewTests(TestCase):
@@ -52,8 +60,12 @@ class ParentPaymentsViewTests(TestCase):
 
         self.program_a = Program.objects.create(name="Program A", active=True)
         self.program_b = Program.objects.create(name="Program B", active=True)
-        Enrollment.objects.create(student=self.student, program=self.program_a, active=True)
-        Enrollment.objects.create(student=self.student, program=self.program_b, active=True)
+        Enrollment.objects.create(
+            student=self.student, program=self.program_a, active=True
+        )
+        Enrollment.objects.create(
+            student=self.student, program=self.program_b, active=True
+        )
 
         Fee.objects.create(
             program=self.program_a,
@@ -99,13 +111,17 @@ class ParentPaymentsViewTests(TestCase):
         self.assertContains(response, "View Balance")
         self.assertContains(
             response,
-            reverse("program_student_balance", args=[self.program_a.pk, self.student.pk]),
+            reverse(
+                "program_student_balance", args=[self.program_a.pk, self.student.pk]
+            ),
         )
         self.assertEqual(response.context["grand_total"], Decimal("130.00"))
         self.assertEqual(len(response.context["student_rows"]), 1)
         self.assertEqual(len(response.context["student_rows"][0]["program_rows"]), 2)
 
-    def test_students_mentors_and_lead_mentors_cannot_access_parent_payments_views(self):
+    def test_students_mentors_and_lead_mentors_cannot_access_parent_payments_views(
+        self,
+    ):
         summary_url = reverse("parent_payments")
 
         self.client.login(username="student_user", password="password123")  # nosec B106
