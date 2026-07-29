@@ -1,0 +1,55 @@
+<div class="dual-listbox" id="dual-listbox-{{ widget.name }}">
+    <div class="row align-items-center">
+        <div class="col-md-5">
+            <label class="form-label fw-bold">{{ available_label }}</label>
+            {% if show_search %}
+            <div class="input-group mb-2">
+                <span class="input-group-text bg-light"><i class="bi bi-search small"></i></span>
+                <input type="text" class="form-control form-control-sm dual-listbox-search-available" placeholder="Search...">
+            </div>
+            {% endif %}
+            <select id="available_{{ widget.name }}" multiple class="form-select dual-listbox-available" size="10">
+                {% for option in available_options %}
+                    <option value="{{ option.value }}">{{ option.label }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-text mt-1">Select from the full list.</div>
+        </div>
+        <div class="col-md-2 text-center mt-3 mt-md-0">
+            <div class="d-grid gap-2 d-md-block">
+                <button type="button" class="btn btn-sm btn-outline-primary dual-listbox-add w-100 mb-1" title="Add selected">
+                    <span class="d-md-none">Add Selected &darr;</span>
+                    <span class="d-none d-md-inline">Add &rarr;</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger dual-listbox-remove w-100 mb-1" title="Remove selected">
+                    <span class="d-md-none">Remove Selected &uarr;</span>
+                    <span class="d-none d-md-inline">&larr; Remove</span>
+                </button>
+                <div class="my-2 border-top d-none d-md-block"></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary dual-listbox-add-all w-100 mb-1" title="Add all">
+                    <span class="d-md-none">Add All &darr;</span>
+                    <span class="d-none d-md-inline">Add All &raquo;</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary dual-listbox-remove-all w-100" title="Remove all">
+                    <span class="d-md-none">Remove All &uarr;</span>
+                    <span class="d-none d-md-inline">&laquo; Remove All</span>
+                </button>
+            </div>
+        </div>
+        <div class="col-md-5 mt-3 mt-md-0">
+            <label class="form-label fw-bold">{{ selected_label }}</label>
+            {% if show_search %}
+            <div class="input-group mb-2">
+                <span class="input-group-text bg-light"><i class="bi bi-search small"></i></span>
+                <input type="text" class="form-control form-control-sm dual-listbox-search-selected" placeholder="Search...">
+            </div>
+            {% endif %}
+            <select id="selected_{{ widget.name }}" name="{{ widget.name }}" multiple class="form-select dual-listbox-selected" size="10">
+                {% for option in selected_options %}
+                    <option value="{{ option.value }}" selected>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-text mt-1">Current selection.</div>
+        </div>
+    </div>
+</div>
