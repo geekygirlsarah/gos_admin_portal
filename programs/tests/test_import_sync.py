@@ -3,7 +3,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from attendance.models import AttendanceSession
+from attendance.models import AttendanceEvent, AttendanceSession
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -103,6 +103,34 @@ class ImportSyncTests(TestCase):
         self.assertEqual(response.status_code, 200)
         rel = AdultStudentRelationship.objects.get(student=student)
         self.assertEqual(rel.relationship_to_student, "parent")
+
+    def test_attendance_import_sets_optional_visitor_team_number(self):
+        attendance_feature, _ = ProgramFeature.objects.get_or_create(
+            key="attendance", defaults={"name": "Attendance"}
+        )
+        program = Program.objects.create(name="Offseason Event")
+        program.features.add(attendance_feature)
+
+        csv_text = "\n".join(
+            [
+                "first_name,last_name,rfid,time_in_utc,time_out_utc,visitor_team_number",
+                "Casey,Visitor,,2025-09-03T18:05:00Z,2025-09-03T19:05:00Z,3504",
+            ]
+        )
+
+        response = self._upload_csv(
+            "attendance_import", csv_text, extra_data={"program_id": str(program.id)}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        session = AttendanceSession.objects.get(program=program)
+        self.assertEqual(session.visitor_name, "Casey Visitor")
+        self.assertEqual(session.visitor_team_number, 3504)
+
+        event = AttendanceEvent.objects.filter(
+            program=program, event_type=AttendanceEvent.IN
+        ).get()
+        self.assertEqual(event.visitor_team_number, 3504)
 
 
 class ImportSampleCsvIntegrationTests(TestCase):
@@ -241,3 +269,8 @@ class ImportSampleCsvIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(AttendanceSession.objects.filter(program=program).count(), 3)
+        self.assertTrue(
+            AttendanceSession.objects.filter(
+                program=program, visitor_name="Jordan Lee", visitor_team_number=3504
+            ).exists()
+        )

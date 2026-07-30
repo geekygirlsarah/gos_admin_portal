@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Improved the Program Settings and Imports attendance CSV import dropdown so programs now show their schedule in the option label (for example: Program Name (2026-01-10 - 2026-04-20)), making it easier to pick the correct program when names are similar.
 - Synchronized portal import behavior with current data models: student imports now map legacy Active values to Graduated, parent and mentor imports now always set the correct role flags, and relationship imports now create links even when the relationship label is blank.
 - Updated the Students sample CSV template to use Graduated (instead of Active) and aligned duplicate sample files to prevent format drift.
+- Expanded attendance CSV imports to support an optional visitor team number column, so visitor attendance records can include team numbers from bulk imports.
 
 ## 2026-07-29
 

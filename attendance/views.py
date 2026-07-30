@@ -285,6 +285,24 @@ class AttendanceImportView(View):
             # Ensure in UTC for storage consistency
             return dt.astimezone(utc)
 
+        def parse_team_number(row):
+            raw = (
+                row.get("visitor_team_number")
+                or row.get("team_number")
+                or row.get("team")
+                or row.get("Visitor Team Number")
+                or row.get("Team Number")
+                or ""
+            )
+            value = str(raw).strip()
+            if not value:
+                return None
+            try:
+                team_number = int(value)
+            except (TypeError, ValueError):
+                return None
+            return team_number if team_number > 0 else None
+
         def find_student(first_name, last_name, rfid):
             # Priority: RFID match
             if rfid:
@@ -343,6 +361,7 @@ class AttendanceImportView(View):
 
                 check_in = parse_utc(t_in_raw)
                 check_out = parse_utc(t_out_raw)
+                visitor_team_number = parse_team_number(row)
                 if not check_in:
                     errors += 1
                     continue
@@ -373,6 +392,7 @@ class AttendanceImportView(View):
 
                 if existing:
                     # Update checkout if new info is provided
+                    fields_to_update = []
                     if (
                         overwrite
                         and check_out
@@ -380,13 +400,25 @@ class AttendanceImportView(View):
                     ):
                         existing.check_out = check_out
                         existing.recompute_duration()
-                        existing.save(
-                            update_fields=[
+                        fields_to_update.extend(
+                            [
                                 "check_out",
                                 "duration_minutes",
                                 "updated_at",
                             ]
                         )
+
+                    if (
+                        overwrite
+                        and not student
+                        and visitor_team_number
+                        and existing.visitor_team_number != visitor_team_number
+                    ):
+                        existing.visitor_team_number = visitor_team_number
+                        fields_to_update.append("visitor_team_number")
+
+                    if fields_to_update:
+                        existing.save(update_fields=fields_to_update)
                         updated += 1
                     else:
                         skipped += 1
@@ -397,6 +429,7 @@ class AttendanceImportView(View):
                     program=program,
                     student=student,
                     visitor_name=visitor_name if not student else "",
+                    visitor_team_number=visitor_team_number if not student else None,
                     rfid_uid=rfid or "",
                     kiosk=None,
                     event_type=AttendanceEvent.IN,
@@ -410,6 +443,9 @@ class AttendanceImportView(View):
                         program=program,
                         student=student,
                         visitor_name=visitor_name if not student else "",
+                        visitor_team_number=(
+                            visitor_team_number if not student else None
+                        ),
                         rfid_uid=rfid or "",
                         kiosk=None,
                         event_type=AttendanceEvent.OUT,
@@ -422,6 +458,7 @@ class AttendanceImportView(View):
                     program=program,
                     student=student,
                     visitor_name=visitor_name if not student else "",
+                    visitor_team_number=visitor_team_number if not student else None,
                     check_in=check_in,
                     check_out=check_out,
                     opened_by_event=open_event,
