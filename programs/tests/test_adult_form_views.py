@@ -11,7 +11,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
-from programs.forms import AdultForm, ParentForm
+from programs.forms import AdultForm
 from programs.models import Adult
 
 User = get_user_model()
@@ -36,19 +36,22 @@ class ParentFormDuplicateEmailTest(TestCase):
             personal_email="shared@example.com",
             is_parent=True,
         )
-        # A second parent form submission with the same email should be valid
-        form = ParentForm(
+        # A second adult form submission with the same email should be valid
+        form = AdultForm(
             data={
                 "first_name": "John",
                 "last_name": "Smith",
                 "personal_email": "shared@example.com",
-                "phone_number": "",
                 "email_updates": False,
+                "is_parent": True,
+                "is_mentor": False,
+                "is_alumni": False,
+                "active": True,
             }
         )
         self.assertTrue(
             form.is_valid(),
-            f"ParentForm should allow duplicate email but got errors: {form.errors}",
+            f"AdultForm should allow duplicate email but got errors: {form.errors}",
         )
 
     def test_adult_form_allows_duplicate_email(self):

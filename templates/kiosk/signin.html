@@ -697,9 +697,10 @@
                     else typeBadge = '<span class="badge bg-secondary">Visitor</span>';
 
                     row.innerHTML = 
-                        '<td class="ps-4 h4">' + person.name + '</td>' +
+                        '<td class="ps-4 h4"></td>' +
                         '<td>' + typeBadge + '</td>' +
                         '<td class="text-end pe-4">' + timeStr + '</td>';
+                    row.querySelector('td.h4').textContent = person.name;
                     tableBody.appendChild(row);
                 });
                 content.classList.remove("d-none");

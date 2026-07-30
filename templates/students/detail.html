@@ -70,7 +70,7 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-md-6"><div class="fw-semibold">Email</div><div>{{ student.personal_email|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Cell phone</div><div>{{ student.cell_phone_number|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Phone</div><div>{{ student.phone_number|default:'—' }} ({{ student.get_phone_type_display|default:'cell' }}){% if student.can_receive_texts %} <span class="badge bg-info text-dark">Texts OK</span>{% endif %}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Address</div><div>{{ student.address|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ student.city|default:'—' }}</div></div>
             <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ student.state|default:'—' }}</div></div>
@@ -183,14 +183,47 @@
         <div class="card-header">Parents / Emergency Contacts</div>
         <div class="card-body">
           <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">Primary contact</div><div>{{ student.primary_contact|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Secondary contact</div><div>{{ student.secondary_contact|default:'—' }}</div></div>
+            <div class="col-md-6"><div class="fw-semibold">Primary contact</div>
+              <div>
+                {% if student.primary_contact %}
+                  {% can_read user 'adult_info' student.primary_contact as can_view_primary %}
+                  {% if can_view_primary %}
+                    <a href="{% url 'adult_detail' student.primary_contact.pk %}">{{ student.primary_contact }}</a>
+                  {% else %}
+                    {{ student.primary_contact }}
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-md-6"><div class="fw-semibold">Secondary contact</div>
+              <div>
+                {% if student.secondary_contact %}
+                  {% can_read user 'adult_info' student.secondary_contact as can_view_secondary %}
+                  {% if can_view_secondary %}
+                    <a href="{% url 'adult_detail' student.secondary_contact.pk %}">{{ student.secondary_contact }}</a>
+                  {% else %}
+                    {{ student.secondary_contact }}
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
             <div class="col-12"><div class="fw-semibold">Parents/guardians</div>
               {% with parents=student.all_parents %}
                 {% if parents %}
                   <ul class="mb-0">
                     {% for p in parents %}
-                      <li>{{ p }}</li>
+                      <li>
+                        {% can_read user 'adult_info' p as can_view_adult %}
+                        {% if can_view_adult %}
+                          <a href="{% url 'adult_detail' p.pk %}">{{ p }}</a>
+                        {% else %}
+                          {{ p }}
+                        {% endif %}
+                      </li>
                     {% endfor %}
                   </ul>
                 {% else %}

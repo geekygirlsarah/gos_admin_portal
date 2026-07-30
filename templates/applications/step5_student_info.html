@@ -66,12 +66,12 @@
                 <div class="col-12 
                     {% if field.name == 'address' or field.name == 'race_ethnicities' or field.name == 'allergies' or field.name == 'dietary_restrictions' or field.name == 'medical_notes' %}
                         col-md-12
-                    {% elif field.name == 'city' or field.name == 'state' or field.name == 'zip_code' or field.name == 'pronouns' or field.name == 'tshirt_size' %}
+                    {% elif field.name == 'city' or field.name == 'state' or field.name == 'zip_code' or field.name == 'pronouns' or field.name == 'tshirt_size' or field.name == 'phone_type' %}
                         col-md-4
                     {% else %}
                         col-md-6
                     {% endif %}">
-                    {% if field.name == 'directory_consent' or field.name == 'confirm_age' or field.name == 'confirm_grade' %}
+                    {% if field.name == 'directory_consent' or field.name == 'can_receive_texts' or field.name == 'confirm_age' or field.name == 'confirm_grade' %}
                         {% if field.name == 'confirm_age' and not warnings %}
                             {# hidden unless warnings present #}
                         {% elif field.name == 'confirm_grade' and not warnings %}

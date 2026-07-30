@@ -1,38 +1,12 @@
 from decimal import Decimal
 
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
-
-
-def _compute_student_program_balance(student, program):
-    """Return the net balance owed (fees - payments - sliding scale discount)."""
-    from programs.models import FeeAssignment, Payment, SlidingScale
-
-    # Fees assigned to this student (or all fees if no per-student assignments exist)
-    assigned_fee_ids = FeeAssignment.objects.filter(
-        fee__program=program, student=student
-    ).values_list("fee_id", flat=True)
-    fees_qs = program.fees.all()
-    if assigned_fee_ids:
-        fees_qs = fees_qs.filter(pk__in=assigned_fee_ids)
-    total_fees = sum(f.amount for f in fees_qs) or Decimal("0.00")
-
-    # Sliding scale discount
-    try:
-        scale = SlidingScale.objects.get(student=student, program=program)
-        discount = (scale.percent / Decimal("100")) * total_fees
-    except SlidingScale.DoesNotExist:
-        discount = Decimal("0.00")
-
-    # Payments made
-    total_paid = sum(
-        p.amount for p in Payment.objects.filter(student=student, program=program)
-    ) or Decimal("0.00")
-
-    return total_fees - discount - total_paid
 
 
 class MyProfileView(LoginRequiredMixin, View):
@@ -114,7 +88,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     active_rows = []
                     other_rows = []
                     for e in enrollments:
-                        balance = _compute_student_program_balance(s, e.program)
+                        from programs.permission_views import can_user_read
+                        from programs.utils import get_student_program_balance
+
+                        can_view_sliding = can_user_read(
+                            self.request.user, "sliding_scale"
+                        )
+                        balance = get_student_program_balance(
+                            s, e.program, can_view_sliding=can_view_sliding
+                        )
 
                         # Add attendance/outreach info
                         e.has_attendance = e.program.has_feature("attendance")
@@ -158,3 +140,97 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     ).select_related("program", "team")
 
         return context
+
+
+class ParentPaymentsAccessMixin(LoginRequiredMixin):
+    def dispatch(self, request, *args, **kwargs):
+        from programs.permission_views import get_user_role
+
+        if get_user_role(request.user) != "Parent":
+            messages.error(
+                request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+
+        self.parent_adult = getattr(request.user, "adult_profile", None)
+        if not self.parent_adult or not self.parent_adult.is_parent:
+            messages.error(
+                request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ParentPaymentsView(ParentPaymentsAccessMixin, View):
+    template_name = "parents/payments.html"
+    online_payment_url = getattr(
+        settings,
+        "PARENT_PAYMENTS_ONLINE_PORTAL_URL",
+        "https://commerce.cashnet.com/CMU267",
+    )
+
+    def get(self, request, *args, **kwargs):
+        from programs.models import Enrollment
+        from programs.permission_views import can_user_read
+        from programs.utils import get_student_program_balance
+
+        can_view_sliding = can_user_read(request.user, "sliding_scale")
+        enrollments = (
+            Enrollment.objects.filter(student__in=self.parent_adult.all_students())
+            .select_related("student", "program")
+            .order_by("student__last_name", "student__first_name", "program__name")
+        )
+
+        students = {}
+        for enrollment in enrollments:
+            balance = get_student_program_balance(
+                enrollment.student,
+                enrollment.program,
+                can_view_sliding=can_view_sliding,
+            )
+            student_data = students.setdefault(
+                enrollment.student_id,
+                {
+                    "student": enrollment.student,
+                    "program_rows": [],
+                    "student_total_owed": Decimal("0"),
+                },
+            )
+            amount_owed = max(balance, 0)
+            student_data["student_total_owed"] += amount_owed
+            student_data["program_rows"].append(
+                {
+                    "program": enrollment.program,
+                    "balance": balance,
+                    "amount_owed": amount_owed,
+                    "balance_url": reverse(
+                        "program_student_balance",
+                        args=[enrollment.program_id, enrollment.student_id],
+                    ),
+                }
+            )
+
+        student_rows = sorted(
+            students.values(),
+            key=lambda row: (
+                (row["student"].last_name or "").lower(),
+                (
+                    row["student"].first_name or row["student"].legal_first_name or ""
+                ).lower(),
+            ),
+        )
+        grand_total = sum(
+            (row["student_total_owed"] for row in student_rows),
+            start=Decimal("0"),
+        )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "student_rows": student_rows,
+                "grand_total": grand_total,
+                "online_payment_url": self.online_payment_url,
+            },
+        )

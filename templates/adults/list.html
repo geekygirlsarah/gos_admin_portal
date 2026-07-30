@@ -47,7 +47,7 @@
                   {% if e %}<a href="mailto:{{ e }}">{{ e }}</a>{% endif %}
                 {% endwith %}
               </td>
-              <td>{% if a.phone_number %}<a href="tel:{{ a.phone_number }}">{{ a.phone_number }}</a>{% endif %}</td>
+              <td>{% if a.phone_number %}<a href="tel:{{ a.phone_number }}">{{ a.phone_number }}</a> <small class="text-muted">({{ a.phone_type }})</small>{% endif %}</td>
               <td>
                 {% if a.is_parent %}<span class="badge bg-primary me-1">Parent</span>{% endif %}
                 {% if a.is_mentor %}<span class="badge bg-warning text-dark me-1">Mentor</span>{% endif %}

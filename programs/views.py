@@ -36,7 +36,6 @@ from .forms import (
     AdultForm,
     FeeAssignmentEditForm,
     FeeForm,
-    ParentForm,
     PaymentForm,
     ProgramDocumentForm,
     ProgramEmailBalancesForm,
@@ -75,6 +74,7 @@ from .utils import (
     compute_sliding_discount_rounded,
     get_safe_url,
     get_student_balance_data,
+    get_student_program_balance,
     redirect_back,
 )
 
@@ -1060,7 +1060,12 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 dob = val_date(d, "date_of_birth", "Date of Birth", "DOB", "Birthdate")
                 seen_once = val_bool(d, "seen_once", "Seen Once")
                 on_discord = val_bool(d, "on_discord", "On Discord")
+                graduated = val_bool(d, "graduated", "Graduated")
+                # Backward compatibility for older templates that still send Active.
+                # Student now uses "graduated" instead of an "active" field.
                 active = val_bool(d, "active", "Active")
+                if graduated is None and active is not None:
+                    graduated = not active
 
                 # School/year
                 school_name = val(d, "school", "School")
@@ -1083,7 +1088,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         "city": city,
                         "state": state,
                         "zip_code": zip_code,
-                        "cell_phone_number": cell_phone,
+                        "phone_number": cell_phone,
+                        "phone_type": "cell",
+                        "can_receive_texts": True,
                         "personal_email": personal_email,
                         "andrew_id": andrew_id,
                         "andrew_email": andrew_email,
@@ -1093,7 +1100,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         "discord_handle": discord_handle,
                         "school": school,
                         "graduation_year": grad_year,
-                        "active": active if active is not None else True,
+                        "graduated": graduated if graduated is not None else False,
                     },
                 )
                 if created_flag:
@@ -1108,7 +1115,9 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         ("city", city),
                         ("state", state),
                         ("zip_code", zip_code),
-                        ("cell_phone_number", cell_phone),
+                        ("phone_number", cell_phone),
+                        ("phone_type", "cell"),
+                        ("can_receive_texts", True),
                         ("personal_email", personal_email),
                         ("andrew_id", andrew_id),
                         ("andrew_email", andrew_email),
@@ -1134,8 +1143,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if on_discord is not None and obj.on_discord != on_discord:
                         obj.on_discord = on_discord
                         changed = True
-                    if active is not None and obj.active != active:
-                        obj.active = active
+                    if graduated is not None and obj.graduated != graduated:
+                        obj.graduated = graduated
                         changed = True
                     if changed:
                         obj.save()
@@ -1295,21 +1304,46 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     errors += 1
                     continue
                 email = val(d, "email", "Email")
-                phone = val(d, "phone_number", "Phone", "Phone Number")
+                phone = val(
+                    d,
+                    "cell_phone",
+                    "Cell Phone",
+                    "Cell Phone Number",
+                    "Phone",
+                    "Phone Number",
+                )
                 obj, created_flag = Adult.objects.get_or_create(
                     first_name=first,
                     last_name=last,
-                    defaults={"personal_email": email, "phone_number": phone},
+                    defaults={
+                        "personal_email": email,
+                        "phone_number": phone,
+                        "phone_type": "cell",
+                        "can_receive_texts": True,
+                        "is_parent": True,
+                    },
                 )
                 if created_flag:
                     created += 1
-                elif overwrite:
+                else:
                     changed = False
+                    if not obj.is_parent:
+                        obj.is_parent = True
+                        changed = True
+
+                    if not overwrite:
+                        if changed:
+                            obj.save(update_fields=["is_parent", "updated_at"])
+                            updated += 1
+                        continue
+
                     if email and obj.personal_email != email:
                         obj.personal_email = email
                         changed = True
                     if phone and obj.phone_number != phone:
                         obj.phone_number = phone
+                        obj.phone_type = "cell"
+                        obj.can_receive_texts = True
                         changed = True
                     if changed:
                         obj.save()
@@ -1590,18 +1624,23 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
                     # Relationship type
                     rel_key = normalize_rel(g["rel"])
-                    if rel_key:
-                        if not dry_run:
+                    rel_key = rel_key or "parent"
+                    if not dry_run:
+                        _, rel_created = (
                             AdultStudentRelationship.objects.update_or_create(
                                 adult=adult,
                                 student=student,
                                 defaults={"relationship_to_student": rel_key},
                             )
-                        rel_updated += 1
+                        )
+                        if rel_created:
+                            linked += 1
+                    else:
+                        if not student.adults.filter(id=adult.id).exists():
+                            linked += 1
+                    rel_updated += 1
 
-                    # Ensure Adult is linked to Student (M2M) - already handled by update_or_create above if not dry_run
-                    if dry_run and not student.adults.filter(id=adult.id).exists():
-                        linked += 1
+                    # Ensure Adult is linked to Student (M2M) - handled by update_or_create when not dry_run.
 
                     # Optionally set primary/secondary contact
                     if g["role"] == "primary":
@@ -1714,8 +1753,18 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                elif overwrite:
+                else:
                     changed = False
+                    if not obj.is_mentor:
+                        obj.is_mentor = True
+                        changed = True
+
+                    if not overwrite:
+                        if changed:
+                            obj.save(update_fields=["is_mentor", "updated_at"])
+                            updated += 1
+                        continue
+
                     for field, value in [
                         ("personal_email", email),
                         ("andrew_email", andrew_email),
@@ -2562,9 +2611,14 @@ class ParentCreateView(
     CreateView,
 ):
     model = Adult
-    form_class = ParentForm
-    template_name = "parents/form.html"
+    form_class = AdultForm
+    template_name = "adults/form.html"
     permission_required = "programs.add_adult"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
 
     def form_valid(self, form):
         # Ensure adults created via this view are flagged as parents
@@ -2609,8 +2663,8 @@ class ParentUpdateView(
     UpdateView,
 ):
     model = Adult
-    form_class = ParentForm
-    template_name = "parents/form.html"
+    form_class = AdultForm
+    template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
 
@@ -3461,64 +3515,14 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     section = "programs"
 
     def _program_balance_for_student(self, student, program):
-        # Reproduce ProgramStudentBalanceView totals for a given student+program
-        from decimal import Decimal
-
-        # Fees applicable to the student (respect fee assignments)
-        applicable_fees = []
-        for fee in Fee.objects.filter(program=program):
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-            applicable_fees.append(fee.amount)
-        total_fees = sum(applicable_fees, start=Decimal("0"))
-
-        # Sliding scale percent discount based on total program fees (per balance sheet logic)
         from .permission_views import can_user_read
 
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
-        # Compute total fees for discount: ONLY include fees applicable to this student
-        # and on or after the sliding scale's effective date.
-        applicable_fees_for_discount = []
-        for fee in Fee.objects.filter(program=program):
-            if (
-                fee.assignments.exists()
-                and not fee.assignments.filter(student=student).exists()
-            ):
-                continue
-
-            fee_date = fee.effective_date or (
-                fee.created_at.date() if fee.created_at else None
-            )
-            if sliding and sliding.date and fee_date and fee_date < sliding.date:
-                continue
-
-            applicable_fees_for_discount.append(fee.amount)
-
-        total_fees_for_discount = sum(
-            applicable_fees_for_discount,
-            start=Decimal("0"),
+        return get_student_program_balance(
+            student,
+            program,
+            can_view_sliding=can_view_sliding,
         )
-        total_sliding = Decimal("0")
-        if sliding and sliding.percent is not None and can_view_sliding:
-            total_sliding = compute_sliding_discount_rounded(
-                total_fees_for_discount, sliding.percent
-            )
-
-        # Payments made by student for this program
-        total_payments = sum(
-            [
-                p.amount
-                for p in Payment.objects.filter(student=student, program=program)
-            ],
-            start=Decimal("0"),
-        )
-
-        balance = total_fees - total_sliding - total_payments
-        return balance
 
     def get(self, request, pk):
         from django.shortcuts import render

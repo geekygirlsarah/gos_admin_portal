@@ -101,6 +101,16 @@ def render_field(field, **kwargs):
         return format_html('<div class="mb-3">{}</div>', field)
 
 
+@register.filter
+def media_scripts(media):
+    """Return the list of JS paths from a Media object.
+    Usage: {% for js in form.media|media_scripts %}
+    """
+    if hasattr(media, "_js"):
+        return media._js
+    return []
+
+
 @register.simple_tag
 def requires_bg(student, program):
     """Return True/False whether the student requires a background check for the program.

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Payments{% endblock %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Payments</h1>
+    {% include 'parents/_how_to_pay_modal.html' %}
+  </div>
+
+  <p class="text-muted">View each student first, then open a balance sheet directly for fee and payment details.</p>
+
+  {% if student_rows %}
+    {% for student_row in student_rows %}
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>{{ student_row.student.first_name|default:student_row.student.legal_first_name }} {{ student_row.student.last_name }}</strong>
+          <span class="fw-semibold">Student Total Owed: ${{ student_row.student_total_owed|floatformat:2 }}</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive mb-0">
+            <table class="table table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Program</th>
+                  <th class="text-end">Current Balance</th>
+                  <th class="text-end">Amount Owed</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in student_row.program_rows %}
+                  <tr>
+                    <td>{{ row.program.name }}</td>
+                    <td class="text-end">
+                      {% if row.balance < 0 %}
+                        <span class="text-success">Credit: ${{ row.balance|floatformat:2|slice:"1:" }}</span>
+                      {% elif row.balance == 0 %}
+                        <span class="text-success">Paid in full</span>
+                      {% else %}
+                        ${{ row.balance|floatformat:2 }}
+                      {% endif %}
+                    </td>
+                    <td class="text-end">${{ row.amount_owed|floatformat:2 }}</td>
+                    <td class="text-end">
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.balance_url }}">
+                        View Balance
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="d-flex justify-content-end mt-3">
+      <h2 class="h5 mb-0">Total Owed: ${{ grand_total|floatformat:2 }}</h2>
+    </div>
+  {% else %}
+    <div class="alert alert-info">No payment records were found for your students.</div>
+  {% endif %}
+{% endblock %}

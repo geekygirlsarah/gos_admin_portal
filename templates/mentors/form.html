@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load form_tags %}
 {% block title %}{% if form.instance.pk %}Edit Mentor{% else %}Add Mentor{% endif %}{% endblock %}
 {% block nav_mentors_active %} active{% endblock %}
@@ -34,9 +35,10 @@
           <div class="card-header">Contact</div>
           <div class="card-body">
             <div class="row g-3">
-              <div class="col-md-4">{% render_field form.personal_email %}</div>
-              <div class="col-md-4">{% render_field form.cell_phone %}</div>
-              <div class="col-md-4">{% render_field form.home_phone %}</div>
+              <div class="col-md-3">{% render_field form.personal_email %}</div>
+              <div class="col-md-3">{% render_field form.phone_number %}</div>
+              <div class="col-md-3">{% render_field form.phone_type %}</div>
+              <div class="col-md-3 mt-4">{% render_field form.can_receive_texts %}</div>
             </div>
           </div>
         </div>
@@ -172,6 +174,10 @@
 {% endblock %}
 
 {% block extra_head %}
+  {{ form.media.css }}
+  {% for js in form.media|media_scripts %}
+    <script src="{% static js %}" nonce="{{ request.csp_nonce }}"></script>
+  {% endfor %}
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet" integrity="sha384-Y87xRkYcSpzXkX0m0O6Cq5C9S6Vp9Z8X7p3V7p3V7p3V7p3V7p3V7p3V7p3V7p3" crossorigin="anonymous">
   <style>
     .cropper-modal .modal-body { max-height: 70vh; }
@@ -182,7 +188,7 @@
 
 
 {% block extra_scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-vIPrwVp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-vIPrwVp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
   <script nonce="{{ request.csp_nonce }}">
     (function(){
       var selector = 'input[type="file"][name="photo"]';

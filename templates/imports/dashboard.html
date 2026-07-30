@@ -143,7 +143,7 @@
                                   <select id="attendance-program" name="program_id" class="form-select" required>
                                       <option value="">Select a program…</option>
                                       {% for p in attendance_programs|default:programs %}
-                                          <option value="{{ p.id }}">{{ p.name }}</option>
+                                        <option value="{{ p.id }}">{{ p.name }}{% if p.start_date or p.end_date %} ({% if p.start_date %}{{ p.start_date|date:"Y-m-d" }}{% else %}TBD{% endif %} - {% if p.end_date %}{{ p.end_date|date:"Y-m-d" }}{% else %}TBD{% endif %}){% endif %}</option>
                                       {% endfor %}
                                   </select>
                               </div>

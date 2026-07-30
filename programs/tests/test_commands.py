@@ -1,59 +1,102 @@
 from datetime import date
+from decimal import Decimal
 
 from django.core.management import call_command
+from django.db import models
 from django.test import TestCase
 
-from programs.models import Adult, Enrollment, Program, School, Student
+from programs.models import (
+    Adult,
+    Enrollment,
+    Fee,
+    Payment,
+    Program,
+    School,
+    SlidingScale,
+    Student,
+)
 
 
 class SeedDbCommandTest(TestCase):
     def test_seed_db_command(self):
-        """Test that the seed_db command creates the expected objects."""
+        """The seed command should create a large, varied modern dataset."""
         call_command("seed_db")
 
-        # Check Programs
-        self.assertEqual(Program.objects.count(), 6)
-        this_year = date.today().year
-        self.assertTrue(
-            Program.objects.filter(name__contains=str(this_year - 1)).exists()
+        today = date.today()
+
+        # Check high-volume core records
+        self.assertGreaterEqual(Program.objects.count(), 12)
+        self.assertGreaterEqual(School.objects.count(), 4)
+        self.assertGreaterEqual(Adult.objects.count(), 18)
+        self.assertGreaterEqual(Student.objects.count(), 12)
+        self.assertGreaterEqual(Enrollment.objects.count(), 30)
+
+        # Check program date variety: past, current, and future offerings
+        self.assertGreaterEqual(Program.objects.filter(end_date__lt=today).count(), 4)
+        self.assertGreaterEqual(
+            Program.objects.filter(start_date__lte=today, end_date__gte=today).count(),
+            4,
         )
-        self.assertTrue(Program.objects.filter(name__contains=str(this_year)).exists())
-        self.assertTrue(
-            Program.objects.filter(name__contains=str(this_year + 1)).exists()
-        )
+        self.assertGreaterEqual(Program.objects.filter(start_date__gt=today).count(), 4)
 
-        # Check Schools
-        self.assertEqual(School.objects.count(), 2)
+        # Check role variety among adults
+        self.assertGreaterEqual(Adult.objects.filter(is_parent=True).count(), 12)
+        self.assertGreaterEqual(Adult.objects.filter(is_mentor=True).count(), 4)
+        self.assertGreaterEqual(Adult.objects.filter(is_alumni=True).count(), 2)
 
-        # Check Adults
-        # 4 parents + 1 lead mentor + 1 passing mentor + 1 expiring mentor + 2 alumni = 9
-        self.assertEqual(Adult.objects.count(), 9)
-        self.assertEqual(Adult.objects.filter(is_parent=True).count(), 4)
-        self.assertEqual(Adult.objects.filter(is_mentor=True).count(), 3)
-        self.assertEqual(Adult.objects.filter(is_alumni=True).count(), 2)
+        # Check financial model coverage
+        self.assertGreaterEqual(Fee.objects.count(), 20)
+        self.assertGreaterEqual(Payment.objects.count(), 20)
+        self.assertGreaterEqual(SlidingScale.objects.count(), 6)
 
-        # Check Students
-        # 3 regular + 2 alumni students = 5
-        self.assertEqual(Student.objects.count(), 5)
+        # Ensure payment states include paid-off, partially paid, and unpaid
+        balance_profiles = {"paid": 0, "partial": 0, "unpaid": 0}
+        for enrollment in Enrollment.objects.select_related("student", "program"):
+            total_fees = Fee.objects.filter(program=enrollment.program).aggregate(
+                total=models.Sum("amount")
+            )["total"] or Decimal("0")
+            total_payments = Payment.objects.filter(
+                student=enrollment.student,
+                program=enrollment.program,
+            ).aggregate(total=models.Sum("amount"))["total"] or Decimal("0")
 
-        # Check Enrollments
-        # Student 1: 6 programs
-        # Student 2: 6 programs
-        # Student 3: 1 program
-        # Alumni 1: 1 program
-        # Alumni 2: 1 program
-        # Total: 15
-        self.assertEqual(Enrollment.objects.count(), 15)
+            if total_fees == Decimal("0"):
+                continue
+            if total_payments == Decimal("0"):
+                balance_profiles["unpaid"] += 1
+            elif total_payments < total_fees:
+                balance_profiles["partial"] += 1
+            elif total_payments >= total_fees:
+                balance_profiles["paid"] += 1
 
-        # Check email format
-        student1 = Student.objects.get(personal_email="swithee+student1@andrew.cmu.edu")
-        self.assertIn("+student1", student1.personal_email)
+        self.assertGreater(balance_profiles["paid"], 0)
+        self.assertGreater(balance_profiles["partial"], 0)
+        self.assertGreater(balance_profiles["unpaid"], 0)
 
-        # Check mentors
-        passing_mentor = Adult.objects.get(first_name="Passing")
-        self.assertTrue(passing_mentor.has_paca_clearance)
-        self.assertTrue(passing_mentor.has_patch_clearance)
-        self.assertTrue(passing_mentor.has_fbi_clearance)
+    def test_seed_db_command_is_idempotent(self):
+        """Running the command twice should not duplicate seeded entities."""
+        call_command("seed_db")
+        first_counts = {
+            "programs": Program.objects.count(),
+            "schools": School.objects.count(),
+            "adults": Adult.objects.count(),
+            "students": Student.objects.count(),
+            "enrollments": Enrollment.objects.count(),
+            "fees": Fee.objects.count(),
+            "payments": Payment.objects.count(),
+            "sliding_scales": SlidingScale.objects.count(),
+        }
 
-        expiring_mentor = Adult.objects.get(first_name="Expiring")
-        self.assertTrue(expiring_mentor.pa_clearances_expiration_date > date.today())
+        call_command("seed_db")
+        second_counts = {
+            "programs": Program.objects.count(),
+            "schools": School.objects.count(),
+            "adults": Adult.objects.count(),
+            "students": Student.objects.count(),
+            "enrollments": Enrollment.objects.count(),
+            "fees": Fee.objects.count(),
+            "payments": Payment.objects.count(),
+            "sliding_scales": SlidingScale.objects.count(),
+        }
+
+        self.assertEqual(first_counts, second_counts)

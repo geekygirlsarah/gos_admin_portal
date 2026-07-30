@@ -17,20 +17,20 @@ class PhoneValidationTestCase(TestCase):
         student = Student(
             legal_first_name="Test",
             last_name="Student",
-            cell_phone_number="12345",  # Invalid: too short
+            phone_number="12345",  # Invalid: too short
             date_of_birth=date(date_of_birth_year, 1, 1),
         )
         with self.assertRaises(ValidationError):
             student.full_clean()
 
-        student.cell_phone_number = "12345678901"  # Invalid: too long
+        student.phone_number = "12345678901"  # Invalid: too long
         with self.assertRaises(ValidationError):
             student.full_clean()
 
-        student.cell_phone_number = "1234567890"  # Valid: 10 digits
+        student.phone_number = "1234567890"  # Valid: 10 digits
         student.full_clean()  # Should not raise
 
-        student.cell_phone_number = "(123) 456-7890"  # Valid: 10 digits after stripping
+        student.phone_number = "(123) 456-7890"  # Valid: 10 digits after stripping
         student.full_clean()  # Should not raise
 
     def test_adult_model_phone_validation(self):
@@ -38,14 +38,12 @@ class PhoneValidationTestCase(TestCase):
             first_name="Test",
             last_name="Adult",
             phone_number="1234567890",
-            cell_phone="1234567890",
-            home_phone="1234567890",
             emergency_contact_phone="1234567890",
         )
         adult.full_clean()  # Should pass
 
         # Testing multiple fields
-        fields = ["phone_number", "cell_phone", "home_phone", "emergency_contact_phone"]
+        fields = ["phone_number", "emergency_contact_phone"]
         for field in fields:
             original_val = getattr(adult, field)
             setattr(adult, field, "123")  # Invalid
@@ -57,14 +55,14 @@ class PhoneValidationTestCase(TestCase):
         form_data = {
             "legal_first_name": "Test",
             "last_name": "Student",
-            "cell_phone_number": "123",
+            "phone_number": "123",
             "date_of_birth": "2010-01-01",
         }
         form = StudentForm(data=form_data)
         self.assertFalse(form.is_valid())
-        self.assertIn("cell_phone_number", form.errors)
+        self.assertIn("phone_number", form.errors)
 
-        form_data["cell_phone_number"] = "1234567890"
+        form_data["phone_number"] = "1234567890"
         form = StudentForm(data=form_data)
         self.assertTrue(form.is_valid())
 
@@ -74,18 +72,19 @@ class PhoneValidationTestCase(TestCase):
             data={
                 "legal_first_name": "A",
                 "last_name": "B",
-                "cell_phone_number": "123",
+                "phone_number": "123",
                 "date_of_birth": "2010-01-01",
             }
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("cell_phone_number", form.errors)
+        self.assertIn("phone_number", form.errors)
 
         form = StudentInfoForm(
             data={
                 "legal_first_name": "A",
                 "last_name": "B",
-                "cell_phone_number": "1234567890",
+                "phone_number": "1234567890",
+                "phone_type": "cell",
                 "address": "123 Main St",
                 "city": "Pittsburgh",
                 "state": "PA",
@@ -104,7 +103,8 @@ class PhoneValidationTestCase(TestCase):
                 "first_name": "A",
                 "last_name": "B",
                 "email": "a@b.com",
-                "cell_phone": "123",
+                "phone_number": "123",
+                "phone_type": "cell",
                 "address": "123 Main St",
                 "city": "Pittsburgh",
                 "state": "PA",
@@ -112,14 +112,15 @@ class PhoneValidationTestCase(TestCase):
             }
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("cell_phone", form.errors)
+        self.assertIn("phone_number", form.errors)
 
         form = ParentInfoForm(
             data={
                 "first_name": "A",
                 "last_name": "B",
                 "email": "a@b.com",
-                "cell_phone": "1234567890",
+                "phone_number": "1234567890",
+                "phone_type": "cell",
                 "address": "123 Main St",
                 "city": "Pittsburgh",
                 "state": "PA",
@@ -131,12 +132,22 @@ class PhoneValidationTestCase(TestCase):
 
         # MentorInfoForm
         form = MentorInfoForm(
-            data={"legal_first_name": "A", "last_name": "B", "cell_phone": "123"}
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "phone_number": "123",
+                "phone_type": "cell",
+            }
         )
         self.assertFalse(form.is_valid())
-        self.assertIn("cell_phone", form.errors)
+        self.assertIn("phone_number", form.errors)
 
         form = MentorInfoForm(
-            data={"legal_first_name": "A", "last_name": "B", "cell_phone": "1234567890"}
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "phone_number": "1234567890",
+                "phone_type": "cell",
+            }
         )
         self.assertTrue(form.is_valid())

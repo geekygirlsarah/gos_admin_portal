@@ -1,6 +1,13 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load form_tags %}
 {% block title %}{% if object %}Edit Adult{% else %}Add Adult{% endif %}{% endblock %}
+{% block extra_head %}
+  {{ form.media.css }}
+  {% for js in form.media|media_scripts %}
+    <script src="{% static js %}" nonce="{{ request.csp_nonce }}"></script>
+  {% endfor %}
+{% endblock %}
 {% block content %}
   <div class="row mb-3">
     <div class="col">
@@ -49,8 +56,8 @@
                     <div class="row g-3">
                       <div class="col-md-6">{% render_field form.personal_email %}</div>
                       <div class="col-md-4">{% render_field form.phone_number %}</div>
-                      <div class="col-md-4">{% render_field form.cell_phone %}</div>
-                      <div class="col-md-4">{% render_field form.home_phone %}</div>
+                      <div class="col-md-4">{% render_field form.phone_type %}</div>
+                      <div class="col-md-4 mt-4">{% render_field form.can_receive_texts %}</div>
                       <div class="col-12">{% render_field form.address %}</div>
                       <div class="col-md-6">{% render_field form.city %}</div>
                       <div class="col-md-3">{% render_field form.state %}</div>

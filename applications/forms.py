@@ -10,6 +10,7 @@ from programs.constants import (
     APP_ID_ALPHABET,
     APP_ID_LENGTH,
     GRADE_CHOICES,
+    PHONE_TYPE_CHOICES,
     RELATIONSHIP_CHOICES,
     STATE_CHOICES,
     TSHIRT_SIZE_CHOICES,
@@ -261,12 +262,25 @@ class StudentInfoForm(forms.Form):
         required=False,
         widget=forms.EmailInput(attrs=_text_attrs),
     )
-    cell_phone_number = forms.CharField(
-        label="Student's cell phone",
+    phone_number = forms.CharField(
+        label="Student's phone number",
         max_length=30,
         required=False,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
+    )
+    phone_type = forms.ChoiceField(
+        label="Phone type",
+        choices=PHONE_TYPE_CHOICES,
+        initial="cell",
+        required=False,
+        widget=forms.Select(attrs=_select_attrs),
+    )
+    can_receive_texts = forms.BooleanField(
+        label="Can receive texts?",
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     directory_consent = forms.BooleanField(
         label="OK to share name, address, and phone for student directory and carpool map",
@@ -481,18 +495,23 @@ class ParentInfoForm(forms.Form):
         widget=forms.TextInput(attrs=_text_attrs),
         validators=[validate_zip_code],
     )
-    cell_phone = forms.CharField(
-        label="Cell phone",
+    phone_number = forms.CharField(
+        label="Phone number",
         max_length=30,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    home_phone = forms.CharField(
-        label="Home phone",
-        max_length=30,
+    phone_type = forms.ChoiceField(
+        label="Phone type",
+        choices=PHONE_TYPE_CHOICES,
+        initial="cell",
+        widget=forms.Select(attrs=_select_attrs),
+    )
+    can_receive_texts = forms.BooleanField(
+        label="Can receive texts?",
         required=False,
-        validators=[validate_phone_number],
-        widget=forms.TextInput(attrs=_text_attrs),
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     email_updates = forms.BooleanField(
         label="Receive email updates",
@@ -634,12 +653,25 @@ class MentorInfoForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    cell_phone = forms.CharField(
-        label="Cell phone",
+    phone_number = forms.CharField(
+        label="Phone number",
         max_length=30,
         required=False,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),
+    )
+    phone_type = forms.ChoiceField(
+        label="Phone type",
+        choices=PHONE_TYPE_CHOICES,
+        initial="cell",
+        required=False,
+        widget=forms.Select(attrs=_select_attrs),
+    )
+    can_receive_texts = forms.BooleanField(
+        label="Can receive texts?",
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     discord_username = forms.CharField(
         label="Discord username",

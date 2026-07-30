@@ -61,10 +61,12 @@
     <div class="row g-3">
       {% can_write user 'contact_address' form.instance as can_write_contact %}
       <div class="col-md-6">{% if can_write_contact %}{% render_field form.personal_email %}{% else %}{% render_field form.personal_email readonly=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_contact %}{% render_field form.cell_phone_number %}{% else %}{% render_field form.cell_phone_number readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_contact %}{% render_field form.phone_number %}{% else %}{% render_field form.phone_number readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_contact %}{% render_field form.phone_type %}{% else %}{% render_field form.phone_type disabled=True %}{% endif %}</div>
+      <div class="col-md-4 mt-4">{% if can_write_contact %}{% render_field form.can_receive_texts %}{% else %}{% render_field form.can_receive_texts disabled=True %}{% endif %}</div>
       <div class="col-md-6">{% if can_write_contact %}{% render_field form.address %}{% else %}{% render_field form.address readonly=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.city %}{% else %}{% render_field form.city readonly=True %}{% endif %}</div>
-      <div class="col-md-3">{% if can_write_contact %}{% render_field form.state %}{% else %}{% render_field form.state readonly=True %}{% endif %}</div>
+      <div class="col-md-3">{% if can_write_contact %}{% render_field form.state %}{% else %}{% render_field form.state disabled=True %}{% endif %}</div>
       <div class="col-md-3">{% if can_write_contact %}{% render_field form.zip_code %}{% else %}{% render_field form.zip_code readonly=True %}{% endif %}</div>
       <div class="col-md-6">{% if can_write_contact %}{% render_field form.directory_consent %}{% else %}{% render_field form.directory_consent disabled=True %}{% endif %}</div>
     </div>
@@ -175,36 +177,37 @@
   <div class="card-header">Parents / Emergency Contacts</div>
   <div class="card-body">
     {% can_write user 'parents_emergency' form.instance as can_write_parents %}
-    {# Keep original Django fields hidden so we can synchronize values before submit #}
-    <div class="d-none">
-      <div class="col-md-6">{% if can_write_parents %}{% render_field form.primary_contact %}{% else %}{% render_field form.primary_contact disabled=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_parents %}{% render_field form.secondary_contact %}{% else %}{% render_field form.secondary_contact disabled=True %}{% endif %}</div>
-      <div class="col-12">{% if can_write_parents %}{% render_field form.parents %}{% else %}{% render_field form.parents disabled=True %}{% endif %}</div>
+    <div class="mb-4">
+      {% if can_write_parents %}
+        {% render_field form.parents %}
+      {% else %}
+        {% render_field form.parents disabled=True %}
+      {% endif %}
     </div>
 
-    <div class="mb-3">
-      <label class="form-label">Find a parent/guardian</label>
-      <div class="d-flex gap-2">
-        <select id="parent-picker" class="form-select" style="max-width:480px" {% if not can_write_parents %}disabled{% endif %}>
-          <option value="">— Select a parent —</option>
-          {% for val,label in form.parents.field.choices %}
-            {% if val %}<option value="{{ val }}">{{ label }}</option>{% endif %}
-          {% endfor %}
-        </select>
-        <button type="button" id="add-parent-btn" class="btn btn-outline-primary" {% if not can_write_parents %}disabled{% endif %}>Add</button>
-      </div>
+    {# Keep original Django contact fields hidden so we can synchronize values before submit #}
+    <div class="d-none">
+      {% render_field form.primary_contact %}
+      {% render_field form.secondary_contact %}
     </div>
 
     <div id="selected-parents">
-      <div class="mb-2 text-muted">Selected parents / contacts:</div>
+      <div class="mb-2 fw-bold text-primary">Parent / Emergency Contact Details:</div>
       <div id="parent-list" class="list-group mb-2">
         {# Pre-populate from existing selection #}
         {% with sel_parents=form.instance.all_parents %}
           {% for p in sel_parents %}
             <div class="list-group-item d-flex align-items-center justify-content-between" data-parent-id="{{ p.id }}">
               <div class="me-3">
-                <div class="fw-semibold">{{ p }}</div>
-                <div class="small text-muted">{{ p.email }}{% if p.phone_number %} • {{ p.phone_number }}{% endif %}</div>
+                <div class="fw-semibold">
+                  {% can_read user 'adult_info' p as can_view_adult %}
+                  {% if can_view_adult %}
+                    <a href="{% url 'adult_detail' p.pk %}?next={{ request.path }}" target="_blank">{{ p }}</a>
+                  {% else %}
+                    {{ p }}
+                  {% endif %}
+                </div>
+                <div class="small text-muted">{{ p.personal_email }}{% if p.phone_number %} • {{ p.phone_number }}{% endif %}</div>
               </div>
               <div class="d-flex align-items-center gap-2 flex-wrap">
                 <div class="d-flex align-items-center gap-1">
@@ -241,7 +244,7 @@
       (function(){
         // Relationship choices from server for creating new items dynamically
         var REL_CHOICES = [
-          {% for k,v in RELATIONSHIP_CHOICES %}["{{ k }}","{{ v }}"],{% endfor %}
+          {% for k,v in RELATIONSHIP_CHOICES %}["{{ k|escapejs }}","{{ v|escapejs }}"],{% endfor %}
         ];
         var CAN_WRITE = {% if can_write_parents %}true{% else %}false{% endif %};
         function ensureHiddenFieldSync(){
@@ -316,23 +319,35 @@
         }
         function hook(){
           if(!CAN_WRITE) return;
-          var addBtn = document.getElementById('add-parent-btn');
-          var picker = document.getElementById('parent-picker');
-          var parentChoices = {};
-          if(picker){
-            // build id->label map
-            Array.prototype.forEach.call(picker.options, function(opt){ if(opt.value){ parentChoices[opt.value] = opt.text; } });
+
+          const dualListContainer = document.querySelector('.dual-listbox');
+          if (dualListContainer) {
+              dualListContainer.addEventListener('dual-listbox:change', syncFromDualListbox);
           }
-          if(addBtn){
-            addBtn.addEventListener('click', function(){
-              var pid = picker.value;
-              if(pid){ addParent(pid, parentChoices[pid] || ('Parent #'+pid)); }
-            });
-          }
+
           document.getElementById('parent-list').addEventListener('click', function(ev){
             if(ev.target && ev.target.classList.contains('remove-parent')){
               var item = ev.target.closest('.list-group-item');
-              if(item){ item.remove(); ensureHiddenFieldSync(); }
+              if(item){
+                  var pid = item.getAttribute('data-parent-id');
+                  // Move back in dual listbox
+                  const selectedSelect = document.querySelector('.dual-listbox-selected');
+                  const availableSelect = document.querySelector('.dual-listbox-available');
+                  if (selectedSelect && availableSelect) {
+                      const opt = Array.from(selectedSelect.options).find(o => o.value == pid);
+                      if(opt){
+                          opt.selected = false;
+                          availableSelect.appendChild(opt);
+                          // trigger sorting by firing a dummy move event or just manual sort
+                          const options = Array.from(availableSelect.options);
+                          options.sort((a, b) => a.text.localeCompare(b.text));
+                          availableSelect.innerHTML = '';
+                          options.forEach(o => availableSelect.appendChild(o));
+                      }
+                  }
+                  item.remove();
+                  ensureHiddenFieldSync();
+              }
             }
           });
           document.getElementById('parent-list').addEventListener('change', function(ev){
@@ -345,6 +360,33 @@
           // On form submit, final sync
           var form = document.querySelector('form');
           if(form){ form.addEventListener('submit', ensureHiddenFieldSync); }
+        }
+
+        function syncFromDualListbox(){
+            const selectedSelect = document.querySelector('.dual-listbox-selected');
+            if(!selectedSelect) return;
+            
+            const selectedOptions = Array.from(selectedSelect.options);
+            const selectedIds = selectedOptions.map(opt => opt.value);
+            const listContainer = document.getElementById('parent-list');
+            
+            // 1. Remove items from list that are no longer selected
+            document.querySelectorAll('#parent-list .list-group-item').forEach(item => {
+                const pid = item.getAttribute('data-parent-id');
+                if(!selectedIds.includes(pid)){
+                    item.remove();
+                }
+            });
+            
+            // 2. Add missing items to list
+            selectedOptions.forEach(opt => {
+                const pid = opt.value;
+                if(!document.querySelector('#parent-list .list-group-item[data-parent-id="'+pid+'"]')){
+                    addParent(pid, opt.text);
+                }
+            });
+            
+            ensureHiddenFieldSync();
         }
         if(document.readyState === 'loading'){
           document.addEventListener('DOMContentLoaded', hook);

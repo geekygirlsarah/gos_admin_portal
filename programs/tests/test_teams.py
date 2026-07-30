@@ -2,7 +2,14 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
-from programs.models import Enrollment, Program, RolePermission, Student, Team
+from programs.models import (
+    Enrollment,
+    Program,
+    ProgramFeature,
+    RolePermission,
+    Student,
+    Team,
+)
 
 
 class TeamSettingsTests(TestCase):
@@ -86,3 +93,23 @@ class TeamSettingsTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.team, team)
+
+    def test_attendance_import_program_option_includes_date_range(self):
+        attendance_feature, _ = ProgramFeature.objects.get_or_create(
+            key="attendance", defaults={"name": "Attendance"}
+        )
+        program = Program.objects.create(
+            name="Build Season",
+            start_date="2026-01-10",
+            end_date="2026-04-20",
+        )
+        program.features.add(attendance_feature)
+
+        resp = self.client.get(reverse("portal_settings") + "?tab=imports")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp,
+            f'<option value="{program.id}">Build Season (2026-01-10 - 2026-04-20)</option>',
+            html=True,
+        )

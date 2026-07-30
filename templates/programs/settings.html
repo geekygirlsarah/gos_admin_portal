@@ -521,12 +521,12 @@
                                 <div class="row g-2 align-items-start">
                                   <div class="col-12">
                                     <label for="attendance-program" class="form-label">Program</label>
-                                    <select id="attendance-program" name="program_id" class="form-select" required>
-                                      <option value="">Select a program...</option>
-                                      {% for p in attendance_programs|default:programs %}
-                                      <option value="{{ p.id }}">{{ p.name }}</option>
-                                      {% endfor %}
-                                    </select>
+                                                                        <select id="attendance-program" name="program_id" class="form-select" required>
+                                                                            <option value="">Select a program...</option>
+                                                                            {% for p in attendance_programs|default:programs %}
+                                      <option value="{{ p.id }}">{{ p.name }}{% if p.start_date or p.end_date %} ({% if p.start_date %}{{ p.start_date|date:"Y-m-d" }}{% else %}TBD{% endif %} - {% if p.end_date %}{{ p.end_date|date:"Y-m-d" }}{% else %}TBD{% endif %}){% endif %}</option>
+                                                                            {% endfor %}
+                                                                        </select>
                                   </div>
                                   <div class="col-12 d-flex gap-2">
                                     <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" />
@@ -636,7 +636,7 @@
 {% block extra_scripts %}
 <script nonce="{{ request.csp_nonce }}">
     // Maintain tab state after POST
-    var activeTab = "{{ active_tab }}";
+    var activeTab = "{{ active_tab|escapejs }}";
     if (activeTab) {
         var tabElement = document.getElementById(activeTab + '-tab');
         if (tabElement) {

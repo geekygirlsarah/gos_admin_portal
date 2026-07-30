@@ -2,9 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-30
+
+### Changed
+- Improved the Program Settings and Imports attendance CSV import dropdown so programs now show their schedule in the option label (for example: Program Name (2026-01-10 - 2026-04-20)), making it easier to pick the correct program when names are similar.
+- Synchronized portal import behavior with current data models: student imports now map legacy Active values to Graduated, parent and mentor imports now always set the correct role flags, and relationship imports now create links even when the relationship label is blank.
+- Updated the Students sample CSV template to use Graduated (instead of Active) and aligned duplicate sample files to prevent format drift.
+
+## 2026-07-29
+
+### Added
+- Added a new parent-only **Payments** page in the main navigation that shows each student first, the programs under that student, and a total owed at the bottom, with direct **View Balance** links from that page.
+- Added a **How to Pay** modal (including check instructions and a direct link to the online payment portal).
+
+### Changed
+- Reused and centralized student-program balance calculations so parent dashboards, parent payments pages, and dues reports all use the same underlying balance logic.
+- Restricted the new parent Payments pages to Parents only, while keeping Students, Mentors, and Lead Mentors blocked from those parent-specific screens.
+- Modify the seed_db command to reflect the latest changes to the data structures.
+- Add links to Parent entries from the Student entries.
+- Add an easier to manage Student-Parent relationship editor on both the Student and Parent side to ease editing and accidental breakage.
+
 ## 2026-07-28
 
 ### Changed
+- **Unified Phone Numbers**: Simplified contact information for both Adults (Parents, Mentors, Alumni) and Students by replacing multiple phone fields with a single phone number, a phone type (home, cell, work, other), and an optional SMS text message consent. Existing data was automatically migrated, and the application wizard now collects this unified information.
 - **Kiosk UI Enlargement**: Significantly increased the size of text, inputs, buttons, and badges on the attendance kiosk to ensure it is easily readable and usable on large touchscreens.
 - **Improved Kiosk Notifications**: Moved the attendance feedback notifications (Welcome/Goodbye messages) from the bottom-right corner to a prominent top-center position. The notification text and boxes have also been enlarged for better visibility across the room.
 - **Kiosk Member Sign-In robustness**: Improved the Member Sign-In tab to strictly require a registered member. If a name or RFID card is not recognized, the kiosk now provides a clear error message instead of incorrectly recording the tap as a visitor. This ensures that attendance data for students and mentors remains accurate and prevents accidental guest records.

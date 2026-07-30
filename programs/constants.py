@@ -90,6 +90,13 @@ TEAM_TYPES = [
     ("FLL_EXPLORE", "FLL Explore"),
 ]
 
+PHONE_TYPE_CHOICES = [
+    ("home", "Home"),
+    ("cell", "Cell"),
+    ("work", "Work"),
+    ("other", "Other"),
+]
+
 
 # 8-char alphanumeric application IDs using an unambiguous Crockford-style
 # alphabet (no 0/O, no 1/I/L). Easy to read aloud over the phone.

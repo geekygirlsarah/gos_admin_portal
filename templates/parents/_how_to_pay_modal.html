@@ -1,0 +1,45 @@
+<button
+  type="button"
+  class="btn btn-outline-primary"
+  data-bs-toggle="modal"
+  data-bs-target="#howToPayModal"
+>
+  How to Pay
+</button>
+
+<div
+  class="modal fade"
+  id="howToPayModal"
+  tabindex="-1"
+  aria-labelledby="howToPayModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title fs-5" id="howToPayModalLabel">How to Pay</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <h3 class="h6"><strong>Pay by Check</strong></h3>
+        <p class="mb-2">Make checks payable to <strong>Carnegie Mellon University</strong>.</p>
+        <p class="mb-2">In the memo, please put <strong>Program Dues - [Student Name]</strong>.</p>
+        <p class="mb-2">Mail to: <br>
+          <blockquote class="blockquote">
+            Lynnetta Miller<br>
+            Girls of Steel Robotics<br>
+            The Robotics Institute<br>
+            5000 Forbes Ave<br>
+            Pittsburgh, PA 15213-3890
+          </blockquote>
+          </ul>
+
+        <h3 class="h6"><strong>Pay Online</strong></h3>
+        <p class="mb-2">You can also pay online using our secure payment portal.</p>
+        <a class="btn btn-primary" href="{{ online_payment_url }}" target="_blank" rel="noopener">
+          Go to Online Payment Portal
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

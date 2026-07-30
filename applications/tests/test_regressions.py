@@ -279,13 +279,14 @@ class Step2LabelReproductionTest(TestCase):
         )
 
     def test_step4_labels_not_duplicated(self):
+        today = timezone.localdate()
         Program.objects.create(
             name="Test Program",
             active=True,
-            start_date=timezone.now().date() + datetime.timedelta(days=30),
+            start_date=today + datetime.timedelta(days=30),
             # applications are open starting today so it shows up in the future list
-            applications_open=timezone.now().date(),
-            applications_close=timezone.now().date() + datetime.timedelta(days=60),
+            applications_open=today - datetime.timedelta(days=1),
+            applications_close=today + datetime.timedelta(days=60),
         )
         app = Application.objects.create(
             email="test@example.com",
@@ -344,7 +345,8 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "555-444-1212",
+                "phone_number": "555-444-1212",
+                "phone_type": "cell",
             },
             student_emails=["name@email.com"],
         )
@@ -361,7 +363,8 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "555-444-1212",
+                "phone_number": "555-444-1212",
+                "phone_type": "cell",
             },
             student_emails=["name+student@email.com"],
         )
@@ -378,7 +381,8 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "555-444-1212",
+                "phone_number": "555-444-1212",
+                "phone_type": "cell",
             },
             student_emails=["student+something@email.com"],
         )
@@ -571,7 +575,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "412-555-0100",
+                "phone_number": "412-555-0100",
+                "phone_type": "cell",
                 # email_updates not checked → False
             },
         )
@@ -613,7 +618,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15213",
-                "cell_phone": "412-555-0100",
+                "phone_number": "412-555-0100",
+                "phone_type": "cell",
                 # email_updates not checked → False
             },
         )
