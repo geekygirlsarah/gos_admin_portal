@@ -18,7 +18,7 @@ from programs.models import (
 
 class ParentPaymentsViewTests(TestCase):
     def setUp(self):
-        password = "password123"  # nosec B106
+        password = "password123"  # nosec B105
         self.parent_user = User.objects.create_user(
             username="parent_user", password=password
         )

@@ -16,7 +16,7 @@ from programs.models import (
 
 class ImportSyncTests(TestCase):
     def setUp(self):
-        self.password = "password123"  # nosec B106
+        self.password = "password123"  # nosec B105
         self.user = User.objects.create_superuser(
             username="admin",
             email="admin@example.com",
@@ -107,7 +107,7 @@ class ImportSyncTests(TestCase):
 
 class ImportSampleCsvIntegrationTests(TestCase):
     def setUp(self):
-        self.password = "password123"  # nosec B106
+        self.password = "password123"  # nosec B105
         self.user = User.objects.create_superuser(
             username="admin",
             email="admin@example.com",

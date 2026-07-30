@@ -11,7 +11,9 @@ User = get_user_model()
 class DualListboxRenderingTest(TestCase):
     def setUp(self):
         self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
-        self.user = User.objects.create_user(username="admin", password="password")
+        self.user = User.objects.create_user(
+            username="admin", password="password"
+        )  # nosec B106
         self.user.groups.add(self.lead_mentor_group)
         self.user.is_staff = True
         self.user.save()
