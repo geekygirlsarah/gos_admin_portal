@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-30
+
+### Changed
+- Improved the Program Settings and Imports attendance CSV import dropdown so programs now show their schedule in the option label (for example: Program Name (2026-01-10 - 2026-04-20)), making it easier to pick the correct program when names are similar.
+
 ## 2026-07-29
 
 ### Added
