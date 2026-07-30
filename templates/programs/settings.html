@@ -515,8 +515,8 @@
                         <div class="col-12 col-lg-6">
                           <div class="card h-100">
                             <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Attendance (CSV)</h5>
-                              <p class="card-text">Import attendance sessions from legacy CSV export with columns: first_name, last_name, rfid, time_in_utc, time_out_utc. Requires selecting a Program.</p>
+                              <h5 class="card-title">Attendance</h5>
+                              <p class="card-text">Import attendance sessions from legacy attendance system by CSV export. Requires selecting a Program.</p>
                               <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
                                 <div class="row g-2 align-items-start">
                                   <div class="col-12">
@@ -537,7 +537,7 @@
                                     <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
                                     <label class="form-check-label" for="attendance-overwrite">Overwrite existing data</label>
                                 </div>
-                                <div class="form-text mt-2">Times can be in local time (e.g., 2025-09-01 20:15) or ISO format with timezone shifts (e.g., 2025-09-01T20:15:00-04:00). If time_out is blank, an open session will be created.</div>
+                                <div class="form-text mt-2">Times can be in local time (e.g., 2025-09-01 20:15) or ISO format with timezone shifts (e.g., 2025-09-01T20:15:00-04:00). If time_out is blank, an open session will be created. Use visitor_team_number for visitor rows only.</div>
                                 <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>
                               </form>
                             </div>
