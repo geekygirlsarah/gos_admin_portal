@@ -1060,7 +1060,12 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 dob = val_date(d, "date_of_birth", "Date of Birth", "DOB", "Birthdate")
                 seen_once = val_bool(d, "seen_once", "Seen Once")
                 on_discord = val_bool(d, "on_discord", "On Discord")
+                graduated = val_bool(d, "graduated", "Graduated")
+                # Backward compatibility for older templates that still send Active.
+                # Student now uses "graduated" instead of an "active" field.
                 active = val_bool(d, "active", "Active")
+                if graduated is None and active is not None:
+                    graduated = not active
 
                 # School/year
                 school_name = val(d, "school", "School")
@@ -1095,7 +1100,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         "discord_handle": discord_handle,
                         "school": school,
                         "graduation_year": grad_year,
-                        "active": active if active is not None else True,
+                        "graduated": graduated if graduated is not None else False,
                     },
                 )
                 if created_flag:
@@ -1138,8 +1143,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if on_discord is not None and obj.on_discord != on_discord:
                         obj.on_discord = on_discord
                         changed = True
-                    if active is not None and obj.active != active:
-                        obj.active = active
+                    if graduated is not None and obj.graduated != graduated:
+                        obj.graduated = graduated
                         changed = True
                     if changed:
                         obj.save()
@@ -1315,12 +1320,23 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         "phone_number": phone,
                         "phone_type": "cell",
                         "can_receive_texts": True,
+                        "is_parent": True,
                     },
                 )
                 if created_flag:
                     created += 1
-                elif overwrite:
+                else:
                     changed = False
+                    if not obj.is_parent:
+                        obj.is_parent = True
+                        changed = True
+
+                    if not overwrite:
+                        if changed:
+                            obj.save(update_fields=["is_parent", "updated_at"])
+                            updated += 1
+                        continue
+
                     if email and obj.personal_email != email:
                         obj.personal_email = email
                         changed = True
@@ -1608,18 +1624,23 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
                     # Relationship type
                     rel_key = normalize_rel(g["rel"])
-                    if rel_key:
-                        if not dry_run:
+                    rel_key = rel_key or "parent"
+                    if not dry_run:
+                        _, rel_created = (
                             AdultStudentRelationship.objects.update_or_create(
                                 adult=adult,
                                 student=student,
                                 defaults={"relationship_to_student": rel_key},
                             )
-                        rel_updated += 1
+                        )
+                        if rel_created:
+                            linked += 1
+                    else:
+                        if not student.adults.filter(id=adult.id).exists():
+                            linked += 1
+                    rel_updated += 1
 
-                    # Ensure Adult is linked to Student (M2M) - already handled by update_or_create above if not dry_run
-                    if dry_run and not student.adults.filter(id=adult.id).exists():
-                        linked += 1
+                    # Ensure Adult is linked to Student (M2M) - handled by update_or_create when not dry_run.
 
                     # Optionally set primary/secondary contact
                     if g["role"] == "primary":
@@ -1732,8 +1753,18 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 )
                 if created_flag:
                     created += 1
-                elif overwrite:
+                else:
                     changed = False
+                    if not obj.is_mentor:
+                        obj.is_mentor = True
+                        changed = True
+
+                    if not overwrite:
+                        if changed:
+                            obj.save(update_fields=["is_mentor", "updated_at"])
+                            updated += 1
+                        continue
+
                     for field, value in [
                         ("personal_email", email),
                         ("andrew_email", andrew_email),
