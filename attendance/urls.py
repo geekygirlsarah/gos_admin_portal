@@ -16,4 +16,5 @@ urlpatterns = [
         name="close_stale_attendance_sessions",
     ),
     path("summary/", views.attendance_summary_view, name="attendance_summary"),
+    path("all/", views.AllAttendanceView.as_view(), name="all_attendance"),
 ]

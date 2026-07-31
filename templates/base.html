@@ -85,6 +85,10 @@
                             <ul class="dropdown-menu" aria-labelledby="attendanceDropdown">
                                 <li><a class="dropdown-item" href="{% url 'attendance_manifest' %}">Active Manifest</a></li>
                                 <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
+                                {% if navbar_role == 'LeadMentor' %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'all_attendance' %}">All Program Entries</a></li>
+                                {% endif %}
                             </ul>
                         </li>
                     {% endif %}

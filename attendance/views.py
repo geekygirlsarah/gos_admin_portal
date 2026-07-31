@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -10,7 +11,11 @@ from django.views import View
 from django.views.decorators.http import require_http_methods
 
 from programs.models import Adult, Program, Student
-from programs.permission_views import can_user_read, can_user_write
+from programs.permission_views import (
+    LeadMentorRequiredMixin,
+    can_user_read,
+    can_user_write,
+)
 from programs.utils import redirect_back
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
@@ -718,3 +723,113 @@ def rfid_management_view(request):
             "q": search_query,
         },
     )
+
+
+class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    def get(self, request):
+        program_id = request.GET.get("program_id")
+        sort = request.GET.get("sort", "check_in")
+        direction = request.GET.get("dir", "desc")
+
+        sessions = AttendanceSession.objects.select_related(
+            "student", "adult", "program"
+        )
+
+        if program_id and program_id.isdigit():
+            sessions = sessions.filter(program_id=program_id)
+
+        # Sorting logic
+        if sort == "person":
+            from django.db.models.functions import Coalesce
+
+            sessions = sessions.annotate(
+                person_sort=Coalesce(
+                    "student__last_name", "adult__last_name", "visitor_name"
+                )
+            )
+            order_field = "person_sort"
+        elif sort == "program":
+            order_field = "program__name"
+        elif sort == "check_out":
+            order_field = "check_out"
+        elif sort == "duration":
+            order_field = "duration_minutes"
+        elif sort == "type":
+            from django.db.models import Case, IntegerField, Value, When
+
+            sessions = sessions.annotate(
+                type_order=Case(
+                    When(student__isnull=False, then=Value(1)),
+                    When(adult__isnull=False, then=Value(2)),
+                    default=Value(3),
+                    output_field=IntegerField(),
+                )
+            )
+            order_field = "type_order"
+        else:  # default to check_in
+            order_field = "check_in"
+
+        if direction == "asc":
+            sessions = sessions.order_by(order_field, "id")
+        else:
+            sessions = sessions.order_by(f"-{order_field}", "-id")
+
+        programs = Program.objects.filter(features__key="attendance").distinct()
+
+        return render(
+            request,
+            "attendance/all_attendance.html",
+            {
+                "sessions": sessions[:500],
+                "programs": programs,
+                "selected_program_id": (
+                    int(program_id) if program_id and program_id.isdigit() else None
+                ),
+                "current_sort": sort,
+                "current_dir": direction,
+            },
+        )
+
+    def post(self, request):
+        action = request.POST.get("action")
+        session_id = request.POST.get("session_id")
+        session = get_object_or_404(AttendanceSession, id=session_id)
+
+        if action == "update":
+            from django.utils.dateparse import parse_datetime
+
+            ci_raw = request.POST.get("check_in")
+            co_raw = request.POST.get("check_out")
+            program_id = request.POST.get("program_id")
+            visitor_team_number = request.POST.get("visitor_team_number")
+
+            ci = parse_datetime(ci_raw) if ci_raw else None
+            co = parse_datetime(co_raw) if co_raw else None
+
+            if ci and timezone.is_naive(ci):
+                ci = timezone.make_aware(ci, timezone.get_current_timezone())
+            if co and timezone.is_naive(co):
+                co = timezone.make_aware(co, timezone.get_current_timezone())
+
+            if ci:
+                session.check_in = ci
+            session.check_out = co
+
+            if program_id and program_id.isdigit():
+                session.program_id = int(program_id)
+
+            if visitor_team_number is not None:
+                if visitor_team_number == "":
+                    session.visitor_team_number = None
+                elif visitor_team_number.isdigit():
+                    session.visitor_team_number = int(visitor_team_number)
+
+            session.recompute_duration()
+            session.save()
+            messages.success(request, "Attendance entry updated.")
+
+        elif action == "delete":
+            session.delete()
+            messages.success(request, "Attendance entry deleted.")
+
+        return redirect_back(request, "all_attendance")
