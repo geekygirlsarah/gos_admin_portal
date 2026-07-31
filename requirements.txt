@@ -13,7 +13,7 @@ cachetools==7.1.4
 certifi==2026.5.20
 cffi==2.0.0
 charset-normalizer==3.4.7
-click==8.1.8
+click==8.3.3
 click-option-group==0.5.9
 colorama==0.4.6
 coverage==7.6.12
