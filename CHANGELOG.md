@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 - **Automatic stale session cleanup**: The attendance sign-in service now automatically detects and closes a person's stale sessions from previous days when they tap in for a new session. This keeps the manifest clean and ensures forgotten sessions are recorded with realistic 1-hour durations without manual intervention.
 
 ### Changed
+- **Grouped Application Review**: Reorganized the application review list into actionable categories: Admin actions (Review to convert, Review to approve) and Applicant actions (Waiting on forms, Parent data, Student data, or Drafts). This makes it easier for Lead Mentors to see what needs immediate attention.
+- **Improved Application Filtering**: Replaced the "Applicant Type" filter with a more useful "Applicant Program" filter on the review screen, allowing admins to quickly focus on applications for a specific program.
+- Fixed a bug on the application review screen where filtering by program would break the site's navigation menu.
 - **Improved Auto-Sign-Out logic**: The attendance kiosk now only considers sign-in events from the current day when attempting to automatically close a session. If a student has an old session open from a previous day, tapping the kiosk will now start a fresh session for today instead of incorrectly closing the multi-day stale record (which is now handled by the new automatic cleanup logic).
 - Improved the Program Settings and Imports attendance CSV import dropdown so programs now show their schedule in the option label (for example: Program Name (2026-01-10 - 2026-04-20)), making it easier to pick the correct program when names are similar.
 - Synchronized portal import behavior with current data models: student imports now map legacy Active values to Graduated, parent and mentor imports now always set the correct role flags, and relationship imports now create links even when the relationship label is blank.

@@ -166,16 +166,85 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
                     order_by_val = order_by_val.desc()
             qs = qs.order_by(order_by_val)
 
+        # Grouping logic
+        # Admin actions:
+        # * Review to convert to student (all "App + Signed" statuses)
+        # * Review to approve application (all "Submitted" statuses)
+        # Applicant actions:
+        # * Waiting on forms to be signed (all "App Approved" statuses)
+        # * Waiting on Parent data (all "awaiting parent")
+        # * Waiting on Student data (all "Email verified")
+        # * No data yet (all "Draft" statuses)
+
+        grouped = [
+            {
+                "title": "Admin actions: Review to convert to student",
+                "statuses": [Application.Status.APPROVED_SIGNED],
+                "apps": [],
+            },
+            {
+                "title": "Admin actions: Review to approve application",
+                "statuses": [Application.Status.SUBMITTED],
+                "apps": [],
+            },
+            {
+                "title": "Applicant actions: Waiting on forms to be signed",
+                "statuses": [Application.Status.APPROVED],
+                "apps": [],
+            },
+            {
+                "title": "Applicant actions: Waiting on Parent data",
+                "statuses": [Application.Status.AWAITING_PARENT],
+                "apps": [],
+            },
+            {
+                "title": "Applicant actions: Waiting on Student data",
+                "statuses": [Application.Status.EMAIL_VERIFIED],
+                "apps": [],
+            },
+            {
+                "title": "Applicant actions: No data yet",
+                "statuses": [Application.Status.DRAFT],
+                "apps": [],
+            },
+            {
+                "title": "Other (Converted / Declined)",
+                "statuses": [Application.Status.CONVERTED, Application.Status.DECLINED],
+                "apps": [],
+            },
+        ]
+
+        # Partition applications into groups
+        for app in qs:
+            found = False
+            for group in grouped:
+                if app.status in group["statuses"]:
+                    group["apps"].append(app)
+                    found = True
+                    break
+            if not found:
+                # Fallback group if we ever add a status forgot to categorize
+                if not grouped or grouped[-1]["title"] != "Other":
+                    grouped.append({"title": "Other", "statuses": [], "apps": []})
+                grouped[-1]["apps"].append(app)
+
+        # Remove empty groups if a filter is active
+        if status or applicant_type or program_id:
+            grouped = [g for g in grouped if g["apps"]]
+
+        from programs.models import Program
+
         return render(
             request,
             self.template_name,
             {
-                "applications": qs,
+                "grouped_applications": grouped,
                 "status_choices": Application.Status.choices,
                 "type_choices": Application.Type.choices,
+                "programs": Program.objects.all().order_by("-active", "name"),
                 "current_status": status,
                 "current_type": applicant_type,
-                "current_program": program_id,
+                "filter_program_id": program_id,
                 "current_sort": sort,
                 "current_dir": direction,
             },
