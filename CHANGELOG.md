@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-30
 
+### Added
+- **Attendance "Stale Session" management**: The Active Manifest page now automatically identifies "stale" sessions—records from previous days that were never closed. Admins can now close all stale sessions at once with a single click, or close them individually.
+- **Flexible and realistic stale session durations**: When closing a stale attendance session, the system now defaults to a 1-hour duration (instead of running until the current moment). Admins can also specify a custom duration when closing all stale sessions in bulk, providing better accuracy for different daily schedules.
+- **Automatic stale session cleanup**: The attendance sign-in service now automatically detects and closes a person's stale sessions from previous days when they tap in for a new session. This keeps the manifest clean and ensures forgotten sessions are recorded with realistic 1-hour durations without manual intervention.
+
 ### Changed
+- **Improved Auto-Sign-Out logic**: The attendance kiosk now only considers sign-in events from the current day when attempting to automatically close a session. If a student has an old session open from a previous day, tapping the kiosk will now start a fresh session for today instead of incorrectly closing the multi-day stale record (which is now handled by the new automatic cleanup logic).
 - Improved the Program Settings and Imports attendance CSV import dropdown so programs now show their schedule in the option label (for example: Program Name (2026-01-10 - 2026-04-20)), making it easier to pick the correct program when names are similar.
 - Synchronized portal import behavior with current data models: student imports now map legacy Active values to Graduated, parent and mentor imports now always set the correct role flags, and relationship imports now create links even when the relationship label is blank.
 - Updated the Students sample CSV template to use Graduated (instead of Active) and aligned duplicate sample files to prevent format drift.

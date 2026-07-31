@@ -499,19 +499,98 @@ def active_manifest_view(request):
     if program_id and program_id.isdigit():
         active_sessions = active_sessions.filter(program_id=program_id)
 
+    now = timezone.localtime()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    today_sessions = active_sessions.filter(check_in__gte=today_start)
+    stale_sessions = active_sessions.filter(check_in__lt=today_start)
+
     programs = Program.objects.filter(features__key="attendance").distinct()
 
     return render(
         request,
         "attendance/active_manifest.html",
         {
-            "active_sessions": active_sessions,
+            "today_sessions": today_sessions,
+            "stale_sessions": stale_sessions,
             "programs": programs,
             "selected_program_id": (
                 int(program_id) if program_id and program_id.isdigit() else None
             ),
         },
     )
+
+
+@login_required
+@require_http_methods(["POST"])
+def close_attendance_session(request, pk):
+    if not can_user_write(request.user, "attendance"):
+        messages.error(request, "You do not have permission to modify attendance.")
+        return redirect("attendance_manifest")
+
+    session = get_object_or_404(AttendanceSession, pk=pk)
+    if not session.check_out:
+        now = timezone.now()
+        local_now = timezone.localtime(now)
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # If session started before today local time, it's stale
+        if session.check_in < today_start:
+            # Assume 1 hour duration for stale sessions to keep hours realistic
+            session.check_out = session.check_in + timedelta(hours=1)
+            messages.success(
+                request,
+                f"Closed stale session for {session.student or session.visitor_name} with 1-hour default duration.",
+            )
+        else:
+            session.check_out = now
+            messages.success(
+                request,
+                f"Closed session for {session.student or session.visitor_name}.",
+            )
+
+        session.recompute_duration()
+        session.save(update_fields=["check_out", "duration_minutes", "updated_at"])
+    else:
+        messages.info(request, "Session is already closed.")
+
+    return redirect_back(request, "attendance_manifest")
+
+
+@login_required
+@require_http_methods(["POST"])
+def close_stale_attendance_sessions(request):
+    if not can_user_write(request.user, "attendance"):
+        messages.error(request, "You do not have permission to modify attendance.")
+        return redirect("attendance_manifest")
+
+    now = timezone.localtime()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    stale_sessions = AttendanceSession.objects.filter(
+        check_out__isnull=True, check_in__lt=today_start
+    )
+
+    # Allow setting a custom duration in hours, defaulting to 1
+    duration_hours = 1
+    try:
+        if "hours" in request.POST and request.POST.get("hours"):
+            duration_hours = float(request.POST.get("hours"))
+    except (ValueError, TypeError):
+        pass
+
+    count = stale_sessions.count()
+    for session in stale_sessions:
+        # Assume duration_hours duration for stale sessions to keep hours realistic
+        session.check_out = session.check_in + timedelta(hours=duration_hours)
+        session.recompute_duration()
+        session.save(update_fields=["check_out", "duration_minutes", "updated_at"])
+
+    messages.success(
+        request,
+        f"Closed {count} stale sessions with {duration_hours}-hour default duration.",
+    )
+    return redirect_back(request, "attendance_manifest")
 
 
 @login_required

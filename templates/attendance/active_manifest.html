@@ -25,7 +25,31 @@
     </div>
 </div>
 
-<div class="card shadow-sm">
+{% if stale_sessions %}
+<div class="alert alert-warning d-flex align-items-center justify-content-between mb-3 shadow-sm">
+    <div>
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>{{ stale_sessions|length }} stale session{{ stale_sessions|length|pluralize }} detected.</strong>
+        These are sessions from previous days that were never closed.
+    </div>
+    <form action="{% url 'close_stale_attendance_sessions' %}" method="post" class="ms-3 d-flex align-items-center">
+        {% csrf_token %}
+        <div class="input-group input-group-sm me-2" style="width: 160px;">
+            <span class="input-group-text">Default</span>
+            <input type="number" name="hours" value="1.0" step="0.5" min="0" class="form-control" aria-label="Hours">
+            <span class="input-group-text">hr</span>
+        </div>
+        <button type="submit" class="btn btn-warning btn-sm text-nowrap" onclick="return confirm('Close all sessions from previous days with the specified duration?')">
+            Close All Stale
+        </button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-light">
+        <h2 class="h6 mb-0">Currently Signed In</h2>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
@@ -34,10 +58,61 @@
                     <th>Program</th>
                     <th>Signed In At</th>
                     <th>Duration So Far</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for session in active_sessions %}
+                {% for session in today_sessions %}
+                <tr>
+                    <td>
+                        {% if session.student %}
+                            <a href="{% url 'student_detail' session.student.id %}">{{ session.student.full_name }}</a>
+                        {% else %}
+                            {{ session.visitor_name }}
+                            {% if session.visitor_team_number %}
+                                <span class="badge bg-secondary">Team {{ session.visitor_team_number }}</span>
+                            {% endif %}
+                            <span class="text-muted">(Visitor)</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ session.program.name }}</td>
+                    <td>{{ session.check_in|date:"H:i" }}</td>
+                    <td>{{ session.check_in|timesince }}</td>
+                    <td class="text-end">
+                        <form action="{% url 'close_attendance_session' session.id %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Close</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">No one is currently signed in today.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if stale_sessions %}
+<div class="card shadow-sm">
+    <div class="card-header bg-warning bg-opacity-10">
+        <h2 class="h6 mb-0 text-dark">Stale Sessions (Previous Days)</h2>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Program</th>
+                    <th>Signed In At</th>
+                    <th>Duration</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in stale_sessions %}
                 <tr>
                     <td>
                         {% if session.student %}
@@ -52,18 +127,18 @@
                     </td>
                     <td>{{ session.program.name }}</td>
                     <td>{{ session.check_in|date:"Y-m-d H:i" }}</td>
-                    <td>
-                        {# We don't have a simple way to show real-time duration in Django template, but we can show check_in #}
-                        {{ session.check_in|timesince }}
+                    <td>{{ session.check_in|timesince }}</td>
+                    <td class="text-end">
+                        <form action="{% url 'close_attendance_session' session.id %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Close</button>
+                        </form>
                     </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center py-4 text-muted">No one is currently signed in.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+{% endif %}
 {% endblock %}
