@@ -175,6 +175,20 @@ class AttendanceSession(models.Model):
         indexes = [
             models.Index(fields=["program", "student", "check_in"]),
             models.Index(fields=["program", "adult", "check_in"]),
+            models.Index(
+                fields=["program", "student", "check_in"],
+                condition=models.Q(check_out__isnull=True),
+                name="att_sess_open_student_idx",
+            ),
+            models.Index(
+                fields=["program", "adult", "check_in"],
+                condition=models.Q(check_out__isnull=True),
+                name="att_sess_open_adult_idx",
+            ),
+            models.Index(
+                fields=["program", "visitor_name", "check_in"],
+                name="att_sess_prog_visitor_in_idx",
+            ),
         ]
         ordering = ["-check_in"]
 

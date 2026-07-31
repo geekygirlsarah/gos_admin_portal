@@ -150,3 +150,29 @@ class AttendanceServiceTests(TestCase):
 
         with self.assertRaises(PermissionDenied):
             record_tap(program=prog2, rfid_uid="123456")
+
+
+class AttendanceSessionIndexTests(TestCase):
+    def test_attendance_session_has_open_session_partial_indexes(self):
+        indexes = {index.name: index for index in AttendanceSession._meta.indexes}
+
+        self.assertIn("att_sess_open_student_idx", indexes)
+        student_index = indexes["att_sess_open_student_idx"]
+        self.assertEqual(student_index.fields, ["program", "student", "check_in"])
+        self.assertEqual(
+            student_index.condition.children, [("check_out__isnull", True)]
+        )
+
+        self.assertIn("att_sess_open_adult_idx", indexes)
+        adult_index = indexes["att_sess_open_adult_idx"]
+        self.assertEqual(adult_index.fields, ["program", "adult", "check_in"])
+        self.assertEqual(adult_index.condition.children, [("check_out__isnull", True)])
+
+    def test_attendance_session_has_visitor_lookup_index(self):
+        indexes = {index.name: index for index in AttendanceSession._meta.indexes}
+
+        self.assertIn("att_sess_prog_visitor_in_idx", indexes)
+        self.assertEqual(
+            indexes["att_sess_prog_visitor_in_idx"].fields,
+            ["program", "visitor_name", "check_in"],
+        )

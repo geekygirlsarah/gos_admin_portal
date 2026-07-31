@@ -198,6 +198,7 @@ class Application(models.Model):
             models.Index(
                 fields=["status", "submitted_at"], name="application_status_sub_idx"
             ),
+            models.Index(fields=["created_at"], name="application_created_at_idx"),
         ]
         permissions = [
             (

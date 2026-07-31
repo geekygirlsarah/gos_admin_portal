@@ -111,3 +111,14 @@ class SiteSettingsTests(TestCase):
         s.pk = 99
         s.save()
         self.assertEqual(s.pk, 1)
+
+
+class ApplicationIndexTests(TestCase):
+    def test_application_has_created_at_index(self):
+        indexes = {index.name: index for index in Application._meta.indexes}
+
+        self.assertIn("application_created_at_idx", indexes)
+        self.assertEqual(
+            indexes["application_created_at_idx"].fields,
+            ["created_at"],
+        )
