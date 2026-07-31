@@ -687,21 +687,58 @@ def rfid_management_view(request):
                 messages.error(request, "RFID UID cannot be empty.")
             else:
                 try:
-                    # Deactivate old cards for this person
-                    if person_type == "student":
-                        person = get_object_or_404(Student, pk=person_id)
-                        RFIDCard.objects.filter(student=person, is_active=True).update(
-                            is_active=False
-                        )
-                        RFIDCard.objects.create(uid=uid, student=person)
-                    else:
-                        person = get_object_or_404(Adult, pk=person_id)
-                        RFIDCard.objects.filter(adult=person, is_active=True).update(
-                            is_active=False
-                        )
-                        RFIDCard.objects.create(uid=uid, adult=person)
+                    from django.db import transaction
 
-                    messages.success(request, f"Assigned RFID {uid} to {person}")
+                    from attendance.services import find_card_by_uid
+
+                    with transaction.atomic():
+                        # Find person
+                        if person_type == "student":
+                            person = get_object_or_404(Student, pk=person_id)
+                        else:
+                            person = get_object_or_404(Adult, pk=person_id)
+
+                        # Find if this UID is already in the system
+                        existing_card = find_card_by_uid(uid)
+
+                        # Deactivate other active cards for this person
+                        person_cards = person.rfid_cards.filter(is_active=True)
+                        if existing_card:
+                            person_cards = person_cards.exclude(pk=existing_card.pk)
+                        person_cards.update(is_active=False)
+
+                        if existing_card:
+                            # Reassign existing card
+                            old_owner = existing_card.student or existing_card.adult
+                            existing_card.student = (
+                                person if person_type == "student" else None
+                            )
+                            existing_card.adult = (
+                                person if person_type != "student" else None
+                            )
+                            existing_card.is_active = True
+                            existing_card.uid = uid  # Normalize to full UID
+                            existing_card.assigned_at = timezone.now()
+                            existing_card.save()
+
+                            if old_owner and old_owner != person:
+                                messages.success(
+                                    request,
+                                    f"Reassigned RFID {uid} from {old_owner} to {person}.",
+                                )
+                            else:
+                                messages.success(
+                                    request, f"Assigned RFID {uid} to {person}."
+                                )
+                        else:
+                            # Create new card record
+                            if person_type == "student":
+                                RFIDCard.objects.create(uid=uid, student=person)
+                            else:
+                                RFIDCard.objects.create(uid=uid, adult=person)
+                            messages.success(
+                                request, f"Assigned RFID {uid} to {person}."
+                            )
                 except Exception as e:
                     messages.error(request, f"Error assigning RFID: {e}")
             return redirect(
