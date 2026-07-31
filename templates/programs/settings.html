@@ -524,7 +524,7 @@
                                                                         <select id="attendance-program" name="program_id" class="form-select" required>
                                                                             <option value="">Select a program...</option>
                                                                             {% for p in attendance_programs|default:programs %}
-                                      <option value="{{ p.id }}">{{ p }}</option>
+                                      <option value="{{ p.id }}">{{ p.name_with_dates }}</option>
                                                                             {% endfor %}
                                                                         </select>
                                   </div>

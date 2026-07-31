@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **CI Parallel Test Crash**: Resolved a `TypeError: cannot pickle 'traceback' object` that occurred in GitHub Actions when tests failed in parallel mode.
 - **Application List Sorting Test**: Fixed `test_application_list_sorting_by_email` to correctly handle the new grouped application review layout.
-- **Program Date Range Display**: Updated `Program.__str__` to include the full date range (e.g., "Program Name (2026-01-10 - 2026-04-20)"), which fixed the attendance import settings test and improved program identification in dropdowns.
+- **Program Date Range Display & Test Stability**: Reverted `Program.__str__` to a year-only format to maintain compatibility with existing tests, while introducing a new `name_with_dates` property for use in administrative dropdowns.
+- **Attendance Test Reliability**: Fixed a 15-minute discrepancy failure in `AttendanceServiceTests.test_record_tap_explicit_in_out` by using fixed timestamps instead of `timezone.now()`, preventing failures caused by tests running across local midnight boundaries.
 - **Coverage Configuration**: Added a missing `.coveragerc` file with `parallel = True` and `concurrency = multiprocessing` to ensure stable coverage reporting when running tests in parallel.
 
 ### Added
