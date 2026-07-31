@@ -368,6 +368,15 @@ class Program(models.Model):
         start_label = start.replace(" Grade", "")
         return f"{start_label}–{end}"
 
+    @property
+    def name_with_dates(self):
+        if self.start_date and self.end_date:
+            return f"{self.name} ({self.start_date.isoformat()} - {self.end_date.isoformat()})"
+        yr = self.year_display
+        if yr:
+            return f"{self.name} ({yr})"
+        return self.name
+
     def __str__(self):
         yr = self.year_display
         if yr:

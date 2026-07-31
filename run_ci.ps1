@@ -46,12 +46,15 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "--- Running Tests (Parallel) ---" -ForegroundColor Cyan
-python manage.py test --noinput --parallel
+Write-Host "--- Running Tests (Parallel) with Coverage ---" -ForegroundColor Cyan
+coverage run manage.py test --noinput --parallel
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Django tests failed"
     exit $LASTEXITCODE
 }
+
+coverage combine
+coverage report
 
 # End of the script
 Write-Host "CI Tasks Completed Successfully!" -ForegroundColor Green

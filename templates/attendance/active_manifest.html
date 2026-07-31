@@ -14,7 +14,7 @@
                 <select name="program_id" class="form-select form-select-sm">
                     <option value="">All Programs</option>
                     {% for p in programs %}
-                    <option value="{{ p.id }}" {% if p.id == selected_program_id %}selected{% endif %}>{{ p.name }}</option>
+                    <option value="{{ p.id }}" {% if p.id == selected_program_id %}selected{% endif %}>{{ p.name_with_dates }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -75,8 +75,8 @@
                             <span class="text-muted">(Visitor)</span>
                         {% endif %}
                     </td>
-                    <td>{{ session.program.name }}</td>
-                    <td>{{ session.check_in|date:"H:i" }}</td>
+                    <td>{{ session.program }}</td>
+                    <td>{{ session.check_in|date:"g:i A" }}</td>
                     <td>{{ session.check_in|timesince }}</td>
                     <td class="text-end">
                         <form action="{% url 'close_attendance_session' session.id %}" method="post" class="d-inline">
@@ -125,8 +125,8 @@
                             <span class="text-muted">(Visitor)</span>
                         {% endif %}
                     </td>
-                    <td>{{ session.program.name }}</td>
-                    <td>{{ session.check_in|date:"Y-m-d H:i" }}</td>
+                    <td>{{ session.program }}</td>
+                    <td>{{ session.check_in|date:"Y-m-d g:i A" }}</td>
                     <td>{{ session.check_in|timesince }}</td>
                     <td class="text-end">
                         <form action="{% url 'close_attendance_session' session.id %}" method="post" class="d-inline">

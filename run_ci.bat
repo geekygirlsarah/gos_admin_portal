@@ -47,11 +47,13 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo --- Running Tests (Parallel) ---
-python manage.py test --noinput --parallel
+echo --- Running Tests (Parallel) with Coverage ---
+coverage run manage.py test --noinput --parallel
 if %ERRORLEVEL% neq 0 (
     echo Django tests failed
     exit /b %ERRORLEVEL%
 )
+coverage combine
+coverage report
 
 echo CI Tasks Completed Successfully!

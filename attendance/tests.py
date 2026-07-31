@@ -1,3 +1,4 @@
+import datetime
 from datetime import timedelta
 
 from django.test import TestCase
@@ -34,7 +35,8 @@ class AttendanceServiceTests(TestCase):
         self.assertIsNone(resolved_none)
 
     def test_record_tap_auto_in_out(self):
-        now = timezone.now()
+        # Use a fixed time to avoid midnight issues in local timezones
+        now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
         # First tap -> IN
         evt1 = record_tap(
             program=self.program,
@@ -65,7 +67,8 @@ class AttendanceServiceTests(TestCase):
         self.assertEqual(session.closed_by_event, evt2)
 
     def test_record_tap_explicit_in_out(self):
-        now = timezone.now()
+        # Use a fixed time to avoid midnight issues in local timezones
+        now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
         # Explicit IN
         evt1 = record_tap(
             program=self.program,
@@ -92,7 +95,7 @@ class AttendanceServiceTests(TestCase):
         self.assertEqual(session.duration_minutes, 45)
 
     def test_visitor_tap(self):
-        now = timezone.now()
+        now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
         evt = record_tap(
             program=self.program,
             visitor_name="John Doe",
@@ -106,7 +109,7 @@ class AttendanceServiceTests(TestCase):
         self.assertEqual(session.visitor_name, "John Doe")
 
     def test_visitor_tap_with_team_number(self):
-        now = timezone.now()
+        now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
         evt = record_tap(
             program=self.program,
             visitor_name="Jane Smith",
@@ -121,7 +124,7 @@ class AttendanceServiceTests(TestCase):
         self.assertEqual(session.visitor_team_number, 1234)
 
     def test_visitor_tap_without_team_number(self):
-        now = timezone.now()
+        now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
         evt = record_tap(
             program=self.program,
             visitor_name="No Team",
@@ -131,7 +134,7 @@ class AttendanceServiceTests(TestCase):
         self.assertIsNone(evt.visitor_team_number)
 
     def test_recompute_duration(self):
-        now = timezone.now()
+        now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
         session = AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
@@ -150,3 +153,29 @@ class AttendanceServiceTests(TestCase):
 
         with self.assertRaises(PermissionDenied):
             record_tap(program=prog2, rfid_uid="123456")
+
+
+class AttendanceSessionIndexTests(TestCase):
+    def test_attendance_session_has_open_session_partial_indexes(self):
+        indexes = {index.name: index for index in AttendanceSession._meta.indexes}
+
+        self.assertIn("att_sess_open_student_idx", indexes)
+        student_index = indexes["att_sess_open_student_idx"]
+        self.assertEqual(student_index.fields, ["program", "student", "check_in"])
+        self.assertEqual(
+            student_index.condition.children, [("check_out__isnull", True)]
+        )
+
+        self.assertIn("att_sess_open_adult_idx", indexes)
+        adult_index = indexes["att_sess_open_adult_idx"]
+        self.assertEqual(adult_index.fields, ["program", "adult", "check_in"])
+        self.assertEqual(adult_index.condition.children, [("check_out__isnull", True)])
+
+    def test_attendance_session_has_visitor_lookup_index(self):
+        indexes = {index.name: index for index in AttendanceSession._meta.indexes}
+
+        self.assertIn("att_sess_prog_visitor_in_idx", indexes)
+        self.assertEqual(
+            indexes["att_sess_prog_visitor_in_idx"].fields,
+            ["program", "visitor_name", "check_in"],
+        )

@@ -4,13 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-30
 
+### Fixed
+- **CI Parallel Test Crash**: Resolved a `TypeError: cannot pickle 'traceback' object` that occurred in GitHub Actions when tests failed in parallel mode.
+- **Application List Sorting Test**: Fixed `test_application_list_sorting_by_email` to correctly handle the new grouped application review layout.
+- **Program Date Range Display & Test Stability**: Reverted `Program.__str__` to a year-only format to maintain compatibility with existing tests, while introducing a new `name_with_dates` property for use in administrative dropdowns.
+- **Attendance Test Reliability**: Fixed a 15-minute discrepancy failure in `AttendanceServiceTests.test_record_tap_explicit_in_out` by using fixed timestamps instead of `timezone.now()`, preventing failures caused by tests running across local midnight boundaries.
+- **Coverage Configuration**: Added a missing `.coveragerc` file with `parallel = True` and `concurrency = multiprocessing` to ensure stable coverage reporting when running tests in parallel.
+
 ### Added
-- **Attendance "All Program Entries" management**: Added a new administrative page that lists all attendance sessions across all programs. This page is restricted to Lead Mentors and allows for inline editing and deletion of any attendance record (students, mentors, and visitors), providing a master view of all facility entries. Includes sortable headers and the ability to update programs and visitor team numbers.
+- **Test Coverage Reporting**: Integrated code test coverage into the GitHub Actions CI workflow. The CI now automatically runs tests with `coverage`, combines results from parallel test runners, and reports the final coverage percentage in the workflow logs.
+- **Local Coverage Tools**: Updated local development scripts (`run_ci.ps1`, `run_ci.sh`, `run_ci.bat`) to include coverage reporting, allowing developers to check their test coverage locally with a single command.
+- **Coverage Configuration**: Added a `.coveragerc` configuration file to ensure accurate coverage reporting by omitting migrations, tests, and standard Django boilerplate files.
+- **Attendance "All Program Entries" management**: Added a new administrative page that lists all attendance sessions across all programs. This page is restricted to Lead Mentors and allows for inline editing and deletion of any attendance record (students, mentors, and visitors), providing a master view of all facility entries. Includes sortable headers, the ability to update programs and visitor team numbers, and 12-hour time formatting for better readability.
 - **Attendance "Stale Session" management**: The Active Manifest page now automatically identifies "stale" sessions—records from previous days that were never closed. Admins can now close all stale sessions at once with a single click, or close them individually.
 - **Flexible and realistic stale session durations**: When closing a stale attendance session, the system now defaults to a 1-hour duration (instead of running until the current moment). Admins can also specify a custom duration when closing all stale sessions in bulk, providing better accuracy for different daily schedules.
 - **Automatic stale session cleanup**: The attendance sign-in service now automatically detects and closes a person's stale sessions from previous days when they tap in for a new session. This keeps the manifest clean and ensures forgotten sessions are recorded with realistic 1-hour durations without manual intervention.
 
 ### Changed
+- **Grouped Application Review**: Reorganized the application review list into actionable categories: Admin actions (Review to convert, Review to approve) and Applicant actions (Waiting on forms, Parent data, Student data, or Drafts). This makes it easier for Lead Mentors to see what needs immediate attention.
+- **Improved Application Filtering**: Replaced the "Applicant Type" filter with a more useful "Applicant Program" filter on the review screen, allowing admins to quickly focus on applications for a specific program.
+- Fixed a bug on the application review screen where filtering by program would break the site's navigation menu.
 - **Improved Auto-Sign-Out logic**: The attendance kiosk now only considers sign-in events from the current day when attempting to automatically close a session. If a student has an old session open from a previous day, tapping the kiosk will now start a fresh session for today instead of incorrectly closing the multi-day stale record (which is now handled by the new automatic cleanup logic).
 - Improved the Program Settings and Imports attendance CSV import dropdown so programs now show their schedule in the option label (for example: Program Name (2026-01-10 - 2026-04-20)), making it easier to pick the correct program when names are similar.
 - Synchronized portal import behavior with current data models: student imports now map legacy Active values to Graduated, parent and mentor imports now always set the correct role flags, and relationship imports now create links even when the relationship label is blank.

@@ -89,8 +89,61 @@
     </div>
 </div>
 {% else %}
-<div class="alert alert-info">
-    Use the search bar above to find a student or mentor to manage their RFID tags.
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0">Currently Assigned RFID Cards</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Assigned To</th>
+                    <th>Type</th>
+                    <th>RFID UID</th>
+                    <th>Assigned At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for card in assigned_cards %}
+                <tr>
+                    <td>
+                        <strong>
+                            {% if card.student %}
+                                {{ card.student }}
+                            {% elif card.adult %}
+                                {{ card.adult }}
+                            {% endif %}
+                        </strong>
+                    </td>
+                    <td><code>{{ card.uid }}</code></td>
+                    <td>
+                        {% if card.student %}
+                        <span class="badge bg-info">Student</span>
+                        {% elif card.adult %}
+                        <span class="badge bg-success">Mentor</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ card.assigned_at|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="deactivate">
+                            <input type="hidden" name="card_id" value="{{ card.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to deactivate this card?')">
+                                Deactivate
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">No RFID cards are currently assigned.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endif %}
 

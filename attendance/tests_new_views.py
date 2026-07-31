@@ -17,7 +17,11 @@ class AttendanceNewViewsTests(TestCase):
         self.user.is_superuser = True
         self.user.save()
 
-        self.program = Program.objects.create(name="Test Program")
+        self.program = Program.objects.create(
+            name="Test Program",
+            start_date=timezone.now().date(),
+            end_date=timezone.now().date() + timezone.timedelta(days=365),
+        )
         from programs.models import ProgramFeature
 
         feature, _ = ProgramFeature.objects.get_or_create(
@@ -39,7 +43,43 @@ class AttendanceNewViewsTests(TestCase):
         response = self.client.get(reverse("attendance_manifest"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "John Doe")
-        self.assertContains(response, "Test Program")
+        # Verify program name includes years
+        year_str = f"({self.program.start_date.year}-{self.program.end_date.year})"
+        self.assertContains(response, f"Test Program {year_str}")
+
+    def test_mentor_access_rfid_management(self):
+        # Create a regular mentor user (not superuser)
+        mentor_user = User.objects.create_user(
+            username="regular_mentor", password="password"
+        )  # nosec B106
+        from programs.models import Adult, RolePermission
+
+        Adult.objects.create(
+            user=mentor_user, first_name="Reg", last_name="Mentor", is_mentor=True
+        )
+
+        # Grant attendance write permission
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="attendance",
+            defaults={"can_read": True, "can_write": True},
+        )
+
+        self.client.login(username="regular_mentor", password="password")  # nosec B106
+
+        # Check RFID management page
+        response = self.client.get(reverse("rfid_management"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "RFID Management")
+
+        # Check menu link presence in base.html
+        self.assertContains(response, reverse("rfid_management"))
+
+    def test_all_attendance_view_program_years(self):
+        response = self.client.get(reverse("all_attendance"))
+        self.assertEqual(response.status_code, 200)
+        year_str = f"({self.program.start_date.year}-{self.program.end_date.year})"
+        self.assertContains(response, f"Test Program {year_str}")
 
     def test_active_manifest_filter(self):
         other_program = Program.objects.create(name="Other Program")
@@ -61,9 +101,15 @@ class AttendanceNewViewsTests(TestCase):
         self.assertContains(response, "2h 0m")
 
     def test_rfid_management_view_get(self):
+        from attendance.models import RFIDCard
+
+        RFIDCard.objects.create(uid="12345", student=self.student, is_active=True)
         response = self.client.get(reverse("rfid_management"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "RFID Management")
+        self.assertContains(response, "12345")
+        self.assertContains(response, "John Doe")
+        self.assertContains(response, "Currently Assigned RFID Cards")
 
     def test_rfid_management_search(self):
         response = self.client.get(reverse("rfid_management"), {"q": "John"})

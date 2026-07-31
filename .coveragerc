@@ -1,0 +1,23 @@
+[run]
+source = .
+omit =
+    */migrations/*
+    */tests/*
+    manage.py
+    GoSAdminPortal/wsgi.py
+    GoSAdminPortal/asgi.py
+parallel = True
+concurrency = multiprocessing
+
+[report]
+show_missing = True
+skip_covered = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if __name__ == .__main__.:
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
