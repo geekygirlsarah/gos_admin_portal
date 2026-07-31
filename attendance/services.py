@@ -38,8 +38,30 @@ def auto_in_or_out(
     Returns (event_type, session).
     """
     now = now or timezone.now()
-    # Find latest open session for today (or overall, policy choice)
-    open_qs = AttendanceSession.objects.filter(program=program, check_out__isnull=True)
+    local_now = timezone.localtime(now)
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # NEW: Close any stale sessions for this person first to keep the manifest clean
+    # and provide realistic durations if they forgot to sign out.
+    stale_qs = AttendanceSession.objects.filter(
+        program=program, check_out__isnull=True, check_in__lt=today_start
+    )
+    if student:
+        stale_qs = stale_qs.filter(student=student)
+    elif adult:
+        stale_qs = stale_qs.filter(adult=adult)
+    else:
+        stale_qs = stale_qs.filter(visitor_name=visitor_name)
+
+    for stale in stale_qs:
+        stale.check_out = stale.check_in + datetime.timedelta(hours=1)
+        stale.recompute_duration()
+        stale.save(update_fields=["check_out", "duration_minutes", "updated_at"])
+
+    # Find latest open session for today (local time)
+    open_qs = AttendanceSession.objects.filter(
+        program=program, check_out__isnull=True, check_in__gte=today_start
+    )
     if student:
         open_qs = open_qs.filter(student=student)
     elif adult:

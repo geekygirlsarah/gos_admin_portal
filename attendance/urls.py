@@ -5,5 +5,15 @@ from . import views
 urlpatterns = [
     path("rfid/", views.rfid_management_view, name="rfid_management"),
     path("manifest/", views.active_manifest_view, name="attendance_manifest"),
+    path(
+        "manifest/close/<int:pk>/",
+        views.close_attendance_session,
+        name="close_attendance_session",
+    ),
+    path(
+        "manifest/close-stale/",
+        views.close_stale_attendance_sessions,
+        name="close_stale_attendance_sessions",
+    ),
     path("summary/", views.attendance_summary_view, name="attendance_summary"),
 ]
