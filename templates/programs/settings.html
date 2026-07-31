@@ -524,7 +524,7 @@
                                                                         <select id="attendance-program" name="program_id" class="form-select" required>
                                                                             <option value="">Select a program...</option>
                                                                             {% for p in attendance_programs|default:programs %}
-                                      <option value="{{ p.id }}">{{ p.name }}{% if p.start_date or p.end_date %} ({% if p.start_date %}{{ p.start_date|date:"Y-m-d" }}{% else %}TBD{% endif %} - {% if p.end_date %}{{ p.end_date|date:"Y-m-d" }}{% else %}TBD{% endif %}){% endif %}</option>
+                                      <option value="{{ p.id }}">{{ p }}</option>
                                                                             {% endfor %}
                                                                         </select>
                                   </div>
@@ -577,7 +577,7 @@
                                 {% for k in kiosk_configs %}
                                 <tr>
                                     <td>{{ k.label }}</td>
-                                    <td>{{ k.program.name }}</td>
+                                    <td>{{ k.program }}</td>
                                     <td><span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ k.is_active|yesno:"Active,Inactive" }}</span></td>
                                     <td><a href="/kiosk/{{ k.pk }}/" target="_blank"><code>/kiosk/{{ k.pk }}/</code></a></td>
                                     <td class="text-end d-flex gap-2 justify-content-end">
@@ -618,7 +618,7 @@
                             <select id="kioskProgram" name="program_id" class="form-select" required>
                                 <option value="">Select program…</option>
                                 {% for p in attendance_programs %}
-                                <option value="{{ p.pk }}">{{ p.name }}</option>
+                                <option value="{{ p.pk }}">{{ p }}</option>
                                 {% endfor %}
                             </select>
                         </div>

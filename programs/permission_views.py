@@ -92,15 +92,16 @@ def can_user_read(user, section, obj=None):
                 return True
 
     perm = RolePermission.objects.filter(role=role, section=section).first()
-    can_read_section = perm.can_read if perm else True  # Default to True for read
+    # Default to True for read, except for attendance for mentors
+    default_read = True
+    if role == "Mentor" and section == "attendance":
+        default_read = False
+    can_read_section = perm.can_read if perm else default_read
 
     # Only Lead Mentors and Parents can view payments/fees/sliding scale
     if section in ["payments", "sliding_scale", "fees"]:
         if role not in ["LeadMentor", "Parent"]:
             return False
-
-    if role == "Mentor" and section == "attendance":
-        return False
 
     if not can_read_section:
         return False

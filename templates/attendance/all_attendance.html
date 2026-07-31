@@ -15,7 +15,7 @@
           <select name="program_id" class="form-select form-select-sm" onchange="this.form.submit()">
             <option value="">All Programs</option>
             {% for p in programs %}
-            <option value="{{ p.id }}" {% if selected_program_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            <option value="{{ p.id }}" {% if selected_program_id == p.id %}selected{% endif %}>{{ p }}</option>
             {% endfor %}
           </select>
         </div>
@@ -58,7 +58,7 @@
                 <span class="badge bg-secondary">Visitor</span>
               {% endif %}
             </td>
-            <td>{{ s.program.name }}</td>
+            <td>{{ s.program }}</td>
             <td>{{ s.check_in|date:'Y-m-d g:i A' }}</td>
             <td>
               {% if s.check_out %}
@@ -97,7 +97,7 @@
                     <label class="form-label small fw-bold">Program</label>
                     <select name="program_id" class="form-select form-select-sm" required>
                       {% for p in programs %}
-                      <option value="{{ p.id }}" {% if s.program_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                      <option value="{{ p.id }}" {% if s.program_id == p.id %}selected{% endif %}>{{ p }}</option>
                       {% endfor %}
                     </select>
                   </div>
