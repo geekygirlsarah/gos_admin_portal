@@ -56,7 +56,9 @@ safety check || echo "Safety check failed. It may require an API key or found vu
 echo "--- Django System Check ---"
 python manage.py check || ( echo "Django system check failed"; exit 1 )
 
-echo "--- Running Tests (Parallel) ---"
-python manage.py test --noinput --parallel || ( echo "Django tests failed"; exit 1 )
+echo "--- Running Tests (Parallel) with Coverage ---"
+coverage run manage.py test --noinput --parallel || ( echo "Django tests failed"; exit 1 )
+coverage combine
+coverage report
 
 echo "CI Tasks Completed Successfully!"

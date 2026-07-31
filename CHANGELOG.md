@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-30
 
 ### Added
+- **Test Coverage Reporting**: Integrated code test coverage into the GitHub Actions CI workflow. The CI now automatically runs tests with `coverage`, combines results from parallel test runners, and reports the final coverage percentage in the workflow logs.
+- **Local Coverage Tools**: Updated local development scripts (`run_ci.ps1`, `run_ci.sh`, `run_ci.bat`) to include coverage reporting, allowing developers to check their test coverage locally with a single command.
+- **Coverage Configuration**: Added a `.coveragerc` configuration file to ensure accurate coverage reporting by omitting migrations, tests, and standard Django boilerplate files.
 - **Attendance "All Program Entries" management**: Added a new administrative page that lists all attendance sessions across all programs. This page is restricted to Lead Mentors and allows for inline editing and deletion of any attendance record (students, mentors, and visitors), providing a master view of all facility entries. Includes sortable headers, the ability to update programs and visitor team numbers, and 12-hour time formatting for better readability.
 - **Attendance "Stale Session" management**: The Active Manifest page now automatically identifies "stale" sessions—records from previous days that were never closed. Admins can now close all stale sessions at once with a single click, or close them individually.
 - **Flexible and realistic stale session durations**: When closing a stale attendance session, the system now defaults to a 1-hour duration (instead of running until the current moment). Admins can also specify a custom duration when closing all stale sessions in bulk, providing better accuracy for different daily schedules.
