@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load static sorting_tags %}
+{% block title %}All Program Entries — Attendance{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+  <div class="row mb-3 align-items-center">
+    <div class="col">
+      <h1 class="h3">All Program Entries</h1>
+      <p class="text-muted">Master list of all attendance sessions.</p>
+    </div>
+    <div class="col-auto">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-auto">
+          <select name="program_id" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">All Programs</option>
+            {% for p in programs %}
+            <option value="{{ p.id }}" {% if selected_program_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0">
+        <thead class="table-light">
+          <tr>
+            <th><a href="{% sort_url 'person' %}" class="text-dark text-decoration-none">Person{% sort_icon 'person' %}</a></th>
+            <th><a href="{% sort_url 'type' %}" class="text-dark text-decoration-none">Type{% sort_icon 'type' %}</a></th>
+            <th><a href="{% sort_url 'program' %}" class="text-dark text-decoration-none">Program{% sort_icon 'program' %}</a></th>
+            <th><a href="{% sort_url 'check_in' %}" class="text-dark text-decoration-none">Check-in{% sort_icon 'check_in' %}</a></th>
+            <th><a href="{% sort_url 'check_out' %}" class="text-dark text-decoration-none">Check-out{% sort_icon 'check_out' %}</a></th>
+            <th><a href="{% sort_url 'duration' %}" class="text-dark text-decoration-none">Duration{% sort_icon 'duration' %}</a></th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+          <tr>
+            <td>
+              {% if s.student %}
+                <a href="{% url 'student_attendance' s.student.id %}">{{ s.student.full_name }}</a>
+              {% elif s.adult %}
+                {{ s.adult.full_name }}
+              {% else %}
+                {{ s.visitor_name|default:"Unknown" }}
+              {% endif %}
+            </td>
+            <td>
+              {% if s.student %}
+                <span class="badge bg-primary">Student</span>
+              {% elif s.adult %}
+                <span class="badge bg-info text-dark">Mentor</span>
+              {% else %}
+                <span class="badge bg-secondary">Visitor</span>
+              {% endif %}
+            </td>
+            <td>{{ s.program.name }}</td>
+            <td>{{ s.check_in|date:'Y-m-d H:i' }}</td>
+            <td>
+              {% if s.check_out %}
+                {{ s.check_out|date:'Y-m-d H:i' }}
+              {% else %}
+                <span class="badge bg-warning text-dark">Open</span>
+              {% endif %}
+            </td>
+            <td>{{ s.duration_hm }}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">Edit</button>
+              <form method="post" class="d-inline js-confirm" data-confirm="Delete this attendance entry? This cannot be undone.">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete" />
+                <input type="hidden" name="session_id" value="{{ s.id }}" />
+                <button class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          <tr class="collapse" id="edit{{ s.id }}">
+            <td colspan="7" class="bg-light p-0">
+              <div class="p-3 border-bottom">
+                <form method="post" class="row g-3 align-items-end">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update" />
+                  <input type="hidden" name="session_id" value="{{ s.id }}" />
+                  <div class="col-md-3">
+                    <label class="form-label small fw-bold">Check-in</label>
+                    <input type="datetime-local" class="form-control form-control-sm" name="check_in" value="{{ s.check_in|date:'Y-m-d\TH:i' }}" required />
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small fw-bold">Check-out</label>
+                    <input type="datetime-local" class="form-control form-control-sm" name="check_out" value="{% if s.check_out %}{{ s.check_out|date:'Y-m-d\TH:i' }}{% endif %}" />
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small fw-bold">Program</label>
+                    <select name="program_id" class="form-select form-select-sm" required>
+                      {% for p in programs %}
+                      <option value="{{ p.id }}" {% if s.program_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  {% if not s.student and not s.adult %}
+                  <div class="col-md-2">
+                    <label class="form-label small fw-bold">Team #</label>
+                    <input type="number" class="form-control form-control-sm" name="visitor_team_number" value="{{ s.visitor_team_number|default:'' }}" />
+                  </div>
+                  {% endif %}
+                  <div class="col-md-1">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+                  </div>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">No attendance entries found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if sessions.count >= 500 %}
+  <div class="mt-3 text-center text-muted small">
+    Showing the latest 500 entries. Use program filters to narrow your search.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
