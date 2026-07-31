@@ -76,7 +76,7 @@
                         {% endif %}
                     </td>
                     <td>{{ session.program.name }}</td>
-                    <td>{{ session.check_in|date:"H:i" }}</td>
+                    <td>{{ session.check_in|date:"g:i A" }}</td>
                     <td>{{ session.check_in|timesince }}</td>
                     <td class="text-end">
                         <form action="{% url 'close_attendance_session' session.id %}" method="post" class="d-inline">
@@ -126,7 +126,7 @@
                         {% endif %}
                     </td>
                     <td>{{ session.program.name }}</td>
-                    <td>{{ session.check_in|date:"Y-m-d H:i" }}</td>
+                    <td>{{ session.check_in|date:"Y-m-d g:i A" }}</td>
                     <td>{{ session.check_in|timesince }}</td>
                     <td class="text-end">
                         <form action="{% url 'close_attendance_session' session.id %}" method="post" class="d-inline">

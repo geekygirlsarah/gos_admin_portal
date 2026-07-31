@@ -163,3 +163,18 @@ class AllAttendanceEntriesTests(TestCase):
         sessions = list(response.context["sessions"])
         self.assertEqual(sessions[0].student.last_name, "Alpha")
         self.assertEqual(sessions[1].student.last_name, "Student")
+
+    def test_all_attendance_page_shows_12_hour_format(self):
+        # Ensure we have a session with a known time
+        # The setUp session uses timezone.now(), which might be AM or PM
+        # Let's check for the presence of AM or PM in the output
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        response = self.client.get(url)
+        content = response.content.decode()
+
+        import re
+
+        # Look for something like "10:30 AM" or "2:30 PM"
+        # The format in template is 'Y-m-d g:i A'
+        self.assertTrue(re.search(r"\d{1,2}:\d{2}\s+(AM|PM)", content, re.IGNORECASE))

@@ -83,8 +83,8 @@
             {% for s in sessions %}
               <tr>
                 <td>{{ s.program.name }}{% if s.program.year_display %} ({{ s.program.year_display }}){% endif %}</td>
-                <td>{{ s.check_in|date:'Y-m-d H:i' }}</td>
-                <td>{% if s.check_out %}{{ s.check_out|date:'Y-m-d H:i' }}{% else %}<span class="badge bg-warning text-dark">Open</span>{% endif %}</td>
+                <td>{{ s.check_in|date:'Y-m-d g:i A' }}</td>
+                <td>{% if s.check_out %}{{ s.check_out|date:'Y-m-d g:i A' }}{% else %}<span class="badge bg-warning text-dark">Open</span>{% endif %}</td>
                 <td>{{ s.duration_hm }}</td>
                 <td class="text-nowrap">
                   {% if can_write_attendance %}

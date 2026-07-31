@@ -59,10 +59,10 @@
               {% endif %}
             </td>
             <td>{{ s.program.name }}</td>
-            <td>{{ s.check_in|date:'Y-m-d H:i' }}</td>
+            <td>{{ s.check_in|date:'Y-m-d g:i A' }}</td>
             <td>
               {% if s.check_out %}
-                {{ s.check_out|date:'Y-m-d H:i' }}
+                {{ s.check_out|date:'Y-m-d g:i A' }}
               {% else %}
                 <span class="badge bg-warning text-dark">Open</span>
               {% endif %}
