@@ -240,10 +240,10 @@ def kiosk_lookup(request, kiosk_id):
 
     results = []
     if rfid:
-        try:
-            card = RFIDCard.objects.select_related("student", "adult").get(
-                uid=rfid, is_active=True
-            )
+        from attendance.services import resolve_card_by_uid
+
+        card = resolve_card_by_uid(rfid)
+        if card:
             person = card.student or card.adult
             results = [
                 {
@@ -252,7 +252,7 @@ def kiosk_lookup(request, kiosk_id):
                     "type": "student" if card.student else "mentor",
                 }
             ]
-        except RFIDCard.DoesNotExist:
+        else:
             results = []
     elif name:
         parts = name.split()

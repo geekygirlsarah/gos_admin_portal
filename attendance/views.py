@@ -311,14 +311,10 @@ class AttendanceImportView(View):
         def find_student(first_name, last_name, rfid):
             # Priority: RFID match
             if rfid:
-                card = (
-                    RFIDCard.objects.filter(
-                        uid__iexact=str(rfid).strip(), is_active=True
-                    )
-                    .select_related("student")
-                    .first()
-                )
-                if card:
+                from attendance.services import resolve_card_by_uid
+
+                card = resolve_card_by_uid(str(rfid).strip())
+                if card and card.student:
                     return card.student
             # Next: name match (case-insensitive)
             fn = (first_name or "").strip()
