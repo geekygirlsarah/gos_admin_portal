@@ -10,14 +10,15 @@ from programs.models import Program, Student
 class AllAttendanceEntriesTests(TestCase):
     def setUp(self):
         self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        password = "password123"  # nosec B105
         self.lead_mentor_user = User.objects.create_user(
-            username="lead_mentor", password="password123"
+            username="lead_mentor", password=password
         )
         self.lead_mentor_user.groups.add(self.lead_mentor_group)
 
         self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
         self.mentor_user = User.objects.create_user(
-            username="mentor", password="password123"
+            username="mentor", password=password
         )
         self.mentor_user.groups.add(self.mentor_group)
 
@@ -38,7 +39,7 @@ class AllAttendanceEntriesTests(TestCase):
         )
 
     def test_lead_mentor_can_access_all_attendance(self):
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
         url = reverse("all_attendance")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -46,7 +47,7 @@ class AllAttendanceEntriesTests(TestCase):
         self.assertContains(response, self.student.full_name)
 
     def test_mentor_cannot_access_all_attendance(self):
-        self.client.login(username="mentor", password="password123")
+        self.client.login(username="mentor", password="password123")  # nosec B106
         url = reverse("all_attendance")
         response = self.client.get(url)
         # LeadMentorRequiredMixin redirects to home with error.
@@ -54,7 +55,7 @@ class AllAttendanceEntriesTests(TestCase):
         self.assertIn(reverse("home"), response.url)
 
     def test_update_attendance_session(self):
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
         url = reverse("all_attendance")
         new_check_in = timezone.now().replace(microsecond=0) - timezone.timedelta(
             hours=1
@@ -76,7 +77,7 @@ class AllAttendanceEntriesTests(TestCase):
         )
 
     def test_delete_attendance_session(self):
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
         url = reverse("all_attendance")
         response = self.client.post(
             url,
@@ -103,7 +104,7 @@ class AllAttendanceEntriesTests(TestCase):
             check_in=timezone.now(),
         )
 
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
         url = reverse("all_attendance")
 
         # 1. Update program for the student session
@@ -148,7 +149,7 @@ class AllAttendanceEntriesTests(TestCase):
             check_in=timezone.now() - timezone.timedelta(days=1),
         )
 
-        self.client.login(username="lead_mentor", password="password123")
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
         url = reverse("all_attendance")
 
         # Default sort (check_in desc)
