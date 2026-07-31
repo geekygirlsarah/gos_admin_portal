@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-07-30
 
+### Fixed
+- **CI Parallel Test Crash**: Resolved a `TypeError: cannot pickle 'traceback' object` that occurred in GitHub Actions when tests failed in parallel mode.
+- **Application List Sorting Test**: Fixed `test_application_list_sorting_by_email` to correctly handle the new grouped application review layout.
+- **Program Date Range Display**: Updated `Program.__str__` to include the full date range (e.g., "Program Name (2026-01-10 - 2026-04-20)"), which fixed the attendance import settings test and improved program identification in dropdowns.
+- **Coverage Configuration**: Added a missing `.coveragerc` file with `parallel = True` and `concurrency = multiprocessing` to ensure stable coverage reporting when running tests in parallel.
+
 ### Added
 - **Test Coverage Reporting**: Integrated code test coverage into the GitHub Actions CI workflow. The CI now automatically runs tests with `coverage`, combines results from parallel test runners, and reports the final coverage percentage in the workflow logs.
 - **Local Coverage Tools**: Updated local development scripts (`run_ci.ps1`, `run_ci.sh`, `run_ci.bat`) to include coverage reporting, allowing developers to check their test coverage locally with a single command.

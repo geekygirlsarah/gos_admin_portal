@@ -119,7 +119,9 @@ class ListSortingTest(TestCase):
         response = self.client.get(
             reverse("application_review_list") + "?sort=email&dir=asc"
         )
-        apps = list(response.context["applications"])
+        apps = []
+        for group in response.context["grouped_applications"]:
+            apps.extend(group["apps"])
         self.assertEqual(apps[0].email, "a@example.com")
         self.assertEqual(apps[1].email, "b@example.com")
         self.assertEqual(apps[2].email, "c@example.com")

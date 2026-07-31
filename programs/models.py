@@ -369,6 +369,8 @@ class Program(models.Model):
         return f"{start_label}–{end}"
 
     def __str__(self):
+        if self.start_date and self.end_date:
+            return f"{self.name} ({self.start_date.isoformat()} - {self.end_date.isoformat()})"
         yr = self.year_display
         if yr:
             return f"{self.name} ({yr})"
