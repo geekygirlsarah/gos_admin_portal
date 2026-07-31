@@ -61,9 +61,15 @@ class AttendanceNewViewsTests(TestCase):
         self.assertContains(response, "2h 0m")
 
     def test_rfid_management_view_get(self):
+        from attendance.models import RFIDCard
+
+        RFIDCard.objects.create(uid="12345", student=self.student, is_active=True)
         response = self.client.get(reverse("rfid_management"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "RFID Management")
+        self.assertContains(response, "12345")
+        self.assertContains(response, "John Doe")
+        self.assertContains(response, "Currently Assigned RFID Cards")
 
     def test_rfid_management_search(self):
         response = self.client.get(reverse("rfid_management"), {"q": "John"})

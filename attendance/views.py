@@ -639,6 +639,7 @@ def rfid_management_view(request):
 
     search_query = request.GET.get("q", "").strip()
     results = []
+    assigned_cards = []
     if search_query:
         # Search students
         student_qs = Student.objects.filter(
@@ -672,6 +673,12 @@ def rfid_management_view(request):
                     "rfid": a.rfid_cards.filter(is_active=True).first(),
                 }
             )
+    else:
+        assigned_cards = (
+            RFIDCard.objects.filter(is_active=True)
+            .select_related("student", "adult")
+            .order_by("-assigned_at")
+        )
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -720,6 +727,7 @@ def rfid_management_view(request):
         "attendance/rfid_management.html",
         {
             "results": results,
+            "assigned_cards": assigned_cards,
             "q": search_query,
         },
     )
