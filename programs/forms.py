@@ -397,7 +397,7 @@ class SlidingScaleApplicationForm(forms.Form):
     documents = MultipleFileField(
         required=False,
         widget=MultipleFileInput(attrs={"multiple": True, "class": "form-control"}),
-        help_text="Optional: upload tax forms or other income documentation. Uploads are kept private and secure, and are permanently deleted once your application is processed.",
+        help_text="Upload tax forms or other income documentation. We recommend the first page of the IRS 1040 form but can take other forms. Please block out social security numbers and birthdates. Uploads are kept private and encrypted, and are permanently deleted once your application is processed.",
     )
     notes = forms.CharField(
         required=False,
