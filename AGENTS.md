@@ -64,7 +64,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - **Enrollment**: Links Student ↔ Program.
 - **Fee**: Per-Program costs.
 - **Payment**: Recorded against a Fee for a Student.
-- **SlidingScale**: Percent discount per Student/Program.
+- **SlidingScale**: Percent discount tied to a Student (not a single Program) with a `status` (`pending`/`approved`/`declined`), an effective `date`/`expiration_date`, and household-size/AGI questionnaire fields. An approved, non-expired record applies to that student's fees across **all** of their programs — see `get_active_sliding_scale()` / `get_student_balance_data()` in `programs/utils.py`. Parents apply from the Payments page (`sliding_scale_apply`); Lead Mentors review from the `sliding_scale_review_list`/`sliding_scale_review_decide` views, which auto-delete uploaded `TaxForm` documents once a decision is made. The base/multiplier numbers used to suggest a discount percent live in the singleton `SlidingScaleSettings` model, editable from Portal Settings → Sliding Scale tab.
 - **Application**: Multi-step resumable application records (in `applications/`).
 - **AttendanceEvent / Session**: RFID-based check-in/out tracking.
 

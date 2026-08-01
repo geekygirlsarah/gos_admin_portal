@@ -316,26 +316,31 @@ class SlidingScaleForm(forms.ModelForm):
             "student",
             "percent",
             "date",
+            "expiration_date",
             "family_size",
             "adjusted_gross_income",
-            "is_pending",
             "notes",
         ]
         labels = {
             "percent": "Discount percent",
             "date": "Effective date",
+            "expiration_date": "Expiration date",
         }
         help_texts = {
-            "percent": "Enter a value between 0 and 100. This percent will discount applicable fees.",
-            "date": "Only fees on or after this date will be discounted. Leave blank to apply to all program fees.",
+            "percent": "Enter a value between 0 and 100. This percent will discount applicable fees across all of the student's programs.",
+            "date": "Only fees on or after this date will be discounted. Leave blank to apply to all fees.",
+            "expiration_date": "The discount stops applying after this date. Leave blank for no expiration.",
         }
         widgets = {
             "date": forms.DateInput(attrs={"type": "date"}),
+            "expiration_date": forms.DateInput(attrs={"type": "date"}),
         }
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
-        # Restrict to students in this program
+        # Restrict to students in this program (the sliding scale itself now
+        # applies across all of the student's programs, but this form is
+        # reached from a specific program's page).
         self.fields["student"].queryset = Student.objects.filter(
             programs=program
         ).order_by(
@@ -350,6 +355,55 @@ class SlidingScaleForm(forms.ModelForm):
         if p < 0 or p > 100:
             raise forms.ValidationError("Percent must be between 0 and 100.")
         return p
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """A FileField that accepts multiple files, following Django's documented
+    pattern for multi-file uploads (single ClearableFileInput doesn't support
+    the `multiple` HTML attribute)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_file_clean(d, initial) for d in data]
+        return single_file_clean(data, initial)
+
+
+class SlidingScaleApplicationForm(forms.Form):
+    """Parent-facing questionnaire used to apply for the sliding scale."""
+
+    family_size = forms.IntegerField(
+        min_value=1,
+        label="Household Size",
+        help_text="Total number of people in your household.",
+        widget=forms.NumberInput(attrs={"class": "form-control"}),
+    )
+    adjusted_gross_income = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=10,
+        decimal_places=2,
+        label="Adjusted Gross Income",
+        help_text="Your household's adjusted gross income (AGI), as reported on your most recent tax return.",
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+    )
+    documents = MultipleFileField(
+        required=False,
+        widget=MultipleFileInput(attrs={"multiple": True, "class": "form-control"}),
+        help_text="Upload tax forms or other income documentation. We recommend the first page of the IRS 1040 form but can take other forms. Please block out social security numbers and birthdates. Uploads are kept private and encrypted, and are permanently deleted once your application is processed.",
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+        label="Additional Notes (optional)",
+    )
 
 
 class SchoolForm(forms.ModelForm):
@@ -476,7 +530,8 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
         super().__init__(*args, **kwargs)
 
     def label_from_instance(self, obj):
-        from .models import Fee, Payment, SlidingScale
+        from .models import Fee, Payment
+        from .utils import get_active_sliding_scale
         from .views import compute_sliding_discount_rounded
 
         student = obj
@@ -490,7 +545,7 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
             if not is_assigned or fee.assignments.filter(student=student).exists():
                 total_fees += fee.amount
 
-        sliding = SlidingScale.objects.filter(student=student, program=program).first()
+        sliding = get_active_sliding_scale(student)
         total_sliding = Decimal("0")
         if sliding and sliding.percent is not None:
             total_sliding = compute_sliding_discount_rounded(

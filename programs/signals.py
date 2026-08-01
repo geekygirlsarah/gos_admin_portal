@@ -3,7 +3,7 @@ import logging
 from django.apps import apps
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import post_migrate, post_save
+from django.db.models.signals import post_migrate, post_save, pre_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
@@ -248,27 +248,100 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
     )
 
 
+@receiver(pre_save, sender="programs.SlidingScale")
+def _capture_old_sliding_scale_status(sender, instance, **kwargs):
+    """Stash the previous status on the instance so post_save can detect transitions."""
+    if instance.pk:
+        try:
+            instance._old_status = (
+                sender.objects.only("status").get(pk=instance.pk).status
+            )
+        except sender.DoesNotExist:
+            instance._old_status = None
+    else:
+        instance._old_status = None
+
+
 @receiver(post_save, sender="programs.SlidingScale")
 def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
-    if not created:
-        return
-
-    from .utils import send_templated_notification
+    from .models import SlidingScale
 
     student = instance.student
-    program = instance.program
-    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    old_status = getattr(instance, "_old_status", None)
 
+    if created and instance.status == SlidingScale.STATUS_PENDING:
+        _notify_sliding_scale_submitted(student, instance)
+        return
+
+    if created and instance.status in (
+        SlidingScale.STATUS_APPROVED,
+        SlidingScale.STATUS_DECLINED,
+    ):
+        # Manually created directly as approved/declined (e.g. by a Lead Mentor).
+        _notify_sliding_scale_processed(student, instance)
+        return
+
+    if (
+        not created
+        and old_status == SlidingScale.STATUS_PENDING
+        and instance.status
+        in (SlidingScale.STATUS_APPROVED, SlidingScale.STATUS_DECLINED)
+    ):
+        # Auto-delete uploaded tax/personal documents once the application has
+        # been reviewed — we don't want to hold on to them.
+        for tax_form in instance.tax_forms.all():
+            try:
+                tax_form.file.delete(save=False)
+            except OSError:
+                # The underlying file may still be locked by another
+                # process (e.g. on Windows, if it was just previewed or
+                # downloaded). Don't let that block the review decision —
+                # the DB record is removed below regardless.
+                logger.warning(
+                    "Could not delete tax form file %s for SlidingScale %s; "
+                    "it may still be in use by another process.",
+                    tax_form.file.name,
+                    instance.pk,
+                )
+            tax_form.delete()
+        _notify_sliding_scale_processed(student, instance)
+
+
+def _notify_sliding_scale_submitted(student, sliding_scale):
+    from .utils import get_lead_mentor_notification_email, send_templated_notification
+
+    context = {"student": student, "sliding_scale": sliding_scale}
+
+    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    if parents:
+        send_templated_notification(
+            f"Sliding Scale Application Submitted for {student}",
+            "programs/emails/sliding_scale_submitted.html",
+            context,
+            [p.personal_email for p in parents],
+        )
+
+    send_templated_notification(
+        f"New Sliding Scale Application to Review: {student}",
+        "programs/emails/sliding_scale_submitted_lead_mentor.html",
+        context,
+        [get_lead_mentor_notification_email()],
+    )
+
+
+def _notify_sliding_scale_processed(student, sliding_scale):
+    from .utils import send_templated_notification
+
+    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
     if not parents:
         return
 
-    subject = f"Sliding Scale Added for {student} - {program.name}"
-    context = {
-        "student": student,
-        "program": program,
-        "sliding_scale": instance,
-    }
-    recipient_list = [p.personal_email for p in parents]
+    verb = "Approved" if sliding_scale.status == "approved" else "Update"
+    subject = f"Sliding Scale Application {verb} for {student}"
+    context = {"student": student, "sliding_scale": sliding_scale}
     send_templated_notification(
-        subject, "programs/emails/sliding_scale_added.html", context, recipient_list
+        subject,
+        "programs/emails/sliding_scale_processed.html",
+        context,
+        [p.personal_email for p in parents],
     )

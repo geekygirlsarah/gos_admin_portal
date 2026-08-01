@@ -14,6 +14,7 @@ from .models import (
     Program,
     RolePermission,
     SlidingScale,
+    SlidingScaleSettings,
     Student,
     SubTeam,
     Team,
@@ -324,11 +325,41 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "programs": programs,
             "attendance_programs": attendance_programs,
             "kiosk_configs": kiosk_configs,
+            "sliding_scale_settings": SlidingScaleSettings.get_solo(),
+            "pending_sliding_scale_count": SlidingScale.objects.filter(
+                status=SlidingScale.STATUS_PENDING
+            ).count(),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
         }
         return render(request, self.template_name, context)
+
+
+class PortalSlidingScaleSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles updates to the portal-wide sliding scale calculation settings."""
+
+    def post(self, request):
+        from decimal import Decimal, InvalidOperation
+
+        settings_obj = SlidingScaleSettings.get_solo()
+        fields = [
+            "base_amount",
+            "additional_member_amount",
+            "low_multiplier",
+            "high_multiplier",
+        ]
+        try:
+            for field in fields:
+                value = request.POST.get(field)
+                setattr(settings_obj, field, Decimal(value))
+        except (TypeError, InvalidOperation):
+            messages.error(request, "Please enter valid numbers for all fields.")
+            return redirect("/programs/settings/?tab=sliding_scale_settings")
+
+        settings_obj.save()
+        messages.success(request, "Sliding scale settings updated successfully.")
+        return redirect("/programs/settings/?tab=sliding_scale_settings")
 
 
 class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, View):

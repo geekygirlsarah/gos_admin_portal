@@ -44,7 +44,6 @@ class SlidingScaleTimeRestrictedtest(TestCase):
         # Sliding scale: 50% discount starting Feb 1
         SlidingScale.objects.create(
             student=student,
-            program=program,
             percent=Decimal("50.00"),
             date=datetime.date(2026, 2, 1),
         )
@@ -90,7 +89,7 @@ class SlidingScaleTimeRestrictedtest(TestCase):
         )
 
         SlidingScale.objects.create(
-            student=student, program=program, percent=Decimal("50.00"), date=None
+            student=student, percent=Decimal("50.00"), date=None
         )
 
         url = reverse("program_student_balance", args=[program.pk, student.pk])

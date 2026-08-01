@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}Apply for Sliding Scale — {{ student }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 720px;">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Apply for Sliding Scale</h1>
+    <a href="{% url 'parent_payments' %}" class="btn btn-outline-secondary">Back to Payments</a>
+  </div>
+
+  <p class="text-muted">
+    Applying for <strong>{{ student }}</strong>. The sliding scale discount, once approved, applies to fees
+    across all of {{ student.first_name|default:student.legal_first_name }}'s programs during the approved time frame.
+  </p>
+
+  <div class="alert alert-info">
+    <i class="bi bi-shield-lock me-1"></i>
+    Your information is kept private and encrypted, is only reviewed by a Lead Mentor, and any uploaded documents
+    are permanently deleted once your application has been processed.
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card shadow-sm">
+    <div class="card-header">
+      <strong>Household Information</strong>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="{{ form.family_size.id_for_label }}" class="form-label">{{ form.family_size.label }}</label>
+          {{ form.family_size }}
+          {% if form.family_size.help_text %}
+            <div class="form-text">{{ form.family_size.help_text }}</div>
+          {% endif %}
+          {% for error in form.family_size.errors %}
+            <div class="text-danger small">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.adjusted_gross_income.id_for_label }}" class="form-label">{{ form.adjusted_gross_income.label }}</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            {{ form.adjusted_gross_income }}
+          </div>
+          {% if form.adjusted_gross_income.help_text %}
+            <div class="form-text">{{ form.adjusted_gross_income.help_text }}</div>
+          {% endif %}
+          {% for error in form.adjusted_gross_income.errors %}
+            <div class="text-danger small">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div id="sliding-scale-estimate" class="alert alert-secondary d-none" role="status">
+          <strong>Estimated Discount:</strong> <span id="sliding-scale-estimate-value">—</span>
+          <div class="form-text mb-0">
+            This is only an estimate based on the numbers you've entered above. It is not a guarantee — your
+            actual discount will be determined once a Lead Mentor reviews your application.
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="mb-3">
+          <label for="{{ form.documents.id_for_label }}" class="form-label">{{ form.documents.label }}</label>
+          {{ form.documents }}
+          {% if form.documents.help_text %}
+            <div class="form-text">{{ form.documents.help_text }}</div>
+          {% endif %}
+          {% for error in form.documents.errors %}
+            <div class="text-danger small">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.notes.id_for_label }}" class="form-label">{{ form.notes.label }}</label>
+          {{ form.notes }}
+          {% if form.notes.help_text %}
+            <div class="form-text">{{ form.notes.help_text }}</div>
+          {% endif %}
+          {% for error in form.notes.errors %}
+            <div class="text-danger small">{{ error }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <a href="{% url 'parent_payments' %}" class="btn btn-outline-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">Submit Application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+    var familySizeInput = document.getElementById('{{ form.family_size.id_for_label }}');
+    var agiInput = document.getElementById('{{ form.adjusted_gross_income.id_for_label }}');
+    var estimateBox = document.getElementById('sliding-scale-estimate');
+    var estimateValue = document.getElementById('sliding-scale-estimate-value');
+
+    if (!familySizeInput || !agiInput || !estimateBox || !estimateValue) {
+        return;
+    }
+
+    var baseAmount = parseFloat('{{ settings_obj.base_amount|default:"0" }}');
+    var additionalMemberAmount = parseFloat('{{ settings_obj.additional_member_amount|default:"0" }}');
+    var lowMultiplier = parseFloat('{{ settings_obj.low_multiplier|default:"0" }}');
+    var highMultiplier = parseFloat('{{ settings_obj.high_multiplier|default:"0" }}');
+
+    function updateEstimate() {
+        var familySize = parseFloat(familySizeInput.value);
+        var agi = parseFloat(agiInput.value);
+
+        if (isNaN(familySize) || familySize < 1 || isNaN(agi) || agi < 0) {
+            estimateBox.classList.add('d-none');
+            return;
+        }
+
+        var fedBase = baseAmount + familySize * additionalMemberAmount;
+        var lowBoundary = fedBase * lowMultiplier;
+        var highBoundary = fedBase * highMultiplier;
+
+        var discountPercent;
+        if (highBoundary === lowBoundary) {
+            discountPercent = 0;
+        } else {
+            var ratio = (agi - lowBoundary) / (highBoundary - lowBoundary);
+            ratio = Math.max(0, Math.min(1, ratio));
+            discountPercent = 100 - ratio * 100;
+        }
+
+        estimateValue.textContent = discountPercent.toFixed(2) + '%';
+        estimateBox.classList.remove('d-none');
+    }
+
+    familySizeInput.addEventListener('input', updateEstimate);
+    agiInput.addEventListener('input', updateEstimate);
+    updateEstimate();
+});
+</script>
+{% endblock %}
