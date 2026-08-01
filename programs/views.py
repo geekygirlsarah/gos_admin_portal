@@ -1,5 +1,8 @@
+import datetime
 import logging
-from decimal import ROUND_HALF_DOWN, Decimal
+import mimetypes
+import os
+from decimal import ROUND_HALF_DOWN, Decimal, InvalidOperation
 
 import cssutils
 from django.conf import settings
@@ -12,10 +15,11 @@ from django.contrib.auth.mixins import (
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import Http404, HttpResponseRedirect, QueryDict
+from django.http import FileResponse, Http404, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import strip_tags
 from django.views.generic import (
     CreateView,
@@ -43,6 +47,7 @@ from .forms import (
     ProgramForm,
     QuickCreateStudentForm,
     SchoolForm,
+    SlidingScaleApplicationForm,
     SlidingScaleForm,
     StudentForm,
 )
@@ -58,6 +63,7 @@ from .models import (
     RaceEthnicity,
     School,
     SlidingScale,
+    SlidingScaleSettings,
     Student,
     SubTeam,
     TaxForm,
@@ -2819,42 +2825,10 @@ class ProgramSlidingScaleCreateView(
         return ctx
 
     def form_valid(self, form):
-        # If a sliding scale already exists for this student and program, redirect to edit
-        student = form.cleaned_data.get("student")
-        existing = (
-            SlidingScale.objects.filter(student=student, program=self.program).first()
-            if student
-            else None
-        )
-        if existing:
-            messages.info(
-                self.request,
-                "A sliding scale already exists for this student. You can edit it below.",
-            )
-            return redirect(
-                "program_sliding_scale_edit", pk=self.program.pk, sliding_id=existing.pk
-            )
-        # Otherwise, create normally; guard against race condition
+        # The sliding scale is no longer tied to a single program — it applies
+        # across all of the student's programs — so we simply create the record.
         obj = form.save(commit=False)
-        obj.program = self.program
-        try:
-            obj.save()
-        except Exception:
-            # In case of a late conflict (e.g., unique_together race), redirect to edit
-            existing = SlidingScale.objects.filter(
-                student=obj.student, program=self.program
-            ).first()
-            if existing:
-                messages.info(
-                    self.request,
-                    "A sliding scale already exists for this student. You can edit it below.",
-                )
-                return redirect(
-                    "program_sliding_scale_edit",
-                    pk=self.program.pk,
-                    sliding_id=existing.pk,
-                )
-            raise
+        obj.save()
         # Log creation
         user = getattr(self.request, "user", None)
         user_repr = (
@@ -2863,11 +2837,10 @@ class ProgramSlidingScaleCreateView(
             else "anonymous"
         )
         forms_logger.info(
-            "FormSave: SlidingScale[%s] create by %s | student=%s | program=%s | percent=%s",
+            "FormSave: SlidingScale[%s] create by %s | student=%s | percent=%s",
             obj.pk,
             user_repr,
             self._fmt_val(getattr(obj, "student", None)),
-            self._fmt_val(getattr(self, "program", None)),
             self._fmt_val(getattr(obj, "percent", None)),
         )
         messages.success(self.request, "Sliding scale saved successfully.")
@@ -2890,9 +2863,7 @@ class ProgramSlidingScaleUpdateView(
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        return get_object_or_404(
-            SlidingScale, pk=self.kwargs["sliding_id"], program=self.program
-        )
+        return get_object_or_404(SlidingScale, pk=self.kwargs["sliding_id"])
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -2906,7 +2877,6 @@ class ProgramSlidingScaleUpdateView(
 
     def form_valid(self, form):
         obj = form.save(commit=False)
-        obj.program = self.program
         # Capture old values for changed fields before saving
         try:
             before = SlidingScale.objects.get(pk=obj.pk)
@@ -2954,7 +2924,6 @@ class ProgramSlidingScaleTaxFormDeleteView(
             TaxForm,
             pk=form_id,
             sliding_scale_id=sliding_id,
-            sliding_scale__program_id=pk,
         )
         tax_form.file.delete(save=False)
         tax_form.delete()
@@ -2962,60 +2931,251 @@ class ProgramSlidingScaleTaxFormDeleteView(
         return redirect("program_sliding_scale_edit", pk=pk, sliding_id=sliding_id)
 
 
-class ProgramSlidingScaleParentUploadView(LoginRequiredMixin, View):
-    def post(self, request, pk, student_id):
-        program = get_object_or_404(Program, pk=pk)
-        student = get_object_or_404(Student, pk=student_id)
+class SlidingScaleTaxFormViewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Stream the *decrypted* contents of an uploaded tax form so a Lead
+    Mentor can view it (e.g. a PDF or image rendered inline in the browser)
+    or download it, without ever exposing the encrypted bytes on disk."""
 
-        # Object level check for Parents
+    def test_func(self):
+        # Allow users with change_slidingscale permission in addition to LeadMentors
+        if self.request.user.has_perm("programs.change_slidingscale"):
+            return True
+        return super().test_func()
 
-        user_role = get_user_role(request.user)
-        if user_role == "Parent":
-            try:
-                adult = request.user.adult_profile
-                if student not in adult.students.all():
-                    messages.error(
-                        request,
-                        "You do not have permission to upload tax forms for this student.",
-                    )
-                    return redirect("home")
-            except Exception:
-                messages.error(
-                    request,
-                    "You do not have permission to upload tax forms for this student.",
-                )
-                return redirect("home")
-        elif not request.user.is_superuser and not (
-            request.user.is_authenticated
-            and (
-                user_role == "LeadMentor"
-                or request.user.user_permissions.filter(
-                    codename="change_slidingscale"
-                ).exists()
-            )
-        ):
-            messages.error(request, "Only parents or lead mentors can use this upload.")
-            return redirect("home")
+    def get(self, request, sliding_id, form_id):
+        tax_form = get_object_or_404(TaxForm, pk=form_id, sliding_scale_id=sliding_id)
+        filename = os.path.basename(tax_form.file.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        content_type = content_type or "application/octet-stream"
+        disposition = "attachment" if request.GET.get("download") else "inline"
+        response = FileResponse(
+            tax_form.file.open("rb"),
+            content_type=content_type,
+        )
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
 
-        # Get or create sliding scale for this student/program
-        sliding, created = SlidingScale.objects.get_or_create(
-            student=student, program=program, defaults={"percent": 0}
+
+class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, ListView):
+    """Lead Mentor queue of sliding scale applications awaiting review."""
+
+    model = SlidingScale
+    template_name = "programs/sliding_scale_review_list.html"
+    context_object_name = "applications"
+
+    def get_queryset(self):
+        return (
+            SlidingScale.objects.filter(status=SlidingScale.STATUS_PENDING)
+            .select_related("student", "applied_by")
+            .order_by("created_at")
         )
 
-        files = request.FILES.getlist("tax_form")
-        if files:
-            for f in files:
-                TaxForm.objects.create(sliding_scale=sliding, file=f)
-            sliding.is_pending = True
-            sliding.save()
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["decided_applications"] = (
+            SlidingScale.objects.exclude(status=SlidingScale.STATUS_PENDING)
+            .select_related("student", "applied_by", "reviewed_by")
+            .order_by("-reviewed_at", "-updated_at")[:25]
+        )
+        return ctx
+
+
+class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Approve or decline a pending sliding scale application."""
+
+    template_name = "programs/sliding_scale_review_detail.html"
+
+    def get_object(self):
+        return get_object_or_404(SlidingScale, pk=self.kwargs["pk"])
+
+    def get(self, request, pk):
+        application = self.get_object()
+        settings_obj = SlidingScaleSettings.get_solo()
+        suggested_percent = settings_obj.compute_discount_percent(
+            application.family_size, application.adjusted_gross_income
+        )
+        return render(
+            request,
+            self.template_name,
+            {
+                "application": application,
+                "suggested_percent": suggested_percent,
+                "settings_obj": settings_obj,
+            },
+        )
+
+    def post(self, request, pk):
+        application = self.get_object()
+        action = request.POST.get("action")
+
+        if action == "approve":
+            percent = request.POST.get("percent")
+            date_val = request.POST.get("date") or None
+            expiration_date = request.POST.get("expiration_date") or None
+            try:
+                application.percent = Decimal(percent)
+            except (TypeError, InvalidOperation):
+                messages.error(request, "Please enter a valid discount percent.")
+                return redirect("sliding_scale_review_decide", pk=pk)
+            if application.percent < 0 or application.percent > 100:
+                messages.error(request, "Percent must be between 0 and 100.")
+                return redirect("sliding_scale_review_decide", pk=pk)
+            application.date = date_val or datetime.date.today()
+            application.expiration_date = expiration_date
+            application.status = SlidingScale.STATUS_APPROVED
+            application.reviewed_by = request.user
+            application.reviewed_at = timezone.now()
+            application.save()
+            messages.success(
+                request, f"Sliding scale approved for {application.student}."
+            )
+        elif action == "decline":
+            reason = (request.POST.get("decline_reason") or "").strip()
+            if not reason:
+                messages.error(
+                    request, "Please provide a reason for declining this application."
+                )
+                return redirect("sliding_scale_review_decide", pk=pk)
+            application.status = SlidingScale.STATUS_DECLINED
+            application.decline_reason = reason
+            application.reviewed_by = request.user
+            application.reviewed_at = timezone.now()
+            application.save()
             messages.success(
                 request,
-                f"{len(files)} tax form(s) uploaded successfully. A mentor will review them.",
+                f"Sliding scale application declined for {application.student}.",
             )
         else:
-            messages.error(request, "No file uploaded.")
+            messages.error(request, "Unknown action.")
 
-        return redirect("program_student_balance", pk=pk, student_id=student_id)
+        return redirect("sliding_scale_review_list")
+
+
+class SlidingScaleApplyView(LoginRequiredMixin, View):
+    """Parent-facing sliding scale application, reached from the Payments page.
+
+    Only a Parent (not the Student, and not a Mentor) may apply, and only for
+    their own linked student(s). The application applies across all of the
+    student's programs, not just one.
+    """
+
+    template_name = "programs/sliding_scale_apply.html"
+
+    def _get_student_for_parent(self, request, student_id):
+        if get_user_role(request.user) != "Parent":
+            messages.error(request, "Only a parent can apply for the sliding scale.")
+            return None, redirect("parent_payments")
+
+        student = get_object_or_404(Student, pk=student_id)
+        try:
+            adult = request.user.adult_profile
+            if not adult.is_parent or student not in adult.students.all():
+                raise Adult.DoesNotExist
+        except (Adult.DoesNotExist, AttributeError):
+            messages.error(
+                request, "You do not have permission to apply for this student."
+            )
+            return None, redirect("parent_payments")
+
+        return student, None
+
+    def get(self, request, student_id):
+        student, error_redirect = self._get_student_for_parent(request, student_id)
+        if error_redirect:
+            return error_redirect
+
+        existing_pending = SlidingScale.objects.filter(
+            student=student, status=SlidingScale.STATUS_PENDING
+        ).exists()
+        if existing_pending:
+            messages.info(
+                request,
+                f"{student} already has a sliding scale application pending review.",
+            )
+            return redirect("parent_payments")
+
+        form = SlidingScaleApplicationForm()
+        settings_obj = SlidingScaleSettings.get_solo()
+        return render(
+            request,
+            self.template_name,
+            {"student": student, "form": form, "settings_obj": settings_obj},
+        )
+
+    def post(self, request, student_id):
+        student, error_redirect = self._get_student_for_parent(request, student_id)
+        if error_redirect:
+            return error_redirect
+
+        form = SlidingScaleApplicationForm(request.POST, request.FILES)
+        if not form.is_valid():
+            settings_obj = SlidingScaleSettings.get_solo()
+            return render(
+                request,
+                self.template_name,
+                {"student": student, "form": form, "settings_obj": settings_obj},
+            )
+
+        adult = request.user.adult_profile
+        application = SlidingScale.objects.create(
+            student=student,
+            family_size=form.cleaned_data["family_size"],
+            adjusted_gross_income=form.cleaned_data["adjusted_gross_income"],
+            status=SlidingScale.STATUS_PENDING,
+            applied_by=adult,
+            notes=form.cleaned_data.get("notes") or "",
+        )
+
+        documents = form.cleaned_data.get("documents")
+        if documents:
+            files = documents if isinstance(documents, list) else [documents]
+            for f in files:
+                TaxForm.objects.create(sliding_scale=application, file=f)
+
+        messages.success(
+            request,
+            f"Sliding scale application submitted for {student}. A Lead Mentor will review it soon.",
+        )
+        return redirect("parent_payments")
+
+
+class SlidingScaleWithdrawView(LoginRequiredMixin, View):
+    """Allows a Parent to withdraw their own pending sliding scale application
+    (e.g. to correct a mistake and reapply)."""
+
+    def post(self, request, pk):
+        application = get_object_or_404(
+            SlidingScale, pk=pk, status=SlidingScale.STATUS_PENDING
+        )
+        student = application.student
+
+        if get_user_role(request.user) != "Parent":
+            messages.error(
+                request, "Only a parent can withdraw a sliding scale application."
+            )
+            return redirect("parent_payments")
+
+        try:
+            adult = request.user.adult_profile
+            if not adult.is_parent or student not in adult.students.all():
+                raise Adult.DoesNotExist
+        except (Adult.DoesNotExist, AttributeError):
+            messages.error(
+                request,
+                "You do not have permission to withdraw this application.",
+            )
+            return redirect("parent_payments")
+
+        for tax_form in application.tax_forms.all():
+            tax_form.file.delete(save=False)
+            tax_form.delete()
+        application.delete()
+
+        messages.success(
+            request,
+            f"Sliding scale application for {student} has been withdrawn. You may submit a new one at any time.",
+        )
+        return redirect("parent_payments")
 
 
 class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, View):

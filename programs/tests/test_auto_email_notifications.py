@@ -91,19 +91,23 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertIn("Initial payment", html_content)
         self.assertIn("$60.00", html_content)
 
-    def test_sliding_scale_added_sends_email(self):
+    def test_sliding_scale_approved_directly_sends_email(self):
         # Clear outbox
         mail.outbox = []
 
-        # Add a sliding scale
+        # A Lead Mentor creates an already-approved sliding scale directly
+        # (not via the parent application flow) — the parent should still be
+        # notified that it's been approved.
         SlidingScale.objects.create(
-            student=self.student, program=self.program, percent=Decimal("50.00")
+            student=self.student,
+            percent=Decimal("50.00"),
+            status=SlidingScale.STATUS_APPROVED,
         )
 
         # Assert email was sent
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.parent.personal_email])
-        self.assertIn("Sliding Scale Added", mail.outbox[0].subject)
+        self.assertIn("Sliding Scale Application Approved", mail.outbox[0].subject)
         self.assertIn("50.00%", mail.outbox[0].body)
 
         # Assert HTML version exists
@@ -111,7 +115,53 @@ class AutoEmailNotificationsTest(TestCase):
         html_content, mimetype = mail.outbox[0].alternatives[0]
         self.assertEqual(mimetype, "text/html")
         self.assertIn("50.00%", html_content)
-        self.assertIn("Sliding Scale Added</h1>", html_content)
+
+    def test_sliding_scale_application_submitted_notifies_parent_and_lead_mentor(self):
+        mail.outbox = []
+
+        SlidingScale.objects.create(
+            student=self.student,
+            family_size=4,
+            adjusted_gross_income=Decimal("30000.00"),
+            status=SlidingScale.STATUS_PENDING,
+        )
+
+        self.assertEqual(len(mail.outbox), 2)
+        subjects = [m.subject for m in mail.outbox]
+        self.assertTrue(
+            any("Sliding Scale Application Submitted" in s for s in subjects)
+        )
+        self.assertTrue(
+            any("New Sliding Scale Application to Review" in s for s in subjects)
+        )
+
+    def test_sliding_scale_declined_notifies_parent_and_deletes_documents(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from programs.models import TaxForm
+
+        application = SlidingScale.objects.create(
+            student=self.student,
+            family_size=2,
+            adjusted_gross_income=Decimal("60000.00"),
+            status=SlidingScale.STATUS_PENDING,
+        )
+        TaxForm.objects.create(
+            sliding_scale=application, file=SimpleUploadedFile("t.pdf", b"content")
+        )
+        self.assertEqual(application.tax_forms.count(), 1)
+
+        mail.outbox = []
+        application.status = SlidingScale.STATUS_DECLINED
+        application.decline_reason = "Income exceeds the sliding scale threshold."
+        application.save()
+
+        self.assertEqual(application.tax_forms.count(), 0)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Sliding Scale Application Update", mail.outbox[0].subject)
+        self.assertIn(
+            "Income exceeds the sliding scale threshold.", mail.outbox[0].body
+        )
 
     def test_no_email_if_email_updates_false(self):
         self.parent.email_updates = False

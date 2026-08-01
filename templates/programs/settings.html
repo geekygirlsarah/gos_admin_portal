@@ -28,6 +28,12 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="tab" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">Kiosk Sign-In</button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'sliding_scale_settings' %}active{% endif %}" id="sliding_scale_settings-tab" data-bs-toggle="tab" data-bs-target="#sliding_scale_settings" type="button" role="tab" aria-controls="sliding_scale_settings" aria-selected="{% if active_tab == 'sliding_scale_settings' %}true{% else %}false{% endif %}">
+                Sliding Scale
+                {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content" id="settingsTabsContent">
@@ -624,6 +630,64 @@
                         </div>
                         <div class="col-md-2">
                             <button type="submit" class="btn btn-primary w-100">Add Kiosk</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sliding Scale Tab -->
+        <div class="tab-pane fade {% if active_tab == 'sliding_scale_settings' %}show active{% endif %}" id="sliding_scale_settings" role="tabpanel" aria-labelledby="sliding_scale_settings-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Sliding Scale Applications</h5>
+                    <a href="{% url 'sliding_scale_review_list' %}" class="btn btn-sm btn-primary">
+                        Review Applications
+                        {% if pending_sliding_scale_count %}<span class="badge bg-light text-dark ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
+                    </a>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-0">Review, approve, or decline pending sliding scale applications submitted by parents.</p>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Income Guideline Settings</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        These numbers are used to calculate the suggested sliding scale discount from a family's household size and
+                        adjusted gross income (AGI), based on federal poverty guidelines:
+                    </p>
+                    <pre class="bg-light p-3 rounded"><code>fed_base = base_amount + household_size * additional_member_amount
+low_boundary = fed_base * low_multiplier
+high_boundary = fed_base * high_multiplier
+discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) * 100)</code></pre>
+                    <form method="post" action="{% url 'portal_sliding_scale_settings' %}" class="row g-3">
+                        {% csrf_token %}
+                        <div class="col-md-3">
+                            <label for="base_amount" class="form-label">Base Amount ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="base_amount" name="base_amount" value="{{ sliding_scale_settings.base_amount }}" required>
+                            <div class="form-text">Poverty guideline base for a 1-person household.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="additional_member_amount" class="form-label">Per Additional Member ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="additional_member_amount" name="additional_member_amount" value="{{ sliding_scale_settings.additional_member_amount }}" required>
+                            <div class="form-text">Added for each household member beyond the first.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="low_multiplier" class="form-label">Lower Boundary Multiplier</label>
+                            <input type="number" step="0.01" class="form-control" id="low_multiplier" name="low_multiplier" value="{{ sliding_scale_settings.low_multiplier }}" required>
+                            <div class="form-text">e.g. 1.5 = 150% of poverty guideline.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="high_multiplier" class="form-label">Upper Boundary Multiplier</label>
+                            <input type="number" step="0.01" class="form-control" id="high_multiplier" name="high_multiplier" value="{{ sliding_scale_settings.high_multiplier }}" required>
+                            <div class="form-text">e.g. 4 = 400% of poverty guideline.</div>
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">Save Sliding Scale Settings</button>
                         </div>
                     </form>
                 </div>

@@ -86,13 +86,18 @@ class UtilsAndModelEdgeTests(TestCase):
         )
         self.assertTrue(s.requires_background_check(p4))
 
-    def test_sliding_scale_unique_together(self):
+    def test_sliding_scale_allows_multiple_records_per_student(self):
+        # SlidingScale is no longer tied to a single program, and a student may
+        # accumulate multiple records over time (e.g. an old declined/expired
+        # application plus a new one) — there's no unique_together constraint.
         prog = Program.objects.create(name="P")
         s = Student.objects.create(legal_first_name="A", last_name="B")
         Enrollment.objects.create(student=s, program=prog)
-        SlidingScale.objects.create(student=s, program=prog, percent=Decimal("10.0"))
-        with self.assertRaises(Exception):
-            SlidingScale.objects.create(student=s, program=prog, percent=Decimal("5.0"))
+        SlidingScale.objects.create(
+            student=s, percent=Decimal("10.0"), status=SlidingScale.STATUS_DECLINED
+        )
+        SlidingScale.objects.create(student=s, percent=Decimal("5.0"))
+        self.assertEqual(SlidingScale.objects.filter(student=s).count(), 2)
 
     def test_fee_unique_together(self):
         p1 = Program.objects.create(name="P1")

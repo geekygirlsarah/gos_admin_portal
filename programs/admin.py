@@ -13,6 +13,7 @@ from .models import (
     RolePermission,
     School,
     SlidingScale,
+    SlidingScaleSettings,
     Student,
 )
 
@@ -437,10 +438,28 @@ class ParentAdmin(admin.ModelAdmin):
 
 @admin.register(SlidingScale)
 class SlidingScaleAdmin(admin.ModelAdmin):
-    list_display = ("student", "program", "percent", "date", "is_pending", "updated_at")
-    list_filter = ("program", "is_pending")
-    search_fields = ("student__first_name", "student__last_name", "program__name")
-    autocomplete_fields = ("student", "program")
+    list_display = (
+        "student",
+        "percent",
+        "status",
+        "date",
+        "expiration_date",
+        "updated_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("student__first_name", "student__last_name")
+    autocomplete_fields = ("student", "applied_by")
+
+
+@admin.register(SlidingScaleSettings)
+class SlidingScaleSettingsAdmin(admin.ModelAdmin):
+    list_display = (
+        "base_amount",
+        "additional_member_amount",
+        "low_multiplier",
+        "high_multiplier",
+        "updated_at",
+    )
 
 
 # StudentApplication admin removed; replaced by the `applications` app.

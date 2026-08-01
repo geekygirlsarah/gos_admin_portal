@@ -66,6 +66,16 @@ def send_templated_notification(
         )
 
 
+LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
+
+
+def get_lead_mentor_notification_email():
+    """Email address that should receive Lead Mentor notifications (e.g. new
+    sliding scale applications). Configurable via LEAD_MENTOR_NOTIFICATION_EMAIL.
+    """
+    return getattr(settings, "LEAD_MENTOR_NOTIFICATION_EMAIL", LEAD_MENTOR_EMAIL)
+
+
 def generate_signed_parent_url(application_id):
     signer = TimestampSigner()
     token = signer.sign(str(application_id))
@@ -545,16 +555,43 @@ def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> D
     return amount.quantize(Decimal("1."), rounding=ROUND_HALF_DOWN)
 
 
+def get_active_sliding_scale(student, on_date=None):
+    """Return the SlidingScale record (if any) currently in effect for a student.
+
+    The sliding scale is no longer tied to a single program: an approved,
+    non-expired record applies across ALL of the student's programs. If
+    ``on_date`` is given, only records that haven't expired as of that date
+    are considered (used to evaluate historical fees/balances correctly).
+    """
+    from django.db.models import Q
+
+    from .models import SlidingScale
+
+    qs = SlidingScale.objects.filter(
+        student=student, status=SlidingScale.STATUS_APPROVED
+    )
+    if on_date is not None:
+        qs = qs.filter(
+            Q(expiration_date__isnull=True) | Q(expiration_date__gte=on_date)
+        )
+    else:
+        qs = qs.filter(
+            Q(expiration_date__isnull=True) | Q(expiration_date__gte=date.today())
+        )
+    return qs.order_by("-date", "-created_at").first()
+
+
 def get_student_balance_data(student, program, can_view_sliding=True):
     """
     Computes entries, total fees, sliding discount, total payments, and balance for
-    a student in a specific program. Matches the logic used in views.
+    a student in a specific program. The sliding scale discount (if any) now
+    applies across all of the student's programs, not just this one.
     """
-    from .models import Fee, Payment, SlidingScale
+    from .models import Fee, Payment
 
     # Gather entries: fees (program), sliding scale (if exists), and payments
     entries = []
-    sliding = SlidingScale.objects.filter(student=student, program=program).first()
+    sliding = get_active_sliding_scale(student)
 
     # Fees: positive amounts
     fees = Fee.objects.filter(program=program)
@@ -569,7 +606,11 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         )
         adjusted_amount = fee.amount
         if sliding and sliding.percent is not None and can_view_sliding:
-            if not sliding.date or (fee_date and fee_date >= sliding.date):
+            starts_ok = not sliding.date or (fee_date and fee_date >= sliding.date)
+            ends_ok = not sliding.expiration_date or (
+                fee_date and fee_date <= sliding.expiration_date
+            )
+            if starts_ok and ends_ok:
                 discount = compute_sliding_discount_rounded(fee.amount, sliding.percent)
                 adjusted_amount = fee.amount - discount
 
@@ -598,6 +639,13 @@ def get_student_balance_data(student, program, can_view_sliding=True):
             fee.created_at.date() if fee.created_at else None
         )
         if sliding and sliding.date and fee_date and fee_date < sliding.date:
+            continue
+        if (
+            sliding
+            and sliding.expiration_date
+            and fee_date
+            and fee_date > sliding.expiration_date
+        ):
             continue
 
         applicable_fees_for_discount.append(fee.amount)

@@ -1,0 +1,17 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}New Sliding Scale Application: {{ student }}{% endblock %}
+
+{% block header %}New Sliding Scale Application to Review{% endblock %}
+
+{% block content %}
+<p>A parent has submitted a sliding scale application for <strong>{{ student }}</strong>.</p>
+
+<ul>
+    <li><strong>Household Size:</strong> {{ sliding_scale.family_size|default:"—" }}</li>
+    <li><strong>Adjusted Gross Income:</strong> {% if sliding_scale.adjusted_gross_income %}${{ sliding_scale.adjusted_gross_income|floatformat:2 }}{% else %}—{% endif %}</li>
+    <li><strong>Suggested Discount:</strong> {% if sliding_scale.percent is not None %}{{ sliding_scale.percent }}%{% else %}—{% endif %}</li>
+</ul>
+
+<p>Please log in to the Admin Portal's Sliding Scale Applications queue to review the uploaded documents and approve or decline this application.</p>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Sliding Scale Application {% if sliding_scale.status == "approved" %}Approved{% else %}Update{% endif %}: {{ student }}{% endblock %}
+
+{% block header %}Sliding Scale Application {% if sliding_scale.status == "approved" %}Approved{% else %}Update{% endif %}{% endblock %}
+
+{% block content %}
+{% if sliding_scale.status == "approved" %}
+<p>Good news — the sliding scale application for <strong>{{ student }}</strong> has been approved.</p>
+<ul>
+    <li><strong>Discount:</strong> {{ sliding_scale.percent }}%</li>
+    <li><strong>Effective Date:</strong> {{ sliding_scale.date|default:"Immediately" }}</li>
+    <li><strong>Valid Through:</strong> {{ sliding_scale.expiration_date|default:"No expiration" }}</li>
+</ul>
+<p>This discount will automatically apply to applicable fees across all of {{ student }}'s programs during that time frame.</p>
+{% else %}
+<p>We've finished reviewing the sliding scale application for <strong>{{ student }}</strong>, and unfortunately we're not able to approve it at this time.</p>
+{% if sliding_scale.decline_reason %}
+<p><strong>Reason:</strong> {{ sliding_scale.decline_reason }}</p>
+{% endif %}
+<p>If you have questions or would like to discuss your situation further, please reach out to <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.</p>
+{% endif %}
+<p>Any documents you uploaded as part of this application have now been deleted from our systems.</p>
+{% endblock %}

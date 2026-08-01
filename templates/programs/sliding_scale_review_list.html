@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Sliding Scale Applications{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Sliding Scale Applications</h1>
+    <a href="{% url 'portal_settings' %}?tab=sliding_scale_settings" class="btn btn-outline-secondary">Back to Settings</a>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-light">
+      <h5 class="mb-0">Pending Review</h5>
+    </div>
+    <div class="card-body p-0">
+      {% if applications %}
+        <div class="table-responsive mb-0">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Student</th>
+                <th>Applied By</th>
+                <th>Household Size</th>
+                <th>Adjusted Gross Income</th>
+                <th>Submitted</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for application in applications %}
+                <tr>
+                  <td>{{ application.student }}</td>
+                  <td>{{ application.applied_by|default:"—" }}</td>
+                  <td>{{ application.family_size|default:"—" }}</td>
+                  <td>{% if application.adjusted_gross_income %}${{ application.adjusted_gross_income|floatformat:2 }}{% else %}—{% endif %}</td>
+                  <td>{{ application.created_at|date:"M j, Y" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'sliding_scale_review_decide' application.pk %}" class="btn btn-sm btn-primary">Review</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-4 text-center text-muted">No pending sliding scale applications.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-light">
+      <h5 class="mb-0">Recently Decided</h5>
+    </div>
+    <div class="card-body p-0">
+      {% if decided_applications %}
+        <div class="table-responsive mb-0">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Student</th>
+                <th>Status</th>
+                <th>Discount</th>
+                <th>Reviewed By</th>
+                <th>Reviewed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for application in decided_applications %}
+                <tr>
+                  <td>{{ application.student }}</td>
+                  <td>
+                    <span class="badge {% if application.status == 'approved' %}bg-success{% else %}bg-secondary{% endif %}">
+                      {{ application.get_status_display }}
+                    </span>
+                  </td>
+                  <td>{% if application.percent is not None %}{{ application.percent }}%{% else %}—{% endif %}</td>
+                  <td>{{ application.reviewed_by|default:"—" }}</td>
+                  <td>{{ application.reviewed_at|date:"M j, Y" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-4 text-center text-muted">No applications have been decided yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

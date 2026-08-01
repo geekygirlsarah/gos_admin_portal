@@ -1,6 +1,7 @@
 import base64
 import datetime
 import logging
+from decimal import Decimal
 from io import BytesIO
 
 import pghistory
@@ -1268,43 +1269,170 @@ class Payment(models.Model):
             )
 
 
+class SlidingScaleSettings(models.Model):
+    """Singleton row holding the portal-wide sliding scale calculation constants.
+
+    These are based on the federal poverty guidelines and can be edited by a
+    Lead Mentor from the Portal Settings page.
+    """
+
+    base_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("10150.00"),
+        help_text="Federal poverty guideline base amount (for household size).",
+    )
+    additional_member_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("5500.00"),
+        help_text="Amount added per household member when computing the poverty guideline base.",
+    )
+    low_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("1.50"),
+        help_text="Multiplier applied to the poverty guideline base to compute the lower income boundary.",
+    )
+    high_multiplier = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("4.00"),
+        help_text="Multiplier applied to the poverty guideline base to compute the upper income boundary.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Sliding Scale Settings"
+        verbose_name_plural = "Sliding Scale Settings"
+
+    def __str__(self):
+        return "Sliding Scale Settings"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def compute_discount_percent(self, family_size, adjusted_gross_income):
+        """Compute the suggested discount percent (0-100) for a household.
+
+        Follows: fed_base = base_amount + family_size * additional_member_amount;
+        low_boundary = fed_base * low_multiplier; high_boundary = fed_base * high_multiplier;
+        percent_owed = (agi - low_boundary) / (high_boundary - low_boundary) * 100,
+        clamped to [0, 100]. The discount percent is 100 - percent_owed.
+        """
+        if family_size is None or adjusted_gross_income is None:
+            return None
+        fed_base = self.base_amount + (
+            Decimal(family_size) * self.additional_member_amount
+        )
+        low_boundary = fed_base * self.low_multiplier
+        high_boundary = fed_base * self.high_multiplier
+        if high_boundary == low_boundary:
+            return Decimal("0.00")
+        ratio = (Decimal(adjusted_gross_income) - low_boundary) / (
+            high_boundary - low_boundary
+        )
+        ratio = max(Decimal("0"), min(Decimal("1"), ratio))
+        percent_owed = ratio * Decimal("100")
+        discount_percent = Decimal("100") - percent_owed
+        return discount_percent.quantize(Decimal("0.01"))
+
+
 class SlidingScale(models.Model):
+    """An income-based discount applied to a student's fees across ALL of the
+    programs they're enrolled in during the effective date range (not tied to
+    a single program). A row represents one application/period; a parent
+    applies (creating a "pending" row), and a Lead Mentor reviews it.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_DECLINED = "declined"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending Review"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_DECLINED, "Declined"),
+    ]
+
     student = models.ForeignKey(
         "Student", on_delete=models.CASCADE, related_name="sliding_scales"
-    )
-    program = models.ForeignKey(
-        "Program", on_delete=models.CASCADE, related_name="sliding_scales"
     )
     percent = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        help_text="Percent discount applied to total program fees (0–100).",
+        blank=True,
+        null=True,
+        help_text="Percent discount applied to total fees (0–100), across all of the student's programs.",
     )
     date = models.DateField(
         blank=True,
         null=True,
-        help_text="Effective date the sliding scale starts. Only fees on or after this date will be discounted.",
+        help_text="Effective start date. Only fees on or after this date (and before the expiration date, if any) will be discounted.",
     )
-    family_size = models.PositiveIntegerField(blank=True, null=True)
+    expiration_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date the discount stops applying. Leave blank for no expiration.",
+    )
+    family_size = models.PositiveIntegerField(
+        blank=True, null=True, verbose_name="Household size"
+    )
     adjusted_gross_income = models.DecimalField(
         max_digits=10, decimal_places=2, blank=True, null=True
     )
-    is_pending = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default=STATUS_APPROVED
+    )
+    decline_reason = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Shown to the parent when the application is declined.",
+    )
+    applied_by = models.ForeignKey(
+        "Adult",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sliding_scale_applications",
+        help_text="Parent who submitted this application, if any.",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("student", "program")
-        ordering = ["program__name", "student__last_name", "student__first_name"]
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(
-                fields=["student", "program"], name="slidingscale_stu_prog_idx"
-            ),
+            models.Index(fields=["student"], name="slidingscale_student_idx"),
+            models.Index(fields=["status"], name="slidingscale_status_idx"),
         ]
 
     def __str__(self):
-        return f"Sliding scale {self.percent}% for {self.student} in {self.program}"
+        return f"Sliding scale ({self.get_status_display()}) for {self.student}"
+
+    @property
+    def is_pending(self):
+        return self.status == self.STATUS_PENDING
+
+    @property
+    def is_active(self):
+        """Whether this approved record currently applies (not expired)."""
+        if self.status != self.STATUS_APPROVED:
+            return False
+        today = datetime.date.today()
+        if self.expiration_date and self.expiration_date < today:
+            return False
+        return True
 
 
 class TaxForm(models.Model):

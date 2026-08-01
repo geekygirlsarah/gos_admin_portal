@@ -22,7 +22,7 @@ class ImportSyncTests(TestCase):
             email="admin@example.com",
             password=self.password,
         )
-        self.client.login(username="admin", password=self.password)  # nosec B106
+        self.client.login(username="admin", password=self.password)
 
     def _upload_csv(self, url_name, csv_text, extra_data=None, filename="import.csv"):
         payload = {
@@ -141,7 +141,7 @@ class ImportSampleCsvIntegrationTests(TestCase):
             email="admin@example.com",
             password=self.password,
         )
-        self.client.login(username="admin", password=self.password)  # nosec B106
+        self.client.login(username="admin", password=self.password)
 
     def _download_csv(self, sample_url_name):
         response = self.client.get(reverse(sample_url_name))

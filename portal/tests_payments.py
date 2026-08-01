@@ -12,6 +12,7 @@ from programs.models import (
     Fee,
     Payment,
     Program,
+    SlidingScale,
     Student,
 )
 
@@ -118,6 +119,24 @@ class ParentPaymentsViewTests(TestCase):
         self.assertEqual(response.context["grand_total"], Decimal("130.00"))
         self.assertEqual(len(response.context["student_rows"]), 1)
         self.assertEqual(len(response.context["student_rows"][0]["program_rows"]), 2)
+
+    def test_parent_payments_shows_withdraw_button_for_pending_sliding_scale(self):
+        application = SlidingScale.objects.create(
+            student=self.student,
+            family_size=3,
+            adjusted_gross_income=Decimal("25000.00"),
+            status=SlidingScale.STATUS_PENDING,
+            applied_by=self.parent,
+        )
+
+        self.client.login(username="parent_user", password="password123")  # nosec B106
+        response = self.client.get(reverse("parent_payments"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sliding Scale")
+        self.assertContains(response, "Application pending review by a Lead Mentor.")
+        withdraw_url = reverse("sliding_scale_withdraw", args=[application.pk])
+        self.assertContains(response, withdraw_url)
+        self.assertContains(response, "Withdraw Application")
 
     def test_students_mentors_and_lead_mentors_cannot_access_parent_payments_views(
         self,

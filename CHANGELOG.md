@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-01
+
+### Fixed
+- **Sliding Scale Approval Error on Locked Files**: Fixed an error that could prevent a Lead Mentor from approving or declining a sliding scale application if one of the uploaded documents was still open/locked elsewhere (for example, right after being previewed or downloaded). The application is now approved/declined successfully and the document record is still cleaned up, even if the underlying file can't be removed immediately.
+
+### Added
+- **Withdraw a Sliding Scale Application**: Parents can now withdraw their own pending sliding scale application from the Payments page (for example, to fix a mistake and reapply). Withdrawing permanently removes the application and any uploaded documents, and a new application can be submitted right away.
+- **Estimated Discount on the Sliding Scale Application**: While filling out the "Apply for Sliding Scale" form, parents now see a live, estimated discount percentage update automatically as they type their household size and income. This is calculated right in the browser (nothing is submitted until they click Submit), and is clearly labeled as an estimate since the final discount is still determined by a Lead Mentor's review.
+- **In-Portal Tax Document Viewer**: On the Sliding Scale Review page, Lead Mentors can now click "View" to preview an uploaded tax document (PDF, image, etc.) right in the page, or "Download" to save a readable copy — both are automatically decrypted on the fly, so the raw encrypted file is never shown or downloaded directly.
+
+### Changed
+- **Clearer Payments Page Layout**: On the Payments page, the sliding scale status for each student has been moved out of the balance table and into its own "Sliding Scale" card that appears after the Total Owed, so the two sections are no longer crowded together.
+- **Easier-to-Read Sliding Scale Application Form**: The "Apply for Sliding Scale" page now has clearer spacing and labeling between fields, instead of everything running together. The note about document handling was also reworded in plain language (documents are kept private and secure, and are permanently deleted after review) instead of the more technical "encrypted in transit and at rest" phrasing.
+
+## 2026-07-31
+
+### Added
+- **Sliding Scale Applications**: Parents can now apply for the sliding scale discount directly from the Payments page. Each student's card shows whether they're currently on the sliding scale (and through what date), have an application pending review, or aren't enrolled in it yet, with an "Apply for Sliding Scale" button when appropriate. Applicants answer a short questionnaire (household size and adjusted gross income) and can optionally upload supporting documents, which are encrypted both in transit and at rest.
+- **Sliding Scale Review Queue**: Lead Mentors now have a dedicated "Sliding Scale Applications" page (linked from the Admin menu and Portal Settings) to review pending applications, see the automatically suggested discount percent, and approve (setting the discount, start date, and an optional expiration date) or decline (with a required reason that's shared with the family) each one.
+- **Configurable Income Guidelines**: The federal poverty guideline numbers used to calculate the suggested sliding scale discount (base amount, per-additional-household-member amount, and the lower/upper income boundary multipliers) are now editable by Lead Mentors from a new "Sliding Scale" tab in Portal Settings, instead of being hard-coded.
+- **Sliding Scale Email Notifications**: Parents (who opt in to updates) now receive an email when they submit a sliding scale application and another when it's approved or declined; Lead Mentors receive an email whenever a new application comes in for review.
+
+### Changed
+- **Sliding Scale Now Applies Across All Programs**: The sliding scale discount is no longer tied to a single program. Once approved for a student, it automatically applies to that student's fees in every program they're enrolled in during the approved date range, rather than needing to be set up separately per program.
+- Uploaded sliding scale documents are now automatically and permanently deleted as soon as a Lead Mentor approves or declines the application, since they're no longer needed for review.
+
 ## 2026-07-30
 
 ### Fixed

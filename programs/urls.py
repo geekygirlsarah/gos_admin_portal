@@ -9,6 +9,7 @@ from .permission_views import (
     PortalKioskView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
+    PortalSlidingScaleSettingsView,
     PortalSubteamView,
     PortalTeamView,
 )
@@ -48,7 +49,6 @@ from .views import (
     ProgramSchoolsView,
     ProgramSignoutSheetView,
     ProgramSlidingScaleCreateView,
-    ProgramSlidingScaleParentUploadView,
     ProgramSlidingScaleTaxFormDeleteView,
     ProgramSlidingScaleUpdateView,
     ProgramStudentAddView,
@@ -64,6 +64,11 @@ from .views import (
     SchoolImportView,
     SchoolListView,
     SchoolUpdateView,
+    SlidingScaleApplyView,
+    SlidingScaleReviewDecideView,
+    SlidingScaleReviewListView,
+    SlidingScaleTaxFormViewView,
+    SlidingScaleWithdrawView,
     StudentBulkConvertToAlumniView,
     StudentConvertToAlumniView,
     StudentCreateView,
@@ -363,11 +368,6 @@ urlpatterns = [
         name="program_sliding_scale_delete_tax_form",
     ),
     path(
-        "<int:pk>/students/<int:student_id>/tax-form/upload/",
-        login_required(ProgramSlidingScaleParentUploadView.as_view()),
-        name="program_sliding_scale_parent_upload",
-    ),
-    path(
         "<int:pk>/students/<int:student_id>/balance/",
         login_required(ProgramStudentBalanceView.as_view()),
         name="program_student_balance",
@@ -407,6 +407,32 @@ urlpatterns = [
             ProgramSlidingScaleUpdateView.as_view()
         ),
         name="program_sliding_scale_edit",
+    ),
+    # Sliding scale application (parent apply) and review queue (Lead Mentor only)
+    path(
+        "sliding-scale/apply/<int:student_id>/",
+        login_required(SlidingScaleApplyView.as_view()),
+        name="sliding_scale_apply",
+    ),
+    path(
+        "sliding-scale/withdraw/<int:pk>/",
+        login_required(SlidingScaleWithdrawView.as_view()),
+        name="sliding_scale_withdraw",
+    ),
+    path(
+        "sliding-scale/review/",
+        login_required(SlidingScaleReviewListView.as_view()),
+        name="sliding_scale_review_list",
+    ),
+    path(
+        "sliding-scale/review/<int:sliding_id>/tax-form/<int:form_id>/",
+        login_required(SlidingScaleTaxFormViewView.as_view()),
+        name="sliding_scale_tax_form_view",
+    ),
+    path(
+        "sliding-scale/review/<int:pk>/",
+        login_required(SlidingScaleReviewDecideView.as_view()),
+        name="sliding_scale_review_decide",
     ),
     # Fee management
     path(
@@ -523,5 +549,10 @@ urlpatterns = [
         "settings/kiosks/",
         PortalKioskView.as_view(),
         name="portal_kiosk",
+    ),
+    path(
+        "settings/sliding-scale/",
+        PortalSlidingScaleSettingsView.as_view(),
+        name="portal_sliding_scale_settings",
     ),
 ]

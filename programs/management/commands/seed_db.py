@@ -532,15 +532,19 @@ class Command(BaseCommand):
             Decimal("50.00"),
         ]
         for idx, discount in enumerate(discount_values):
+            is_pending = idx % 4 == 0
             SlidingScale.objects.update_or_create(
                 student=students[idx],
-                program=primary_program,
                 defaults={
                     "percent": discount,
                     "date": primary_program.start_date,
                     "family_size": 3 + idx,
                     "adjusted_gross_income": Decimal("30000.00") + Decimal(idx * 4500),
-                    "is_pending": idx % 4 == 0,
+                    "status": (
+                        SlidingScale.STATUS_PENDING
+                        if is_pending
+                        else SlidingScale.STATUS_APPROVED
+                    ),
                     "notes": "Seeded income-based discount",
                 },
             )

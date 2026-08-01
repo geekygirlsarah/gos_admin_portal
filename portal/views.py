@@ -171,9 +171,9 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
     )
 
     def get(self, request, *args, **kwargs):
-        from programs.models import Enrollment
+        from programs.models import Enrollment, SlidingScale
         from programs.permission_views import can_user_read
-        from programs.utils import get_student_program_balance
+        from programs.utils import get_active_sliding_scale, get_student_program_balance
 
         can_view_sliding = can_user_read(request.user, "sliding_scale")
         enrollments = (
@@ -210,6 +210,27 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
                     ),
                 }
             )
+
+        if can_view_sliding:
+            for student_data in students.values():
+                student = student_data["student"]
+                active = get_active_sliding_scale(student)
+                pending_application = (
+                    SlidingScale.objects.filter(
+                        student=student, status=SlidingScale.STATUS_PENDING
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+                student_data["sliding_scale"] = active
+                student_data["sliding_scale_pending"] = pending_application
+                student_data["sliding_scale_apply_url"] = reverse(
+                    "sliding_scale_apply", args=[student.pk]
+                )
+                if pending_application:
+                    student_data["sliding_scale_withdraw_url"] = reverse(
+                        "sliding_scale_withdraw", args=[pending_application.pk]
+                    )
 
         student_rows = sorted(
             students.values(),
