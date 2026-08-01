@@ -784,8 +784,7 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         return redirect_back(request, "student_list")
 
 
-class StudentBulkConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = "programs.change_student"
+class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):

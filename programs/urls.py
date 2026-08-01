@@ -238,9 +238,7 @@ urlpatterns = [
     ),
     path(
         "students/convert-to-alumni/",
-        permission_required("programs.change_student")(
-            StudentBulkConvertToAlumniView.as_view()
-        ),
+        StudentBulkConvertToAlumniView.as_view(),
         name="student_bulk_convert_select",
     ),
     path(
