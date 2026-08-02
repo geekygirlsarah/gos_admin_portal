@@ -243,6 +243,31 @@ def can_user_write(user, section, obj=None):
     return can_write_section
 
 
+def can_user_delete(user, section, obj=None):
+    """
+    Returns True if the user may delete records in the given section.
+
+    Deletion rules are stricter than write rules:
+    - LeadMentors can always delete.
+    - Mentors are explicitly blocked from deleting attendance records, even if
+      they have write (add/edit) access.
+    - All other roles follow the same object-level write restrictions but
+      deletion is denied if the role cannot write to the section at all.
+    """
+    role = get_user_role(user)
+    if role == "LeadMentor":
+        return True
+    if role is None:
+        return False
+
+    # Mentors can add/edit attendance but never delete it
+    if role == "Mentor" and section == "attendance":
+        return False
+
+    # For all other sections/roles, delete tracks write permission
+    return can_user_write(user, section, obj=obj)
+
+
 class LeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
         return (
