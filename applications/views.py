@@ -1054,9 +1054,12 @@ class Step7PrimaryParentView(View):
             .get("step5-student", {})
             .get("_existing_student_id")
         )
-        if not saved and existing_student_id:
+        student = None
+        if existing_student_id:
             student = Student.objects.filter(pk=existing_student_id).first()
-            if student and student.primary_contact_id:
+
+        if not saved and student:
+            if student.primary_contact_id:
                 existing_adult = student.primary_contact
         if not saved and existing_adult is None:
             lookup_email = handoff_email or application.email
@@ -1088,7 +1091,9 @@ class Step7PrimaryParentView(View):
         # Prefer prior saved data, then existing adult lookup. If we came in
         # via a handoff and have no other info, at least seed the parent's
         # email field.
-        initial = saved or (adult_to_prefill(existing_adult) if existing_adult else {})
+        initial = saved or (
+            adult_to_prefill(existing_adult, student=student) if existing_adult else {}
+        )
         if not initial:
             if handoff_email:
                 initial = {"email": handoff_email}
