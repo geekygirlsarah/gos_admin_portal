@@ -70,6 +70,7 @@ Tests are located in each app's `tests/` directory. Run all tests with:
 
 To run specific integration flows:
    python manage.py test programs.tests.test_integration_flows
+   python manage.py test applications.tests.test_integration_flows
 
 We follow a TDD approach. New features or bug fixes should include both unit tests and, where appropriate, "Story" integration tests that cover full lifecycles.
 
