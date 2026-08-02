@@ -160,11 +160,11 @@ class StudentAttendanceRoleTests(TestCase):
         # RolePermission defaults to can_read=True, so no explicit entry needed
         self.client.login(username="mentor_user3", password="password123")  # nosec B106
         url = reverse("student_attendance", args=[self.student1.pk])
-        
+
         # Debugging: Check if the mentor has the required permissions
         # role_perm = RolePermission.objects.get(role="Mentor", section="attendance")
         # print(f"RolePermission for Mentor in attendance: can_read={role_perm.can_read}, can_write={role_perm.can_write}")
-        
+
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
