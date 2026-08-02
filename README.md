@@ -50,8 +50,13 @@ A Django-based administrative portal for managing programs, students, parents, a
 Typical settings for email, debug, and allowed hosts can be configured directly in GoSAdminPortal/settings.py for local development. For production, consider using environment variables and a .env loader.
 
 ## Running Tests
-If tests are added later, they can be executed with:
-   python manage.py test
+Tests are located in each app's `tests/` directory. Run all tests with:
+   python manage.py test --parallel
+
+To run specific integration flows:
+   python manage.py test programs.tests.test_integration_flows
+
+We follow a TDD approach. New features or bug fixes should include both unit tests and, where appropriate, "Story" integration tests that cover full lifecycles.
 
 ## Deployment Notes
 - Use a production-ready database (PostgreSQL, MySQL) instead of SQLite.
