@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-02
+
+### Fixed
+- **Dynamic Permission Logic**: Fixed a bug in `DynamicPermissionMixin` where `CreateView` operations would incorrectly attempt to fetch a non-existent object (via `get_object()`), causing a 404 or permission failure when trying to add new records (such as Fees or Payments) if a primary key was present in the URL (e.g., the parent Program's ID).
+
+### Added
+- **Story Integration Tests**: Introduced a new testing pattern for full user lifecycles. The first suite (`programs/tests/test_integration_flows.py`) covers the complete financial journey: adding a fee, applying for a sliding scale discount, approving it, recording payments, and verifying the final balance sheet accuracy.
+- **Application Flow Integration Tests**: Added a comprehensive integration test suite for the public application wizard (`applications/tests/test_integration_flows.py`). It covers both Student-initiated (including parent handoff) and Parent-initiated application lifecycles from start through lead mentor approval and conversion to student records.
+- **Improved Documentation for Reliability**: Updated `README.md` and `AGENTS.md` to explicitly require Test-Driven Development (TDD) for all new features and bug fixes, and provided guidance on when to use unit vs. integration tests.
+- **CI/CD Documentation**: Added a "Continuous Integration (CI)" section to `README.md` detailing the automated checks (linting, security, system checks, and tests) that must pass before deployment, and how to execute them using the `run_ci` scripts.
+
 ## 2026-08-01
 
 ### Fixed
@@ -85,6 +96,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-07-27
 
 ### Changed
+- **Attendance permission rules tightened**: The portal now enforces clear role-based rules for who can view, add, edit, or delete attendance records. Students can only see their own attendance. Parents can only see their children's attendance. Mentors can view and add or edit student attendance records for current programs, but cannot delete any attendance records. Users with no role cannot access attendance data. Lead Mentors continue to have full access.
 - **Kiosk security improvement — no API key required**: Kiosk sign-in pages no longer embed an API key in the browser. Instead, a mentor visits the kiosk URL once and enters their portal credentials to "unlock" the kiosk. After unlocking, the kiosk runs without any login for 7 days. All attendance recording and student lookups now happen through secure server-side calls — nothing sensitive is ever sent to the browser. Staff can Activate or Deactivate individual kiosks from the Settings → Kiosk Sign-In tab.
 - **Visitor sign-in now tracks team number**: The kiosk Visitor / Guest tab now includes an optional "Team Number" field so visiting FRC/FTC/FLL teams can log their team number when signing in. The team number is stored alongside the visit record for reporting.
 - **API Key creation simplified**: When creating a new API key, you no longer need to enter or generate a key manually. Just give it a name, pick a scope (read or read/write), and save — a secure key is generated automatically. The key is displayed read-only on the edit page so you can copy it at any time.

@@ -132,6 +132,13 @@ class StudentAttendanceRoleTests(TestCase):
             user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
         )
 
+        # Ensure RolePermission entry exists for Mentor in attendance section
+        self.role_perm = RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="attendance",
+            defaults={"can_read": True, "can_write": True},
+        )[0]
+
         # Student 1
         self.student_user1 = User.objects.create_user(
             username="student_user1", password="password123"  # nosec B106
@@ -148,11 +155,31 @@ class StudentAttendanceRoleTests(TestCase):
             user=self.student_user2, first_name="Student", last_name="Two"
         )
 
-    def test_mentor_cannot_view_attendance(self):
+    def test_mentor_can_view_attendance_by_default(self):
+        """Mentors can view student attendance (to add/edit) when RolePermission allows."""
+        # RolePermission defaults to can_read=True, so no explicit entry needed
+        self.client.login(username="mentor_user3", password="password123")  # nosec B106
+        url = reverse("student_attendance", args=[self.student1.pk])
+
+        # Debugging: Check if the mentor has the required permissions
+        # role_perm = RolePermission.objects.get(role="Mentor", section="attendance")
+        # print(f"RolePermission for Mentor in attendance: can_read={role_perm.can_read}, can_write={role_perm.can_write}")
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_mentor_cannot_view_attendance_when_denied(self):
+        """Mentors are blocked from attendance when RolePermission denies read."""
+        from programs.models import RolePermission
+
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="attendance",
+            defaults={"can_read": False, "can_write": False},
+        )
         self.client.login(username="mentor_user3", password="password123")  # nosec B106
         url = reverse("student_attendance", args=[self.student1.pk])
         response = self.client.get(url)
-        # Should be redirected to home
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
 

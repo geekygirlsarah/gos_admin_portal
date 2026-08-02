@@ -313,6 +313,7 @@ def adult_to_prefill(adult, student=None) -> dict:
         return {}
 
     relationship = ""
+    specific_relationship = ""
     if student:
         from programs.models import AdultStudentRelationship
 
@@ -320,13 +321,21 @@ def adult_to_prefill(adult, student=None) -> dict:
             adult=adult, student=student
         ).first()
         if asr:
-            relationship = asr.relationship
+            relationship = asr.relationship_to_student
+            specific_relationship = asr.specific_relationship
 
     return {
         "first_name": adult.first_name or "",
+        "preferred_first_name": adult.preferred_first_name or "",
         "last_name": adult.last_name or "",
+        "pronouns": adult.pronouns or "",
         "relationship_to_student": relationship,
+        "specific_relationship": specific_relationship,
         "email": adult.personal_email or "",
+        "address": adult.address or "",
+        "city": adult.city or "",
+        "state": adult.state or "PA",
+        "zip_code": adult.zip_code or "",
         "phone_number": adult.phone_number or "",
         "phone_type": adult.phone_type or "cell",
         "can_receive_texts": adult.can_receive_texts,

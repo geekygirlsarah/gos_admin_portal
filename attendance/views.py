@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 from programs.models import Adult, Program, Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
+    can_user_delete,
     can_user_read,
     can_user_write,
 )
@@ -122,6 +123,16 @@ def student_attendance_view(request, pk):
             session.save()
             return redirect("student_attendance", pk=student.pk)
         elif action == "delete":
+            if not can_user_delete(request.user, "attendance"):
+                return render(
+                    request,
+                    "students/attendance.html",
+                    {
+                        "student": student,
+                        "error": "You do not have permission to delete attendance records.",
+                    },
+                    status=403,
+                )
             session_id = request.POST.get("session_id")
             session = get_object_or_404(
                 AttendanceSession, id=session_id, student=student
