@@ -98,7 +98,8 @@ class DynamicPermissionMixin(UserPassesTestMixin):
         if not self.section:
             return True
         obj = getattr(self, "object", None)
-        if not obj and hasattr(self, "get_object"):
+        # Avoid calling get_object on CreateViews where 'pk' in URL refers to a parent
+        if not obj and hasattr(self, "get_object") and not isinstance(self, CreateView):
             try:
                 obj = self.get_object()
             except Http404:
