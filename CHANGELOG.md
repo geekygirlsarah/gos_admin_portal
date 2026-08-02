@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-02
+
+### Fixed
+- **Dynamic Permission Logic**: Fixed a bug in `DynamicPermissionMixin` where `CreateView` operations would incorrectly attempt to fetch a non-existent object (via `get_object()`), causing a 404 or permission failure when trying to add new records (such as Fees or Payments) if a primary key was present in the URL (e.g., the parent Program's ID).
+
+### Added
+- **Story Integration Tests**: Introduced a new testing pattern for full user lifecycles. The first suite (`programs/tests/test_integration_flows.py`) covers the complete financial journey: adding a fee, applying for a sliding scale discount, approving it, recording payments, and verifying the final balance sheet accuracy.
+- **Improved Documentation for Reliability**: Updated `README.md` and `AGENTS.md` to explicitly require Test-Driven Development (TDD) for all new features and bug fixes, and provided guidance on when to use unit vs. integration tests.
+- **CI/CD Documentation**: Added a "Continuous Integration (CI)" section to `README.md` detailing the automated checks (linting, security, system checks, and tests) that must pass before deployment, and how to execute them using the `run_ci` scripts.
+
 ## 2026-08-01
 
 ### Fixed
