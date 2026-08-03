@@ -50,20 +50,24 @@ class DashboardAttendanceTests(TestCase):
 
         # Create some attendance sessions
         now = timezone.now()
+        # Week starts on Monday (matches attendance.services.get_attendance_stats)
+        week_start = (now - datetime.timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         # Session from this week
         AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
-            check_in=now - datetime.timedelta(hours=2),
-            check_out=now - datetime.timedelta(hours=1),
+            check_in=week_start + datetime.timedelta(hours=1),
+            check_out=week_start + datetime.timedelta(hours=2),
             duration_minutes=60,
         )
-        # Session from 2 weeks ago
+        # Session from 2 weeks ago (before the current week)
         AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
-            check_in=now - datetime.timedelta(days=14, hours=2),
-            check_out=now - datetime.timedelta(days=14, hours=1),
+            check_in=week_start - datetime.timedelta(days=14, hours=2),
+            check_out=week_start - datetime.timedelta(days=14, hours=1),
             duration_minutes=60,
         )
 
@@ -93,11 +97,15 @@ class DashboardAttendanceTests(TestCase):
 
         # Create an attendance session
         now = timezone.now()
+        # Week starts on Monday (matches attendance.services.get_attendance_stats)
+        week_start = (now - datetime.timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
-            check_in=now - datetime.timedelta(hours=2),
-            check_out=now - datetime.timedelta(hours=1),
+            check_in=week_start + datetime.timedelta(hours=1),
+            check_out=week_start + datetime.timedelta(hours=2),
             duration_minutes=60,
         )
 

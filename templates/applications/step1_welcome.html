@@ -8,14 +8,97 @@
         {{ settings_obj.welcome_message|linebreaks }}
     </div>
 
+    <div class="mb-4">
+        <h2 class="h5">Who can apply?</h2>
+        <p class="mb-2">
+            This application lets you join a Girls of Steel Robotics program.
+            Depending on your situation, you can apply as:
+        </p>
+        <ul class="mb-0">
+            <li>
+                <strong>Students</strong> — Apply for yourself to join one of
+                our upcoming programs for girls in grades K–12.
+            </li>
+            <li>
+                <strong>Parents / Guardians</strong> — Apply on behalf of one
+                of your children.
+            </li>
+            <li>
+                <strong>Mentors / Volunteers</strong> — Apply to volunteer with
+                our teams and support our mission. (Jump straight to the application below.)
+            </li>
+        </ul>
+    </div>
+
+    <h2 class="h5">Programs students can apply for</h2>
+    {% if future_programs %}
+        <p class="form-text mb-3">
+            Here are the programs that we are currently accepting applications for. If you don't see the program you're
+            expecting, it may have closed or not be open yet. Select "More details" on any
+            program to learn more.
+        </p>
+        <div class="list-group accordion" id="welcomeProgramsAccordion">
+            {% for prog in future_programs %}
+                <div class="list-group-item">
+                    <div class="d-flex gap-2 align-items-center mb-1">
+                        <span class="fw-semibold ms-1">{{ prog.name }}</span>
+                        {% if prog.grade_range_display %}
+                            <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
+                        {% endif %}
+                    </div>
+                    {% if prog.start_date %}
+                        <div class="small text-muted">
+                            Runs {{ prog.start_date|date:"F j, Y" }}{% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}
+                        </div>
+                    {% endif %}
+                    <div class="mt-2">
+                        <button
+                                class="btn btn-sm btn-outline-secondary"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#welcome-prog-details-{{ prog.pk }}"
+                                aria-expanded="false"
+                                aria-controls="welcome-prog-details-{{ prog.pk }}"
+                        >
+                            More details
+                        </button>
+                        <div id="welcome-prog-details-{{ prog.pk }}" class="collapse mt-2" data-bs-parent="#welcomeProgramsAccordion">
+                            {% if prog.cost %}
+                                <div class="small mb-2">
+                                    <abbr title="Program cost may be as low as $0 after applying for the sliding scale.">
+                                        Cost: <strong>{{ prog.cost }}</strong>
+                                    </abbr>
+                                </div>
+                            {% endif %}
+                            {% if prog.description %}
+                                <div class="small">{{ prog.description|linebreaksbr }}</div>
+                            {% endif %}
+                            {% if not prog.cost and not prog.description %}
+                                <div class="small text-muted">
+                                    No additional details are available for this program yet.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info" role="status">
+            There are no programs accepting applications right now.
+            Please check back soon, or contact us at
+            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+        </div>
+    {% endif %}
+
+    <hr class="my-4" aria-hidden="true">
+
     <form method="post" action="{% url 'apply_start' %}" novalidate>
         {% csrf_token %}
         <button type="submit" class="btn btn-primary btn-lg w-100">
             Start a new application
         </button>
     </form>
-
-    <hr class="my-4" aria-hidden="true">
 
     <h2 class="h5">Resume an application</h2>
 
@@ -39,4 +122,7 @@
         </div>
         <button type="submit" class="btn btn-outline-primary">Resume</button>
     </form>
+
+    <hr class="my-4" aria-hidden="true">
+
 {% endblock %}

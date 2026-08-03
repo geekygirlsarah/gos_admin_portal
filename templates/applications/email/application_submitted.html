@@ -1,10 +1,14 @@
 <p>Hi {{ application.applicant_name|default:"" }},</p>
 <p>Thanks for applying to <strong>Girls of Steel Robotics</strong>!</p>
 <p>
+    {% if not application.is_mentor %}
     <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
     {% if application.primary_parent_name %}<strong>Primary adult contact:</strong> {{ application.primary_parent_name }}<br>{% endif %}
     {% if application.secondary_parent_name %}<strong>Secondary adult contact:</strong> {{ application.secondary_parent_name }}<br>{% endif %}
     <strong>Program:</strong> {{ application.program|default:"(not specified)" }}<br>
+    {% else %}
+    <strong>Mentor:</strong> {{ application.mentor_name|default:"(not specified)" }}<br>
+    {% endif %}
     <strong>Application ID:</strong> <code>{{ application.application_id }}</code>
 </p>
 <p>

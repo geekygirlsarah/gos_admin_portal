@@ -340,9 +340,14 @@ class Application(models.Model):
         return first or last or ""
 
     @property
+    def is_mentor(self) -> bool:
+        """``True`` if this application is for a mentor / volunteer."""
+        return self.applicant_type == self.Type.MENTOR
+
+    @property
     def applicant_name(self) -> str:
         """Friendly name of the main person applying (student or mentor)."""
-        if self.applicant_type == self.Type.MENTOR:
+        if self.is_mentor:
             return self.mentor_name
         return self.student_name
 

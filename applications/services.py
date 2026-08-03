@@ -586,8 +586,9 @@ class ApplicationConversionError(Exception):
     """Raised when an application cannot be converted to a Student."""
 
 
-def _adult_from_data(parent_data: dict):
-    """Find or create an Adult from a step7-primaryparent/step8-secondaryparent data dict.
+def _adult_from_data(parent_data: dict, is_parent: bool = True):
+    """Find or create an Adult from a step7-primaryparent/step8-secondaryparent
+    (or mentor_info) data dict.
 
     Match is by email (case-insensitive) when one is provided; otherwise a
     new Adult is created. Existing Adults have their blank/null fields
@@ -652,10 +653,11 @@ def _adult_from_data(parent_data: dict):
             setattr(adult, field, value)
 
     _fill("first_name", first_name)
-    _fill("preferred_name", preferred)
+    _fill("preferred_first_name", preferred)
     _fill("last_name", last_name)
     _fill("personal_email", email)
     _fill("andrew_email", andrew_email)
+    _fill("andrew_id", andrew_id)
     _fill("phone_number", parent_data.get("phone_number"))
     _fill("phone_type", parent_data.get("phone_type"))
     if parent_data.get("can_receive_texts") and not adult.can_receive_texts:
@@ -665,12 +667,18 @@ def _adult_from_data(parent_data: dict):
     _fill("state", parent_data.get("state"))
     _fill("zip_code", parent_data.get("zip_code"))
     _fill("pronouns", parent_data.get("pronouns"))
+    _fill("discord_username", parent_data.get("discord_username"))
+    _fill("employer", parent_data.get("employer"))
+    _fill("notes", parent_data.get("notes"))
 
     # For boolean fields, only update if the existing value is False and we have a True value.
     if parent_data.get("email_updates") and not adult.email_updates:
         adult.email_updates = True
 
-    adult.is_parent = True
+    # Only set the parent flag when the applicant is a parent; never clear it
+    # on a matched record (e.g. an existing parent also applying as a mentor).
+    if is_parent:
+        adult.is_parent = True
     adult.save()
     return adult
 
@@ -814,13 +822,19 @@ def convert_application_to_student(application: Application, request=None):
     if application.converted_student_id:
         return application.converted_student
 
+    # Mentors don't produce a Student record, so idempotency is tracked by
+    # the CONVERTED status plus a lookup of the created mentor Adult.
+    if (
+        application.applicant_type == Application.Type.MENTOR
+        and application.status == Application.Status.CONVERTED
+    ):
+        return find_existing_mentor_by_email(application.email)
+
     if application.status not in (
         Application.Status.APPROVED,
         Application.Status.APPROVED_SIGNED,
     ):
-        raise ApplicationConversionError(
-            "Only approved applications can be converted to a student."
-        )
+        raise ApplicationConversionError("Only approved applications can be converted.")
     # If approved (not yet APPROVED_SIGNED), verify there are no
     # required signed documents still missing for the program.
     if application.status == Application.Status.APPROVED and application.program_id:
@@ -839,7 +853,12 @@ def convert_application_to_student(application: Application, request=None):
                 "Cannot convert: required signed documents are still "
                 f"missing: {names}."
             )
-    if not application.program_id:
+    # Mentors apply to the organization, not a program, so they are the one
+    # applicant type that converts without a program selected.
+    if (
+        not application.program_id
+        and application.applicant_type != Application.Type.MENTOR
+    ):
         raise ApplicationConversionError(
             "Application has no program selected; cannot enroll."
         )
@@ -856,7 +875,7 @@ def convert_application_to_student(application: Application, request=None):
             if application.email.lower().endswith("@andrew.cmu.edu"):
                 mentor_data["andrew_email_fallback"] = application.email
 
-            adult = _adult_from_data(mentor_data)
+            adult = _adult_from_data(mentor_data, is_parent=False)
             adult.is_mentor = True
             adult.save()
 

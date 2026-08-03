@@ -69,9 +69,7 @@ class ApplicantTypeForm(forms.Form):
 
     applicant_type = forms.ChoiceField(
         label="I am applying as a…",
-        choices=[
-            c for c in Application.Type.choices if c[0] != Application.Type.MENTOR
-        ],
+        choices=Application.Type.choices,
         widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
     email = forms.EmailField(

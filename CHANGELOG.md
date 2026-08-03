@@ -5,11 +5,15 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-02
 
 ### Fixed
+- **Mentor Applications Keep Mentor Flow**: Fixed a bug where a prospective mentor who went back a few steps (e.g., to the "Who are you?" page) and continued again would be bounced into the student program-selection step instead of back through the mentor questions. Mentors now stay in the mentor wizard, and resuming/continuing an unfinished mentor application routes to the correct mentor step.
 - **Dynamic Permission Logic**: Fixed a bug in `DynamicPermissionMixin` where `CreateView` operations would incorrectly attempt to fetch a non-existent object (via `get_object()`), causing a 404 or permission failure when trying to add new records (such as Fees or Payments) if a primary key was present in the URL (e.g., the parent Program's ID).
+- **Mentor Application Submission wording**: The post-submission confirmation page and the submission-confirmation email previously always referred to a "student" and "primary adult contact" even for mentor applicants (who have neither). Mentors now see thank-you text and an email that correctly identify them as the applicant/mentor instead of showing student/parent information.
 
 ### Added
+- **More Helpful Application Welcome Page**: The first page of the application wizard now explains who can apply (students, parents/guardians, or mentors/volunteers) and lists the programs currently accepting applications — including grade range and dates at a glance, with an expandable "More details" section on every program. You can browse what's available without starting an application.
 - **Story Integration Tests**: Introduced a new testing pattern for full user lifecycles. The first suite (`programs/tests/test_integration_flows.py`) covers the complete financial journey: adding a fee, applying for a sliding scale discount, approving it, recording payments, and verifying the final balance sheet accuracy.
 - **Application Flow Integration Tests**: Added a comprehensive integration test suite for the public application wizard (`applications/tests/test_integration_flows.py`). It covers both Student-initiated (including parent handoff) and Parent-initiated application lifecycles from start through lead mentor approval and conversion to student records.
+- **Mentor / Volunteer Applications Re-enabled**: The "Mentor / Volunteer" option is available again in the public application wizard. Prospective mentors can now submit an application, and lead mentors can approve and convert it into a mentor record on file.
 - **Improved Documentation for Reliability**: Updated `README.md` and `AGENTS.md` to explicitly require Test-Driven Development (TDD) for all new features and bug fixes, and provided guidance on when to use unit vs. integration tests.
 - **CI/CD Documentation**: Added a "Continuous Integration (CI)" section to `README.md` detailing the automated checks (linting, security, system checks, and tests) that must pass before deployment, and how to execute them using the `run_ci` scripts.
 

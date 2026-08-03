@@ -4,10 +4,12 @@ Thanks for applying to Girls of Steel Robotics!
 
 We've received your application:
 
-  Student:          {{ application.student_name|default:"(not specified)" }}
+{% if application.is_mentor %}  Mentor:           {{ application.mentor_name|default:"(not specified)" }}
+{% else %}  Student:          {{ application.student_name|default:"(not specified)" }}
   {% if application.primary_parent_name %}Primary adult contact:   {{ application.primary_parent_name }}
   {% endif %}{% if application.secondary_parent_name %}Secondary adult contact: {{ application.secondary_parent_name }}
-  {% endif %}Program:          {{ application.program|default:"(not specified)" }}
+  Program:          {{ application.program|default:"(not specified)" }}
+  {% endif %}{% endif %}
   Application ID:   {{ application.application_id }}
 
 Our lead mentors have been notified and will review your application.

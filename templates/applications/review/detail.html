@@ -54,7 +54,11 @@
           </form>
           {% if application.status == 'converted' %}
             <button class="btn btn-primary w-100" type="button" disabled>
-              ✓ Converted to Student
+              {% if application.applicant_type == 'mentor' %}
+                ✓ Converted to Mentor
+              {% else %}
+                ✓ Converted to Student
+              {% endif %}
             </button>
             {% if application.converted_student %}
               <a class="btn btn-outline-primary"
@@ -68,7 +72,11 @@
               <button class="btn btn-primary w-100" type="submit"
                       {% if not can_convert %}disabled
                       title="Approve the application first, and make sure any required signed documents have been uploaded."{% endif %}>
-                Convert to Student
+                {% if application.applicant_type == 'mentor' %}
+                  Convert to Mentor
+                {% else %}
+                  Convert to Student
+                {% endif %}
               </button>
             </form>
           {% endif %}
@@ -130,7 +138,7 @@
               </form>
             {% endif %}
 
-            {% if application.status == 'converted' %}
+            {% if application.status == 'converted' and application.applicant_type != 'mentor' %}
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="type" value="converted">

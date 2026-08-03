@@ -55,6 +55,42 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, "Welcome")
         self.assertContains(response, "Application ID")
 
+    def test_step1_explains_who_can_apply(self):
+        response = self.client.get(reverse("apply_start"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Students")
+        self.assertContains(response, "Parent")
+        self.assertContains(response, "Mentor")
+
+    def test_step1_lists_upcoming_programs(self):
+        self.future_program.description = "A great first robotics program."
+        self.future_program.grade_range_start = 4
+        self.future_program.grade_range_end = 6
+        self.future_program.cost = "$300"
+        self.future_program.save()
+
+        response = self.client.get(reverse("apply_start"))
+        self.assertEqual(response.status_code, 200)
+        # Name, grade range, and dates are visible without expanding.
+        self.assertContains(response, self.future_program.name)
+        self.assertContains(response, "4th")
+        self.assertContains(response, "6th")
+        self.assertContains(response, "Runs")
+        # The full details (description, cost) are inside the expandable area.
+        self.assertContains(response, "collapse")
+        self.assertContains(response, "A great first robotics program.")
+        self.assertContains(response, "$300")
+        # Closed programs are not shown here.
+        self.assertNotContains(response, self.current_program.name)
+
+    def test_step1_shows_details_button_without_description_or_cost(self):
+        # Programs with no description/cost on file must still offer a
+        # "More details" button so the affordance is always visible.
+        response = self.client.get(reverse("apply_start"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "More details")
+        self.assertContains(response, "collapse")
+
     def test_step1_post_starts_new_application_and_redirects_to_step2(self):
         response = self.client.post(reverse("apply_start"))
         self.assertEqual(response.status_code, 302)
