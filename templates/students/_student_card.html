@@ -1,0 +1,29 @@
+{% with s=item.student|default:item team=item.team crew=item.crew %}
+  <div class="col">
+    <div class="card h-100 text-center">
+      <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+        {% if s.photo %}
+          <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
+        {% else %}
+          <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
+            <span class="text-muted">No Photo</span>
+          </div>
+        {% endif %}
+      </a>
+      <div class="card-body p-2">
+        <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+        <div class="mt-1 d-flex flex-wrap justify-content-center gap-1">
+          {% if team %}
+            <span class="badge rounded-pill team-badge" data-color="{{ team.color }}">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
+          {% endif %}
+          {% if crew %}
+            <span class="badge rounded-pill crew-badge" data-color="{{ crew.color }}">{{ crew.name }}</span>
+          {% endif %}
+          {% if show_inactive %}
+            <span class="badge bg-secondary ms-2">Inactive</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endwith %}

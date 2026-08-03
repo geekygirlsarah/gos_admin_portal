@@ -59,7 +59,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 ## Data Model Summary
 
 - **Program**: Central entity with fees, features, and enrollments.
-- **Student**: Identity, school, graduation, demographics, medical, and relationships to adults.
+- **Student**: Identity, school, graduation, demographics, medical, and relationships to adults. A student is considered **inactive** once marked `graduated=True`; within a program they're inactive if their `Enrollment.active` is `False` or they've graduated. When building student dropdowns/selection lists, reuse `active_students()` / `active_students_in_program(program)` in `programs/utils.py` so inactive students stay out. On program-scoped list pages, separate inactive students into their own section (as `programs/views.py` does for the program detail, assignment, photo grid, and dues-owed views).
 - **Adult**: Unified model for Parent, Mentor, Alumni, Volunteer.
 - **Enrollment**: Links Student ↔ Program.
 - **Fee**: Per-Program costs.
@@ -119,5 +119,6 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - Search the codebase to infer structure; `programs/permission_views.py`, `signals.py`, and `utils.py` have important reusable code blocks. Reuse those whenever possible, or add similar code blocks into these files.
 - When adding a new view, pick the right mixin from `programs/permission_views.py`: `LeadMentorRequiredMixin` for Lead Mentor-only actions, `DynamicReadPermissionMixin` / `DynamicWritePermissionMixin` (with `permission_section`) for role-configurable pages, `LoginRequiredMixin` for any authenticated user.
 - When filtering querysets by role, use `StudentQuerysetRoleMixin.filter_students_by_role()` (in `programs/views.py`) instead of duplicating the Parent/Student filter pattern.
+- When limiting a student queryset to active students, use `active_students()` (non-graduated) for global lists and `active_students_in_program(program)` (active enrollment + non-graduated) for program-scoped lists, both in `programs/utils.py`. Don't build the `enrollment__active=True, graduated=False` filter inline.
 - `signals.py` uses string-based lazy senders (`sender="programs.Adult"`) — not lambdas. Follow this pattern for any new signal receivers.
 - The `PortalSettingsView` handles GET only. Permission updates, team, crew, and subteam changes each have their own dedicated view (`PortalPermissionsUpdateView`, `PortalTeamView`, `PortalCrewView`, `PortalSubteamView`).

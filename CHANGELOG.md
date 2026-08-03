@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-03
 
+### Added
+- **Inactive Students Kept Out of Student Selection Lists**: Students who have graduated (or whose enrollment in a program was marked inactive) no longer appear in the dropdowns and selection lists used to pick a student — such as adding an existing student to a program, recording a payment, assigning a fee, creating a sliding scale discount, sending a balance email, or linking students to an adult. Previously these lists could mix inactive students in with the current roster.
+- **Inactive Students Shown Separately on Program Pages**: On a program's team/crew assignment page and its photo grid, students who are no longer active are now listed in their own "Students No Longer Active" section (the same way the program detail page already shows them), so they're clearly separated from current students instead of mixed in.
+
 ### Changed
 - **Sliding Scale Applies to Programs Active in the Same Time Frame**: A student's approved sliding scale discount now applies to a program only if the program's start/end dates overlap the sliding scale's effective date range. So a discount set for the current season won't discount fees from a past program that has already ended. The program's active/inactive toggle is ignored for this purpose, so a program that becomes active again automatically picks up the discount for any overlapping dates.
 - **Sliding Scale Management Moved to Applications Page**: The "Add Sliding Scale" button no longer appears on a program's page. Instead, the Sliding Scale Applications page has its own "Add Sliding Scale" button, and existing sliding scales (both pending and already decided) can be edited from there. This keeps all sliding scale management in one place.

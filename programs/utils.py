@@ -479,6 +479,35 @@ def format_grade(grade: int | str | None) -> str:
     return f"{n}{suffix} Grade"
 
 
+def active_students():
+    """Return a queryset of students who are still active (not graduated).
+
+    A student is considered inactive once marked ``graduated=True``. This is
+    the student-level equivalent of the old ``active`` flag and is used to
+    keep inactive students out of dropdowns/selection lists.
+    """
+    from .models import Student
+
+    return Student.objects.filter(graduated=False)
+
+
+def active_students_in_program(program):
+    """Return students with an active enrollment in ``program``.
+
+    A student is considered active in a program when their ``Enrollment`` has
+    ``active=True`` and the student record isn't marked graduated. Students who
+    dropped out (enrollment marked inactive) or graduated are excluded. This
+    mirrors how the program detail page splits active vs. inactive students.
+    """
+    from .models import Student
+
+    return Student.objects.filter(
+        enrollment__program=program,
+        enrollment__active=True,
+        graduated=False,
+    )
+
+
 def get_safe_url(request, url):
     """
     Return a safe local URL for redirects.

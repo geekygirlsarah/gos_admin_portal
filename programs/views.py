@@ -510,6 +510,15 @@ class ProgramStudentPhotoListView(
         ctx["program"] = self.program
         # Compatibility for the template which expects 'students'
         ctx["students"] = ctx["enrollments"]
+        # Split the page's enrollments into active and inactive sections so
+        # inactive (dropped/graduated) students aren't mixed in with active ones.
+        page_enrollments = list(ctx["enrollments"])
+        ctx["active_enrollments"] = [
+            e for e in page_enrollments if e.active and not e.student.graduated
+        ]
+        ctx["inactive_enrollments"] = [
+            e for e in page_enrollments if not (e.active and not e.student.graduated)
+        ]
         return ctx
 
 
@@ -2554,12 +2563,21 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         crews = Crew.objects.filter(program=program).order_by("name")
         subteams = SubTeam.objects.filter(program=program).order_by("name")
 
+        # Separate inactive students (inactive enrollment or graduated) so they
+        # don't get mixed in with the active ones being assigned.
+        active_enrollments = enrollments.filter(active=True, student__graduated=False)
+        inactive_enrollments = enrollments.exclude(
+            active=True, student__graduated=False
+        )
+
         return render(
             request,
             self.template_name,
             {
                 "program": program,
                 "enrollments": enrollments,
+                "active_enrollments": active_enrollments,
+                "inactive_enrollments": inactive_enrollments,
                 "teams": teams,
                 "crews": crews,
                 "subteams": subteams,

@@ -63,7 +63,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for e in enrollments %}
+                                {% for e in active_enrollments %}
                                 <tr>
                                     <td>
                                         <input class="form-check-input student-checkbox" type="checkbox" name="student_ids" value="{{ e.student.id }}">
@@ -100,6 +100,60 @@
                 </form>
             </div>
         </div>
+
+        {% if inactive_enrollments %}
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h2 class="h5 mb-0">Students No Longer Active</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">These students are no longer active in this program and cannot be assigned to a team/crew.</p>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Current Team</th>
+                                <th>Current Crew</th>
+                                <th>Current SubTeam</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in inactive_enrollments %}
+                            <tr class="table-secondary">
+                                <td>
+                                    {{ e.student.first_name|default:e.student.legal_first_name }} {{ e.student.last_name }}
+                                    <span class="badge bg-secondary ms-2">Inactive</span>
+                                </td>
+                                <td>
+                                    {% if e.team %}
+                                        <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}</span>
+                                    {% else %}
+                                        <span class="text-muted small">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if e.crew %}
+                                        <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                                    {% else %}
+                                        <span class="text-muted small">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if e.subteam %}
+                                        <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
+                                    {% else %}
+                                        <span class="text-muted small">None</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
