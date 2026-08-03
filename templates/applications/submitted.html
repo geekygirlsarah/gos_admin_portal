@@ -37,11 +37,19 @@
     </p>
 </div>
 
+{% if application.is_mentor %}
+<p>
+    A confirmation email has been sent to you.
+    Our lead mentors have been notified and will review your mentor
+    application. You can check back any time using your application ID.
+</p>
+{% else %}
 <p>
     A confirmation email has been sent to both student and the primary adult contact.
     Our lead mentors have been notified and will review your application.
     You can check back any time using your application ID.
 </p>
+{% endif %}
 
 <p>
     <a href="{% url 'apply_start' %}" class="btn btn-outline-primary">
