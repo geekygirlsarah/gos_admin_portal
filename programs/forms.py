@@ -344,14 +344,15 @@ class SlidingScaleForm(forms.ModelForm):
             "expiration_date": forms.DateInput(attrs={"type": "date"}),
         }
 
-    def __init__(self, *args, program: Program, **kwargs):
+    def __init__(self, *args, program=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Restrict to students in this program (the sliding scale itself now
-        # applies across all of the student's programs, but this form is
-        # reached from a specific program's page).
-        self.fields["student"].queryset = Student.objects.filter(
-            programs=program
-        ).order_by(
+        # Restrict to students in the program when reached from a specific
+        # program's page; otherwise list all students (the sliding scale
+        # itself applies across all of the student's programs).
+        students = Student.objects.all()
+        if program is not None:
+            students = students.filter(programs=program)
+        self.fields["student"].queryset = students.order_by(
             Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
             Lower("last_name"),
         )

@@ -1,16 +1,15 @@
 {% extends 'base.html' %}
 {% load form_tags %}
-{% block title %}{% if object %}Edit Sliding Scale{% else %}New Sliding Scale{% endif %} — {{ program.name }}{% endblock %}
-{% block nav_programs_active %} active{% endblock %}
+{% block title %}{% if object %}Edit Sliding Scale{% else %}New Sliding Scale{% endif %}{% endblock %}
 {% block content %}
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+      <a class="link-secondary" href="{% url 'sliding_scale_review_list' %}">← Back to Sliding Scale Applications</a>
     </div>
   </div>
   <div class="row">
     <div class="col-lg-8 col-xl-6">
-      <h1 class="h4">{% if object %}Edit{% else %}New{% endif %} Sliding Scale for {{ program.name }}</h1>
+      <h1 class="h4">{% if object %}Edit{% else %}New{% endif %} Sliding Scale</h1>
       <p class="text-muted">
         Once saved, the discount applies to this student's fees across all of their programs
         during the effective time frame.
@@ -102,7 +101,7 @@
                         </div>
                         <div class="modal-footer">
                           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                          <form method="post" action="{% url 'program_sliding_scale_delete_tax_form' program.id object.id tax_form.id %}">
+                          <form method="post" action="{% url 'sliding_scale_delete_tax_form' object.id tax_form.id %}">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-danger">Delete Form</button>
                           </form>
@@ -117,7 +116,7 @@
         {% endif %}
 
         <button type="submit" class="btn btn-primary">Save</button>
-        <a href="{% url 'program_detail' program.id %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+        <a href="{% url 'sliding_scale_review_list' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
       </form>
     </div>
   </div>

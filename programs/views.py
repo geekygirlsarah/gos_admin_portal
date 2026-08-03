@@ -2235,7 +2235,6 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         if role == "Mentor":
             ctx["can_manage_students"] = False
             ctx["can_add_payment"] = False
-            ctx["can_add_sliding_scale"] = False
             ctx["can_manage_fees"] = False
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
@@ -2244,7 +2243,6 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
                 self.request.user, "student_info"
             )
             ctx["can_add_payment"] = can_user_write(self.request.user, "payments")
-            ctx["can_add_sliding_scale"] = can_user_write(self.request.user, "payments")
             ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
             ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
             ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
@@ -2799,7 +2797,7 @@ class ProgramPaymentPrintView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
         )
 
 
-class ProgramSlidingScaleCreateView(
+class SlidingScaleCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
@@ -2810,18 +2808,8 @@ class ProgramSlidingScaleCreateView(
     template_name = "programs/sliding_scale_form.html"
     section = "sliding_scale"
 
-    def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["program"] = self.program
-        return kwargs
-
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["program"] = self.program
         ctx["settings_obj"] = SlidingScaleSettings.get_solo()
         return ctx
 
@@ -2845,10 +2833,10 @@ class ProgramSlidingScaleCreateView(
             self._fmt_val(getattr(obj, "percent", None)),
         )
         messages.success(self.request, "Sliding scale saved successfully.")
-        return redirect("program_detail", pk=self.program.pk)
+        return redirect("sliding_scale_review_list")
 
 
-class ProgramSlidingScaleUpdateView(
+class SlidingScaleUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
@@ -2859,21 +2847,11 @@ class ProgramSlidingScaleUpdateView(
     template_name = "programs/sliding_scale_form.html"
     section = "sliding_scale"
 
-    def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
     def get_object(self, queryset=None):
         return get_object_or_404(SlidingScale, pk=self.kwargs["sliding_id"])
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["program"] = self.program
-        return kwargs
-
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["program"] = self.program
         ctx["settings_obj"] = SlidingScaleSettings.get_solo()
         return ctx
 
@@ -2906,10 +2884,10 @@ class ProgramSlidingScaleUpdateView(
                 self._fmt_val(new),
             )
         messages.success(self.request, "Sliding scale updated successfully.")
-        return redirect("program_detail", pk=self.program.pk)
+        return redirect("sliding_scale_review_list")
 
 
-class ProgramSlidingScaleTaxFormDeleteView(
+class SlidingScaleTaxFormDeleteView(
     LoginRequiredMixin, DynamicWritePermissionMixin, View
 ):
     section = "sliding_scale"
@@ -2921,7 +2899,7 @@ class ProgramSlidingScaleTaxFormDeleteView(
             return True
         return super().test_func()
 
-    def post(self, request, pk, sliding_id, form_id):
+    def post(self, request, sliding_id, form_id):
         tax_form = get_object_or_404(
             TaxForm,
             pk=form_id,
@@ -2930,7 +2908,7 @@ class ProgramSlidingScaleTaxFormDeleteView(
         tax_form.file.delete(save=False)
         tax_form.delete()
         messages.success(request, "Tax form deleted.")
-        return redirect("program_sliding_scale_edit", pk=pk, sliding_id=sliding_id)
+        return redirect("sliding_scale_edit", sliding_id=sliding_id)
 
 
 class SlidingScaleTaxFormViewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):

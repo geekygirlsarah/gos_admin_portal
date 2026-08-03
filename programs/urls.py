@@ -48,9 +48,6 @@ from .views import (
     ProgramPaymentPrintView,
     ProgramSchoolsView,
     ProgramSignoutSheetView,
-    ProgramSlidingScaleCreateView,
-    ProgramSlidingScaleTaxFormDeleteView,
-    ProgramSlidingScaleUpdateView,
     ProgramStudentAddView,
     ProgramStudentBalancePrintView,
     ProgramStudentBalanceView,
@@ -65,9 +62,12 @@ from .views import (
     SchoolListView,
     SchoolUpdateView,
     SlidingScaleApplyView,
+    SlidingScaleCreateView,
     SlidingScaleReviewDecideView,
     SlidingScaleReviewListView,
+    SlidingScaleTaxFormDeleteView,
     SlidingScaleTaxFormViewView,
+    SlidingScaleUpdateView,
     SlidingScaleWithdrawView,
     StudentBulkConvertToAlumniView,
     StudentConvertToAlumniView,
@@ -361,11 +361,6 @@ urlpatterns = [
         name="program_student_remove",
     ),
     path(
-        "<int:pk>/sliding/<int:sliding_id>/delete_tax_form/<int:form_id>/",
-        login_required(ProgramSlidingScaleTaxFormDeleteView.as_view()),
-        name="program_sliding_scale_delete_tax_form",
-    ),
-    path(
         "<int:pk>/students/<int:student_id>/balance/",
         login_required(ProgramStudentBalanceView.as_view()),
         name="program_student_balance",
@@ -390,21 +385,6 @@ urlpatterns = [
         "<int:pk>/payments/<int:payment_id>/print/",
         login_required(ProgramPaymentPrintView.as_view()),
         name="program_payment_print",
-    ),
-    # Sliding scales
-    path(
-        "<int:pk>/sliding-scales/new/",
-        permission_required("programs.add_slidingscale")(
-            ProgramSlidingScaleCreateView.as_view()
-        ),
-        name="program_sliding_scale_create",
-    ),
-    path(
-        "<int:pk>/sliding-scales/<int:sliding_id>/edit/",
-        permission_required("programs.change_slidingscale")(
-            ProgramSlidingScaleUpdateView.as_view()
-        ),
-        name="program_sliding_scale_edit",
     ),
     # Sliding scale application (parent apply) and review queue (Lead Mentor only)
     path(
@@ -431,6 +411,25 @@ urlpatterns = [
         "sliding-scale/review/<int:pk>/",
         login_required(SlidingScaleReviewDecideView.as_view()),
         name="sliding_scale_review_decide",
+    ),
+    path(
+        "sliding-scale/new/",
+        permission_required("programs.add_slidingscale")(
+            SlidingScaleCreateView.as_view()
+        ),
+        name="sliding_scale_create",
+    ),
+    path(
+        "sliding-scale/<int:sliding_id>/edit/",
+        permission_required("programs.change_slidingscale")(
+            SlidingScaleUpdateView.as_view()
+        ),
+        name="sliding_scale_edit",
+    ),
+    path(
+        "sliding-scale/<int:sliding_id>/tax-forms/<int:form_id>/delete/",
+        login_required(SlidingScaleTaxFormDeleteView.as_view()),
+        name="sliding_scale_delete_tax_form",
     ),
     # Fee management
     path(
