@@ -62,6 +62,43 @@ class MentorFlowTests(TestCase):
             fetch_redirect_response=False,
         )
 
+    def test_mentor_step3_get_when_already_verified_redirects_to_mentor_flow(self):
+        # Visiting the email-verify page again with a verified email must NOT
+        # send a mentor to the student program-selection step.
+        app = _make_verified_mentor_app()
+        response = self.client.get(
+            reverse("apply_step3", kwargs={"app_id": app.application_id})
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_mentor_info", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
+    def test_mentor_going_back_to_step2_then_forward_stays_in_mentor_flow(self):
+        # Regression: after getting partway through the mentor wizard, going
+        # back to step 2 and pressing Continue again used to land the user in
+        # the student program-selection step. It should return to the mentor
+        # questions instead.
+        app = _make_verified_mentor_app()
+        app.data = {"mentor_info": {"legal_first_name": "Alex", "last_name": "Lee"}}
+        app.save()
+        response = self.client.post(
+            reverse("apply_step2", kwargs={"app_id": app.application_id}),
+            {"applicant_type": "mentor", "email": "newmentor@example.com"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+        response = self.client.get(response["Location"])
+        self.assertRedirects(
+            response,
+            reverse("apply_mentor_info", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
     def test_mentor_otp_success_blocks_existing_mentor(self):
         Adult.objects.create(
             first_name="Pat",
@@ -281,6 +318,38 @@ class MentorFlowTests(TestCase):
         self.assertContains(response, app.application_id)
 
     # --- Resume routing -------------------------------------------------
+
+    def test_resume_link_routes_unverified_mentor_to_email_verify(self):
+        # An unverified mentor resuming must go to the email-verify page
+        # (apply_step3), never to the student program-selection page.
+        app = Application.objects.create(
+            applicant_type=Application.Type.MENTOR,
+            email="x@example.com",
+            current_step=3,
+        )
+        response = self.client.get(
+            reverse("apply_resume_link", kwargs={"app_id": app.application_id})
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
+    def test_continue_for_unverified_mentor_goes_to_email_verify(self):
+        app = Application.objects.create(
+            applicant_type=Application.Type.MENTOR,
+            email="x@example.com",
+            current_step=5,
+        )
+        response = self.client.get(
+            reverse("apply_continue", kwargs={"app_id": app.application_id})
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step3", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
 
     def test_resume_link_routes_mentor_to_mentor_info_after_otp(self):
         app = _make_verified_mentor_app()

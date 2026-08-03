@@ -98,7 +98,7 @@ def _redirect_to_current_step(application: Application):
         if step <= 2:
             return redirect("apply_step2", app_id=application.application_id)
         if not application.email_is_verified:
-            return redirect("apply_step4", app_id=application.application_id)
+            return redirect("apply_step3", app_id=application.application_id)
         data = application.data or {}
         if not data.get("mentor_info"):
             return redirect("apply_mentor_info", app_id=application.application_id)
@@ -162,12 +162,14 @@ class WelcomeView(View):
     template_name = "applications/step1_welcome.html"
 
     def get(self, request):
+        future_programs, _, _ = get_program_buckets()
         return render(
             request,
             self.template_name,
             {
                 "settings_obj": SiteSettings.load(),
                 "resume_form": ResumeApplicationForm(),
+                "future_programs": future_programs,
                 "current_step": 1,
                 "total_steps": TOTAL_STEPS,
                 "application": None,
@@ -189,12 +191,14 @@ class ResumeView(View):
     def post(self, request):
         form = ResumeApplicationForm(request.POST)
         if not form.is_valid():
+            future_programs, _, _ = get_program_buckets()
             return render(
                 request,
                 self.template_name,
                 {
                     "settings_obj": SiteSettings.load(),
                     "resume_form": form,
+                    "future_programs": future_programs,
                     "current_step": 1,
                     "total_steps": TOTAL_STEPS,
                     "resume_error": True,
@@ -359,7 +363,9 @@ class Step3VerifyEmailView(View):
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
         if application.email_is_verified:
-            return redirect("apply_step4", app_id=application.application_id)
+            # Mentors skip program selection — send them back into the mentor
+            # wizard; everyone else continues to Step 4 (program selection).
+            return _redirect_after_email_verified(application)
         if not application.email:
             messages.error(
                 request,
@@ -602,6 +608,8 @@ class ContinueView(View):
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
         if not application.email_is_verified:
+            if _is_mentor(application):
+                return redirect("apply_step3", app_id=application.application_id)
             return redirect("apply_step4", app_id=application.application_id)
         # Land them on the highest step they've reached so far (>= 5).
         application.current_step = max(application.current_step, 5)
