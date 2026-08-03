@@ -1,12 +1,13 @@
 from decimal import Decimal
 from unittest import mock
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group, Permission, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
+from programs.forms import SlidingScaleForm
 from programs.models import (
     Adult,
     Enrollment,
@@ -172,6 +173,90 @@ class SlidingScaleApplicationTests(TestCase):
         self.assertContains(response, str(settings_obj.additional_member_amount))
         self.assertContains(response, str(settings_obj.low_multiplier))
         self.assertContains(response, str(settings_obj.high_multiplier))
+
+    # ------------------------------------------------------------------
+    # Admin entry form (from the Programs page) mirrors the apply layout
+    # ------------------------------------------------------------------
+
+    def test_sliding_scale_form_field_order_matches_apply_layout(self):
+        """The Lead Mentor 'Add Sliding Scale' form should present the
+        household questionnaire (family size + AGI) first, then the discount
+        and date fields, so it reads like the parent-facing apply page."""
+        form = SlidingScaleForm(program=self.program)
+        self.assertEqual(
+            list(form.fields.keys()),
+            [
+                "student",
+                "family_size",
+                "adjusted_gross_income",
+                "percent",
+                "date",
+                "expiration_date",
+                "notes",
+            ],
+        )
+
+    def test_program_sliding_scale_create_page_includes_calculator(self):
+        """The admin create page should expose the sliding scale calculation
+        constants so JavaScript can show a live discount estimate (matching the
+        parent apply page)."""
+        perm = Permission.objects.get(codename="add_slidingscale")
+        self.lead_mentor_user.user_permissions.add(perm)
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        url = reverse("program_sliding_scale_create", args=[self.program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        settings_obj = SlidingScaleSettings.get_solo()
+        self.assertEqual(response.context["settings_obj"], settings_obj)
+        self.assertContains(response, "Estimated")
+        self.assertContains(response, str(settings_obj.base_amount))
+        self.assertContains(response, str(settings_obj.additional_member_amount))
+        self.assertContains(response, str(settings_obj.low_multiplier))
+        self.assertContains(response, str(settings_obj.high_multiplier))
+        self.assertContains(response, "Household Size")
+        self.assertContains(response, "Adjusted Gross Income")
+
+    def test_program_sliding_scale_create_page_uses_apply_style_fields(self):
+        """The admin create page should render household + discount fields in
+        Bootstrap form markup (not a bare database-row `form.as_p` dump)."""
+        perm = Permission.objects.get(codename="add_slidingscale")
+        self.lead_mentor_user.user_permissions.add(perm)
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        url = reverse("program_sliding_scale_create", args=[self.program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "form-control")
+        self.assertContains(response, "sliding-scale-estimate")
+
+    def test_lead_mentor_can_create_sliding_scale_with_household_info(self):
+        """A Lead Mentor can create an approved sliding scale row from the
+        program page, with the household questionnaire and discount data."""
+        perm = Permission.objects.get(codename="add_slidingscale")
+        self.lead_mentor_user.user_permissions.add(perm)
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        url = reverse("program_sliding_scale_create", args=[self.program.pk])
+        response = self.client.post(
+            url,
+            {
+                "student": self.student.pk,
+                "family_size": 4,
+                "adjusted_gross_income": "30000.00",
+                "percent": "50.00",
+                "date": "2026-01-01",
+                "expiration_date": "2027-01-01",
+            },
+            follow=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        sliding = SlidingScale.objects.get(student=self.student)
+        self.assertEqual(sliding.status, SlidingScale.STATUS_APPROVED)
+        self.assertEqual(sliding.family_size, 4)
+        self.assertEqual(sliding.adjusted_gross_income, Decimal("30000.00"))
+        self.assertEqual(sliding.percent, Decimal("50.00"))
 
     # ------------------------------------------------------------------
     # Withdrawing (Parent only, pending applications only)

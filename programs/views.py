@@ -2822,6 +2822,7 @@ class ProgramSlidingScaleCreateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["program"] = self.program
+        ctx["settings_obj"] = SlidingScaleSettings.get_solo()
         return ctx
 
     def form_valid(self, form):
@@ -2873,6 +2874,7 @@ class ProgramSlidingScaleUpdateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["program"] = self.program
+        ctx["settings_obj"] = SlidingScaleSettings.get_solo()
         return ctx
 
     def form_valid(self, form):

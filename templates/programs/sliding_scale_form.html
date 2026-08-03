@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load form_tags %}
 {% block title %}{% if object %}Edit Sliding Scale{% else %}New Sliding Scale{% endif %} — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
@@ -10,9 +11,69 @@
   <div class="row">
     <div class="col-lg-8 col-xl-6">
       <h1 class="h4">{% if object %}Edit{% else %}New{% endif %} Sliding Scale for {{ program.name }}</h1>
+      <p class="text-muted">
+        Once saved, the discount applies to this student's fees across all of their programs
+        during the effective time frame.
+      </p>
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+
       <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        <div class="mb-3">{{ form.as_p }}</div>
+
+        <div class="card mb-3 shadow-sm">
+          <div class="card-header"><strong>Apply to Student</strong></div>
+          <div class="card-body">
+            {% render_field form.student %}
+          </div>
+        </div>
+
+        <div class="card mb-3 shadow-sm">
+          <div class="card-header"><strong>Household Information</strong></div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                {% render_field form.family_size %}
+              </div>
+              <div class="col-md-6">
+                {% render_field form.adjusted_gross_income %}
+              </div>
+            </div>
+
+            <div id="sliding-scale-estimate" class="alert alert-secondary d-none mb-0" role="status">
+              <strong>Estimated Discount:</strong> <span id="sliding-scale-estimate-value">—</span>
+              <div class="form-text mb-0">
+                Estimate based on the current sliding scale settings. You can use it to help set the
+                discount below, or override it.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-3 shadow-sm">
+          <div class="card-header"><strong>Discount and Dates</strong></div>
+          <div class="card-body">
+            {% render_field form.percent %}
+            <div class="row">
+              <div class="col-md-6">
+                {% render_field form.date %}
+              </div>
+              <div class="col-md-6">
+                {% render_field form.expiration_date %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-3 shadow-sm">
+          <div class="card-header"><strong>Notes</strong></div>
+          <div class="card-body">
+            {% render_field form.notes %}
+          </div>
+        </div>
+
         {% if object.tax_forms.exists %}
           <div class="card mb-3 border-info">
             <div class="card-body">
@@ -54,9 +115,60 @@
             </div>
           </div>
         {% endif %}
+
         <button type="submit" class="btn btn-primary">Save</button>
         <a href="{% url 'program_detail' program.id %}" class="btn btn-outline-secondary ms-2">Cancel</a>
       </form>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+    var familySizeInput = document.getElementById('{{ form.family_size.id_for_label }}');
+    var agiInput = document.getElementById('{{ form.adjusted_gross_income.id_for_label }}');
+    var estimateBox = document.getElementById('sliding-scale-estimate');
+    var estimateValue = document.getElementById('sliding-scale-estimate-value');
+
+    if (!familySizeInput || !agiInput || !estimateBox || !estimateValue) {
+        return;
+    }
+
+    var baseAmount = parseFloat('{{ settings_obj.base_amount|default:"0" }}');
+    var additionalMemberAmount = parseFloat('{{ settings_obj.additional_member_amount|default:"0" }}');
+    var lowMultiplier = parseFloat('{{ settings_obj.low_multiplier|default:"0" }}');
+    var highMultiplier = parseFloat('{{ settings_obj.high_multiplier|default:"0" }}');
+
+    function updateEstimate() {
+        var familySize = parseFloat(familySizeInput.value);
+        var agi = parseFloat(agiInput.value);
+
+        if (isNaN(familySize) || familySize < 1 || isNaN(agi) || agi < 0) {
+            estimateBox.classList.add('d-none');
+            return;
+        }
+
+        var fedBase = baseAmount + familySize * additionalMemberAmount;
+        var lowBoundary = fedBase * lowMultiplier;
+        var highBoundary = fedBase * highMultiplier;
+
+        var discountPercent;
+        if (highBoundary === lowBoundary) {
+            discountPercent = 0;
+        } else {
+            var ratio = (agi - lowBoundary) / (highBoundary - lowBoundary);
+            ratio = Math.max(0, Math.min(1, ratio));
+            discountPercent = 100 - ratio * 100;
+        }
+
+        estimateValue.textContent = discountPercent.toFixed(2) + '%';
+        estimateBox.classList.remove('d-none');
+    }
+
+    familySizeInput.addEventListener('input', updateEstimate);
+    agiInput.addEventListener('input', updateEstimate);
+    updateEstimate();
+});
+</script>
 {% endblock %}
