@@ -55,14 +55,16 @@
                         </li>
                         {% endif %}
  
-                        {% if navbar_role == 'LeadMentor' %}
+                        {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
                             {% can_read user 'adult_info' as can_read_adults %}
                             {% if can_read_adults %}
                             <li class="nav-item">
-                                <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#parents">Parents</a>
+                                <a class="nav-link" href="{% url 'program_emergency_contacts' current_program.pk %}">Emergency Contacts</a>
                             </li>
                             {% endif %}
- 
+                        {% endif %}
+
+                        {% if navbar_role == 'LeadMentor' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
                             </li>

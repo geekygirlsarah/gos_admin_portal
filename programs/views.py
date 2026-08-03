@@ -71,12 +71,14 @@ from .models import (
 )
 from .permission_views import (
     LeadMentorRequiredMixin,
+    MentorOrLeadMentorRequiredMixin,
     PassUserToFormMixin,
     can_user_read,
     can_user_write,
     get_user_role,
 )
 from .utils import (
+    active_students_in_program,
     compute_sliding_discount_rounded,
     get_safe_url,
     get_student_balance_data,
@@ -714,6 +716,61 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
         return ctx
+
+
+class ProgramEmergencyContactsView(
+    LoginRequiredMixin, MentorOrLeadMentorRequiredMixin, View
+):
+    """Lists active students in a program with their contact info, plus the
+    email and phone number of every parent/guardian on file for each student.
+
+    Each student is shown with their Primary Guardian, Secondary Guardian,
+    and any other parents/guardians on file."""
+
+    template_name = "programs/emergency_contacts.html"
+
+    def _split_guardians(self, student):
+        """Return (primary, secondary, others) guardians for a student.
+
+        Falls back to the first/second parents on file when the
+        primary_contact/secondary_contact fields aren't set.
+        """
+        parents = student.all_parents
+        primary = student.primary_contact or (parents[0] if parents else None)
+        remaining = [p for p in parents if p.pk != getattr(primary, "pk", None)]
+        secondary = student.secondary_contact or (remaining[0] if remaining else None)
+        others = [p for p in remaining if p.pk != getattr(secondary, "pk", None)]
+        return primary, secondary, others
+
+    def get(self, request, program_id):
+        program = get_object_or_404(Program, pk=program_id)
+        students = (
+            active_students_in_program(program)
+            .select_related("primary_contact", "secondary_contact", "school")
+            .prefetch_related("adults", "adultstudentrelationship_set")
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("first_name", Value("")), "legal_first_name"
+                ),
+            )
+            .order_by(Lower("sort_first"), Lower("last_name"))
+        )
+        rows = []
+        for student in students:
+            primary, secondary, others = self._split_guardians(student)
+            rows.append(
+                {
+                    "student": student,
+                    "primary": primary,
+                    "secondary": secondary,
+                    "others": others,
+                }
+            )
+        return render(
+            request,
+            self.template_name,
+            {"program": program, "rows": rows},
+        )
 
 
 class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):

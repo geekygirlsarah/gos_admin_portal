@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block title %}Emergency Contacts{% endblock %}
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h1 class="h3">Emergency Contacts{% if program %} for {{ program.name }}{% endif %}</h1>
+    </div>
+    <div class="col-auto d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'program_detail' program.pk %}">Back to Program</a>
+    </div>
+</div>
+<p class="text-muted">
+    Contact info for active students in {{ program.name }} and the guardians on file for each student.
+    Click a phone or email button to call or email that person.
+</p>
+
+{% if rows %}
+  <!-- Desktop/tablet view -->
+  <div class="d-none d-md-block">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Primary Guardian</th>
+            <th>Secondary Guardian</th>
+            <th>Other Contacts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td>
+                <a class="text-decoration-none fw-semibold" href="{% url 'student_detail' row.student.pk %}?next={{ request.path }}">{{ row.student.first_name|default:row.student.legal_first_name }} {{ row.student.last_name }}</a>
+                <div class="mt-1">
+                  {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email andrew_email=row.student.andrew_email %}
+                </div>
+              </td>
+              <td>
+                {% if row.primary %}
+                  <div class="fw-semibold">{{ row.primary.full_name }}</div>
+                  <div class="mt-1">
+                    {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email andrew_email=row.primary.andrew_email %}
+                  </div>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if row.secondary %}
+                  <div class="fw-semibold">{{ row.secondary.full_name }}</div>
+                  <div class="mt-1">
+                    {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email andrew_email=row.secondary.andrew_email %}
+                  </div>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% for p in row.others %}
+                  <div class="mb-2">
+                    <div class="fw-semibold">{{ p.full_name }}</div>
+                    <div class="mt-1">
+                      {% include "programs/_contact_buttons.html" with phone=p.phone_number personal_email=p.personal_email andrew_email=p.andrew_email %}
+                    </div>
+                  </div>
+                {% empty %}
+                  <span class="text-muted">—</span>
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Mobile view: condensed cards -->
+  <div class="d-md-none">
+    <div class="row g-3">
+      {% for row in rows %}
+        <div class="col-12">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title mb-1">
+                <a class="text-decoration-none" href="{% url 'student_detail' row.student.pk %}?next={{ request.path }}">{{ row.student.first_name|default:row.student.legal_first_name }} {{ row.student.last_name }}</a>
+              </h5>
+              <div class="mt-2">
+                {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email andrew_email=row.student.andrew_email %}
+              </div>
+
+              {% if row.primary %}
+                <hr class="my-2" />
+                <div class="fw-semibold">Primary Guardian: {{ row.primary.full_name }}</div>
+                <div class="mt-1">
+                  {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email andrew_email=row.primary.andrew_email %}
+                </div>
+              {% endif %}
+
+              {% if row.secondary %}
+                <hr class="my-2" />
+                <div class="fw-semibold">Secondary Guardian: {{ row.secondary.full_name }}</div>
+                <div class="mt-1">
+                  {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email andrew_email=row.secondary.andrew_email %}
+                </div>
+              {% endif %}
+
+              {% for p in row.others %}
+                <hr class="my-2" />
+                <div class="fw-semibold">Other Contact: {{ p.full_name }}</div>
+                <div class="mt-1">
+                  {% include "programs/_contact_buttons.html" with phone=p.phone_number personal_email=p.personal_email andrew_email=p.andrew_email %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-info">No active students found in this program.</div>
+{% endif %}
+{% endblock %}
