@@ -67,6 +67,64 @@ class SlidingScaleTimeRestrictedtest(TestCase):
         # total_fees (200) - discount (50) = 150 balance
         self.assertEqual(response.context["balance"], Decimal("150.00"))
 
+    def test_sliding_scale_only_applies_to_overlapping_programs(self):
+        """
+        A sliding scale discount applies to a program only if the program's
+        start/end date range overlaps the sliding scale's effective window.
+        The program's `active` flag is intentionally ignored: an inactive
+        program that overlaps still gets the discount, so it applies
+        automatically if the program becomes active again.
+        """
+        from programs.utils import get_student_balance_data
+
+        student = Student.objects.create(
+            legal_first_name="Overlap", last_name="Student"
+        )
+
+        overlapping = Program.objects.create(
+            name="Overlapping Program",
+            start_date=datetime.date(2026, 3, 1),
+            end_date=datetime.date(2026, 6, 30),
+        )
+        non_overlapping = Program.objects.create(
+            name="Non-Overlapping Program",
+            start_date=datetime.date(2025, 1, 1),
+            end_date=datetime.date(2025, 12, 31),
+        )
+        inactive_but_overlapping = Program.objects.create(
+            name="Inactive Overlapping Program",
+            active=False,
+            start_date=datetime.date(2026, 4, 1),
+            end_date=datetime.date(2026, 7, 31),
+        )
+        for program in (
+            overlapping,
+            non_overlapping,
+            inactive_but_overlapping,
+        ):
+            Enrollment.objects.create(student=student, program=program)
+            Fee.objects.create(
+                program=program,
+                name="Program Fee",
+                amount=Decimal("100.00"),
+                effective_date=datetime.date(2026, 3, 15),
+            )
+
+        SlidingScale.objects.create(
+            student=student,
+            percent=Decimal("50.00"),
+            date=datetime.date(2026, 2, 1),
+            expiration_date=datetime.date(2026, 12, 31),
+        )
+
+        data_overlap = get_student_balance_data(student, overlapping)
+        data_no_overlap = get_student_balance_data(student, non_overlapping)
+        data_inactive = get_student_balance_data(student, inactive_but_overlapping)
+
+        self.assertEqual(data_overlap["total_sliding"], Decimal("50"))
+        self.assertEqual(data_no_overlap["total_sliding"], Decimal("0"))
+        self.assertEqual(data_inactive["total_sliding"], Decimal("50"))
+
     def test_sliding_scale_no_date_applies_to_all(self):
         """
         Verify that SlidingScale with no date still applies to all fees.

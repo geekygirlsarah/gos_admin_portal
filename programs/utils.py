@@ -555,6 +555,30 @@ def compute_sliding_discount_rounded(total_fees: Decimal, percent: Decimal) -> D
     return amount.quantize(Decimal("1."), rounding=ROUND_HALF_DOWN)
 
 
+def program_overlaps_sliding_window(program, sliding):
+    """Return True if a program's date range overlaps the sliding scale's
+    effective window (``sliding.date`` → ``sliding.expiration_date``).
+
+    Null dates are treated as unbounded, and the program's ``active`` flag is
+    intentionally ignored: a program that isn't currently active still gets the
+    discount whenever its dates overlap, so it applies automatically if the
+    program becomes active again.
+    """
+    if program is None or sliding is None:
+        return False
+
+    prog_start = program.start_date
+    prog_end = program.end_date
+    slide_start = sliding.date
+    slide_end = sliding.expiration_date
+
+    if prog_start is not None and slide_end is not None and prog_start > slide_end:
+        return False
+    if prog_end is not None and slide_start is not None and prog_end < slide_start:
+        return False
+    return True
+
+
 def get_active_sliding_scale(student, on_date=None):
     """Return the SlidingScale record (if any) currently in effect for a student.
 
@@ -592,6 +616,7 @@ def get_student_balance_data(student, program, can_view_sliding=True):
     # Gather entries: fees (program), sliding scale (if exists), and payments
     entries = []
     sliding = get_active_sliding_scale(student)
+    sliding_overlaps = program_overlaps_sliding_window(program, sliding)
 
     # Fees: positive amounts
     fees = Fee.objects.filter(program=program)
@@ -605,7 +630,12 @@ def get_student_balance_data(student, program, can_view_sliding=True):
             fee.created_at.date() if fee.created_at else None
         )
         adjusted_amount = fee.amount
-        if sliding and sliding.percent is not None and can_view_sliding:
+        if (
+            sliding
+            and sliding.percent is not None
+            and can_view_sliding
+            and sliding_overlaps
+        ):
             starts_ok = not sliding.date or (fee_date and fee_date >= sliding.date)
             ends_ok = not sliding.expiration_date or (
                 fee_date and fee_date <= sliding.expiration_date
@@ -654,7 +684,12 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         applicable_fees_for_discount,
         start=Decimal("0"),
     )
-    if sliding and sliding.percent is not None and can_view_sliding:
+    if (
+        sliding
+        and sliding.percent is not None
+        and can_view_sliding
+        and sliding_overlaps
+    ):
         discount = compute_sliding_discount_rounded(
             total_fees_for_discount, sliding.percent
         )
