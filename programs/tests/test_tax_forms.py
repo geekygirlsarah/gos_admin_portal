@@ -1,12 +1,14 @@
+import datetime
 from decimal import Decimal
 from unittest import mock
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group, Permission, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
+from programs.forms import SlidingScaleForm
 from programs.models import (
     Adult,
     Enrollment,
@@ -172,6 +174,180 @@ class SlidingScaleApplicationTests(TestCase):
         self.assertContains(response, str(settings_obj.additional_member_amount))
         self.assertContains(response, str(settings_obj.low_multiplier))
         self.assertContains(response, str(settings_obj.high_multiplier))
+
+    # ------------------------------------------------------------------
+    # Admin entry form (from the Sliding Scale Applications page) mirrors
+    # the apply layout
+    # ------------------------------------------------------------------
+
+    def test_sliding_scale_form_field_order_matches_apply_layout(self):
+        """The Lead Mentor 'Add Sliding Scale' form should present the
+        household questionnaire (family size + AGI) first, then the discount
+        and date fields, so it reads like the parent-facing apply page."""
+        form = SlidingScaleForm()
+        self.assertEqual(
+            list(form.fields.keys()),
+            [
+                "student",
+                "family_size",
+                "adjusted_gross_income",
+                "percent",
+                "date",
+                "expiration_date",
+                "notes",
+            ],
+        )
+
+    def _login_lead_with_add_permission(self):
+        perm = Permission.objects.get(codename="add_slidingscale")
+        self.lead_mentor_user.user_permissions.add(perm)
+        self.client.login(username="lead", password="password")  # nosec B106
+
+    def test_sliding_scale_create_page_includes_calculator(self):
+        """The admin create page should expose the sliding scale calculation
+        constants so JavaScript can show a live discount estimate (matching the
+        parent apply page)."""
+        self._login_lead_with_add_permission()
+
+        url = reverse("sliding_scale_create")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        settings_obj = SlidingScaleSettings.get_solo()
+        self.assertEqual(response.context["settings_obj"], settings_obj)
+        self.assertContains(response, "Estimated")
+        self.assertContains(response, str(settings_obj.base_amount))
+        self.assertContains(response, str(settings_obj.additional_member_amount))
+        self.assertContains(response, str(settings_obj.low_multiplier))
+        self.assertContains(response, str(settings_obj.high_multiplier))
+        self.assertContains(response, "Household Size")
+        self.assertContains(response, "Adjusted Gross Income")
+
+    def test_sliding_scale_create_page_uses_apply_style_fields(self):
+        """The admin create page should render household + discount fields in
+        Bootstrap form markup (not a bare database-row `form.as_p` dump)."""
+        self._login_lead_with_add_permission()
+
+        url = reverse("sliding_scale_create")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "form-control")
+        self.assertContains(response, "sliding-scale-estimate")
+
+    def test_lead_mentor_can_create_sliding_scale_with_household_info(self):
+        """A Lead Mentor can create an approved sliding scale row from the
+        Sliding Scale Applications page, with the household questionnaire and
+        discount data."""
+        self._login_lead_with_add_permission()
+
+        url = reverse("sliding_scale_create")
+        response = self.client.post(
+            url,
+            {
+                "student": self.student.pk,
+                "family_size": 4,
+                "adjusted_gross_income": "30000.00",
+                "percent": "50.00",
+                "date": "2026-01-01",
+                "expiration_date": "2027-01-01",
+            },
+            follow=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("sliding_scale_review_list"))
+        sliding = SlidingScale.objects.get(student=self.student)
+        self.assertEqual(sliding.status, SlidingScale.STATUS_APPROVED)
+        self.assertEqual(sliding.family_size, 4)
+        self.assertEqual(sliding.adjusted_gross_income, Decimal("30000.00"))
+        self.assertEqual(sliding.percent, Decimal("50.00"))
+
+    # ------------------------------------------------------------------
+    # Sliding scale management lives on the Applications page
+    # ------------------------------------------------------------------
+
+    def test_review_list_shows_add_button(self):
+        """The 'Sliding Scale Applications' page should offer the 'Add
+        Sliding Scale' button (moved from the program detail page)."""
+        self.client.login(username="lead", password="password")  # nosec B106
+        response = self.client.get(reverse("sliding_scale_review_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add Sliding Scale")
+        self.assertContains(response, reverse("sliding_scale_create"))
+
+    def test_program_detail_has_no_add_sliding_scale_button(self):
+        """The program detail page should no longer offer 'Add Sliding Scale'
+        since management moved to the Sliding Scale Applications page."""
+        self.client.login(username="lead", password="password")  # nosec B106
+        response = self.client.get(reverse("program_detail", args=[self.program.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Add Sliding Scale")
+
+    def test_review_list_shows_edit_links(self):
+        """Both pending and decided sliding scales should offer an Edit link
+        from the Sliding Scale Applications page."""
+        pending = SlidingScale.objects.create(
+            student=self.student,
+            family_size=3,
+            adjusted_gross_income=Decimal("20000.00"),
+            status=SlidingScale.STATUS_PENDING,
+        )
+        decided = SlidingScale.objects.create(
+            student=self.student,
+            percent=Decimal("50.00"),
+            status=SlidingScale.STATUS_APPROVED,
+            reviewed_by=self.lead_mentor_user,
+            reviewed_at=datetime.datetime.now(),
+        )
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        response = self.client.get(reverse("sliding_scale_review_list"))
+        self.assertEqual(response.status_code, 200)
+        edit_pending = reverse("sliding_scale_edit", args=[pending.pk])
+        edit_decided = reverse("sliding_scale_edit", args=[decided.pk])
+        self.assertContains(response, edit_pending)
+        self.assertContains(response, edit_decided)
+
+    def test_lead_mentor_can_edit_sliding_scale(self):
+        """A Lead Mentor can edit an existing sliding scale from the
+        Applications page, including its household info, discount, and dates."""
+        perm = Permission.objects.get(codename="change_slidingscale")
+        self.lead_mentor_user.user_permissions.add(perm)
+        self.client.login(username="lead", password="password")  # nosec B106
+
+        sliding = SlidingScale.objects.create(
+            student=self.student,
+            family_size=2,
+            adjusted_gross_income=Decimal("15000.00"),
+            percent=Decimal("75.00"),
+            date=datetime.date(2026, 1, 1),
+            status=SlidingScale.STATUS_APPROVED,
+        )
+
+        url = reverse("sliding_scale_edit", args=[sliding.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            url,
+            {
+                "student": self.student.pk,
+                "family_size": 4,
+                "adjusted_gross_income": "30000.00",
+                "percent": "50.00",
+                "date": "2026-06-01",
+                "expiration_date": "2027-01-01",
+            },
+            follow=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("sliding_scale_review_list"))
+
+        sliding.refresh_from_db()
+        self.assertEqual(sliding.family_size, 4)
+        self.assertEqual(sliding.adjusted_gross_income, Decimal("30000.00"))
+        self.assertEqual(sliding.percent, Decimal("50.00"))
+        self.assertEqual(sliding.date, datetime.date(2026, 6, 1))
+        self.assertEqual(sliding.expiration_date, datetime.date(2027, 1, 1))
 
     # ------------------------------------------------------------------
     # Withdrawing (Parent only, pending applications only)

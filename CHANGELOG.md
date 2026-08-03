@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-03
+
+### Changed
+- **Sliding Scale Applies to Programs Active in the Same Time Frame**: A student's approved sliding scale discount now applies to a program only if the program's start/end dates overlap the sliding scale's effective date range. So a discount set for the current season won't discount fees from a past program that has already ended. The program's active/inactive toggle is ignored for this purpose, so a program that becomes active again automatically picks up the discount for any overlapping dates.
+- **Sliding Scale Management Moved to Applications Page**: The "Add Sliding Scale" button no longer appears on a program's page. Instead, the Sliding Scale Applications page has its own "Add Sliding Scale" button, and existing sliding scales (both pending and already decided) can be edited from there. This keeps all sliding scale management in one place.
+- **Sliding Scale Entry Matches the Application Form**: The "Add Sliding Scale" form now looks and works like the page parents use to apply. The student is selected first, then household size and adjusted gross income are entered at the top, with a live estimated discount that updates as you type. The discount percent, effective date, and expiration date sit below in their own section.
+
 ## 2026-08-02
 
 ### Fixed

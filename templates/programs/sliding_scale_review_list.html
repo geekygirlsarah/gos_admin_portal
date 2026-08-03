@@ -5,7 +5,10 @@
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Sliding Scale Applications</h1>
-    <a href="{% url 'portal_settings' %}?tab=sliding_scale_settings" class="btn btn-outline-secondary">Back to Settings</a>
+    <div class="d-flex gap-2">
+      <a href="{% url 'sliding_scale_create' %}" class="btn btn-primary">Add Sliding Scale</a>
+      <a href="{% url 'portal_settings' %}?tab=sliding_scale_settings" class="btn btn-outline-secondary">Back to Settings</a>
+    </div>
   </div>
 
   <div class="card shadow-sm mb-4">
@@ -36,6 +39,7 @@
                   <td>{{ application.created_at|date:"M j, Y" }}</td>
                   <td class="text-end">
                     <a href="{% url 'sliding_scale_review_decide' application.pk %}" class="btn btn-sm btn-primary">Review</a>
+                    <a href="{% url 'sliding_scale_edit' application.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
                   </td>
                 </tr>
               {% endfor %}
@@ -63,6 +67,7 @@
                 <th>Discount</th>
                 <th>Reviewed By</th>
                 <th>Reviewed</th>
+                <th class="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -77,6 +82,9 @@
                   <td>{% if application.percent is not None %}{{ application.percent }}%{% else %}—{% endif %}</td>
                   <td>{{ application.reviewed_by|default:"—" }}</td>
                   <td>{{ application.reviewed_at|date:"M j, Y" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'sliding_scale_edit' application.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>

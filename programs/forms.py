@@ -314,36 +314,45 @@ class SlidingScaleForm(forms.ModelForm):
         model = SlidingScale
         fields = [
             "student",
+            "family_size",
+            "adjusted_gross_income",
             "percent",
             "date",
             "expiration_date",
-            "family_size",
-            "adjusted_gross_income",
             "notes",
         ]
         labels = {
+            "family_size": "Household Size",
+            "adjusted_gross_income": "Adjusted Gross Income (AGI)",
             "percent": "Discount percent",
             "date": "Effective date",
             "expiration_date": "Expiration date",
         }
         help_texts = {
+            "family_size": "Total number of people in the student's household.",
+            "adjusted_gross_income": "The household's adjusted gross income (AGI), as reported on their most recent tax return.",
             "percent": "Enter a value between 0 and 100. This percent will discount applicable fees across all of the student's programs.",
             "date": "Only fees on or after this date will be discounted. Leave blank to apply to all fees.",
             "expiration_date": "The discount stops applying after this date. Leave blank for no expiration.",
         }
         widgets = {
+            "family_size": forms.NumberInput(attrs={"min": "1"}),
+            "adjusted_gross_income": forms.NumberInput(
+                attrs={"step": "0.01", "min": "0"}
+            ),
             "date": forms.DateInput(attrs={"type": "date"}),
             "expiration_date": forms.DateInput(attrs={"type": "date"}),
         }
 
-    def __init__(self, *args, program: Program, **kwargs):
+    def __init__(self, *args, program=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Restrict to students in this program (the sliding scale itself now
-        # applies across all of the student's programs, but this form is
-        # reached from a specific program's page).
-        self.fields["student"].queryset = Student.objects.filter(
-            programs=program
-        ).order_by(
+        # Restrict to students in the program when reached from a specific
+        # program's page; otherwise list all students (the sliding scale
+        # itself applies across all of the student's programs).
+        students = Student.objects.all()
+        if program is not None:
+            students = students.filter(programs=program)
+        self.fields["student"].queryset = students.order_by(
             Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
             Lower("last_name"),
         )
