@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **Story Integration Tests**: Introduced a new testing pattern for full user lifecycles. The first suite (`programs/tests/test_integration_flows.py`) covers the complete financial journey: adding a fee, applying for a sliding scale discount, approving it, recording payments, and verifying the final balance sheet accuracy.
 - **Application Flow Integration Tests**: Added a comprehensive integration test suite for the public application wizard (`applications/tests/test_integration_flows.py`). It covers both Student-initiated (including parent handoff) and Parent-initiated application lifecycles from start through lead mentor approval and conversion to student records.
+- **Mentor / Volunteer Applications Re-enabled**: The "Mentor / Volunteer" option is available again in the public application wizard. Prospective mentors can now submit an application, and lead mentors can approve and convert it into a mentor record on file.
 - **Improved Documentation for Reliability**: Updated `README.md` and `AGENTS.md` to explicitly require Test-Driven Development (TDD) for all new features and bug fixes, and provided guidance on when to use unit vs. integration tests.
 - **CI/CD Documentation**: Added a "Continuous Integration (CI)" section to `README.md` detailing the automated checks (linting, security, system checks, and tests) that must pass before deployment, and how to execute them using the `run_ci` scripts.
 

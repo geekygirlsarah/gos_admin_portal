@@ -647,9 +647,16 @@ class ApplicationConvertView(_ReviewerRequiredMixin, View):
             return redirect(
                 "application_review_detail", app_id=application.application_id
             )
-        messages.success(
-            request,
-            f"Converted application {application.application_id} into "
-            f"student “{student}” enrolled in {application.program}.",
-        )
+        if application.applicant_type == Application.Type.MENTOR:
+            messages.success(
+                request,
+                f"Converted application {application.application_id} into "
+                f"mentor “{student}”.",
+            )
+        else:
+            messages.success(
+                request,
+                f"Converted application {application.application_id} into "
+                f"student “{student}” enrolled in {application.program}.",
+            )
         return redirect("application_review_detail", app_id=application.application_id)
