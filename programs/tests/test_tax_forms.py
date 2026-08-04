@@ -5,7 +5,7 @@ from unittest import mock
 from django.contrib.auth.models import Group, Permission, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from programs.forms import SlidingScaleForm
@@ -20,6 +20,7 @@ from programs.models import (
 )
 
 
+@override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 class SlidingScaleApplicationTests(TestCase):
     """Covers the parent-facing sliding scale application flow: a Parent
     applies (across all of a student's programs, not tied to one), a Lead

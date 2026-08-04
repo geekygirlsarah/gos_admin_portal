@@ -1,9 +1,10 @@
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from programs.models import Student
 
 
+@override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 class EncryptionTest(TestCase):
     def test_student_fields_are_encrypted(self):
         # Create a student with sensitive data

@@ -1,4 +1,3 @@
-import base64
 import datetime
 import logging
 from decimal import Decimal
@@ -28,10 +27,20 @@ logger = logging.getLogger(__name__)
 def get_fernet():
     key = getattr(settings, "FILE_ENCRYPTION_KEY", None)
     if not key:
-        # Fallback to a key derived from SECRET_KEY
-        key = base64.urlsafe_b64encode(
-            settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
-        )
+        if getattr(settings, "DEBUG", False):
+            # In DEBUG mode, derive a key from SECRET_KEY for local dev/test convenience.
+            # This is NOT secure for production use.
+            import base64
+
+            key = base64.urlsafe_b64encode(
+                settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
+            )
+        else:
+            raise RuntimeError(
+                "FILE_ENCRYPTION_KEY is not configured. "
+                "Set FILE_ENCRYPTION_KEY environment variable. "
+                'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
     if isinstance(key, str):
         key = key.encode()
     return Fernet(key)
@@ -63,8 +72,8 @@ class EncryptedFileField(models.FileField):
 
 class EncryptedTextField(models.TextField):
     def get_prep_value(self, value):
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         fernet = get_fernet()
         try:
             fernet.decrypt(value.encode())
@@ -86,8 +95,8 @@ class EncryptedTextField(models.TextField):
 
 class EncryptedCharField(models.CharField):
     def get_prep_value(self, value):
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         fernet = get_fernet()
         try:
             fernet.decrypt(value.encode())

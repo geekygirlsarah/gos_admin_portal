@@ -29,6 +29,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd"
 )
+
+# File encryption key for EncryptedFileField, EncryptedTextField, EncryptedCharField.
+# Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# MUST be set in production. If rotated, all encrypted data must be re-encrypted.
+FILE_ENCRYPTION_KEY = os.getenv("FILE_ENCRYPTION_KEY")
+
+# Legacy: SECRET_KEY_FALLBACKS is kept for backwards compatibility with old signed data (e.g., sessions, tokens).
+# Do NOT use for file encryption. File encryption uses FILE_ENCRYPTION_KEY exclusively.
 SECRET_KEY_FALLBACKS = [
     os.environ.get(
         "OLD_SECRET_KEY",
@@ -43,6 +51,43 @@ DEBUG = os.getenv("DEBUG", "True").lower() in ["1", "true", "yes"]
 # https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+
+    # SECURITY: Fail fast on critical production misconfigurations
+    if not os.getenv("FILE_ENCRYPTION_KEY"):
+        raise ImproperlyConfigured(
+            "FILE_ENCRYPTION_KEY environment variable must be set in production. "
+            'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+        )
+
+    # SECURITY: SECRET_KEY must not use the insecure default in production
+    default_secret = "django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd"  # nosec B105
+    if os.getenv("SECRET_KEY") == default_secret:
+        raise ImproperlyConfigured(
+            "SECRET_KEY is using the insecure default value. "
+            "Set SECRET_KEY environment variable to a strong random string in production."
+        )
+
+    # SECURITY: ALLOWED_HOSTS must be explicitly set in production (not just localhost)
+    allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "").strip()
+    if not allowed_hosts_env:
+        raise ImproperlyConfigured(
+            "ALLOWED_HOSTS environment variable must be set in production. "
+            "Set to comma-separated list of your domain(s), e.g., 'example.com,www.example.com'"
+        )
+
+    # SECURITY: Email is required for OTP login (ACCOUNT_LOGIN_BY_CODE_ENABLED=True)
+    if not os.getenv("EMAIL_HOST_USER"):
+        raise ImproperlyConfigured(
+            "EMAIL_HOST_USER environment variable must be set in production. "
+            "Required for email OTP login functionality."
+        )
+    if not os.getenv("EMAIL_HOST_PASSWORD"):
+        raise ImproperlyConfigured(
+            "EMAIL_HOST_PASSWORD environment variable must be set in production. "
+            "Required for email OTP login functionality."
+        )
+
     SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in [
         "1",
         "true",
