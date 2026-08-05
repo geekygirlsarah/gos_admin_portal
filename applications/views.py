@@ -39,7 +39,12 @@ from .forms import (
     StudentExperienceForm,
     StudentInfoForm,
 )
-from .models import Application, ApplicationDocumentSubmission, SiteSettings
+from .models import (
+    Application,
+    ApplicationDocumentSubmission,
+    OtpVerifyResult,
+    SiteSettings,
+)
 from .services import (
     adult_to_prefill,
     find_adult_by_email,
@@ -81,6 +86,19 @@ def _mentor_progress(view_key: str) -> tuple[int, int]:
 
 def _get_application_or_404(app_id: str) -> Application:
     return get_object_or_404(Application, application_id=(app_id or "").upper())
+
+
+def _issue_and_send(application: Application, request) -> bool:
+    """Generate, store and email a fresh OTP. Returns whether it succeeded."""
+    try:
+        code = application.issue_otp()
+        send_otp_email(application, code, request=request)
+        return True
+    except Exception:
+        logger.exception(
+            "Failed to send OTP for application %s", application.application_id
+        )
+        return False
 
 
 def _redirect_to_current_step(application: Application):
@@ -278,10 +296,15 @@ class Step2ApplicantTypeView(View):
             )
             return redirect("apply_start")
 
+        # Issue and email the verification code now, at the deterministic
+        # transition out of Step 2, so a later page view/reload never has to
+        # (and never can) silently generate a new code that invalidates the
+        # one the applicant already received.
+        if application.email and not application.email_is_verified:
+            _issue_and_send(application, request)
+
         # Mentor applicants skip Step 4 (program selection) — they apply
         # to the organization, not to a specific program.
-        if application.applicant_type == Application.Type.MENTOR:
-            return redirect("apply_step3", app_id=application.application_id)
         return redirect("apply_step3", app_id=application.application_id)
 
     def _render(self, request, application, form):
@@ -373,9 +396,16 @@ class Step3VerifyEmailView(View):
                 "Please go back and fill in your email.",
             )
             return redirect("apply_step2", app_id=application.application_id)
-        # Issue a fresh OTP whenever they land here without a pending one.
+        # Issue a fresh OTP only when none is pending (e.g., resuming an
+        # application that never received one). When a code is already
+        # pending, the page just renders so a reload can't invalidate it.
         if not application.otp_hash or not application.otp_expires_at:
-            self._issue_and_send(application, request)
+            if _issue_and_send(application, request):
+                messages.info(
+                    request,
+                    "We just emailed you a fresh verification code. "
+                    "Use the code from the newest email.",
+                )
         return self._render(request, application, OtpVerifyForm())
 
     def post(self, request, app_id: str):
@@ -383,12 +413,25 @@ class Step3VerifyEmailView(View):
         form = OtpVerifyForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
-        if not application.verify_otp(form.cleaned_data["code"]):
-            messages.error(
-                request,
-                "That code didn't match or has expired. "
-                "Please check your email and try again, or request a new code.",
-            )
+        result = application.verify_otp(form.cleaned_data["code"])
+        if result is not OtpVerifyResult.SUCCESS:
+            if result is OtpVerifyResult.INVALID:
+                message = (
+                    "That code didn't match. Double-check it and try again, "
+                    "or request a new code below."
+                )
+            elif result is OtpVerifyResult.EXPIRED:
+                message = "That code has expired. Please request a new code below."
+            elif result is OtpVerifyResult.TOO_MANY_ATTEMPTS:
+                message = (
+                    "Too many incorrect attempts. Please request a new code below."
+                )
+            else:  # OtpVerifyResult.NO_CODE
+                message = (
+                    "There's no active code for this application. "
+                    "Please request a new code below."
+                )
+            messages.error(request, message)
             return self._render(request, application, form)
         application.current_step = max(application.current_step, 4)
         application.save(update_fields=["current_step", "updated_at"])
@@ -413,15 +456,6 @@ class Step3VerifyEmailView(View):
 
         messages.success(request, "Email verified — thanks!")
         return _redirect_after_email_verified(application)
-
-    def _issue_and_send(self, application: Application, request) -> None:
-        try:
-            code = application.issue_otp()
-            send_otp_email(application, code, request=request)
-        except Exception:
-            logger.exception(
-                "Failed to send OTP for application %s", application.application_id
-            )
 
     def _render(self, request, application, form):
         if _is_mentor(application):

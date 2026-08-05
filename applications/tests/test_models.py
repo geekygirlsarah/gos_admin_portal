@@ -11,6 +11,7 @@ from applications.models import (
     APP_ID_ALPHABET,
     APP_ID_LENGTH,
     Application,
+    OtpVerifyResult,
     SiteSettings,
     generate_application_id,
     generate_otp_code,
@@ -56,7 +57,7 @@ class OtpTests(TestCase):
         self.assertEqual(len(code), 6)
         # Plaintext is never persisted.
         self.assertNotIn(code, app.otp_hash)
-        self.assertTrue(app.verify_otp(code))
+        self.assertIs(app.verify_otp(code), OtpVerifyResult.SUCCESS)
         app.refresh_from_db()
         self.assertEqual(app.otp_hash, "")
         self.assertIsNone(app.otp_expires_at)
@@ -66,7 +67,7 @@ class OtpTests(TestCase):
     def test_verify_otp_wrong_code_fails(self):
         app = Application.objects.create(email="user@example.com")
         app.issue_otp()
-        self.assertFalse(app.verify_otp("000000"))
+        self.assertIs(app.verify_otp("000000"), OtpVerifyResult.INVALID)
         app.refresh_from_db()
         # Hash still set; user can retry.
         self.assertTrue(app.otp_hash)
@@ -77,11 +78,11 @@ class OtpTests(TestCase):
         code = app.issue_otp()
         app.otp_expires_at = timezone.now() - timedelta(minutes=1)
         app.save(update_fields=["otp_expires_at"])
-        self.assertFalse(app.verify_otp(code))
+        self.assertIs(app.verify_otp(code), OtpVerifyResult.EXPIRED)
 
     def test_verify_otp_no_pending_fails(self):
         app = Application.objects.create(email="user@example.com")
-        self.assertFalse(app.verify_otp("123456"))
+        self.assertIs(app.verify_otp("123456"), OtpVerifyResult.NO_CODE)
 
     def test_verify_otp_attempt_cap(self):
         app = Application.objects.create(email="user@example.com")
@@ -89,7 +90,7 @@ class OtpTests(TestCase):
         for _ in range(11):
             app.verify_otp("000000")
         # After cap, even the correct code is rejected.
-        self.assertFalse(app.verify_otp(code))
+        self.assertIs(app.verify_otp(code), OtpVerifyResult.TOO_MANY_ATTEMPTS)
 
 
 class SiteSettingsTests(TestCase):

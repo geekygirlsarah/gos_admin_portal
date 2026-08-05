@@ -9,7 +9,12 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from applications.models import APP_ID_LENGTH, Application, SiteSettings
+from applications.models import (
+    APP_ID_LENGTH,
+    Application,
+    OtpVerifyResult,
+    SiteSettings,
+)
 from programs.models import Program
 
 
@@ -158,8 +163,10 @@ class WizardFlowTests(TestCase):
         self.assertEqual(app.email, "kid@example.com")
         self.assertEqual(app.applicant_type, "student")
         self.assertGreaterEqual(app.current_step, 3)
-        # No email sent yet — it's deferred until Step 4 landing.
-        self.assertEqual(len(mail.outbox), 0)
+        # The verification code is issued and emailed right when the email is
+        # saved on Step 2, so a later reload can't silently replace it.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(app.otp_hash)
 
     def test_step2_student_without_email_redirects_to_start_with_message(self):
         app = Application.objects.create()
@@ -349,7 +356,7 @@ class WizardFlowTests(TestCase):
         app.refresh_from_db()
         self.assertNotEqual(app.otp_hash, old_hash)
         # Old code should no longer verify.
-        self.assertFalse(app.verify_otp(old_code))
+        self.assertIsNot(app.verify_otp(old_code), OtpVerifyResult.SUCCESS)
         self.assertEqual(len(mail.outbox), 1)
 
     # --- Continue placeholder ------------------------------------------

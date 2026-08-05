@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-04
 
+### Fixed
+- **Clearer Email Verification Code Messages**: If the verification code you type doesn't match, the application page now says it didn't match instead of warning that it "expired". A code is now reported as expired only when it has actually been open too long, and separate messages cover when there's no active code or too many wrong attempts.
+- **Verification Codes No Longer Randomly Replaced**: The verification code is now emailed as soon as you enter your email address, and reloading or revisiting the verification page will not silently generate and send a new code. Previously a page refresh could issue a fresh code and invalidate the one in your inbox.
+
 ### Changed
 - **Kiosk Name Lookup Finds Preferred Names**: The attendance kiosk now also searches by a person's preferred name when matching typed names, not just their legal/first and last name. So a member who goes by a nickname can type the name they actually use and still be found.
 - **Kiosk Success Message Moved to Bottom**: On the kiosk sign-in screen, the green success message now appears at the bottom of the screen instead of the top, so it no longer covers the header and title.
