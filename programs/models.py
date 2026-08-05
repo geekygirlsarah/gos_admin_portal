@@ -129,17 +129,27 @@ class EncryptedFileDescriptor:
 
             def decrypted_open(mode="rb"):
                 f = original_open(mode)
-                if "b" in mode:
+                if "b" not in mode:
+                    return f
+                try:
+                    f.seek(0)
                     content = f.read()
-                    try:
-                        fernet = get_fernet()
-                        decrypted_content = fernet.decrypt(content)
-                        return BytesIO(decrypted_content)
-                    except InvalidToken:
-                        # If decryption fails, return original (might be already decrypted or not encrypted)
-                        f.seek(0)
-                        return f
-                return f
+                finally:
+                    # The ciphertext is fully read; close the underlying
+                    # storage handle so we don't hold file descriptors open for
+                    # the lifetime of the instance. The decrypted bytes live in
+                    # the returned BytesIO instead.
+                    f.close()
+                try:
+                    fernet = get_fernet()
+                    return BytesIO(fernet.decrypt(content))
+                except InvalidToken:
+                    # The stored bytes may be legacy plaintext; return a fresh
+                    # handle positioned at the start so the caller can read the
+                    # raw file.
+                    f = original_open(mode)
+                    f.seek(0)
+                    return f
 
             file.open = decrypted_open
             file._decrypted_file = True
