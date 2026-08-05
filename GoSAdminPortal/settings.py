@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -213,7 +214,10 @@ DATABASES = {
     }
 }
 if os.getenv("DATABASE_URL", None):
-    DATABASES["default"] = dj_database_url.config(conn_max_age=600)
+    db_config = dj_database_url.config(conn_max_age=600)
+    if "test" in sys.argv:
+        db_config["CONN_MAX_AGE"] = 0
+    DATABASES["default"] = db_config
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
