@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-04
+
+### Changed
+- **Kiosk Name Lookup Finds Preferred Names**: The attendance kiosk now also searches by a person's preferred name when matching typed names, not just their legal/first and last name. So a member who goes by a nickname can type the name they actually use and still be found.
+- **Kiosk Success Message Moved to Bottom**: On the kiosk sign-in screen, the green success message now appears at the bottom of the screen instead of the top, so it no longer covers the header and title.
+
+### Added
+- **Kiosk Reminder for Students**: The kiosk's Visitor/Guest tab now reminds anyone who is a Girls of Steel student to use the "Member" tab, so student hours get logged correctly. After a visitor checks in, the kiosk automatically jumps back to the Member tab, ready for the next student.
+
 ## 2026-08-03
 
 ### Added

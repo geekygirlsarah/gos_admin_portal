@@ -190,7 +190,7 @@
 <!-- ── Normal sign-in UI ───────────────────────────────────────────────────── -->
 <div class="container" style="max-width: 720px;">
     <!-- Toast notifications -->
-    <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 10000; width: 100%; max-width: 600px;">
+    <div class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3" style="z-index: 10000; width: 100%; max-width: 600px;">
         <div id="statusToast" class="toast text-white w-100" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header text-white" id="toastHeader">
                 <strong class="me-auto h4 mb-0">Attendance</strong>
@@ -253,6 +253,10 @@
                     <p class="text-muted mb-3">
                         Not a GoS member? Enter your name and optional team number to record your visit.
                     </p>
+                    <div class="alert alert-info mb-3" role="alert">
+                        <strong>Heads up!</strong> If you're a Girls of Steel student, please use the <em>Member</em>
+                        tab above so we can log your hours correctly.
+                    </div>
                     <div class="mb-3">
                         <label for="guestInput" class="form-label">Your Full Name</label>
                         <input
@@ -477,6 +481,15 @@
         document.getElementById("loadingOverlay").classList.add("d-none");
     }
 
+    function showMemberTab() {
+        var memberTabBtn = document.getElementById("member-tab");
+        if (memberTabBtn) {
+            new bootstrap.Tab(memberTabBtn).show();
+        }
+        var memberInput = document.getElementById("memberInput");
+        if (memberInput) { memberInput.focus(); }
+    }
+
     function showToast(message, success) {
         var toastEl = document.getElementById("statusToast");
         var toastBody = document.getElementById("toastBody");
@@ -658,6 +671,7 @@
                 input.value = "";
                 teamInput.value = "";
                 document.getElementById("guestSignInBtn").disabled = false;
+                showMemberTab();
             });
     }
 

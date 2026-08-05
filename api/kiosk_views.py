@@ -277,7 +277,9 @@ def kiosk_lookup(request, kiosk_id):
         adult_qs = Adult.objects.filter(is_mentor=True)
         for part in parts:
             adult_qs = adult_qs.filter(
-                Q(first_name__icontains=part) | Q(last_name__icontains=part)
+                Q(first_name__icontains=part)
+                | Q(preferred_first_name__icontains=part)
+                | Q(last_name__icontains=part)
             )
         for a in adult_qs[:10]:
             results.append(
