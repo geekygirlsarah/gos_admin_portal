@@ -7,6 +7,7 @@ parents and prospective mentors.
 
 from __future__ import annotations
 
+import enum
 import secrets
 
 import pghistory
@@ -33,6 +34,20 @@ def generate_application_id() -> str:
 def generate_otp_code() -> str:
     """Return a 6-digit numeric OTP as a zero-padded string."""
     return f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
+
+
+class OtpVerifyResult(enum.Enum):
+    """Outcome of an OTP verification attempt.
+
+    Distinct results let the caller show accurate messages instead of
+    collapsing every failure into a generic "didn't match or expired".
+    """
+
+    SUCCESS = "success"
+    NO_CODE = "no_code"
+    EXPIRED = "expired"
+    INVALID = "invalid"
+    TOO_MANY_ATTEMPTS = "too_many_attempts"
 
 
 # --- SiteSettings -----------------------------------------------------------
@@ -249,21 +264,24 @@ class Application(models.Model):
         )
         return code
 
-    def verify_otp(self, code: str) -> bool:
-        """Check ``code`` against the stored hash. On success, clear the OTP
-        and mark the email as verified.
+    def verify_otp(self, code: str) -> OtpVerifyResult:
+        """Check ``code`` against the stored hash.
+
+        Returns an :class:`OtpVerifyResult` describing the outcome. On success
+        the OTP is cleared and the email is marked as verified.
         """
         if not self.otp_hash or not self.otp_expires_at:
-            return False
+            return OtpVerifyResult.NO_CODE
         if timezone.now() > self.otp_expires_at:
-            return False
+            return OtpVerifyResult.EXPIRED
         # Cap brute-force attempts.
         self.otp_attempts = (self.otp_attempts or 0) + 1
         if self.otp_attempts > 10:
-            return False
+            self.save(update_fields=["otp_attempts", "updated_at"])
+            return OtpVerifyResult.TOO_MANY_ATTEMPTS
         if not check_password((code or "").strip(), self.otp_hash):
             self.save(update_fields=["otp_attempts", "updated_at"])
-            return False
+            return OtpVerifyResult.INVALID
         self.otp_hash = ""
         self.otp_expires_at = None
         self.otp_attempts = 0
@@ -280,7 +298,7 @@ class Application(models.Model):
                 "updated_at",
             ]
         )
-        return True
+        return OtpVerifyResult.SUCCESS
 
     def issue_handoff_token(self) -> str:
         """Generate and store a fresh handoff token. Returns it."""

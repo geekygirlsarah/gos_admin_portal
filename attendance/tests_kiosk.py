@@ -130,6 +130,42 @@ class KioskPageViewTests(TestCase):
             "Kiosk page should have a guest/visitor section",
         )
 
+    def test_kiosk_toast_container_positioned_at_bottom(self):
+        """The status toast should appear at the bottom, not covering the header."""
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # The toast container should no longer be pinned to the top center.
+        self.assertNotIn("position-fixed top-0 start-50", content)
+        # It should use a bottom-* Bootstrap position class.
+        self.assertIn("position-fixed bottom-0", content)
+
+    def test_kiosk_page_reminds_students_to_use_member_tab(self):
+        """The guest/visitor section should remind GoS students to use the Member tab."""
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Girls of Steel student", content)
+        self.assertIn("Member", content)
+
+    def test_kiosk_page_switches_back_to_member_tab_after_guest_signin(self):
+        """After a visitor signs in, JS should return the user to the Member tab."""
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # Look for JS that programmatically shows the member tab.
+        self.assertIn("member-tab", content)
+        self.assertIn("showMemberTab", content)
+
 
 class KioskUnlockEndpointTests(TestCase):
     """Tests for POST /kiosk/<id>/unlock/ and POST /kiosk/<id>/lock/"""
@@ -425,6 +461,68 @@ class KioskProxyLookupTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["students"], [])
+
+    def test_lookup_by_student_preferred_name(self):
+        """Lookup matches a student when typing their preferred (display) name."""
+        student = Student.objects.create(
+            legal_first_name="Barbara",
+            first_name="Babs",
+            last_name="Smith",
+        )
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Babs Smith"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        ids = [s["id"] for s in data["students"]]
+        self.assertIn(student.id, ids)
+
+    def test_lookup_by_student_legal_name(self):
+        """Lookup matches a student when typing their legal name as well."""
+        student = Student.objects.create(
+            legal_first_name="Barbara",
+            first_name="Babs",
+            last_name="Smith",
+        )
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Barbara Smith"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        ids = [s["id"] for s in data["students"]]
+        self.assertIn(student.id, ids)
+
+    def test_lookup_by_mentor_preferred_name(self):
+        """Lookup matches a mentor when typing their preferred first name."""
+        mentor = Adult.objects.create(
+            first_name="Robert",
+            preferred_first_name="Bobby",
+            last_name="Martin",
+            is_mentor=True,
+        )
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Bobby Martin"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        ids = [s["id"] for s in data["students"]]
+        self.assertIn(mentor.id, ids)
+
+    def test_lookup_by_mentor_legal_name(self):
+        """Lookup matches a mentor by their legal first name too."""
+        mentor = Adult.objects.create(
+            first_name="Robert",
+            preferred_first_name="Rob",
+            last_name="Martin",
+            is_mentor=True,
+        )
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Robert Martin"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        ids = [s["id"] for s in data["students"]]
+        self.assertIn(mentor.id, ids)
 
 
 class KioskConfigSettingsTests(TestCase):

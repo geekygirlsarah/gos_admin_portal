@@ -284,6 +284,19 @@ class LeadMentorRequiredMixin(UserPassesTestMixin):
         return super().handle_no_permission()
 
 
+class MentorOrLeadMentorRequiredMixin(UserPassesTestMixin):
+    def test_func(self):
+        return get_user_role(self.request.user) in ("LeadMentor", "Mentor")
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            messages.error(
+                self.request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+        return super().handle_no_permission()
+
+
 class PassUserToFormMixin:
     """
     Mixin to pass the current user to the form's kwargs.

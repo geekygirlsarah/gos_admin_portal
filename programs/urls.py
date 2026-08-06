@@ -37,6 +37,7 @@ from .views import (
     ProgramDuesOwedView,
     ProgramEmailBalancesView,
     ProgramEmailView,
+    ProgramEmergencyContactsView,
     ProgramEnrollmentUpdateView,
     ProgramFeeAssignmentEditView,
     ProgramFeeCreateView,
@@ -314,6 +315,11 @@ urlpatterns = [
         "<int:program_id>/parents/",
         login_required(ParentListView.as_view()),
         name="program_parent_list",
+    ),
+    path(
+        "<int:program_id>/emergency-contacts/",
+        login_required(ProgramEmergencyContactsView.as_view()),
+        name="program_emergency_contacts",
     ),
     path(
         "<int:program_id>/mentors/",

@@ -2,12 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
-## 2026-08-03
+## 2026-08-04
+
+### Fixed
+- **Clearer Email Verification Code Messages**: If the verification code you type doesn't match, the application page now says it didn't match instead of warning that it "expired". A code is now reported as expired only when it has actually been open too long, and separate messages cover when there's no active code or too many wrong attempts.
+- **Verification Codes No Longer Randomly Replaced**: The verification code is now emailed as soon as you enter your email address, and reloading or revisiting the verification page will not silently generate and send a new code. Previously a page refresh could issue a fresh code and invalidate the one in your inbox.
 
 ### Changed
+- **Kiosk Name Lookup Finds Preferred Names**: The attendance kiosk now also searches by a person's preferred name when matching typed names, not just their legal/first and last name. So a member who goes by a nickname can type the name they actually use and still be found.
+- **Kiosk Success Message Moved to Bottom**: On the kiosk sign-in screen, the green success message now appears at the bottom of the screen instead of the top, so it no longer covers the header and title.
+
+### Added
+- **Kiosk Reminder for Students**: The kiosk's Visitor/Guest tab now reminds anyone who is a Girls of Steel student to use the "Member" tab, so student hours get logged correctly. After a visitor checks in, the kiosk automatically jumps back to the Member tab, ready for the next student.
+
+## 2026-08-03
+
+### Added
+- **Inactive Students Kept Out of Student Selection Lists**: Students who have graduated (or whose enrollment in a program was marked inactive) no longer appear in the dropdowns and selection lists used to pick a student — such as adding an existing student to a program, recording a payment, assigning a fee, creating a sliding scale discount, sending a balance email, or linking students to an adult. Previously these lists could mix inactive students in with the current roster.
+- **Inactive Students Shown Separately on Program Pages**: On a program's team/crew assignment page and its photo grid, students who are no longer active are now listed in their own "Students No Longer Active" section (the same way the program detail page already shows them), so they're clearly separated from current students instead of mixed in.
+- **Program Emergency Contacts Page**: A new per-program "Emergency Contacts" page lists every active student in the program along with their Primary Guardian, Secondary Guardian, and any other contacts on file. Each person's phone number and email are shown as clickable buttons, so staff can call or email them with one click. Mentors and Lead Mentors can view it; parents and students cannot.
+
+### Changed
+- **"Parents" Nav Link Becomes "Emergency Contacts"**: The program navigation bar link that previously pointed to the Parents section of a program's page now opens the new per-program Emergency Contacts page instead, under the name "Emergency Contacts". It is shown to Mentors and Lead Mentors only.
 - **Sliding Scale Applies to Programs Active in the Same Time Frame**: A student's approved sliding scale discount now applies to a program only if the program's start/end dates overlap the sliding scale's effective date range. So a discount set for the current season won't discount fees from a past program that has already ended. The program's active/inactive toggle is ignored for this purpose, so a program that becomes active again automatically picks up the discount for any overlapping dates.
 - **Sliding Scale Management Moved to Applications Page**: The "Add Sliding Scale" button no longer appears on a program's page. Instead, the Sliding Scale Applications page has its own "Add Sliding Scale" button, and existing sliding scales (both pending and already decided) can be edited from there. This keeps all sliding scale management in one place.
 - **Sliding Scale Entry Matches the Application Form**: The "Add Sliding Scale" form now looks and works like the page parents use to apply. The student is selected first, then household size and adjusted gross income are entered at the top, with a live estimated discount that updates as you type. The discount percent, effective date, and expiration date sit below in their own section.
+- **File encryption secure key update**: Convert file encryption from using SECRET_KEY to using FILE_ENCRYPTION_KEY, and ensure some checks before code run in production.
 
 ## 2026-08-02
 

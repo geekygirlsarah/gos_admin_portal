@@ -6,7 +6,12 @@ from django.conf import settings
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
-from programs.utils import format_grade, get_academic_year_ending
+from programs.utils import (
+    active_students,
+    active_students_in_program,
+    format_grade,
+    get_academic_year_ending,
+)
 
 from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
 from .widgets import DualListboxWidget
@@ -161,13 +166,16 @@ class AddExistingStudentToProgramForm(forms.Form):
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
-        # Exclude students already enrolled in this program
+        # Exclude students already enrolled in this program, and keep inactive
+        # (graduated) students out of the dropdown.
         # Also sort by first name (coalescing legal name) then last name
-        self.fields["student"].queryset = Student.objects.exclude(
-            id__in=program.students.values_list("id", flat=True)
-        ).order_by(
-            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
-            Lower("last_name"),
+        self.fields["student"].queryset = (
+            active_students()
+            .exclude(id__in=program.students.values_list("id", flat=True))
+            .order_by(
+                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower("last_name"),
+            )
         )
 
 
@@ -205,9 +213,10 @@ class AdultForm(forms.ModelForm):
                     if field in self.fields:
                         del self.fields[field]
 
-        # Sort students by first name (Preferred, then legal if no preferred)
+        # Sort students by first name (Preferred, then legal if no preferred),
+        # and exclude inactive (graduated) students.
         if "students" in self.fields:
-            self.fields["students"].queryset = Student.objects.all().order_by(
+            self.fields["students"].queryset = active_students().order_by(
                 Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
                 Lower("last_name"),
             )
@@ -298,10 +307,9 @@ class PaymentForm(forms.ModelForm):
 
     def __init__(self, *args, program: Program, **kwargs):
         super().__init__(*args, **kwargs)
-        # Restrict student choices to those enrolled in this program
-        self.fields["student"].queryset = Student.objects.filter(
-            programs=program
-        ).order_by(
+        # Restrict student choices to those actively enrolled in this program
+        # (excludes inactive enrollments and graduated students)
+        self.fields["student"].queryset = active_students_in_program(program).order_by(
             Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
             Lower("last_name"),
         )
@@ -348,10 +356,12 @@ class SlidingScaleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Restrict to students in the program when reached from a specific
         # program's page; otherwise list all students (the sliding scale
-        # itself applies across all of the student's programs).
-        students = Student.objects.all()
+        # itself applies across all of the student's programs). Inactive
+        # (graduated) students are always excluded.
         if program is not None:
-            students = students.filter(programs=program)
+            students = active_students_in_program(program)
+        else:
+            students = active_students()
         self.fields["student"].queryset = students.order_by(
             Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
             Lower("last_name"),
@@ -650,10 +660,11 @@ class ProgramEmailBalancesForm(forms.Form):
             self.fields["program"].initial = program
             self.fields["program"].widget = forms.HiddenInput()
             self.fields["program"].required = True
-            # Population and sorting for student field
+            # Population and sorting for student field; only actively enrolled
+            # (non-graduated) students are selectable.
             self.fields["student"].program = program
-            self.fields["student"].queryset = Student.objects.filter(
-                enrollment__program=program
+            self.fields["student"].queryset = active_students_in_program(
+                program
             ).order_by(
                 Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
                 Lower("last_name"),
@@ -679,11 +690,10 @@ class FeeAssignmentEditForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.program = program
         self.fee = fee
-        # Limit to students enrolled in the program, sorted by display name then last name
-        # (case-insensitive; uses legal_first_name as fallback)
-        self.fields["students"].queryset = Student.objects.filter(
-            programs=program
-        ).order_by(
+        # Limit to actively enrolled students in the program, sorted by display
+        # name then last name (case-insensitive; uses legal_first_name as
+        # fallback). Inactive (graduated/dropped) students are excluded.
+        self.fields["students"].queryset = active_students_in_program(program).order_by(
             Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
             Lower("last_name"),
         )
@@ -697,10 +707,15 @@ class FeeAssignmentEditForm(forms.Form):
         # Clearing assignments means fee applies to everyone
         from .models import FeeAssignment
 
+        # Only manage assignments for students selectable in this form; preserve
+        # existing assignments to inactive (graduated/dropped) students.
+        selectable_ids = list(
+            self.fields["students"].queryset.values_list("id", flat=True)
+        )
         # Delete assignments not in selection
-        FeeAssignment.objects.filter(fee=self.fee).exclude(
-            student__in=selected_students
-        ).delete()
+        FeeAssignment.objects.filter(
+            fee=self.fee, student_id__in=selectable_ids
+        ).exclude(student__in=selected_students).delete()
         # Ensure assignments exist for selected
         for s in selected_students:
             FeeAssignment.objects.get_or_create(fee=self.fee, student=s)

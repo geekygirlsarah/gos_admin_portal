@@ -1,4 +1,3 @@
-import base64
 import datetime
 import logging
 from decimal import Decimal
@@ -28,10 +27,20 @@ logger = logging.getLogger(__name__)
 def get_fernet():
     key = getattr(settings, "FILE_ENCRYPTION_KEY", None)
     if not key:
-        # Fallback to a key derived from SECRET_KEY
-        key = base64.urlsafe_b64encode(
-            settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
-        )
+        if getattr(settings, "DEBUG", False):
+            # In DEBUG mode, derive a key from SECRET_KEY for local dev/test convenience.
+            # This is NOT secure for production use.
+            import base64
+
+            key = base64.urlsafe_b64encode(
+                settings.SECRET_KEY[:32].encode().ljust(32, b"\0")
+            )
+        else:
+            raise RuntimeError(
+                "FILE_ENCRYPTION_KEY is not configured. "
+                "Set FILE_ENCRYPTION_KEY environment variable. "
+                'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
     if isinstance(key, str):
         key = key.encode()
     return Fernet(key)
@@ -63,8 +72,8 @@ class EncryptedFileField(models.FileField):
 
 class EncryptedTextField(models.TextField):
     def get_prep_value(self, value):
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         fernet = get_fernet()
         try:
             fernet.decrypt(value.encode())
@@ -86,8 +95,8 @@ class EncryptedTextField(models.TextField):
 
 class EncryptedCharField(models.CharField):
     def get_prep_value(self, value):
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         fernet = get_fernet()
         try:
             fernet.decrypt(value.encode())
@@ -120,17 +129,27 @@ class EncryptedFileDescriptor:
 
             def decrypted_open(mode="rb"):
                 f = original_open(mode)
-                if "b" in mode:
+                if "b" not in mode:
+                    return f
+                try:
+                    f.seek(0)
                     content = f.read()
-                    try:
-                        fernet = get_fernet()
-                        decrypted_content = fernet.decrypt(content)
-                        return BytesIO(decrypted_content)
-                    except InvalidToken:
-                        # If decryption fails, return original (might be already decrypted or not encrypted)
-                        f.seek(0)
-                        return f
-                return f
+                finally:
+                    # The ciphertext is fully read; close the underlying
+                    # storage handle so we don't hold file descriptors open for
+                    # the lifetime of the instance. The decrypted bytes live in
+                    # the returned BytesIO instead.
+                    f.close()
+                try:
+                    fernet = get_fernet()
+                    return BytesIO(fernet.decrypt(content))
+                except InvalidToken:
+                    # The stored bytes may be legacy plaintext; return a fresh
+                    # handle positioned at the start so the caller can read the
+                    # raw file.
+                    f = original_open(mode)
+                    f.seek(0)
+                    return f
 
             file.open = decrypted_open
             file._decrypted_file = True

@@ -85,7 +85,7 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         "If you did not start an application with Girls of Steel, you can safely ignore this email.\n"
     )
 
-    def _send():
+    def _send(close_connections: bool = False):
         try:
             send_mail(
                 subject=subject,
@@ -99,10 +99,19 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
                 "Failed to send OTP email for %s", application.application_id
             )
         finally:
-            close_old_connections()
+            # Only close connections from a background thread. The thread-local
+            # connection must be released before the thread exits, but closing
+            # connections synchronously (e.g. inside tests) can drop a live
+            # transaction's connection.
+            if close_connections:
+                close_old_connections()
 
     if _should_send_async():
-        threading.Thread(target=_send, name=f"otp-email-{application.pk}").start()
+        threading.Thread(
+            target=_send,
+            kwargs={"close_connections": True},
+            name=f"otp-email-{application.pk}",
+        ).start()
     else:
         _send()
 
@@ -357,7 +366,7 @@ def _send_html_email(
     if not recipients:
         return
 
-    def _do_send():
+    def _do_send(close_connections: bool = False):
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
@@ -371,10 +380,19 @@ def _send_html_email(
         except Exception:  # pragma: no cover - defensive
             logger.exception("Failed to send email %r to %r", subject, recipients)
         finally:
-            close_old_connections()
+            # Only close connections from a background thread. The thread-local
+            # connection must be released before the thread exits, but closing
+            # connections synchronously (e.g. inside tests) can drop a live
+            # transaction's connection.
+            if close_connections:
+                close_old_connections()
 
     if _should_send_async():
-        threading.Thread(target=_do_send, name=f"html-email-{subject[:20]}").start()
+        threading.Thread(
+            target=_do_send,
+            kwargs={"close_connections": True},
+            name=f"html-email-{subject[:20]}",
+        ).start()
     else:
         _do_send()
 

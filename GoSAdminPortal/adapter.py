@@ -227,7 +227,7 @@ class AccountAdapter(DefaultAccountAdapter):
         elif (settings.DEBUG or is_staging) and code:
             logging.info(f"DEBUG/STAGING: Login code for {email} is {code}")
 
-        def _send():
+        def _send(close_connections: bool = False):
             from django.db import close_old_connections
 
             try:
@@ -235,7 +235,12 @@ class AccountAdapter(DefaultAccountAdapter):
             except Exception as e:
                 logging.error(f"Failed to send email {template_prefix} to {email}: {e}")
             finally:
-                close_old_connections()
+                # Only close connections from a background thread. The thread-local
+                # connection must be released before the thread exits, but closing
+                # connections synchronously (e.g. inside tests) can drop a live
+                # transaction's connection.
+                if close_connections:
+                    close_old_connections()
 
         if (
             settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend"
@@ -243,7 +248,11 @@ class AccountAdapter(DefaultAccountAdapter):
         ):
             _send()
         else:
-            threading.Thread(target=_send, name=f"allauth-email-{email[:20]}").start()
+            threading.Thread(
+                target=_send,
+                kwargs={"close_connections": True},
+                name=f"allauth-email-{email[:20]}",
+            ).start()
 
     def format_email_subject(self, subject):
         """

@@ -61,6 +61,23 @@ The repository is organized into several Django apps:
 ## Environment Variables
 Typical settings for email, debug, and allowed hosts can be configured directly in GoSAdminPortal/settings.py for local development. For production, consider using environment variables and a .env loader.
 
+**Required in production:**
+- `FILE_ENCRYPTION_KEY` — Fernet key for encrypting medical/tax documents and sensitive fields.
+  Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+  If this key is rotated, all existing encrypted data (EncryptedFileField, EncryptedTextField, EncryptedCharField) must be re-encrypted using a data migration script.
+- `SECRET_KEY` — Django secret key for cryptographic signing. Must NOT use the default insecure value.
+  Generate with: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
+- `ALLOWED_HOSTS` — Comma-separated list of your production domain(s), e.g., `example.com,www.example.com`
+- `EMAIL_HOST_USER` — SMTP username for sending OTP login emails (required for allauth email OTP)
+- `EMAIL_HOST_PASSWORD` — SMTP password for the above account
+
+**Recommended in production:**
+- `DATABASE_URL` — PostgreSQL connection string (defaults to SQLite if not set)
+- `ADMIN_EMAILS` — Comma-separated admin emails for error notifications
+- `DEFAULT_FROM_EMAIL` — From address for outgoing emails
+- `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` — Set to "True" (default)
+- `SECURE_HSTS_SECONDS` — HSTS max-age in seconds (default: 31536000)
+
 ## Additional Documentation
 For detailed architectural guidance, data model summaries, and coding standards (especially for AI agents), see [AGENTS.md](AGENTS.md).
 

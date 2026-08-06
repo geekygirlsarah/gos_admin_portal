@@ -91,6 +91,21 @@ jobs:
 
   django:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python
@@ -106,6 +121,8 @@ jobs:
       run: |
         python manage.py check
         python manage.py check --deploy
+    - name: Run Migrations
+      run: python manage.py migrate --noinput
     - name: Run Tests with Coverage
       run: |
         coverage run manage.py test --noinput --parallel
