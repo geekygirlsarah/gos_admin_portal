@@ -120,11 +120,35 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         )
         past.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
 
+        # Group past programs by school year (July–June) based on end date,
+        # newest school year first.
+        def school_year_label(prog):
+            ed = prog.end_date
+            if ed:
+                start = ed.year if ed.month >= 7 else ed.year - 1
+                return f"{start}-{start + 1}"
+            sd = prog.start_date
+            if sd:
+                return str(sd.year)
+            return "Unknown"
+
+        past_grouped = {}
+        for p in past:
+            past_grouped.setdefault(school_year_label(p), []).append(p)
+        for label in past_grouped:
+            past_grouped[label].sort(
+                key=lambda p: (p.end_date is not None, p.end_date), reverse=True
+            )
+        past_programs_by_year = sorted(
+            past_grouped.items(), key=lambda kv: kv[0], reverse=True
+        )
+
         ctx.update(
             {
                 "future_programs": future,
                 "current_programs": current,
                 "past_programs": past,
+                "past_programs_by_year": past_programs_by_year,
             }
         )
         return ctx

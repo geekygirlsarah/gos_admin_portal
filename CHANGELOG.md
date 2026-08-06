@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-06
 
+### Changed
+- **Past Programs Grouped by School Year**: On the Programs landing page, past programs are now grouped under the school year (July–June) in which they ended, newest first, so it's easier to find programs from a particular season.
+- **Restructured unit tests**: Regrouped and separated unit tests from dozens of files to more logical and reasonable groups.
+
 ### Fixed
 - **Mentor Emails No Longer Say "Student"**: The approval, finalization, decline, and lead-mentor notification emails now use mentor-appropriate wording for mentor applications instead of showing an empty "Student" line. Mentors are addressed by their own name, and the approval email no longer tells them to download, sign, and re-upload documents (they're converted directly to mentors instead).
 
