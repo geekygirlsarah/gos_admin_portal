@@ -1,21 +1,9 @@
-"""
-TDD for attendance permission rules (Issue: permission structures for attendance data).
-
-Permission spec:
-- Students: Can view their own attendance data, cannot view other attendance data.
-- Parents: Can view their students' attendance data, cannot view other attendance data.
-- Mentors: Can add or edit student attendance data for current programs, cannot delete
-           student attendance data, can view student attendance (to add/edit), cannot
-           view any other attendance data they don't have access to.
-- Visitors (no role): Cannot view any attendance data.
-- Lead Mentors: Full admin access.
-"""
-
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from attendance.models import AttendanceSession
 from programs.models import (
     Adult,
     Enrollment,
@@ -26,7 +14,7 @@ from programs.models import (
 )
 from programs.permission_views import can_user_delete, can_user_read, can_user_write
 
-from .models import AttendanceSession
+from .base import make_program
 
 
 def _make_program(name="Test Program", active=True):
@@ -39,8 +27,6 @@ def _make_program(name="Test Program", active=True):
 
 
 class MentorAttendanceReadPermissionTests(TestCase):
-    """Mentors can read student attendance for current programs."""
-
     def setUp(self):
         self.active_program = _make_program("Active Program", active=True)
         self.inactive_program = _make_program("Inactive Program", active=False)
@@ -48,7 +34,7 @@ class MentorAttendanceReadPermissionTests(TestCase):
         self.mentor_user = User.objects.create_user(
             username="mentor_perm", password="password123"  # nosec B106
         )
-        self.mentor = Adult.objects.create(
+        Adult.objects.create(
             user=self.mentor_user,
             first_name="Mentor",
             last_name="User",
@@ -58,7 +44,6 @@ class MentorAttendanceReadPermissionTests(TestCase):
         self.student = Student.objects.create(first_name="Test", last_name="Student")
         Enrollment.objects.create(student=self.student, program=self.active_program)
 
-        # Ensure RolePermission allows mentor to read attendance
         RolePermission.objects.update_or_create(
             role="Mentor",
             section="attendance",
@@ -66,11 +51,9 @@ class MentorAttendanceReadPermissionTests(TestCase):
         )
 
     def test_mentor_can_read_student_attendance(self):
-        """Mentors can view student attendance data (to add/edit it)."""
         self.assertTrue(can_user_read(self.mentor_user, "attendance", obj=self.student))
 
     def test_mentor_cannot_read_attendance_when_role_permission_denies(self):
-        """If the dynamic RolePermission denies read, Mentor cannot read."""
         RolePermission.objects.update_or_create(
             role="Mentor",
             section="attendance",
@@ -82,8 +65,6 @@ class MentorAttendanceReadPermissionTests(TestCase):
 
 
 class MentorAttendanceWritePermissionTests(TestCase):
-    """Mentors can add/edit but NOT delete student attendance."""
-
     def setUp(self):
         self.program = _make_program()
 
@@ -106,17 +87,13 @@ class MentorAttendanceWritePermissionTests(TestCase):
         )
 
     def test_mentor_can_write_attendance(self):
-        """Mentors with write permission can create/edit attendance."""
         self.assertTrue(can_user_write(self.mentor_user, "attendance"))
 
     def test_mentor_cannot_delete_attendance(self):
-        """Mentors cannot delete student attendance records."""
         self.assertFalse(can_user_delete(self.mentor_user, "attendance"))
 
 
 class MentorAttendanceDeleteViewTests(TestCase):
-    """Mentors are blocked from the delete action on the student attendance view."""
-
     def setUp(self):
         self.program = _make_program()
 
@@ -145,7 +122,6 @@ class MentorAttendanceDeleteViewTests(TestCase):
         )
 
     def test_mentor_cannot_delete_session_via_view(self):
-        """POST delete action from a Mentor should return 403 or redirect with error."""
         self.client.login(
             username="mentor_delete", password="password123"
         )  # nosec B106
@@ -157,15 +133,11 @@ class MentorAttendanceDeleteViewTests(TestCase):
                 "session_id": self.session.pk,
             },
         )
-        # Session must still exist
         self.assertTrue(AttendanceSession.objects.filter(pk=self.session.pk).exists())
-        # Should either redirect or return 403
         self.assertIn(response.status_code, [302, 403])
 
 
 class StudentAttendancePermissionTests(TestCase):
-    """Students can view their own attendance only."""
-
     def setUp(self):
         self.student_user = User.objects.create_user(
             username="student_own", password="password123"  # nosec B106
@@ -192,8 +164,6 @@ class StudentAttendancePermissionTests(TestCase):
 
 
 class ParentAttendancePermissionTests(TestCase):
-    """Parents can view only their students' attendance data."""
-
     def setUp(self):
         self.parent_user = User.objects.create_user(
             username="parent_att", password="password123"  # nosec B106
@@ -224,8 +194,6 @@ class ParentAttendancePermissionTests(TestCase):
 
 
 class VisitorAttendancePermissionTests(TestCase):
-    """Users with no role (visitors) cannot view any attendance data."""
-
     def setUp(self):
         self.visitor_user = User.objects.create_user(
             username="visitor_att", password="password123"  # nosec B106
@@ -245,8 +213,6 @@ class VisitorAttendancePermissionTests(TestCase):
 
 
 class LeadMentorAttendancePermissionTests(TestCase):
-    """Lead Mentors have full admin access to attendance."""
-
     def setUp(self):
         self.lead_user = User.objects.create_user(
             username="lead_att", password="password123"  # nosec B106

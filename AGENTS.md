@@ -91,7 +91,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 
 ## Testing Strategy and Contribution
 
-- **Location**: Tests live in `programs/tests/`, `applications/tests/`, `attendance/tests.py`, and `attendance/test_attendance_permissions.py`.
+- **Location**: Tests live in `programs/tests/`, `applications/tests/`, and `attendance/tests/` (with `test_models.py`, `test_views.py`, `test_kiosk.py`, `test_permissions.py`, `test_reliability.py`, `test_manifest.py`).
 - **Story Integration Tests**: For complex lifecycles (e.g., Application -> Conversion -> Financials), use "Story" tests that exercise multiple views and signals in a single test case (see `programs/tests/test_integration_flows.py` for examples). These help catch regressions in side-effects (like emails or balance calculations) that unit tests often miss.
 - **TDD Requirement**: When fixing bugs, add a reproducer test file (e.g., `test_issue_reproduction.py`) before applying the fix.
 - **UI Automation**: For JS-heavy components (like DualListbox or the multi-step application wizard), consider browser-based tests using Playwright.

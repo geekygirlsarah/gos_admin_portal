@@ -24,54 +24,16 @@ from attendance.services import (
 )
 from programs.models import Adult, Program, ProgramFeature, Student
 
-
-class AttendanceModelReliabilityTests(TestCase):
-    def setUp(self):
-        self.program = Program.objects.create(name="Model Program")
-        self.student = Student.objects.create(first_name="Model", last_name="Student")
-        self.adult = Adult.objects.create(
-            first_name="Model", last_name="Mentor", is_mentor=True
-        )
-
-    def test_rfid_card_owner_constraint_requires_exactly_one_owner(self):
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                RFIDCard.objects.create(
-                    uid="BAD-BOTH", student=self.student, adult=self.adult
-                )
-
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                RFIDCard.objects.create(uid="BAD-NONE")
-
-    def test_kiosk_device_string_includes_location_when_present(self):
-        device = KioskDevice.objects.create(
-            name="Front Desk", program=self.program, api_key="key-1", location="Lobby"
-        )
-        self.assertEqual(str(device), "Front Desk (Lobby)")
-
-    def test_attendance_session_duration_hm_is_zero_padded(self):
-        session = AttendanceSession.objects.create(
-            program=self.program,
-            student=self.student,
-            check_in=timezone.now(),
-            check_out=timezone.now(),
-            duration_minutes=125,
-        )
-        self.assertEqual(session.duration_hm, "2:05")
+from .base import make_program, make_student
 
 
 class AttendanceServiceReliabilityTests(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(name="Service Program")
-        feature, _ = ProgramFeature.objects.get_or_create(
-            key="attendance", defaults={"name": "Attendance"}
-        )
-        self.program.features.add(feature)
-        self.student = Student.objects.create(
+        self.program = make_program("Service Program")
+        self.student = make_student(
             first_name="Service", last_name="Student", graduation_year=2027
         )
-        self.other_student = Student.objects.create(
+        self.other_student = make_student(
             first_name="Other", last_name="Student", graduation_year=2027
         )
 
@@ -150,16 +112,12 @@ class AttendanceServiceReliabilityTests(TestCase):
 class KioskApiReliabilityTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.program = Program.objects.create(name="Kiosk Program")
-        feature, _ = ProgramFeature.objects.get_or_create(
-            key="attendance", defaults={"name": "Attendance"}
-        )
-        self.program.features.add(feature)
+        self.program = make_program("Kiosk Program")
         self.kiosk = KioskConfig.objects.create(
             label="Main Kiosk", program=self.program
         )
         self.cookie_name = _cookie_name(self.kiosk.pk)
-        self.student = Student.objects.create(
+        self.student = make_student(
             first_name="Kiosk", last_name="Student", graduation_year=2027
         )
 
@@ -230,10 +188,10 @@ class RFIDManagementReliabilityTests(TestCase):
         )  # nosec B106
         self.client.login(username="admin", password="password")  # nosec B106
 
-        self.student_a = Student.objects.create(
+        self.student_a = make_student(
             first_name="Student", last_name="A", graduation_year=2027
         )
-        self.student_b = Student.objects.create(
+        self.student_b = make_student(
             first_name="Student", last_name="B", graduation_year=2027
         )
 

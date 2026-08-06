@@ -4,24 +4,17 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
+from attendance.models import AttendanceEvent, AttendanceSession, KioskDevice, RFIDCard
+from attendance.services import record_tap, resolve_student_by_uid
 from programs.models import Program, ProgramFeature, Student
 
-from .models import AttendanceEvent, AttendanceSession, KioskDevice, RFIDCard
-from .services import record_tap, resolve_student_by_uid
+from .base import make_adult, make_program, make_student
 
 
 class AttendanceServiceTests(TestCase):
     def setUp(self):
-        self.program = Program.objects.create(name="Test Program")
-        # Enable attendance feature if needed (services.py checks for 'attendance' feature)
-        feat, _ = ProgramFeature.objects.get_or_create(
-            key="attendance", defaults={"name": "Attendance"}
-        )
-        self.program.features.add(feat)
-
-        self.student = Student.objects.create(
-            legal_first_name="Test", last_name="Student"
-        )
+        self.program = make_program()
+        self.student = make_student(legal_first_name="Test", last_name="Student")
         self.rfid = RFIDCard.objects.create(uid="123456", student=self.student)
         self.kiosk = KioskDevice.objects.create(
             name="Main Kiosk", program=self.program, api_key="test-key"
@@ -35,9 +28,7 @@ class AttendanceServiceTests(TestCase):
         self.assertIsNone(resolved_none)
 
     def test_record_tap_auto_in_out(self):
-        # Use a fixed time to avoid midnight issues in local timezones
         now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        # First tap -> IN
         evt1 = record_tap(
             program=self.program,
             rfid_uid="123456",
@@ -51,7 +42,6 @@ class AttendanceServiceTests(TestCase):
         self.assertIsNone(session.check_out)
         self.assertEqual(session.opened_by_event, evt1)
 
-        # Second tap -> OUT
         later = now + timedelta(minutes=30)
         evt2 = record_tap(
             program=self.program,
@@ -67,9 +57,7 @@ class AttendanceServiceTests(TestCase):
         self.assertEqual(session.closed_by_event, evt2)
 
     def test_record_tap_explicit_in_out(self):
-        # Use a fixed time to avoid midnight issues in local timezones
         now = datetime.datetime(2026, 7, 31, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        # Explicit IN
         evt1 = record_tap(
             program=self.program,
             rfid_uid="123456",
@@ -79,7 +67,6 @@ class AttendanceServiceTests(TestCase):
         )
         self.assertEqual(evt1.event_type, AttendanceEvent.IN)
 
-        # Explicit OUT
         later = now + timedelta(minutes=45)
         evt2 = record_tap(
             program=self.program,
@@ -146,9 +133,7 @@ class AttendanceServiceTests(TestCase):
         self.assertEqual(session.duration_hm, "1:15")
 
     def test_attendance_feature_gate(self):
-        # Create a program without attendance feature
         prog2 = Program.objects.create(name="No Attendance Prog")
-        # record_tap should raise PermissionDenied if 'attendance' feature is missing
         from django.core.exceptions import PermissionDenied
 
         with self.assertRaises(PermissionDenied):
@@ -179,3 +164,49 @@ class AttendanceSessionIndexTests(TestCase):
             indexes["att_sess_prog_visitor_in_idx"].fields,
             ["program", "visitor_name", "check_in"],
         )
+
+
+class AttendanceModelReliabilityTests(TestCase):
+    def setUp(self):
+        self.program = make_program("Model Program")
+        self.student = make_student(first_name="Model", last_name="Student")
+        self.adult = make_adult(first_name="Model", last_name="Mentor", is_mentor=True)
+
+    def test_rfid_card_owner_constraint_requires_exactly_one_owner(self):
+        from django.db import IntegrityError, transaction
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                RFIDCard.objects.create(
+                    uid="BAD-BOTH", student=self.student, adult=self.adult
+                )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                RFIDCard.objects.create(uid="BAD-NONE")
+
+    def test_kiosk_device_string_includes_location_when_present(self):
+        device = KioskDevice.objects.create(
+            name="Front Desk", program=self.program, api_key="key-1", location="Lobby"
+        )
+        self.assertEqual(str(device), "Front Desk (Lobby)")
+
+    def test_attendance_session_duration_hm_is_zero_padded(self):
+        session = AttendanceSession.objects.create(
+            program=self.program,
+            student=self.student,
+            check_in=timezone.now(),
+            check_out=timezone.now(),
+            duration_minutes=125,
+        )
+        self.assertEqual(session.duration_hm, "2:05")
+
+
+class MentorAttendanceTests(TestCase):
+    def setUp(self):
+        self.program = make_program()
+        self.mentor = make_adult(first_name="Mentor", last_name="User", is_mentor=True)
+
+    def test_mentor_rfid_association(self):
+        rfid = RFIDCard.objects.create(uid="M123456", adult=self.mentor)
+        self.assertEqual(rfid.adult, self.mentor)
