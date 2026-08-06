@@ -7,53 +7,53 @@ from __future__ import annotations
 
 from django.urls import path
 
-from . import review, views
+from . import views
 
 urlpatterns = [
     # --- Lead-mentor review pages (gated by applications.review_application) ---
     path(
         "review/",
-        review.ApplicationReviewListView.as_view(),
+        views.ApplicationReviewListView.as_view(),
         name="application_review_list",
     ),
     path(
         "review/cleanup-stale/",
-        review.ApplicationCleanupView.as_view(),
+        views.ApplicationCleanupView.as_view(),
         name="application_cleanup_stale",
     ),
     path(
         "review/<str:app_id>/",
-        review.ApplicationReviewDetailView.as_view(),
+        views.ApplicationReviewDetailView.as_view(),
         name="application_review_detail",
     ),
     path(
         "review/<str:app_id>/approve/",
-        review.ApplicationApproveView.as_view(),
+        views.ApplicationApproveView.as_view(),
         name="application_review_approve",
     ),
     path(
         "review/<str:app_id>/decline/",
-        review.ApplicationDeclineView.as_view(),
+        views.ApplicationDeclineView.as_view(),
         name="application_review_decline",
     ),
     path(
         "review/<str:app_id>/edit/",
-        review.ApplicationEditView.as_view(),
+        views.ApplicationEditView.as_view(),
         name="application_review_edit",
     ),
     path(
         "review/<str:app_id>/delete/",
-        review.ApplicationDeleteView.as_view(),
+        views.ApplicationDeleteView.as_view(),
         name="application_review_delete",
     ),
     path(
         "review/<str:app_id>/convert/",
-        review.ApplicationConvertView.as_view(),
+        views.ApplicationConvertView.as_view(),
         name="application_review_convert",
     ),
     path(
         "review/<str:app_id>/resend-email/",
-        review.ApplicationResendEmailView.as_view(),
+        views.ApplicationResendEmailView.as_view(),
         name="application_review_resend_email",
     ),
     # Step 1: welcome / start / resume

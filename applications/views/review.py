@@ -23,8 +23,8 @@ from django.views import View
 from audit.events import AuditEvent
 from audit.service import log_event
 
-from .models import Application
-from .services import (
+from ..models import Application
+from ..services import (
     ApplicationConversionError,
     convert_application_to_student,
     get_primary_parent_email,
@@ -592,7 +592,7 @@ class ApplicationResendEmailView(_ReviewerRequiredMixin, View):
                 messages.success(request, "Resent approval email.")
         elif email_type == "declined":
             if application.status != Application.Status.DECLINED:
-                messages.error(request, "This application has not been declined.")
+                messages.error(request, "This application has not been declined yet.")
             else:
                 send_application_declined_email(
                     application, application.decline_reason, request=request
