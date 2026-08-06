@@ -4,7 +4,11 @@
 unable to approve your application at this time.</p>
 
 <p>
+    {% if application.is_mentor %}
+    <strong>Mentor:</strong> {{ application.mentor_name|default:"(not specified)" }}<br>
+    {% else %}
     <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
+    {% endif %}
     <strong>Application ID:</strong> {{ application.application_id }}
 </p>
 

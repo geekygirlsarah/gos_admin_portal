@@ -2,6 +2,16 @@
 
 <p><strong>Great news</strong> — your Girls of Steel application has been approved!</p>
 
+{% if application.is_mentor %}
+<p>
+    Welcome aboard! You're on your way to becoming a Girls of Steel mentor,
+    and our lead mentors will be in touch with your onboarding details.
+</p>
+<ul>
+    <li><strong>Mentor:</strong> {{ application.mentor_name|default:"(not specified)" }}</li>
+    <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
+</ul>
+{% else %}
 <ul>
     <li><strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}</li>
     <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
@@ -16,6 +26,7 @@
 <p>
     <a href="{{ documents_url }}">{{ documents_url }}</a>
 </p>
+{% endif %}
 
 <p>If you have any questions, just reply to this email.</p>
 

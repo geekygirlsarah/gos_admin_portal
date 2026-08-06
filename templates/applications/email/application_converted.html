@@ -1,15 +1,20 @@
 <p>Hi {{ application.applicant_name|default:"" }},</p>
 
-<p><strong>Great news</strong> - your Girls of Steel application has been finalized! You are now officially enrolled in the program.</p>
+<p><strong>Great news</strong> - your Girls of Steel application has been finalized!
+    {% if application.is_mentor %}You are now officially a Girls of Steel mentor!{% else %}You are now officially enrolled in the program.{% endif %}</p>
 
 <ul>
+    {% if application.is_mentor %}
+    <li><strong>Mentor:</strong> {{ application.mentor_name|default:"(not specified)" }}</li>
+    {% else %}
     <li><strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}</li>
-    <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
     <li><strong>Program:</strong> {{ application.program }}</li>
+    {% endif %}
+    <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
 </ul>
 
 <p>
-    You will receive more information about the program and next steps via email soon.
+    You will receive more information about next steps via email soon.
 </p>
 
 <p>If you have any questions, just reply to this email.</p>
