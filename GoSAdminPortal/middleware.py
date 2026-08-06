@@ -25,6 +25,7 @@ EXEMPT_PATH_PREFIXES = (
     "/apply/",  # public application wizard
     "/api/v1/",  # API endpoints use X-API-KEY header auth, not session auth
     "/kiosk/",  # public kiosk attendance sign-in pages
+    "/health/",  # health check endpoint for infrastructure monitoring
     settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,
 )

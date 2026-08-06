@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-05
+
+### Added
+- **/health Endpoint for Render Health Checks**: A new `/health` endpoint verifies both the database connection and the outgoing email backend are alive. It returns `{"status": "ok", "db": "ok", "email": "ok"}` (HTTP 200) when healthy, or `{"status": "unhealthy", ...}` (HTTP 503) with per-component details on failure. This allows Render's infrastructure health checks to verify that the service, database, and email (required for OTP login) are all up without requiring authentication.
+
 ## 2026-08-04
 
 ### Fixed
