@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Mentor Emails No Longer Say "Student"**: The approval, finalization, decline, and lead-mentor notification emails now use mentor-appropriate wording for mentor applications instead of showing an empty "Student" line. Mentors are addressed by their own name, and the approval email no longer tells them to download, sign, and re-upload documents (they're converted directly to mentors instead).
+- **Kiosk Enter Key Now Signs In**: On the attendance kiosk, pressing Enter after typing in the name fields now reliably signs the person in or out, and pressing Enter after typing a visitor's team number now signs the visitor in as well.
 
 ## 2026-08-05
 

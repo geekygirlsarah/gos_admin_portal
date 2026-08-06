@@ -750,6 +750,7 @@
         var manifestModalEl = document.getElementById("manifestModal");
         var memberInput = document.getElementById("memberInput");
         var guestInput = document.getElementById("guestInput");
+        var guestTeamInput = document.getElementById("guestTeamInput");
 
         if (memberSignInBtn) memberSignInBtn.addEventListener("click", memberSignIn);
         if (guestSignInBtn) guestSignInBtn.addEventListener("click", guestSignIn);
@@ -770,6 +771,11 @@
         }
         if (guestInput) {
             guestInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { guestSignIn(); }
+            });
+        }
+        if (guestTeamInput) {
+            guestTeamInput.addEventListener("keydown", function (e) {
                 if (e.key === "Enter") { guestSignIn(); }
             });
         }

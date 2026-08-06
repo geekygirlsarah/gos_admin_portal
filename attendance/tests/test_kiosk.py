@@ -126,6 +126,42 @@ class KioskPageViewTests(TestCase):
         self.assertIn("member-tab", content)
         self.assertIn("showMemberTab", content)
 
+    def test_kiosk_enter_key_wired_to_member_signin(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(
+            'memberInput.addEventListener("keydown"', content,
+            "Pressing Enter in the member name field should trigger sign-in",
+        )
+
+    def test_kiosk_enter_key_wired_to_guest_signin(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(
+            'guestInput.addEventListener("keydown"', content,
+            "Pressing Enter in the guest name field should trigger sign-in",
+        )
+
+    def test_kiosk_enter_key_wired_to_guest_team_number_signin(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(
+            'guestTeamInput.addEventListener("keydown"', content,
+            "Pressing Enter in the guest team number field should trigger sign-in",
+        )
+
 
 class KioskUnlockEndpointTests(TestCase):
     def setUp(self):
