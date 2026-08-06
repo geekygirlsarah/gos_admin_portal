@@ -497,3 +497,125 @@ class MentorAttendanceDeleteViewTests(TestCase):
         )
         self.assertTrue(AttendanceSession.objects.filter(pk=self.session.pk).exists())
         self.assertIn(response.status_code, [302, 403])
+
+
+class MentorManifestClosePermissionTests(TestCase):
+    """Mentors with attendance write access can close stale sessions."""
+
+    def setUp(self):
+        self.mentor_user = User.objects.create_user(
+            username="mentor_manifest", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=self.mentor_user,
+            first_name="Mentor",
+            last_name="Manifest",
+            is_mentor=True,
+        )
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="attendance",
+            defaults={"can_read": True, "can_write": True},
+        )
+        self.client.login(
+            username="mentor_manifest", password="password123"
+        )  # nosec B106
+
+        self.program = make_program()
+        self.student = make_student(first_name="Stale", last_name="Student")
+        self.stale_session = AttendanceSession.objects.create(
+            program=self.program,
+            student=self.student,
+            check_in=timezone.now() - timezone.timedelta(days=2),
+        )
+
+    def test_mentor_can_close_stale_sessions_batch(self):
+        url = reverse("close_stale_attendance_sessions")
+        response = self.client.post(url, {"hours": "1"})
+        self.assertEqual(response.status_code, 302)
+        self.stale_session.refresh_from_db()
+        self.assertIsNotNone(self.stale_session.check_out)
+
+    def test_mentor_can_close_single_stale_session(self):
+        url = reverse("close_attendance_session", args=[self.stale_session.pk])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        self.stale_session.refresh_from_db()
+        self.assertIsNotNone(self.stale_session.check_out)
+
+
+class MentorRFIDDeletePermissionTests(TestCase):
+    """Mentors can view/assign/replace RFID cards but never deactivate them."""
+
+    def setUp(self):
+        self.mentor_user = User.objects.create_user(
+            username="mentor_rfid", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=self.mentor_user,
+            first_name="Mentor",
+            last_name="RFID",
+            is_mentor=True,
+        )
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="attendance",
+            defaults={"can_read": True, "can_write": True},
+        )
+        self.client.login(username="mentor_rfid", password="password123")  # nosec B106
+
+        self.student = make_student(first_name="RFID", last_name="Student")
+        from attendance.models import RFIDCard
+
+        self.card = RFIDCard.objects.create(
+            uid="CARD-123", student=self.student, is_active=True
+        )
+
+    def test_mentor_can_access_rfid_management(self):
+        response = self.client.get(reverse("rfid_management"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_mentor_can_assign_rfid(self):
+        url = reverse("rfid_management") + "?q=RFID"
+        response = self.client.post(
+            url,
+            {
+                "action": "assign",
+                "person_type": "student",
+                "person_id": self.student.id,
+                "uid": "NEW-CARD-999",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        from attendance.models import RFIDCard
+
+        self.assertTrue(
+            RFIDCard.objects.filter(
+                uid="NEW-CARD-999", student=self.student, is_active=True
+            ).exists()
+        )
+
+    def test_mentor_cannot_deactivate_rfid(self):
+        url = reverse("rfid_management") + "?q=RFID"
+        response = self.client.post(
+            url, {"action": "deactivate", "card_id": self.card.id}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.card.refresh_from_db()
+        self.assertTrue(self.card.is_active)
+
+    def test_mentor_rfid_page_hides_deactivate_button(self):
+        response = self.client.get(reverse("rfid_management"))
+        content = response.content.decode()
+        self.assertNotIn("Deactivate", content)
+
+    def test_lead_mentor_can_deactivate_rfid(self):
+        make_lead_mentor_user(username="lead_rfid")
+        self.client.login(username="lead_rfid", password="password123")  # nosec B106
+        url = reverse("rfid_management") + "?q=RFID"
+        response = self.client.post(
+            url, {"action": "deactivate", "card_id": self.card.id}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.card.refresh_from_db()
+        self.assertFalse(self.card.is_active)
