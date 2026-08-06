@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core import mail
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from programs.models import (
@@ -15,6 +15,7 @@ from programs.models import (
 )
 
 
+@override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 class AutoEmailNotificationsTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)
