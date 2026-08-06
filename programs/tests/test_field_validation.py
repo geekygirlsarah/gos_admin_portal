@@ -1,3 +1,5 @@
+"""Field validation tests: phone and ZIP code validation on models and forms."""
+
 from datetime import date
 
 from django.core.exceptions import ValidationError
@@ -17,21 +19,21 @@ class PhoneValidationTestCase(TestCase):
         student = Student(
             legal_first_name="Test",
             last_name="Student",
-            phone_number="12345",  # Invalid: too short
+            phone_number="12345",
             date_of_birth=date(date_of_birth_year, 1, 1),
         )
         with self.assertRaises(ValidationError):
             student.full_clean()
 
-        student.phone_number = "12345678901"  # Invalid: too long
+        student.phone_number = "12345678901"
         with self.assertRaises(ValidationError):
             student.full_clean()
 
-        student.phone_number = "1234567890"  # Valid: 10 digits
-        student.full_clean()  # Should not raise
+        student.phone_number = "1234567890"
+        student.full_clean()
 
-        student.phone_number = "(123) 456-7890"  # Valid: 10 digits after stripping
-        student.full_clean()  # Should not raise
+        student.phone_number = "(123) 456-7890"
+        student.full_clean()
 
     def test_adult_model_phone_validation(self):
         adult = Adult(
@@ -40,16 +42,15 @@ class PhoneValidationTestCase(TestCase):
             phone_number="1234567890",
             emergency_contact_phone="1234567890",
         )
-        adult.full_clean()  # Should pass
+        adult.full_clean()
 
-        # Testing multiple fields
         fields = ["phone_number", "emergency_contact_phone"]
         for field in fields:
             original_val = getattr(adult, field)
-            setattr(adult, field, "123")  # Invalid
+            setattr(adult, field, "123")
             with self.assertRaises(ValidationError):
                 adult.full_clean()
-            setattr(adult, field, original_val)  # Restore valid value
+            setattr(adult, field, original_val)
 
     def test_student_form_validation(self):
         form_data = {
@@ -67,7 +68,6 @@ class PhoneValidationTestCase(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_application_forms_validation(self):
-        # StudentInfoForm
         form = StudentInfoForm(
             data={
                 "legal_first_name": "A",
@@ -97,7 +97,6 @@ class PhoneValidationTestCase(TestCase):
         )
         self.assertTrue(form.is_valid(), form.errors)
 
-        # ParentInfoForm
         form = ParentInfoForm(
             data={
                 "first_name": "A",
@@ -130,7 +129,6 @@ class PhoneValidationTestCase(TestCase):
         )
         self.assertTrue(form.is_valid(), form.errors)
 
-        # MentorInfoForm
         form = MentorInfoForm(
             data={
                 "legal_first_name": "A",
@@ -151,3 +149,56 @@ class PhoneValidationTestCase(TestCase):
             }
         )
         self.assertTrue(form.is_valid())
+
+
+class ZipValidationTestCase(TestCase):
+    def test_student_model_zip_validation(self):
+        student = Student(
+            legal_first_name="Test",
+            last_name="Student",
+            date_of_birth="2010-01-01",
+        )
+        for invalid_zip in ["123", "1234", "123456", "abcde"]:
+            student.zip_code = invalid_zip
+            with self.assertRaises(ValidationError):
+                student.full_clean()
+
+        student.zip_code = "12345"
+        student.full_clean()
+
+    def test_student_form_zip_validation(self):
+        form_data = {
+            "legal_first_name": "Test",
+            "last_name": "Student",
+            "date_of_birth": "2010-01-01",
+            "zip_code": "123",
+        }
+        form = StudentForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn("zip_code", form.errors)
+
+        form_data["zip_code"] = "12345"
+        form = StudentForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_application_forms_zip_validation(self):
+        form = StudentInfoForm(
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "date_of_birth": "2010-01-01",
+                "zip_code": "123",
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("zip_code", form.errors)
+
+        form = StudentInfoForm(
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "date_of_birth": "2010-01-01",
+                "zip_code": "12345",
+            }
+        )
+        self.assertNotIn("zip_code", form.errors)

@@ -1,7 +1,9 @@
-import datetime
+"""Fee-related tests: due dates, effective dates, and form behaviors."""
+
+from datetime import date
 from decimal import Decimal
 
-from django.db import IntegrityError, transaction
+from django.core import mail
 from django.test import TestCase, override_settings
 
 from programs.forms import PaymentForm, ProgramEmailForm, SlidingScaleForm
@@ -15,24 +17,112 @@ from programs.models import (
 from programs.views import compute_sliding_discount_rounded
 
 
+class FeeDueDateTest(TestCase):
+    def setUp(self):
+        self.program = Program.objects.create(name="Test Program")
+        self.student = Student.objects.create(first_name="John", last_name="Doe")
+        Enrollment.objects.create(student=self.student, program=self.program)
+
+    def test_fee_due_date_field(self):
+        due_date = date(2026, 8, 1)
+        fee = Fee.objects.create(
+            program=self.program,
+            name="Registration Fee",
+            amount=100.00,
+            due_date=due_date,
+        )
+        self.assertEqual(fee.due_date, due_date)
+
+    def test_fee_due_date_in_balance_data(self):
+        from programs.utils import get_student_balance_data
+
+        due_date = date(2026, 8, 1)
+        Fee.objects.create(
+            program=self.program,
+            name="Registration Fee",
+            amount=100.00,
+            due_date=due_date,
+        )
+        balance_data = get_student_balance_data(self.student, self.program)
+        fee_entry = next(e for e in balance_data["entries"] if e["type"] == "Fee")
+        self.assertEqual(fee_entry.get("due_date"), due_date)
+
+    def test_fee_added_email_contains_due_date(self):
+        from programs.models import Adult, AdultStudentRelationship
+
+        parent = Adult.objects.create(
+            personal_email="parent@example.com", email_updates=True, is_parent=True
+        )
+        AdultStudentRelationship.objects.create(
+            adult=parent, student=self.student, relationship_to_student="parent"
+        )
+        due_date = date(2026, 8, 1)
+        Fee.objects.create(
+            program=self.program,
+            name="Registration Fee",
+            amount=100.00,
+            due_date=due_date,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Due Date:", mail.outbox[0].body)
+        self.assertIn("Aug. 1, 2026", mail.outbox[0].body)
+
+    def test_payment_notification_email_contains_due_date(self):
+        from programs.models import Adult, AdultStudentRelationship, Payment
+
+        parent = Adult.objects.create(
+            personal_email="parent@example.com", email_updates=True, is_parent=True
+        )
+        AdultStudentRelationship.objects.create(
+            adult=parent, student=self.student, relationship_to_student="parent"
+        )
+        due_date = date(2026, 8, 1)
+        Fee.objects.create(
+            program=self.program,
+            name="Registration Fee",
+            amount=100.00,
+            due_date=due_date,
+        )
+        mail.outbox = []
+        Payment.objects.create(
+            student=self.student,
+            program=self.program,
+            amount=50.00,
+            paid_on=date.today(),
+            paid_via="cash",
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Registration Fee", mail.outbox[0].body)
+        self.assertIn("Due: Aug. 1, 2026", mail.outbox[0].body)
+
+
+class FeeEffectiveDateTest(TestCase):
+    def test_fee_effective_date_field(self):
+        program = Program.objects.create(name="Test Program")
+        effective_date = date(2026, 7, 1)
+        fee = Fee.objects.create(
+            program=program,
+            name="Test Fee",
+            amount=50.00,
+            effective_date=effective_date,
+        )
+        self.assertEqual(fee.effective_date, effective_date)
+
+
 class UtilsAndModelEdgeTests(TestCase):
     def test_compute_sliding_discount_rounding(self):
-        # 10% of 100.49 -> 10.049 -> 10.05 -> rounds to 10 (half-down at .50 rounds down)
         self.assertEqual(
             compute_sliding_discount_rounded(Decimal("100.49"), Decimal("10")),
             Decimal("10"),
         )
-        # 10% of 100.50 -> 10.05 -> HALF_DOWN => 10
         self.assertEqual(
             compute_sliding_discount_rounded(Decimal("100.50"), Decimal("10")),
             Decimal("10"),
         )
-        # 10% of 105.51 -> 10.551 -> rounds to 11 (>.50)
         self.assertEqual(
             compute_sliding_discount_rounded(Decimal("105.51"), Decimal("10")),
             Decimal("11"),
         )
-        # Guard rails for None/invalid
         self.assertEqual(
             compute_sliding_discount_rounded(None, Decimal("10")), Decimal("0")
         )
@@ -44,52 +134,44 @@ class UtilsAndModelEdgeTests(TestCase):
         s1 = Student.objects.create(
             legal_first_name="A",
             last_name="B",
-            date_of_birth=datetime.date(2010, 5, 20),
+            date_of_birth=date(2010, 5, 20),
         )
-        self.assertEqual(s1.eighteenth_birthday(), datetime.date(2028, 5, 20))
-        # Feb 29 should map to Feb 28 on non-leap year
+        self.assertEqual(s1.eighteenth_birthday(), date(2028, 5, 20))
         s2 = Student.objects.create(
             legal_first_name="C",
             last_name="D",
-            date_of_birth=datetime.date(2008, 2, 29),
+            date_of_birth=date(2008, 2, 29),
         )
-        self.assertEqual(s2.eighteenth_birthday(), datetime.date(2026, 2, 28))
+        self.assertEqual(s2.eighteenth_birthday(), date(2026, 2, 28))
 
     def test_student_requires_background_check(self):
-        # Student turns 18 on 2028-05-20
         s = Student.objects.create(
             legal_first_name="A",
             last_name="B",
-            date_of_birth=datetime.date(2010, 5, 20),
+            date_of_birth=date(2010, 5, 20),
         )
         prog = Program.objects.create(
             name="Season",
-            start_date=datetime.date(2028, 1, 1),
-            end_date=datetime.date(2028, 12, 31),
+            start_date=date(2028, 1, 1),
+            end_date=date(2028, 12, 31),
         )
         self.assertTrue(s.requires_background_check(prog))
-        # If program lacks dates -> False
         p2 = Program.objects.create(name="No Dates")
         self.assertFalse(s.requires_background_check(p2))
-        # If program ends before 18th -> False
         p3 = Program.objects.create(
             name="Early",
-            start_date=datetime.date(2028, 1, 1),
-            end_date=datetime.date(2028, 5, 19),
+            start_date=date(2028, 1, 1),
+            end_date=date(2028, 5, 19),
         )
         self.assertFalse(s.requires_background_check(p3))
-        # If program is after 18th but start <= end (always) -> True (because end >= birthday)
         p4 = Program.objects.create(
             name="After",
-            start_date=datetime.date(2028, 5, 21),
-            end_date=datetime.date(2028, 6, 1),
+            start_date=date(2028, 5, 21),
+            end_date=date(2028, 6, 1),
         )
         self.assertTrue(s.requires_background_check(p4))
 
     def test_sliding_scale_allows_multiple_records_per_student(self):
-        # SlidingScale is no longer tied to a single program, and a student may
-        # accumulate multiple records over time (e.g. an old declined/expired
-        # application plus a new one) — there's no unique_together constraint.
         prog = Program.objects.create(name="P")
         s = Student.objects.create(legal_first_name="A", last_name="B")
         Enrollment.objects.create(student=s, program=prog)
@@ -100,14 +182,14 @@ class UtilsAndModelEdgeTests(TestCase):
         self.assertEqual(SlidingScale.objects.filter(student=s).count(), 2)
 
     def test_fee_unique_together(self):
+        from django.db import IntegrityError, transaction
+
         p1 = Program.objects.create(name="P1")
         p2 = Program.objects.create(name="P2")
         Fee.objects.create(program=p1, name="Dues", amount=Decimal("25.00"))
-        # Same name in same program should fail (wrap in atomic to avoid breaking the outer transaction)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Fee.objects.create(program=p1, name="Dues", amount=Decimal("30.00"))
-        # Same name across different programs is ok
         Fee.objects.create(program=p2, name="Dues", amount=Decimal("25.00"))
 
 
@@ -131,10 +213,8 @@ class FormBehaviorTests(TestCase):
 
     def test_payment_form_limits_queryset(self):
         form = PaymentForm(program=self.program)
-        # Student choices include only enrolled
         self.assertIn(self.enrolled_student, list(form.fields["student"].queryset))
         self.assertNotIn(self.not_enrolled, list(form.fields["student"].queryset))
-        # Fee field should not be in form.fields anymore
         self.assertNotIn("fee", form.fields)
 
     def test_sliding_scale_form_percent_validation_and_queryset(self):
@@ -142,7 +222,7 @@ class FormBehaviorTests(TestCase):
             program=self.program,
             data={
                 "student": self.enrolled_student.pk,
-                "percent": "150",  # invalid (>100)
+                "percent": "150",
             },
         )
         self.assertFalse(form.is_valid())
@@ -154,7 +234,6 @@ class FormBehaviorTests(TestCase):
             },
         )
         self.assertTrue(form2.is_valid(), form2.errors)
-        # queryset restriction
         self.assertIn(self.enrolled_student, list(form2.fields["student"].queryset))
         self.assertNotIn(self.not_enrolled, list(form2.fields["student"].queryset))
 
@@ -178,14 +257,12 @@ class FormBehaviorTests(TestCase):
         choices = dict(form.fields["from_account"].choices)
         self.assertIn("ops", choices)
         self.assertIn("info", choices)
-        # When program is passed, it should be hidden and required
         p = Program.objects.create(name="X")
         form2 = ProgramEmailForm(program=p)
         self.assertTrue(hasattr(form2.fields["program"].widget, "input_type"))
         self.assertEqual(
             getattr(form2.fields["program"].widget, "input_type", ""), "hidden"
         )
-        # If hidden and not provided in data -> non-field error
         form_hidden_missing = ProgramEmailForm(
             program=p,
             data={
@@ -197,7 +274,6 @@ class FormBehaviorTests(TestCase):
         )
         self.assertFalse(form_hidden_missing.is_valid())
         self.assertIn("__all__", form_hidden_missing.errors)
-        # If provided -> valid (assuming minimal required fields)
         form_hidden_ok = ProgramEmailForm(
             program=p,
             data={
@@ -209,7 +285,3 @@ class FormBehaviorTests(TestCase):
             },
         )
         self.assertTrue(form_hidden_ok.is_valid(), form_hidden_ok.errors)
-
-
-# ApplicationFlowTests removed; the public application flow now lives in
-# the `applications` app and is covered by its own tests.

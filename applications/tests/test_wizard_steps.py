@@ -1,4 +1,4 @@
-"""Tests for the application wizard Steps 5-8 (Phase 2)."""
+"""Tests for the application wizard Steps 5-9 (student info through confirm)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
-from programs.models import Adult, Program, Student
+from programs.models import Adult, Program, School, Student
 
 
 def _verified(**kwargs):
@@ -29,8 +29,6 @@ def _verified(**kwargs):
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step5StudentInfoTests(TestCase):
     def setUp(self):
-        from programs.models import School
-
         School.objects.get_or_create(name="Pittsburgh High")
         today = timezone.localdate()
         self.program = Program.objects.create(
@@ -139,13 +137,46 @@ class Step5StudentInfoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Anna")
         self.assertContains(response, "Bea")
-        # Selecting one prefills the form fields.
         response2 = self.client.post(
             reverse("apply_step5", kwargs={"app_id": app.application_id}),
             {"student": str(student_a.pk), "_pick_student": "1"},
         )
         self.assertEqual(response2.status_code, 200)
         self.assertContains(response2, 'value="Anna"')
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class Step6ExperienceTests(TestCase):
+    def setUp(self):
+        self.app = _verified(current_step=6)
+
+    def test_step6_get_renders(self):
+        response = self.client.get(
+            reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Experience and interest")
+
+    def test_step6_post_saves_and_advances(self):
+        response = self.client.post(
+            reverse("apply_step6", kwargs={"app_id": self.app.application_id}),
+            {
+                "interest_reason": "I love robots",
+                "hoped_gains": "Knowledge",
+                "prior_robotics_experience": "None",
+                "referral_source": "Friend",
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step7", kwargs={"app_id": self.app.application_id}),
+            fetch_redirect_response=False,
+        )
+        self.app.refresh_from_db()
+        self.assertEqual(
+            self.app.data["step6-experience"]["interest_reason"], "I love robots"
+        )
+        self.assertEqual(self.app.current_step, 7)
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
@@ -238,8 +269,6 @@ class Step7PrimaryParentTests(TestCase):
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step8SecondaryParentTests(TestCase):
     def test_secondary_parent_is_required(self):
-        # Posting an empty form (or the legacy "skip" button) must not
-        # advance to step 9 — a secondary contact is required.
         app = _verified(current_step=8)
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
@@ -343,19 +372,13 @@ class Step9ConfirmTests(TestCase):
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.SUBMITTED)
         self.assertIsNotNone(app.submitted_at)
-        # Two emails: confirmation to applicant + lead-mentor notification.
         self.assertEqual(len(mail.outbox), 2)
         recipients = {addr for m in mail.outbox for addr in m.to}
         self.assertIn(app.email, recipients)
-        # Confirmation should also go to the primary parent's email from
-        # Step 6 (in addition to the student/applicant email).
         self.assertIn("parent@example.com", recipients)
-        # Default lead recipient
         self.assertTrue(
             any("leads@girlsofsteelrobotics.org" in addr for addr in recipients)
         )
-        # Find the applicant confirmation email specifically and assert its
-        # recipient list contains both the applicant and the parent.
         confirm_msgs = [
             m for m in mail.outbox if "leads@girlsofsteelrobotics.org" not in m.to
         ]
@@ -365,10 +388,6 @@ class Step9ConfirmTests(TestCase):
         self.assertIn("parent@example.com", confirm.to)
 
     def test_submit_sends_only_parent_when_student_has_no_email(self):
-        # Simulate a student-without-email flow where Step 2 captured the
-        # parent's email as application.email (no separate step5.email),
-        # and Step 6 records the same parent email. The confirmation should
-        # be sent once, to that single address.
         app = _verified(
             program=self.program,
             current_step=9,
@@ -411,6 +430,321 @@ class Step9ConfirmTests(TestCase):
         self.assertContains(response, app.application_id)
 
 
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class Step5ValidationTests(TestCase):
+    """Step 5 form validation: birthdate, grade, and t-shirt field."""
+
+    def setUp(self):
+        School.objects.get_or_create(name="Pittsburgh High")
+        self.app = Application.objects.create(
+            applicant_type=Application.Type.STUDENT,
+            email="student@example.com",
+            current_step=5,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+
+    def test_birthdate_required(self):
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "This field is required")
+
+    def test_birthdate_future_date_invalid(self):
+        future_date = timezone.localdate() + datetime.timedelta(days=1)
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": future_date.strftime("%Y-%m-%d"),
+                "school_name": "Pittsburgh High",
+                "grade": "9",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "Date of birth cannot be in the future")
+
+    def test_birthdate_19_older_invalid(self):
+        dob = timezone.localdate() - datetime.timedelta(days=20 * 365)
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": "Pittsburgh High",
+                "grade": "9",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "must be 18 or younger")
+
+    def test_birthdate_young_allowed_with_confirmation(self):
+        dob = timezone.localdate() - datetime.timedelta(days=4 * 365)
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": "Pittsburgh High",
+                "grade": "9",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "seems a bit young")
+        self.assertContains(response, "I confirm this birthdate is correct")
+
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "confirm_age": "on",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
+            },
+            follow=True,
+        )
+        self.assertRedirects(
+            response, reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        )
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class GradeValidationTests(TestCase):
+    def setUp(self):
+        self.school, _ = School.objects.get_or_create(name="Pittsburgh High")
+        self.program = Program.objects.create(
+            name="Summer Camp",
+            start_date=timezone.now().date() + datetime.timedelta(days=30),
+            end_date=timezone.now().date() + datetime.timedelta(days=35),
+            grade_range_start=4,
+            grade_range_end=6,
+            active=True,
+        )
+        self.app = Application.objects.create(
+            applicant_type=Application.Type.PARENT,
+            email="parent@example.com",
+            program=self.program,
+            current_step=5,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+
+    def test_grade_within_range_no_warning(self):
+        dob = timezone.localdate() - datetime.timedelta(days=10 * 365)
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": self.school.name,
+                "grade": "5",
+            },
+            follow=True,
+        )
+        self.assertNotContains(
+            response, "seems to be outside the recommended grade range"
+        )
+        self.assertRedirects(
+            response, reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        )
+
+    def test_grade_outside_range_requires_confirmation(self):
+        dob = timezone.localdate() - datetime.timedelta(days=13 * 365)
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": self.school.name,
+                "grade": "8",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "seems to be outside the recommended grade range")
+        self.assertContains(response, "I confirm this grade is correct")
+
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "date_of_birth": dob.strftime("%Y-%m-%d"),
+                "school_name": self.school.name,
+                "grade": "8",
+                "confirm_grade": "on",
+            },
+            follow=True,
+        )
+        self.assertRedirects(
+            response, reverse("apply_step6", kwargs={"app_id": self.app.application_id})
+        )
+
+
+class TshirtFieldTests(TestCase):
+    def test_tshirt_field_presence_by_default(self):
+        from applications.forms import StudentInfoForm
+
+        form = StudentInfoForm()
+        self.assertIn("tshirt_size", form.fields)
+
+    def test_tshirt_field_removable(self):
+        from applications.forms import StudentInfoForm
+
+        form = StudentInfoForm(tshirt_enabled=False)
+        self.assertNotIn("tshirt_size", form.fields)
+
+    def test_tshirt_field_present_when_enabled(self):
+        from applications.forms import StudentInfoForm
+
+        form = StudentInfoForm(tshirt_enabled=True)
+        self.assertIn("tshirt_size", form.fields)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class RenumberingTests(TestCase):
+    def setUp(self):
+        School.objects.get_or_create(name="Pittsburgh High")
+
+    def test_step5_post_advances_to_step6(self):
+        app = _verified()
+        date_of_birth_year_string = str(datetime.date.today().year - 12)
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "personal_email": "grace@example.com",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": date_of_birth_year_string + "-01-01",
+                "school_name": "Pittsburgh High",
+                "grade": "9",
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step6", kwargs={"app_id": app.application_id}),
+            fetch_redirect_response=False,
+        )
+
+    def test_step_urls_and_views(self):
+        app = _verified()
+        response = self.client.get(
+            reverse("apply_step7", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Primary adult contact")
+
+        response = self.client.get(
+            reverse("apply_step8", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Secondary adult contact")
+
+        response = self.client.get(
+            reverse("apply_step9", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Review and submit")
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class Step8RepopulationTests(TestCase):
+    def setUp(self):
+        self.program = Program.objects.create(
+            name="Spring 2030",
+            start_date=timezone.localdate() + datetime.timedelta(days=60),
+            end_date=timezone.localdate() + datetime.timedelta(days=120),
+            active=True,
+        )
+
+    def test_step8_repopulates_when_navigating_back(self):
+        app = _verified(program=self.program, current_step=8)
+        app.data = {"step5-student": {"address": "123 Main St"}}
+        app.save()
+
+        self.client.post(
+            reverse("apply_step8", kwargs={"app_id": app.application_id}),
+            {
+                "first_name": "Secondary",
+                "last_name": "Parent",
+                "relationship_to_student": "guardian",
+                "email": "secondary@example.com",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "phone_number": "123-456-7890",
+                "phone_type": "cell",
+            },
+        )
+
+        app.refresh_from_db()
+        self.assertEqual(app.current_step, 9)
+        self.assertIn("step8-secondaryparent", app.data)
+
+        response = self.client.get(
+            reverse("apply_step8", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="Secondary"')
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class SwapParentsViewTests(TestCase):
     """Tests for the swap-parents endpoint."""
 
@@ -481,9 +815,6 @@ class SwapParentsViewTests(TestCase):
         self.assertEqual(app.data["step8-secondaryparent"]["first_name"], "Jane")
 
     def test_swap_hydrates_from_student_record_when_steps_not_yet_saved(self):
-        # Returning student: application.data has no step7/step8 yet because
-        # the user hasn't submitted those forms — data lives only in the
-        # Student record.  Swap should still work by reading from the record.
         primary = Adult.objects.create(
             first_name="Joe", last_name="Primary", personal_email="joe@example.com"
         )
@@ -509,7 +840,6 @@ class SwapParentsViewTests(TestCase):
             {"next": "7"},
         )
         app.refresh_from_db()
-        # After swap, step7 should contain Jane (old secondary) and step8 Joe (old primary).
         self.assertEqual(app.data["step7-primaryparent"]["first_name"], "Jane")
         self.assertEqual(app.data["step8-secondaryparent"]["first_name"], "Joe")
 
@@ -527,24 +857,21 @@ class SwapParentsViewTests(TestCase):
             reverse("apply_swap_parents", kwargs={"app_id": app.application_id}),
             {"next": "7"},
         )
-        # Should redirect to email verification, not swap.
         self.assertRedirects(
             response,
             reverse("apply_step3", kwargs={"app_id": app.application_id}),
             fetch_redirect_response=False,
         )
         app.refresh_from_db()
-        # Data must be unchanged.
         self.assertEqual(app.data["step7-primaryparent"]["first_name"], "Joe")
 
 
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step7SwapBoxVisibilityTests(TestCase):
     """Swap box on step 7 should appear when a secondary contact exists."""
 
     def setUp(self):
         today = timezone.localdate()
-        import datetime
-
         self.program = Program.objects.create(
             name="Spring 2030",
             start_date=today + datetime.timedelta(days=60),
@@ -584,7 +911,6 @@ class Step7SwapBoxVisibilityTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Swap primary")
-        # Secondary's full name should appear in the swap prompt.
         self.assertContains(response, "Jane")
         self.assertContains(response, "Secondary")
 
@@ -599,9 +925,6 @@ class Step7SwapBoxVisibilityTests(TestCase):
         self.assertNotContains(response, "Swap primary")
 
     def test_swap_box_shown_when_step7_already_saved_and_adult_has_secondary(self):
-        # Returning parent who already completed step7 in a prior session —
-        # existing_adult is not populated by _build_forms (because saved is
-        # truthy), so _render must fall back to an email lookup.
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="joe@example.com",
@@ -624,6 +947,7 @@ class Step7SwapBoxVisibilityTests(TestCase):
         self.assertContains(response, "Swap primary")
 
 
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ResumeRedirectsToCurrentStepTests(TestCase):
     """Resume should land users on the right step 5/6/7/8/9."""
 
@@ -664,13 +988,9 @@ class ResumeRedirectsToCurrentStepTests(TestCase):
         )
 
 
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step7AddressCopyTests(TestCase):
     def test_step7_has_student_address_in_context(self):
-        """
-        Verify that Step 7 context contains student address data from Step 5.
-        """
-        # 1. Create an application that has completed step 5.
-        # Note: Step 5 now saves to "step5-student" key.
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
@@ -686,11 +1006,8 @@ class Step7AddressCopyTests(TestCase):
                 }
             },
         )
-
-        # 2. Access Step 7 (Primary Parent)
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context.get("student_address"), "123 Main St")
         self.assertEqual(response.context.get("student_city"), "Pittsburgh")
@@ -698,9 +1015,6 @@ class Step7AddressCopyTests(TestCase):
         self.assertEqual(response.context.get("student_zip_code"), "15213")
 
     def test_step8_has_student_address_in_context(self):
-        """
-        Verify that Step 8 context contains student address data from Step 5.
-        """
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
@@ -716,15 +1030,12 @@ class Step7AddressCopyTests(TestCase):
                 }
             },
         )
-
         url = reverse("apply_step8", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context.get("student_address"), "123 Main St")
 
     def test_step7_fallback_to_student_model(self):
-        """Verify Step 7 context has student address even if missing in application.data."""
         student = Student.objects.create(
             legal_first_name="Jane",
             last_name="Doe",
@@ -742,16 +1053,13 @@ class Step7AddressCopyTests(TestCase):
             status=Application.Status.EMAIL_VERIFIED,
             data={"step5-student": {"_existing_student_id": student.pk}},
         )
-
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context.get("student_address"), "456 Elm St")
         self.assertEqual(response.context.get("student_city"), "Pittsburgh")
 
     def test_step7_fallback_to_old_key(self):
-        """Verify Step 7 context has student address from old 'step5' key."""
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
@@ -767,28 +1075,23 @@ class Step7AddressCopyTests(TestCase):
                 }
             },
         )
-
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context.get("student_address"), "789 Pine St")
         self.assertEqual(response.context.get("student_city"), "Cleveland")
 
     def test_button_not_rendered_when_address_missing(self):
-        """Verify button is not in HTML when no student address is available."""
         app = Application.objects.create(
             applicant_type=Application.Type.PARENT,
             email="parent@example.com",
             current_step=7,
             email_verified_at=timezone.now(),
             status=Application.Status.EMAIL_VERIFIED,
-            data={},  # No step5 data
+            data={},
         )
-
         url = reverse("apply_step7", kwargs={"app_id": app.application_id})
         response = self.client.get(url)
-
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Copy address from student")
         self.assertNotContains(response, "function copyStudentAddress")

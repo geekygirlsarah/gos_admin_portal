@@ -1,6 +1,9 @@
+"""Kiosk tests: config model, page views, unlock endpoint, OTP unlock, proxy tap/lookup."""
+
 import json
 
 from django.core.cache import cache
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -15,17 +18,11 @@ class KioskConfigModelTests(TestCase):
         self.program = make_program()
 
     def test_kiosk_config_str(self):
-        config = KioskConfig.objects.create(
-            label="Build Space Kiosk",
-            program=self.program,
-        )
+        config = KioskConfig.objects.create(label="Build Space Kiosk", program=self.program)
         self.assertIn("Build Space Kiosk", str(config))
 
     def test_kiosk_config_defaults(self):
-        config = KioskConfig.objects.create(
-            label="Kiosk",
-            program=self.program,
-        )
+        config = KioskConfig.objects.create(label="Kiosk", program=self.program)
         self.assertTrue(config.is_active)
 
     def test_kiosk_config_requires_label_and_program(self):
@@ -38,8 +35,7 @@ class KioskPageViewTests(TestCase):
         self.client = Client()
         self.program = make_program()
         self.kiosk_config = KioskConfig.objects.create(
-            label="Main Kiosk",
-            program=self.program,
+            label="Main Kiosk", program=self.program
         )
 
     def test_kiosk_page_is_public(self):
@@ -139,8 +135,7 @@ class KioskUnlockEndpointTests(TestCase):
         self.client = Client()
         self.program = make_program()
         self.kiosk_config = KioskConfig.objects.create(
-            label="Unlock Test Kiosk",
-            program=self.program,
+            label="Unlock Test Kiosk", program=self.program
         )
         self.user = User.objects.create_user(
             username="mentor@example.com",
@@ -151,7 +146,6 @@ class KioskUnlockEndpointTests(TestCase):
     def test_unlock_with_valid_credentials_sets_cookie(self):
         cache_key = f"kiosk_otp_{self.kiosk_config.pk}_mentor@example.com"
         cache.set(cache_key, "654321", 600)
-
         url = reverse("api_kiosk_unlock", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -194,9 +188,7 @@ class KioskIndexTests(TestCase):
 
     def test_kiosk_index_lists_active_kiosks(self):
         KioskConfig.objects.create(
-            label="Active Kiosk",
-            program=self.program,
-            is_active=True,
+            label="Active Kiosk", program=self.program, is_active=True
         )
         response = self.client.get(reverse("kiosk_index"))
         self.assertEqual(response.status_code, 200)
@@ -204,9 +196,7 @@ class KioskIndexTests(TestCase):
 
     def test_kiosk_index_excludes_inactive_kiosks(self):
         KioskConfig.objects.create(
-            label="Inactive Kiosk",
-            program=self.program,
-            is_active=False,
+            label="Inactive Kiosk", program=self.program, is_active=False
         )
         response = self.client.get(reverse("kiosk_index"))
         self.assertNotContains(response, "Inactive Kiosk")
@@ -216,9 +206,7 @@ class KioskIndexTests(TestCase):
 
         other_program = Program.objects.create(name="No Attendance Program")
         KioskConfig.objects.create(
-            label="Ghost Kiosk",
-            program=other_program,
-            is_active=True,
+            label="Ghost Kiosk", program=other_program, is_active=True
         )
         response = self.client.get(reverse("kiosk_index"))
         self.assertNotContains(response, "Ghost Kiosk")
@@ -228,10 +216,7 @@ class KioskOTPUntockTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.program = make_program("OTP Program")
-        self.kiosk = KioskConfig.objects.create(
-            label="OTP Kiosk",
-            program=self.program,
-        )
+        self.kiosk = KioskConfig.objects.create(label="OTP Kiosk", program=self.program)
         self.mentor = Adult.objects.create(
             first_name="Mentor",
             last_name="Joe",
@@ -248,7 +233,6 @@ class KioskOTPUntockTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
-
         cache_key = f"kiosk_otp_{self.kiosk.id}_mentor@andrew.cmu.edu"
         self.assertIsNotNone(cache.get(cache_key))
 
@@ -265,7 +249,6 @@ class KioskOTPUntockTests(TestCase):
     def test_kiosk_unlock_success(self):
         cache_key = f"kiosk_otp_{self.kiosk.id}_mentor@andrew.cmu.edu"
         cache.set(cache_key, "123456", 600)
-
         url = reverse("api_kiosk_unlock", args=[self.kiosk.id])
         response = self.client.post(
             url,
@@ -274,16 +257,13 @@ class KioskOTPUntockTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
-
         cookie_name = f"kiosk_unlocked_{self.kiosk.id}"
         self.assertEqual(response.cookies[cookie_name].value, "1")
-
         self.assertIsNone(cache.get(cache_key))
 
     def test_kiosk_unlock_invalid_code(self):
         cache_key = f"kiosk_otp_{self.kiosk.id}_mentor@andrew.cmu.edu"
         cache.set(cache_key, "123456", 600)
-
         url = reverse("api_kiosk_unlock", args=[self.kiosk.id])
         response = self.client.post(
             url,
@@ -299,8 +279,7 @@ class KioskProxyTapTests(TestCase):
         self.client = Client()
         self.program = make_program()
         self.kiosk_config = KioskConfig.objects.create(
-            label="Tap Test Kiosk",
-            program=self.program,
+            label="Tap Test Kiosk", program=self.program
         )
         self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
 
@@ -343,14 +322,11 @@ class KioskProxyLookupTests(TestCase):
         self.client = Client()
         self.program = make_program()
         self.kiosk_config = KioskConfig.objects.create(
-            label="Lookup Test Kiosk",
-            program=self.program,
+            label="Lookup Test Kiosk", program=self.program
         )
         self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
         self.student = Student.objects.create(
-            legal_first_name="Bob",
-            first_name="Bob",
-            last_name="Jones",
+            legal_first_name="Bob", first_name="Bob", last_name="Jones"
         )
         self.rfid = RFIDCard.objects.create(uid="RFID999", student=self.student)
 
@@ -388,9 +364,7 @@ class KioskProxyLookupTests(TestCase):
 
     def test_lookup_by_student_preferred_name(self):
         student = Student.objects.create(
-            legal_first_name="Barbara",
-            first_name="Babs",
-            last_name="Smith",
+            legal_first_name="Barbara", first_name="Babs", last_name="Smith"
         )
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
@@ -402,9 +376,7 @@ class KioskProxyLookupTests(TestCase):
 
     def test_lookup_by_student_legal_name(self):
         student = Student.objects.create(
-            legal_first_name="Barbara",
-            first_name="Babs",
-            last_name="Smith",
+            legal_first_name="Barbara", first_name="Babs", last_name="Smith"
         )
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
@@ -448,7 +420,6 @@ class KioskProxyLookupTests(TestCase):
 class KioskConfigSettingsTests(TestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
-        from django.contrib.auth.models import Group
 
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -461,7 +432,6 @@ class KioskConfigSettingsTests(TestCase):
         self.user.save()
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)
-
         self.program = make_program()
         self.client = Client()
         self.client.force_login(self.user)
@@ -483,10 +453,7 @@ class KioskConfigSettingsTests(TestCase):
         self.assertTrue(KioskConfig.objects.filter(label="New Kiosk").exists())
 
     def test_delete_kiosk_config(self):
-        config = KioskConfig.objects.create(
-            label="Delete Me",
-            program=self.program,
-        )
+        config = KioskConfig.objects.create(label="Delete Me", program=self.program)
         response = self.client.post(
             reverse("portal_kiosk"),
             {
@@ -499,9 +466,7 @@ class KioskConfigSettingsTests(TestCase):
 
     def test_toggle_kiosk_config_active(self):
         config = KioskConfig.objects.create(
-            label="Toggle Me",
-            program=self.program,
-            is_active=True,
+            label="Toggle Me", program=self.program, is_active=True
         )
         response = self.client.post(
             reverse("portal_kiosk"),

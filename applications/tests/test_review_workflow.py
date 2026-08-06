@@ -1,4 +1,5 @@
-"""Tests for the lead-mentor application review pages."""
+"""Tests for the lead-mentor application review workflow: permissions,
+approve/decline/edit/delete, convert, and email resend."""
 
 from __future__ import annotations
 
@@ -111,8 +112,6 @@ class ReviewPermissionGatingTests(TestCase):
         plain = User.objects.create_user(username="plain")
         self.client.force_login(plain)
         response = self.client.get(self.list_url)
-        # PermissionRequiredMixin denies access — either 403 (forbidden)
-        # or 302 (redirect to login), depending on Django configuration.
         self.assertIn(response.status_code, (302, 403))
 
     def test_lead_mentor_can_access_list(self):
@@ -154,7 +153,6 @@ class ReviewListFilterTests(TestCase):
         url = reverse("application_review_list") + "?status=bogus"
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        # All three still visible.
         self.assertContains(response, self.submitted.application_id)
         self.assertContains(response, self.approved.application_id)
         self.assertContains(response, self.declined.application_id)
@@ -168,8 +166,6 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.client.force_login(self.user)
         mail.outbox = []
 
-    # -- Approve ------------------------------------------------------------
-
     def test_approve_sets_status_and_emails(self):
         url = reverse(
             "application_review_approve", kwargs={"app_id": self.app.application_id}
@@ -180,14 +176,11 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertEqual(self.app.status, Application.Status.APPROVED)
         self.assertIsNotNone(self.app.reviewed_at)
         self.assertEqual(self.app.reviewed_by, self.user)
-        # Should have advanced past the wizard.
         self.assertGreaterEqual(self.app.current_step, 9)
-        # An approval email went out — to both the application email and the parent.
         self.assertEqual(len(mail.outbox), 1)
         msg = mail.outbox[0]
         recipients = {r.lower() for r in msg.to}
         self.assertIn("parent@example.com", recipients)
-        # Student email too (different from application email).
         self.assertIn("ada@example.com", recipients)
 
     def test_approving_already_approved_is_a_noop(self):
@@ -200,8 +193,6 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 0)
 
-    # -- Decline ------------------------------------------------------------
-
     def test_decline_with_reason_saves_and_emails(self):
         url = reverse(
             "application_review_decline", kwargs={"app_id": self.app.application_id}
@@ -212,7 +203,6 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertEqual(self.app.status, Application.Status.DECLINED)
         self.assertEqual(self.app.decline_reason, "Not the right fit this season.")
         self.assertEqual(self.app.reviewed_by, self.user)
-        # An email went out and contains the reason.
         self.assertEqual(len(mail.outbox), 1)
         body = mail.outbox[0].body
         self.assertIn("Not the right fit this season.", body)
@@ -235,8 +225,6 @@ class ApproveDeclineEditDeleteTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Send decline")
-
-    # -- Edit ---------------------------------------------------------------
 
     def test_edit_saves_data_and_email(self):
         url = reverse(
@@ -274,8 +262,6 @@ class ApproveDeclineEditDeleteTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "object")
-
-    # -- Delete -------------------------------------------------------------
 
     def test_delete_get_renders_confirmation(self):
         url = reverse(
@@ -357,21 +343,17 @@ class ConvertToStudentTests(TestCase):
         student = app.converted_student
         self.assertEqual(student.legal_first_name, "Ada")
         self.assertEqual(student.last_name, "Lovelace")
-        # Primary + secondary contacts wired up.
         self.assertIsNotNone(student.primary_contact)
         self.assertEqual(student.primary_contact.personal_email, "parent@example.com")
         self.assertIsNotNone(student.secondary_contact)
         self.assertEqual(student.secondary_contact.personal_email, "sam@example.com")
-        # School created.
         self.assertIsNotNone(student.school)
         self.assertEqual(student.school.name, "Allderdice High School")
-        # Enrolled in program.
         self.assertTrue(
             Enrollment.objects.filter(student=student, program=self.program).exists()
         )
 
     def test_convert_allowed_when_approved_and_no_required_docs(self):
-        # APPROVED with no required ProgramDocuments -> conversion proceeds.
         app = self._approved_signed_app(status=Application.Status.APPROVED)
         url = reverse(
             "application_review_convert", kwargs={"app_id": app.application_id}
@@ -424,7 +406,6 @@ class ConvertToStudentTests(TestCase):
         )
         self.client.post(url)
         before = Student.objects.count()
-        # Second call should not create a new Student.
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Student.objects.count(), before)
@@ -438,7 +419,143 @@ class ConvertToStudentTests(TestCase):
             "application_review_convert", kwargs={"app_id": app.application_id}
         )
         response = self.client.post(url)
-        # PermissionRequiredMixin -> 302 to login by default
         self.assertIn(response.status_code, (302, 403))
         app.refresh_from_db()
         self.assertEqual(app.status, Application.Status.APPROVED_SIGNED)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class LeadMentorGroupMergeTests(TestCase):
+    """After the group merge, the single 'LeadMentor' group grants
+    access to the application review pages."""
+
+    def setUp(self):
+        self.app = _make_application()
+        self.list_url = reverse("application_review_list")
+        self.detail_url = reverse(
+            "application_review_detail",
+            kwargs={"app_id": self.app.application_id},
+        )
+        self.lead_mentor_group, _ = Group.objects.get_or_create(name=LEAD_MENTORS_GROUP)
+        self.lead_mentor_group.permissions.add(_ensure_review_perm())
+
+    def test_lead_mentor_group_has_review_permission(self):
+        perm_codenames = set(
+            self.lead_mentor_group.permissions.values_list("codename", flat=True)
+        )
+        self.assertIn(
+            REVIEW_PERM_CODENAME,
+            perm_codenames,
+            "The 'LeadMentor' group is missing the 'review_application' permission.",
+        )
+
+    def test_lead_mentor_group_member_can_access_review_list(self):
+        user = User.objects.create_user(username="lm_user", email="lm@x.test")
+        user.groups.add(self.lead_mentor_group)
+        self.client.force_login(user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(
+            response.status_code,
+            200,
+            "Expected LeadMentor group member to access review list (got "
+            f"{response.status_code}).",
+        )
+
+    def test_lead_mentor_group_member_can_access_review_detail(self):
+        user = User.objects.create_user(username="lm_user2", email="lm2@x.test")
+        user.groups.add(self.lead_mentor_group)
+        self.client.force_login(user)
+        response = self.client.get(self.detail_url)
+        self.assertEqual(
+            response.status_code,
+            200,
+            "Expected LeadMentor group member to access review detail (got "
+            f"{response.status_code}).",
+        )
+
+    def test_old_lead_mentors_group_no_longer_exists(self):
+        self.assertFalse(
+            Group.objects.filter(name="Lead Mentors").exists(),
+            "The deprecated 'Lead Mentors' group still exists; "
+            "it should have been renamed to 'LeadMentor'.",
+        )
+
+    def test_user_without_group_cannot_access_review(self):
+        plain = User.objects.create_user(username="plain_user", email="plain@x.test")
+        self.client.force_login(plain)
+        response = self.client.get(self.list_url)
+        self.assertIn(
+            response.status_code,
+            [302, 403],
+            "Plain user should not be able to access review pages.",
+        )
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class ResendEmailTests(TestCase):
+    def setUp(self):
+        self.app = _make_application()
+        self.user = _reviewer_user()
+        self.client.force_login(self.user)
+        mail.outbox = []
+
+    def test_resend_otp_email(self):
+        url = reverse(
+            "application_review_resend_email",
+            kwargs={"app_id": self.app.application_id},
+        )
+        response = self.client.post(url, {"type": "otp"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("verification code", mail.outbox[0].subject.lower())
+        self.assertIn("parent@example.com", mail.outbox[0].to)
+
+    def test_resend_handoff_email(self):
+        self.app.status = Application.Status.AWAITING_PARENT
+        self.app.save()
+        url = reverse(
+            "application_review_resend_email",
+            kwargs={"app_id": self.app.application_id},
+        )
+        response = self.client.post(url, {"type": "handoff"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("application is waiting for you", mail.outbox[0].subject.lower())
+        self.assertIn("parent@example.com", mail.outbox[0].to)
+
+    def test_resend_submission_confirmation(self):
+        self.app.status = Application.Status.SUBMITTED
+        self.app.submitted_at = timezone.now()
+        self.app.save()
+        url = reverse(
+            "application_review_resend_email",
+            kwargs={"app_id": self.app.application_id},
+        )
+        response = self.client.post(url, {"type": "submitted"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("application has been submitted", mail.outbox[0].subject.lower())
+
+    def test_resend_handoff_email_student_initiated(self):
+        self.app.applicant_type = Application.Type.STUDENT
+        self.app.email = "student@example.com"
+        self.app.data = {"step7_handoff": {"parent_email": "real-parent@example.com"}}
+        self.app.status = Application.Status.AWAITING_PARENT
+        self.app.save()
+        url = reverse(
+            "application_review_resend_email",
+            kwargs={"app_id": self.app.application_id},
+        )
+        response = self.client.post(url, {"type": "handoff"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("real-parent@example.com", mail.outbox[0].to)
+
+    def test_invalid_type_error(self):
+        url = reverse(
+            "application_review_resend_email",
+            kwargs={"app_id": self.app.application_id},
+        )
+        response = self.client.post(url, {"type": "invalid"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 0)
