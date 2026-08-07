@@ -176,12 +176,27 @@ class AttendanceNewViewsTests(TestCase):
 
         self.client.login(username="mentor", password="password")  # nosec B106
 
-    def test_active_manifest_view(self):
-        response = self.client.get(reverse("attendance_manifest"))
+    def test_who_is_here_view(self):
+        response = self.client.get(reverse("attendance_active"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "John Doe")
         year_str = f"({self.program.start_date.year}-{self.program.end_date.year})"
         self.assertContains(response, f"Test Program {year_str}")
+
+    def test_who_is_here_mentor_shows_as_mentor_not_visitor(self):
+        mentor = Adult.objects.create(
+            first_name="Alice", last_name="Mentor", is_mentor=True
+        )
+        AttendanceSession.objects.create(
+            program=self.program, adult=mentor, check_in=timezone.now()
+        )
+
+        response = self.client.get(reverse("attendance_active"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+
+        self.assertIn("Alice Mentor", content)
+        self.assertNotIn("(Visitor)", content)
 
     def test_mentor_access_rfid_management(self):
         mentor_user = User.objects.create_user(
@@ -210,10 +225,10 @@ class AttendanceNewViewsTests(TestCase):
         year_str = f"({self.program.start_date.year}-{self.program.end_date.year})"
         self.assertContains(response, f"Test Program {year_str}")
 
-    def test_active_manifest_filter(self):
+    def test_who_is_here_filter(self):
         other_program = make_program("Other Program")
         response = self.client.get(
-            reverse("attendance_manifest") + f"?program_id={other_program.id}"
+            reverse("attendance_active") + f"?program_id={other_program.id}"
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "John Doe")
@@ -499,17 +514,17 @@ class MentorAttendanceDeleteViewTests(TestCase):
         self.assertIn(response.status_code, [302, 403])
 
 
-class MentorManifestClosePermissionTests(TestCase):
+class MentorWhoIsHereClosePermissionTests(TestCase):
     """Mentors with attendance write access can close stale sessions."""
 
     def setUp(self):
         self.mentor_user = User.objects.create_user(
-            username="mentor_manifest", password="password123"
+            username="mentor_who_is_here", password="password123"
         )  # nosec B106
         Adult.objects.create(
             user=self.mentor_user,
             first_name="Mentor",
-            last_name="Manifest",
+            last_name="WhoIsHere",
             is_mentor=True,
         )
         RolePermission.objects.update_or_create(
@@ -518,7 +533,7 @@ class MentorManifestClosePermissionTests(TestCase):
             defaults={"can_read": True, "can_write": True},
         )
         self.client.login(
-            username="mentor_manifest", password="password123"
+            username="mentor_who_is_here", password="password123"
         )  # nosec B106
 
         self.program = make_program()

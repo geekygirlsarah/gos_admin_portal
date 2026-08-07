@@ -290,8 +290,8 @@
 
     <!-- Lock kiosk button -->
     <div class="text-center mt-4 d-flex justify-content-center gap-3">
-        <button id="manifestBtn" type="button" class="btn btn-sm btn-outline-primary btn-lock">
-            📋 Who's here?
+        <button id="whoIsHereBtn" type="button" class="btn btn-sm btn-outline-primary btn-lock">
+            📋 Who's Here Now
         </button>
         <button id="lockBtn" type="button" class="btn btn-sm btn-outline-secondary btn-lock">
             🔒 Lock Kiosk
@@ -299,21 +299,21 @@
     </div>
 </div>
 
-<!-- Manifest Modal -->
-<div class="modal fade" id="manifestModal" tabindex="-1" aria-labelledby="manifestModalLabel" aria-hidden="true">
+<!-- Who's Here Modal -->
+<div class="modal fade" id="whoIsHereModal" tabindex="-1" aria-labelledby="whoIsHereModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="manifestModalLabel">Currently Signed In</h3>
+                <h3 class="modal-title" id="whoIsHereModalLabel">Currently Signed In</h3>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-0">
-                <div id="manifestLoading" class="text-center py-5">
+                <div id="whoIsHereLoading" class="text-center py-5">
                     <div class="spinner-border text-primary" role="status"></div>
-                    <div class="mt-2">Loading manifest…</div>
+                    <div class="mt-2">Loading…</div>
                 </div>
-                <div id="manifestError" class="alert alert-danger m-3 d-none"></div>
-                <div id="manifestContent" class="d-none">
+                <div id="whoIsHereError" class="alert alert-danger m-3 d-none"></div>
+                <div id="whoIsHereContent" class="d-none">
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
@@ -322,11 +322,11 @@
                                 <th class="text-end pe-4">Signed In</th>
                             </tr>
                         </thead>
-                        <tbody id="manifestTableBody">
+                        <tbody id="whoIsHereTableBody">
                             <!-- Populated via JS -->
                         </tbody>
                     </table>
-                    <div id="manifestEmpty" class="text-center py-5 d-none">
+                    <div id="whoIsHereEmpty" class="text-center py-5 d-none">
                         <p class="text-muted h5">No one is currently signed in.</p>
                     </div>
                 </div>
@@ -675,13 +675,13 @@
             });
     }
 
-    // ── manifest ─────────────────────────────────────────────────────────────
-    function loadManifest() {
-        var loading = document.getElementById("manifestLoading");
-        var error = document.getElementById("manifestError");
-        var content = document.getElementById("manifestContent");
-        var tableBody = document.getElementById("manifestTableBody");
-        var empty = document.getElementById("manifestEmpty");
+    // ── who's here ─────────────────────────────────────────────────────────────
+    function loadWhoIsHere() {
+        var loading = document.getElementById("whoIsHereLoading");
+        var error = document.getElementById("whoIsHereError");
+        var content = document.getElementById("whoIsHereContent");
+        var tableBody = document.getElementById("whoIsHereTableBody");
+        var empty = document.getElementById("whoIsHereEmpty");
 
         loading.classList.remove("d-none");
         error.classList.add("d-none");
@@ -689,18 +689,18 @@
         empty.classList.add("d-none");
         tableBody.innerHTML = "";
 
-        fetch("/api/v1/kiosk/" + KIOSK_ID + "/manifest/", {
+        fetch("/api/v1/kiosk/" + KIOSK_ID + "/who-is-here/", {
             method: "GET",
             headers: { "X-CSRFToken": getCookie("csrftoken") },
         })
         .then(function (r) {
-            if (!r.ok) throw new Error("Failed to load manifest.");
+            if (!r.ok) throw new Error("Failed to load who's here.");
             return r.json();
         })
         .then(function (data) {
             loading.classList.add("d-none");
-            if (data.manifest && data.manifest.length > 0) {
-                data.manifest.forEach(function (person) {
+            if (data.people && data.people.length > 0) {
+                data.people.forEach(function (person) {
                     var row = document.createElement("tr");
                     var date = new Date(person.check_in);
                     var timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -746,8 +746,8 @@
         var memberSignInBtn = document.getElementById("memberSignInBtn");
         var guestSignInBtn = document.getElementById("guestSignInBtn");
         var lockBtn = document.getElementById("lockBtn");
-        var manifestBtn = document.getElementById("manifestBtn");
-        var manifestModalEl = document.getElementById("manifestModal");
+        var whoIsHereBtn = document.getElementById("whoIsHereBtn");
+        var whoIsHereModalEl = document.getElementById("whoIsHereModal");
         var memberInput = document.getElementById("memberInput");
         var guestInput = document.getElementById("guestInput");
         var guestTeamInput = document.getElementById("guestTeamInput");
@@ -755,11 +755,11 @@
         if (memberSignInBtn) memberSignInBtn.addEventListener("click", memberSignIn);
         if (guestSignInBtn) guestSignInBtn.addEventListener("click", guestSignIn);
         if (lockBtn) lockBtn.addEventListener("click", lockKiosk);
-        if (manifestBtn && manifestModalEl) {
-            var manifestModal = new bootstrap.Modal(manifestModalEl);
-            manifestBtn.addEventListener("click", function() {
-                loadManifest();
-                manifestModal.show();
+        if (whoIsHereBtn && whoIsHereModalEl) {
+            var whoIsHereModal = new bootstrap.Modal(whoIsHereModalEl);
+            whoIsHereBtn.addEventListener("click", function() {
+                loadWhoIsHere();
+                whoIsHereModal.show();
             });
         }
 

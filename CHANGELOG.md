@@ -6,8 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Quieter Unit Test Output**: Audit log entries no longer clutter the output when running unit tests. They still appear on the console during normal use of the site.
+- **"Active Manifest" Renamed to "Who's Here Now"**: The attendance page that shows people currently signed in is now called "Who's Here Now" in the navigation and page title. The kiosk button that opens the same list is now labeled "Who's Here Now" too.
 
 ### Fixed
+- **Mentors Shown Correctly on Active Manifest**: Mentors signed in via the kiosk no longer appear as "Visitor" on the Active Manifest page. They now show their name with a Mentor badge, matching the All Program Entries page.
 - **Health Checks Actually Run Now**: The `/health` endpoint (used by Render health checks) no longer redirects anonymous requests to the login page. A probe hitting `/health` without a trailing slash was previously redirected to login, and since the probe followed the redirect and saw the login page's HTTP 200, the service looked "healthy" without the database or email checks ever running. Both `/health` and `/health/` now run the real check for anyone.
 
 ## 2026-08-06

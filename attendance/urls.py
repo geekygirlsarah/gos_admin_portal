@@ -4,14 +4,14 @@ from . import views
 
 urlpatterns = [
     path("rfid/", views.rfid_management_view, name="rfid_management"),
-    path("manifest/", views.active_manifest_view, name="attendance_manifest"),
+    path("active/", views.who_is_here_view, name="attendance_active"),
     path(
-        "manifest/close/<int:pk>/",
+        "active/close/<int:pk>/",
         views.close_attendance_session,
         name="close_attendance_session",
     ),
     path(
-        "manifest/close-stale/",
+        "active/close-stale/",
         views.close_stale_attendance_sessions,
         name="close_stale_attendance_sessions",
     ),
