@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-07
 
+### Added
+- **Rate Limiting on the Public Application Wizard**: The online application is now throttled to prevent abuse. Each IP address can submit at most 10 forms per minute, each email address can request at most 5 verification codes per hour, and each application can be verified at most 10 times per hour. When a limit is hit, you'll see a friendly "Just a moment…" page and are asked to wait before trying again.
+
 ### Changed
 - **Quieter Unit Test Output**: Audit log entries no longer clutter the output when running unit tests. They still appear on the console during normal use of the site.
 - **"Active Manifest" Renamed to "Who's Here Now"**: The attendance page that shows people currently signed in is now called "Who's Here Now" in the navigation and page title. The kiosk button that opens the same list is now labeled "Who's Here Now" too.

@@ -161,6 +161,10 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Throttle anonymous POSTs to the public application wizard (/apply/).
+    # Placed after AuthenticationMiddleware so the 429 page can render the
+    # authenticated navbar.
+    "GoSAdminPortal.middleware.ApplyRateLimitMiddleware",
     "GoSAdminPortal.middleware.TimezoneMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -328,6 +332,41 @@ HEALTH_SMTP_CHECK_INTERVAL = int(os.getenv("HEALTH_SMTP_CHECK_INTERVAL", "300"))
 # Shorter cooldown after a failure so recovery is detected quickly.
 HEALTH_SMTP_FAILURE_COOLDOWN = int(os.getenv("HEALTH_SMTP_FAILURE_COOLDOWN", "30"))
 
+# True while running `manage.py test`; used to silence audit logs and to
+# disable rate limiting (see APPLY_RATE_LIMIT_ENABLED below).
+TESTING = "test" in sys.argv
+
+# Caching. LocMemCache is fine for single-process development and tests; in
+# production configure a shared backend (e.g. Redis via CACHE_BACKEND /
+# CACHE_LOCATION) so rate-limit counters apply across all app servers.
+CACHES = {
+    "default": {
+        "BACKEND": os.getenv(
+            "CACHE_BACKEND", "django.core.cache.backends.locmem.LocMemCache"
+        ),
+        "LOCATION": os.getenv("CACHE_LOCATION", "gos-admin-portal"),
+    }
+}
+
+# Public application wizard throttling (see applications/rate_limiting.py and
+# GoSAdminPortal/middleware.py).
+# - APPLY_IP_POST_LIMIT: max /apply/* POSTs per client IP per minute.
+# - APPLY_OTP_SEND_LIMIT: max OTP codes issued per email per hour.
+# - APPLY_OTP_VERIFY_LIMIT: max OTP verify attempts per application per hour.
+# Disabled during the automated test run: the test client shares one IP and a
+# single process-local cache, so one test's hits would otherwise leak into the
+# next test's counters and cause spurious 429s.
+APPLY_RATE_LIMIT_ENABLED = (
+    os.getenv("APPLY_RATE_LIMIT_ENABLED", "").strip().lower()
+    not in ("0", "false", "no")
+    and not TESTING
+)
+APPLY_IP_POST_LIMIT = int(os.getenv("APPLY_IP_POST_LIMIT", "10"))
+APPLY_IP_POST_WINDOW_SECONDS = int(os.getenv("APPLY_IP_POST_WINDOW_SECONDS", "60"))
+APPLY_OTP_SEND_LIMIT = int(os.getenv("APPLY_OTP_SEND_LIMIT", "5"))
+APPLY_OTP_VERIFY_LIMIT = int(os.getenv("APPLY_OTP_VERIFY_LIMIT", "10"))
+APPLY_OTP_WINDOW_SECONDS = int(os.getenv("APPLY_OTP_WINDOW_SECONDS", "3600"))
+
 # Content Security Policy (django-csp)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
 CONTENT_SECURITY_POLICY = {
@@ -389,8 +428,6 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", LOG_LEVEL)
 
 # Silence audit console output while running unit tests so test results stay clean.
-TESTING = "test" in sys.argv
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

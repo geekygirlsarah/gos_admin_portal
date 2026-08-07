@@ -7,6 +7,12 @@ from django.urls import Resolver404, resolve
 from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 
+from applications.rate_limiting import (
+    get_client_ip,
+    rate_limit_hit,
+    rate_limited_response,
+)
+
 logger = logging.getLogger(__name__)
 
 EXEMPT_URL_NAMES = {
@@ -72,6 +78,33 @@ class LoginRequiredMiddleware(MiddlewareMixin):
                 )
                 continue
         return False
+
+
+class ApplyRateLimitMiddleware(MiddlewareMixin):
+    """Throttle POST requests to the public application wizard (/apply/).
+
+    The wizard is exempt from :class:`LoginRequiredMiddleware`, so anonymous
+    users can hit it directly. This caps each client IP at
+    ``settings.APPLY_IP_POST_LIMIT`` POSTs per ``settings.APPLY_IP_POST_WINDOW_SECONDS``
+    to blunt DoS and mass-application abuse. OTP-specific limits (per email /
+    per application) are enforced in the wizard views themselves.
+    """
+
+    def process_request(self, request):
+        if not getattr(settings, "APPLY_RATE_LIMIT_ENABLED", True):
+            return None
+        if request.method != "POST" or not request.path.startswith("/apply/"):
+            return None
+
+        allowed, retry_after = rate_limit_hit(
+            "ip",
+            get_client_ip(request),
+            getattr(settings, "APPLY_IP_POST_LIMIT", 10),
+            getattr(settings, "APPLY_IP_POST_WINDOW_SECONDS", 60),
+        )
+        if not allowed:
+            return rate_limited_response(request, retry_after)
+        return None
 
 
 class TimezoneMiddleware(MiddlewareMixin):
