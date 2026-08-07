@@ -95,9 +95,13 @@ class Step2LabelReproductionTest(TestCase):
         content = response.content.decode()
         student_labels = re.findall(r"<label[^>]*>\s*Student\s*</label>", content)
         self.assertEqual(len(student_labels), 1)
-        parent_labels = re.findall(r"<label[^>]*>\s*Parent / Guardian\s*</label>", content)
+        parent_labels = re.findall(
+            r"<label[^>]*>\s*Parent / Guardian\s*</label>", content
+        )
         self.assertEqual(len(parent_labels), 1)
-        mentor_labels = re.findall(r"<label[^>]*>\s*Mentor / Volunteer\s*</label>", content)
+        mentor_labels = re.findall(
+            r"<label[^>]*>\s*Mentor / Volunteer\s*</label>", content
+        )
         self.assertEqual(len(mentor_labels), 1)
 
     def test_step4_labels_not_duplicated(self):

@@ -161,6 +161,32 @@ class HealthCheckViewTest(TestCase):
         response = middleware(request)
         self.assertEqual(response.status_code, 200)
 
+    def test_health_anonymous_access_no_trailing_slash(self):
+        """Anonymous /health (no trailing slash) must hit the real endpoint.
+
+        Probes (e.g. Render) may hit /health without a slash. That path used to
+        be redirected to login, which the probe followed and then treated the
+        login page's 200 as "healthy" without ever running the check.
+        """
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(
+            response.content, {"status": "ok", "db": "ok", "email": "ok"}
+        )
+
+    def test_health_exempt_from_login_middleware_no_trailing_slash(self):
+        """Middleware should not redirect anonymous /health (no slash) to login."""
+
+        def get_response(request):
+            return HttpResponse("OK")
+
+        middleware = LoginRequiredMiddleware(get_response)
+        request = self.factory.get("/health")
+        request.user = AnonymousUser()
+        response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"OK")
+
     def test_health_reports_db_down(self):
         """When the DB connection is broken, /health returns 503."""
         from unittest import mock

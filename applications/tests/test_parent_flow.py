@@ -21,7 +21,9 @@ class HandoffSecurityReproductionTests(TestCase):
         response = self.client.get(
             reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
-        self.assertContains(response, "Now an adult contact needs to finish the application")
+        self.assertContains(
+            response, "Now an adult contact needs to finish the application"
+        )
         response = self.client.post(
             reverse("apply_step7", kwargs={"app_id": app.application_id}),
             {"parent_email": "parent@example.com"},
@@ -37,7 +39,9 @@ class HandoffSecurityReproductionTests(TestCase):
             response, reverse("apply_step7", kwargs={"app_id": app.application_id})
         )
         response = self.client.get(response.url)
-        self.assertContains(response, "This application has been handed off to an adult contact")
+        self.assertContains(
+            response, "This application has been handed off to an adult contact"
+        )
         self.assertNotContains(response, "Please provide the primary adult contact")
 
     def test_parent_can_access_handoff_with_token(self):
@@ -139,7 +143,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(
-            response, "At least one adult contact must opt in to receiving email updates"
+            response,
+            "At least one adult contact must opt in to receiving email updates",
         )
         app.refresh_from_db()
         self.assertEqual(app.current_step, 8)
@@ -211,7 +216,8 @@ class ParentNotificationOptInReproductionTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(
-            response, "At least one parent or guardian must opt in to receiving email updates"
+            response,
+            "At least one parent or guardian must opt in to receiving email updates",
         )
         app.refresh_from_db()
         self.assertNotEqual(app.status, Application.Status.SUBMITTED)

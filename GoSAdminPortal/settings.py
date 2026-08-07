@@ -382,6 +382,9 @@ MANAGERS = ADMINS
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", LOG_LEVEL)
 
+# Silence audit console output while running unit tests so test results stay clean.
+TESTING = "test" in sys.argv
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -422,6 +425,9 @@ LOGGING = {
             "()": "audit.logging_handlers.AuditStderrHandler",
             "formatter": "audit_json",
         },
+        "audit_null": {
+            "class": "logging.NullHandler",
+        },
     },
     "loggers": {
         # Root logger: everything -> console
@@ -452,9 +458,10 @@ LOGGING = {
             "propagate": False,
         },
         "audit": {
-            "handlers": ["audit_stdout", "audit_stderr"],
-            "level": "INFO",
-            "propagate": True,
+            # Keep console output in development, but drop it entirely during tests.
+            "handlers": ["audit_null"] if TESTING else ["audit_stdout", "audit_stderr"],
+            "level": "CRITICAL" if TESTING else "INFO",
+            "propagate": not TESTING,
         },
     },
 }

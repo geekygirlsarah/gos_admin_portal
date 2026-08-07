@@ -29,13 +29,19 @@ class ActiveStudentDropdownTests(TestCase):
         self.program = Program.objects.create(name="Season")
         self.other_program = Program.objects.create(name="Past Season")
         self.active = Student.objects.create(first_name="Active", last_name="A")
-        Enrollment.objects.create(student=self.active, program=self.program, active=True)
+        Enrollment.objects.create(
+            student=self.active, program=self.program, active=True
+        )
         self.dropped = Student.objects.create(first_name="Dropped", last_name="B")
-        Enrollment.objects.create(student=self.dropped, program=self.program, active=False)
+        Enrollment.objects.create(
+            student=self.dropped, program=self.program, active=False
+        )
         self.graduated = Student.objects.create(
             first_name="Grad", last_name="C", graduated=True
         )
-        Enrollment.objects.create(student=self.graduated, program=self.program, active=True)
+        Enrollment.objects.create(
+            student=self.graduated, program=self.program, active=True
+        )
         self.other_program_student = Student.objects.create(
             first_name="Other", last_name="D"
         )
@@ -263,7 +269,9 @@ class InactiveStudentsDuesTest(TestCase):
         student_active = Student.objects.create(
             legal_first_name="Active", last_name="Student"
         )
-        Enrollment.objects.create(student=student_active, program=self.program, active=True)
+        Enrollment.objects.create(
+            student=student_active, program=self.program, active=True
+        )
         student_inactive = Student.objects.create(
             legal_first_name="Inactive", last_name="Student"
         )

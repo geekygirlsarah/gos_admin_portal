@@ -2,8 +2,8 @@
 
 import json
 
-from django.core.cache import cache
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -18,7 +18,9 @@ class KioskConfigModelTests(TestCase):
         self.program = make_program()
 
     def test_kiosk_config_str(self):
-        config = KioskConfig.objects.create(label="Build Space Kiosk", program=self.program)
+        config = KioskConfig.objects.create(
+            label="Build Space Kiosk", program=self.program
+        )
         self.assertIn("Build Space Kiosk", str(config))
 
     def test_kiosk_config_defaults(self):
@@ -134,7 +136,8 @@ class KioskPageViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn(
-            'memberInput.addEventListener("keydown"', content,
+            'memberInput.addEventListener("keydown"',
+            content,
             "Pressing Enter in the member name field should trigger sign-in",
         )
 
@@ -146,7 +149,8 @@ class KioskPageViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn(
-            'guestInput.addEventListener("keydown"', content,
+            'guestInput.addEventListener("keydown"',
+            content,
             "Pressing Enter in the guest name field should trigger sign-in",
         )
 
@@ -158,7 +162,8 @@ class KioskPageViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn(
-            'guestTeamInput.addEventListener("keydown"', content,
+            'guestTeamInput.addEventListener("keydown"',
+            content,
             "Pressing Enter in the guest team number field should trigger sign-in",
         )
 

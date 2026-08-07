@@ -118,13 +118,19 @@ class TeamSettingsTests(TestCase):
 class CrewTests(TestCase):
     def setUp(self):
         self.password = "password"  # nosec B105
-        self.user = User.objects.create_user(username="leadmentor", password=self.password)
+        self.user = User.objects.create_user(
+            username="leadmentor", password=self.password
+        )
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
-        self.student = Student.objects.create(legal_first_name="Alex", last_name="Smith")
-        self.enrollment = Enrollment.objects.create(student=self.student, program=self.program)
+        self.student = Student.objects.create(
+            legal_first_name="Alex", last_name="Smith"
+        )
+        self.enrollment = Enrollment.objects.create(
+            student=self.student, program=self.program
+        )
 
     def test_add_crew(self):
         url = reverse("portal_crew")
@@ -138,10 +144,14 @@ class CrewTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(Crew.objects.filter(name="Chassis", program=self.program).exists())
+        self.assertTrue(
+            Crew.objects.filter(name="Chassis", program=self.program).exists()
+        )
 
     def test_update_crew(self):
-        crew = Crew.objects.create(name="Old Name", program=self.program, color="#000000")
+        crew = Crew.objects.create(
+            name="Old Name", program=self.program, color="#000000"
+        )
         url = reverse("portal_crew")
         response = self.client.post(
             url,
@@ -194,7 +204,9 @@ class SubTeamTests(TestCase):
             name="Test SubTeam", program=self.program, color="#ff0000"
         )
         self.student = Student.objects.create(first_name="Test", last_name="Student")
-        self.enrollment = Enrollment.objects.create(student=self.student, program=self.program)
+        self.enrollment = Enrollment.objects.create(
+            student=self.student, program=self.program
+        )
 
     def test_subteam_creation(self):
         self.assertEqual(str(self.subteam), "Test SubTeam (Test Program)")
@@ -208,7 +220,9 @@ class SubTeamTests(TestCase):
 class SubTeamSettingsViewTests(TestCase):
     def setUp(self):
         self.password = "password"  # nosec B105
-        self.user = User.objects.create_user(username="leadmentor", password=self.password)
+        self.user = User.objects.create_user(
+            username="leadmentor", password=self.password
+        )
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
@@ -262,15 +276,25 @@ class SubTeamSettingsViewTests(TestCase):
 class AssignmentTests(TestCase):
     def setUp(self):
         self.password = "test_pass_123"  # nosec B105
-        self.user = User.objects.create_user(username="leadmentor", password=self.password)
+        self.user = User.objects.create_user(
+            username="leadmentor", password=self.password
+        )
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
-        self.student1 = Student.objects.create(legal_first_name="Alex", last_name="Smith")
-        self.student2 = Student.objects.create(legal_first_name="Bob", last_name="Jones")
-        self.enrollment1 = Enrollment.objects.create(student=self.student1, program=self.program)
-        self.enrollment2 = Enrollment.objects.create(student=self.student2, program=self.program)
+        self.student1 = Student.objects.create(
+            legal_first_name="Alex", last_name="Smith"
+        )
+        self.student2 = Student.objects.create(
+            legal_first_name="Bob", last_name="Jones"
+        )
+        self.enrollment1 = Enrollment.objects.create(
+            student=self.student1, program=self.program
+        )
+        self.enrollment2 = Enrollment.objects.create(
+            student=self.student2, program=self.program
+        )
         self.team = Team.objects.create(
             team_type="FLL_CHALLENGE", number=123, name="Cool Bots"
         )
