@@ -29,14 +29,14 @@ def make_program(name="Test Program", active=True, start_date=None, end_date=Non
     return program
 
 
-def make_lead_mentor_user(username="lead_mentor", password="password123"):
+def make_lead_mentor_user(username="lead_mentor", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
     return user
 
 
-def make_mentor_user(username="mentor", password="password123"):
+def make_mentor_user(username="mentor", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
         user=user, first_name="Mentor", last_name="User", is_mentor=True
@@ -49,7 +49,7 @@ def make_mentor_user(username="mentor", password="password123"):
     return user
 
 
-def make_parent_user(username="parent", password="password123"):
+def make_parent_user(username="parent", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
         user=user, first_name="Parent", last_name="User", is_parent=True

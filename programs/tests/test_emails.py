@@ -46,7 +46,9 @@ class EmailBalancesTest(TestCase):
         )
         self.s2.primary_contact = self.a2
         self.s2.save()
-        f1 = Fee.objects.create(program=self.program, name="Fee 1", amount=Decimal("100.00"))
+        f1 = Fee.objects.create(
+            program=self.program, name="Fee 1", amount=Decimal("100.00")
+        )
         from programs.models import FeeAssignment
 
         FeeAssignment.objects.create(fee=f1, student=self.s2)
@@ -233,7 +235,9 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertEqual(application.tax_forms.count(), 0)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Sliding Scale Application Update", mail.outbox[0].subject)
-        self.assertIn("Income exceeds the sliding scale threshold.", mail.outbox[0].body)
+        self.assertIn(
+            "Income exceeds the sliding scale threshold.", mail.outbox[0].body
+        )
 
     def test_no_email_if_email_updates_false(self):
         self.parent.email_updates = False

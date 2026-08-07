@@ -13,8 +13,8 @@ from applications.services import (
     send_application_declined_email,
     send_application_submitted_email,
     send_lead_notification_email,
-    send_parent_handoff_email,
     send_otp_email,
+    send_parent_handoff_email,
 )
 from programs.models import Program
 

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-07
 
+### Changed
+- **Quieter Unit Test Output**: Audit log entries no longer clutter the output when running unit tests. They still appear on the console during normal use of the site.
+
 ### Fixed
 - **Health Checks Actually Run Now**: The `/health` endpoint (used by Render health checks) no longer redirects anonymous requests to the login page. A probe hitting `/health` without a trailing slash was previously redirected to login, and since the probe followed the redirect and saw the login page's HTTP 200, the service looked "healthy" without the database or email checks ever running. Both `/health` and `/health/` now run the real check for anyone.
 

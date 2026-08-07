@@ -154,8 +154,7 @@ class Step9DocumentsTests(TestCase):
         self.assertIn("warnings", response.context)
         self.assertFalse(
             any("warnings" in message for message in seen),
-            "Step 10 render logged a failed template lookup for 'warnings': "
-            f"{seen}",
+            "Step 10 render logged a failed template lookup for 'warnings': " f"{seen}",
         )
 
     # -- Upload behavior ----------------------------------------------------

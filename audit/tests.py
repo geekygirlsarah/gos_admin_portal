@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -7,6 +8,7 @@ from django.urls import reverse
 
 from applications.models import Application
 from audit.events import AuditEvent
+from audit.logging_handlers import AuditStderrHandler, AuditStdoutHandler
 from audit.models import AuditLog
 from audit.service import log_event
 from programs.models import Adult, Enrollment, Program, Student
@@ -247,3 +249,25 @@ class AuditLoggingPrivacyTest(TestCase):
         # Event should be logged as its enum name label only, not as raw object
         self.assertIn("event=PASSWORD_RESET", output)
         self.assertNotRegex(output, r"<AuditEvent\\.PASSWORD_RESET>")
+
+
+class AuditLogConsoleSuppressionTest(TestCase):
+    """
+    While running unit tests, the 'audit' logger must not echo records to the
+    console (stdout/stderr). Development-mode console output is intentional, but
+    it pollutes the output of `python manage.py test`.
+    """
+
+    def test_audit_logger_does_not_reach_console_during_tests(self):
+        logger = logging.getLogger("audit")
+
+        # No stdout/stderr handlers wired up during test runs.
+        handler_types = [type(h) for h in logger.handlers]
+        self.assertNotIn(AuditStdoutHandler, handler_types)
+        self.assertNotIn(AuditStderrHandler, handler_types)
+
+        # Records must not bubble up to the root console handler.
+        self.assertFalse(logger.propagate)
+
+        # INFO (success) / WARNING (failure) records are suppressed outright.
+        self.assertGreaterEqual(logger.level, logging.WARNING)

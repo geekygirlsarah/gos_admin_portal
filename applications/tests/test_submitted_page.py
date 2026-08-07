@@ -11,7 +11,9 @@ class SubmittedNamesReproductionTest(TestCase):
     """Test displaying student and parent names on the application thanks page."""
 
     def setUp(self):
-        self.program = Program.objects.create(name="Girls of Steel Program", active=True)
+        self.program = Program.objects.create(
+            name="Girls of Steel Program", active=True
+        )
 
     def test_submitted_page_shows_student_and_parent_names(self):
         application = Application.objects.create(
