@@ -187,6 +187,8 @@ TEMPLATES = [
                 "csp.context_processors.nonce",
                 # Navbar context (current program, user role)
                 "GoSAdminPortal.context_processors.navbar_context",
+                # Wizard-step template defaults (e.g. `warnings`)
+                "GoSAdminPortal.context_processors.wizard_context",
             ],
         },
     },

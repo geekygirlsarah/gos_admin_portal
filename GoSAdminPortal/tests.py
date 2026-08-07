@@ -127,6 +127,101 @@ class MiddlewareExemptionTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class HealthCheckViewTest(TestCase):
+    """Tests for the /health endpoint used by Render health checks."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_health_returns_200(self):
+        response = self.client.get(reverse("health"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_health_reports_ok_status(self):
+        response = self.client.get(reverse("health"))
+        self.assertJSONEqual(
+            response.content, {"status": "ok", "db": "ok", "email": "ok"}
+        )
+
+    def test_health_anonymous_access(self):
+        """Anonymous users must be able to hit /health (Render probe)."""
+        response = self.client.get(reverse("health"))
+        self.assertNotEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+
+    def test_health_exempt_from_login_middleware(self):
+        """Middleware should not redirect anonymous /health requests to login."""
+
+        def get_response(request):
+            return HttpResponse("OK")
+
+        middleware = LoginRequiredMiddleware(get_response)
+        request = self.factory.get("/health/")
+        request.user = AnonymousUser()
+        response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_health_reports_db_down(self):
+        """When the DB connection is broken, /health returns 503."""
+        from unittest import mock
+
+        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+            mock_conn.cursor.side_effect = Exception("DB connection failed")
+            response = self.client.get(reverse("health"))
+            self.assertEqual(response.status_code, 503)
+            self.assertJSONEqual(
+                response.content, {"status": "unhealthy", "db": "unavailable"}
+            )
+        """When cursor creation or query raises, /health returns 503."""
+        from unittest import mock
+
+        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+            mock_conn.cursor.side_effect = Exception("DB connection refused")
+            response = self.client.get(reverse("health"))
+            self.assertEqual(response.status_code, 503)
+            self.assertJSONEqual(
+                response.content, {"status": "unhealthy", "db": "unavailable"}
+            )
+
+    def test_health_reports_email_down(self):
+        """When the email backend is unreachable, /health returns 503."""
+        from unittest import mock
+
+        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+            mock_conn.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+                1,
+            )
+            with mock.patch("GoSAdminPortal.views.mail") as mock_mail:
+                mock_conn_obj = mock.MagicMock()
+                mock_conn_obj.open.side_effect = Exception("SMTP connection refused")
+                mock_mail.get_connection.return_value = mock_conn_obj
+                response = self.client.get(reverse("health"))
+                self.assertEqual(response.status_code, 503)
+                self.assertJSONEqual(
+                    response.content,
+                    {"status": "unhealthy", "db": "ok", "email": "unavailable"},
+                )
+
+    def test_health_reports_all_ok(self):
+        """When DB and email are both healthy, /health returns 200 with details."""
+        from unittest import mock
+
+        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+            mock_conn.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+                1,
+            )
+            with mock.patch("GoSAdminPortal.views.mail") as mock_mail:
+                mock_conn_obj = mock.MagicMock()
+                mock_conn_obj.open.return_value = True
+                mock_mail.get_connection.return_value = mock_conn_obj
+                response = self.client.get(reverse("health"))
+                self.assertEqual(response.status_code, 200)
+                self.assertJSONEqual(
+                    response.content,
+                    {"status": "ok", "db": "ok", "email": "ok"},
+                )
+
+
 class AdapterEmailProvisioningTest(TestCase):
     """Tests for _find_or_provision_user_for_email in GoSAdminPortal/adapter.py."""
 

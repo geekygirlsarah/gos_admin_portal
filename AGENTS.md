@@ -82,7 +82,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - **Global Auth**: `LoginRequiredMiddleware` in `GoSAdminPortal/middleware.py` enforces login globally. Unknown paths redirect to login (not bypass it).
 - **Exempt URLs**: `/apply/`, `/accounts/*`, `admin/`, `privacy_policy`, `non_discrimination_policy`, and static/media. These are listed in `EXEMPT_URL_NAMES` inside the middleware.
 - **Roles**: Determined by `get_user_role(user)` in `programs/permission_views.py`. Priority order: `LeadMentor` (superuser or `LeadMentor` group) → `Mentor` → `Parent` → `Alumni` → `Student` → `Staff`/None.
-- **Dynamic Permissions**: `RolePermission` model lets Lead Mentors configure per-section read/write access for each role. Check with `can_user_read(user, section, obj=None)` and `can_user_write(user, section, obj=None)`.
+- **Dynamic Permissions**: `RolePermission` model lets Lead Mentors configure per-section read/write access for each role. Check with `can_user_read(user, section, obj=None)` and `can_user_write(user, section, obj=None)`. By default Mentors get read+write on the `attendance` section (so they can close stale sessions on the Active Manifest and manage RFID cards); deletion is still blocked for them via `can_user_delete()`.
 - **View Mixins**: Use `LeadMentorRequiredMixin`, `DynamicReadPermissionMixin`, or `DynamicWritePermissionMixin` (all in `programs/permission_views.py`). Do NOT use raw `has_perm()` checks for portal views.
 - **Object-Level Access**: `can_user_read`/`can_user_write` accept an `obj` argument for per-object checks (e.g., a Parent can only read their own students). Always pass `obj` when checking access to a specific record.
 - **Mentor Adult Access**: Mentors can only view Adults with `is_parent=True` who have a student in an active program. This is enforced in both the queryset and `can_user_read`.
@@ -91,7 +91,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 
 ## Testing Strategy and Contribution
 
-- **Location**: Tests live in `programs/tests/`, `applications/tests/`, `attendance/tests.py`, and `attendance/test_attendance_permissions.py`.
+- **Location**: Tests live in `programs/tests/`, `applications/tests/`, and `attendance/tests/` (with `test_models.py`, `test_views.py`, `test_kiosk.py`, `test_permissions.py`, `test_reliability.py`, `test_manifest.py`).
 - **Story Integration Tests**: For complex lifecycles (e.g., Application -> Conversion -> Financials), use "Story" tests that exercise multiple views and signals in a single test case (see `programs/tests/test_integration_flows.py` for examples). These help catch regressions in side-effects (like emails or balance calculations) that unit tests often miss.
 - **TDD Requirement**: When fixing bugs, add a reproducer test file (e.g., `test_issue_reproduction.py`) before applying the fix.
 - **UI Automation**: For JS-heavy components (like DualListbox or the multi-step application wizard), consider browser-based tests using Playwright.

@@ -22,12 +22,15 @@ from django.urls import include, path, re_path, reverse_lazy
 from django.views.generic import RedirectView, TemplateView
 from django.views.static import serve
 
+from GoSAdminPortal import views as portal_views
+
 handler404 = "GoSAdminPortal.views.handler404"
 handler403 = "GoSAdminPortal.views.handler403"
 handler400 = "GoSAdminPortal.views.handler400"
 handler500 = "GoSAdminPortal.views.handler500"
 
 urlpatterns = [
+    path("health/", portal_views.health, name="health"),
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("programs/", include("programs.urls")),

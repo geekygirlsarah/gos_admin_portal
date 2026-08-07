@@ -1,6 +1,11 @@
 from django import template
 
-from programs.permission_views import can_user_read, can_user_write, get_user_role
+from programs.permission_views import (
+    can_user_delete,
+    can_user_read,
+    can_user_write,
+    get_user_role,
+)
 
 register = template.Library()
 
@@ -13,6 +18,11 @@ def can_read(user, section, obj=None):
 @register.simple_tag
 def can_write(user, section, obj=None):
     return can_user_write(user, section, obj)
+
+
+@register.simple_tag
+def can_delete(user, section, obj=None):
+    return can_user_delete(user, section, obj)
 
 
 @register.simple_tag

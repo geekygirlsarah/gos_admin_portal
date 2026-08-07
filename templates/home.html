@@ -71,21 +71,24 @@
 
             {% if past_programs %}
               <h3 class="h5 mt-3">Past Programs</h3>
-              <ul class="list-group mb-3">
-                {% for program in past_programs %}
-                  <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
-                      {% if program.end_date %}
-                        <small class="text-muted ms-2">ended {{ program.end_date }}</small>
-                      {% endif %}
-                      {% if not program.active %}
-                        <span class="badge bg-secondary ms-2">inactive</span>
-                      {% endif %}
-                    </div>
-                  </li>
-                {% endfor %}
-              </ul>
+              {% for label, year_programs in past_programs_by_year %}
+                <h4 class="h6 mt-3 text-muted">{{ label }} School Year</h4>
+                <ul class="list-group mb-3">
+                  {% for program in year_programs %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <div>
+                        <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                        {% if program.end_date %}
+                          <small class="text-muted ms-2">ended {{ program.end_date }}</small>
+                        {% endif %}
+                        {% if not program.active %}
+                          <span class="badge bg-secondary ms-2">inactive</span>
+                        {% endif %}
+                      </div>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endfor %}
             {% endif %}
           </div>
         </div>

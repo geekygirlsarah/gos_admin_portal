@@ -757,6 +757,13 @@ def rfid_management_view(request):
             )
 
         elif action == "deactivate":
+            if not can_user_delete(request.user, "attendance"):
+                messages.error(
+                    request, "You do not have permission to deactivate RFID cards."
+                )
+                return redirect(
+                    f"{reverse('rfid_management')}?{urlencode({'q': search_query})}"
+                )
             card_id = request.POST.get("card_id")
             card = get_object_or_404(RFIDCard, id=card_id)
             card.is_active = False

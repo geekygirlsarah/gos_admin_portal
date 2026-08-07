@@ -4,9 +4,12 @@ excluded entirely (dropdowns/selection lists) or separated out (program-scoped
 student list pages), matching the behavior of the program detail page.
 """
 
+from decimal import Decimal
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 
 from programs.forms import (
     AddExistingStudentToProgramForm,
@@ -25,27 +28,14 @@ class ActiveStudentDropdownTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Season")
         self.other_program = Program.objects.create(name="Past Season")
-
         self.active = Student.objects.create(first_name="Active", last_name="A")
-        Enrollment.objects.create(
-            student=self.active, program=self.program, active=True
-        )
-
-        # Enrolled in this program but the enrollment was marked inactive
+        Enrollment.objects.create(student=self.active, program=self.program, active=True)
         self.dropped = Student.objects.create(first_name="Dropped", last_name="B")
-        Enrollment.objects.create(
-            student=self.dropped, program=self.program, active=False
-        )
-
-        # Graduated (student-level inactive)
+        Enrollment.objects.create(student=self.dropped, program=self.program, active=False)
         self.graduated = Student.objects.create(
             first_name="Grad", last_name="C", graduated=True
         )
-        Enrollment.objects.create(
-            student=self.graduated, program=self.program, active=True
-        )
-
-        # Enrolled in a different program, not this one
+        Enrollment.objects.create(student=self.graduated, program=self.program, active=True)
         self.other_program_student = Student.objects.create(
             first_name="Other", last_name="D"
         )
@@ -54,11 +44,7 @@ class ActiveStudentDropdownTests(TestCase):
             program=self.other_program,
             active=True,
         )
-
-        # Not enrolled anywhere yet
         self.unenrolled = Student.objects.create(first_name="New", last_name="E")
-
-        # Graduated AND not enrolled in this program (still shouldn't be offered)
         self.graduated_unenrolled = Student.objects.create(
             first_name="Old Grad", last_name="F", graduated=True
         )
@@ -66,7 +52,6 @@ class ActiveStudentDropdownTests(TestCase):
     def test_add_existing_student_form_excludes_graduated(self):
         form = AddExistingStudentToProgramForm(program=self.program)
         qs = form.fields["student"].queryset
-        # Already-enrolled students are excluded by the form itself
         self.assertNotIn(self.active, qs)
         self.assertIn(self.unenrolled, qs)
         self.assertNotIn(self.graduated, qs)
@@ -151,8 +136,7 @@ class ActiveStudentDropdownTests(TestCase):
 
 
 class ProgramStudentListSeparationTests(TestCase):
-    """Program-scoped list pages must separate inactive students, like the
-    program detail page already does."""
+    """Program-scoped list pages must separate inactive students."""
 
     def setUp(self):
         self.password = "test_pass_123"  # nosec B105
@@ -162,19 +146,15 @@ class ProgramStudentListSeparationTests(TestCase):
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
-
         self.program = Program.objects.create(name="FLL 2025")
-
         self.active = Student.objects.create(first_name="Active", last_name="A")
         self.active_enrollment = Enrollment.objects.create(
             student=self.active, program=self.program, active=True
         )
-
         self.dropped = Student.objects.create(first_name="Dropped", last_name="B")
         self.dropped_enrollment = Enrollment.objects.create(
             student=self.dropped, program=self.program, active=False
         )
-
         self.graduated = Student.objects.create(
             first_name="Grad", last_name="C", graduated=True
         )
@@ -199,3 +179,110 @@ class ProgramStudentListSeparationTests(TestCase):
         inactive_ids = {e.student_id for e in response.context["inactive_enrollments"]}
         self.assertEqual(active_ids, {self.active.pk})
         self.assertEqual(inactive_ids, {self.dropped.pk, self.graduated.pk})
+
+
+class InactiveStudentTest(TestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="admin",
+            password="password",
+            email="admin@example.com",  # nosec B106
+        )
+        self.client.login(username="admin", password="password")  # nosec B106
+        self.program = Program.objects.create(
+            name="Test Program",
+            active=True,
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+        self.student = Student.objects.create(
+            first_name="Active",
+            last_name="Student",
+            personal_email="active@example.com",
+        )
+        self.enrollment = Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
+        )
+        self.inactive_student = Student.objects.create(
+            first_name="Inactive",
+            last_name="Student",
+            personal_email="inactive@example.com",
+        )
+        self.inactive_enrollment = Enrollment.objects.create(
+            student=self.inactive_student, program=self.program, active=False
+        )
+
+    def test_program_detail_lists_inactive_enrollment_correctly(self):
+        response = self.client.get(reverse("program_detail", args=[self.program.pk]))
+        self.assertEqual(response.status_code, 200)
+        active_enrollments = response.context["active_enrollments"]
+        inactive_enrollments = response.context["inactive_enrollments"]
+        self.assertIn(self.enrollment, active_enrollments)
+        self.assertNotIn(self.inactive_enrollment, active_enrollments)
+        self.assertIn(self.inactive_enrollment, inactive_enrollments)
+
+    def test_messaging_excludes_inactive_enrollments(self):
+        from django.core import mail
+
+        url = reverse("program_email", args=[self.program.pk])
+        data = {
+            "program": self.program.pk,
+            "recipient_groups": ["students"],
+            "subject": "Test Subject",
+            "body": "Test Body",
+            "from_account": "DEFAULT",
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        all_recipients = []
+        for m in mail.outbox:
+            all_recipients.extend(m.to)
+            all_recipients.extend(m.bcc)
+        self.assertIn(self.student.personal_email, all_recipients)
+        self.assertNotIn(self.inactive_student.personal_email, all_recipients)
+
+    def test_enrollment_update_view_handles_active_flag(self):
+        url = reverse("program_enrollment_update", args=[self.program.pk])
+        data = {"enrollment_id": self.enrollment.id, "active": "false"}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.enrollment.refresh_from_db()
+        self.assertFalse(self.enrollment.active)
+
+
+class InactiveStudentsDuesTest(TestCase):
+    def setUp(self):
+        password = get_random_string(32)
+        self.user = User.objects.create_superuser(
+            username="admin", password=password, email="admin@example.com"
+        )
+        self.client.login(username="admin", password=password)
+        self.program = Program.objects.create(name="Test Program")
+
+    def test_inactive_students_separated(self):
+        student_active = Student.objects.create(
+            legal_first_name="Active", last_name="Student"
+        )
+        Enrollment.objects.create(student=student_active, program=self.program, active=True)
+        student_inactive = Student.objects.create(
+            legal_first_name="Inactive", last_name="Student"
+        )
+        Enrollment.objects.create(
+            student=student_inactive, program=self.program, active=False
+        )
+        student_graduated = Student.objects.create(
+            legal_first_name="Graduated", last_name="Student", graduated=True
+        )
+        Enrollment.objects.create(
+            student=student_graduated, program=self.program, active=True
+        )
+        url = reverse("program_dues_owed", args=[self.program.pk])
+        response = self.client.get(url)
+        active_rows = response.context["active_rows"]
+        self.assertEqual(len(active_rows), 1)
+        self.assertEqual(active_rows[0]["student"], student_active)
+        inactive_rows = response.context["inactive_rows"]
+        self.assertEqual(len(inactive_rows), 2)
+        self.assertEqual(inactive_rows[0]["student"], student_graduated)
+        self.assertEqual(inactive_rows[1]["student"], student_inactive)
+        self.assertEqual(len(active_rows) + len(inactive_rows), 3)

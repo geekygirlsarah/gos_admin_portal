@@ -364,29 +364,4 @@ ALUMNI DASHBOARD
 </section>
 {% endif %}
 
-{% comment %}
-══════════════════════════════════════════════════════════════════════════════
-ACCOUNT INFO SIDEBAR (shown when an adult profile exists)
-══════════════════════════════════════════════════════════════════════════════
-{% endcomment %}
-{% if adult %}
-<section class="mb-4">
-    <div class="card">
-        <div class="card-header">Your Contact Information</div>
-        <div class="card-body">
-            <p><strong>Name:</strong> {{ adult.first_name }} {{ adult.last_name }}</p>
-            <p><strong>Email:</strong> {{ adult.email }}</p>
-            {% if adult.phone_number %}
-                <p><strong>Phone:</strong> {{ adult.phone_number }} ({{ adult.get_phone_type_display }})</p>
-                {% if adult.can_receive_texts %}
-                    <p class="small text-muted"><i class="bi bi-chat-dots"></i> Can receive text messages</p>
-                {% endif %}
-            {% endif %}
-            <hr>
-            <p class="small text-muted mb-0">To update your contact information, please contact a lead mentor.</p>
-        </div>
-    </div>
-</section>
-{% endif %}
-
 {% endblock %}

@@ -671,14 +671,8 @@ class MentorInfoForm(forms.Form):
         initial=True,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
-    discord_username = forms.CharField(
-        label="Discord username",
-        max_length=100,
-        required=False,
-        widget=forms.TextInput(attrs=_text_attrs),
-    )
     andrew_id = forms.CharField(
-        label="Andrew ID (CMU affiliates only)",
+        label="Andrew ID (if you have one)",
         max_length=50,
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
@@ -709,10 +703,10 @@ class MentorClearanceInterestForm(forms.Form):
         widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
         help_text=(
             "Pennsylvania law requires anyone working directly with children "
-            "to have three background-check clearances on file (PACA, PATCH, "
-            "and FBI fingerprint check). Are you interested in obtaining (or "
-            "providing copies of) these clearances so you can work directly "
-            "with our students?"
+            "to have three background-check clearances on file (Child abuse (PACA), "
+            "Criminal History (PATCH), and FBI fingerprint check). Are you interested "
+            "in obtaining (or providing copies of) these clearances so you can work "
+            "directly with our students?"
         ),
     )
 
