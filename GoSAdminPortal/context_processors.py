@@ -4,6 +4,18 @@ from programs.models import Enrollment, Program
 from programs.permission_views import get_user_role
 
 
+def wizard_context(request):
+    """Provide wizard-step template defaults.
+
+    ``applications/_wizard_base.html`` renders ``{% if warnings %}`` on every
+    wizard step, but only the Step 5 view ever supplies ``warnings``. Supplying
+    a falsy default here keeps every wizard page resolvable so Django doesn't
+    log ``VariableDoesNotExist`` at DEBUG on each render. The Step 5 view's own
+    context overrides this value.
+    """
+    return {"warnings": None}
+
+
 def navbar_context(request):
     """
     Injects navbar-related context into every template:

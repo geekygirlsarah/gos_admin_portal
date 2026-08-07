@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import shutil
 import tempfile
 
@@ -119,6 +120,43 @@ class Step9DocumentsTests(TestCase):
         self.assertContains(response, "Optional handbook ack")
         # Required badge shown for required doc.
         self.assertContains(response, "Required")
+
+    def test_documents_page_resolves_warnings_without_debug_log(self):
+        """Regression: _wizard_base.html renders ``{% if warnings %}`` on every
+        wizard page, but only the Step 5 view supplied ``warnings`` in its
+        context. Rendering Step 10 made Django's template engine fail the
+        lookup and log ``VariableDoesNotExist`` at DEBUG on every request.
+
+        ``warnings`` must resolve (falsily) on every wizard page so the base
+        template renders without lookup failures.
+        """
+        app = _approved_application(self.program)
+        url = reverse("apply_step10", kwargs={"app_id": app.application_id})
+
+        logger = logging.getLogger("django.template")
+        seen = []
+
+        def _capture(record):
+            seen.append(record.getMessage())
+
+        handler = logging.Handler()
+        handler.emit = _capture
+        original_level = logger.level
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+        try:
+            response = self.client.get(url)
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(original_level)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("warnings", response.context)
+        self.assertFalse(
+            any("warnings" in message for message in seen),
+            "Step 10 render logged a failed template lookup for 'warnings': "
+            f"{seen}",
+        )
 
     # -- Upload behavior ----------------------------------------------------
 
