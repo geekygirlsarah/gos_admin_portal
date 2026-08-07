@@ -322,6 +322,12 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "")
 DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Admin")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
+# Health check throttling
+# Render probes /health every few seconds; don't hit the SMTP server that often.
+HEALTH_SMTP_CHECK_INTERVAL = int(os.getenv("HEALTH_SMTP_CHECK_INTERVAL", "300"))
+# Shorter cooldown after a failure so recovery is detected quickly.
+HEALTH_SMTP_FAILURE_COOLDOWN = int(os.getenv("HEALTH_SMTP_FAILURE_COOLDOWN", "30"))
+
 # Content Security Policy (django-csp)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
 CONTENT_SECURITY_POLICY = {

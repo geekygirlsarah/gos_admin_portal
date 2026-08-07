@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Quieter Unit Test Output**: Audit log entries no longer clutter the output when running unit tests. They still appear on the console during normal use of the site.
 - **"Active Manifest" Renamed to "Who's Here Now"**: The attendance page that shows people currently signed in is now called "Who's Here Now" in the navigation and page title. The kiosk button that opens the same list is now labeled "Who's Here Now" too.
+- **Health Checks Ping Email Less Often**: The `/health` endpoint now only tests the outgoing email server once per minute (configurable via `HEALTH_SMTP_CHECK_INTERVAL`) instead of on every single probe, so Render's 5-second health checks don't hammer the SMTP server. Failed checks use a shorter cooldown so recovery is still noticed quickly.
 
 ### Fixed
 - **Mentors Shown Correctly on Active Manifest**: Mentors signed in via the kiosk no longer appear as "Visitor" on the Active Manifest page. They now show their name with a Mentor badge, matching the All Program Entries page.

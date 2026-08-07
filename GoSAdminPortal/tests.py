@@ -132,6 +132,9 @@ class HealthCheckViewTest(TestCase):
 
     def setUp(self):
         self.factory = RequestFactory()
+        from django.core.cache import cache
+
+        cache.clear()
 
     def test_health_returns_200(self):
         response = self.client.get(reverse("health"))
@@ -246,6 +249,46 @@ class HealthCheckViewTest(TestCase):
                     response.content,
                     {"status": "ok", "db": "ok", "email": "ok"},
                 )
+
+    def test_health_email_check_throttled_by_cache(self):
+        """Repeated probes within the cache window must not re-ping SMTP.
+
+        Render hits /health every 5 seconds; the email backend should only be
+        contacted once per cache window instead of on every single probe.
+        """
+        from unittest import mock
+
+        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+            mock_conn.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+                1,
+            )
+            with mock.patch("GoSAdminPortal.views.mail") as mock_mail:
+                mock_conn_obj = mock.MagicMock()
+                mock_conn_obj.open.return_value = True
+                mock_mail.get_connection.return_value = mock_conn_obj
+                self.client.get(reverse("health"))
+                self.client.get(reverse("health"))
+                self.client.get(reverse("health"))
+                self.assertEqual(mock_mail.get_connection.call_count, 1)
+
+    def test_health_email_check_reruns_after_cache_expiry(self):
+        """Once the cached result expires, the next probe pings SMTP again."""
+        from unittest import mock
+
+        from django.core.cache import cache
+
+        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+            mock_conn.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+                1,
+            )
+            with mock.patch("GoSAdminPortal.views.mail") as mock_mail:
+                mock_conn_obj = mock.MagicMock()
+                mock_conn_obj.open.return_value = True
+                mock_mail.get_connection.return_value = mock_conn_obj
+                self.client.get(reverse("health"))
+                cache.clear()
+                self.client.get(reverse("health"))
+                self.assertEqual(mock_mail.get_connection.call_count, 2)
 
 
 class AdapterEmailProvisioningTest(TestCase):
