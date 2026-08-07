@@ -14,7 +14,6 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -150,7 +149,6 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
         sort_map = {
             "id": "application_id",
             "type": "applicant_type",
-            "email": Lower("email"),
             "program": "program__name",
             "status": "status",
             "started": "created_at",

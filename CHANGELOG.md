@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Quieter Unit Test Output**: Audit log entries no longer clutter the output when running unit tests. They still appear on the console during normal use of the site.
+- **Application Review List Shows Names**: The application review page now lists the student's or mentor's name instead of the applicant's email, so reviewers can identify applications at a glance. Converted mentor applications also show their status as "Converted to Mentor" instead of "Converted to Student".
 - **"Active Manifest" Renamed to "Who's Here Now"**: The attendance page that shows people currently signed in is now called "Who's Here Now" in the navigation and page title. The kiosk button that opens the same list is now labeled "Who's Here Now" too.
 - **Health Checks Ping Email Less Often**: The `/health` endpoint now only tests the outgoing email server once per minute (configurable via `HEALTH_SMTP_CHECK_INTERVAL`) instead of on every single probe, so Render's 5-second health checks don't hammer the SMTP server. Failed checks use a shorter cooldown so recovery is still noticed quickly.
 

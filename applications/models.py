@@ -369,6 +369,13 @@ class Application(models.Model):
             return self.mentor_name
         return self.student_name
 
+    @property
+    def status_label(self) -> str:
+        """Status label for display, adjusted for converted mentors."""
+        if self.status == self.Status.CONVERTED and self.is_mentor:
+            return "Converted to Mentor"
+        return self.get_status_display()
+
 
 # --- Step 9: post-approval signed-document uploads --------------------------
 
