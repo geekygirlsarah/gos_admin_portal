@@ -498,7 +498,7 @@ class AttendanceImportView(View):
 
 
 @login_required
-def active_manifest_view(request):
+def who_is_here_view(request):
     if not can_user_read(request.user, "attendance"):
         messages.error(request, "You do not have permission to view attendance.")
         return redirect("home")
@@ -507,7 +507,7 @@ def active_manifest_view(request):
     program_id = request.GET.get("program_id")
     active_sessions = AttendanceSession.objects.filter(
         check_out__isnull=True
-    ).select_related("student", "program")
+    ).select_related("student", "adult", "program")
     if program_id and program_id.isdigit():
         active_sessions = active_sessions.filter(program_id=program_id)
 
@@ -521,7 +521,7 @@ def active_manifest_view(request):
 
     return render(
         request,
-        "attendance/active_manifest.html",
+        "attendance/who_is_here.html",
         {
             "today_sessions": today_sessions,
             "stale_sessions": stale_sessions,
@@ -538,7 +538,7 @@ def active_manifest_view(request):
 def close_attendance_session(request, pk):
     if not can_user_write(request.user, "attendance"):
         messages.error(request, "You do not have permission to modify attendance.")
-        return redirect("attendance_manifest")
+        return redirect("attendance_active")
 
     session = get_object_or_404(AttendanceSession, pk=pk)
     if not session.check_out:
@@ -566,7 +566,7 @@ def close_attendance_session(request, pk):
     else:
         messages.info(request, "Session is already closed.")
 
-    return redirect_back(request, "attendance_manifest")
+    return redirect_back(request, "attendance_active")
 
 
 @login_required
@@ -574,7 +574,7 @@ def close_attendance_session(request, pk):
 def close_stale_attendance_sessions(request):
     if not can_user_write(request.user, "attendance"):
         messages.error(request, "You do not have permission to modify attendance.")
-        return redirect("attendance_manifest")
+        return redirect("attendance_active")
 
     now = timezone.localtime()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -602,7 +602,7 @@ def close_stale_attendance_sessions(request):
         request,
         f"Closed {count} stale sessions with {duration_hours}-hour default duration.",
     )
-    return redirect_back(request, "attendance_manifest")
+    return redirect_back(request, "attendance_active")
 
 
 @login_required

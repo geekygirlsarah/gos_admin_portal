@@ -294,8 +294,8 @@ def kiosk_lookup(request, kiosk_id):
 
 
 @require_GET
-def kiosk_manifest(request, kiosk_id):
-    """GET /api/v1/kiosk/<id>/manifest/
+def kiosk_who_is_here(request, kiosk_id):
+    """GET /api/v1/kiosk/<id>/who-is-here/
     Returns list of people currently signed in. Requires the unlock cookie.
     """
     config = _get_kiosk_or_404(kiosk_id)
@@ -333,4 +333,4 @@ def kiosk_manifest(request, kiosk_id):
     # Sort by name
     results.sort(key=lambda x: x["name"])
 
-    return JsonResponse({"manifest": results})
+    return JsonResponse({"people": results})

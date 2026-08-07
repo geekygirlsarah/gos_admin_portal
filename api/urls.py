@@ -10,7 +10,7 @@ kiosk_patterns = [
     path("lock/", kiosk_views.kiosk_lock, name="api_kiosk_lock"),
     path("tap/", kiosk_views.kiosk_tap, name="api_kiosk_tap"),
     path("lookup/", kiosk_views.kiosk_lookup, name="api_kiosk_lookup"),
-    path("manifest/", kiosk_views.kiosk_manifest, name="api_kiosk_manifest"),
+    path("who-is-here/", kiosk_views.kiosk_who_is_here, name="api_kiosk_who_is_here"),
 ]
 
 urlpatterns = [

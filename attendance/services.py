@@ -85,7 +85,7 @@ def auto_in_or_out(
     local_now = timezone.localtime(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # NEW: Close any stale sessions for this person first to keep the manifest clean
+    # NEW: Close any stale sessions for this person first to keep the list clean
     # and provide realistic durations if they forgot to sign out.
     stale_qs = AttendanceSession.objects.filter(
         program=program, check_out__isnull=True, check_in__lt=today_start
