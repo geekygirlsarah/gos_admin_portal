@@ -30,6 +30,9 @@ handler400 = "GoSAdminPortal.views.handler400"
 handler500 = "GoSAdminPortal.views.handler500"
 
 urlpatterns = [
+    # Health endpoint is public; also serve it without a trailing slash since
+    # infrastructure probes (e.g. Render) may not follow redirects.
+    path("health", portal_views.health, name="health"),
     path("health/", portal_views.health, name="health"),
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),

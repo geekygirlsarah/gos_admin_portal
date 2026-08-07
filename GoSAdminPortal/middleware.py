@@ -17,6 +17,7 @@ EXEMPT_URL_NAMES = {
     "admin:login",
     "privacy_policy",
     "non_discrimination_policy",
+    "health",
 }
 
 EXEMPT_PATH_PREFIXES = (
@@ -49,19 +50,27 @@ class LoginRequiredMiddleware(MiddlewareMixin):
             if prefix and path.startswith(prefix):
                 return True
 
-        # Allow named urls in exempt set
-        try:
-            match = resolve(path)
-            if match.view_name in EXEMPT_URL_NAMES:
-                return True
-        except Resolver404:
-            # The path doesn't resolve to any known URL. Do NOT treat this as
-            # exempt: an anonymous user hitting an unknown path should still
-            # be redirected to login rather than being shown a bare 404,
-            # which would otherwise leak information about which paths exist.
-            return False
-        except Exception:
-            logger.debug("Unexpected error resolving path %s", path, exc_info=True)
+        # Allow named urls in exempt set. Also try the trailing-slash variant:
+        # an anonymous request to /health (no slash) would otherwise hit this
+        # middleware before APPEND_SLASH gets a chance to normalize it, so
+        # both /health and /health/ must be treated as exempt.
+        for candidate in (path, path + "/"):
+            try:
+                match = resolve(candidate)
+                if match.view_name in EXEMPT_URL_NAMES:
+                    return True
+            except Resolver404:
+                # The candidate doesn't resolve to any known URL. Do NOT treat
+                # it as exempt: an anonymous user hitting an unknown path should
+                # still be redirected to login rather than being shown a bare
+                # 404, which would otherwise leak information about which paths
+                # exist.
+                continue
+            except Exception:
+                logger.debug(
+                    "Unexpected error resolving path %s", candidate, exc_info=True
+                )
+                continue
         return False
 
 
