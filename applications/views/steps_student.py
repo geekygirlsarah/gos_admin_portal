@@ -33,6 +33,7 @@ from ..models import (
     ApplicationDocumentSubmission,
     OtpVerifyResult,
 )
+from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
 from ..services import (
     adult_to_prefill,
     find_adult_by_email,
@@ -116,6 +117,9 @@ class Step2ApplicantTypeView(View):
         # (and never can) silently generate a new code that invalidates the
         # one the applicant already received.
         if application.email and not application.email_is_verified:
+            rate_limited = check_otp_send_limit(request, application.email)
+            if rate_limited is not None:
+                return rate_limited
             _issue_and_send(application, request)
 
         # Mentor applicants skip Step 4 (program selection) — they apply
@@ -215,6 +219,9 @@ class Step3VerifyEmailView(View):
         # application that never received one). When a code is already
         # pending, the page just renders so a reload can't invalidate it.
         if not application.otp_hash or not application.otp_expires_at:
+            rate_limited = check_otp_send_limit(request, application.email)
+            if rate_limited is not None:
+                return rate_limited
             if _issue_and_send(application, request):
                 messages.info(
                     request,
@@ -225,6 +232,9 @@ class Step3VerifyEmailView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id)
+        rate_limited = check_otp_verify_limit(request, application.application_id)
+        if rate_limited is not None:
+            return rate_limited
         form = OtpVerifyForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
@@ -366,6 +376,9 @@ class Step3ResendCodeView(View):
         application = _get_application_or_404(app_id)
         if not application.email:
             return redirect("apply_step2", app_id=application.application_id)
+        rate_limited = check_otp_send_limit(request, application.email)
+        if rate_limited is not None:
+            return rate_limited
         try:
             code = application.issue_otp()
             _services.send_otp_email(application, code, request=request)

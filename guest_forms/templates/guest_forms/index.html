@@ -1,0 +1,54 @@
+{% extends "guest_forms/base.html" %}
+
+{% block title %}Guest Permission Forms{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 mb-4">Guest Permission Forms</h1>
+
+                <p class="lead mb-4">
+                    Select a form to download, fill out, and submit:
+                </p>
+
+                {% if forms %}
+                    <div class="list-group">
+                        {% for form in forms %}
+                            <a href="{% url 'guest_form_detail' form.slug %}" class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ form.name }}</strong>
+                                        <span class="badge bg-{% if form.form_type == 'student' %}primary{% else %}success{% endif %} ms-2">
+                                            {{ form.form_type|title }}
+                                        </span>
+                                        {% if form.description %}
+                                            <div class="small text-muted mt-1">{{ form.description|truncatewords:20 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <span class="btn btn-sm btn-outline-primary">View & Sign</span>
+                                </div>
+                            </a>
+                        {% empty %}
+                            <div class="list-group-item text-muted text-center">
+                                No active guest forms available.
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-file-earmark-plus text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-3">No guest forms available at this time.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <p class="text-center text-muted small mt-3 mb-0">
+            <strong>Need help?</strong> Contact
+            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

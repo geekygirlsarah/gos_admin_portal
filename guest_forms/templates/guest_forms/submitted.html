@@ -1,0 +1,33 @@
+{% extends "guest_forms/base.html" %}
+
+{% block title %}Form Submitted{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4 p-md-5 text-center">
+                <div class="mb-4">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h1 class="h3 mb-3">Thank You!</h1>
+                <p class="lead mb-4">
+                    Your signed <strong>{{ guest_form.name }}</strong> has been submitted successfully.
+                </p>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Thank you! Our team will review your submission. We'll reach out if there are issues.
+                </div>
+                <a href="{% url 'guest_form_index' %}" class="btn btn-outline-primary">
+                    ← Back to Forms
+                </a>
+            </div>
+        </div>
+
+        <p class="text-center text-muted small mt-3 mb-0">
+            <strong>Need help?</strong> Contact
+            <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+        </p>
+    </div>
+</div>
+{% endblock %}

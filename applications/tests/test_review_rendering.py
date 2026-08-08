@@ -35,6 +35,117 @@ class BooleanRenderingReproductionTest(TestCase):
         self.assertContains(response, "Yes")
 
 
+class ReviewListNameAndStatusLabelTest(TestCase):
+    """The review list shows the applicant's name instead of email, and
+    converted mentor applications read "Converted to Mentor"."""
+
+    def setUp(self):
+        self.reviewer = _reviewer_user()
+        self.client.force_login(self.reviewer)
+        self.list_url = reverse("application_review_list")
+
+    def _app(self, **overrides):
+        defaults = dict(
+            email="applicant@example.com",
+            status=Application.Status.SUBMITTED,
+            submitted_at=timezone.now(),
+        )
+        defaults.update(overrides)
+        return Application.objects.create(**defaults)
+
+    def test_list_shows_student_name_not_email(self):
+        self._app(
+            applicant_type=Application.Type.STUDENT,
+            data={
+                "step5-student": {
+                    "legal_first_name": "Ada",
+                    "last_name": "Lovelace",
+                }
+            },
+        )
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ada Lovelace")
+        self.assertNotContains(response, "applicant@example.com")
+
+    def test_list_shows_mentor_name_not_email(self):
+        self._app(
+            applicant_type=Application.Type.MENTOR,
+            data={
+                "mentor_info": {
+                    "legal_first_name": "Grace",
+                    "last_name": "Hopper",
+                }
+            },
+        )
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Grace Hopper")
+        self.assertNotContains(response, "applicant@example.com")
+
+    def test_list_name_column_does_not_sort_by_email(self):
+        self._app(
+            applicant_type=Application.Type.STUDENT,
+            data={
+                "step5-student": {
+                    "legal_first_name": "Ada",
+                    "last_name": "Lovelace",
+                }
+            },
+        )
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Student/Mentor Name")
+        self.assertNotContains(response, "sort=email")
+
+    def test_converted_mentor_status_label_on_list(self):
+        self._app(
+            applicant_type=Application.Type.MENTOR,
+            status=Application.Status.CONVERTED,
+            data={
+                "mentor_info": {
+                    "legal_first_name": "Grace",
+                    "last_name": "Hopper",
+                }
+            },
+        )
+        response = self.client.get(self.list_url)
+        self.assertContains(response, "Converted to Mentor")
+
+    def test_converted_student_status_label_unchanged(self):
+        self._app(
+            applicant_type=Application.Type.STUDENT,
+            status=Application.Status.CONVERTED,
+            data={
+                "step5-student": {
+                    "legal_first_name": "Ada",
+                    "last_name": "Lovelace",
+                }
+            },
+        )
+        response = self.client.get(self.list_url)
+        self.assertContains(response, "Converted to Student")
+
+    def test_converted_mentor_status_label_on_detail(self):
+        app = self._app(
+            applicant_type=Application.Type.MENTOR,
+            status=Application.Status.CONVERTED,
+            data={
+                "mentor_info": {
+                    "legal_first_name": "Grace",
+                    "last_name": "Hopper",
+                }
+            },
+        )
+        url = reverse(
+            "application_review_detail", kwargs={"app_id": app.application_id}
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Converted to Mentor")
+        self.assertNotContains(response, "Converted to Student")
+
+
 class AdultToPrefillAttributeErrorTest(TestCase):
     """Test that adult_to_prefill and Step 8 view no longer crash when
     prefilling data for an existing student/adult relationship.

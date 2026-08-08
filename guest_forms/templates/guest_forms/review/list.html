@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Guest Form Submissions – Review{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">Guest Form Submissions</h1>
+        <a href="{% url 'guest_form_manage_list' %}" class="btn btn-outline-primary">
+            <i class="bi bi-gear me-1"></i> Manage Forms
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="id_type" class="form-label">Form Type</label>
+                    <select name="type" id="id_type" class="form-select">
+                        <option value="">All</option>
+                        <option value="student" {% if current_type == 'student' %}selected{% endif %}>Student</option>
+                        <option value="adult" {% if current_type == 'adult' %}selected{% endif %}>Adult</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_form" class="form-label">Form</label>
+                    <select name="form" id="id_form" class="form-select">
+                        <option value="">All</option>
+                        {% for form in forms %}
+                            <option value="{{ form.pk }}" {% if current_form == form.pk|stringformat:"s" %}selected{% endif %}>{{ form.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_search" class="form-label">Search</label>
+                    <input type="text" name="search" id="id_search" class="form-control" value="{{ search_query }}" placeholder="Search names, email, forms...">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="{% url 'guest_form_review_list' %}" class="btn btn-outline-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="card">
+        <div class="card-body p-0">
+            {% if submissions %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Participant</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Team</th>
+                                <th>Form</th>
+                                <th>Type</th>
+                                <th>Submitted</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for submission in submissions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ submission.participant_name }}</strong>
+                                </td>
+                                <td>{{ submission.email }}</td>
+                                <td>{{ submission.phone_number }}</td>
+                                <td>{% if submission.team_number %}{{ submission.team_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                                <td>{{ submission.guest_form.name }}</td>
+                                <td>
+                                    <span class="badge bg-{% if submission.guest_form.form_type == 'student' %}primary{% else %}success{% endif %}">
+                                        {{ submission.guest_form.form_type|title }}
+                                    </span>
+                                </td>
+                                <td>{{ submission.submitted_at|date:"M j, Y H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'guest_form_review_detail' submission.pk %}" class="btn btn-sm btn-outline-primary">
+                                        View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3">No submissions found.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

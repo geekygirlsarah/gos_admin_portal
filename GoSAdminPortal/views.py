@@ -1,8 +1,12 @@
+from django.conf import settings
 from django.contrib import messages
 from django.core import mail
+from django.core.cache import cache
 from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+
+EMAIL_HEALTH_CACHE_KEY = "health:email_status"
 
 
 def health(request):
@@ -11,6 +15,11 @@ def health(request):
     Verifies the database connection and outgoing email backend are alive:
       - 200 {"status": "ok", "db": "ok", "email": "ok"} when healthy
       - 503 {"status": "unhealthy", ...} with per-component details on failure
+
+    Render probes this endpoint every few seconds, so the SMTP check result is
+    cached for HEALTH_SMTP_CHECK_INTERVAL seconds to avoid opening a connection
+    to the mail server on every single probe. Failures use a shorter cooldown
+    (HEALTH_SMTP_FAILURE_COOLDOWN) so a recovery is detected promptly.
     """
     try:
         with connection.cursor() as cursor:
@@ -22,11 +31,20 @@ def health(request):
             status=503,
         )
 
-    try:
-        conn = mail.get_connection()
-        conn.open()
-        conn.close()
-    except Exception:
+    email_status = cache.get(EMAIL_HEALTH_CACHE_KEY)
+    if email_status is None:
+        try:
+            conn = mail.get_connection()
+            conn.open()
+            conn.close()
+            email_status = "ok"
+            ttl = settings.HEALTH_SMTP_CHECK_INTERVAL
+        except Exception:
+            email_status = "unavailable"
+            ttl = settings.HEALTH_SMTP_FAILURE_COOLDOWN
+        cache.set(EMAIL_HEALTH_CACHE_KEY, email_status, ttl)
+
+    if email_status != "ok":
         return JsonResponse(
             {"status": "unhealthy", "db": "ok", "email": "unavailable"},
             status=503,
