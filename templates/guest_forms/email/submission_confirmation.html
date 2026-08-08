@@ -1,0 +1,20 @@
+<p>Hi {{ participant_name }},</p>
+<p>
+    Thank you for submitting the <strong>{{ guest_form.name }}</strong> for
+    <strong>Girls of Steel Robotics</strong>!
+</p>
+<p>
+    We've received your signed form and our team will review it.
+    We'll reach out if we have any questions or issues.
+</p>
+<ul>
+    <li><strong>Form:</strong> {{ guest_form.name }}</li>
+    <li><strong>Participant:</strong> {{ participant_name }}</li>
+    <li><strong>Email:</strong> {{ submission.email }}</li>
+    {% if submission.team_number %}<li><strong>Team number:</strong> {{ submission.team_number }}</li>{% endif %}
+    <li><strong>Submitted:</strong> {{ submission.submitted_at|date:"F j, Y g:i A" }}</li>
+</ul>
+<p style="color:#666;font-size:0.9em">
+    Questions? Email
+    <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+</p>

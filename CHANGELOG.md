@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Saving a Guest Form Now Works**: When creating or editing a guest form (the PDF you upload for visitors to download), clicking Save no longer silently drops you back to the form. The form previously required the legal-notices and safety-guidelines URLs but never showed fields for them, so saving always failed. Those fields are now shown on the form. Lead Mentors also get the permission to manage guest forms (previously it was only granted on databases created before the feature shipped).
 
+### Added
+- **Guest Form Confirmation Emails**: When someone submits a guest permission form, they now get a confirmation email with a summary of what they submitted, so they know it was received. (No email is sent if the submission has no email address.)
+
 ## 2026-08-07
 
 ### Added
