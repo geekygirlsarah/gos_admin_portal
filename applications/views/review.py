@@ -153,6 +153,7 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
             "status": "status",
             "started": "created_at",
             "submitted": "submitted_at",
+            "email": "email",
         }
 
         if sort in sort_map:
