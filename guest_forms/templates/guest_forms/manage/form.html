@@ -66,6 +66,24 @@
                             {% endif %}
                         </div>
 
+                        <div class="mb-3">
+                            <label for="{{ form.legal_notices_url.id_for_label }}" class="form-label">{{ form.legal_notices_url.label }}</label>
+                            {{ form.legal_notices_url }}
+                            {% if form.legal_notices_url.errors %}
+                                <div class="invalid-feedback d-block">{{ form.legal_notices_url.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">{{ form.legal_notices_url.help_text }}</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.safety_guidelines_url.id_for_label }}" class="form-label">{{ form.safety_guidelines_url.label }}</label>
+                            {{ form.safety_guidelines_url }}
+                            {% if form.safety_guidelines_url.errors %}
+                                <div class="invalid-feedback d-block">{{ form.safety_guidelines_url.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">{{ form.safety_guidelines_url.help_text }}</div>
+                        </div>
+
                         <div class="row mb-3">
                             <div class="col-md-4 mb-3">
                                 <div class="form-check">
