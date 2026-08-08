@@ -1,0 +1,14 @@
+Hi {{ participant_name }},
+
+Thank you for submitting the {{ guest_form.name }} for Girls of Steel Robotics!
+
+We've received your signed form and our team will review it. We'll reach out
+if we have any questions or issues.
+
+  Form:        {{ guest_form.name }}
+  Participant: {{ participant_name }}
+  Email:       {{ submission.email }}
+{% if submission.team_number %}  Team number: {{ submission.team_number }}
+{% endif %}  Submitted:   {{ submission.submitted_at|date:"F j, Y g:i A" }}
+
+If you have questions, contact leads@girlsofsteelrobotics.org.

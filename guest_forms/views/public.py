@@ -9,6 +9,7 @@ from django.views.decorators.cache import never_cache
 
 from guest_forms.forms import GuestFormSubmissionForm
 from guest_forms.models import GuestForm
+from guest_forms.services import send_submission_confirmation_email
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -57,6 +58,8 @@ class GuestFormDetailView(View):
             else:
                 submission.submitted_ip = request.META.get("REMOTE_ADDR")
             submission.save()
+
+            send_submission_confirmation_email(submission)
 
             return redirect("guest_form_submitted", slug=guest_form.slug)
 
