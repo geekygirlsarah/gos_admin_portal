@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Guest Form{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4 p-md-5">
+                    <h1 class="h3 mb-4">Delete Guest Form</h1>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Are you sure you want to delete <strong>{{ guest_form.name }}</strong>?
+                    </div>
+
+                    <dl class="row">
+                        <dt class="col-sm-3">Type</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge bg-{% if guest_form.form_type == 'student' %}primary{% else %}success{% endif %}">
+                                {{ guest_form.form_type|title }}
+                            </span>
+                        </dd>
+                        <dt class="col-sm-3">Program</dt>
+                        <dd class="col-sm-9">{{ guest_form.program.name }}</dd>
+                        <dt class="col-sm-3">Submissions</dt>
+                        <dd class="col-sm-9">{{ guest_form.submissions.count }}</dd>
+                    </dl>
+
+                    {% if guest_form.submissions.exists %}
+                        <div class="alert alert-danger">
+                            <strong>Warning:</strong> This form has {{ guest_form.submissions.count }} submission(s).
+                            Deleting the form will also delete all associated submissions and uploaded files.
+                        </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'guest_form_manage_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash me-1"></i> Yes, Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

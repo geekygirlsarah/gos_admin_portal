@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}{{ submission.participant_name }} – {{ submission.guest_form.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">View Submission</h1>
+            <p class="text-muted mb-0">
+                <a href="{% url 'guest_form_review_list' %}">← Back to Submissions</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Participant Information</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Name</dt>
+                        <dd class="col-sm-9">{{ submission.participant_name }}</dd>
+
+                        <dt class="col-sm-3">Email</dt>
+                        <dd class="col-sm-9">{{ submission.email }}</dd>
+
+                        <dt class="col-sm-3">Phone</dt>
+                        <dd class="col-sm-9">{{ submission.phone_number }} ({{ submission.get_phone_type_display }})</dd>
+
+                        {% if submission.team_number %}
+                            <dt class="col-sm-3">Team Number</dt>
+                            <dd class="col-sm-9">{{ submission.team_number }}</dd>
+                        {% endif %}
+
+                        <dt class="col-sm-3">Submitted</dt>
+                        <dd class="col-sm-9">{{ submission.submitted_at|date:"M j, Y H:i" }}</dd>
+
+                        {% if submission.submitted_ip %}
+                            <dt class="col-sm-3">IP Address</dt>
+                            <dd class="col-sm-9"><code>{{ submission.submitted_ip }}</code></dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Emergency Contact</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Name</dt>
+                        <dd class="col-sm-9">{{ submission.emergency_contact_name }}</dd>
+
+                        <dt class="col-sm-3">Phone</dt>
+                        <dd class="col-sm-9">{{ submission.emergency_contact_phone }}</dd>
+
+                        <dt class="col-sm-3">Relationship</dt>
+                        <dd class="col-sm-9">{{ submission.emergency_contact_relationship_display }}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Agreements</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">CMU Legal Notices</dt>
+                        <dd class="col-sm-8">
+                            {% if submission.agreed_legal_notices %}
+                                <i class="bi bi-check-circle text-success me-1"></i> Agreed
+                            {% else %}
+                                <i class="bi bi-x-circle text-danger me-1"></i> Not Agreed
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4">Safety Guidelines</dt>
+                        <dd class="col-sm-8">
+                            {% if submission.agreed_safety_guidelines %}
+                                <i class="bi bi-check-circle text-success me-1"></i> Agreed
+                            {% else %}
+                                <i class="bi bi-x-circle text-danger me-1"></i> Not Agreed
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Form Details</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Form</dt>
+                        <dd class="col-sm-9">{{ submission.guest_form.name }}</dd>
+
+                        <dt class="col-sm-3">Type</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge bg-{% if submission.guest_form.form_type == 'student' %}primary{% else %}success{% endif %}">
+                                {{ submission.guest_form.form_type|title }}
+                            </span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Uploaded File</h2>
+                </div>
+                <div class="card-body">
+                    <a href="{{ submission.file.url }}" target="_blank" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark me-1"></i> View Submitted File
+                    </a>
+                    <p class="form-text mt-2">{{ submission.file.name|cut:"guest_form_submissions/" }} ({{ submission.file.size|filesizeformat }})</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Quick Info</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Participant</dt>
+                        <dd class="col-sm-7">{{ submission.participant_name }}</dd>
+
+                        <dt class="col-sm-5">Email</dt>
+                        <dd class="col-sm-7">{{ submission.email }}</dd>
+
+                        <dt class="col-sm-5">Form</dt>
+                        <dd class="col-sm-7">{{ submission.guest_form.name }}</dd>
+
+                        <dt class="col-sm-5">Submitted</dt>
+                        <dd class="col-sm-7">{{ submission.submitted_at|date:"M j, Y H:i" }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

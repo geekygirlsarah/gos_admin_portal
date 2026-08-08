@@ -147,6 +147,7 @@ INSTALLED_APPS = [
     "api",
     "applications",
     "portal",
+    "guest_forms",
     "pghistory",
     "pgtrigger",
     "audit",

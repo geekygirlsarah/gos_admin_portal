@@ -44,6 +44,8 @@ urlpatterns = [
     # Public kiosk attendance sign-in pages (no login required)
     path("kiosk/", include("attendance.kiosk_urls")),
     path("attendance/", include("attendance.urls")),
+    # Public guest permission forms (no login required)
+    path("guest/", include("guest_forms.urls")),
     path(
         "privacy/",
         TemplateView.as_view(template_name="privacy.html"),
