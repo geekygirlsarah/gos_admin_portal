@@ -125,7 +125,11 @@ class StudentEmergencyContactsView(
         qs = self.filter_students_by_role(qs)
 
         qs = (
-            qs.select_related("school", "primary_contact", "secondary_contact")
+            qs.select_related(
+                "school",
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+            )
             .prefetch_related("adults")
             .annotate(
                 sort_first=Coalesce(

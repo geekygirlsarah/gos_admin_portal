@@ -928,8 +928,8 @@ class Step7PrimaryParentView(View):
                 adult_for_check = find_adult_by_email(application.email)
             if adult_for_check is not None:
                 linked_student = Student.objects.filter(
-                    primary_contact=adult_for_check,
-                    secondary_contact__isnull=False,
+                    primary_contact_relationship__adult=adult_for_check,
+                    secondary_contact_relationship__isnull=False,
                 ).first()
                 if linked_student:
                     has_secondary = True

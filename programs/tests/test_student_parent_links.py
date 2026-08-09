@@ -32,16 +32,9 @@ class StudentParentLinksTest(TestCase):
             is_parent=True,
         )
 
-        # Set primary contact
+        # Set primary contact (creates the through row + pointer)
         self.student.primary_contact = self.parent
         self.student.save()
-
-        # Link Parent to Student
-        AdultStudentRelationship.objects.create(
-            adult=self.parent,
-            student=self.student,
-            relationship_to_student="parent",
-        )
 
     def test_student_detail_links_to_parent(self):
         """Student detail page should contain a link to the parent's detail page."""

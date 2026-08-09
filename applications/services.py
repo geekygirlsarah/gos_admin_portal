@@ -212,11 +212,18 @@ def find_adult_by_email(email: str):
     """
     if not email:
         return None
+    from django.db.models import Exists, OuterRef
+
+    from programs.models import Student
+
     qs = Adult.objects.filter(
         Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
     )
     # Prefer primary contacts over secondary/unlinked adults.
-    primary = qs.filter(primary_for__isnull=False).first()
+    is_primary_for = Student.objects.filter(
+        primary_contact_relationship__adult=OuterRef("pk")
+    )
+    primary = qs.filter(Exists(is_primary_for)).first()
     if primary is not None:
         return primary
     return qs.first()
@@ -238,11 +245,6 @@ def students_for_adult(adult) -> List:
     if adult is None:
         return []
     seen = {}
-    for s in adult.primary_for.all():
-        seen[s.pk] = s
-    for s in adult.secondary_for.all():
-        seen.setdefault(s.pk, s)
-    # Reverse M2M from Student.adults
     for s in adult.students.all():
         seen.setdefault(s.pk, s)
     return list(seen.values())

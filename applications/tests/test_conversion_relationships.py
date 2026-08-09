@@ -50,8 +50,18 @@ class ConversionRelationshipTests(TestCase):
         self.assertEqual(student.secondary_contact.personal_email, "sam@example.com")
 
         # Check bi-directional via FK related names
-        self.assertIn(student, student.primary_contact.primary_for.all())
-        self.assertIn(student, student.secondary_contact.secondary_for.all())
+        self.assertIn(
+            student,
+            Student.objects.filter(
+                primary_contact_relationship__adult=student.primary_contact
+            ),
+        )
+        self.assertIn(
+            student,
+            Student.objects.filter(
+                secondary_contact_relationship__adult=student.secondary_contact
+            ),
+        )
 
         # Check ManyToMany (the user likely expects this to be populated too)
         # Note: Student.parents is an alias for Student.adults
@@ -112,7 +122,10 @@ class ConversionRelationshipTests(TestCase):
         )
 
         # Verify relationship
-        self.assertIn(student, existing_parent.primary_for.all())
+        self.assertIn(
+            student,
+            Student.objects.filter(primary_contact_relationship__adult=existing_parent),
+        )
         # Check M2M too
         self.assertIn(existing_parent, student.adults.all())
         self.assertIn(student, existing_parent.students.all())
@@ -160,11 +173,17 @@ class ConversionRelationshipTests(TestCase):
         )
 
         # Verify relationships for NEW student
-        self.assertIn(student, existing_parent.primary_for.all())
+        self.assertIn(
+            student,
+            Student.objects.filter(primary_contact_relationship__adult=existing_parent),
+        )
         self.assertIn(student, existing_parent.students.all())
 
         # Verify relationships for OLD student are preserved
-        self.assertIn(other_student, existing_parent.primary_for.all())
+        self.assertIn(
+            other_student,
+            Student.objects.filter(primary_contact_relationship__adult=existing_parent),
+        )
         self.assertIn(other_student, existing_parent.students.all())
 
     def test_parent_signing_up_two_students_sequential(self):
@@ -217,11 +236,17 @@ class ConversionRelationshipTests(TestCase):
         )
 
         # Bi-directional checks for Student A
-        self.assertIn(student_a, parent_a.primary_for.all())
+        self.assertIn(
+            student_a,
+            Student.objects.filter(primary_contact_relationship__adult=parent_a),
+        )
         self.assertIn(student_a, parent_a.students.all())
 
         # Bi-directional checks for Student B
-        self.assertIn(student_b, parent_a.primary_for.all())
+        self.assertIn(
+            student_b,
+            Student.objects.filter(primary_contact_relationship__adult=parent_a),
+        )
         self.assertIn(student_b, parent_a.students.all())
 
     def test_two_parents_same_email_different_names(self):
@@ -264,8 +289,13 @@ class ConversionRelationshipTests(TestCase):
         self.assertEqual(secondary.first_name, "John")
 
         # Both should be linked to the student
-        self.assertIn(student, primary.primary_for.all())
-        self.assertIn(student, secondary.secondary_for.all())
+        self.assertIn(
+            student, Student.objects.filter(primary_contact_relationship__adult=primary)
+        )
+        self.assertIn(
+            student,
+            Student.objects.filter(secondary_contact_relationship__adult=secondary),
+        )
 
     def test_parent_signing_up_two_students_different_programs(self):
         """
@@ -315,8 +345,14 @@ class ConversionRelationshipTests(TestCase):
 
         # Verify bi-directional
         self.assertCountEqual(parent.students.all(), [student_a, student_b])
-        self.assertIn(student_a, parent.primary_for.all())
-        self.assertIn(student_b, parent.primary_for.all())
+        self.assertIn(
+            student_a,
+            Student.objects.filter(primary_contact_relationship__adult=parent),
+        )
+        self.assertIn(
+            student_b,
+            Student.objects.filter(primary_contact_relationship__adult=parent),
+        )
 
 
 class DuplicateApplicationConversionTests(TestCase):
@@ -444,5 +480,11 @@ class DuplicateApplicationConversionTests(TestCase):
             Adult.objects.filter(personal_email="parent@example.com").count(), 1
         )
         parent = Adult.objects.get(personal_email="parent@example.com")
-        self.assertIn(student_a, parent.primary_for.all())
-        self.assertIn(student_b, parent.primary_for.all())
+        self.assertIn(
+            student_a,
+            Student.objects.filter(primary_contact_relationship__adult=parent),
+        )
+        self.assertIn(
+            student_b,
+            Student.objects.filter(primary_contact_relationship__adult=parent),
+        )

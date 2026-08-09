@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-09
+
+### Changed
+- **Simplified How Parent/Guardian Links Are Stored**: A student's Primary and Secondary Guardian are now stored as links on the existing student↔adult relationship record instead of as separate fields on the student card. This means a guardian who is listed as primary or secondary always shows up on the student's family list automatically (no more duplicate entries), and removing a relationship cleans up the guardian pointers too. Existing data was migrated in place.
+
 ## 2026-08-08
 
 ### Fixed

@@ -233,7 +233,11 @@ class ProgramEmergencyContactsView(
         program = get_object_or_404(Program, pk=program_id)
         students = (
             active_students_in_program(program)
-            .select_related("primary_contact", "secondary_contact", "school")
+            .select_related(
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+                "school",
+            )
             .prefetch_related("adults", "adultstudentrelationship_set")
             .annotate(
                 sort_first=Coalesce(

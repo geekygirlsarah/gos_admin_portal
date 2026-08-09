@@ -436,11 +436,20 @@ class Command(BaseCommand):
                     "last_name": last_name,
                     "school": schools[idx % len(schools)],
                     "graduation_year": graduation_year,
-                    "primary_contact": primary_contact,
-                    "secondary_contact": secondary_contact,
                     "on_discord": idx % 2 == 0,
                     "discord_handle": f"{first_name.lower()}.{last_name.lower()}",
                 },
+            )
+
+            # Primary/secondary are relationship-row pointers now; the setter
+            # keeps the through row and pointer in sync.
+            student.primary_contact = primary_contact
+            student.secondary_contact = secondary_contact
+            student.save(
+                update_fields=[
+                    "primary_contact_relationship",
+                    "secondary_contact_relationship",
+                ]
             )
 
             AdultStudentRelationship.objects.get_or_create(

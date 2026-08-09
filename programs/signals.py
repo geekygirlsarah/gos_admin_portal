@@ -122,6 +122,18 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Adult groups", exc_info=True)
 
 
+@receiver(post_save, sender="programs.AdultStudentRelationship")
+def mark_adult_as_parent_on_relationship(sender, instance, created, **kwargs):
+    """Auto-flag an Adult as a parent whenever a student relationship is made."""
+    try:
+        if instance.adult_id and not instance.adult.is_parent:
+            instance.adult.__class__.objects.filter(pk=instance.adult_id).update(
+                is_parent=True
+            )
+    except Exception:
+        logger.debug("Failed to mark Adult as parent", exc_info=True)
+
+
 @receiver(post_save, sender="programs.Student")
 def ensure_user_in_student_group(sender, instance, created, **kwargs):
     try:

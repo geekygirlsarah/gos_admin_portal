@@ -28,6 +28,21 @@ class StudentForm(forms.ModelForm):
             selected_label="Selected Parents",
         ),
     )
+    # Primary/secondary contacts are now relationship-row pointers on the
+    # model; expose them as Adult pickers for backwards compatibility. The
+    # model's property setters keep the through row and pointer in sync.
+    primary_contact = forms.ModelChoiceField(
+        queryset=Adult.objects.filter(is_parent=True),
+        required=False,
+        label="Primary contact",
+        help_text="Primary parent/guardian, e.g. the one to contact first.",
+    )
+    secondary_contact = forms.ModelChoiceField(
+        queryset=Adult.objects.filter(is_parent=True),
+        required=False,
+        label="Secondary contact",
+        help_text="Secondary parent/guardian.",
+    )
     # Non-model field used to pick K–12 and auto-calc graduation year
     GRADE_CHOICES = [(0, "K")] + [(i, str(i)) for i in range(1, 13)]
     grade_selector = forms.ChoiceField(
@@ -38,9 +53,16 @@ class StudentForm(forms.ModelForm):
 
     class Meta:
         model = Student
-        # Include all model fields except system-managed ones and M2M-through
+        # Include all model fields except system-managed ones, M2M-through,
+        # and the relationship-row pointers (rendered as Adult pickers above).
         fields = "__all__"
-        exclude = ["programs", "created_at", "updated_at"]
+        exclude = [
+            "programs",
+            "created_at",
+            "updated_at",
+            "primary_contact_relationship",
+            "secondary_contact_relationship",
+        ]
         widgets = {
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),
             "clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
@@ -141,6 +163,12 @@ class StudentForm(forms.ModelForm):
                 pass
         # Save base fields first
         instance = super().save(commit=False)
+        # Wire primary/secondary contacts (declared form fields, not model
+        # fields) onto the instance; the model setters keep the through row
+        # and relationship pointer in sync.
+        if hasattr(self, "cleaned_data"):
+            instance.primary_contact = self.cleaned_data.get("primary_contact")
+            instance.secondary_contact = self.cleaned_data.get("secondary_contact")
         if commit:
             instance.save()
         # After instance exists, sync the reverse M2M to Parents ensuring Primary/Secondary are included

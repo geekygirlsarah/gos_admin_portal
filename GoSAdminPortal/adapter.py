@@ -6,7 +6,7 @@ from allauth.account.adapter import DefaultAccountAdapter
 from allauth.account.forms import RequestLoginCodeForm
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils.crypto import get_random_string
 
 
@@ -44,7 +44,13 @@ def _find_or_provision_user_for_email(email):
         Adult.objects.filter(
             Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
         )
-        .annotate(is_primary_contact=Count("primary_for"))
+        .annotate(
+            is_primary_contact=Exists(
+                Student.objects.filter(
+                    primary_contact_relationship__adult=OuterRef("pk")
+                )
+            )
+        )
         .order_by("-is_primary_contact", "last_name", "first_name")
     )
 

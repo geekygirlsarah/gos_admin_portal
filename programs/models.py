@@ -646,21 +646,114 @@ class Student(models.Model):
         help_text="Team numbers or names, comma-separated",
     )
 
-    # New contact fields
-    primary_contact = models.ForeignKey(
-        "Adult",
+    # Contact relationships. Primary/secondary point at an
+    # AdultStudentRelationship row (the through model behind Adult.students /
+    # Student.adults) so the parent side and student side can never drift.
+    # The .primary_contact / .secondary_contact properties below expose the
+    # linked Adult for backwards compatibility and auto-create the through row
+    # on assignment (even before the Student has been saved).
+    primary_contact_relationship = models.ForeignKey(
+        "AdultStudentRelationship",
         on_delete=models.SET_NULL,
-        related_name="primary_for",
+        related_name="students_with_primary",
         null=True,
         blank=True,
+        verbose_name="Primary contact relationship",
     )
-    secondary_contact = models.ForeignKey(
-        "Adult",
+    secondary_contact_relationship = models.ForeignKey(
+        "AdultStudentRelationship",
         on_delete=models.SET_NULL,
-        related_name="secondary_for",
+        related_name="students_with_secondary",
         null=True,
         blank=True,
+        verbose_name="Secondary contact relationship",
     )
+
+    @property
+    def primary_contact(self):
+        """Backwards-compatible accessor: the primary-contact Adult."""
+        rel = self.primary_contact_relationship
+        return rel.adult if rel is not None else None
+
+    @primary_contact.setter
+    def primary_contact(self, adult):
+        self._set_contact("primary", adult)
+
+    @property
+    def primary_contact_id(self):
+        rel = self.primary_contact_relationship
+        return rel.adult_id if rel is not None else None
+
+    @primary_contact_id.setter
+    def primary_contact_id(self, value):
+        if value in (None, ""):
+            self.primary_contact = None
+        else:
+            self.primary_contact = Adult.objects.filter(pk=value).first()
+
+    @property
+    def secondary_contact(self):
+        """Backwards-compatible accessor: the secondary-contact Adult."""
+        rel = self.secondary_contact_relationship
+        return rel.adult if rel is not None else None
+
+    @secondary_contact.setter
+    def secondary_contact(self, adult):
+        self._set_contact("secondary", adult)
+
+    @property
+    def secondary_contact_id(self):
+        rel = self.secondary_contact_relationship
+        return rel.adult_id if rel is not None else None
+
+    @secondary_contact_id.setter
+    def secondary_contact_id(self, value):
+        if value in (None, ""):
+            self.secondary_contact = None
+        else:
+            self.secondary_contact = Adult.objects.filter(pk=value).first()
+
+    def _set_contact(self, slot, adult):
+        """Assign a primary/secondary contact, creating the through row."""
+        if adult is None:
+            setattr(self, f"{slot}_contact_relationship", None)
+            self.__dict__.pop(f"_pending_{slot}_contact", None)
+            return
+        if self.pk is None:
+            # Unsaved Student: defer creating the through row until save() so
+            # there's a student PK to reference.
+            self.__dict__[f"_pending_{slot}_contact"] = adult
+            setattr(self, f"{slot}_contact_relationship", None)
+            return
+        rel, _ = AdultStudentRelationship.objects.get_or_create(
+            adult=adult, student=self
+        )
+        setattr(self, f"{slot}_contact_relationship", rel)
+        self.__dict__.pop(f"_pending_{slot}_contact", None)
+        if not adult.is_parent:
+            Adult.objects.filter(pk=adult.pk).update(is_parent=True)
+
+    def _resolve_deferred_contacts(self):
+        """Create through rows for contacts assigned before the first save."""
+        changed = False
+        for slot in ("primary", "secondary"):
+            pending = self.__dict__.pop(f"_pending_{slot}_contact", None)
+            if pending is None:
+                continue
+            rel, _ = AdultStudentRelationship.objects.get_or_create(
+                adult=pending, student=self
+            )
+            setattr(self, f"{slot}_contact_relationship", rel)
+            if not pending.is_parent:
+                Adult.objects.filter(pk=pending.pk).update(is_parent=True)
+            changed = True
+        if changed:
+            super().save(
+                update_fields=[
+                    "primary_contact_relationship",
+                    "secondary_contact_relationship",
+                ]
+            )
 
     @property
     def parents(self):
@@ -756,18 +849,37 @@ class Student(models.Model):
         return self.full_name or f"Student #{self.pk}"
 
     def _prune_dangling_contacts(self):
-        """Clear dangling primary/secondary contact FKs in a single query."""
-        pks = [pk for pk in (self.primary_contact_id, self.secondary_contact_id) if pk]
-        if not pks:
+        """Clear relationship pointers whose Adult is missing.
+
+        A Student may carry a primary/secondary relationship pointer whose
+        Adult has since been deleted (AdultStudentRelationship cascades with
+        the Adult, which would clear the pointer via SET NULL, but keep this
+        as a safety net for legacy/orphaned data).
+        """
+        ptrs = [
+            pk
+            for pk in (
+                self.primary_contact_relationship_id,
+                self.secondary_contact_relationship_id,
+            )
+            if pk
+        ]
+        if not ptrs:
             return
         try:
-            existing = set(
-                Adult.objects.filter(pk__in=pks).values_list("pk", flat=True)
+            valid = set(
+                AdultStudentRelationship.objects.filter(
+                    pk__in=ptrs, adult__isnull=False
+                ).values_list("pk", flat=True)
             )
-            if self.primary_contact_id and self.primary_contact_id not in existing:
-                self.primary_contact_id = None
-            if self.secondary_contact_id and self.secondary_contact_id not in existing:
-                self.secondary_contact_id = None
+            if self.primary_contact_relationship_id and (
+                self.primary_contact_relationship_id not in valid
+            ):
+                self.primary_contact_relationship_id = None
+            if self.secondary_contact_relationship_id and (
+                self.secondary_contact_relationship_id not in valid
+            ):
+                self.secondary_contact_relationship_id = None
         except Exception:
             logger.debug("Unexpected error in contact cleanup", exc_info=True)
 
@@ -832,6 +944,9 @@ class Student(models.Model):
         normalize_image_field(getattr(self, "photo", None), log_prefix="Student photo")
         self._prune_dangling_contacts()
         super().save(*args, **kwargs)
+        # Create through rows for any primary/secondary contacts assigned
+        # before the Student had a PK, then persist the pointers.
+        self._resolve_deferred_contacts()
 
         # Sync Student name to User account if linked
         if self.user:
