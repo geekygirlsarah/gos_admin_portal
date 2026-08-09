@@ -1549,6 +1549,10 @@ class SlidingScale(models.Model):
         indexes = [
             models.Index(fields=["student"], name="slidingscale_student_idx"),
             models.Index(fields=["status"], name="slidingscale_status_idx"),
+            models.Index(
+                fields=["student", "status", "date", "expiration_date"],
+                name="slidingscale_active_lookup_idx",
+            ),
         ]
 
     def __str__(self):

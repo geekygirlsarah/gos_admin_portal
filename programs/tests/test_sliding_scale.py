@@ -790,3 +790,25 @@ class BalanceSheetSlidingScaleTest(TestCase):
         self.assertEqual(sliding_entry["amount"], Decimal("0.00"))
         self.assertEqual(response.context["total_sliding"], Decimal("100.00"))
         self.assertEqual(response.context["balance"], Decimal("200.00"))
+
+
+class SlidingScaleIndexTests(TestCase):
+    """Verify the composite index backing get_active_sliding_scale() exists."""
+
+    def test_active_lookup_composite_index_exists(self):
+        from django.db import connection
+
+        table = SlidingScale._meta.db_table
+        with connection.cursor() as cursor:
+            if connection.vendor == "postgresql":
+                cursor.execute(
+                    "SELECT indexname FROM pg_indexes WHERE tablename = %s",
+                    [table],
+                )
+            else:
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = %s",
+                    [table],
+                )
+            index_names = {row[0] for row in cursor.fetchall()}
+        self.assertIn("slidingscale_active_lookup_idx", index_names)
