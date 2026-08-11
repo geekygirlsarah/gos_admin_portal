@@ -239,6 +239,60 @@ def find_existing_mentor_by_email(email: str):
     return None
 
 
+PENDING_STATUSES = (
+    Application.Status.DRAFT,
+    Application.Status.EMAIL_VERIFIED,
+    Application.Status.AWAITING_PARENT,
+    Application.Status.SUBMITTED,
+    Application.Status.APPROVED,
+    Application.Status.APPROVED_SIGNED,
+)
+
+
+def applications_for_user(user):
+    """Return the in-progress applications tied to a logged-in user.
+
+    Matching is identity-based and mirrors ``find_student_by_email`` /
+    ``find_adult_by_email``:
+
+    - A student matches applications started with their own personal or
+      andrew email.
+    - An adult (parent/guardian) additionally matches applications that
+      list their email as the primary or secondary parent, applications
+      handed off to them (``AWAITING_PARENT``), and applications they
+      started themselves.
+
+    Only non-terminal statuses (:data:`PENDING_STATUSES`) are returned,
+    newest first.
+    """
+    if not user.is_authenticated:
+        return []
+    match = Q()
+    student = getattr(user, "student_profile", None)
+    if student is not None:
+        for email in {student.personal_email, student.andrew_email}:
+            if email:
+                match |= Q(email__iexact=email)
+
+    adult = getattr(user, "adult_profile", None)
+    if adult is not None:
+        for email in {adult.personal_email, adult.andrew_email}:
+            if not email:
+                continue
+            match |= Q(email__iexact=email)
+            match |= Q(**{"data__step7-primaryparent__email__iexact": email})
+            match |= Q(**{"data__step8-secondaryparent__email__iexact": email})
+            match |= Q(**{"data__step7_handoff__parent_email__iexact": email})
+
+    if not match:
+        return []
+    return list(
+        Application.objects.filter(match, status__in=PENDING_STATUSES)
+        .select_related("program")
+        .order_by("-created_at")
+    )
+
+
 def students_for_adult(adult) -> List:
     """Return the unique students this adult is connected to (primary,
     secondary, or any M2M relation)."""

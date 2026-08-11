@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-11
+
+### Added
+- **Pending Applications Box on the Dashboard**: Students and parents now see a "Pending Applications" box on their dashboard listing any applications tied to their account (matched by email — their own, applications they started, ones they're listed on as a parent, or ones handed off to them). Each entry shows the application's status (Draft, Awaiting parent, Submitted, etc.) with buttons to resume it or withdraw it. The box is hidden when there are no pending applications.
+
 ## 2026-08-09
 
 ### Changed

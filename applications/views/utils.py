@@ -151,6 +151,43 @@ def _is_handoff_authorized(request, application: Application) -> bool:
     return bool(session_token and session_token == expected)
 
 
+def _auto_authorize_handoff(request, application: Application) -> None:
+    """Let a logged-in parent resume an AWAITING_PARENT application.
+
+    When the signed-in adult's email matches the handoff recipient (or a
+    parent already listed on the application), grant the same session token
+    that an emailed resume link would provide so the dashboard's "Resume
+    application" button works without re-emailing.
+    """
+    if application.status != Application.Status.AWAITING_PARENT:
+        return
+    token = application.handoff_token
+    if not token:
+        return
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return
+    adult = getattr(user, "adult_profile", None)
+    if adult is None:
+        return
+    adult_emails = {
+        email.strip().lower()
+        for email in (adult.personal_email, adult.andrew_email)
+        if email
+    }
+    if not adult_emails:
+        return
+    data = application.data or {}
+    parent_emails = {
+        (data.get("step7_handoff") or {}).get("parent_email"),
+        (data.get("step7-primaryparent") or {}).get("email"),
+        (data.get("step8-secondaryparent") or {}).get("email"),
+    }
+    parent_emails = {e.strip().lower() for e in parent_emails if e}
+    if adult_emails & parent_emails:
+        request.session[f"handoff_token_{application.application_id}"] = token
+
+
 def _save_step_data(application: Application, key: str, payload: dict, next_step: int):
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
