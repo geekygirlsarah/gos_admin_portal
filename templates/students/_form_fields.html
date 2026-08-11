@@ -21,32 +21,46 @@
 </div>
 {% endif %}
 
-{% if form.instance and form.instance.pk and 'background-checks' in program_feature_keys %}
+{% if form.instance and form.instance.pk %}
 {% can_read user 'background_checks' as can_read_bg %}
-{% if can_read_bg %}
+{% if can_read_bg and can_edit_bg or can_read_bg and 'background-checks' in program_feature_keys %}
 <div class="card mb-4">
   <div class="card-header">Background Checks</div>
   <div class="card-body">
-      <div>The student needs background checks to participate in the following programs:</div>
-      {% if form.instance.programs.all %}
-          <ul class="mb-0">
-              {% for prog in form.instance.programs.all %}
-                  {% requires_bg form.instance prog as needs_bg %}
-                  <li>{{ prog.year_display }} {{ prog.name }}: <span class="badge {% if needs_bg %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ needs_bg|yesno:"Yes,No" }}</span></li>
-              {% empty %}
-                  <li class="text-muted">Not enrolled in any programs.</li>
-              {% endfor %}
-          </ul>
-      {% else %}
-          <div class="text-muted">Not enrolled in any programs.</div>
-      {% endif %}
-      <div class="form-text">This is informational; the requirement is calculated from date of birth and program dates.</div>
-    <hr/>
-      <div class="row g-3">
-          {% can_write user 'background_checks' form.instance as can_write_bg %}
-          <div class="col-md-4">{% if can_write_bg %}{% render_field form.has_passed_clearances %}{% else %}{% render_field form.has_passed_clearances disabled=True %}{% endif %}</div>
-          <div class="col-md-4">{% if can_write_bg %}{% render_field form.clearances_expiration_date %}{% else %}{% render_field form.clearances_expiration_date readonly=True %}{% endif %}</div>
+      {% requires_bg form.instance as requires_bg %}
+      {% needs_bg form.instance as missing_bg %}
+      <div>
+          This student {% if requires_bg %}requires PA background clearances (17 or older on Sept 1 of the current academic year).{% else %}does not currently require PA background clearances.{% endif %}
       </div>
+      {% if requires_bg and missing_bg %}
+          <div class="alert alert-warning mt-2 mb-2">One or more clearances is missing or expired.</div>
+      {% endif %}
+      {% if can_edit_bg %}
+      <div class="row g-3">
+          {% for label, cleared_field, obtained_field in bg_checks_form.rows %}
+          <div class="col-md-4">
+              <div class="fw-semibold mb-1">{{ label }}</div>
+              {% render_field cleared_field %}
+              {% render_field obtained_field %}
+          </div>
+          {% endfor %}
+      </div>
+      {% else %}
+      <div class="row g-3 mb-2">
+          {% for check in form.instance.background_checks.all %}
+          <div class="col-md-4">
+              <div class="fw-semibold">{{ check.get_check_type_display }}</div>
+              <div>
+                  <span class="badge {% if check.is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ check.is_valid|yesno:"Valid,Not Valid" }}</span>
+                  {% if check.expiration_date %} &middot; expires {{ check.expiration_date|date:'M j, Y' }}{% endif %}
+              </div>
+          </div>
+          {% empty %}
+          <div class="col-12 text-muted">No background clearances on file.</div>
+          {% endfor %}
+      </div>
+      {% endif %}
+      <div class="form-text">Clearance records are managed by Lead Mentors. The requirement is always calculated from date of birth.</div>
   </div>
 </div>
 {% endif %}

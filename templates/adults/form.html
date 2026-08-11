@@ -67,8 +67,43 @@
                   </div>
                 </div>
 
+                <div class="card mb-3">
+                  <div class="card-header bg-light">Clearances</div>
+                  <div class="card-body">
+                    {% if can_edit_bg and bg_checks_form %}
+                    <div class="row g-3">
+                      {% for label, cleared_field, obtained_field in bg_checks_form.rows %}
+                      <div class="col-md-4">
+                        <div class="fw-semibold mb-1">{{ label }}</div>
+                        {% render_field cleared_field %}
+                        {% render_field obtained_field %}
+                      </div>
+                      {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="row g-3">
+                      {% for check in object.background_checks.all %}
+                      <div class="col-md-4">
+                        <div class="fw-semibold">{{ check.get_check_type_display }}</div>
+                        <div>
+                          <span class="badge {% if check.is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ check.is_valid|yesno:"Valid,Not Valid" }}</span>
+                          {% if check.expiration_date %} &middot; expires {{ check.expiration_date|date:'M j, Y' }}{% endif %}
+                        </div>
+                      </div>
+                      {% empty %}
+                      <div class="col-12 text-muted">No background clearances on file.</div>
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if object %}
+                    <div class="form-text">Clearance records are managed by Lead Mentors. Expiration is automatically 5 years from the obtained date.</div>
+                    {% endif %}
+                  </div>
+                </div>
+
                 {% if form.is_parent or form.is_mentor or form.is_alumni %}
                 <div class="card mb-3">
+                  <div class="card-header bg-light">Roles</div>
                   <div class="card-header bg-light">Roles</div>
                   <div class="card-body">
                     <div class="row g-3">
@@ -136,18 +171,6 @@
                       {% if form.role %}<div class="col-md-4">{% render_field form.role %}</div>{% endif %}
                       {% if form.emergency_contact_name %}<div class="col-md-6">{% render_field form.emergency_contact_name %}</div>{% endif %}
                       {% if form.emergency_contact_phone %}<div class="col-md-6">{% render_field form.emergency_contact_phone %}</div>{% endif %}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card mb-3">
-                  <div class="card-header bg-light">Clearances</div>
-                  <div class="card-body">
-                    <div class="row g-3">
-                      {% if form.has_paca_clearance %}<div class="col-md-4">{% render_field form.has_paca_clearance %}</div>{% endif %}
-                      {% if form.has_patch_clearance %}<div class="col-md-4">{% render_field form.has_patch_clearance %}</div>{% endif %}
-                      {% if form.has_fbi_clearance %}<div class="col-md-4">{% render_field form.has_fbi_clearance %}</div>{% endif %}
-                      {% if form.pa_clearances_expiration_date %}<div class="col-md-6">{% render_field form.pa_clearances_expiration_date %}</div>{% endif %}
                     </div>
                   </div>
                 </div>

@@ -5,6 +5,7 @@ from .models import (
     AddressGeocode,
     Adult,
     AdultStudentRelationship,
+    BackgroundCheck,
     Enrollment,
     Fee,
     Payment,
@@ -45,6 +46,25 @@ class ProgramDocumentAdmin(admin.ModelAdmin):
     list_filter = ("program", "is_required", "is_active")
     search_fields = ("name", "program__name")
     autocomplete_fields = ("program",)
+
+
+@admin.register(BackgroundCheck)
+class BackgroundCheckAdmin(admin.ModelAdmin):
+    list_display = (
+        "check_type",
+        "student",
+        "adult",
+        "cleared",
+        "expiration_date",
+        "obtained_date",
+    )
+    list_filter = ("check_type", "cleared")
+    search_fields = (
+        "student__first_name",
+        "student__last_name",
+        "adult__first_name",
+        "adult__last_name",
+    )
 
 
 @admin.register(RolePermission)
@@ -142,6 +162,12 @@ class AdultStudentRelationshipInline(admin.TabularInline):
     model = AdultStudentRelationship
     extra = 1
     autocomplete_fields = ("student",)
+
+
+class BackgroundCheckInline(admin.TabularInline):
+    model = BackgroundCheck
+    extra = 1
+    fields = ("check_type", "cleared", "obtained_date")
 
 
 @admin.register(School)
@@ -262,7 +288,7 @@ class StudentAdmin(admin.ModelAdmin):
             },
         ),
     )
-    inlines = [EnrollmentInline]
+    inlines = [EnrollmentInline, BackgroundCheckInline]
 
     actions = ["convert_to_alumni", "remove_alumni_flag"]
 
@@ -337,7 +363,7 @@ class ParentAdmin(admin.ModelAdmin):
         "andrew_id",
         "phone_number",
     )
-    inlines = [AdultStudentRelationshipInline]
+    inlines = [AdultStudentRelationshipInline, BackgroundCheckInline]
     fieldsets = (
         (
             "Name",
@@ -383,18 +409,6 @@ class ParentAdmin(admin.ModelAdmin):
                     "photo",
                     "emergency_contact_name",
                     "emergency_contact_phone",
-                ),
-            },
-        ),
-        (
-            "Clearances",
-            {
-                "classes": ("collapse",),
-                "fields": (
-                    "has_paca_clearance",
-                    "has_patch_clearance",
-                    "has_fbi_clearance",
-                    "pa_clearances_expiration_date",
                 ),
             },
         ),

@@ -5,9 +5,11 @@ from io import BytesIO
 
 import pghistory
 from cryptography.fernet import Fernet, InvalidToken
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import models
+from django.utils import timezone
 from PIL import ImageFile
 
 from programs.constants import (
@@ -544,16 +546,6 @@ class Student(models.Model):
         default=datetime.date(1900, 1, 1),
         help_text="Student's date of birth. The default value (1900-01-01) is a placeholder — please enter the actual date.",
     )
-    # Background clearances (per-student, separate from mentor clearances)
-    has_passed_clearances = models.BooleanField(
-        default=False,
-        help_text="Check if the student has completed and passed required background clearances.",
-    )
-    clearances_expiration_date = models.DateField(
-        blank=True,
-        null=True,
-        help_text="Expiration date for the student's background clearances (if applicable).",
-    )
     photo = models.ImageField(upload_to="photos/students/", blank=True, null=True)
 
     address = models.CharField(max_length=255, blank=True, null=True)
@@ -1006,17 +998,45 @@ class Student(models.Model):
 
         return format_grade(self.current_grade)
 
-    def requires_background_check(self, program: "Program") -> bool:
-        """Whether the student will be 18 at any point during the given program's dates.
-        Returns False if insufficient data (no DOB or no program dates).
+    def requires_background_check(self) -> bool:
+        """Whether the student must hold PA background clearances.
+
+        Per the university's rule, a student needs clearances if they will be
+        17 years old on Sept 1 of the current academic year (the academic year
+        is considered to start on Sept 1). Returns False if no DOB is set.
         """
-        if not program or not program.start_date or not program.end_date:
+        dob = self.date_of_birth
+        if not dob:
             return False
-        b18 = self.eighteenth_birthday()
-        if not b18:
+        if isinstance(dob, str):
+            try:
+                dob = datetime.datetime.strptime(dob, "%Y-%m-%d").date()
+            except ValueError:
+                return False
+        today = timezone.localdate()
+        if (today.month, today.day) >= (9, 1):
+            academic_year = today.year
+        else:
+            academic_year = today.year - 1
+        # The oldest someone can be born and still be 17 on Sept 1 of the
+        # academic year is Sept 1, 17 years prior to that academic year.
+        oldest_dob = datetime.date(academic_year - 17, 9, 1)
+        return dob <= oldest_dob
+
+    def needs_background_check(self) -> bool:
+        """Whether the student requires clearances AND is missing at least one.
+
+        The requirement is always derived from date of birth; only the
+        clearance records themselves are stored state. Returns False if the
+        student does not require clearances.
+        """
+        if not self.requires_background_check():
             return False
-        # If the program end is on/after 18th birthday, and the start is on/before end.
-        return program.end_date >= b18 and program.start_date <= program.end_date
+        required_types = set(BackgroundCheckType.values)
+        valid_types = {
+            bc.check_type for bc in self.background_checks.all() if bc.is_valid
+        }
+        return not required_types.issubset(valid_types)
 
 
 @pghistory.track()
@@ -1045,6 +1065,11 @@ class Enrollment(models.Model):
         related_name="enrollments",
     )
     active = models.BooleanField(default=True)
+    clearance_due = models.BooleanField(
+        default=False,
+        help_text="Set when the enrolled student requires PA background clearances "
+        "and is missing at least one valid clearance.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1188,12 +1213,6 @@ class Adult(models.Model):
     on_canva = models.BooleanField(default=False)
     on_google_mentor_group = models.BooleanField(default=False)
     on_google_field_crew_group = models.BooleanField(default=False)
-
-    # Clearances
-    has_paca_clearance = models.BooleanField(default=False)
-    has_patch_clearance = models.BooleanField(default=False)
-    has_fbi_clearance = models.BooleanField(default=False)
-    pa_clearances_expiration_date = models.DateField(blank=True, null=True)
 
     # Emergency contact
     emergency_contact_name = models.CharField(max_length=150, blank=True, null=True)
@@ -1549,6 +1568,10 @@ class SlidingScale(models.Model):
         indexes = [
             models.Index(fields=["student"], name="slidingscale_student_idx"),
             models.Index(fields=["status"], name="slidingscale_status_idx"),
+            models.Index(
+                fields=["student", "status", "date", "expiration_date"],
+                name="slidingscale_active_lookup_idx",
+            ),
         ]
 
     def __str__(self):
@@ -1714,3 +1737,97 @@ class AddressGeocode(models.Model):
         if self.found and self.latitude is not None and self.longitude is not None:
             return f"{self.address} → ({self.latitude:.4f}, {self.longitude:.4f})"
         return f"{self.address} → not found"
+
+
+class BackgroundCheckType(models.TextChoices):
+    STATE_POLICE = "state_police", "PA State Police Criminal History (PATCH)"
+    CHILD_ABUSE = "child_abuse", "PA Child Abuse History (Act 151)"
+    FBI = "fbi", "FBI Fingerprint (Act 114)"
+
+
+# PA clearances are valid for 5 years for both adults and students.
+CLEARANCE_VALIDITY_YEARS = 5
+
+
+class BackgroundCheck(models.Model):
+    """A single PA background clearance held by a student or an adult.
+
+    One row per check type per person. Both ``student`` and ``adult`` are
+    nullable but exactly one must be set. The university holds the actual
+    forms/reports, so we only track clearance status and (when known) the
+    expiration/obtained dates. Clearances are valid for 5 years; a student
+    becoming an alumni may have both a student and an adult record, so we do
+    not enforce a unique-per-type constraint at the database level (the
+    application logic keeps at most one row per type per person).
+    """
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="background_checks",
+    )
+    adult = models.ForeignKey(
+        Adult,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="background_checks",
+    )
+    check_type = models.CharField(max_length=20, choices=BackgroundCheckType.choices)
+    cleared = models.BooleanField(
+        default=False,
+        help_text="Whether this clearance has been obtained and passed.",
+    )
+    obtained_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="When this clearance was obtained (becomes active). Expiration is calculated automatically.",
+    )
+
+    class Meta:
+        ordering = ["check_type"]
+
+    def __str__(self):
+        holder = self.student or self.adult
+        return f"{self.get_check_type_display()} for {holder}"
+
+    @property
+    def expiration_date(self):
+        """When this clearance expires.
+
+        PA clearances are valid for 5 years from the date obtained, so the
+        expiration date is always derived from ``obtained_date``.
+        """
+        if not self.obtained_date:
+            return None
+        return self.obtained_date + relativedelta(years=CLEARANCE_VALIDITY_YEARS)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        def holder_set(fk):
+            # Works for both saved (via _id) and unsaved (via cached obj) FKs.
+            if getattr(self, f"{fk}_id", None):
+                return True
+            try:
+                obj = getattr(self, fk)
+            except Exception:
+                return False
+            return obj is not None and bool(obj.pk)
+
+        if holder_set("student") == holder_set("adult"):
+            raise ValidationError(
+                "A background check must belong to exactly one student or adult."
+            )
+
+    @property
+    def is_valid(self):
+        """Whether the clearance is currently valid (passed and not expired)."""
+        if not self.cleared:
+            return False
+        expiration = self.expiration_date
+        if not expiration:
+            return True
+        return expiration >= timezone.localdate()
