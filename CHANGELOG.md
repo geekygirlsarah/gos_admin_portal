@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **Map Markers Now Show Up**: The map marker icons were being blocked by the site's content security policy, so you'd see the outline of a marker but no icon. The policy now allows the map's marker images, so markers render correctly.
 - **Line Breaks Preserved When Pasting Plain Text**: Pasting text that contains line breaks (for example, copied from a terminal or a plain-text document) no longer squashes everything into one paragraph. Each line now keeps its own line break in the message.
+- **Guardian Links No Longer Block the Site Update**: The database update that reworked how primary/secondary guardians are stored was failing partway through on live servers, which stopped the site from updating. The update now finishes cleanly, so the guardian-linking change can ship.
 
 ### Changed
 - **Upgraded the Email Editor**: The rich-text editor used for email messages (on the Messaging and Email Balance Sheets pages) was upgraded to a newer version, which is what enables tables and the pasting improvements above.
