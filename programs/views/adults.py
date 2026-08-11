@@ -30,6 +30,7 @@ from ..utils import (
     redirect_back,
 )
 from .mixins import (
+    BackgroundChecksInlineMixin,
     DynamicPermissionMixin,
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
@@ -97,7 +98,9 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_parent=True).prefetch_related("students")
+        qs = Adult.objects.filter(is_parent=True).prefetch_related(
+            "students__school", "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -140,7 +143,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_mentor=True)
+        qs = Adult.objects.filter(is_mentor=True).prefetch_related(
+            "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -170,7 +175,9 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_alumni=True)
+        qs = Adult.objects.filter(is_alumni=True).prefetch_related(
+            "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -256,6 +263,7 @@ class ParentUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Adult
@@ -263,6 +271,7 @@ class ParentUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+    background_checks_kwarg = "adult"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -304,6 +313,7 @@ class AdultUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Adult
@@ -311,6 +321,7 @@ class AdultUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+    background_checks_kwarg = "adult"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -356,6 +367,7 @@ class MentorUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Adult
@@ -363,6 +375,7 @@ class MentorUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+    background_checks_kwarg = "adult"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

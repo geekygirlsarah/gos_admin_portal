@@ -1,9 +1,6 @@
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.mixins import (
-    LoginRequiredMixin,
-    PermissionRequiredMixin,
-)
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
@@ -11,13 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import strip_tags
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    ListView,
-    UpdateView,
-    View,
-)
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from premailer import transform
 
 from ..forms import (
@@ -49,6 +40,7 @@ from ..utils import (
     active_students_in_program,
     get_safe_url,
     redirect_back,
+    resolve_address_points,
 )
 from .mixins import (
     DynamicReadPermissionMixin,
@@ -168,7 +160,7 @@ class ProgramStudentPhotoListView(
 
     def get_queryset(self):
         qs = Enrollment.objects.filter(program=self.program).select_related(
-            "student", "team"
+            "student", "team", "crew"
         )
 
         qs = self.filter_students_by_role(
@@ -233,7 +225,11 @@ class ProgramEmergencyContactsView(
         program = get_object_or_404(Program, pk=program_id)
         students = (
             active_students_in_program(program)
-            .select_related("primary_contact", "secondary_contact", "school")
+            .select_related(
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+                "school",
+            )
             .prefetch_related("adults", "adultstudentrelationship_set")
             .annotate(
                 sort_first=Coalesce(
@@ -733,12 +729,17 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
 
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
-        # Active (non-graduated) students enrolled in this program with some address info
+        role = get_user_role(request.user)
+        # Active (non-graduated) students enrolled in this program with some
+        # address info. Parents and students get the "carpool map" view, so
+        # only include students who have consented to directory sharing.
+        qs = Student.objects.filter(
+            enrollment__program=program, enrollment__active=True, graduated=False
+        )
+        if role in ("Parent", "Student"):
+            qs = qs.filter(directory_consent=True)
         students = (
-            Student.objects.filter(
-                enrollment__program=program, enrollment__active=True, graduated=False
-            )
-            .distinct()
+            qs.distinct()
             .only(
                 "first_name",
                 "legal_first_name",
@@ -753,25 +754,40 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
-        items = []
+        rows = []
+        addresses = []
         for s in students:
             parts = [s.address or "", s.city or "", s.state or "", s.zip_code or ""]
             addr = ", ".join([p for p in parts if p]).strip(", ")
             if not addr:
                 continue
             name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
-            items.append(
-                {
-                    "name": name or f"Student #{s.pk}",
-                    "address": addr,
-                }
-            )
+            rows.append((name or f"Student #{s.pk}", addr))
+            addresses.append(addr)
+        points = resolve_address_points(addresses) if addresses else {}
+        items = [
+            {
+                "name": name,
+                "address": addr,
+                "latitude": points[addr][0] if points.get(addr) else None,
+                "longitude": points[addr][1] if points.get(addr) else None,
+            }
+            for name, addr in rows
+        ]
+        if role in ("Parent", "Student"):
+            back_url = reverse("profile_dashboard")
+            back_label = "← Back to Dashboard"
+        else:
+            back_url = reverse("program_detail", args=[program.pk])
+            back_label = "← Back to Program"
         return render(
             request,
             self.template_name,
             {
                 "program": program,
                 "items": items,
+                "back_url": back_url,
+                "back_label": back_label,
             },
         )
 

@@ -6,6 +6,8 @@ from django.core.management.base import BaseCommand
 from programs.models import (
     Adult,
     AdultStudentRelationship,
+    BackgroundCheck,
+    BackgroundCheckType,
     Enrollment,
     Fee,
     Payment,
@@ -292,40 +294,40 @@ class Command(BaseCommand):
                 "last_name": "Ride",
                 "email": "seed.mentor1@gos.example",
                 "role": "mentor",
-                "has_paca_clearance": True,
-                "has_patch_clearance": True,
-                "has_fbi_clearance": True,
-                "pa_clearances_expiration_date": date(this_year + 1, 12, 31),
+                "paca": True,
+                "patch": True,
+                "fbi": True,
+                "expires": date(this_year + 1, 12, 31),
             },
             {
                 "first_name": "Barbara",
                 "last_name": "McClintock",
                 "email": "seed.mentor2@gos.example",
                 "role": "volunteer",
-                "has_paca_clearance": True,
-                "has_patch_clearance": True,
-                "has_fbi_clearance": False,
-                "pa_clearances_expiration_date": date(this_year + 1, 12, 31),
+                "paca": True,
+                "patch": True,
+                "fbi": False,
+                "expires": date(this_year + 1, 12, 31),
             },
             {
                 "first_name": "Hypatia",
                 "last_name": "Alexandria",
                 "email": "seed.mentor3@gos.example",
                 "role": "chaperone",
-                "has_paca_clearance": True,
-                "has_patch_clearance": False,
-                "has_fbi_clearance": False,
-                "pa_clearances_expiration_date": date(this_year + 1, 12, 31),
+                "paca": True,
+                "patch": False,
+                "fbi": False,
+                "expires": date(this_year + 1, 12, 31),
             },
             {
                 "first_name": "Vera",
                 "last_name": "Rubin",
                 "email": "seed.mentor4@gos.example",
                 "role": "mentor",
-                "has_paca_clearance": True,
-                "has_patch_clearance": True,
-                "has_fbi_clearance": True,
-                "pa_clearances_expiration_date": date(this_year, 11, 1),
+                "paca": True,
+                "patch": True,
+                "fbi": True,
+                "expires": date(this_year, 11, 1),
             },
         ]
 
@@ -341,14 +343,15 @@ class Command(BaseCommand):
                     "is_alumni": False,
                     "role": mentor_info["role"],
                     "start_year": this_year - 3,
-                    "has_paca_clearance": mentor_info["has_paca_clearance"],
-                    "has_patch_clearance": mentor_info["has_patch_clearance"],
-                    "has_fbi_clearance": mentor_info["has_fbi_clearance"],
-                    "pa_clearances_expiration_date": mentor_info[
-                        "pa_clearances_expiration_date"
-                    ],
                     "email_updates": True,
                 },
+            )
+            _seed_clearances(
+                mentor,
+                paca=mentor_info["paca"],
+                patch=mentor_info["patch"],
+                fbi=mentor_info["fbi"],
+                expires=mentor_info["expires"],
             )
             mentors.append(mentor)
 
@@ -436,11 +439,20 @@ class Command(BaseCommand):
                     "last_name": last_name,
                     "school": schools[idx % len(schools)],
                     "graduation_year": graduation_year,
-                    "primary_contact": primary_contact,
-                    "secondary_contact": secondary_contact,
                     "on_discord": idx % 2 == 0,
                     "discord_handle": f"{first_name.lower()}.{last_name.lower()}",
                 },
+            )
+
+            # Primary/secondary are relationship-row pointers now; the setter
+            # keeps the through row and pointer in sync.
+            student.primary_contact = primary_contact
+            student.secondary_contact = secondary_contact
+            student.save(
+                update_fields=[
+                    "primary_contact_relationship",
+                    "secondary_contact_relationship",
+                ]
             )
 
             AdultStudentRelationship.objects.get_or_create(
@@ -608,3 +620,21 @@ class Command(BaseCommand):
                     paid_via="cash",
                     defaults={"notes": "Seed: partial payment"},
                 )
+
+
+def _seed_clearances(adult, paca, patch, fbi, expires):
+    """Create BackgroundCheck rows for an adult, one per type."""
+    mappings = [
+        (BackgroundCheckType.STATE_POLICE, patch),
+        (BackgroundCheckType.CHILD_ABUSE, paca),
+        (BackgroundCheckType.FBI, fbi),
+    ]
+    for check_type, cleared in mappings:
+        BackgroundCheck.objects.update_or_create(
+            check_type=check_type,
+            adult=adult,
+            defaults={
+                "cleared": cleared,
+                "obtained_date": expires if cleared else None,
+            },
+        )

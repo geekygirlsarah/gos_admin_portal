@@ -163,10 +163,12 @@ class AdultToPrefillAttributeErrorTest(TestCase):
             last_name="Sarkarov",
             secondary_contact=self.adult,
         )
-        self.asr = AdultStudentRelationship.objects.create(
+        # The secondary_contact setter creates the through row already; keep
+        # the relationship type explicit for clarity.
+        AdultStudentRelationship.objects.update_or_create(
             adult=self.adult,
             student=self.student,
-            relationship_to_student="parent",
+            defaults={"relationship_to_student": "parent"},
         )
         self.application = Application.objects.create(
             program=self.program,

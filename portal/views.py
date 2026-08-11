@@ -31,6 +31,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
+        # Pending (in-progress) applications tied to this user by email,
+        # shown in the dashboard's "Pending Applications" box.
+        from applications.services import applications_for_user
+
+        context["pending_applications"] = applications_for_user(user)
+
         # ── Student profile ──────────────────────────────────────────────────
         student = getattr(user, "student_profile", None)
         context["student"] = student

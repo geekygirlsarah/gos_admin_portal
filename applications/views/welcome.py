@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -10,9 +11,14 @@ from django.views.decorators.cache import never_cache
 
 from ..forms import ResumeApplicationForm
 from ..models import Application, SiteSettings
-from ..services import get_program_buckets
+from ..services import (
+    PENDING_STATUSES,
+    applications_for_user,
+    get_program_buckets,
+)
 from .utils import (
     TOTAL_STEPS,
+    _auto_authorize_handoff,
     _get_application_or_404,
     _is_mentor,
     _mentor_progress,
@@ -97,6 +103,9 @@ class ResumeLinkView(View):
 class ContinueView(View):
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id)
+        # Let a logged-in parent whose email matches the handoff recipient
+        # resume an AWAITING_PARENT application from their dashboard.
+        _auto_authorize_handoff(request, application)
         if not application.email_is_verified:
             if _is_mentor(application):
                 return redirect("apply_step3", app_id=application.application_id)
@@ -105,6 +114,50 @@ class ContinueView(View):
         application.current_step = max(application.current_step, 5)
         application.save(update_fields=["current_step", "updated_at"])
         return _redirect_to_current_step(application)
+
+
+@method_decorator(never_cache, name="dispatch")
+class ApplicationWithdrawView(LoginRequiredMixin, View):
+    """Applicant-facing two-step withdraw (permanent delete).
+
+    Only the person tied to the application by email (see
+    ``applications_for_user``) may withdraw it, and only while its status is
+    still pending (not converted or declined). GET shows a confirmation
+    page; POST performs the delete.
+    """
+
+    template_name = "applications/withdraw.html"
+
+    def _get_application(self, request, app_id: str):
+        application = _get_application_or_404(app_id)
+        if application.status not in PENDING_STATUSES:
+            messages.error(
+                request,
+                "That application can no longer be withdrawn.",
+            )
+            return None
+        if application not in applications_for_user(request.user):
+            messages.error(
+                request,
+                "You are not allowed to withdraw that application.",
+            )
+            return None
+        return application
+
+    def get(self, request, app_id: str):
+        application = self._get_application(request, app_id)
+        if application is None:
+            return redirect("profile_dashboard")
+        return render(request, self.template_name, {"application": application})
+
+    def post(self, request, app_id: str):
+        application = self._get_application(request, app_id)
+        if application is None:
+            return redirect("profile_dashboard")
+        app_str = application.application_id
+        application.delete()
+        messages.success(request, f"Your application {app_str} was withdrawn.")
+        return redirect("profile_dashboard")
 
 
 @method_decorator(never_cache, name="dispatch")

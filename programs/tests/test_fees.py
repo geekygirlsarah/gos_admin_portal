@@ -144,32 +144,77 @@ class UtilsAndModelEdgeTests(TestCase):
         )
         self.assertEqual(s2.eighteenth_birthday(), date(2026, 2, 28))
 
-    def test_student_requires_background_check(self):
-        s = Student.objects.create(
+    def test_student_requires_background_check_sept1_rule(self):
+        """A student needs clearances if they will be 17 on Sept 1 of the
+        current academic year (which runs Sept 1 → Aug 31)."""
+        from unittest.mock import patch
+
+        from programs.models import timezone
+
+        # Born 2009-09-02 → turns 17 on 2026-09-02, which is AFTER Sept 1 2026.
+        # During the 2025-26 academic year (today before Sept 1 2026) they are
+        # still 16 on Sept 1 2025, so they do NOT require clearances.
+        s_born_sept2 = Student.objects.create(
             legal_first_name="A",
             last_name="B",
-            date_of_birth=date(2010, 5, 20),
+            date_of_birth=date(2009, 9, 2),
         )
-        prog = Program.objects.create(
-            name="Season",
-            start_date=date(2028, 1, 1),
-            end_date=date(2028, 12, 31),
+        # Born 2009-09-01 → exactly 17 on Sept 1 2026, but only 16 on Sept 1
+        # 2025, so during the 2025-26 academic year they do NOT require them yet.
+        s_born_sept1 = Student.objects.create(
+            legal_first_name="C",
+            last_name="D",
+            date_of_birth=date(2009, 9, 1),
         )
-        self.assertTrue(s.requires_background_check(prog))
-        p2 = Program.objects.create(name="No Dates")
-        self.assertFalse(s.requires_background_check(p2))
-        p3 = Program.objects.create(
-            name="Early",
-            start_date=date(2028, 1, 1),
-            end_date=date(2028, 5, 19),
+        # Born 2008-08-01 → 17 on Aug 1 2025 (before Sept 1 2025), requires them.
+        s_older = Student.objects.create(
+            legal_first_name="E",
+            last_name="F",
+            date_of_birth=date(2008, 8, 1),
         )
-        self.assertFalse(s.requires_background_check(p3))
-        p4 = Program.objects.create(
-            name="After",
-            start_date=date(2028, 5, 21),
-            end_date=date(2028, 6, 1),
+        with patch.object(timezone, "localdate", return_value=date(2026, 8, 1)):
+            self.assertFalse(s_born_sept2.requires_background_check())
+            self.assertFalse(s_born_sept1.requires_background_check())
+            self.assertTrue(s_older.requires_background_check())
+
+        # Once we cross Sept 1 2026, the academic year rolls forward: only
+        # students 17 on Sept 1 2026 OR earlier require clearances.
+        with patch.object(timezone, "localdate", return_value=date(2026, 9, 1)):
+            # Born 2009-09-02 is still 16 on Sept 1 2026 → no check needed.
+            self.assertFalse(s_born_sept2.requires_background_check())
+            # Born 2009-09-01 is now exactly 17 on Sept 1 2026 → check needed.
+            self.assertTrue(s_born_sept1.requires_background_check())
+
+    def test_student_needs_background_check_requires_all_three(self):
+        """needs_background_check() is True when a required student is missing
+        at least one valid clearance of the three types."""
+        from unittest.mock import patch
+
+        from programs.models import BackgroundCheck, BackgroundCheckType, timezone
+
+        student = Student.objects.create(
+            legal_first_name="A",
+            last_name="B",
+            date_of_birth=date(2008, 8, 1),
         )
-        self.assertTrue(s.requires_background_check(p4))
+        with patch.object(timezone, "localdate", return_value=date(2026, 8, 1)):
+            self.assertTrue(student.needs_background_check())
+            # Provide all three valid clearances.
+            for check_type in BackgroundCheckType.values:
+                BackgroundCheck.objects.create(
+                    student=student,
+                    check_type=check_type,
+                    cleared=True,
+                    obtained_date=date(2022, 8, 1),
+                )
+            self.assertFalse(student.needs_background_check())
+            # Expire one → needs again.
+            expired = BackgroundCheck.objects.get(
+                student=student, check_type=BackgroundCheckType.FBI
+            )
+            expired.obtained_date = date(2020, 1, 1)
+            expired.save()
+            self.assertTrue(student.needs_background_check())
 
     def test_sliding_scale_allows_multiple_records_per_student(self):
         prog = Program.objects.create(name="P")

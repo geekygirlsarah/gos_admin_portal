@@ -13,7 +13,17 @@ from programs.utils import (
     get_academic_year_ending,
 )
 
-from .models import Adult, Fee, Payment, Program, School, SlidingScale, Student
+from .models import (
+    Adult,
+    BackgroundCheck,
+    BackgroundCheckType,
+    Fee,
+    Payment,
+    Program,
+    School,
+    SlidingScale,
+    Student,
+)
 from .widgets import DualListboxWidget
 
 
@@ -28,6 +38,21 @@ class StudentForm(forms.ModelForm):
             selected_label="Selected Parents",
         ),
     )
+    # Primary/secondary contacts are now relationship-row pointers on the
+    # model; expose them as Adult pickers for backwards compatibility. The
+    # model's property setters keep the through row and pointer in sync.
+    primary_contact = forms.ModelChoiceField(
+        queryset=Adult.objects.filter(is_parent=True),
+        required=False,
+        label="Primary contact",
+        help_text="Primary parent/guardian, e.g. the one to contact first.",
+    )
+    secondary_contact = forms.ModelChoiceField(
+        queryset=Adult.objects.filter(is_parent=True),
+        required=False,
+        label="Secondary contact",
+        help_text="Secondary parent/guardian.",
+    )
     # Non-model field used to pick K–12 and auto-calc graduation year
     GRADE_CHOICES = [(0, "K")] + [(i, str(i)) for i in range(1, 13)]
     grade_selector = forms.ChoiceField(
@@ -38,12 +63,18 @@ class StudentForm(forms.ModelForm):
 
     class Meta:
         model = Student
-        # Include all model fields except system-managed ones and M2M-through
+        # Include all model fields except system-managed ones, M2M-through,
+        # and the relationship-row pointers (rendered as Adult pickers above).
         fields = "__all__"
-        exclude = ["programs", "created_at", "updated_at"]
+        exclude = [
+            "programs",
+            "created_at",
+            "updated_at",
+            "primary_contact_relationship",
+            "secondary_contact_relationship",
+        ]
         widgets = {
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),
-            "clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
             # Render as clear, clickable checkboxes (fixes empty button appearance)
             "race_ethnicities": forms.CheckboxSelectMultiple(),
             "directory_consent": forms.CheckboxInput(
@@ -141,6 +172,12 @@ class StudentForm(forms.ModelForm):
                 pass
         # Save base fields first
         instance = super().save(commit=False)
+        # Wire primary/secondary contacts (declared form fields, not model
+        # fields) onto the instance; the model setters keep the through row
+        # and relationship pointer in sync.
+        if hasattr(self, "cleaned_data"):
+            instance.primary_contact = self.cleaned_data.get("primary_contact")
+            instance.secondary_contact = self.cleaned_data.get("secondary_contact")
         if commit:
             instance.save()
         # After instance exists, sync the reverse M2M to Parents ensuring Primary/Secondary are included
@@ -258,10 +295,6 @@ class AdultForm(forms.ModelForm):
             "photo",
             "emergency_contact_name",
             "emergency_contact_phone",
-            "has_paca_clearance",
-            "has_patch_clearance",
-            "has_fbi_clearance",
-            "pa_clearances_expiration_date",
             "on_discord",
             "discord_username",
             "has_cmu_id_card",
@@ -280,7 +313,6 @@ class AdultForm(forms.ModelForm):
             "notes",
         ]
         widgets = {
-            "pa_clearances_expiration_date": forms.DateInput(attrs={"type": "date"}),
             "andrew_id_expiration": forms.DateInput(attrs={"type": "date"}),
             "students": DualListboxWidget(
                 available_label="Available Students",
@@ -781,3 +813,80 @@ class ProgramDocumentForm(forms.ModelForm):
         if program is not None:
             self.fields["program"].initial = program
             self.fields["program"].required = True
+
+
+class BackgroundChecksForm(forms.Form):
+    """Inline editor for a holder's PA background clearances.
+
+    Presents one row per clearance type (``cleared_<type>`` checkbox and
+    ``obtained_<type>`` date). Saving creates/updates/deletes the matching
+    ``BackgroundCheck`` rows for exactly one student or adult.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for check_type in BackgroundCheckType.values:
+            self.fields[f"cleared_{check_type}"] = forms.BooleanField(
+                required=False,
+                label="Cleared",
+                widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            )
+            self.fields[f"obtained_{check_type}"] = forms.DateField(
+                required=False,
+                label="Obtained",
+                widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            )
+
+    @property
+    def rows(self):
+        """Return per-type (label, cleared_field, obtained_field) tuples."""
+        return [
+            (
+                BackgroundCheckType(check_type).label,
+                self[f"cleared_{check_type}"],
+                self[f"obtained_{check_type}"],
+            )
+            for check_type in BackgroundCheckType.values
+        ]
+
+    def _existing_rows(self, student, adult):
+        return {
+            bc.check_type: bc
+            for bc in BackgroundCheck.objects.filter(
+                student=student if student else None,
+                adult=adult if adult else None,
+            )
+        }
+
+    def initial_from_holder(self, student=None, adult=None):
+        """Pre-populate the form from a holder's existing clearances."""
+        for check_type, check in self._existing_rows(student, adult).items():
+            self.fields[f"cleared_{check_type}"].initial = check.cleared
+            self.fields[f"obtained_{check_type}"].initial = check.obtained_date
+
+    def save(self, student=None, adult=None):
+        if bool(student) == bool(adult):
+            raise ValueError(
+                "A background check form must target exactly one student or adult."
+            )
+        if not self.is_valid():
+            raise ValueError("Cannot save an invalid background check form.")
+        existing = self._existing_rows(student, adult)
+        cleaned = self.cleaned_data
+        for check_type in BackgroundCheckType.values:
+            cleared = cleaned.get(f"cleared_{check_type}")
+            obtained = cleaned.get(f"obtained_{check_type}")
+            row = existing.get(check_type)
+            if not cleared:
+                if row is not None:
+                    row.delete()
+                continue
+            if row is None:
+                row = BackgroundCheck(
+                    student=student if student else None,
+                    adult=adult if adult else None,
+                    check_type=check_type,
+                )
+            row.cleared = True
+            row.obtained_date = obtained
+            row.save()

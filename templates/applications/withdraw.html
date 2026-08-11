@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}Withdraw application - {{ block.super }}{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Withdraw application {{ application.application_id }}</h1>
+
+<div class="card border-danger">
+    <div class="card-header bg-danger text-white">Confirm withdrawal</div>
+    <div class="card-body">
+        <p class="mb-1"><strong>This cannot be undone.</strong></p>
+        <p class="mb-3">
+            Your application{% if application.program.name %} for
+            <strong>{{ application.program.name }}</strong>{% endif %}
+            (status: {{ application.status_label }}) will be permanently
+            deleted, along with any data you've entered.
+        </p>
+        <form method="post" class="mb-3">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">Yes, withdraw application</button>
+            <a class="btn btn-outline-secondary" href="{% url 'profile_dashboard' %}">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

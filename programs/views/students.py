@@ -38,6 +38,7 @@ from ..utils import (
     redirect_back,
 )
 from .mixins import (
+    BackgroundChecksInlineMixin,
     DynamicPermissionMixin,
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
@@ -74,6 +75,12 @@ class StudentListView(
             qs = qs.filter(enrollment__program_id=program_id).distinct()
 
         qs = self.filter_students_by_role(qs)
+
+        qs = qs.select_related(
+            "school",
+            "primary_contact_relationship__adult",
+            "secondary_contact_relationship__adult",
+        ).prefetch_related("adults", "enrollment_set__program")
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         qs = qs.annotate(
@@ -125,7 +132,11 @@ class StudentEmergencyContactsView(
         qs = self.filter_students_by_role(qs)
 
         qs = (
-            qs.select_related("school", "primary_contact", "secondary_contact")
+            qs.select_related(
+                "school",
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+            )
             .prefetch_related("adults")
             .annotate(
                 sort_first=Coalesce(
@@ -263,6 +274,28 @@ class StudentDetailView(
     context_object_name = "student"
     section = "student_info"
 
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related(
+                "school",
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+            )
+            .prefetch_related(
+                "adults",
+                "adultstudentrelationship_set",
+                "background_checks",
+                "race_ethnicities",
+            )
+        )
+
+    def get_object(self, queryset=None):
+        if getattr(self, "object", None) is None:
+            self.object = super().get_object(queryset)
+        return self.object
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
@@ -284,6 +317,7 @@ class StudentUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Student
@@ -291,6 +325,7 @@ class StudentUpdateView(
     template_name = "students/form.html"
     permission_required = "programs.change_student"
     section = "student_info"
+    background_checks_kwarg = "student"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

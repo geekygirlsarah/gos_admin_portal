@@ -368,8 +368,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if contact_changed:
                     obj.save(
                         update_fields=[
-                            "primary_contact",
-                            "secondary_contact",
+                            "primary_contact_relationship",
+                            "secondary_contact_relationship",
                             "updated_at",
                         ]
                     )
@@ -788,13 +788,17 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         if student.primary_contact_id != adult.id:
                             if not dry_run and overwrite:
                                 student.primary_contact = adult
-                                updated_student_fields.add("primary_contact")
+                                updated_student_fields.add(
+                                    "primary_contact_relationship"
+                                )
                             set_primary += 1
                     elif g["role"] == "secondary":
                         if student.secondary_contact_id != adult.id:
                             if not dry_run and overwrite:
                                 student.secondary_contact = adult
-                                updated_student_fields.add("secondary_contact")
+                                updated_student_fields.add(
+                                    "secondary_contact_relationship"
+                                )
                             set_secondary += 1
 
                 if updated_student_fields and not dry_run:

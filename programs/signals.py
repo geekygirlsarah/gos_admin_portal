@@ -122,6 +122,18 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Adult groups", exc_info=True)
 
 
+@receiver(post_save, sender="programs.AdultStudentRelationship")
+def mark_adult_as_parent_on_relationship(sender, instance, created, **kwargs):
+    """Auto-flag an Adult as a parent whenever a student relationship is made."""
+    try:
+        if instance.adult_id and not instance.adult.is_parent:
+            instance.adult.__class__.objects.filter(pk=instance.adult_id).update(
+                is_parent=True
+            )
+    except Exception:
+        logger.debug("Failed to mark Adult as parent", exc_info=True)
+
+
 @receiver(post_save, sender="programs.Student")
 def ensure_user_in_student_group(sender, instance, created, **kwargs):
     try:
@@ -185,6 +197,31 @@ def notify_parents_on_fee_assignment(sender, instance, created, **kwargs):
         return
 
     _send_fee_notification(instance.student, instance.fee.program, instance.fee)
+
+
+@receiver(post_save, sender="programs.Enrollment")
+def flag_clearance_due_on_enrollment(sender, instance, created, **kwargs):
+    """Auto-flag an enrollment when the enrolled student requires PA clearances
+    but is missing at least one valid clearance.
+
+    The requirement is always derived from the student's date of birth; only
+    the clearance records themselves are stored state.
+    """
+    from .models import BackgroundCheckType
+
+    student = instance.student
+    if not student or not student.requires_background_check():
+        if instance.clearance_due:
+            sender.objects.filter(pk=instance.pk).update(clearance_due=False)
+        return
+
+    required_types = set(BackgroundCheckType.values)
+    valid_types = {
+        bc.check_type for bc in student.background_checks.all() if bc.is_valid
+    }
+    needs = not required_types.issubset(valid_types)
+    if needs != instance.clearance_due:
+        sender.objects.filter(pk=instance.pk).update(clearance_due=needs)
 
 
 def _send_fee_notification(student, program, fee):

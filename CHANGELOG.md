@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-11
+
+### Added
+- **Student Map Loads Much Faster**: The program map (and the new Carpool Map for parents and students) no longer looks up every address in your web browser, one at a time. Addresses are now geocoded once on the server and cached, so the map appears immediately on every visit after the first. A "geocode_student_addresses" command is available for lead mentors to pre-fill the cache (e.g. right after importing students). The map also automatically zooms in on the area where the students live instead of starting at the whole world.
+- **Carpool Map for Parents and Students**: Parents and students now see a "Carpool Map" button on their dashboard for each active program. It shows the addresses of students in that program (only students who have consented to directory sharing), making it easy to plan carpools. Mentors still use the existing "Map View" on the program page.
+- **Pending Applications Box on the Dashboard**: Students and parents now see a "Pending Applications" box on their dashboard listing any applications tied to their account (matched by email — their own, applications they started, ones they're listed on as a parent, or ones handed off to them). Each entry shows the application's status (Draft, Awaiting parent, Submitted, etc.) with buttons to resume it or withdraw it. The box is hidden when there are no pending applications.
+- **Tables in Email Messages**: The message editor now has an "Insert Table" button so you can add a table to an email (for example, to lay out a schedule or a list of items). Tables keep their borders and spacing when the email is sent, so they look right in recipients' inboxes.
+
+### Fixed
+- **Map Markers Now Show Up**: The map marker icons were being blocked by the site's content security policy, so you'd see the outline of a marker but no icon. The policy now allows the map's marker images, so markers render correctly.
+- **Line Breaks Preserved When Pasting Plain Text**: Pasting text that contains line breaks (for example, copied from a terminal or a plain-text document) no longer squashes everything into one paragraph. Each line now keeps its own line break in the message.
+
+### Changed
+- **Upgraded the Email Editor**: The rich-text editor used for email messages (on the Messaging and Email Balance Sheets pages) was upgraded to a newer version, which is what enables tables and the pasting improvements above.
+
+
+## 2026-08-09
+
+### Changed
+- **Edit Clearances Directly on a Profile**: Lead Mentors can now update a student's or adult's background clearances right on the edit screen, instead of having to go through the admin panel. Each clearance (PA State Police, PA Child Abuse, and FBI) shows a checkmark for "cleared" plus the date it was obtained. Expiration is now always figured out automatically as 5 years from the obtained date, so you only need to enter when each clearance became active. Other roles still see clearance info read-only; only Lead Mentors can edit it.
+- **Reworked Background Clearances**: Student and adult background clearances (PA State Police, PA Child Abuse, and FBI) are now tracked per check type, each with its own cleared/expiration status, instead of a single on/off flag. Because clearances are valid for 5 years in Pennsylvania, each check now stores its own expiration date so you can see at a glance when one lapses. The old mentor-only clearance fields were migrated into the new records, and clearance info now shows on any adult's profile/edit screen (parents, alumni, and volunteers included), not just mentors.
+- **Smarter "Needs a Background Check" Flag**: Whether a student needs clearances is now calculated automatically from their date of birth (17 or older on Sept 1 of the current academic year) instead of being entered by hand or figured out per program. A student is only flagged as needing a check if they're missing or have an expired clearance, and enrolled students who need one are flagged on their enrollment automatically.
+- **Simplified How Parent/Guardian Links Are Stored**: A student's Primary and Secondary Guardian are now stored as links on the existing student↔adult relationship record instead of as separate fields on the student card. This means a guardian who is listed as primary or secondary always shows up on the student's family list automatically (no more duplicate entries), and removing a relationship cleans up the guardian pointers too. Existing data was migrated in place.
+- **Background Check Data**: Students and parents were storing the data differently, and it was tied to programs. It should be tied to age or role. These have all been fixed.
+
 ## 2026-08-08
 
 ### Fixed
