@@ -68,6 +68,42 @@ def get_user_role(user):
     return None
 
 
+def _user_adult_flag(user, field, group_name):
+    """True if the user's Adult profile has ``field`` set (or the legacy
+    ``group_name`` group as a fallback). Unlike ``get_user_role`` this ignores
+    role priority, so an Adult who is flagged as several roles at once (e.g. a
+    parent who also mentors) is still recognized for each role they hold."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    try:
+        if getattr(user.adult_profile, field):
+            return True
+    except (Adult.DoesNotExist, AttributeError):
+        pass
+    return user.groups.filter(name=group_name).exists()
+
+
+def user_is_parent(user):
+    """True if the user is a parent/guardian, regardless of other Adult flags.
+
+    ``get_user_role`` collapses a multi-role Adult to a single role with Mentor
+    taking priority, so parent-only features (Payments page, balance sheets)
+    must check this helper rather than the role string.
+    """
+    return _user_adult_flag(user, "is_parent", "Parent")
+
+
+def user_is_mentor(user):
+    """True if the user serves as a mentor/volunteer, regardless of other
+    Adult flags."""
+    return _user_adult_flag(user, "is_mentor", "Mentor")
+
+
+def user_is_alumni(user):
+    """True if the user is a program alumni, regardless of other Adult flags."""
+    return _user_adult_flag(user, "is_alumni", "Alumni")
+
+
 def can_user_read(user, section, obj=None):
     role = get_user_role(user)
     if role == "LeadMentor":
@@ -92,20 +128,56 @@ def can_user_read(user, section, obj=None):
             if hasattr(user, "adult_profile") and obj == user.adult_profile:
                 return True
 
-    perm = RolePermission.objects.filter(role=role, section=section).first()
-    # Default to True for read, except for attendance for mentors
-    default_read = True
-    if role == "Mentor" and section == "attendance":
-        default_read = False
-    can_read_section = perm.can_read if perm else default_read
+    is_parent = user_is_parent(user)
+
+    # Finance sections use the Parent role's permission config for anyone who
+    # is a parent, even if they also hold mentor/alumni flags (get_user_role
+    # would report those roles instead).
+    if is_parent and section in ["payments", "sliding_scale", "fees"]:
+        perm = RolePermission.objects.filter(role="Parent", section=section).first()
+        can_read_section = perm.can_read if perm else True
+    else:
+        perm = RolePermission.objects.filter(role=role, section=section).first()
+        # Default to True for read, except for attendance for mentors
+        default_read = True
+        if role == "Mentor" and section == "attendance":
+            default_read = False
+        can_read_section = perm.can_read if perm else default_read
 
     # Only Lead Mentors and Parents can view payments/fees/sliding scale
     if section in ["payments", "sliding_scale", "fees"]:
-        if role not in ["LeadMentor", "Parent"]:
+        if role != "LeadMentor" and not is_parent:
             return False
 
     if not can_read_section:
         return False
+
+    # Object-level restriction for Parents — including parents who also carry
+    # the mentor/alumni flags — on finance sections. The single-role branches
+    # below don't cover dual-role adults, so finance access must always be
+    # scoped to the parent's own students.
+    if is_parent and obj and section in ["payments", "sliding_scale", "fees"]:
+        try:
+            adult = user.adult_profile
+            if isinstance(obj, Student):
+                # Parents can only read their own students
+                return obj in adult.students.all()
+            if isinstance(obj, Adult):
+                # Parents can only read their own profile
+                return obj == adult
+            if isinstance(obj, (Payment, SlidingScale)):
+                # Parents can only read their own students' payments/sliding scale
+                return obj.student in adult.students.all()
+            if isinstance(obj, Fee):
+                # Parents can see fees for programs their students are enrolled in
+                return Enrollment.objects.filter(
+                    student__adults=adult, program=obj.program
+                ).exists()
+            if isinstance(obj, Program):
+                # Parents cannot view programs directly
+                return False
+        except (Adult.DoesNotExist, AttributeError):
+            return False
 
     # Object-level restriction for Parents, Alumni, and Students
     if role == "Parent" and obj:

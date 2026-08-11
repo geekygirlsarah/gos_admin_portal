@@ -102,6 +102,55 @@ class ParentPaymentsViewTests(TestCase):
         student_response = self.client.get(reverse("profile_dashboard"))
         self.assertNotContains(student_response, reverse("parent_payments"))
 
+    def test_parent_mentor_sees_payments_nav_link(self):
+        """Adults flagged as both a parent and a mentor must still see Payments."""
+        parent_mentor_user = User.objects.create_user(
+            username="parent_mentor_user", password="password123"  # nosec B106
+        )
+        parent_mentor = Adult.objects.create(
+            user=parent_mentor_user,
+            first_name="Parent",
+            last_name="Mentor",
+            is_parent=True,
+            is_mentor=True,
+        )
+        AdultStudentRelationship.objects.create(
+            adult=parent_mentor,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+
+        self.client.login(
+            username="parent_mentor_user", password="password123"
+        )  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        self.assertContains(response, reverse("parent_payments"))
+        self.assertContains(response, ">Payments<", html=False)
+
+    def test_parent_mentor_can_access_payments_view(self):
+        parent_mentor_user = User.objects.create_user(
+            username="parent_mentor_user2", password="password123"  # nosec B106
+        )
+        parent_mentor = Adult.objects.create(
+            user=parent_mentor_user,
+            first_name="Parent",
+            last_name="Mentor",
+            is_parent=True,
+            is_mentor=True,
+        )
+        AdultStudentRelationship.objects.create(
+            adult=parent_mentor,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+
+        self.client.login(
+            username="parent_mentor_user2", password="password123"
+        )  # nosec B106
+        response = self.client.get(reverse("parent_payments"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Student One")
+
     def test_parent_payments_summary_shows_students_then_programs_and_grand_total(self):
         self.client.login(username="parent_user", password="password123")  # nosec B106
         response = self.client.get(reverse("parent_payments"))
