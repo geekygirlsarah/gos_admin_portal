@@ -112,11 +112,23 @@ def media_scripts(media):
 
 
 @register.simple_tag
-def requires_bg(student, program):
-    """Return True/False whether the student requires a background check for the program.
-    Usage: {% requires_bg student program as needs_bg %}
+def requires_bg(student):
+    """Return True/False whether the student requires a background check.
+    Usage: {% requires_bg student as needs_bg %}
     """
     try:
-        return bool(student.requires_background_check(program))
+        return bool(student.requires_background_check())
+    except Exception:
+        return False
+
+
+@register.simple_tag
+def needs_bg(student):
+    """Return True/False whether the student requires a background check AND
+    is missing at least one valid clearance.
+    Usage: {% needs_bg student as missing_bg %}
+    """
+    try:
+        return bool(student.needs_background_check())
     except Exception:
         return False

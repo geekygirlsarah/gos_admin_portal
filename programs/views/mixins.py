@@ -30,6 +30,7 @@ from audit.mixins import SensitiveDataViewMixin
 from audit.service import log_event
 from programs.constants import RELATIONSHIP_CHOICES
 
+from ..forms import BackgroundChecksForm
 from ..models import (
     Adult,
     AdultStudentRelationship,
@@ -105,6 +106,47 @@ class DynamicReadPermissionMixin(DynamicPermissionMixin):
 
 class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
+
+
+class BackgroundChecksInlineMixin:
+    """Add inline PA background-check editing to a student/adult update view.
+
+    Editing is gated on ``can_user_write('background_checks', obj)`` which by
+    default only grants access to Lead Mentors. Subclasses must set
+    ``background_checks_kwarg`` to either ``"student"`` or ``"adult"``.
+    """
+
+    background_checks_kwarg = None
+
+    def _bg_holder(self):
+        holder_kwargs = {self.background_checks_kwarg: self.object}
+        return holder_kwargs
+
+    def _can_edit_bg(self):
+        return can_user_write(self.request.user, "background_checks", self.object)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if getattr(self, "object", None) and self.object.pk:
+            bg_form = BackgroundChecksForm()
+            bg_form.initial_from_holder(**self._bg_holder())
+            ctx["bg_checks_form"] = bg_form
+            ctx["can_edit_bg"] = self._can_edit_bg()
+        return ctx
+
+    def _save_background_checks(self):
+        if not self.background_checks_kwarg:
+            return
+        if not self._can_edit_bg():
+            return
+        bg_form = BackgroundChecksForm(self.request.POST)
+        bg_form.initial_from_holder(**self._bg_holder())
+        if bg_form.is_valid():
+            bg_form.save(**self._bg_holder())
+
+    def form_valid(self, form):
+        self._save_background_checks()
+        return super().form_valid(form)
 
 
 class StudentQuerysetRoleMixin:

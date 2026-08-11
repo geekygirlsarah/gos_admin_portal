@@ -30,6 +30,7 @@ from ..utils import (
     redirect_back,
 )
 from .mixins import (
+    BackgroundChecksInlineMixin,
     DynamicPermissionMixin,
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
@@ -256,6 +257,7 @@ class ParentUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Adult
@@ -263,6 +265,7 @@ class ParentUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+    background_checks_kwarg = "adult"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -304,6 +307,7 @@ class AdultUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Adult
@@ -311,6 +315,7 @@ class AdultUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+    background_checks_kwarg = "adult"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -356,6 +361,7 @@ class MentorUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Adult
@@ -363,6 +369,7 @@ class MentorUpdateView(
     template_name = "adults/form.html"
     permission_required = "programs.change_adult"
     section = "adult_info"
+    background_checks_kwarg = "adult"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
