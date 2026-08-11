@@ -6,6 +6,20 @@ import pgtrigger.migrations
 from django.db import migrations, models
 
 
+def flush_deferred_fk_checks(apps, schema_editor):
+    """Flush deferred FK checks so the legacy columns can be dropped.
+
+    The backfill above updates the newly-added relationship FK columns, which
+    Django created DEFERRABLE INITIALLY DEFERRED. On PostgreSQL those updates
+    queue deferred checks as pending trigger events, so the RemoveField /
+    DROP CONSTRAINT operations below fail with "cannot ALTER TABLE ... because
+    it has pending trigger events". Forcing all constraints immediate here
+    (PostgreSQL only) consumes those events before the ALTERs run.
+    """
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
 def link_relationships_from_old_contacts(apps, schema_editor):
     """Point Student.primary/secondary_contact_relationship at the ASR rows.
 
@@ -113,6 +127,7 @@ class Migration(migrations.Migration):
         migrations.RunPython(
             link_relationships_from_old_contacts, migrations.RunPython.noop
         ),
+        migrations.RunPython(flush_deferred_fk_checks, migrations.RunPython.noop),
         migrations.RemoveField(
             model_name="student",
             name="primary_contact",
