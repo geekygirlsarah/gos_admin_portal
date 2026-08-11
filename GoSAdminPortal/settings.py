@@ -368,16 +368,29 @@ APPLY_OTP_SEND_LIMIT = int(os.getenv("APPLY_OTP_SEND_LIMIT", "5"))
 APPLY_OTP_VERIFY_LIMIT = int(os.getenv("APPLY_OTP_VERIFY_LIMIT", "10"))
 APPLY_OTP_WINDOW_SECONDS = int(os.getenv("APPLY_OTP_WINDOW_SECONDS", "3600"))
 
+# Server-side geocoding for the student map (OpenStreetMap Nominatim).
+# Results are cached in the AddressGeocode model so each unique address is
+# only looked up once.
+GEOCODING_URL = os.getenv("GEOCODING_URL", "https://nominatim.openstreetmap.org/search")
+GEOCODING_USER_AGENT = os.getenv("GEOCODING_USER_AGENT", "GoSAdminPortal/1.0")
+GEOCODING_TIMEOUT = int(os.getenv("GEOCODING_TIMEOUT", "10"))
+# Nominatim asks for at most 1 request/second.
+GEOCODING_DELAY_SECONDS = float(os.getenv("GEOCODING_DELAY_SECONDS", "1.0"))
+
 # Content Security Policy (django-csp)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "base-uri": ["'self'"],
-        "connect-src": ["'self'", "https://nominatim.openstreetmap.org"],
         "default-src": ["'self'"],
         "font-src": ["'self'", "https://cdn.jsdelivr.net", "data:"],
         "frame-ancestors": ["'self'"],
-        "img-src": ["'self'", "data:", "*.tile.openstreetmap.org"],
+        "img-src": [
+            "'self'",
+            "data:",
+            "*.tile.openstreetmap.org",
+            "https://unpkg.com",
+        ],
         "object-src": ["'none'"],
         "script-src": [
             "'self'",

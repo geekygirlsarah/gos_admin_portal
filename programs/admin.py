@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .forms import AdultForm, StudentForm
 from .models import (
+    AddressGeocode,
     Adult,
     AdultStudentRelationship,
     Enrollment,
@@ -16,6 +17,13 @@ from .models import (
     SlidingScaleSettings,
     Student,
 )
+
+
+@admin.register(AddressGeocode)
+class AddressGeocodeAdmin(admin.ModelAdmin):
+    list_display = ("address", "latitude", "longitude", "found", "updated_at")
+    list_filter = ("found",)
+    search_fields = ("address",)
 
 
 @admin.register(ProgramFeature)

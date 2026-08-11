@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-11
 
 ### Added
+- **Student Map Loads Much Faster**: The program map (and the new Carpool Map for parents and students) no longer looks up every address in your web browser, one at a time. Addresses are now geocoded once on the server and cached, so the map appears immediately on every visit after the first. A "geocode_student_addresses" command is available for lead mentors to pre-fill the cache (e.g. right after importing students). The map also automatically zooms in on the area where the students live instead of starting at the whole world.
+- **Carpool Map for Parents and Students**: Parents and students now see a "Carpool Map" button on their dashboard for each active program. It shows the addresses of students in that program (only students who have consented to directory sharing), making it easy to plan carpools. Mentors still use the existing "Map View" on the program page.
+
+### Fixed
+- **Map Markers Now Show Up**: The map marker icons were being blocked by the site's content security policy, so you'd see the outline of a marker but no icon. The policy now allows the map's marker images, so markers render correctly.
+
+### Added
 - **Pending Applications Box on the Dashboard**: Students and parents now see a "Pending Applications" box on their dashboard listing any applications tied to their account (matched by email — their own, applications they started, ones they're listed on as a parent, or ones handed off to them). Each entry shows the application's status (Draft, Awaiting parent, Submitted, etc.) with buttons to resume it or withdraw it. The box is hidden when there are no pending applications.
 
 ## 2026-08-09

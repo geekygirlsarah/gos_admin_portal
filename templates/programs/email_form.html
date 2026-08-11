@@ -61,6 +61,11 @@
             <div class="form-text">Parents/guardians will only be emailed if they are opted in to receive email updates.</div>
               <div class="form-text">Mentors are not linked to programs in the current data model; selecting Mentors will email all active mentors.</div>
           </div>
+            <div class="col-md-6">
+                {{ form.test_email.label_tag }}
+                {{ form.test_email }}
+                <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
+            </div>
         </div>
       </div>
 
@@ -99,11 +104,6 @@
         <div class="card-header">Testing &amp; Send</div>
         <div class="card-body">
           <div class="row g-3 align-items-end">
-            <div class="col-md-6">
-              {{ form.test_email.label_tag }}
-              {{ form.test_email }}
-              <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
-            </div>
             <div class="col-md-6 text-md-end mt-3 mt-md-0">
               <button type="submit" class="btn btn-primary">Send Email</button>
             </div>

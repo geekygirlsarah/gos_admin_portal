@@ -16,6 +16,7 @@ from .balances import (
     get_student_program_balance,
     program_overlaps_sliding_window,
 )
+from .geocoding import normalize_address, resolve_address_points
 from .grades import (
     calculate_grade,
     calculate_graduation_year,
@@ -60,6 +61,9 @@ __all__ = [
     "calculate_grade",
     "calculate_graduation_year",
     "format_grade",
+    # geocoding
+    "normalize_address",
+    "resolve_address_points",
     # urls
     "generate_signed_parent_url",
     "get_safe_url",
