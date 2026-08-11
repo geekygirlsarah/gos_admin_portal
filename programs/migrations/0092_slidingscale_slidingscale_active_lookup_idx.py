@@ -7,13 +7,16 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0091_refactor_student_parent_links'),
+        ("programs", "0091_refactor_student_parent_links"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='slidingscale',
-            index=models.Index(fields=['student', 'status', 'date', 'expiration_date'], name='slidingscale_active_lookup_idx'),
+            model_name="slidingscale",
+            index=models.Index(
+                fields=["student", "status", "date", "expiration_date"],
+                name="slidingscale_active_lookup_idx",
+            ),
         ),
     ]
