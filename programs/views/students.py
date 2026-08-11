@@ -38,6 +38,7 @@ from ..utils import (
     redirect_back,
 )
 from .mixins import (
+    BackgroundChecksInlineMixin,
     DynamicPermissionMixin,
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
@@ -288,6 +289,7 @@ class StudentUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
     DynamicWritePermissionMixin,
+    BackgroundChecksInlineMixin,
     UpdateView,
 ):
     model = Student
@@ -295,6 +297,7 @@ class StudentUpdateView(
     template_name = "students/form.html"
     permission_required = "programs.change_student"
     section = "student_info"
+    background_checks_kwarg = "student"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

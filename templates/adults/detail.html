@@ -68,6 +68,25 @@
         </div>
       </div>
 
+      <div class="card mb-4">
+        <div class="card-header">Clearances</div>
+        <div class="card-body">
+          <div class="row g-3">
+            {% for check in adult.background_checks.all %}
+            <div class="col-md-4">
+              <div class="fw-semibold">{{ check.get_check_type_display }}</div>
+              <div>
+                <span class="badge {% if check.is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ check.is_valid|yesno:"Valid,Not Valid" }}</span>
+                {% if check.expiration_date %} &middot; expires {{ check.expiration_date|date:'M j, Y' }}{% endif %}
+              </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-muted">No background clearances on file.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
       {% if adult.is_parent %}
       <div class="card mb-4">
         <div class="card-header">Linked Students</div>

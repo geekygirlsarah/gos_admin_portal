@@ -151,10 +151,6 @@ class AdultFormFieldsTest(TestCase):
             "role",
             "emergency_contact_name",
             "emergency_contact_phone",
-            "has_paca_clearance",
-            "has_patch_clearance",
-            "has_fbi_clearance",
-            "pa_clearances_expiration_date",
             "on_discord",
             "discord_username",
         ]
@@ -163,6 +159,20 @@ class AdultFormFieldsTest(TestCase):
                 field,
                 form.fields,
                 f"AdultForm is missing mentor field: {field}",
+            )
+
+    def test_adult_form_no_clearance_fields(self):
+        form = AdultForm()
+        for field in (
+            "has_paca_clearance",
+            "has_patch_clearance",
+            "has_fbi_clearance",
+            "pa_clearances_expiration_date",
+        ):
+            self.assertNotIn(
+                field,
+                form.fields,
+                f"AdultForm should not contain removed clearance field: {field}",
             )
 
     def test_adult_form_has_alumni_fields(self):

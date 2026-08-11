@@ -67,9 +67,9 @@
                   <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
                 {% endif %}
                 {% if 'background-checks' in program.feature_keys %}
-                {% requires_bg s program as needs_bg %}
-                  {% if needs_bg %}
-                      <span class="badge bg-secondary ms-2">BG Check Needed</span>
+                {% needs_bg s as missing_bg %}
+                  {% if missing_bg %}
+                      <span class="badge bg-warning text-dark ms-2">BG Check Needed</span>
                   {% endif %}
                 {% endif %}
               </div>
@@ -117,9 +117,9 @@
                 {% if e.subteam %}
                   <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
                 {% endif %}
-                {% requires_bg s program as needs_bg %}
-                  {% if needs_bg %}
-                      <span class="badge bg-info ms-2">BG Check Needed</span>
+                {% needs_bg s as missing_bg %}
+                  {% if missing_bg %}
+                      <span class="badge bg-warning text-dark ms-2">BG Check Needed</span>
                   {% endif %}
                 <span class="badge bg-secondary ms-2">Inactive</span>
               </div>
