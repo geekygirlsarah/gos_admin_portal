@@ -98,7 +98,9 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_parent=True).prefetch_related("students")
+        qs = Adult.objects.filter(is_parent=True).prefetch_related(
+            "students__school", "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -141,7 +143,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_mentor=True)
+        qs = Adult.objects.filter(is_mentor=True).prefetch_related(
+            "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -171,7 +175,9 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_alumni=True)
+        qs = Adult.objects.filter(is_alumni=True).prefetch_related(
+            "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()

@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("programs", "0091_refactor_student_parent_links"),
+        ("programs", "0095_remove_adult_insert_insert_and_more"),
     ]
 
     operations = [

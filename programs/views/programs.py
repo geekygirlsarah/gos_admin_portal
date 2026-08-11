@@ -160,7 +160,7 @@ class ProgramStudentPhotoListView(
 
     def get_queryset(self):
         qs = Enrollment.objects.filter(program=self.program).select_related(
-            "student", "team"
+            "student", "team", "crew"
         )
 
         qs = self.filter_students_by_role(
