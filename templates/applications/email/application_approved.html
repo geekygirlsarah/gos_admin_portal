@@ -12,16 +12,33 @@
     <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
 </ul>
 {% else %}
+<table role="presentation" style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr>
+        <td style="background:#fff4e5;border:1px solid #ffcc99;border-radius:6px;padding:14px 16px">
+            <p style="margin:0 0 6px">
+                <strong>
+                    There is one more step before {{ application.student_name|default:"your student" }}
+                    is officially in {{ application.program|default:"the program" }}:
+                </strong>
+            </p>
+            <p style="margin:0 0 6px">
+                <strong>Download, sign, and re-upload the required documents.</strong>
+            </p>
+            <p style="margin:0">
+                {{ application.student_name|default:"Your student" }} is
+                <strong>not fully enrolled</strong> until we have received these signed
+                documents, so please complete them as soon as possible.
+            </p>
+        </td>
+    </tr>
+</table>
 <ul>
     <li><strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}</li>
     <li><strong>Application ID:</strong> <code>{{ application.application_id }}</code></li>
-    <li><strong>Program:</strong> {{ application.program }}</li>
+    <li><strong>Program:</strong> {{ application.program|default:"(not specified)" }}</li>
 </ul>
 
-<p>
-    There are a few documents we need you to download, sign, and re-upload
-    before we can finish enrolling you. Use the link below to access them:
-</p>
+<p>Use the link below to access the documents:</p>
 
 <p>
     <a href="{{ documents_url }}">{{ documents_url }}</a>

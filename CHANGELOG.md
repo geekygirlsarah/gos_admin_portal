@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Guardian Links No Longer Block the Site Update**: The database update that reworked how primary/secondary guardians are stored was failing partway through on live servers, which stopped the site from updating. The update now finishes cleanly, so the guardian-linking change can ship.
 
 ### Changed
+- **Approval Emails Now Highlight the Next Step**: The email families get when an application is approved now clearly spells out that the student is not fully enrolled until the required documents are downloaded, signed, and re-uploaded. This step is called out near the top of the email (in a highlighted box), and the subject line now says "Approved: action needed to finish enrollment", so it's no longer easy to miss.
 - **Upgraded the Email Editor**: The rich-text editor used for email messages (on the Messaging and Email Balance Sheets pages) was upgraded to a newer version, which is what enables tables and the pasting improvements above.
 
 
