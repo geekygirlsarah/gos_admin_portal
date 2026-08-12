@@ -61,8 +61,9 @@ class SiteSettings(models.Model):
     """
 
     DEFAULT_WELCOME = (
-        "Welcome to the Girls of Steel program application! "
-        "Use this wizard to apply for one of our upcoming programs. "
+        "Welcome to the Girls of Steel application system! "
+        "Use this wizard to apply for one of our upcoming programs or start the process "
+        "of becoming a mentor."
         "If you started an application earlier, you can resume it below "
         "with your application ID."
     )

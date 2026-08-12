@@ -150,9 +150,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
 class ParentPaymentsAccessMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
-        from programs.permission_views import get_user_role
+        from programs.permission_views import user_is_parent
 
-        if get_user_role(request.user) != "Parent":
+        # Check the parent flag directly rather than the role string so a
+        # parent who also mentors (or is an alumni) still reaches Payments.
+        if not user_is_parent(request.user):
             messages.error(
                 request, "You do not have permission to access that section."
             )

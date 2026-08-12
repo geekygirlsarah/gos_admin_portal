@@ -614,6 +614,71 @@ class FinancePermissionTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
 
+    def test_parent_mentor_can_view_child_balance_sheet(self):
+        """A parent who is also a mentor keeps parent finance access."""
+        parent_mentor_user = User.objects.create_user(
+            username="parent_mentor_user", password="password123"
+        )  # nosec B106
+        parent_mentor = Adult.objects.create(
+            user=parent_mentor_user,
+            first_name="Parent",
+            last_name="Mentor",
+            is_parent=True,
+            is_mentor=True,
+        )
+        AdultStudentRelationship.objects.create(
+            adult=parent_mentor,
+            student=self.student_profile,
+            relationship_to_student="parent",
+        )
+        self.client.login(
+            username="parent_mentor_user", password="password123"
+        )  # nosec B106
+        url = reverse(
+            "program_student_balance", args=[self.program.pk, self.student_profile.pk]
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_parent_mentor_cannot_view_other_student_balance_sheet(self):
+        """A parent+mentor must still be scoped to their own students for finance."""
+        parent_mentor_user = User.objects.create_user(
+            username="parent_mentor_user2", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=parent_mentor_user,
+            first_name="Parent",
+            last_name="Mentor",
+            is_parent=True,
+            is_mentor=True,
+        )
+        other_student = Student.objects.create(first_name="Other", last_name="Student")
+        self.client.login(
+            username="parent_mentor_user2", password="password123"
+        )  # nosec B106
+        url = reverse(
+            "program_student_balance", args=[self.program.pk, other_student.pk]
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+
+    def test_parent_mentor_can_read_sliding_scale(self):
+        """Parent+mentor can read sliding scale (used on the Payments page)."""
+        from programs.permission_views import can_user_read
+
+        user = User.objects.create_user(
+            username="parent_mentor_user3", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=user,
+            first_name="Parent",
+            last_name="Mentor",
+            is_parent=True,
+            is_mentor=True,
+        )
+        self.assertTrue(can_user_read(user, "sliding_scale"))
+        self.assertTrue(can_user_read(user, "payments"))
+
     def test_mentor_cannot_view_payments_create(self):
         self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_payment_create", args=[self.program.pk])
@@ -993,6 +1058,125 @@ class GetUserRoleTests(TestCase):
         group, _ = Group.objects.get_or_create(name="Student")
         user.groups.add(group)
         self.assertEqual(get_user_role(user), "Student")
+
+
+class UserRoleFlagTests(TestCase):
+    """user_is_parent / user_is_mentor / user_is_alumni helpers.
+
+    These check a single Adult role flag independently of role priority, so a
+    parent who also mentors (or is an alumni) is still recognized as a parent.
+    """
+
+    def test_parent_only(self):
+        from programs.permission_views import (
+            user_is_alumni,
+            user_is_mentor,
+            user_is_parent,
+        )
+
+        user = User.objects.create_user(
+            username="parent_only", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=user, first_name="Test", last_name="User", is_parent=True
+        )
+        self.assertTrue(user_is_parent(user))
+        self.assertFalse(user_is_mentor(user))
+        self.assertFalse(user_is_alumni(user))
+
+    def test_parent_and_mentor(self):
+        from programs.permission_views import (
+            user_is_alumni,
+            user_is_mentor,
+            user_is_parent,
+        )
+
+        user = User.objects.create_user(
+            username="parent_mentor", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=user,
+            first_name="Test",
+            last_name="User",
+            is_parent=True,
+            is_mentor=True,
+        )
+        self.assertTrue(user_is_parent(user))
+        self.assertTrue(user_is_mentor(user))
+        self.assertFalse(user_is_alumni(user))
+
+    def test_all_three_flags(self):
+        from programs.permission_views import (
+            user_is_alumni,
+            user_is_mentor,
+            user_is_parent,
+        )
+
+        user = User.objects.create_user(
+            username="all_three", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=user,
+            first_name="Test",
+            last_name="User",
+            is_parent=True,
+            is_mentor=True,
+            is_alumni=True,
+        )
+        self.assertTrue(user_is_parent(user))
+        self.assertTrue(user_is_mentor(user))
+        self.assertTrue(user_is_alumni(user))
+
+    def test_mentor_only(self):
+        from programs.permission_views import user_is_parent
+
+        user = User.objects.create_user(
+            username="mentor_only", password="password123"
+        )  # nosec B106
+        Adult.objects.create(
+            user=user, first_name="Test", last_name="User", is_mentor=True
+        )
+        self.assertFalse(user_is_parent(user))
+
+    def test_anonymous_and_unlinked_users(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        from programs.permission_views import (
+            user_is_alumni,
+            user_is_mentor,
+            user_is_parent,
+        )
+
+        self.assertFalse(user_is_parent(AnonymousUser()))
+        self.assertFalse(user_is_mentor(AnonymousUser()))
+        self.assertFalse(user_is_alumni(AnonymousUser()))
+
+        user = User.objects.create_user(
+            username="nobody", password="password123"
+        )  # nosec B106
+        self.assertFalse(user_is_parent(user))
+        self.assertFalse(user_is_mentor(user))
+        self.assertFalse(user_is_alumni(user))
+
+    def test_parent_group_fallback(self):
+        from programs.permission_views import user_is_parent
+
+        user = User.objects.create_user(
+            username="parent_group", password="password123"
+        )  # nosec B106
+        group, _ = Group.objects.get_or_create(name="Parent")
+        user.groups.add(group)
+        self.assertTrue(user_is_parent(user))
+
+    def test_mentor_group_fallback(self):
+        from programs.permission_views import user_is_mentor
+
+        user = User.objects.create_user(
+            username="mentor_group", password="password123"
+        )  # nosec B106
+        group, _ = Group.objects.get_or_create(name="Mentor")
+        user.groups.add(group)
+        self.assertTrue(user_is_mentor(user))
 
 
 class SignalGroupAssignmentTests(TestCase):

@@ -1,6 +1,6 @@
 import re
 
-from programs.models import Enrollment, Program
+from programs.models import Adult, Enrollment, Program
 from programs.permission_views import get_user_role
 
 
@@ -28,6 +28,30 @@ def navbar_context(request):
         return {}
 
     role = get_user_role(request.user)
+
+    # Resolve the adult's role flags once per request. Django caches
+    # ``user.adult_profile`` on the instance after the first lookup (including
+    # the "no related object" case), and we fetch the user's group names in a
+    # single query, so the navbar adds at most two queries no matter how many
+    # flags the template reads. Superusers short-circuit ``get_user_role``
+    # without touching the profile, so we always do the one profile lookup here.
+    try:
+        adult_flags = {
+            "is_parent": request.user.adult_profile.is_parent,
+            "is_mentor": request.user.adult_profile.is_mentor,
+            "is_alumni": request.user.adult_profile.is_alumni,
+        }
+    except (Adult.DoesNotExist, AttributeError):
+        adult_flags = {}
+
+    if request.user.is_superuser:
+        group_names = set()
+    else:
+        group_names = set(request.user.groups.values_list("name", flat=True))
+
+    navbar_is_parent = bool(adult_flags.get("is_parent") or "Parent" in group_names)
+    navbar_is_mentor = bool(adult_flags.get("is_mentor") or "Mentor" in group_names)
+    navbar_is_alumni = bool(adult_flags.get("is_alumni") or "Alumni" in group_names)
 
     # Try to extract a program pk from the URL path, e.g. /programs/42/...
     current_program = None
@@ -75,4 +99,10 @@ def navbar_context(request):
     return {
         "current_program": current_program,
         "navbar_role": role,
+        # Flag-style helpers: an Adult can hold several roles at once (e.g. a
+        # parent who also mentors), so expose each independently rather than
+        # relying on the single navbar_role string.
+        "navbar_is_parent": navbar_is_parent,
+        "navbar_is_mentor": navbar_is_mentor,
+        "navbar_is_alumni": navbar_is_alumni,
     }
