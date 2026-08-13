@@ -17,6 +17,7 @@ from .models import (
     SlidingScale,
     SlidingScaleSettings,
     Student,
+    StudentDocument,
 )
 
 
@@ -158,6 +159,12 @@ class EnrollmentInline(admin.TabularInline):
     fields = ("program", "team", "crew", "subteam", "active")
 
 
+class StudentDocumentInline(admin.TabularInline):
+    model = StudentDocument
+    extra = 0
+    readonly_fields = ("uploaded_at",)
+
+
 class AdultStudentRelationshipInline(admin.TabularInline):
     model = AdultStudentRelationship
     extra = 1
@@ -288,7 +295,7 @@ class StudentAdmin(admin.ModelAdmin):
             },
         ),
     )
-    inlines = [EnrollmentInline, BackgroundCheckInline]
+    inlines = [EnrollmentInline, StudentDocumentInline, BackgroundCheckInline]
 
     actions = ["convert_to_alumni", "remove_alumni_flag"]
 

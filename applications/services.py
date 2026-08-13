@@ -1042,6 +1042,26 @@ def convert_application_to_student(application: Application, request=None):
 
         Enrollment.objects.get_or_create(student=student, program=application.program)
 
+        # Carry over signed documents to the student profile
+        from django.core.files.base import ContentFile
+        from programs.models import StudentDocument
+        import os
+
+        for submission in application.document_submissions.all():
+            if submission.file:
+                student_doc, _ = StudentDocument.objects.get_or_create(
+                    student=student, program_document=submission.document
+                )
+                filename = os.path.basename(submission.file.name)
+                try:
+                    with submission.file.open("rb") as f:
+                        student_doc.file.save(
+                            filename, ContentFile(f.read()), save=True
+                        )
+                except (FileNotFoundError, IOError):
+                    # Skip if the original file is missing or unreadable
+                    pass
+
         log_event(
             request=request,
             event=AuditEvent.ENROLLMENT_CHANGED,

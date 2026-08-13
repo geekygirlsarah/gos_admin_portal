@@ -4,9 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-13
 
+### Added
+- **Application Documents Carried Over to Student Profile**: Signed documents uploaded during the application process are now automatically copied to the student's profile upon conversion. This ensures that legal forms and other signed documents remain accessible even if the original application is deleted.
+- **Retroactive Document Migration Tool**: Added a new management command `python manage.py move_application_documents` for administrators to migrate documents for students who were converted before this feature was implemented.
+- **Student Documents in Admin**: A new "Student Documents" section has been added to the Student admin page to view all carried-over documents.
+- **Student Documents Portal View**: Students and parents can now view signed documents directly on the student profile page.
+- **Program-wide Document Summary**: Lead Mentors and Mentors (with permission) can now access a "Signed Documents" overview page for each program, showing a matrix of all enrolled students and their submitted documents.
+
 ### Fixed
 - **Large and Unusual Filenames No Longer Crash the Site**: Previously, uploading a file with a very long name or unusual characters could cause a "SuspiciousFileOperation" error, resulting in a technical error page. Filenames are now automatically cleaned up and shortened (if necessary) before being saved. We've also increased the maximum allowed length for filenames across the portal (including student photos, application documents, and tax forms) to 255 characters to better handle long names from sources like Google Docs or mobile devices.
 - **Friendly Error for Invalid Uploads**: In the rare case that a file still cannot be saved (for example, if it's completely empty or corrupted in a way the system can't handle), you'll now see a helpful message asking you to rename the file and try again instead of seeing an error page.
+- **Missing Template Filter**: Added a `get_item` filter to allow dictionary lookups in templates, used for the new document summary matrix.
 
 ## 2026-08-11
 

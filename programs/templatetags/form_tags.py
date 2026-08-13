@@ -132,3 +132,13 @@ def needs_bg(student):
         return bool(student.needs_background_check())
     except Exception:
         return False
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Get an item from a dictionary by key.
+    Usage: {{ my_dict|get_item:my_key }}
+    """
+    if dictionary:
+        return dictionary.get(key)
+    return None

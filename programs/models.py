@@ -243,6 +243,7 @@ class RolePermission(models.Model):
         ("school", "Student - School"),
         ("cmu_andrew", "Student - CMU Andrew ID"),
         ("background_checks", "Student - Background Checks"),
+        ("student_documents", "Student - Signed Documents"),
         ("discord", "Student - Discord"),
         ("first_website", "Student - FIRST Website"),
         ("parents_emergency", "Student - Parents/Emergency Contacts"),
@@ -1683,6 +1684,15 @@ def _program_document_upload_to(instance, filename):
     return f"program_documents/{pid}/{filename}"
 
 
+def _student_document_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/student_documents/<student_id>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
+    sid = instance.student_id or "unassigned"
+    filename = sanitize_upload_filename(filename)
+    return f"student_documents/{sid}/{filename}"
+
+
 class ProgramDocument(models.Model):
     """A document (typically a PDF) that an approved applicant needs to
     download, sign, and re-upload before becoming a full student in the
@@ -1725,6 +1735,36 @@ class ProgramDocument(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.program})"
+
+
+class StudentDocument(models.Model):
+    """A signed document (typically a PDF) uploaded by a student (or their parent)
+    that was originally part of a Program enrollment process and carried over
+    from their application.
+    """
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="signed_documents",
+    )
+    program_document = models.ForeignKey(
+        ProgramDocument,
+        on_delete=models.CASCADE,
+        related_name="student_submissions",
+    )
+    file = models.FileField(
+        upload_to=_student_document_upload_to,
+        max_length=255,
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("student", "program_document")
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return f"{self.program_document.name} for {self.student}"
 
 
 class AddressGeocode(models.Model):

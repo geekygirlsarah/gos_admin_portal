@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load form_tags %}
+
+{% block title %}Student Documents: {{ program.name }}{% endblock %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    </div>
+  </div>
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 m-0">Student Documents: {{ program.name }}</h1>
+  </div>
+
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width: 200px;">Student</th>
+              {% for doc in program_documents %}
+                <th class="text-center">{{ doc.name }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in student_docs %}
+              <tr {% if not row.active %}class="table-light text-muted"{% endif %}>
+                <td>
+                  <a href="{% url 'student_detail' row.student.pk %}" class="text-decoration-none {% if not row.active %}text-muted{% endif %}">
+                    {{ row.student.last_name }}, {{ row.student.first_name|default:row.student.legal_first_name }}
+                  </a>
+                  {% if not row.active %}
+                    <span class="badge bg-secondary ms-1">Inactive</span>
+                  {% endif %}
+                </td>
+                {% for doc in program_documents %}
+                  <td class="text-center">
+                    {% with submission=row.submissions|get_item:doc.id %}
+                      {% if submission %}
+                        <a href="{{ submission.file.url }}" target="_blank" title="Uploaded {{ submission.uploaded_at|date:'Y-m-d' }}">
+                          <i class="bi bi-file-earmark-check-fill text-success fs-4"></i>
+                        </a>
+                      {% else %}
+                        {% if doc.is_required %}
+                          <i class="bi bi-file-earmark-x text-danger fs-4" title="Required - Missing"></i>
+                        {% else %}
+                          <i class="bi bi-dash text-muted" title="Not submitted"></i>
+                        {% endif %}
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="{{ program_documents.count|add:1 }}" class="text-center py-4 text-muted">
+                  No students enrolled in this program.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4 text-muted small">
+    <p>
+      <i class="bi bi-file-earmark-check-fill text-success"></i> = Document submitted and available.<br>
+      <i class="bi bi-file-earmark-x text-danger"></i> = Required document missing.<br>
+      <i class="bi bi-dash"></i> = Optional document not submitted.
+    </p>
+  </div>
+{% endblock %}

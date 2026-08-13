@@ -315,6 +315,9 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["can_manage_fees"] = False
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
+            ctx["can_view_documents"] = can_user_read(
+                self.request.user, "student_documents"
+            )
         else:
             ctx["can_manage_students"] = can_user_write(
                 self.request.user, "student_info"
@@ -323,6 +326,9 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["can_manage_fees"] = can_user_write(self.request.user, "fees")
             ctx["can_view_payments"] = can_user_read(self.request.user, "payments")
             ctx["can_view_attendance"] = can_user_read(self.request.user, "attendance")
+            ctx["can_view_documents"] = can_user_read(
+                self.request.user, "student_documents"
+            )
 
         # Document management: any user who can edit the program can manage
         # the blank documents attached to it (used by the application wizard
@@ -337,6 +343,59 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         if ctx["can_manage_students"]:
             ctx["add_existing_form"] = AddExistingStudentToProgramForm(program=program)
             ctx["quick_create_form"] = QuickCreateStudentForm()
+        return ctx
+
+
+class ProgramStudentDocumentsView(
+    LoginRequiredMixin, DynamicReadPermissionMixin, DetailView
+):
+    model = Program
+    template_name = "programs/student_documents.html"
+    context_object_name = "program"
+    section = "student_documents"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        program = self.object
+
+        # Get all required documents for this program
+        docs = program.documents.all().order_by("display_order", "name")
+        ctx["program_documents"] = docs
+
+        # Get all students enrolled in this program
+        enrollments = (
+            Enrollment.objects.filter(program=program)
+            .select_related("student")
+            .prefetch_related("student__signed_documents")
+            .annotate(
+                sort_first=Lower(
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                sort_last=Lower("student__last_name"),
+            )
+            .order_by("sort_last", "sort_first")
+        )
+
+        # Build a matrix of student -> {doc_id: signed_doc}
+        student_docs = []
+        for e in enrollments:
+            student = e.student
+            submissions = {
+                sd.program_document_id: sd for sd in student.signed_documents.all()
+            }
+            student_docs.append(
+                {
+                    "student": student,
+                    "submissions": submissions,
+                    "active": e.active and not student.graduated,
+                }
+            )
+
+        ctx["student_docs"] = student_docs
+        ctx["role"] = get_user_role(self.request.user)
         return ctx
 
 
