@@ -26,11 +26,17 @@ class EmergencyContactRelationship(models.TextChoices):
 
 def _guest_form_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/guest_forms/<slug>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
+    filename = sanitize_upload_filename(filename)
     return f"guest_forms/{instance.slug}/{filename}"
 
 
 def _guest_submission_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/guest_form_submissions/<guest_form_slug>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
+    filename = sanitize_upload_filename(filename)
     return f"guest_form_submissions/{instance.guest_form.slug}/{filename}"
 
 
@@ -72,6 +78,7 @@ class GuestForm(models.Model):
     )
     file = models.FileField(
         upload_to=_guest_form_upload_to,
+        max_length=255,
         help_text="The blank PDF (or other file) for the guest to download, fill out, and re-upload.",
     )
     is_required = models.BooleanField(
@@ -178,6 +185,7 @@ class GuestFormSubmission(models.Model):
     # Submission details
     file = models.FileField(
         upload_to=_guest_submission_upload_to,
+        max_length=255,
         help_text="The signed form uploaded by the guest.",
     )
     submitted_at = models.DateTimeField(auto_now_add=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.core.exceptions import SuspiciousFileOperation
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -61,7 +62,15 @@ class Step10DocumentsView(View):
             application=application, document=document
         )
         submission.file = form.cleaned_data["file"]
-        submission.save()
+        try:
+            submission.save()
+        except SuspiciousFileOperation:
+            messages.error(
+                request,
+                "The filename of your uploaded document is too long or contains invalid characters. "
+                "Please rename the file to something shorter and try again.",
+            )
+            return self._render(request, application, form, focus_doc_id=document.pk)
 
         # If every required ProgramDocument now has a submission, promote
         # the application from APPROVED -> APPROVED_SIGNED so lead mentors
