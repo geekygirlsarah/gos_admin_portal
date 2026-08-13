@@ -1,17 +1,26 @@
 Hi {{ application.applicant_name|default:"" }},
 
 Great news — your Girls of Steel application has been approved!
+
 {% if application.is_mentor %}
 Welcome aboard! You're on your way to becoming a Girls of Steel mentor,
 and our lead mentors will be in touch with your onboarding details.
 
 Mentor:         {{ application.mentor_name|default:"(not specified)" }}
 {% else %}
-Student:        {{ application.student_name|default:"(not specified)" }}
-Program:        {{ application.program }}
+There is one more step before {{ application.student_name|default:"your student" }}
+is officially in {{ application.program|default:"the program" }}:
 
-There are a few documents we need you to download, sign, and re-upload
-before we can finish enrolling you. Use the link below to access them:
+    DOWNLOAD, SIGN, AND RE-UPLOAD the required documents.
+
+{{ application.student_name|default:"Your student" }} is not fully enrolled
+until we have received these signed documents, so please complete them as soon
+as possible.
+
+Student:        {{ application.student_name|default:"(not specified)" }}
+Program:        {{ application.program|default:"(not specified)" }}
+
+Use the link below to access the documents:
 
   {{ documents_url }}
 {% endif %}

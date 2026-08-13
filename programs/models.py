@@ -524,6 +524,12 @@ class RaceEthnicity(models.Model):
         return cls.objects.filter(key__in=keys)
 
 
+def _student_photo_upload_to(instance, filename):
+    from programs.utils.files import sanitize_upload_filename
+
+    return f"photos/students/{sanitize_upload_filename(filename)}"
+
+
 @pghistory.track()
 class Student(models.Model):
     # Optional link to a User so students can self-manage later if desired
@@ -546,7 +552,9 @@ class Student(models.Model):
         default=datetime.date(1900, 1, 1),
         help_text="Student's date of birth. The default value (1900-01-01) is a placeholder — please enter the actual date.",
     )
-    photo = models.ImageField(upload_to="photos/students/", blank=True, null=True)
+    photo = models.ImageField(
+        upload_to=_student_photo_upload_to, blank=True, null=True, max_length=255
+    )
 
     address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
@@ -1102,6 +1110,12 @@ class AdultStudentRelationship(models.Model):
         return f"{self.adult} - {self.relationship_to_student} to {self.student}"
 
 
+def _adult_photo_upload_to(instance, filename):
+    from programs.utils.files import sanitize_upload_filename
+
+    return f"photos/adults/{sanitize_upload_filename(filename)}"
+
+
 @pghistory.track()
 class Adult(models.Model):
     # Role flags
@@ -1163,7 +1177,9 @@ class Adult(models.Model):
     role = models.CharField(
         max_length=20, choices=MENTOR_ROLE_CHOICES, default="mentor"
     )
-    photo = models.ImageField(upload_to="photos/adults/", blank=True, null=True)
+    photo = models.ImageField(
+        upload_to=_adult_photo_upload_to, blank=True, null=True, max_length=255
+    )
 
     # Andrew ID details (mentors/CMU-affiliated staff only)
     andrew_id = models.CharField(
@@ -1592,12 +1608,19 @@ class SlidingScale(models.Model):
         return True
 
 
+def _tax_form_upload_to(instance, filename):
+    from programs.utils.files import sanitize_upload_filename
+
+    return f"tax_forms/{sanitize_upload_filename(filename)}"
+
+
 class TaxForm(models.Model):
     sliding_scale = models.ForeignKey(
         SlidingScale, on_delete=models.CASCADE, related_name="tax_forms"
     )
     file = EncryptedFileField(
-        upload_to="tax_forms/",
+        upload_to=_tax_form_upload_to,
+        max_length=255,
         help_text="Uploaded tax form for sliding scale verification. Will be deleted after review.",
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -1653,7 +1676,10 @@ class FeeAssignment(models.Model):
 
 def _program_document_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/program_documents/<program_id>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
     pid = instance.program_id or "unassigned"
+    filename = sanitize_upload_filename(filename)
     return f"program_documents/{pid}/{filename}"
 
 
@@ -1679,6 +1705,7 @@ class ProgramDocument(models.Model):
     )
     file = models.FileField(
         upload_to=_program_document_upload_to,
+        max_length=255,
         help_text="The blank PDF (or other file) for the applicant to download and fill out.",
     )
     is_required = models.BooleanField(

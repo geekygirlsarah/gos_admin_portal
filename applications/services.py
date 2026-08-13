@@ -598,8 +598,12 @@ def send_application_approved_email(application: Application, request=None) -> N
     }
     text_body = render_to_string("applications/email/application_approved.txt", ctx)
     html_body = render_to_string("applications/email/application_approved.html", ctx)
+    if application.is_mentor:
+        subject = "Your Girls of Steel application has been approved"
+    else:
+        subject = "Approved: action needed to finish your Girls of Steel enrollment"
     _send_html_email(
-        subject="Your Girls of Steel application has been approved",
+        subject=subject,
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
