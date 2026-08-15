@@ -428,6 +428,30 @@ class Program(models.Model):
             return "Inactive"
         return "Active"
 
+    @property
+    def is_applications_open(self) -> bool:
+        """Return True if applications are currently open for this program."""
+        today = timezone.now().date()
+        if not self.active:
+            return False
+        # If open date is set, check it. Default is start_date (set in save())
+        if self.applications_open and self.applications_open > today:
+            return False
+        # If close date is set, check it. Default is end_date (set in save())
+        if self.applications_close and self.applications_close < today:
+            return False
+        # If the program has ended, applications are definitely closed.
+        if self.end_date and self.end_date < today:
+            return False
+        return True
+
+    @property
+    def applications_are_invalid(self) -> bool:
+        """Return True if applications are for programs where the applications closed or the program has ended."""
+        # This is essentially the complement of is_applications_open, but
+        # explicitly about whether an *existing* application is still valid.
+        return not self.is_applications_open
+
     def save(self, *args, **kwargs):
         if not self.applications_open and self.start_date:
             self.applications_open = self.start_date

@@ -22,6 +22,11 @@ urlpatterns = [
         name="application_cleanup_stale",
     ),
     path(
+        "review/messaging/",
+        views.ApplicationEmailView.as_view(),
+        name="application_review_messaging",
+    ),
+    path(
         "review/<str:app_id>/",
         views.ApplicationReviewDetailView.as_view(),
         name="application_review_detail",

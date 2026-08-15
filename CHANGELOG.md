@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-15
+
+### Added
+- **Bulk Applicant Messaging**: Lead Mentors can now send bulk emails to applicants based on their application status and program. This is accessible via the new "Message Applicants" button on the application review list page. The feature supports rich text editing and allows filtering by multiple statuses and programs.
+- **Application Review Enhancements**:
+    - Added a filter to show only "Open applications" in the review list.
+    - Applications for programs that are closed or ended are now automatically grouped into a new "Closed or Ended Programs (Invalid)" category with clear visual indicators and badges.
+
 ## 2026-08-13
 
 ### Added
