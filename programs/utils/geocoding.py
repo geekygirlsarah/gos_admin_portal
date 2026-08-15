@@ -1,9 +1,9 @@
 """Server-side address geocoding with a database-backed cache.
 
 Student addresses are resolved to (latitude, longitude) coordinates via
-OpenStreetMap's Nominatim geocoder. Results are cached in the
-``AddressGeocode`` model keyed by a normalized address string so each unique
-address is looked up (and counted against the geocoding service's usage
+configurable geocoding backends (Mapbox, Nominatim/OSM). Results are cached
+in the ``AddressGeocode`` model keyed by a normalized address string so each
+unique address is looked up (and counted against the geocoding service's usage
 policy) only once; students who share an address reuse the same row.
 """
 
@@ -11,16 +11,123 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Iterable, Optional, Tuple
+import urllib.parse
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import requests
 from django.conf import settings
+from django.utils.module_loading import import_string
 
 from programs.models import AddressGeocode
 
 logger = logging.getLogger(__name__)
 
 LatLng = Tuple[float, float]
+
+
+class BaseGeocodingBackend:
+    """Base class for geocoding service backends."""
+
+    def __init__(self):
+        self.timeout = getattr(settings, "GEOCODING_TIMEOUT", 10)
+        self.user_agent = getattr(settings, "GEOCODING_USER_AGENT", "GoSAdminPortal/1.0")
+        self.delay = getattr(settings, "GEOCODING_DELAY_SECONDS", 1.0)
+
+    def geocode(self, address: str) -> Optional[LatLng]:
+        """Ask the geocoding service for coordinates for an address."""
+        raise NotImplementedError
+
+    def _get_headers(self) -> Dict[str, str]:
+        return {
+            "Accept": "application/json",
+            "User-Agent": self.user_agent,
+        }
+
+
+class NominatimBackend(BaseGeocodingBackend):
+    """Geocoding backend using OpenStreetMap's Nominatim service."""
+
+    def geocode(self, address: str) -> Optional[LatLng]:
+        url = getattr(
+            settings,
+            "GEOCODING_URL",
+            "https://nominatim.openstreetmap.org/search",
+        )
+        params = {
+            "format": "jsonv2",
+            "limit": 1,
+            "q": address,
+        }
+        try:
+            response = requests.get(
+                url, params=params, headers=self._get_headers(), timeout=self.timeout
+            )
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, list) and data:
+                first = data[0]
+                lat = float(first.get("lat"))
+                lon = float(first.get("lon"))
+                if lat and lon:
+                    return (lat, lon)
+        except (requests.RequestException, TypeError, ValueError, KeyError):
+            pass
+        return None
+
+
+class MapboxBackend(BaseGeocodingBackend):
+    """Geocoding backend using Mapbox Geocoding API."""
+
+    def geocode(self, address: str) -> Optional[LatLng]:
+        token = getattr(settings, "MAPBOX_ACCESS_TOKEN", None)
+        if not token:
+            logger.debug("Mapbox backend skipped: MAPBOX_ACCESS_TOKEN not set.")
+            return None
+
+        # Mapbox expects the address in the URL path.
+        quoted_address = urllib.parse.quote(address)
+        url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quoted_address}.json"
+        params = {
+            "access_token": token,
+            "limit": 1,
+        }
+        try:
+            response = requests.get(
+                url, params=params, headers=self._get_headers(), timeout=self.timeout
+            )
+            response.raise_for_status()
+            data = response.json()
+            features = data.get("features", [])
+            if features:
+                # Mapbox returns [longitude, latitude] in the "center" field.
+                center = features[0].get("center")
+                if center and len(center) == 2:
+                    lat, lon = float(center[1]), float(center[0])
+                    if lat and lon:
+                        return (lat, lon)
+        except (requests.RequestException, TypeError, ValueError, KeyError):
+            pass
+        return None
+
+
+def get_geocoding_backends() -> List[BaseGeocodingBackend]:
+    """Instantiate the geocoding backends configured in settings."""
+    backend_paths = getattr(
+        settings,
+        "GEOCODING_BACKENDS",
+        [
+            "programs.utils.geocoding.MapboxBackend",
+            "programs.utils.geocoding.NominatimBackend",
+        ],
+    )
+    backends = []
+    for path in backend_paths:
+        try:
+            backend_class = import_string(path)
+            backends.append(backend_class())
+        except ImportError:
+            logger.error("Could not import geocoding backend: %s", path)
+    return backends
 
 
 def normalize_address(address: Optional[str]) -> str:
@@ -32,34 +139,17 @@ def normalize_address(address: Optional[str]) -> str:
 
 
 def _geocode_remote(address: str) -> Optional[LatLng]:
-    """Ask the configured geocoding service for coordinates for an address."""
-    params = {
-        "format": "jsonv2",
-        "limit": 1,
-        "q": address,
-    }
-    url = getattr(
-        settings,
-        "GEOCODING_URL",
-        "https://nominatim.openstreetmap.org/search",
-    )
-    timeout = getattr(settings, "GEOCODING_TIMEOUT", 10)
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": getattr(settings, "GEOCODING_USER_AGENT", "GoSAdminPortal/1.0"),
-    }
-    response = requests.get(url, params=params, headers=headers, timeout=timeout)
-    response.raise_for_status()
-    data = response.json()
-    if isinstance(data, list) and data:
-        first = data[0]
-        try:
-            lat = float(first.get("lat"))
-            lon = float(first.get("lon"))
-        except (TypeError, ValueError):
-            return None
-        if lat and lon:
-            return (lat, lon)
+    """Ask configured geocoding backends for coordinates, with fallbacks."""
+    backends = get_geocoding_backends()
+    for backend in backends:
+        point = backend.geocode(address)
+        if point:
+            return point
+
+        # If we have multiple backends, be polite and wait between calls if configured
+        if len(backends) > 1 and backend.delay:
+            time.sleep(backend.delay)
+
     return None
 
 
@@ -67,7 +157,7 @@ def _geocode_and_store(key: str, query: str) -> Optional[LatLng]:
     """Geocode an address and persist the result (or the miss) in the cache."""
     try:
         point = _geocode_remote(query)
-    except requests.RequestException:
+    except Exception:
         logger.warning("Address geocoding lookup failed for %r", query, exc_info=True)
         point = None
     else:

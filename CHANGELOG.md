@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 - **Application Review Enhancements**:
     - Added a filter to show only "Open applications" in the review list.
     - Applications for programs that are closed or ended are now automatically grouped into a new "Closed or Ended Programs (Invalid)" category with clear visual indicators and badges.
+- **Enhanced Address Geocoding with Mapbox Support**:
+    - Added support for **Mapbox Geocoding API** as a primary geocoder, which provides significantly better address coverage than the default OpenStreetMap (Nominatim).
+    - Implemented a **backend-driven geocoding system** that supports multiple providers with automatic fallbacks. If Mapbox fails to find an address, the system can automatically fall back to OpenStreetMap.
+    - Added a new `--retry-missing` flag to the `geocode_student_addresses` management command. This allows Lead Mentors to re-attempt geocoding for addresses that were previously not found (e.g., when the site only used OpenStreetMap).
+    - New settings `GEOCODING_BACKENDS` and `MAPBOX_ACCESS_TOKEN` enable easy configuration of geocoding providers.
 
 ## 2026-08-13
 
