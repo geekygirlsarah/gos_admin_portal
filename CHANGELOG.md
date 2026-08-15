@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-15
 
 ### Added
+- **Visitor Management and Standardizing Names**:
+    - Added a new **Visitor Management** tool (accessible from Attendance pages) that allows Lead Mentors to see all unique visitor names and their session counts.
+    - Mentors can now **merge** multiple inconsistent visitor names (e.g., "John", "John D.", "John Doe") into a single standardized name across all historical attendance records and events.
+    - Visitor names can now be edited individually directly on the "All Program Entries" attendance page.
 - **Bulk Applicant Messaging**: Lead Mentors can now send bulk emails to applicants based on their application status and program. This is accessible via the new "Message Applicants" button on the application review list page. The feature supports rich text editing and allows filtering by multiple statuses and programs.
 - **Application Review Enhancements**:
     - Added a filter to show only "Open applications" in the review list.
