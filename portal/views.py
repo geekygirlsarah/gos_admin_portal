@@ -31,6 +31,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
+        # Pending (in-progress) applications tied to this user by email,
+        # shown in the dashboard's "Pending Applications" box.
+        from applications.services import applications_for_user
+
+        context["pending_applications"] = applications_for_user(user)
+
         # ── Student profile ──────────────────────────────────────────────────
         student = getattr(user, "student_profile", None)
         context["student"] = student
@@ -144,9 +150,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
 class ParentPaymentsAccessMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
-        from programs.permission_views import get_user_role
+        from programs.permission_views import user_is_parent
 
-        if get_user_role(request.user) != "Parent":
+        # Check the parent flag directly rather than the role string so a
+        # parent who also mentors (or is an alumni) still reaches Payments.
+        if not user_is_parent(request.user):
             messages.error(
                 request, "You do not have permission to access that section."
             )

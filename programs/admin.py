@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .forms import AdultForm, StudentForm
 from .models import (
+    AddressGeocode,
     Adult,
     AdultStudentRelationship,
     BackgroundCheck,
@@ -16,7 +17,15 @@ from .models import (
     SlidingScale,
     SlidingScaleSettings,
     Student,
+    StudentDocument,
 )
+
+
+@admin.register(AddressGeocode)
+class AddressGeocodeAdmin(admin.ModelAdmin):
+    list_display = ("address", "latitude", "longitude", "found", "updated_at")
+    list_filter = ("found",)
+    search_fields = ("address",)
 
 
 @admin.register(ProgramFeature)
@@ -150,6 +159,12 @@ class EnrollmentInline(admin.TabularInline):
     fields = ("program", "team", "crew", "subteam", "active")
 
 
+class StudentDocumentInline(admin.TabularInline):
+    model = StudentDocument
+    extra = 0
+    readonly_fields = ("uploaded_at",)
+
+
 class AdultStudentRelationshipInline(admin.TabularInline):
     model = AdultStudentRelationship
     extra = 1
@@ -280,7 +295,7 @@ class StudentAdmin(admin.ModelAdmin):
             },
         ),
     )
-    inlines = [EnrollmentInline, BackgroundCheckInline]
+    inlines = [EnrollmentInline, StudentDocumentInline, BackgroundCheckInline]
 
     actions = ["convert_to_alumni", "remove_alumni_flag"]
 

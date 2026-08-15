@@ -46,6 +46,7 @@ from .steps_student import (
 from .utils import (
     MENTOR_TOTAL_STEPS,
     TOTAL_STEPS,
+    _auto_authorize_handoff,
     _get_application_or_404,
     _is_handoff_authorized,
     _is_mentor,
@@ -62,6 +63,7 @@ from .utils import (
     logger,
 )
 from .welcome import (
+    ApplicationWithdrawView,
     ContinueView,
     ResumeLinkView,
     ResumeView,
@@ -74,6 +76,7 @@ __all__ = [
     "MENTOR_TOTAL_STEPS",
     "TOTAL_STEPS",
     # helpers
+    "_auto_authorize_handoff",
     "_get_application_or_404",
     "_is_mentor",
     "_is_handoff_authorized",
@@ -89,6 +92,7 @@ __all__ = [
     "_student_initial_for",
     "logger",
     # welcome
+    "ApplicationWithdrawView",
     "ContinueView",
     "ResumeLinkView",
     "ResumeView",

@@ -44,6 +44,7 @@ from ..permission_views import (
     LeadMentorRequiredMixin,
     can_user_read,
     get_user_role,
+    user_is_parent,
 )
 from ..utils import (
     get_student_balance_data,
@@ -543,7 +544,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
     template_name = "programs/sliding_scale_apply.html"
 
     def _get_student_for_parent(self, request, student_id):
-        if get_user_role(request.user) != "Parent":
+        if not user_is_parent(request.user):
             messages.error(request, "Only a parent can apply for the sliding scale.")
             return None, redirect("parent_payments")
 
@@ -630,7 +631,7 @@ class SlidingScaleWithdrawView(LoginRequiredMixin, View):
         )
         student = application.student
 
-        if get_user_role(request.user) != "Parent":
+        if not user_is_parent(request.user):
             messages.error(
                 request, "Only a parent can withdraw a sliding scale application."
             )
@@ -666,8 +667,8 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
 
-        # Object level check for Parents
-        if get_user_role(request.user) == "Parent":
+        # Object level check for Parents (including parents who also mentor)
+        if user_is_parent(request.user):
             try:
                 adult = request.user.adult_profile
                 if student not in adult.students.all():
@@ -719,8 +720,8 @@ class ProgramStudentBalancePrintView(
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
 
-        # Object level check for Parents
-        if get_user_role(request.user) == "Parent":
+        # Object level check for Parents (including parents who also mentor)
+        if user_is_parent(request.user):
             try:
                 adult = request.user.adult_profile
                 if student not in adult.students.all():

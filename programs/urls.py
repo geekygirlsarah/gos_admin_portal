@@ -52,6 +52,7 @@ from .views import (
     ProgramStudentAddView,
     ProgramStudentBalancePrintView,
     ProgramStudentBalanceView,
+    ProgramStudentDocumentsView,
     ProgramStudentMapView,
     ProgramStudentPhotoListView,
     ProgramStudentQuickCreateView,
@@ -123,6 +124,11 @@ urlpatterns = [
         "<int:pk>/photos/",
         login_required(ProgramStudentPhotoListView.as_view()),
         name="program_student_photos",
+    ),
+    path(
+        "<int:pk>/documents/",
+        login_required(ProgramStudentDocumentsView.as_view()),
+        name="program_student_documents",
     ),
     path(
         "<int:pk>/map/",

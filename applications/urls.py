@@ -103,6 +103,12 @@ urlpatterns = [
         views.ContinueView.as_view(),
         name="apply_continue",
     ),
+    # Applicant withdraw: permanently delete their own pending application.
+    path(
+        "<str:app_id>/withdraw/",
+        views.ApplicationWithdrawView.as_view(),
+        name="apply_withdraw",
+    ),
     path(
         "<str:app_id>/step5/",
         views.Step5StudentInfoView.as_view(),

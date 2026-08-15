@@ -103,3 +103,57 @@ class RefactorStudentParentLinksMigrationTest(TestCase):
         self.assertEqual(
             self.AdultStudentRelationship.objects.filter(student=student).count(), 0
         )
+
+    def test_flushes_deferred_fk_checks_before_dropping_legacy_columns(self):
+        """The data backfill updates the new relationship FKs, which are
+        DEFERRABLE INITIALLY DEFERRED on PostgreSQL. The resulting pending
+        checks would make the RemoveField (DROP CONSTRAINT) operations fail
+        with "cannot ALTER TABLE ... because it has pending trigger events",
+        so the migration must flush them before any RemoveField runs.
+        """
+        from django.db import migrations
+
+        ops = (
+            RefactorStudentParentLinksMigrationTest.migration_module.Migration.operations
+        )
+
+        def op_index(predicate):
+            return next(i for i, op in enumerate(ops) if isinstance(op, predicate))
+
+        backfill_idx = op_index(migrations.RunPython)
+        flush_idx = next(
+            i
+            for i, op in enumerate(ops)
+            if isinstance(op, migrations.RunPython)
+            and op.code
+            is RefactorStudentParentLinksMigrationTest.migration_module.flush_deferred_fk_checks
+        )
+        first_removefield_idx = op_index(migrations.RemoveField)
+
+        self.assertLess(backfill_idx, flush_idx)
+        self.assertLess(flush_idx, first_removefield_idx)
+
+    def test_flush_deferred_fk_checks_only_runs_on_postgresql(self):
+        import types
+
+        flush = (
+            RefactorStudentParentLinksMigrationTest.migration_module.flush_deferred_fk_checks
+        )
+
+        for vendor, expected_calls in (("sqlite", 0), ("postgresql", 1)):
+            with self.subTest(vendor=vendor):
+                calls = []
+                schema_editor = types.SimpleNamespace(
+                    connection=types.SimpleNamespace(vendor=vendor),
+                    execute=lambda sql: calls.append(sql),
+                )
+                flush(real_apps, schema_editor)
+                self.assertEqual(len(calls), expected_calls)
+
+        calls = []
+        schema_editor = types.SimpleNamespace(
+            connection=types.SimpleNamespace(vendor="postgresql"),
+            execute=lambda sql: calls.append(sql),
+        )
+        flush(real_apps, schema_editor)
+        self.assertEqual(calls, ["SET CONSTRAINTS ALL IMMEDIATE"])

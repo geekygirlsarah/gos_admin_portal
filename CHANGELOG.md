@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-13
+
+### Added
+- **Application Documents Carried Over to Student Profile**: Signed documents uploaded during the application process are now automatically copied to the student's profile upon conversion. This ensures that legal forms and other signed documents remain accessible even if the original application is deleted.
+- **Retroactive Document Migration Tool**: Added a new management command `python manage.py move_application_documents` for administrators to migrate documents for students who were converted before this feature was implemented.
+- **Student Documents in Admin**: A new "Student Documents" section has been added to the Student admin page to view all carried-over documents.
+- **Student Documents Portal View**: Students and parents can now view signed documents directly on the student profile page.
+- **Program-wide Document Summary**: Lead Mentors and Mentors (with permission) can now access a "Signed Documents" overview page for each program, showing a matrix of all enrolled students and their submitted documents.
+
+### Fixed
+- **Large and Unusual Filenames No Longer Crash the Site**: Previously, uploading a file with a very long name or unusual characters could cause a "SuspiciousFileOperation" error, resulting in a technical error page. Filenames are now automatically cleaned up and shortened (if necessary) before being saved. We've also increased the maximum allowed length for filenames across the portal (including student photos, application documents, and tax forms) to 255 characters to better handle long names from sources like Google Docs or mobile devices.
+- **Friendly Error for Invalid Uploads**: In the rare case that a file still cannot be saved (for example, if it's completely empty or corrupted in a way the system can't handle), you'll now see a helpful message asking you to rename the file and try again instead of seeing an error page.
+- **Missing Template Filter**: Added a `get_item` filter to allow dictionary lookups in templates, used for the new document summary matrix.
+
+## 2026-08-11
+
+### Added
+- **Student Map Loads Much Faster**: The program map (and the new Carpool Map for parents and students) no longer looks up every address in your web browser, one at a time. Addresses are now geocoded once on the server and cached, so the map appears immediately on every visit after the first. A "geocode_student_addresses" command is available for lead mentors to pre-fill the cache (e.g. right after importing students). The map also automatically zooms in on the area where the students live instead of starting at the whole world.
+- **Carpool Map for Parents and Students**: Parents and students now see a "Carpool Map" button on their dashboard for each active program. It shows the addresses of students in that program (only students who have consented to directory sharing), making it easy to plan carpools. Mentors still use the existing "Map View" on the program page.
+- **Pending Applications Box on the Dashboard**: Students and parents now see a "Pending Applications" box on their dashboard listing any applications tied to their account (matched by email — their own, applications they started, ones they're listed on as a parent, or ones handed off to them). Each entry shows the application's status (Draft, Awaiting parent, Submitted, etc.) with buttons to resume it or withdraw it. The box is hidden when there are no pending applications.
+- **Tables in Email Messages**: The message editor now has an "Insert Table" button so you can add a table to an email (for example, to lay out a schedule or a list of items). Tables keep their borders and spacing when the email is sent, so they look right in recipients' inboxes.
+
+### Fixed
+- **Parents Who Also Mentor Can See Payments Again**: If a parent is also a mentor, the site treated them only as a mentor, so the "Payments" link disappeared from the top navigation and they couldn't open their own payments or balance sheets. Parents are now recognized as parents no matter what other roles they hold (mentor, alumni, or both), so the Payments page and balance sheets are always available to them — while still showing only their own students' finances.
+- **Map Markers Now Show Up**: The map marker icons were being blocked by the site's content security policy, so you'd see the outline of a marker but no icon. The policy now allows the map's marker images, so markers render correctly.
+- **Line Breaks Preserved When Pasting Plain Text**: Pasting text that contains line breaks (for example, copied from a terminal or a plain-text document) no longer squashes everything into one paragraph. Each line now keeps its own line break in the message.
+- **Line Breaks Survive More Paste Sources**: Line breaks are now preserved even when pasting text that your web browser supplies an HTML copy of (which most apps do, even for plain text). Previously those pastes could arrive in the email as one long line; the message editor now recognizes them and keeps each line separate, without affecting richer pastes like formatted paragraphs, lists, or tables. This also covers the way many sites and apps (for example, Gmail, Slack, or a terminal) put each line in its own block, which used to paste in as a separate paragraph; those now keep tight line breaks just like pasting plain text.
+- **Pasting From Google Docs Keeps Line Breaks**: Copying text out of Google Docs no longer collapses the lines inside a paragraph (for example, the two lines of an address) into a single line. Google Docs hides soft line breaks inside its formatting, and those used to be turned into plain spaces; the message editor now recognizes and preserves them as real line breaks.
+- **Guardian Links No Longer Block the Site Update**: The database update that reworked how primary/secondary guardians are stored was failing partway through on live servers, which stopped the site from updating. The update now finishes cleanly, so the guardian-linking change can ship.
+
+### Changed
+- **Approval Emails Now Highlight the Next Step**: The email families get when an application is approved now clearly spells out that the student is not fully enrolled until the required documents are downloaded, signed, and re-uploaded. This step is called out near the top of the email (in a highlighted box), and the subject line now says "Approved: action needed to finish enrollment", so it's no longer easy to miss.
+- **Upgraded the Email Editor**: The rich-text editor used for email messages (on the Messaging and Email Balance Sheets pages) was upgraded to a newer version, which is what enables tables and the pasting improvements above.
+
+
 ## 2026-08-09
 
 ### Changed
@@ -9,6 +44,7 @@ All notable changes to this project will be documented in this file.
 - **Reworked Background Clearances**: Student and adult background clearances (PA State Police, PA Child Abuse, and FBI) are now tracked per check type, each with its own cleared/expiration status, instead of a single on/off flag. Because clearances are valid for 5 years in Pennsylvania, each check now stores its own expiration date so you can see at a glance when one lapses. The old mentor-only clearance fields were migrated into the new records, and clearance info now shows on any adult's profile/edit screen (parents, alumni, and volunteers included), not just mentors.
 - **Smarter "Needs a Background Check" Flag**: Whether a student needs clearances is now calculated automatically from their date of birth (17 or older on Sept 1 of the current academic year) instead of being entered by hand or figured out per program. A student is only flagged as needing a check if they're missing or have an expired clearance, and enrolled students who need one are flagged on their enrollment automatically.
 - **Simplified How Parent/Guardian Links Are Stored**: A student's Primary and Secondary Guardian are now stored as links on the existing student↔adult relationship record instead of as separate fields on the student card. This means a guardian who is listed as primary or secondary always shows up on the student's family list automatically (no more duplicate entries), and removing a relationship cleans up the guardian pointers too. Existing data was migrated in place.
+- **Background Check Data**: Students and parents were storing the data differently, and it was tied to programs. It should be tied to age or role. These have all been fixed.
 
 ## 2026-08-08
 

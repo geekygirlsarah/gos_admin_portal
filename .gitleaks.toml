@@ -1,4 +1,5 @@
 [allowlist]
     paths = [
-        "programs/static/vendor/quill/1.3.7/quill.min.js"
+        "programs/static/vendor/quill/1.3.7/quill.min.js",
+        "programs/static/vendor/quill/2.0.3/quill.js"
     ]

@@ -151,5 +151,3 @@ class ViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         # Check if referrerPolicy is in the script for TileLayer
         self.assertContains(resp, "referrerPolicy: 'no-referrer-when-downgrade'")
-        # Check if referrerPolicy is in the fetch call for Nominatim
-        self.assertContains(resp, "referrerPolicy: 'no-referrer-when-downgrade'")

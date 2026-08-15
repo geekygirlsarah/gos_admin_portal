@@ -61,8 +61,9 @@ class SiteSettings(models.Model):
     """
 
     DEFAULT_WELCOME = (
-        "Welcome to the Girls of Steel program application! "
-        "Use this wizard to apply for one of our upcoming programs. "
+        "Welcome to the Girls of Steel application system! "
+        "Use this wizard to apply for one of our upcoming programs or start the process "
+        "of becoming a mentor."
         "If you started an application earlier, you can resume it below "
         "with your application ID."
     )
@@ -382,9 +383,12 @@ class Application(models.Model):
 
 def _application_doc_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/application_documents/<application_id>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
     aid = (
         instance.application.application_id if instance.application_id else "unassigned"
     )
+    filename = sanitize_upload_filename(filename)
     return f"application_documents/{aid}/{filename}"
 
 
@@ -406,7 +410,7 @@ class ApplicationDocumentSubmission(models.Model):
         on_delete=models.CASCADE,
         related_name="submissions",
     )
-    file = models.FileField(upload_to=_application_doc_upload_to)
+    file = models.FileField(upload_to=_application_doc_upload_to, max_length=255)
     uploaded_at = models.DateTimeField(auto_now=True)
 
     class Meta:

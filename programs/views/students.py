@@ -76,6 +76,12 @@ class StudentListView(
 
         qs = self.filter_students_by_role(qs)
 
+        qs = qs.select_related(
+            "school",
+            "primary_contact_relationship__adult",
+            "secondary_contact_relationship__adult",
+        ).prefetch_related("adults", "enrollment_set__program")
+
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         qs = qs.annotate(
             sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
@@ -267,6 +273,29 @@ class StudentDetailView(
     template_name = "students/detail.html"
     context_object_name = "student"
     section = "student_info"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related(
+                "school",
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+            )
+            .prefetch_related(
+                "adults",
+                "adultstudentrelationship_set",
+                "background_checks",
+                "race_ethnicities",
+                "signed_documents__program_document",
+            )
+        )
+
+    def get_object(self, queryset=None):
+        if getattr(self, "object", None) is None:
+            self.object = super().get_object(queryset)
+        return self.object
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

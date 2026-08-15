@@ -87,6 +87,33 @@ class MentorEmailsReproductionTests(TestCase):
         self.assertIn("Jane Doe", body)
         # self.assertIn("download, sign, and re-upload", body)
 
+    def test_approved_email_student_does_not_mention_mentor_onboarding(self):
+        send_application_approved_email(self._student_app())
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        for body in (email.body, email.alternatives[0][0]):
+            self.assertNotIn("becoming a Girls of Steel mentor", body)
+            self.assertNotIn("Welcome aboard", body)
+            self.assertNotIn("Mentor:", body)
+
+    def test_approved_email_mentor_does_not_mention_student_documents_html(self):
+        send_application_approved_email(self._mentor_app())
+        self.assertEqual(len(mail.outbox), 1)
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertNotIn("not fully enrolled", html)
+        self.assertNotIn("one more step", html)
+        self.assertNotIn("Student:", html)
+        self.assertIn("James Smith", html)
+
+    def test_approved_email_student_html_keeps_student_wording(self):
+        send_application_approved_email(self._student_app())
+        self.assertEqual(len(mail.outbox), 1)
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn("Student:", html)
+        self.assertIn("Jane Doe", html)
+        self.assertIn("not fully enrolled", html)
+        self.assertNotIn("Mentor:", html)
+
     # -- Converted email -----------------------------------------------------
 
     def test_converted_email_mentor_does_not_use_student_language(self):
