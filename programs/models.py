@@ -959,6 +959,10 @@ class Student(models.Model):
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
                 changed = True
+            target_active = not self.graduated
+            if self.user.is_active != target_active:
+                self.user.is_active = target_active
+                changed = True
             if changed:
                 self.user.save()
 
@@ -1310,6 +1314,22 @@ class Adult(models.Model):
             s.attached_rel = rels.get(s.pk, "parent")
         return students
 
+    def requires_background_check(self) -> bool:
+        """Whether the adult must hold PA background clearances.
+        Currently, all mentors/volunteers require them.
+        """
+        return self.is_mentor
+
+    def needs_background_check(self) -> bool:
+        """Whether the adult requires clearances AND is missing at least one valid check."""
+        if not self.requires_background_check():
+            return False
+        required_types = set(BackgroundCheckType.values)
+        valid_types = {
+            bc.check_type for bc in self.background_checks.all() if bc.is_valid
+        }
+        return not required_types.issubset(valid_types)
+
     def clean(self):
         super().clean()
         from django.core.exceptions import ValidationError
@@ -1351,6 +1371,11 @@ class Adult(models.Model):
                 changed = True
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
+                changed = True
+            # Login is enabled if they are active OR if they have other active roles (parent/alumni)
+            target_active = self.active or self.is_parent or self.is_alumni
+            if self.user.is_active != target_active:
+                self.user.is_active = target_active
                 changed = True
             if changed:
                 self.user.save()

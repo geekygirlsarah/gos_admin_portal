@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-13
 
 ### Added
+- **Deactivate Mentors and Adults**: Lead Mentors can now mark a mentor, parent, or alumni as "inactive" by unchecking the Active box on their profile. Inactive adults are automatically hidden from the main parent/alumni lists and will no longer receive automated emails (like fee or payment notifications).
+- **Mentor List Refinement**: Inactive mentors are no longer hidden from the mentor list; instead, they are moved to the bottom of the list and marked with an "Inactive" badge. This allows tracking past mentors while keeping the current roster focused. The main Adults list also includes inactive adults at the bottom.
+- **Background Check Badges**: Mentors who are missing required PA background clearances or have expired ones now show a "BG Check Needed" badge next to their name in the mentor and adult lists.
+- **Refined Account Access**: When an adult is marked as inactive, their portal login account is only disabled if they are NOT also a parent or alumni. Inactive mentors who are also parents or alumni can still log in to manage their students' information or their own alumni profile, but their mentor-specific permissions are revoked.
+- **Disabled Member Sign-in**: Inactive mentors and students (those marked as graduated) can no longer sign in at the attendance kiosk. They are hidden from the name search, and their RFID cards will no longer resolve if tapped.
+- **Inactive Status Visibility**: A student's profile and the main adult list now clearly label any inactive adults with an "Inactive" badge.
+- **Adult List Utilities**: Added new developer utilities `active_adults()`, `active_mentors()`, `active_parents()`, and `active_alumni()` in `programs.utils` to ensure consistent filtering across the codebase.
+
 - **Application Documents Carried Over to Student Profile**: Signed documents uploaded during the application process are now automatically copied to the student's profile upon conversion. This ensures that legal forms and other signed documents remain accessible even if the original application is deleted.
 - **Retroactive Document Migration Tool**: Added a new management command `python manage.py move_application_documents` for administrators to migrate documents for students who were converted before this feature was implemented.
 - **Student Documents in Admin**: A new "Student Documents" section has been added to the Student admin page to view all carried-over documents.

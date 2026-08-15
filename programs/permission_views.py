@@ -37,7 +37,7 @@ def get_user_role(user):
     # Check if the user is linked to an Adult profile
     try:
         adult = user.adult_profile
-        if adult.is_mentor:
+        if adult.active and adult.is_mentor:
             return "Mentor"
         if adult.is_parent:
             return "Parent"
@@ -76,7 +76,11 @@ def _user_adult_flag(user, field, group_name):
     if user is None or not getattr(user, "is_authenticated", False):
         return False
     try:
-        if getattr(user.adult_profile, field):
+        adult = user.adult_profile
+        if getattr(adult, field):
+            # If checking mentor status, also require the adult to be active
+            if field == "is_mentor" and not adult.active:
+                return False
             return True
     except (Adult.DoesNotExist, AttributeError):
         pass

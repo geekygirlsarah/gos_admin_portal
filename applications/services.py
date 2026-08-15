@@ -1043,9 +1043,11 @@ def convert_application_to_student(application: Application, request=None):
         Enrollment.objects.get_or_create(student=student, program=application.program)
 
         # Carry over signed documents to the student profile
-        from django.core.files.base import ContentFile
-        from programs.models import StudentDocument
         import os
+
+        from django.core.files.base import ContentFile
+
+        from programs.models import StudentDocument
 
         for submission in application.document_submissions.all():
             if submission.file:

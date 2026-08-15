@@ -6,13 +6,35 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0098_studentdocument'),
+        ("programs", "0098_studentdocument"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='rolepermission',
-            name='section',
-            field=models.CharField(choices=[('student_info', 'Student - Info (General)'), ('identity', 'Student - Identity'), ('contact_address', 'Student - Contact & Address'), ('health_medical', 'Student - Health & Medical'), ('school', 'Student - School'), ('cmu_andrew', 'Student - CMU Andrew ID'), ('background_checks', 'Student - Background Checks'), ('student_documents', 'Student - Signed Documents'), ('discord', 'Student - Discord'), ('first_website', 'Student - FIRST Website'), ('parents_emergency', 'Student - Parents/Emergency Contacts'), ('other_details', 'Student - Other Details'), ('attendance', 'Student - Attendance'), ('adult_info', 'Adult - Info'), ('payments', 'Payments - General'), ('sliding_scale', 'Payments - Sliding Scale'), ('fees', 'Programs - Fees'), ('programs', 'Programs - General')], max_length=50),
+            model_name="rolepermission",
+            name="section",
+            field=models.CharField(
+                choices=[
+                    ("student_info", "Student - Info (General)"),
+                    ("identity", "Student - Identity"),
+                    ("contact_address", "Student - Contact & Address"),
+                    ("health_medical", "Student - Health & Medical"),
+                    ("school", "Student - School"),
+                    ("cmu_andrew", "Student - CMU Andrew ID"),
+                    ("background_checks", "Student - Background Checks"),
+                    ("student_documents", "Student - Signed Documents"),
+                    ("discord", "Student - Discord"),
+                    ("first_website", "Student - FIRST Website"),
+                    ("parents_emergency", "Student - Parents/Emergency Contacts"),
+                    ("other_details", "Student - Other Details"),
+                    ("attendance", "Student - Attendance"),
+                    ("adult_info", "Adult - Info"),
+                    ("payments", "Payments - General"),
+                    ("sliding_scale", "Payments - Sliding Scale"),
+                    ("fees", "Programs - Fees"),
+                    ("programs", "Programs - General"),
+                ],
+                max_length=50,
+            ),
         ),
     ]

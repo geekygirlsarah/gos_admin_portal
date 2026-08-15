@@ -1,8 +1,11 @@
 import os
-from django.core.management.base import BaseCommand
+
 from django.core.files.base import ContentFile
+from django.core.management.base import BaseCommand
+
 from applications.models import Application
 from programs.models import StudentDocument
+
 
 class Command(BaseCommand):
     help = "Move signed documents from converted applications to student profiles."
@@ -17,8 +20,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         apps = Application.objects.filter(
-            converted_student__isnull=False,
-            status=Application.Status.CONVERTED
+            converted_student__isnull=False, status=Application.Status.CONVERTED
         ).prefetch_related("document_submissions")
 
         count = 0
@@ -33,8 +35,7 @@ class Command(BaseCommand):
 
                 # Check if it already exists
                 if StudentDocument.objects.filter(
-                    student=student,
-                    program_document=submission.document
+                    student=student, program_document=submission.document
                 ).exists():
                     skipped += 1
                     continue
@@ -53,11 +54,10 @@ class Command(BaseCommand):
                     with submission.file.open("rb") as f:
                         content = f.read()
                         student_doc = StudentDocument(
-                            student=student,
-                            program_document=submission.document
+                            student=student, program_document=submission.document
                         )
                         student_doc.file.save(filename, ContentFile(content), save=True)
-                    
+
                     self.stdout.write(
                         self.style.SUCCESS(
                             f"Copied {submission.file.name} to {student}"
