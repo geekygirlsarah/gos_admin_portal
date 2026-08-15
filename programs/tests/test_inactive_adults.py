@@ -62,12 +62,15 @@ class InactiveAdultTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Active Mentor")
         self.assertContains(response, "Inactive Mentor")
-        
+
         # Verify ordering: Active should appear before Inactive
         content = response.content.decode()
         active_pos = content.find("Active Mentor")
         inactive_pos = content.find("Inactive Mentor")
-        self.assertTrue(active_pos < inactive_pos, "Active mentor should appear before inactive mentor")
+        self.assertTrue(
+            active_pos < inactive_pos,
+            "Active mentor should appear before inactive mentor",
+        )
 
     def test_adult_list_includes_inactive_at_bottom(self):
         """Adult list should show all adults, inactive at the bottom."""
@@ -76,12 +79,15 @@ class InactiveAdultTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Active Mentor")
         self.assertContains(response, "Inactive Parent")
-        
+
         # Verify ordering
         content = response.content.decode()
         active_pos = content.find("Active Mentor")
         inactive_pos = content.find("Inactive Parent")
-        self.assertTrue(active_pos < inactive_pos, "Active adult should appear before inactive adult")
+        self.assertTrue(
+            active_pos < inactive_pos,
+            "Active adult should appear before inactive adult",
+        )
 
     def test_parent_list_still_excludes_inactive(self):
         """Parent list should still exclude inactive parents (as they were not explicitly changed)."""
@@ -94,42 +100,53 @@ class InactiveAdultTest(TestCase):
     def test_login_logic_for_inactive_adults(self):
         """Inactive adults can only log in if they are also parents or alumni."""
         # 1. Inactive mentor who is NOT a parent/alumni
-        user1 = User.objects.create_user(username="mentor1", password="password")  # nosec B106
+        user1 = User.objects.create_user(
+            username="mentor1", password="password"
+        )  # nosec B106
         self.inactive_mentor.user = user1
-        self.inactive_mentor.save() # This triggers User sync
+        self.inactive_mentor.save()  # This triggers User sync
         user1.refresh_from_db()
-        self.assertFalse(user1.is_active, "Inactive mentor without other roles should have disabled login")
-        
+        self.assertFalse(
+            user1.is_active,
+            "Inactive mentor without other roles should have disabled login",
+        )
+
         # 2. Inactive mentor who IS a parent
-        user2 = User.objects.create_user(username="parent1", password="password")  # nosec B106
-        self.inactive_parent.is_mentor = True # Make them a mentor too
+        user2 = User.objects.create_user(
+            username="parent1", password="password"
+        )  # nosec B106
+        self.inactive_parent.is_mentor = True  # Make them a mentor too
         self.inactive_parent.user = user2
         self.inactive_parent.save()
         user2.refresh_from_db()
-        self.assertTrue(user2.is_active, "Inactive mentor who is also a parent should still have active login")
+        self.assertTrue(
+            user2.is_active,
+            "Inactive mentor who is also a parent should still have active login",
+        )
 
     def test_background_check_badges(self):
         """Mentors missing clearances should show a badge."""
         url = reverse("mentor_list")
-        
+
         # Active mentor needs background check (is_mentor=True)
         self.assertTrue(self.active_mentor.needs_background_check())
-        
+
         response = self.client.get(url)
         self.assertContains(response, "BG Check Needed")
-        
+
         # Add clearances for active mentor
         from programs.models import BackgroundCheck, BackgroundCheckType
+
         for check_type in BackgroundCheckType.values:
             BackgroundCheck.objects.create(
                 adult=self.active_mentor,
                 check_type=check_type,
                 cleared=True,
-                obtained_date=timezone.now().date()
+                obtained_date=timezone.now().date(),
             )
-        
+
         self.assertFalse(self.active_mentor.needs_background_check())
-        
+
         response = self.client.get(url)
         # Count "BG Check Needed" - should still be there for Inactive Mentor if not cleared
         # but self.active_mentor should no longer have it.
@@ -139,17 +156,21 @@ class InactiveAdultTest(TestCase):
     def test_inactive_mentor_access_denied(self):
         """Inactive mentors should not have mentor permissions."""
         from programs.permission_views import user_is_mentor
-        
+
         # Create a user for the inactive mentor
-        user = User.objects.create_user(username="inactive_mentor_user", password="password")  # nosec B106
+        user = User.objects.create_user(
+            username="inactive_mentor_user", password="password"
+        )  # nosec B106
         self.inactive_mentor.user = user
-        self.inactive_mentor.is_parent = True # Allow login
+        self.inactive_mentor.is_parent = True  # Allow login
         self.inactive_mentor.save()
-        
+
         user.refresh_from_db()
         self.assertTrue(user.is_active)
-        
-        self.assertFalse(user_is_mentor(user), "Inactive mentor should not be recognized as a mentor")
+
+        self.assertFalse(
+            user_is_mentor(user), "Inactive mentor should not be recognized as a mentor"
+        )
 
     def test_inactive_parent_does_not_get_emails(self):
         """Inactive parents should not be included in recipient lists for notifications."""

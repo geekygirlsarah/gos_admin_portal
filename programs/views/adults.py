@@ -164,7 +164,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         return qs
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_mentor=True).prefetch_related("students__enrollment_set__program")
+        qs = Adult.objects.filter(is_mentor=True).prefetch_related(
+            "students__enrollment_set__program"
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
