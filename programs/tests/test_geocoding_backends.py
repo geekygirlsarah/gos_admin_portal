@@ -1,6 +1,7 @@
 from unittest import mock
 from django.test import TestCase, override_settings
 import requests
+from urllib.parse import urlparse
 from programs.utils.geocoding import (
     NominatimBackend, 
     MapboxBackend, 
@@ -67,9 +68,10 @@ class GeocodingBackendTests(TestCase):
     def test_geocode_remote_fallbacks(self):
         # Scenario: Mapbox fails to find it, but Nominatim does
         def fake_geocode(url, *args, **kwargs):
-            if "mapbox.com" in url:
+            host = (urlparse(url).hostname or "").lower()
+            if host == "api.mapbox.com":
                 return MockResponse({"features": []})
-            if "nominatim.openstreetmap.org" in url:
+            if host == "nominatim.openstreetmap.org":
                 return MockResponse([{"lat": "40.44", "lon": "-79.99"}])
             return MockResponse({}, status_code=404)
 
