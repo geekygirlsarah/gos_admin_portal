@@ -70,7 +70,7 @@ class NominatimBackend(BaseGeocodingBackend):
                 first = data[0]
                 lat = float(first.get("lat"))
                 lon = float(first.get("lon"))
-                if lat and lon:
+                if lat is not None and lon is not None:
                     return (lat, lon)
         except (requests.RequestException, TypeError, ValueError, KeyError):
             pass
@@ -105,7 +105,7 @@ class MapboxBackend(BaseGeocodingBackend):
                 center = features[0].get("center")
                 if center and len(center) == 2:
                     lat, lon = float(center[1]), float(center[0])
-                    if lat and lon:
+                    if lat is not None and lon is not None:
                         return (lat, lon)
         except (requests.RequestException, TypeError, ValueError, KeyError):
             pass

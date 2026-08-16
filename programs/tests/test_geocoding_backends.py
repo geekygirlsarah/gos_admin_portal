@@ -56,6 +56,25 @@ class GeocodingBackendTests(TestCase):
                 mock_get.call_args[1]["params"]["access_token"], "fake-token"
             )
 
+    @override_settings(MAPBOX_ACCESS_TOKEN="fake-token")  # nosec B106
+    def test_mapbox_backend_zero_coordinates(self):
+        """Coordinates at (0.0, 0.0) are valid and must not be discarded."""
+        backend = MapboxBackend()
+        with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
+            mock_get.return_value = MockResponse(
+                {"features": [{"center": [0.0, 0.0]}]}
+            )
+            result = backend.geocode("Null Island")
+            self.assertEqual(result, (0.0, 0.0))
+
+    def test_nominatim_backend_zero_coordinates(self):
+        """Coordinates at (0.0, 0.0) are valid and must not be discarded."""
+        backend = NominatimBackend()
+        with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
+            mock_get.return_value = MockResponse([{"lat": "0.0", "lon": "0.0"}])
+            result = backend.geocode("Null Island")
+            self.assertEqual(result, (0.0, 0.0))
+
     @override_settings(MAPBOX_ACCESS_TOKEN="")  # nosec B106
     def test_mapbox_backend_skipped_without_token(self):
         backend = MapboxBackend()
