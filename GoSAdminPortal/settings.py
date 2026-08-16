@@ -170,6 +170,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # TEMPORARY: enforces the MENTOR_ACCESS_BLOCKED login/feature block.
+    # Remove together with the settings flag once mentor features are ready.
+    "GoSAdminPortal.middleware.TemporaryMentorBlockMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
     # Must come AFTER SessionMiddleware and AuthenticationMiddleware:
     "audit.middleware.AuditHistoryMiddleware",
@@ -367,6 +370,30 @@ APPLY_IP_POST_WINDOW_SECONDS = int(os.getenv("APPLY_IP_POST_WINDOW_SECONDS", "60
 APPLY_OTP_SEND_LIMIT = int(os.getenv("APPLY_OTP_SEND_LIMIT", "5"))
 APPLY_OTP_VERIFY_LIMIT = int(os.getenv("APPLY_OTP_VERIFY_LIMIT", "10"))
 APPLY_OTP_WINDOW_SECONDS = int(os.getenv("APPLY_OTP_WINDOW_SECONDS", "3600"))
+
+# ── TEMPORARY mentor access block ─────────────────────────────────────────
+# Remove this whole block (and every `MENTOR_ACCESS_BLOCKED` check in
+# GoSAdminPortal/middleware.py and programs/permission_views.py) once mentor
+# portal features are ready.
+#
+# While enabled:
+#   * Users whose ONLY role is Mentor (no Parent/Alumni flags and not a lead
+#     mentor) are logged out and sent back to the login page with the message
+#     "Sorry, mentors cannot log in yet. You'll receive an announcement when
+#     you can."
+#   * Users who are Mentors AND Parents/Alumni stay logged in, but their
+#     mentor role is suppressed: get_user_role never returns "Mentor", so they
+#     only see non-mentor features.
+#   * Lead mentors and superusers are unaffected.
+#
+# Disabled while running `manage.py test` (like APPLY_RATE_LIMIT_ENABLED) so
+# the existing mentor test coverage keeps working. Force it on in a specific
+# test with `@override_settings(MENTOR_ACCESS_BLOCKED=True)`; force it off in
+# any environment with MENTOR_ACCESS_BLOCKED=0.
+MENTOR_ACCESS_BLOCKED = (
+    os.getenv("MENTOR_ACCESS_BLOCKED", "").strip().lower() not in ("0", "false", "no")
+    and not TESTING
+)
 
 # Server-side geocoding for the student map.
 # Results are cached in the AddressGeocode model so each unique address is

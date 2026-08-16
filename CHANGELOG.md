@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-16
+
+### Changed
+- **Temporary Mentor Access Block**: While mentor portal features are being finished, mentors cannot log in yet. Mentors whose only role is mentor are signed out and returned to the login page with the message "Sorry, mentors cannot log in yet. You'll receive an announcement when you can." Mentors who are also parents or alumni can still log in to manage their students' information or their alumni profile, but they won't see mentor-specific features until the block is lifted. Lead mentors are unaffected.
+
 ## 2026-08-15
 
 ### Added
