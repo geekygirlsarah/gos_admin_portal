@@ -1,10 +1,12 @@
 from unittest import mock
-from django.test import TestCase, override_settings
-import requests
 from urllib.parse import urlparse
+
+import requests
+from django.test import TestCase, override_settings
+
 from programs.utils.geocoding import (
-    NominatimBackend,
     MapboxBackend,
+    NominatimBackend,
     _geocode_remote,
     get_geocoding_backends,
 )
@@ -40,7 +42,7 @@ class GeocodingBackendTests(TestCase):
             result = backend.geocode("Unknown Place")
             self.assertIsNone(result)
 
-    @override_settings(MAPBOX_ACCESS_TOKEN="fake-token")
+    @override_settings(MAPBOX_ACCESS_TOKEN="fake-token")  # nosec B106
     def test_mapbox_backend_success(self):
         backend = MapboxBackend()
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
@@ -54,7 +56,7 @@ class GeocodingBackendTests(TestCase):
                 mock_get.call_args[1]["params"]["access_token"], "fake-token"
             )
 
-    @override_settings(MAPBOX_ACCESS_TOKEN="")
+    @override_settings(MAPBOX_ACCESS_TOKEN="")  # nosec B106
     def test_mapbox_backend_skipped_without_token(self):
         backend = MapboxBackend()
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
@@ -69,7 +71,7 @@ class GeocodingBackendTests(TestCase):
             "programs.utils.geocoding.NominatimBackend",
         ],
         GEOCODING_DELAY_SECONDS=0,
-    )
+    )  # nosec B106
     def test_geocode_remote_fallbacks(self):
         # Scenario: Mapbox fails to find it, but Nominatim does
         def fake_geocode(url, *args, **kwargs):
@@ -94,7 +96,7 @@ class GeocodingBackendTests(TestCase):
             "programs.utils.geocoding.NominatimBackend",
         ],
         GEOCODING_DELAY_SECONDS=0,
-    )
+    )  # nosec B106
     def test_geocode_remote_stops_at_first_success(self):
         # Scenario: Mapbox finds it, Nominatim should not be called
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:

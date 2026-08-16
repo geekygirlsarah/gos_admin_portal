@@ -1,10 +1,12 @@
-from django.test import TestCase, Client
-from django.urls import reverse
-from django.contrib.auth.models import User, Group
-from attendance.models import AttendanceSession, AttendanceEvent
-from programs.models import Program
-from django.utils import timezone
 import datetime
+
+from django.contrib.auth.models import Group, User
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from attendance.models import AttendanceEvent, AttendanceSession
+from programs.models import Program
 
 
 class VisitorManagementTest(TestCase):
@@ -12,10 +14,10 @@ class VisitorManagementTest(TestCase):
         self.client = Client()
         self.lead_mentor_user = User.objects.create_superuser(
             username="leadmentor", email="lead@example.com", password="password"
-        )
+        )  # nosec B106
         self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor_user.groups.add(self.lead_mentor_group)
-        self.client.login(username="leadmentor", password="password")
+        self.client.login(username="leadmentor", password="password")  # nosec B106
 
         self.program = Program.objects.create(
             name="Test Program", start_date=datetime.date(2026, 1, 1)
