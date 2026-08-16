@@ -159,7 +159,7 @@ class Command(BaseCommand):
                 "description": "Current computer vision and autonomous controls cohort.",
                 "active": True,
                 "start_date": date(this_year, 3, 1),
-                "end_date": date(this_year, 8, 15),
+                "end_date": date(this_year, 11, 15),
                 "cost": "$420",
                 "grade_range_start": 8,
                 "grade_range_end": 12,
