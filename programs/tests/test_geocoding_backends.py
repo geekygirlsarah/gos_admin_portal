@@ -3,11 +3,12 @@ from django.test import TestCase, override_settings
 import requests
 from urllib.parse import urlparse
 from programs.utils.geocoding import (
-    NominatimBackend, 
-    MapboxBackend, 
-    _geocode_remote, 
-    get_geocoding_backends
+    NominatimBackend,
+    MapboxBackend,
+    _geocode_remote,
+    get_geocoding_backends,
 )
+
 
 class MockResponse:
     def __init__(self, data, status_code=200):
@@ -21,6 +22,7 @@ class MockResponse:
 
     def json(self):
         return self._data
+
 
 class GeocodingBackendTests(TestCase):
     def test_nominatim_backend_success(self):
@@ -42,15 +44,15 @@ class GeocodingBackendTests(TestCase):
     def test_mapbox_backend_success(self):
         backend = MapboxBackend()
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
-            mock_get.return_value = MockResponse({
-                "features": [{
-                    "center": [-79.99, 40.44]
-                }]
-            })
+            mock_get.return_value = MockResponse(
+                {"features": [{"center": [-79.99, 40.44]}]}
+            )
             result = backend.geocode("100 Main St")
             self.assertEqual(result, (40.44, -79.99))
             self.assertIn("api.mapbox.com", mock_get.call_args[0][0])
-            self.assertEqual(mock_get.call_args[1]["params"]["access_token"], "fake-token")
+            self.assertEqual(
+                mock_get.call_args[1]["params"]["access_token"], "fake-token"
+            )
 
     @override_settings(MAPBOX_ACCESS_TOKEN="")
     def test_mapbox_backend_skipped_without_token(self):
@@ -62,8 +64,11 @@ class GeocodingBackendTests(TestCase):
 
     @override_settings(
         MAPBOX_ACCESS_TOKEN="fake-token",
-        GEOCODING_BACKENDS=["programs.utils.geocoding.MapboxBackend", "programs.utils.geocoding.NominatimBackend"],
-        GEOCODING_DELAY_SECONDS=0
+        GEOCODING_BACKENDS=[
+            "programs.utils.geocoding.MapboxBackend",
+            "programs.utils.geocoding.NominatimBackend",
+        ],
+        GEOCODING_DELAY_SECONDS=0,
     )
     def test_geocode_remote_fallbacks(self):
         # Scenario: Mapbox fails to find it, but Nominatim does
@@ -75,24 +80,27 @@ class GeocodingBackendTests(TestCase):
                 return MockResponse([{"lat": "40.44", "lon": "-79.99"}])
             return MockResponse({}, status_code=404)
 
-        with mock.patch("programs.utils.geocoding.requests.get", side_effect=fake_geocode) as mock_get:
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ) as mock_get:
             result = _geocode_remote("Fallback Street")
             self.assertEqual(result, (40.44, -79.99))
             self.assertEqual(mock_get.call_count, 2)
 
     @override_settings(
         MAPBOX_ACCESS_TOKEN="fake-token",
-        GEOCODING_BACKENDS=["programs.utils.geocoding.MapboxBackend", "programs.utils.geocoding.NominatimBackend"],
-        GEOCODING_DELAY_SECONDS=0
+        GEOCODING_BACKENDS=[
+            "programs.utils.geocoding.MapboxBackend",
+            "programs.utils.geocoding.NominatimBackend",
+        ],
+        GEOCODING_DELAY_SECONDS=0,
     )
     def test_geocode_remote_stops_at_first_success(self):
         # Scenario: Mapbox finds it, Nominatim should not be called
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
-            mock_get.return_value = MockResponse({
-                "features": [{
-                    "center": [-79.99, 40.44]
-                }]
-            })
+            mock_get.return_value = MockResponse(
+                {"features": [{"center": [-79.99, 40.44]}]}
+            )
             result = _geocode_remote("Mapbox Street")
             self.assertEqual(result, (40.44, -79.99))
             self.assertEqual(mock_get.call_count, 1)

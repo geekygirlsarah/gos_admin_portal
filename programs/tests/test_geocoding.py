@@ -191,26 +191,29 @@ class GeocodeStudentAddressesCommandTests(TestCase):
             zip_code="15213",
         )
         Enrollment.objects.create(student=student, program=program)
-        
+
         # Create a "not found" entry
         AddressGeocode.objects.create(
-            address="100 main st. pittsburgh pa 15213",
-            found=False
+            address="100 main st. pittsburgh pa 15213", found=False
         )
-        
+
         # Normal run should NOT retry it
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
             call_command("geocode_student_addresses", "--program", program.pk)
             mock_get.assert_not_called()
-            
+
         # Retry run SHOULD clear and retry it
         with mock.patch(
             "programs.utils.geocoding.requests.get",
-            side_effect=lambda *a, **k: MockResponse([{"lat": "40.44", "lon": "-79.99"}])
+            side_effect=lambda *a, **k: MockResponse(
+                [{"lat": "40.44", "lon": "-79.99"}]
+            ),
         ) as mock_get:
-            call_command("geocode_student_addresses", "--program", program.pk, "--retry-missing")
+            call_command(
+                "geocode_student_addresses", "--program", program.pk, "--retry-missing"
+            )
             self.assertEqual(mock_get.call_count, 1)
-            
+
         entry = AddressGeocode.objects.get(address="100 main st. pittsburgh pa 15213")
         self.assertTrue(entry.found)
         self.assertEqual(entry.latitude, 40.44)

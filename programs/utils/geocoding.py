@@ -30,7 +30,9 @@ class BaseGeocodingBackend:
 
     def __init__(self):
         self.timeout = getattr(settings, "GEOCODING_TIMEOUT", 10)
-        self.user_agent = getattr(settings, "GEOCODING_USER_AGENT", "GoSAdminPortal/1.0")
+        self.user_agent = getattr(
+            settings, "GEOCODING_USER_AGENT", "GoSAdminPortal/1.0"
+        )
         self.delay = getattr(settings, "GEOCODING_DELAY_SECONDS", 1.0)
 
     def geocode(self, address: str) -> Optional[LatLng]:
