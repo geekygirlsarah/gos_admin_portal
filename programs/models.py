@@ -243,6 +243,7 @@ class RolePermission(models.Model):
         ("school", "Student - School"),
         ("cmu_andrew", "Student - CMU Andrew ID"),
         ("background_checks", "Student - Background Checks"),
+        ("student_documents", "Student - Signed Documents"),
         ("discord", "Student - Discord"),
         ("first_website", "Student - FIRST Website"),
         ("parents_emergency", "Student - Parents/Emergency Contacts"),
@@ -426,6 +427,30 @@ class Program(models.Model):
         if self.end_date and self.end_date < today:
             return "Inactive"
         return "Active"
+
+    @property
+    def is_applications_open(self) -> bool:
+        """Return True if applications are currently open for this program."""
+        today = timezone.now().date()
+        if not self.active:
+            return False
+        # If open date is set, check it. Default is start_date (set in save())
+        if self.applications_open and self.applications_open > today:
+            return False
+        # If close date is set, check it. Default is end_date (set in save())
+        if self.applications_close and self.applications_close < today:
+            return False
+        # If the program has ended, applications are definitely closed.
+        if self.end_date and self.end_date < today:
+            return False
+        return True
+
+    @property
+    def applications_are_invalid(self) -> bool:
+        """Return True if applications are for programs where the applications closed or the program has ended."""
+        # This is essentially the complement of is_applications_open, but
+        # explicitly about whether an *existing* application is still valid.
+        return not self.is_applications_open
 
     def save(self, *args, **kwargs):
         if not self.applications_open and self.start_date:
@@ -958,6 +983,10 @@ class Student(models.Model):
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
                 changed = True
+            target_active = not self.graduated
+            if self.user.is_active != target_active:
+                self.user.is_active = target_active
+                changed = True
             if changed:
                 self.user.save()
 
@@ -1309,6 +1338,22 @@ class Adult(models.Model):
             s.attached_rel = rels.get(s.pk, "parent")
         return students
 
+    def requires_background_check(self) -> bool:
+        """Whether the adult must hold PA background clearances.
+        Currently, all mentors/volunteers require them.
+        """
+        return self.is_mentor
+
+    def needs_background_check(self) -> bool:
+        """Whether the adult requires clearances AND is missing at least one valid check."""
+        if not self.requires_background_check():
+            return False
+        required_types = set(BackgroundCheckType.values)
+        valid_types = {
+            bc.check_type for bc in self.background_checks.all() if bc.is_valid
+        }
+        return not required_types.issubset(valid_types)
+
     def clean(self):
         super().clean()
         from django.core.exceptions import ValidationError
@@ -1350,6 +1395,11 @@ class Adult(models.Model):
                 changed = True
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
+                changed = True
+            # Login is enabled if they are active OR if they have other active roles (parent/alumni)
+            target_active = self.active or self.is_parent or self.is_alumni
+            if self.user.is_active != target_active:
+                self.user.is_active = target_active
                 changed = True
             if changed:
                 self.user.save()
@@ -1683,6 +1733,15 @@ def _program_document_upload_to(instance, filename):
     return f"program_documents/{pid}/{filename}"
 
 
+def _student_document_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/student_documents/<student_id>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
+    sid = instance.student_id or "unassigned"
+    filename = sanitize_upload_filename(filename)
+    return f"student_documents/{sid}/{filename}"
+
+
 class ProgramDocument(models.Model):
     """A document (typically a PDF) that an approved applicant needs to
     download, sign, and re-upload before becoming a full student in the
@@ -1725,6 +1784,36 @@ class ProgramDocument(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.program})"
+
+
+class StudentDocument(models.Model):
+    """A signed document (typically a PDF) uploaded by a student (or their parent)
+    that was originally part of a Program enrollment process and carried over
+    from their application.
+    """
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="signed_documents",
+    )
+    program_document = models.ForeignKey(
+        ProgramDocument,
+        on_delete=models.CASCADE,
+        related_name="student_submissions",
+    )
+    file = models.FileField(
+        upload_to=_student_document_upload_to,
+        max_length=255,
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("student", "program_document")
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return f"{self.program_document.name} for {self.student}"
 
 
 class AddressGeocode(models.Model):

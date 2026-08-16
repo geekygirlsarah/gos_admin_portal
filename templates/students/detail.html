@@ -152,6 +152,30 @@
       </div>
       {% endif %}
 
+      {% can_read user 'student_documents' student as can_read_docs %}
+      {% if can_read_docs %}
+      <div class="card mb-4">
+        <div class="card-header">Signed Documents</div>
+        <div class="card-body">
+            <div class="row g-3 mb-2">
+                {% for doc in student.signed_documents.all %}
+                <div class="col-md-6">
+                    <div class="fw-semibold">{{ doc.program_document.name }}</div>
+                    <div class="small text-muted">Uploaded {{ doc.uploaded_at|date:'M j, Y' }}</div>
+                    <div>
+                        <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                            View File
+                        </a>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-muted">No signed documents on file.</div>
+                {% endfor %}
+            </div>
+        </div>
+      </div>
+      {% endif %}
+
       {% can_read user 'discord' student as can_read_discord %}
       {% if can_read_discord and 'discord' in program_feature_keys %}
       <div class="card mb-4">
@@ -195,6 +219,9 @@
                   {% else %}
                     {{ student.primary_contact }}
                   {% endif %}
+                  {% if not student.primary_contact.active %}
+                    <span class="badge bg-secondary">Inactive</span>
+                  {% endif %}
                 {% else %}
                   —
                 {% endif %}
@@ -208,6 +235,9 @@
                     <a href="{% url 'adult_detail' student.secondary_contact.pk %}">{{ student.secondary_contact }}</a>
                   {% else %}
                     {{ student.secondary_contact }}
+                  {% endif %}
+                  {% if not student.secondary_contact.active %}
+                    <span class="badge bg-secondary">Inactive</span>
                   {% endif %}
                 {% else %}
                   —
@@ -225,6 +255,9 @@
                           <a href="{% url 'adult_detail' p.pk %}">{{ p }}</a>
                         {% else %}
                           {{ p }}
+                        {% endif %}
+                        {% if not p.active %}
+                          <span class="badge bg-secondary">Inactive</span>
                         {% endif %}
                       </li>
                     {% endfor %}

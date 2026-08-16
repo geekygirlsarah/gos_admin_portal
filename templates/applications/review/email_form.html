@@ -1,0 +1,110 @@
+{% extends 'applications/review/_base.html' %}
+{% block title %}Applicant Messaging{% endblock %}
+{% block review_title %}Applicant Messaging{% endblock %}
+{% block extra_head %}
+  {% load static %}
+  <!-- Quill rich-text editor (self-hosted); provide CDN fallback via JS if unavailable -->
+  <link href="{% static 'vendor/quill/2.0.3/quill.snow.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.css' %}" rel="stylesheet">
+  <link href="{% static 'css/email_form.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block review_body %}
+<div class="row mb-3">
+  <div class="col">
+    <a class="link-secondary" href="{% url 'application_review_list' %}">← Back to Applications</a>
+  </div>
+</div>
+<div class="row">
+  <div class="col-lg-10 col-xl-9">
+    <h1 class="h4 mb-3">Applicant Messaging</h1>
+
+      {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% for field in form %}
+          {% if field.errors %}
+              <div class="text-danger small">{{ field.label }}: {{ field.errors|join:", " }}</div>
+          {% endif %}
+      {% endfor %}
+
+    <form method="post" class="needs-validation" novalidate>
+      {% csrf_token %}
+
+      <!-- Audience -->
+      <div class="card mb-3">
+        <div class="card-header">Audience</div>
+        <div class="card-body">
+          <div class="mb-3">
+            {{ form.program.label_tag }}
+            {{ form.program }}
+            {% if form.program.help_text %}<div class="form-text">{{ form.program.help_text }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Application Statuses</label>
+            {{ form.statuses }}
+            {% if form.statuses.help_text %}<div class="form-text">{{ form.statuses.help_text }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            {{ form.test_email.label_tag }}
+            {{ form.test_email }}
+            <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sender -->
+      <div class="card mb-3">
+        <div class="card-header">Sender</div>
+        <div class="card-body">
+          <div class="mb-0">
+            {{ form.from_account.label_tag }}
+            {{ form.from_account }}
+            <div class="form-text">Choose the sender address.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="card mb-3">
+        <div class="card-header">Content</div>
+        <div class="card-body">
+          <div class="mb-3">
+            {{ form.subject.label_tag }}
+            {{ form.subject }}
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label">Message body</label>
+            <div id="editor" class="form-control"></div>
+            <input type="hidden" name="body" id="id_body" value="{{ form.body.value|default:'' }}">
+            <div class="form-text">Rich text is supported. The email will be sent in HTML format with a plain-text fallback.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Testing & Send -->
+      <div class="card mb-4">
+        <div class="card-header">Testing &amp; Send</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6 text-md-end mt-3 mt-md-0">
+              <button type="submit" class="btn btn-primary">Send Email</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+    {% load static %}
+    <script src="{% static 'vendor/quill/2.0.3/quill.js' %}"></script>
+    <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}"></script>
+    <script src="{% static 'js/email_form.js' %}"></script>
+{% endblock %}

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
@@ -34,10 +35,16 @@ def get_user_role(user):
     if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
         return "LeadMentor"
 
+    # TEMPORARY mentor access block: while MENTOR_ACCESS_BLOCKED is on the
+    # Mentor role is suppressed so mentors who are also parents/alumni resolve
+    # to their non-mentor role. Mentor-only users fall through to None (they
+    # are logged out by TemporaryMentorBlockMiddleware anyway).
+    mentor_blocked = getattr(settings, "MENTOR_ACCESS_BLOCKED", False)
+
     # Check if the user is linked to an Adult profile
     try:
         adult = user.adult_profile
-        if adult.is_mentor:
+        if adult.active and adult.is_mentor and not mentor_blocked:
             return "Mentor"
         if adult.is_parent:
             return "Parent"
@@ -58,7 +65,7 @@ def get_user_role(user):
         pass
 
     # Check groups if profile link is missing or doesn't specify
-    if user.groups.filter(name="Mentor").exists():
+    if user.groups.filter(name="Mentor").exists() and not mentor_blocked:
         return "Mentor"
     if user.groups.filter(name="Parent").exists():
         return "Parent"
@@ -66,6 +73,25 @@ def get_user_role(user):
         return "Student"
 
     return None
+
+
+def mentor_access_blocked(user):
+    """TEMPORARY — True when the temporary ``MENTOR_ACCESS_BLOCKED`` flag is
+    active for this user.
+
+    Lead mentors and superusers are never blocked. Parents/alumni who also
+    mentor count as blocked for *mentor features* (their role resolves to
+    Parent/Alumni instead of Mentor) but not for logging in — the
+    ``TemporaryMentorBlockMiddleware`` only logs out users whose only role is
+    mentor. Remove together with the settings flag.
+    """
+    if not getattr(settings, "MENTOR_ACCESS_BLOCKED", False):
+        return False
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+        return False
+    return user_is_mentor(user)
 
 
 def _user_adult_flag(user, field, group_name):
@@ -76,7 +102,11 @@ def _user_adult_flag(user, field, group_name):
     if user is None or not getattr(user, "is_authenticated", False):
         return False
     try:
-        if getattr(user.adult_profile, field):
+        adult = user.adult_profile
+        if getattr(adult, field):
+            # If checking mentor status, also require the adult to be active
+            if field == "is_mentor" and not adult.active:
+                return False
             return True
     except (Adult.DoesNotExist, AttributeError):
         pass

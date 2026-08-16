@@ -288,6 +288,7 @@ class StudentDetailView(
                 "adultstudentrelationship_set",
                 "background_checks",
                 "race_ethnicities",
+                "signed_documents__program_document",
             )
         )
 

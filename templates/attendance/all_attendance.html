@@ -10,16 +10,19 @@
       <p class="text-muted">Master list of all attendance sessions.</p>
     </div>
     <div class="col-auto">
-      <form method="get" class="row g-2 align-items-center">
-        <div class="col-auto">
-          <select name="program_id" class="form-select form-select-sm" onchange="this.form.submit()">
-            <option value="">All Programs</option>
-            {% for p in programs %}
-            <option value="{{ p.id }}" {% if selected_program_id == p.id %}selected{% endif %}>{{ p.name_with_dates }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </form>
+      <div class="d-flex gap-2 align-items-center">
+        <a href="{% url 'visitor_management' %}" class="btn btn-sm btn-outline-primary">Manage Visitors</a>
+        <form method="get" class="row g-2 align-items-center mb-0">
+          <div class="col-auto">
+            <select name="program_id" class="form-select form-select-sm" onchange="this.form.submit()">
+              <option value="">All Programs</option>
+              {% for p in programs %}
+              <option value="{{ p.id }}" {% if selected_program_id == p.id %}selected{% endif %}>{{ p.name_with_dates }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -102,6 +105,10 @@
                     </select>
                   </div>
                   {% if not s.student and not s.adult %}
+                  <div class="col-md-3">
+                    <label class="form-label small fw-bold">Visitor Name</label>
+                    <input type="text" class="form-control form-control-sm" name="visitor_name" value="{{ s.visitor_name|default:'' }}" required />
+                  </div>
                   <div class="col-md-2">
                     <label class="form-label small fw-bold">Team #</label>
                     <input type="number" class="form-control form-control-sm" name="visitor_team_number" value="{{ s.visitor_team_number|default:'' }}" />

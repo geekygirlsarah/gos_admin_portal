@@ -24,6 +24,7 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <span>Identity & Roles</span>
           <div>
+            {% if not adult.active %}<span class="badge bg-secondary">Inactive</span>{% endif %}
             {% if adult.is_parent %}<span class="badge bg-info">Parent</span>{% endif %}
             {% if adult.is_mentor %}<span class="badge bg-primary">Mentor</span>{% endif %}
             {% if adult.is_alumni %}<span class="badge bg-success">Alumni</span>{% endif %}

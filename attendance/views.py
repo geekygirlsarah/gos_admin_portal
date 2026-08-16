@@ -860,6 +860,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             ci_raw = request.POST.get("check_in")
             co_raw = request.POST.get("check_out")
             program_id = request.POST.get("program_id")
+            visitor_name = request.POST.get("visitor_name")
             visitor_team_number = request.POST.get("visitor_team_number")
 
             ci = parse_datetime(ci_raw) if ci_raw else None
@@ -877,11 +878,46 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if program_id and program_id.isdigit():
                 session.program_id = int(program_id)
 
+            if visitor_name is not None and not session.student and not session.adult:
+                new_name = visitor_name.strip()
+                session.visitor_name = new_name
+                # Keep linked events in sync if they exist
+                if (
+                    session.opened_by_event
+                    and not session.opened_by_event.student
+                    and not session.opened_by_event.adult
+                ):
+                    session.opened_by_event.visitor_name = new_name
+                    session.opened_by_event.save(update_fields=["visitor_name"])
+                if (
+                    session.closed_by_event
+                    and not session.closed_by_event.student
+                    and not session.closed_by_event.adult
+                ):
+                    session.closed_by_event.visitor_name = new_name
+                    session.closed_by_event.save(update_fields=["visitor_name"])
+
             if visitor_team_number is not None:
-                if visitor_team_number == "":
-                    session.visitor_team_number = None
-                elif visitor_team_number.isdigit():
-                    session.visitor_team_number = int(visitor_team_number)
+                new_team = None
+                if visitor_team_number.isdigit():
+                    new_team = int(visitor_team_number)
+
+                session.visitor_team_number = new_team
+                # Keep linked events in sync if they exist
+                if (
+                    session.opened_by_event
+                    and not session.opened_by_event.student
+                    and not session.opened_by_event.adult
+                ):
+                    session.opened_by_event.visitor_team_number = new_team
+                    session.opened_by_event.save(update_fields=["visitor_team_number"])
+                if (
+                    session.closed_by_event
+                    and not session.closed_by_event.student
+                    and not session.closed_by_event.adult
+                ):
+                    session.closed_by_event.visitor_team_number = new_team
+                    session.closed_by_event.save(update_fields=["visitor_team_number"])
 
             session.recompute_duration()
             session.save()
@@ -892,3 +928,56 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             messages.success(request, "Attendance entry deleted.")
 
         return redirect_back(request, "all_attendance")
+
+
+class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    def get(self, request):
+        from django.db.models import Count
+
+        visitors = (
+            AttendanceSession.objects.filter(student__isnull=True, adult__isnull=True)
+            .exclude(visitor_name="")
+            .values("visitor_name")
+            .annotate(session_count=Count("id"))
+            .order_by("visitor_name")
+        )
+
+        return render(
+            request,
+            "attendance/visitor_management.html",
+            {
+                "visitors": visitors,
+            },
+        )
+
+    def post(self, request):
+        action = request.POST.get("action")
+        if action == "merge":
+            selected_names = request.POST.getlist("selected_names")
+            target_name = request.POST.get("target_name", "").strip()
+
+            if not target_name:
+                messages.error(request, "Target name is required for merge.")
+            elif not selected_names:
+                messages.error(request, "Select at least one visitor name to merge.")
+            else:
+                # Update all sessions
+                AttendanceSession.objects.filter(
+                    student__isnull=True,
+                    adult__isnull=True,
+                    visitor_name__in=selected_names,
+                ).update(visitor_name=target_name)
+
+                # Update all events
+                AttendanceEvent.objects.filter(
+                    student__isnull=True,
+                    adult__isnull=True,
+                    visitor_name__in=selected_names,
+                ).update(visitor_name=target_name)
+
+                messages.success(
+                    request,
+                    f"Merged {len(selected_names)} visitor names into '{target_name}'.",
+                )
+
+        return redirect("visitor_management")

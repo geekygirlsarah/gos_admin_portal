@@ -8,6 +8,7 @@ split into submodules.
 
 from __future__ import annotations
 
+from .adults import active_adults, active_alumni, active_mentors, active_parents
 from .alumni import convert_student_to_alumni, find_matching_alumni_adult
 from .balances import (
     compute_sliding_discount_rounded,
@@ -51,6 +52,11 @@ __all__ = [
     # alumni
     "convert_student_to_alumni",
     "find_matching_alumni_adult",
+    # adults
+    "active_adults",
+    "active_mentors",
+    "active_parents",
+    "active_alumni",
     # imports (csv/xlsx helpers + academic year)
     "get_academic_year_ending",
     "row_raw",

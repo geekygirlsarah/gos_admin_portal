@@ -26,6 +26,14 @@
             {% endfor %}
           </select>
         </div>
+        <div class="col-sm-auto">
+          <div class="form-check pt-4">
+            <input class="form-check-input" type="checkbox" name="open" value="1" id="open-only" {% if open_only %}checked{% endif %}>
+            <label class="form-check-label" for="open-only">
+              Open applications only
+            </label>
+          </div>
+        </div>
         <div class="col-auto">
           <button class="btn btn-primary" type="submit">Filter</button>
           <a class="btn btn-outline-secondary" href="{% url 'application_review_list' %}">Reset</a>
@@ -33,7 +41,10 @@
       </form>
     </div>
     <div class="col-auto ms-auto">
-      <form method="post" action="{% url 'application_cleanup_stale' %}" onsubmit="return confirm('Are you sure you want to delete all applications older than 30 days?');">
+      <a class="btn btn-outline-primary" href="{% url 'application_review_messaging' %}">
+        Message Applicants
+      </a>
+      <form method="post" action="{% url 'application_cleanup_stale' %}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete all applications older than 30 days?');">
         {% csrf_token %}
         <button class="btn btn-outline-danger" type="submit">
           Delete all apps > 30 days
@@ -45,9 +56,14 @@
   {% if grouped_applications %}
     {% for group in grouped_applications %}
       {% if group.apps %}
-        <h2 class="h5 mt-4 mb-2 text-primary">{{ group.title }}</h2>
+        <h2 class="h5 mt-4 mb-2 {% if group.is_invalid %}text-danger{% else %}text-primary{% endif %}">
+          {{ group.title }}
+          {% if group.is_invalid %}
+            <span class="badge bg-danger ms-2">Invalid</span>
+          {% endif %}
+        </h2>
         <div class="table-responsive">
-          <table class="table table-sm align-middle mb-4">
+          <table class="table table-sm align-middle mb-4 {% if group.is_invalid %}table-hover opacity-75{% endif %}">
             <thead>
               <tr>
                 <th><a href="{% sort_url 'id' %}" class="text-decoration-none text-dark">Application ID{% sort_icon 'id' %}</a></th>
@@ -67,7 +83,12 @@
                   <td>{{ app.get_applicant_type_display|default:"—" }}</td>
                   <td>{{ app.applicant_name|default:"—" }}</td>
                   <td>{{ app.program|default:"—" }}</td>
-                  <td><span class="badge bg-secondary">{{ app.status_label }}</span></td>
+                  <td>
+                    <span class="badge {% if group.is_invalid %}bg-danger{% else %}bg-secondary{% endif %}">
+                      {{ app.status_label }}
+                      {% if group.is_invalid %} (Closed/Ended){% endif %}
+                    </span>
+                  </td>
                   <td>{{ app.created_at|date:"Y-m-d" }}</td>
                   <td>{{ app.submitted_at|date:"Y-m-d"|default:"—" }}</td>
                   <td class="text-end">

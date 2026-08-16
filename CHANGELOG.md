@@ -2,11 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-16
+
+### Changed
+- **Temporary Mentor Access Block**: While mentor portal features are being finished, mentors cannot log in yet. Mentors whose only role is mentor are signed out and returned to the login page with the message "Sorry, mentors cannot log in yet. You'll receive an announcement when you can." Mentors who are also parents or alumni can still log in to manage their students' information or their alumni profile, but they won't see mentor-specific features until the block is lifted. Lead mentors are unaffected.
+
+## 2026-08-15
+
+### Added
+- **Visitor Management and Standardizing Names**:
+    - Added a new **Visitor Management** tool (accessible from Attendance pages) that allows Lead Mentors to see all unique visitor names and their session counts.
+    - Mentors can now **merge** multiple inconsistent visitor names (e.g., "John", "John D.", "John Doe") into a single standardized name across all historical attendance records and events.
+    - Visitor names can now be edited individually directly on the "All Program Entries" attendance page.
+- **Bulk Applicant Messaging**: Lead Mentors can now send bulk emails to applicants based on their application status and program. This is accessible via the new "Message Applicants" button on the application review list page. The feature supports rich text editing and allows filtering by multiple statuses and programs.
+- **Application Review Enhancements**:
+    - Added a filter to show only "Open applications" in the review list.
+    - Applications for programs that are closed or ended are now automatically grouped into a new "Closed or Ended Programs (Invalid)" category with clear visual indicators and badges.
+- **Enhanced Address Geocoding with Mapbox Support**:
+    - Added support for **Mapbox Geocoding API** as a primary geocoder, which provides significantly better address coverage than the default OpenStreetMap (Nominatim).
+    - Implemented a **backend-driven geocoding system** that supports multiple providers with automatic fallbacks. If Mapbox fails to find an address, the system can automatically fall back to OpenStreetMap.
+    - Added a new `--retry-missing` flag to the `geocode_student_addresses` management command. This allows Lead Mentors to re-attempt geocoding for addresses that were previously not found (e.g., when the site only used OpenStreetMap).
+    - New settings `GEOCODING_BACKENDS` and `MAPBOX_ACCESS_TOKEN` enable easy configuration of geocoding providers.
+
 ## 2026-08-13
+
+### Added
+- **Deactivate Mentors and Adults**: Lead Mentors can now mark a mentor, parent, or alumni as "inactive" by unchecking the Active box on their profile. Inactive adults are automatically hidden from the main parent/alumni lists and will no longer receive automated emails (like fee or payment notifications).
+- **Mentor List Refinement**: Inactive mentors are no longer hidden from the mentor list; instead, they are moved to the bottom of the list and marked with an "Inactive" badge. This allows tracking past mentors while keeping the current roster focused. The main Adults list also includes inactive adults at the bottom.
+- **Background Check Badges**: Mentors who are missing required PA background clearances or have expired ones now show a "BG Check Needed" badge next to their name in the mentor and adult lists.
+- **Refined Account Access**: When an adult is marked as inactive, their portal login account is only disabled if they are NOT also a parent or alumni. Inactive mentors who are also parents or alumni can still log in to manage their students' information or their own alumni profile, but their mentor-specific permissions are revoked.
+- **Disabled Member Sign-in**: Inactive mentors and students (those marked as graduated) can no longer sign in at the attendance kiosk. They are hidden from the name search, and their RFID cards will no longer resolve if tapped.
+- **Inactive Status Visibility**: A student's profile and the main adult list now clearly label any inactive adults with an "Inactive" badge.
+- **Adult List Utilities**: Added new developer utilities `active_adults()`, `active_mentors()`, `active_parents()`, and `active_alumni()` in `programs.utils` to ensure consistent filtering across the codebase.
+
+- **Application Documents Carried Over to Student Profile**: Signed documents uploaded during the application process are now automatically copied to the student's profile upon conversion. This ensures that legal forms and other signed documents remain accessible even if the original application is deleted.
+- **Retroactive Document Migration Tool**: Added a new management command `python manage.py move_application_documents` for administrators to migrate documents for students who were converted before this feature was implemented.
+- **Student Documents in Admin**: A new "Student Documents" section has been added to the Student admin page to view all carried-over documents.
+- **Student Documents Portal View**: Students and parents can now view signed documents directly on the student profile page.
+- **Program-wide Document Summary**: Lead Mentors and Mentors (with permission) can now access a "Signed Documents" overview page for each program, showing a matrix of all enrolled students and their submitted documents.
 
 ### Fixed
 - **Large and Unusual Filenames No Longer Crash the Site**: Previously, uploading a file with a very long name or unusual characters could cause a "SuspiciousFileOperation" error, resulting in a technical error page. Filenames are now automatically cleaned up and shortened (if necessary) before being saved. We've also increased the maximum allowed length for filenames across the portal (including student photos, application documents, and tax forms) to 255 characters to better handle long names from sources like Google Docs or mobile devices.
 - **Friendly Error for Invalid Uploads**: In the rare case that a file still cannot be saved (for example, if it's completely empty or corrupted in a way the system can't handle), you'll now see a helpful message asking you to rename the file and try again instead of seeing an error page.
+- **Missing Template Filter**: Added a `get_item` filter to allow dictionary lookups in templates, used for the new document summary matrix.
 
 ## 2026-08-11
 

@@ -59,7 +59,16 @@ def find_card_by_uid(uid: str) -> Optional[RFIDCard]:
 
 def resolve_person_by_uid(uid: str):
     card = resolve_card_by_uid(uid)
-    return (card.student or card.adult) if card else None
+    if not card:
+        return None
+    person = card.student or card.adult
+    if person:
+        # Check active status
+        if hasattr(person, "active") and not person.active:
+            return None
+        if hasattr(person, "graduated") and person.graduated:
+            return None
+    return person
 
 
 def resolve_student_by_uid(uid: str):

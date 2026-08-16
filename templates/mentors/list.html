@@ -41,6 +41,9 @@
                 {% else %}
                   {{ m.first_name }} {{ m.last_name }}
                 {% endif %}
+                {% if m.needs_background_check %}
+                  <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
+                {% endif %}
               </td>
               <td>{{ m.get_role_display }}</td>
               <td><span class="badge {% if m.active %}bg-success{% else %}bg-secondary{% endif %}">{{ m.active|yesno:"Yes,No" }}</span></td>

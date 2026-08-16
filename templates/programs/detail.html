@@ -34,6 +34,9 @@
             <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
             <a class="btn btn-outline-dark" href="{% url 'program_dues_owed' program.id %}">All Dues Owed</a>
             <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
+            {% if can_view_documents %}
+              <a class="btn btn-outline-dark" href="{% url 'program_student_documents' program.id %}">Signed Documents</a>
+            {% endif %}
             <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
             <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
             <a class="btn btn-outline-primary" href="{% url 'program_assignment' program.id %}">Assign Teams/Crews</a>

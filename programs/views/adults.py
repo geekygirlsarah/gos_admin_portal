@@ -26,6 +26,10 @@ from ..permission_views import (
     get_user_role,
 )
 from ..utils import (
+    active_adults,
+    active_alumni,
+    active_mentors,
+    active_parents,
     get_safe_url,
     redirect_back,
 )
@@ -52,8 +56,17 @@ class AdultsListView(
         "name": (Lower("first_name"), Lower("last_name")),
         "email": Lower("personal_email"),
         "phone": "phone_number",
+        "active": "active",
     }
     default_sort_field = "name"
+
+    def apply_sorting(self, qs):
+        # Always prepend -active to sorting if not already sorting by active
+        sort = self.get_sort_field()
+        qs = super().apply_sorting(qs)
+        if sort != "active":
+            qs = qs.order_by("-active", *qs.query.order_by)
+        return qs
 
     def get_queryset(self):
 
@@ -98,7 +111,7 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_parent=True).prefetch_related(
+        qs = active_parents().prefetch_related(
             "students__school", "students__enrollment_set__program"
         )
         program_id = self.kwargs.get("program_id")
@@ -142,9 +155,18 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     }
     default_sort_field = "name"
 
+    def apply_sorting(self, qs):
+        # Always prepend -active to sorting if not already sorting by active
+        sort = self.get_sort_field()
+        qs = super().apply_sorting(qs)
+        if sort != "active":
+            qs = qs.order_by("-active", *qs.query.order_by)
+        return qs
+
     def get_queryset(self):
         qs = Adult.objects.filter(is_mentor=True).prefetch_related(
-            "students__enrollment_set__program"
+            "students__enrollment_set__program",
+            "background_checks",
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -175,9 +197,7 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_alumni=True).prefetch_related(
-            "students__enrollment_set__program"
-        )
+        qs = active_alumni().prefetch_related("students__enrollment_set__program")
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
