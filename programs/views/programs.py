@@ -807,6 +807,8 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
                 "city",
                 "state",
                 "zip_code",
+                "phone_number",
+                "personal_email",
             )
             .annotate(
                 sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
@@ -821,18 +823,51 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
             if not addr:
                 continue
             name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
-            rows.append((name or f"Student #{s.pk}", addr))
+            rows.append(
+                (
+                    name or f"Student #{s.pk}",
+                    addr,
+                    s.phone_number or "",
+                    s.personal_email or "",
+                )
+            )
             addresses.append(addr)
         points = resolve_address_points(addresses) if addresses else {}
         items = [
             {
                 "name": name,
                 "address": addr,
+                "phone": phone,
+                "email": email,
                 "latitude": points[addr][0] if points.get(addr) else None,
                 "longitude": points[addr][1] if points.get(addr) else None,
             }
-            for name, addr in rows
+            for name, addr, phone, email in rows
         ]
+        # For parent/student views, show names of students who opted out of
+        # directory sharing in an "Unlisted Students" section below the map.
+        unlisted = []
+        if role in ("Parent", "Student"):
+            unlisted_qs = (
+                Student.objects.filter(
+                    enrollment__program=program,
+                    enrollment__active=True,
+                    graduated=False,
+                    directory_consent=False,
+                )
+                .distinct()
+                .only("first_name", "legal_first_name", "last_name")
+                .annotate(
+                    sort_first=Coalesce(
+                        NullIf("first_name", Value("")), "legal_first_name"
+                    )
+                )
+                .order_by(Lower("sort_first"), Lower("last_name"))
+            )
+            for s in unlisted_qs:
+                name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+                if name:
+                    unlisted.append(name)
         if role in ("Parent", "Student"):
             back_url = reverse("profile_dashboard")
             back_label = "← Back to Dashboard"
@@ -845,6 +880,7 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
             {
                 "program": program,
                 "items": items,
+                "unlisted": unlisted,
                 "back_url": back_url,
                 "back_label": back_label,
             },
