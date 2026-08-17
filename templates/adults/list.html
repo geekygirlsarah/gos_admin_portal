@@ -38,9 +38,9 @@
             <tr>
               <td>
                 {% if a.photo %}
-                  <img src="{{ a.photo.url }}" alt="{{ a.first_name }} {{ a.last_name }}" class="avatar avatar-32 me-2"/>
+                  <img src="{{ a.photo.url }}" alt="{{ a.full_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
-                {{ a.first_name }} {{ a.last_name }}
+                {{ a.full_name }}
                 {% if not a.active %}
                   <span class="badge bg-secondary ms-1">Inactive</span>
                 {% endif %}
