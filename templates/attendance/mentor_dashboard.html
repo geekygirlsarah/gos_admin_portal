@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load permission_tags %}
+
+{% block title %}Program Attendance — {{ program.name }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js" nonce="{{ request.csp_nonce }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h1 class="mb-1">Attendance Hours — {{ program.name }}{% if program.year_display %} ({{ program.year_display }}){% endif %}</h1>
+  {% if program.start_date or program.end_date %}
+  <p class="text-muted mb-4">
+    {% if program.start_date %}{{ program.start_date|date:"N j, Y" }}{% endif %}
+    {% if program.start_date and program.end_date %} – {% endif %}
+    {% if program.end_date %}{{ program.end_date|date:"N j, Y" }}{% endif %}
+  </p>
+  {% endif %}
+
+  {# ── Bar chart ── #}
+  {% if chart_data_json != '[]' %}
+  <div class="card mb-4">
+    <div class="card-header">Total Hours per Student</div>
+    <div class="card-body">
+      <div style="height: {{ student_list|length|add:1 }}rem; min-height: 300px; max-height: 700px;">
+        <canvas id="studentBarChart"></canvas>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Student hours table ── #}
+  <div class="card">
+    <div class="card-header">Student Hours</div>
+    <div class="table-responsive">
+      <table class="table table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th class="text-end">Total Hours</th>
+            <th class="text-end">Sessions</th>
+            <th>Last Attended</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in student_list %}
+          <tr>
+            <td>{{ s.name }}</td>
+            <td class="text-end">{{ s.total_hours }}</td>
+            <td class="text-end">{{ s.session_count }}</td>
+            <td>{% if s.last_attended %}{{ s.last_attended|date:"N j, Y" }}{% else %}—{% endif %}</td>
+            <td>
+              <a href="{% url 'student_hours' s.id %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-graph-up"></i> View Hours
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-muted">No attendance data for this program.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  var labels = {{ chart_labels_json|safe }};
+  var data = {{ chart_data_json|safe }};
+
+  if (labels.length > 0) {
+    var ctx = document.getElementById('studentBarChart');
+    if (ctx) {
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Total Hours',
+            data: data,
+            backgroundColor: 'rgba(13, 110, 253, 0.7)',
+            borderColor: '#0d6efd',
+            borderWidth: 1
+          }]
+        },
+        options: {
+
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.parsed.x + ' hours';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              title: { display: true, text: 'Hours' }
+            }
+          }
+        }
+      });
+    }
+  }
+});
+</script>
+{% endblock %}

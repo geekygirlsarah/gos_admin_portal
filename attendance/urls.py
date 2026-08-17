@@ -3,6 +3,16 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path(
+        "hours/<int:pk>/",
+        views.student_hours_view,
+        name="student_hours",
+    ),
+    path(
+        "program-hours/<int:program_id>/",
+        views.program_hours_view,
+        name="program_hours",
+    ),
     path("rfid/", views.rfid_management_view, name="rfid_management"),
     path("active/", views.who_is_here_view, name="attendance_active"),
     path(

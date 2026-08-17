@@ -930,6 +930,258 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         return redirect_back(request, "all_attendance")
 
 
+@login_required
+def student_hours_view(request, pk):
+    """Student/parent attendance hours visualization with line chart and calendar."""
+    student = get_object_or_404(Student, pk=pk)
+
+    if not can_user_read(request.user, "attendance", obj=student):
+        messages.error(request, "You do not have permission to view attendance.")
+        return redirect("home")
+
+    # Attendance-enabled programs the student is enrolled in (active + past)
+    enrolled_programs = Program.objects.filter(
+        enrollment__student=student, features__key="attendance"
+    ).distinct()
+
+    # Program filter
+    program_id = request.GET.get("program_id")
+    selected_program = None
+    if program_id and program_id.isdigit():
+        selected_program = enrolled_programs.filter(id=int(program_id)).first()
+
+    sessions = AttendanceSession.objects.filter(student=student).select_related(
+        "program"
+    )
+    if selected_program:
+        sessions = sessions.filter(program=selected_program)
+
+    # --- Line chart: cumulative hours per week ---
+    import json
+    from datetime import date, datetime
+
+    tz = timezone.get_current_timezone()
+    now = timezone.now()
+
+    chart_labels = []
+    chart_data = []
+
+    overall_start_date = None
+    if selected_program and selected_program.start_date:
+        overall_start_date = selected_program.start_date
+    else:
+        start_dates = [p.start_date for p in enrolled_programs if p.start_date]
+        if start_dates:
+            overall_start_date = min(start_dates)
+        else:
+            earliest = sessions.order_by("check_in").first()
+            if earliest:
+                overall_start_date = earliest.check_in.date()
+
+    if overall_start_date:
+        start_dt = timezone.make_aware(
+            datetime.combine(overall_start_date, datetime.min.time()), tz
+        )
+
+        # Build week boundaries from start to now
+        week_start = overall_start_date
+        cumulative = 0.0
+        while week_start <= now.date():
+            week_end = week_start + timedelta(days=7)
+            week_start_dt = timezone.make_aware(
+                datetime.combine(week_start, datetime.min.time()), tz
+            )
+            week_end_dt = timezone.make_aware(
+                datetime.combine(week_end, datetime.min.time()), tz
+            )
+            # Sum hours for sessions overlapping this week
+            week_hours = 0.0
+            for s in sessions.filter(check_in__lt=week_end_dt).exclude(
+                check_out__isnull=False, check_out__lt=week_start_dt
+            ):
+                ci = s.check_in if s.check_in > week_start_dt else week_start_dt
+                co = s.check_out or now
+                if co > week_end_dt:
+                    co = week_end_dt
+                if co > ci:
+                    week_hours += (co - ci).total_seconds() / 3600.0
+            cumulative += week_hours
+            chart_labels.append(week_start.strftime("%b %d"))
+            chart_data.append(round(cumulative, 2))
+            week_start = week_end
+
+    # --- Stats ---
+    total_hours = 0.0
+    if overall_start_date:
+        start_dt = timezone.make_aware(
+            datetime.combine(overall_start_date, datetime.min.time()), tz
+        )
+        for s in sessions.filter(check_in__gte=start_dt):
+            co = s.check_out or now
+            if co > s.check_in:
+                total_hours += (co - s.check_in).total_seconds() / 3600.0
+        days = (now.date() - overall_start_date).days
+        weeks_elapsed = max((days // 7) + 1, 1)
+    else:
+        weeks_elapsed = 1
+
+    avg_hours_per_week = total_hours / weeks_elapsed if weeks_elapsed > 0 else 0
+
+    # --- Calendar: hours per day for the current month ---
+    cal_month = int(request.GET.get("cal_month", now.month))
+    cal_year = int(request.GET.get("cal_year", now.year))
+    import calendar as cal_mod
+
+    cal = cal_mod.Calendar(firstweekday=6)  # Sunday first
+    month_days = cal.monthdayscalendar(cal_year, cal_month)
+    month_names = [
+        "",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ]
+
+    # Aggregate hours by day for this month
+    month_start = timezone.make_aware(datetime(cal_year, cal_month, 1, 0, 0, 0), tz)
+    last_day = cal_mod.monthrange(cal_year, cal_month)[1]
+    month_end = timezone.make_aware(
+        datetime(cal_year, cal_month, last_day, 23, 59, 59), tz
+    )
+    day_hours = {}
+    for s in sessions.filter(check_in__lt=month_end).exclude(
+        check_out__isnull=False, check_out__lt=month_start
+    ):
+        ci = s.check_in if s.check_in > month_start else month_start
+        co = s.check_out or now
+        if co > month_end:
+            co = month_end
+        if co > ci:
+            session_date = timezone.localtime(ci).date()
+            hrs = (co - ci).total_seconds() / 3600.0
+            day_hours[session_date] = day_hours.get(session_date, 0.0) + hrs
+
+    # Build calendar data as list of [day, hours_display]
+    calendar_data = []
+    for week in month_days:
+        week_row = []
+        for day in week:
+            if day == 0:
+                week_row.append(None)
+            else:
+                d = date(cal_year, cal_month, day)
+                hrs = round(day_hours.get(d, 0.0), 1)
+                week_row.append({"day": day, "hours": hrs})
+        calendar_data.append(week_row)
+
+    # Determine prev/next month
+    if cal_month == 1:
+        prev_month, prev_year = 12, cal_year - 1
+    else:
+        prev_month, prev_year = cal_month - 1, cal_year
+    if cal_month == 12:
+        next_month, next_year = 1, cal_year + 1
+    else:
+        next_month, next_year = cal_month + 1, cal_year
+
+    return render(
+        request,
+        "attendance/hours_visualization.html",
+        {
+            "student": student,
+            "enrolled_programs": enrolled_programs,
+            "selected_program": selected_program,
+            "chart_labels_json": json.dumps(chart_labels),
+            "chart_data_json": json.dumps(chart_data),
+            "overall_start_date": overall_start_date,
+            "total_hours": round(total_hours, 1),
+            "avg_hours_per_week": round(avg_hours_per_week, 1),
+            "weeks_elapsed": weeks_elapsed,
+            "calendar_data": calendar_data,
+            "cal_month": cal_month,
+            "cal_year": cal_year,
+            "cal_month_name": month_names[cal_month],
+            "prev_month": prev_month,
+            "prev_year": prev_year,
+            "next_month": next_month,
+            "next_year": next_year,
+            "day_names": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+        },
+    )
+
+
+@login_required
+def program_hours_view(request, program_id):
+    """Mentor attendance dashboard: bar chart of hours per student in a program."""
+    program = get_object_or_404(Program, pk=program_id)
+
+    if not can_user_read(request.user, "attendance"):
+        messages.error(request, "You do not have permission to view attendance.")
+        return redirect("home")
+
+    if not program.has_feature("attendance"):
+        messages.error(request, "Attendance is not enabled for this program.")
+        return redirect("home")
+
+    from django.db.models import Count, Max, Sum
+
+    sessions = AttendanceSession.objects.filter(program=program).select_related(
+        "student"
+    )
+
+    # Aggregate per student
+    student_stats = (
+        sessions.filter(student__isnull=False)
+        .values("student__id", "student__first_name", "student__last_name")
+        .annotate(
+            total_minutes=Sum("duration_minutes"),
+            session_count=Count("id"),
+            last_attended=Max("check_in"),
+        )
+        .order_by("-total_minutes")
+    )
+
+    import json
+
+    chart_labels = []
+    chart_data = []
+    student_list = []
+
+    for stat in student_stats:
+        name = f"{stat['student__first_name']} {stat['student__last_name']}"
+        hours = round((stat["total_minutes"] or 0) / 60.0, 1)
+        chart_labels.append(name)
+        chart_data.append(hours)
+        student_list.append(
+            {
+                "id": stat["student__id"],
+                "name": name,
+                "total_hours": hours,
+                "session_count": stat["session_count"],
+                "last_attended": stat["last_attended"],
+            }
+        )
+
+    return render(
+        request,
+        "attendance/mentor_dashboard.html",
+        {
+            "program": program,
+            "chart_labels_json": json.dumps(chart_labels),
+            "chart_data_json": json.dumps(chart_data),
+            "student_list": student_list,
+        },
+    )
+
+
 class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request):
         from django.db.models import Count
