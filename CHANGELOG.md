@@ -6,11 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Signed Document Uploads for Mentor Agreements**: Mentor agreements with an attached PDF now require mentors to download the document, sign it, and upload the signed copy before they can accept. The agreement page shows the upload status (not yet uploaded / signed copy uploaded) and the "I Agree to All" button is blocked until all required signed copies are uploaded. Markdown-only agreements still use the existing checkbox flow. Re-uploading replaces the previous signed copy. Signed files are stored in `MEDIA_ROOT/agreement_submissions/<adult_id>/`.
+- **Add grades to student names**: On the program list view, add grades next to student names.
 
 ## 2026-08-16
 
 ### Changed
 - **Temporary Mentor Access Block**: While mentor portal features are being finished, mentors cannot log in yet. Mentors whose only role is mentor are signed out and returned to the login page with the message "Sorry, mentors cannot log in yet. You'll receive an announcement when you can." Mentors who are also parents or alumni can still log in to manage their students' information or their alumni profile, but they won't see mentor-specific features until the block is lifted. Lead mentors are unaffected.
+- **Resolve geocoding issues**: Fixed an issue where geocoding was not working properly for some addresses by adding Mapbox as a backend service to find addresses OpenStreetMap/Nominatim didn't have.
+- **Attendance graphs**: Add in attendance graphs for students to see hours over time, and mentors to see students hours over time.
 
 ## 2026-08-15
 

@@ -59,7 +59,7 @@
                     <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-32 me-2"/>
                   </a>
                 {% endif %}
-                <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
                 {% if e.team %}
                   <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                 {% endif %}
@@ -110,7 +110,7 @@
                     <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-32 me-2"/>
                   </a>
                 {% endif %}
-                <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
                 {% if e.team %}
                   <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                 {% endif %}
