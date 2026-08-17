@@ -9,13 +9,25 @@
 </div>
 
 <h1 class="h4 mb-3">{{ program.name }} — Student Addresses Map</h1>
-<p class="text-muted">Plots enrolled students with a mappable address. Addresses are geocoded via OpenStreetMap Nominatim and cached server-side.</p>
+<p class="text-muted">Students are mapped as when they join the program. If they have restricted sharing their address, phone, or email, they won't show up on the map.</p>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <div id="map" style="width:100%; height: 75vh; border:1px solid #ddd; border-radius:8px;"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 {{ items|json_script:"student-items" }}
+
+{% if unlisted %}
+<div class="mt-4">
+  <h2 class="h5">Unlisted Students</h2>
+  <p class="text-muted">These students have chosen not to share their contact information for the directory.</p>
+  <ul class="list-unstyled">
+    {% for name in unlisted %}
+      <li>{{ name }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 <script nonce="{{ request.csp_nonce }}">
 (function(){
   const items = JSON.parse(document.getElementById('student-items').textContent || '[]');
@@ -40,7 +52,14 @@
     const lat = Number(item.latitude), lon = Number(item.longitude);
     if (Number.isNaN(lat) || Number.isNaN(lon)) return;
     const marker = L.marker([lat, lon]).addTo(map);
-    marker.bindPopup('<strong>' + esc(item.name) + '</strong><br/>' + esc(item.address));
+    let popup = '<strong>' + esc(item.name) + '</strong><br/>' + esc(item.address);
+    if (item.phone) {
+      popup += '<br/>Phone: ' + esc(item.phone);
+    }
+    if (item.email) {
+      popup += '<br/>Email: <a href="mailto:' + esc(item.email) + '">' + esc(item.email) + '</a>';
+    }
+    marker.bindPopup(popup);
     bounds.extend([lat, lon]);
     hasPoints = true;
   });

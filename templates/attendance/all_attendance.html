@@ -11,6 +11,7 @@
     </div>
     <div class="col-auto">
       <div class="d-flex gap-2 align-items-center">
+        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addEntryModal">Add Entry</button>
         <a href="{% url 'visitor_management' %}" class="btn btn-sm btn-outline-primary">Manage Visitors</a>
         <form method="get" class="row g-2 align-items-center mb-0">
           <div class="col-auto">
@@ -136,4 +137,79 @@
   </div>
   {% endif %}
 </div>
+
+<div class="modal fade" id="addEntryModal" tabindex="-1" aria-labelledby="addEntryModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add" />
+        <div class="modal-header">
+          <h5 class="modal-title" id="addEntryModalLabel">Add Attendance Entry</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Person Type</label>
+            <select name="person_type" id="addPersonType" class="form-select" required onchange="toggleAddPersonFields()">
+              <option value="student">Student</option>
+              <option value="visitor">Visitor</option>
+            </select>
+          </div>
+          <div id="addStudentFields">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Student</label>
+              <select name="student_id" id="addStudentId" class="form-select">
+                <option value="">-- Select Student --</option>
+                {% for st in students %}
+                <option value="{{ st.id }}">{{ st.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div id="addVisitorFields" style="display:none;">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Visitor Name</label>
+              <input type="text" class="form-control" name="visitor_name" id="addVisitorName" maxlength="120" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Team Number <span class="text-muted fw-normal">(optional)</span></label>
+              <input type="number" class="form-control" name="visitor_team_number" id="addVisitorTeam" min="0" />
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Program</label>
+            <select name="program_id" class="form-select" required>
+              {% for p in programs %}
+              <option value="{{ p.id }}" {% if selected_program_id == p.id %}selected{% endif %}>{{ p.name_with_dates }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Check-in</label>
+            <input type="datetime-local" class="form-control" name="check_in" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Check-out <span class="text-muted fw-normal">(leave blank for open session)</span></label>
+            <input type="datetime-local" class="form-control" name="check_out" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">Add Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleAddPersonFields() {
+  var type = document.getElementById('addPersonType').value;
+  document.getElementById('addStudentFields').style.display = type === 'student' ? '' : 'none';
+  document.getElementById('addVisitorFields').style.display = type === 'visitor' ? '' : 'none';
+  document.getElementById('addStudentId').required = type === 'student';
+  document.getElementById('addVisitorName').required = type === 'visitor';
+}
+</script>
 {% endblock %}
