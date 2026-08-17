@@ -39,6 +39,7 @@
             {% endif %}
             <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
             <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
+            <a class="btn btn-outline-dark" href="{% url 'program_student_export' program.id %}">Export Students</a>
             <a class="btn btn-outline-primary" href="{% url 'program_assignment' program.id %}">Assign Teams/Crews</a>
             {% if 'signout-sheet' in program.feature_keys %}
               <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
