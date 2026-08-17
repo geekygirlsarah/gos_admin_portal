@@ -10,7 +10,9 @@ class PreferredNameDisplayTest(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_superuser(
-            username="leadmentor", email="lead@example.com", password="password"  # nosec B106
+            username="leadmentor",
+            email="lead@example.com",
+            password="password",  # nosec B106
         )
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(group)

@@ -14,10 +14,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from programs.models import MentorAgreement
 
-DEFAULT_FILE = (
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "data_policy.md"
-)
+DEFAULT_FILE = Path(__file__).resolve().parent.parent.parent.parent / "data_policy.md"
 DEFAULT_SLUG = "data-access-policy"
 
 
