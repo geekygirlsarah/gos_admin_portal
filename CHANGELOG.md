@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-17
+
+### Added
+- **Signed Document Uploads for Mentor Agreements**: Mentor agreements with an attached PDF now require mentors to download the document, sign it, and upload the signed copy before they can accept. The agreement page shows the upload status (not yet uploaded / signed copy uploaded) and the "I Agree to All" button is blocked until all required signed copies are uploaded. Markdown-only agreements still use the existing checkbox flow. Re-uploading replaces the previous signed copy. Signed files are stored in `MEDIA_ROOT/agreement_submissions/<adult_id>/`.
+
 ## 2026-08-16
 
 ### Changed

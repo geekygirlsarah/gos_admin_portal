@@ -34,6 +34,9 @@
                 {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'agreements' %}active{% endif %}" id="agreements-tab" data-bs-toggle="tab" data-bs-target="#agreements" type="button" role="tab" aria-controls="agreements" aria-selected="{% if active_tab == 'agreements' %}true{% else %}false{% endif %}">Agreements</button>
+        </li>
     </ul>
 
     <div class="tab-content" id="settingsTabsContent">
@@ -692,6 +695,172 @@ discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) 
                     </form>
                 </div>
             </div>
+        </div>
+
+        <!-- Agreements Tab -->
+        <div class="tab-pane fade {% if active_tab == 'agreements' %}show active{% endif %}" id="agreements" role="tabpanel" aria-labelledby="agreements-tab">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Existing Agreements</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Slug</th>
+                                    <th>Version</th>
+                                    <th>Effective Date</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for agreement in mentor_agreements %}
+                                <tr>
+                                    <td>{{ agreement.title }}</td>
+                                    <td><code>{{ agreement.slug }}</code></td>
+                                    <td>v{{ agreement.version }}</td>
+                                    <td>{{ agreement.effective_date|date:"M j, Y" }}</td>
+                                    <td>
+                                        <span class="badge {% if agreement.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ agreement.is_active|yesno:"Active,Draft" }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end d-flex gap-1 justify-content-end">
+                                        <form method="post" class="d-inline" action="{% url 'portal_agreements' %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="toggle_agreement">
+                                            <input type="hidden" name="agreement_id" value="{{ agreement.id }}">
+                                            <button class="btn btn-sm {% if agreement.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                {% if agreement.is_active %}Deactivate{% else %}Activate{% endif %}
+                                            </button>
+                                        </form>
+                                        <form method="post" class="d-inline js-confirm" data-confirm="Delete this agreement and all its versions? This cannot be undone." action="{% url 'portal_agreements' %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_agreement">
+                                            <input type="hidden" name="agreement_id" value="{{ agreement.id }}">
+                                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">No agreements created yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create New Agreement -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Create New Agreement</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'portal_agreements' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_agreement">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="new_slug" class="form-label">Slug</label>
+                                <input type="text" name="slug" id="new_slug" class="form-control" placeholder="e.g. data-access-policy" required pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only">
+                                <div class="form-text">URL-friendly identifier. All versions of this agreement share the same slug.</div>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="new_title" class="form-label">Title</label>
+                                <input type="text" name="title" id="new_title" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="new_content" class="form-label">Content (Markdown)</label>
+                                <textarea name="content" id="new_content" class="form-control" rows="8" placeholder="Write agreement content in Markdown, or upload a document below."></textarea>
+                                <div class="form-text">Leave blank if uploading a document instead.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="new_document" class="form-label">Document (PDF, etc.)</label>
+                                <input type="file" name="document" id="new_document" class="form-control" accept=".pdf,.doc,.docx">
+                                <div class="form-text">Leave empty if writing markdown content above.</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="new_effective_date" class="form-label">Effective Date</label>
+                                <input type="date" name="effective_date" id="new_effective_date" class="form-control" required>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="is_active" id="new_is_active" checked>
+                                    <label class="form-check-label" for="new_is_active">Active</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-success">Create Agreement</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% regroup mentor_agreements by slug as slug_groups %}
+            {% for group in slug_groups %}
+            {% with current=group.list|first %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Update: {{ current.title }}</h5>
+                    <span class="badge bg-info">{{ group.list|length }} version{{ group.list|length|pluralize }}</span>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'portal_agreements' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_agreement">
+                        <input type="hidden" name="agreement_id" value="{{ current.id }}">
+                        <input type="hidden" name="slug" value="{{ current.slug }}">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Slug</label>
+                                <input type="text" class="form-control" value="{{ current.slug }}" disabled>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="edit_title_{{ current.id }}" class="form-label">Title</label>
+                                <input type="text" name="title" id="edit_title_{{ current.id }}" class="form-control" value="{{ current.title }}" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="edit_content_{{ current.id }}" class="form-label">Content (Markdown)</label>
+                                <textarea name="content" id="edit_content_{{ current.id }}" class="form-control" rows="8">{{ current.content }}</textarea>
+                                <div class="form-text">
+                                    {% if current.document %}
+                                    Currently has a document uploaded: <a href="{{ current.document.url }}" target="_blank">{{ current.document.name }}</a>.
+                                    {% endif %}
+                                    Leave blank if using a document.
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="edit_document_{{ current.id }}" class="form-label">Replace Document</label>
+                                <input type="file" name="document" id="edit_document_{{ current.id }}" class="form-control" accept=".pdf,.doc,.docx">
+                                <div class="form-text">Upload a new file to create a new version. Leave empty to keep the current one.</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="edit_effective_date_{{ current.id }}" class="form-label">Effective Date</label>
+                                <input type="date" name="effective_date" id="edit_effective_date_{{ current.id }}" class="form-control" value="{{ current.effective_date|date:'Y-m-d' }}" required>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="is_active" id="edit_is_active_{{ current.id }}" {% if current.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="edit_is_active_{{ current.id }}">Active</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                                <small class="text-muted ms-2">Editing content or uploading a new document creates a new version.</small>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
         </div>
     </div>
 </div>

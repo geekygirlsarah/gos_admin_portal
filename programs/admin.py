@@ -8,6 +8,9 @@ from .models import (
     BackgroundCheck,
     Enrollment,
     Fee,
+    MentorAgreement,
+    MentorAgreementAcceptance,
+    MentorAgreementSubmission,
     Payment,
     Program,
     ProgramDocument,
@@ -492,3 +495,36 @@ class SlidingScaleSettingsAdmin(admin.ModelAdmin):
 
 
 # StudentApplication admin removed; replaced by the `applications` app.
+
+
+@admin.register(MentorAgreement)
+class MentorAgreementAdmin(admin.ModelAdmin):
+    list_display = (
+        "slug",
+        "version",
+        "title",
+        "effective_date",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("is_active", "slug")
+    search_fields = ("title", "slug")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(MentorAgreementAcceptance)
+class MentorAgreementAcceptanceAdmin(admin.ModelAdmin):
+    list_display = ("adult", "agreement", "accepted_at", "ip_address")
+    list_filter = ("agreement",)
+    search_fields = ("adult__first_name", "adult__last_name")
+    autocomplete_fields = ("adult", "agreement")
+    readonly_fields = ("accepted_at",)
+
+
+@admin.register(MentorAgreementSubmission)
+class MentorAgreementSubmissionAdmin(admin.ModelAdmin):
+    list_display = ("adult", "agreement", "uploaded_at")
+    list_filter = ("agreement",)
+    search_fields = ("adult__first_name", "adult__last_name")
+    autocomplete_fields = ("adult", "agreement")
+    readonly_fields = ("uploaded_at",)

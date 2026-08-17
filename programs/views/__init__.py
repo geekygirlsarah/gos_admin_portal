@@ -42,6 +42,7 @@ from .imports import (
     SchoolImportView,
     StudentImportView,
 )
+from .mentor_agreement import mentor_agreement_view
 from .mixins import (
     DynamicPermissionMixin,
     DynamicReadPermissionMixin,

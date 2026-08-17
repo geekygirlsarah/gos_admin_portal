@@ -5,6 +5,7 @@ from django.views.generic import TemplateView
 from attendance.views import AttendanceImportView, student_attendance_view
 
 from .permission_views import (
+    PortalAgreementView,
     PortalCrewView,
     PortalKioskView,
     PortalPermissionsUpdateView,
@@ -563,5 +564,10 @@ urlpatterns = [
         "settings/sliding-scale/",
         PortalSlidingScaleSettingsView.as_view(),
         name="portal_sliding_scale_settings",
+    ),
+    path(
+        "settings/agreements/",
+        PortalAgreementView.as_view(),
+        name="portal_agreements",
     ),
 ]
