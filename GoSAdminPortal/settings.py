@@ -174,6 +174,7 @@ MIDDLEWARE = [
     # Remove together with the settings flag once mentor features are ready.
     "GoSAdminPortal.middleware.TemporaryMentorBlockMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
+    "GoSAdminPortal.middleware.MentorAgreementMiddleware",
     # Must come AFTER SessionMiddleware and AuthenticationMiddleware:
     "audit.middleware.AuditHistoryMiddleware",
 ]
@@ -392,6 +393,17 @@ APPLY_OTP_WINDOW_SECONDS = int(os.getenv("APPLY_OTP_WINDOW_SECONDS", "3600"))
 # any environment with MENTOR_ACCESS_BLOCKED=0.
 MENTOR_ACCESS_BLOCKED = (
     os.getenv("MENTOR_ACCESS_BLOCKED", "").strip().lower() not in ("0", "false", "no")
+    and not TESTING
+)
+
+# ── Mentor data access agreement ─────────────────────────────────────────
+# Mentors (and lead mentors, and any user with is_mentor=True) must accept
+# the current active MentorAgreement before accessing the portal.  Disabled
+# during tests by default; force on with
+# @override_settings(MENTOR_AGREEMENT_ENABLED=True).
+MENTOR_AGREEMENT_ENABLED = (
+    os.getenv("MENTOR_AGREEMENT_ENABLED", "").strip().lower()
+    not in ("0", "false", "no")
     and not TESTING
 )
 

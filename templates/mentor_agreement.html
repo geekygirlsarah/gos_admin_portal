@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Mentor Agreements - Girls of Steel Portal{% endblock %}
+
+{% block extra_head %}
+<style>
+    .agreement-content {
+        max-height: 50vh;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        background-color: #f8f9fa;
+    }
+    .agreement-content h2 {
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        font-size: 1.25rem;
+    }
+    .agreement-content h3 {
+        margin-top: 1.25rem;
+        margin-bottom: 0.5rem;
+        font-size: 1.1rem;
+    }
+    .agreement-content ul {
+        padding-left: 1.5rem;
+    }
+    .agreement-content li {
+        margin-bottom: 0.25rem;
+    }
+    .agreement-card {
+        border-left: 4px solid #0d6efd;
+    }
+    .agreement-card.accepted {
+        border-left-color: #198754;
+        opacity: 0.75;
+    }
+    .upload-form {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h1 class="h4 mb-0">
+                    <i class="bi bi-shield-lock me-2"></i>Mentor Agreements
+                </h1>
+            </div>
+            <div class="card-body">
+                {% if pending_details %}
+                <p class="text-muted mb-4">
+                    Please review and agree to each of the following documents before accessing the portal.
+                </p>
+
+                <form method="post" enctype="multipart/form-data" id="agreement-form">
+                    {% csrf_token %}
+
+                    {% for item in pending_details %}
+                    <div class="card mb-4 agreement-card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">{{ item.agreement.title }}</h5>
+                            <small class="text-muted">
+                                Version {{ item.agreement.version }} &mdash;
+                                Effective {{ item.agreement.effective_date|date:"F j, Y" }}
+                            </small>
+                        </div>
+                        <div class="card-body">
+                            {% if item.content_html %}
+                            <div class="agreement-content mb-3">
+                                {{ item.content_html|safe }}
+                            </div>
+                            {% endif %}
+
+                            {% if item.agreement.document %}
+                            <div class="mb-3">
+                                <a href="{{ item.agreement.document.url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>View Document (PDF)
+                                </a>
+                            </div>
+                            {% endif %}
+
+                            {% if item.needs_upload %}
+                            <div class="upload-form mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-upload me-1"></i>Upload Signed Copy
+                                </label>
+                                {% if item.submission %}
+                                <div class="mb-2">
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle me-1"></i>Signed copy uploaded
+                                    </span>
+                                    <small class="text-muted ms-2">
+                                        {{ item.submission.uploaded_at|date:"M j, Y g:i A" }}
+                                    </small>
+                                </div>
+                                {% else %}
+                                <div class="mb-2">
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Not yet uploaded
+                                    </span>
+                                </div>
+                                {% endif %}
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="file" name="file_{{ item.agreement.id }}"
+                                           accept=".pdf,.png,.jpg,.jpeg" class="form-control form-control-sm"
+                                           style="max-width: 300px;">
+                                    <input type="hidden" name="upload_agreement_id" value="{{ item.agreement.id }}">
+                                    <button type="submit" name="action" value="upload"
+                                            class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-upload me-1"></i>{% if item.submission %}Replace{% else %}Upload{% endif %}
+                                    </button>
+                                </div>
+                                {% if not item.submission %}
+                                <div class="form-text">Download the PDF above, sign it, then upload the signed copy.</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="agree-{{ item.agreement.id }}" required
+                                       {% if item.needs_upload and not item.submission %}disabled{% endif %}>
+                                <label class="form-check-label" for="agree-{{ item.agreement.id }}">
+                                    I have read and agree to the above {{ item.agreement.title }}.
+                                </label>
+                                {% if item.needs_upload and not item.submission %}
+                                <div class="form-text text-muted">
+                                    Upload the signed copy above before checking this box.
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="action" value="agree" class="btn btn-primary" id="agree-btn" disabled>
+                            <i class="bi bi-check-circle me-1"></i>I Agree
+                        </button>
+                        <button type="submit" name="action" value="disagree" class="btn btn-outline-secondary">
+                            I Do Not Agree
+                        </button>
+                    </div>
+                </form>
+
+                {% elif already_accepted %}
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-2"></i>
+                    You have already accepted all required mentor agreements.
+                </div>
+                <a href="{% url 'profile_dashboard' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+                </a>
+
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    There are no active mentor agreements at this time.
+                    Please contact a Lead Mentor if you have questions.
+                </div>
+                <a href="{% url 'profile_dashboard' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('agreement-form');
+        if (!form) return;
+
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+        const agreeBtn = document.getElementById('agree-btn');
+        if (!agreeBtn) return;
+
+        function updateButton() {
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            agreeBtn.disabled = !allChecked;
+        }
+
+        checkboxes.forEach(cb => cb.addEventListener('change', updateButton));
+        updateButton();
+    });
+</script>
+{% endblock %}

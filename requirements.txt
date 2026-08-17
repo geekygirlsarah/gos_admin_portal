@@ -51,6 +51,7 @@ joserfc==1.7.1
 jsonschema==4.25.1
 jsonschema-specifications==2025.9.1
 lxml==6.1.1
+markdown==3.8.2
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 marshmallow==4.3.0

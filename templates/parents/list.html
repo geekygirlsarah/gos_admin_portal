@@ -41,7 +41,7 @@
         <tbody>
           {% for p in parents %}
             <tr>
-              <td>{{ p.first_name }} {{ p.last_name }}</td>
+              <td>{{ p.full_name }}</td>
               <td>
                 {% for s in p.students.all %}
                   {{ s }}{% if not forloop.last %}, {% endif %}

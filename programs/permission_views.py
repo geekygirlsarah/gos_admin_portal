@@ -11,6 +11,7 @@ from .models import (
     Crew,
     Enrollment,
     Fee,
+    MentorAgreement,
     Payment,
     Program,
     RolePermission,
@@ -469,6 +470,10 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "pending_sliding_scale_count": SlidingScale.objects.filter(
                 status=SlidingScale.STATUS_PENDING
             ).count(),
+            "mentor_agreements": MentorAgreement.objects.order_by("slug", "-version"),
+            "mentor_agreement_slugs": MentorAgreement.objects.values_list(
+                "slug", flat=True
+            ).distinct(),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
@@ -675,3 +680,122 @@ class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             return redirect("/programs/settings/?tab=kiosk_configs")
 
         return redirect("/programs/settings/?tab=kiosk_configs")
+
+
+class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles create / update / toggle / delete actions for Mentor Agreements."""
+
+    def post(self, request):
+        from datetime import date
+
+        from .forms import MentorAgreementForm
+
+        action = request.POST.get("action")
+
+        if action == "add_agreement":
+            form = MentorAgreementForm(request.POST, request.FILES)
+            if form.is_valid():
+                slug = form.cleaned_data["slug"]
+                version = (
+                    MentorAgreement.objects.filter(slug=slug)
+                    .order_by("-version")
+                    .values_list("version", flat=True)
+                    .first()
+                )
+                version = (version or 0) + 1
+                agreement = form.save(commit=False)
+                agreement.version = version
+                if not agreement.effective_date:
+                    agreement.effective_date = date.today()
+                agreement.save()
+                messages.success(
+                    request,
+                    f"Agreement '{agreement.title}' created (version {version}).",
+                )
+            else:
+                messages.error(request, "Please correct the errors below.")
+            return redirect("/programs/settings/?tab=agreements")
+
+        elif action == "update_agreement":
+            agreement_id = request.POST.get("agreement_id")
+            try:
+                agreement = MentorAgreement.objects.get(pk=agreement_id)
+            except MentorAgreement.DoesNotExist:
+                messages.error(request, "Agreement not found.")
+                return redirect("/programs/settings/?tab=agreements")
+
+            old_content = agreement.content
+            old_doc = agreement.document
+            form = MentorAgreementForm(request.POST, request.FILES, instance=agreement)
+            if form.is_valid():
+                new_agreement = form.save(commit=False)
+                content_changed = new_agreement.content != old_content
+                doc_changed = (
+                    "document" in form.changed_data
+                    and new_agreement.document
+                    and new_agreement.document != old_doc
+                )
+                if content_changed or doc_changed:
+                    # Create new version
+                    version = (
+                        MentorAgreement.objects.filter(slug=agreement.slug)
+                        .order_by("-version")
+                        .values_list("version", flat=True)
+                        .first()
+                    )
+                    new_agreement.version = (version or 0) + 1
+                    new_agreement.pk = None
+                    new_agreement.created_at = None
+                    new_agreement.updated_at = None
+                    if not new_agreement.effective_date:
+                        new_agreement.effective_date = date.today()
+                    new_agreement.save()
+                    messages.success(
+                        request,
+                        f"Agreement '{new_agreement.title}' updated as version {new_agreement.version}.",
+                    )
+                else:
+                    # No content change — just update metadata (title, is_active, etc.)
+                    form.save()
+                    messages.success(
+                        request,
+                        f"Agreement '{agreement.title}' metadata updated.",
+                    )
+            else:
+                messages.error(request, "Please correct the errors below.")
+            return redirect("/programs/settings/?tab=agreements")
+
+        elif action == "toggle_agreement":
+            agreement_id = request.POST.get("agreement_id")
+            try:
+                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement.is_active = not agreement.is_active
+                agreement.save(update_fields=["is_active"])
+                state = "activated" if agreement.is_active else "deactivated"
+                messages.success(request, f"Agreement '{agreement.title}' {state}.")
+            except MentorAgreement.DoesNotExist:
+                messages.error(request, "Agreement not found.")
+            return redirect("/programs/settings/?tab=agreements")
+
+        elif action == "delete_agreement":
+            agreement_id = request.POST.get("agreement_id")
+            try:
+                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                title = agreement.title
+                from programs.models import MentorAgreementAcceptance
+
+                versions = MentorAgreement.objects.filter(slug=agreement.slug)
+                MentorAgreementAcceptance.objects.filter(
+                    agreement__in=versions
+                ).delete()
+                count = versions.count()
+                versions.delete()
+                messages.success(
+                    request,
+                    f"Agreement '{title}' and {count} version(s) deleted.",
+                )
+            except MentorAgreement.DoesNotExist:
+                messages.error(request, "Agreement not found.")
+            return redirect("/programs/settings/?tab=agreements")
+
+        return redirect("/programs/settings/?tab=agreements")

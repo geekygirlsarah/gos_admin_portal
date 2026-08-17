@@ -955,6 +955,64 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         )
 
 
+class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    """Export active students in a program as an Excel (.xlsx) file."""
+
+    section = "programs"
+
+    def get(self, request, pk):
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+
+        program = get_object_or_404(Program, pk=pk)
+
+        enrollments = (
+            Enrollment.objects.filter(
+                program=program, active=True, student__graduated=False
+            )
+            .select_related("student")
+            .annotate(
+                sort_first=Lower(
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                sort_last=Lower("student__last_name"),
+            )
+            .order_by("sort_first", "sort_last")
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Students"
+        ws.append(["First Name", "Last Name", "Grade"])
+
+        for enrollment in enrollments:
+            student = enrollment.student
+            ws.append(
+                [
+                    student.first_name or student.legal_first_name,
+                    student.last_name,
+                    student.grade_display or "",
+                ]
+            )
+
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        filename = f"{program.name} - Students.xlsx"
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
 class ProgramDocumentCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,

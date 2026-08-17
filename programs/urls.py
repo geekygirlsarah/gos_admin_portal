@@ -5,6 +5,7 @@ from django.views.generic import TemplateView
 from attendance.views import AttendanceImportView, student_attendance_view
 
 from .permission_views import (
+    PortalAgreementView,
     PortalCrewView,
     PortalKioskView,
     PortalPermissionsUpdateView,
@@ -53,6 +54,7 @@ from .views import (
     ProgramStudentBalancePrintView,
     ProgramStudentBalanceView,
     ProgramStudentDocumentsView,
+    ProgramStudentExportView,
     ProgramStudentMapView,
     ProgramStudentPhotoListView,
     ProgramStudentQuickCreateView,
@@ -139,6 +141,11 @@ urlpatterns = [
         "<int:pk>/schools/",
         login_required(ProgramSchoolsView.as_view()),
         name="program_schools",
+    ),
+    path(
+        "<int:pk>/export/",
+        login_required(ProgramStudentExportView.as_view()),
+        name="program_student_export",
     ),
     path(
         "<int:pk>/signout/",
@@ -563,5 +570,10 @@ urlpatterns = [
         "settings/sliding-scale/",
         PortalSlidingScaleSettingsView.as_view(),
         name="portal_sliding_scale_settings",
+    ),
+    path(
+        "settings/agreements/",
+        PortalAgreementView.as_view(),
+        name="portal_agreements",
     ),
 ]

@@ -42,6 +42,7 @@ from .imports import (
     SchoolImportView,
     StudentImportView,
 )
+from .mentor_agreement import mentor_agreement_view
 from .mixins import (
     DynamicPermissionMixin,
     DynamicReadPermissionMixin,
@@ -65,6 +66,7 @@ from .programs import (
     ProgramSignoutSheetView,
     ProgramStudentAddView,
     ProgramStudentDocumentsView,
+    ProgramStudentExportView,
     ProgramStudentMapView,
     ProgramStudentPhotoListView,
     ProgramStudentQuickCreateView,
@@ -134,6 +136,7 @@ __all__ = [
     "ProgramStudentBalancePrintView",
     "ProgramStudentBalanceView",
     "ProgramStudentDocumentsView",
+    "ProgramStudentExportView",
     "ProgramStudentMapView",
     "ProgramStudentPhotoListView",
     "ProgramStudentQuickCreateView",
