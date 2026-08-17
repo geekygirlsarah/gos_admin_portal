@@ -61,9 +61,7 @@ class GeocodingBackendTests(TestCase):
         """Coordinates at (0.0, 0.0) are valid and must not be discarded."""
         backend = MapboxBackend()
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
-            mock_get.return_value = MockResponse(
-                {"features": [{"center": [0.0, 0.0]}]}
-            )
+            mock_get.return_value = MockResponse({"features": [{"center": [0.0, 0.0]}]})
             result = backend.geocode("Null Island")
             self.assertEqual(result, (0.0, 0.0))
 

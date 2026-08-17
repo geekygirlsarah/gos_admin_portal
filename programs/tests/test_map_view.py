@@ -249,9 +249,8 @@ class ParentConsentTests(TestCase):
         self.assertContains(resp, "Consent Yes")
         # "Consent No" should NOT appear in the JSON map data, only in the
         # unlisted section.
-        import json
-
         import html as html_mod
+        import json
 
         script_start = resp.content.decode().index('id="student-items"')
         script_tag = resp.content.decode()[
