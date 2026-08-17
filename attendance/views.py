@@ -17,7 +17,7 @@ from programs.permission_views import (
     can_user_read,
     can_user_write,
 )
-from programs.utils import redirect_back
+from programs.utils import active_students, redirect_back
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
 
@@ -841,6 +841,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             {
                 "sessions": sessions[:500],
                 "programs": programs,
+                "students": active_students().order_by("last_name", "first_name"),
                 "selected_program_id": (
                     int(program_id) if program_id and program_id.isdigit() else None
                 ),
@@ -851,6 +852,50 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
     def post(self, request):
         action = request.POST.get("action")
+
+        if action == "add":
+            from django.utils.dateparse import parse_datetime
+
+            person_type = request.POST.get("person_type")
+            program_id = request.POST.get("program_id")
+            ci_raw = request.POST.get("check_in")
+            co_raw = request.POST.get("check_out")
+
+            if not program_id or not ci_raw:
+                messages.error(request, "Program and check-in time are required.")
+                return redirect_back(request, "all_attendance")
+
+            ci = parse_datetime(ci_raw)
+            co = parse_datetime(co_raw) if co_raw else None
+
+            if ci and timezone.is_naive(ci):
+                ci = timezone.make_aware(ci, timezone.get_current_timezone())
+            if co and timezone.is_naive(co):
+                co = timezone.make_aware(co, timezone.get_current_timezone())
+
+            new_session = AttendanceSession(
+                program_id=int(program_id),
+                check_in=ci,
+                check_out=co,
+            )
+
+            if person_type == "student":
+                student_id = request.POST.get("student_id")
+                if student_id and student_id.isdigit():
+                    new_session.student_id = int(student_id)
+            elif person_type == "visitor":
+                new_session.visitor_name = (
+                    request.POST.get("visitor_name", "").strip()
+                )
+                team_raw = request.POST.get("visitor_team_number")
+                if team_raw and team_raw.isdigit():
+                    new_session.visitor_team_number = int(team_raw)
+
+            new_session.recompute_duration()
+            new_session.save()
+            messages.success(request, "Attendance entry added.")
+            return redirect_back(request, "all_attendance")
+
         session_id = request.POST.get("session_id")
         session = get_object_or_404(AttendanceSession, id=session_id)
 
