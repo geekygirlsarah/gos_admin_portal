@@ -884,9 +884,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 if student_id and student_id.isdigit():
                     new_session.student_id = int(student_id)
             elif person_type == "visitor":
-                new_session.visitor_name = (
-                    request.POST.get("visitor_name", "").strip()
-                )
+                new_session.visitor_name = request.POST.get("visitor_name", "").strip()
                 team_raw = request.POST.get("visitor_team_number")
                 if team_raw and team_raw.isdigit():
                     new_session.visitor_team_number = int(team_raw)
@@ -1095,13 +1093,13 @@ def student_hours_view(request, pk):
         "December",
     ]
 
-    # Aggregate hours by day for this month
+    # Aggregate sessions by day for this month (store per-session detail)
     month_start = timezone.make_aware(datetime(cal_year, cal_month, 1, 0, 0, 0), tz)
     last_day = cal_mod.monthrange(cal_year, cal_month)[1]
     month_end = timezone.make_aware(
         datetime(cal_year, cal_month, last_day, 23, 59, 59), tz
     )
-    day_hours = {}
+    day_sessions = {}
     for s in sessions.filter(check_in__lt=month_end).exclude(
         check_out__isnull=False, check_out__lt=month_start
     ):
@@ -1111,10 +1109,21 @@ def student_hours_view(request, pk):
             co = month_end
         if co > ci:
             session_date = timezone.localtime(ci).date()
-            hrs = (co - ci).total_seconds() / 3600.0
-            day_hours[session_date] = day_hours.get(session_date, 0.0) + hrs
+            total_secs = (co - ci).total_seconds()
+            hours = int(total_secs // 3600)
+            minutes = int((total_secs % 3600) // 60)
+            local_ci = timezone.localtime(ci)
+            local_co = timezone.localtime(co)
+            entry = {
+                "check_in": local_ci.strftime("%I:%M %p").lstrip("0"),
+                "check_out": local_co.strftime("%I:%M %p").lstrip("0"),
+                "total_hrs": round(total_secs / 3600.0, 1),
+                "hours_part": hours,
+                "minutes_part": minutes,
+            }
+            day_sessions.setdefault(session_date, []).append(entry)
 
-    # Build calendar data as list of [day, hours_display]
+    # Build calendar data with per-session detail
     calendar_data = []
     for week in month_days:
         week_row = []
@@ -1123,9 +1132,16 @@ def student_hours_view(request, pk):
                 week_row.append(None)
             else:
                 d = date(cal_year, cal_month, day)
-                hrs = round(day_hours.get(d, 0.0), 1)
-                week_row.append({"day": day, "hours": hrs})
+                sessions_list = day_sessions.get(d, [])
+                total = round(sum(s["total_hrs"] for s in sessions_list), 1)
+                week_row.append({"day": day, "hours": total, "sessions": sessions_list})
         calendar_data.append(week_row)
+
+    # Today highlight
+    today = now.date()
+    cal_today = (
+        today.day if cal_year == today.year and cal_month == today.month else None
+    )
 
     # Determine prev/next month
     if cal_month == 1:
@@ -1136,6 +1152,17 @@ def student_hours_view(request, pk):
         next_month, next_year = 1, cal_year + 1
     else:
         next_month, next_year = cal_month + 1, cal_year
+
+    # Clamp calendar navigation: earliest is the overall start date, latest is today
+    cal_earliest = overall_start_date
+    cal_latest = today
+    can_go_prev = True
+    can_go_next = True
+    if cal_earliest:
+        if (prev_year, prev_month) < (cal_earliest.year, cal_earliest.month):
+            can_go_prev = False
+    if (next_year, next_month) > (cal_latest.year, cal_latest.month):
+        can_go_next = False
 
     return render(
         request,
@@ -1154,10 +1181,13 @@ def student_hours_view(request, pk):
             "cal_month": cal_month,
             "cal_year": cal_year,
             "cal_month_name": month_names[cal_month],
+            "cal_today": cal_today,
             "prev_month": prev_month,
             "prev_year": prev_year,
             "next_month": next_month,
             "next_year": next_year,
+            "can_go_prev": can_go_prev,
+            "can_go_next": can_go_next,
             "day_names": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
         },
     )
