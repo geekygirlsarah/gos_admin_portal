@@ -10,7 +10,7 @@ from applications.models import Application
 from programs.models import Program, School, Student
 
 CURRENT_KEY = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
-TEST_SECRET = "test-secret-key-for-legacy-encryption!!"  #nosec B105
+TEST_SECRET = "test-secret-key-for-legacy-encryption!!"  # nosec B105
 
 
 def _legacy_fernet(secret_key=TEST_SECRET):
@@ -29,7 +29,7 @@ def _write_encrypted(student, plaintext_fields, fernet_instance):
         params.append(fernet_instance.encrypt(plaintext.encode()).decode())
     params.append(student.pk)
 
-    sql = f"UPDATE programs_student SET {', '.join(set_clauses)} WHERE id = %s"  #nosec B608
+    sql = f"UPDATE programs_student SET {', '.join(set_clauses)} WHERE id = %s"  # nosec B608
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
     student.refresh_from_db()
