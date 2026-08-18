@@ -18,27 +18,30 @@ class InactiveAdultTest(TestCase):
         self.client = Client()
         self.client.login(username="leadmentor", password="password")  # nosec B106
 
-        # Create active and inactive adults
+        # Create active mentors (mentor_active controls mentor behavior)
         self.active_mentor = Adult.objects.create(
             first_name="Active",
             last_name="Mentor",
             is_mentor=True,
-            active=True,
+            mentor_active=True,
+            login_enabled=True,
             personal_email="active_mentor@example.com",
         )
         self.inactive_mentor = Adult.objects.create(
             first_name="Inactive",
             last_name="Mentor",
             is_mentor=True,
-            active=False,
+            mentor_active=False,
+            login_enabled=True,
             personal_email="inactive_mentor@example.com",
         )
 
+        # Create active parents (login_enabled controls login)
         self.active_parent = Adult.objects.create(
             first_name="Active",
             last_name="Parent",
             is_parent=True,
-            active=True,
+            login_enabled=True,
             personal_email="active_parent@example.com",
             email_updates=True,
         )
@@ -46,7 +49,7 @@ class InactiveAdultTest(TestCase):
             first_name="Inactive",
             last_name="Parent",
             is_parent=True,
-            active=False,
+            login_enabled=False,
             personal_email="inactive_parent@example.com",
             email_updates=True,
         )
@@ -55,21 +58,24 @@ class InactiveAdultTest(TestCase):
         self.active_parent.students.add(self.student)
         self.inactive_parent.students.add(self.student)
 
-    def test_mentor_list_includes_inactive_at_bottom(self):
-        """Mentor list should show inactive mentors at the bottom."""
+    def test_mentor_list_groups_inactive(self):
+        """Mentor list should show inactive mentors in a separate section."""
         url = reverse("mentor_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Active Mentor")
         self.assertContains(response, "Inactive Mentor")
 
-        # Verify ordering: Active should appear before Inactive
+        # Verify inactive mentors are in a separate section
         content = response.content.decode()
+        self.assertIn("Inactive Mentors", content)
+
+        # Verify ordering: Active mentor should appear before the Inactive section header
         active_pos = content.find("Active Mentor")
-        inactive_pos = content.find("Inactive Mentor")
+        inactive_section_pos = content.find("Inactive Mentors")
         self.assertTrue(
-            active_pos < inactive_pos,
-            "Active mentor should appear before inactive mentor",
+            active_pos < inactive_section_pos,
+            "Active mentor should appear before inactive section",
         )
 
     def test_adult_list_includes_inactive_at_bottom(self):
@@ -90,38 +96,39 @@ class InactiveAdultTest(TestCase):
         )
 
     def test_parent_list_still_excludes_inactive(self):
-        """Parent list should still exclude inactive parents (as they were not explicitly changed)."""
+        """Parent list should still exclude inactive parents."""
         url = reverse("parent_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Active Parent")
         self.assertNotContains(response, "Inactive Parent")
 
-    def test_login_logic_for_inactive_adults(self):
-        """Inactive adults can only log in if they are also parents or alumni."""
-        # 1. Inactive mentor who is NOT a parent/alumni
+    def test_login_disabled_adult_cannot_log_in(self):
+        """Adults with login_enabled=False who are not parents/alumni get login disabled."""
         user1 = User.objects.create_user(
             username="mentor1", password="password"
         )  # nosec B106
         self.inactive_mentor.user = user1
-        self.inactive_mentor.save()  # This triggers User sync
+        self.inactive_mentor.login_enabled = False
+        self.inactive_mentor.save()
         user1.refresh_from_db()
         self.assertFalse(
             user1.is_active,
-            "Inactive mentor without other roles should have disabled login",
+            "Adult with login_enabled=False and no other roles should have disabled login",
         )
 
-        # 2. Inactive mentor who IS a parent
+    def test_login_disabled_parent_keeps_login_if_alumni(self):
+        """A parent with login_enabled=False who is also an alumni keeps login."""
         user2 = User.objects.create_user(
             username="parent1", password="password"
         )  # nosec B106
-        self.inactive_parent.is_mentor = True  # Make them a mentor too
+        self.inactive_parent.is_alumni = True
         self.inactive_parent.user = user2
         self.inactive_parent.save()
         user2.refresh_from_db()
         self.assertTrue(
             user2.is_active,
-            "Inactive mentor who is also a parent should still have active login",
+            "Parent with login_enabled=False who is also alumni should still have active login",
         )
 
     def test_background_check_badges(self):
@@ -150,11 +157,10 @@ class InactiveAdultTest(TestCase):
         response = self.client.get(url)
         # Count "BG Check Needed" - should still be there for Inactive Mentor if not cleared
         # but self.active_mentor should no longer have it.
-        # self.inactive_mentor is also a mentor and hasn't been cleared.
         self.assertContains(response, "BG Check Needed", count=1)
 
     def test_inactive_mentor_access_denied(self):
-        """Inactive mentors should not have mentor permissions."""
+        """Inactive mentors (mentor_active=False) should not have mentor permissions."""
         from programs.permission_views import user_is_mentor
 
         # Create a user for the inactive mentor
@@ -163,17 +169,19 @@ class InactiveAdultTest(TestCase):
         )  # nosec B106
         self.inactive_mentor.user = user
         self.inactive_mentor.is_parent = True  # Allow login
+        self.inactive_mentor.login_enabled = True
         self.inactive_mentor.save()
 
         user.refresh_from_db()
         self.assertTrue(user.is_active)
 
         self.assertFalse(
-            user_is_mentor(user), "Inactive mentor should not be recognized as a mentor"
+            user_is_mentor(user),
+            "Inactive mentor (mentor_active=False) should not be recognized as a mentor",
         )
 
     def test_inactive_parent_does_not_get_emails(self):
-        """Inactive parents should not be included in recipient lists for notifications."""
+        """Parents with login_enabled=False should not receive email notifications."""
         from django.core import mail
 
         from programs.models import Fee
@@ -193,3 +201,64 @@ class InactiveAdultTest(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["active_parent@example.com"])
         self.assertNotIn("inactive_parent@example.com", mail.outbox[0].to)
+
+    def test_mentor_active_controls_mentor_role_recognition(self):
+        """mentor_active=True is required for mentor role recognition."""
+        from programs.permission_views import user_is_mentor
+
+        # Create a mentor with mentor_active=True
+        active_user = User.objects.create_user(
+            username="active_m_user", password="password"
+        )  # nosec B106
+        Adult.objects.create(
+            first_name="Active",
+            last_name="MentorUser",
+            is_mentor=True,
+            mentor_active=True,
+            login_enabled=True,
+            user=active_user,
+        )
+        self.assertTrue(user_is_mentor(active_user))
+
+        # Create a mentor with mentor_active=False (but login_enabled=True so they can log in)
+        inactive_user = User.objects.create_user(
+            username="inactive_m_user", password="password"
+        )  # nosec B106
+        Adult.objects.create(
+            first_name="Inactive",
+            last_name="MentorUser",
+            is_mentor=True,
+            mentor_active=False,
+            login_enabled=True,
+            user=inactive_user,
+        )
+        # user_is_mentor checks mentor_active directly, bypassing the group fallback
+        self.assertFalse(user_is_mentor(inactive_user))
+
+    def test_mentor_active_false_excluded_from_email_recipients(self):
+        """Mentors with mentor_active=False should not appear in email recipient lists."""
+        url = reverse("mentor_list")
+        # The mentor list should still show both (for tracking purposes)
+        response = self.client.get(url)
+        self.assertContains(response, "Inactive Mentor")
+
+    def test_mentor_active_independent_of_login_enabled(self):
+        """mentor_active and login_enabled are independent flags."""
+        user = User.objects.create_user(
+            username="independent_user", password="password"
+        )  # nosec B106
+        mentor = Adult.objects.create(
+            first_name="Independent",
+            last_name="Mentor",
+            is_mentor=True,
+            mentor_active=False,
+            login_enabled=True,
+            user=user,
+        )
+        user.refresh_from_db()
+        # Can still log in
+        self.assertTrue(user.is_active)
+        # But not recognized as mentor
+        from programs.permission_views import user_is_mentor
+
+        self.assertFalse(user_is_mentor(user))

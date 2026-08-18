@@ -63,7 +63,9 @@ def resolve_person_by_uid(uid: str):
         return None
     person = card.student or card.adult
     if person:
-        # Check active status
+        # Check active status (Student.active or Adult.login_enabled)
+        if hasattr(person, "login_enabled") and not person.login_enabled:
+            return None
         if hasattr(person, "active") and not person.active:
             return None
         if hasattr(person, "graduated") and person.graduated:

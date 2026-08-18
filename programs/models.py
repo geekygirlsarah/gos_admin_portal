@@ -1282,7 +1282,16 @@ class Adult(models.Model):
     email_updates = models.BooleanField(
         default=False, help_text="If checked, this adult will receive email updates."
     )
-    active = models.BooleanField(default=True, db_index=True)
+    login_enabled = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Uncheck to disable this person's portal login.",
+    )
+    mentor_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Uncheck to mark this person as an inactive mentor.",
+    )
 
     # Alumni information (merged from Alumni)
     student_record = models.OneToOneField(
@@ -1318,13 +1327,16 @@ class Adult(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name"], name="adult_name_idx"),
             models.Index(
-                fields=["is_parent", "active"], name="adult_parent_active_idx"
+                fields=["is_parent", "login_enabled"],
+                name="adult_parent_login_idx",
             ),
             models.Index(
-                fields=["is_mentor", "active"], name="adult_mentor_active_idx"
+                fields=["is_mentor", "mentor_active"],
+                name="adult_mentor_active_idx",
             ),
             models.Index(
-                fields=["is_alumni", "active"], name="adult_alumni_active_idx"
+                fields=["is_alumni", "login_enabled"],
+                name="adult_alumni_login_idx",
             ),
         ]
 
@@ -1409,8 +1421,8 @@ class Adult(models.Model):
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
                 changed = True
-            # Login is enabled if they are active OR if they have other active roles (parent/alumni)
-            target_active = self.active or self.is_parent or self.is_alumni
+            # Login is enabled if they have login_enabled OR if they have other active roles (parent/alumni)
+            target_active = self.login_enabled or self.is_parent or self.is_alumni
             if self.user.is_active != target_active:
                 self.user.is_active = target_active
                 changed = True

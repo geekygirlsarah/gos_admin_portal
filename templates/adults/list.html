@@ -41,8 +41,8 @@
                   <img src="{{ a.photo.url }}" alt="{{ a.full_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
                 {{ a.full_name }}
-                {% if not a.active %}
-                  <span class="badge bg-secondary ms-1">Inactive</span>
+                {% if not a.login_enabled %}
+                  <span class="badge bg-secondary ms-1">Login Disabled</span>
                 {% endif %}
                 {% if a.is_mentor and a.needs_background_check %}
                   <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>

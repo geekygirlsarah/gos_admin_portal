@@ -301,7 +301,7 @@ class AdapterEmailProvisioningTest(TestCase):
             first_name=kwargs.get("first_name", "Ada"),
             last_name=kwargs.get("last_name", "Lovelace"),
             personal_email=email,
-            active=True,
+            login_enabled=True,
         )
 
     def _make_student(self, personal_email=None, andrew_email=None):
@@ -400,7 +400,7 @@ class AdapterEmailProvisioningTest(TestCase):
             last_name="Smith",
             is_mentor=True,
             andrew_email="msmith@andrew.cmu.edu",
-            active=True,
+            login_enabled=True,
         )
         self.assertTrue(_find_or_provision_user_for_email("msmith@andrew.cmu.edu"))
 

@@ -363,7 +363,14 @@ class ParentAdmin(admin.ModelAdmin):
         "phone_type",
         "email_updates",
     )
-    list_filter = ("email_updates", "is_parent", "is_mentor", "is_alumni", "active")
+    list_filter = (
+        "email_updates",
+        "is_parent",
+        "is_mentor",
+        "is_alumni",
+        "login_enabled",
+        "mentor_active",
+    )
     search_fields = (
         "first_name",
         "preferred_first_name",
@@ -405,7 +412,8 @@ class ParentAdmin(admin.ModelAdmin):
                     "is_parent",
                     "is_mentor",
                     "is_alumni",
-                    "active",
+                    "login_enabled",
+                    "mentor_active",
                 )
             },
         ),

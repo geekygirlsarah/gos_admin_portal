@@ -867,7 +867,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
             for adult in s.all_parents:
                 # Only include parents/guardians who have opted into email updates and are active
                 if getattr(adult, "email_updates", False) and getattr(
-                    adult, "active", True
+                    adult, "login_enabled", True
                 ):
                     email = adult.personal_email or adult.andrew_email
                     if email:

@@ -75,14 +75,14 @@ class Command(BaseCommand):
                 students__enrollment__program=prog,
                 students__enrollment__active=True,
                 email_updates=True,
-                active=True,
+                login_enabled=True,
             ).distinct():
                 e = parent.personal_email or parent.andrew_email
                 if e:
                     recipients.add(e)
 
         if "mentors" in groups:
-            for m in Adult.objects.filter(is_mentor=True, active=True):
+            for m in Adult.objects.filter(is_mentor=True, mentor_active=True):
                 e = m.personal_email or m.andrew_email
                 if e:
                     recipients.add(e)
