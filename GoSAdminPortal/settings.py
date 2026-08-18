@@ -171,6 +171,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
+    "GoSAdminPortal.middleware.MentorAgreementMiddleware",
     # Must come AFTER SessionMiddleware and AuthenticationMiddleware:
     "audit.middleware.AuditHistoryMiddleware",
 ]
@@ -368,14 +369,37 @@ APPLY_OTP_SEND_LIMIT = int(os.getenv("APPLY_OTP_SEND_LIMIT", "5"))
 APPLY_OTP_VERIFY_LIMIT = int(os.getenv("APPLY_OTP_VERIFY_LIMIT", "10"))
 APPLY_OTP_WINDOW_SECONDS = int(os.getenv("APPLY_OTP_WINDOW_SECONDS", "3600"))
 
-# Server-side geocoding for the student map (OpenStreetMap Nominatim).
+# ── Mentor data access agreement ─────────────────────────────────────────
+# Mentors (and lead mentors, and any user with is_mentor=True) must accept
+# the current active MentorAgreement before accessing the portal.  Disabled
+# during tests by default; force on with
+# @override_settings(MENTOR_AGREEMENT_ENABLED=True).
+MENTOR_AGREEMENT_ENABLED = (
+    os.getenv("MENTOR_AGREEMENT_ENABLED", "").strip().lower()
+    not in ("0", "false", "no")
+    and not TESTING
+)
+
+# Server-side geocoding for the student map.
 # Results are cached in the AddressGeocode model so each unique address is
 # only looked up once.
+# Configurable backends (Mapbox, Nominatim/OSM). Mapbox requires an API token.
+# Example environment variables:
+# GEOCODING_BACKENDS=programs.utils.geocoding.MapboxBackend,programs.utils.geocoding.NominatimBackend
+# MAPBOX_ACCESS_TOKEN=pk.eyJ1IjoibXktdXNlciIsImEiOiJjbH..."
+# GEOCODING_URL=https://nominatim.openstreetmap.org/search
+# GEOCODING_TIMEOUT=10
+# GEOCODING_DELAY_SECONDS=1.0
+GEOCODING_BACKENDS = os.getenv(
+    "GEOCODING_BACKENDS",
+    "programs.utils.geocoding.MapboxBackend,programs.utils.geocoding.NominatimBackend",
+).split(",")
 GEOCODING_URL = os.getenv("GEOCODING_URL", "https://nominatim.openstreetmap.org/search")
 GEOCODING_USER_AGENT = os.getenv("GEOCODING_USER_AGENT", "GoSAdminPortal/1.0")
 GEOCODING_TIMEOUT = int(os.getenv("GEOCODING_TIMEOUT", "10"))
 # Nominatim asks for at most 1 request/second.
 GEOCODING_DELAY_SECONDS = float(os.getenv("GEOCODING_DELAY_SECONDS", "1.0"))
+MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
 
 # Content Security Policy (django-csp)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed

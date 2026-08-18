@@ -45,7 +45,7 @@ class StudentMapViewTests(TestCase):
     def _enroll(self, student):
         Enrollment.objects.create(student=student, program=self.program)
 
-    def _student(self, name, consent=True):
+    def _student(self, name, consent=True, phone=None, email=None):
         first, last = name.split(" ", 1)
         return Student.objects.create(
             legal_first_name=first,
@@ -55,6 +55,8 @@ class StudentMapViewTests(TestCase):
             state="PA",
             zip_code="15213",
             directory_consent=consent,
+            phone_number=phone,
+            personal_email=email,
         )
 
     def test_map_view_geocodes_and_caches_student_points(self):
@@ -160,6 +162,44 @@ class StudentMapViewTests(TestCase):
         self.assertContains(resp, "Consent Yes")
         self.assertContains(resp, "Consent No")
 
+    def test_marker_popup_includes_phone_and_email(self):
+        student = self._student(
+            "Ada Lovelace", phone="4125551234", email="ada@example.com"
+        )
+        self._enroll(student)
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "4125551234")
+        self.assertContains(resp, "ada@example.com")
+
+    def test_marker_popup_works_without_phone_or_email(self):
+        student = self._student("No Contact")
+        self._enroll(student)
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "No Contact")
+
+    def test_lead_mentor_does_not_see_unlisted_section(self):
+        self._student("Consent Yes")
+        self._student("Consent No", consent=False)
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertNotContains(resp, "Unlisted Students")
+
 
 class ParentConsentTests(TestCase):
     def setUp(self):
@@ -207,9 +247,84 @@ class ParentConsentTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Consent Yes")
-        self.assertNotContains(resp, "Consent No")
+        # "Consent No" should NOT appear in the JSON map data, only in the
+        # unlisted section.
+        import html as html_mod
+        import json
+
+        script_start = resp.content.decode().index('id="student-items"')
+        script_tag = resp.content.decode()[
+            script_start : resp.content.decode().index("</script>", script_start)
+        ]
+        json_str = script_tag.split(">", 1)[1]
+        items = json.loads(json_str)
+        item_names = [i["name"] for i in items]
+        self.assertIn("Consent Yes", item_names)
+        self.assertNotIn("Consent No", item_names)
+        # The name does appear in the unlisted section though.
+        self.assertContains(resp, "Consent No")
         # Only one address is looked up for this parent's view.
         self.assertEqual(mock_get.call_count, 1)
+
+    def test_parent_sees_unlisted_students_section_for_non_consenter(self):
+        consenting = Student.objects.create(
+            legal_first_name="Consent",
+            last_name="Yes",
+            address="100 Main St.",
+            city="Pittsburgh",
+            state="PA",
+            zip_code="15213",
+            directory_consent=True,
+        )
+        non_consenting = Student.objects.create(
+            legal_first_name="Consent",
+            last_name="No",
+            address="200 Second Ave.",
+            city="Pittsburgh",
+            state="PA",
+            zip_code="15213",
+            directory_consent=False,
+        )
+        self._enroll(consenting)
+        self._enroll(non_consenting)
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Unlisted Students")
+        self.assertContains(resp, "Consent No")
+        # Consenting student is on the map, not in the unlisted section.
+        self.assertContains(resp, "Consent Yes")
+
+    def test_parent_unlisted_section_hidden_when_all_consent(self):
+        self._enroll(self._student("All Consent"))
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "Unlisted Students")
+
+    def test_parent_marker_popup_includes_phone_and_email(self):
+        student = self._student("Contact Me")
+        student.phone_number = "4125559999"
+        student.personal_email = "contact@example.com"
+        student.save()
+        self._enroll(student)
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "4125559999")
+        self.assertContains(resp, "contact@example.com")
 
     def test_parent_map_links_back_to_dashboard(self):
         self._enroll(self._student("Consent Yes"))

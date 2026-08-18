@@ -821,7 +821,7 @@ class RoleProtectionTests(TestCase):
         self.mentor_profile.refresh_from_db()
         self.assertEqual(self.mentor_profile.last_name, "Mentor Updated")
         self.assertTrue(self.mentor_profile.is_mentor)
-        self.assertTrue(self.mentor_profile.active)
+        self.assertTrue(self.mentor_profile.login_enabled)
 
     def test_parent_cannot_change_students(self):
         parent_user = User.objects.create_user(
@@ -860,7 +860,7 @@ class RoleProtectionTests(TestCase):
             "personal_email": "mentor@example.com",
             "is_mentor": "on",
             "is_parent": "on",
-            "active": "on",
+            "login_enabled": "on",
         }
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)

@@ -154,6 +154,115 @@ class AllAttendanceEntriesTests(TestCase):
 
         self.assertTrue(re.search(r"\d{1,2}:\d{2}\s+(AM|PM)", content, re.IGNORECASE))
 
+    def test_add_button_shown_on_page(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        response = self.client.get(url)
+        self.assertContains(response, "addEntryModal")
+        self.assertContains(response, "Add Entry")
+
+    def test_add_student_session(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        check_in = timezone.now().replace(microsecond=0) - timezone.timedelta(hours=2)
+        check_out = timezone.now().replace(microsecond=0) - timezone.timedelta(hours=1)
+        local_ci = timezone.localtime(check_in)
+        local_co = timezone.localtime(check_out)
+
+        response = self.client.post(
+            url,
+            {
+                "action": "add",
+                "person_type": "student",
+                "student_id": self.student.id,
+                "program_id": self.program.id,
+                "check_in": local_ci.strftime("%Y-%m-%dT%H:%M"),
+                "check_out": local_co.strftime("%Y-%m-%dT%H:%M"),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(AttendanceSession.objects.count(), 2)
+        new_session = AttendanceSession.objects.exclude(id=self.session.id).get()
+        self.assertEqual(new_session.student, self.student)
+        self.assertEqual(new_session.program, self.program)
+        self.assertIsNotNone(new_session.check_out)
+        self.assertGreater(new_session.duration_minutes, 0)
+
+    def test_add_visitor_session(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        check_in = timezone.now().replace(microsecond=0) - timezone.timedelta(hours=3)
+
+        response = self.client.post(
+            url,
+            {
+                "action": "add",
+                "person_type": "visitor",
+                "visitor_name": "Jane Visitor",
+                "visitor_team_number": "9999",
+                "program_id": self.program.id,
+                "check_in": timezone.localtime(check_in).strftime("%Y-%m-%dT%H:%M"),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(AttendanceSession.objects.count(), 2)
+        new_session = AttendanceSession.objects.exclude(id=self.session.id).get()
+        self.assertIsNone(new_session.student)
+        self.assertEqual(new_session.visitor_name, "Jane Visitor")
+        self.assertEqual(new_session.visitor_team_number, 9999)
+        self.assertIsNone(new_session.check_out)
+
+    def test_add_session_missing_required_fields(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        response = self.client.post(
+            url,
+            {
+                "action": "add",
+                "person_type": "student",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(AttendanceSession.objects.count(), 1)
+
+    def test_mentor_cannot_add_session(self):
+        self.client.login(username="mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        response = self.client.post(
+            url,
+            {
+                "action": "add",
+                "person_type": "student",
+                "student_id": self.student.id,
+                "program_id": self.program.id,
+                "check_in": timezone.localtime(timezone.now()).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(AttendanceSession.objects.count(), 1)
+
+    def test_add_session_open_session_no_checkout(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("all_attendance")
+        check_in = timezone.now().replace(microsecond=0) - timezone.timedelta(hours=1)
+
+        response = self.client.post(
+            url,
+            {
+                "action": "add",
+                "person_type": "student",
+                "student_id": self.student.id,
+                "program_id": self.program.id,
+                "check_in": timezone.localtime(check_in).strftime("%Y-%m-%dT%H:%M"),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        new_session = AttendanceSession.objects.exclude(id=self.session.id).get()
+        self.assertIsNone(new_session.check_out)
+        self.assertTrue(new_session.is_open)
+
 
 class AttendanceNewViewsTests(TestCase):
     def setUp(self):

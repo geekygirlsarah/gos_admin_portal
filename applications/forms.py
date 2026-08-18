@@ -15,7 +15,7 @@ from programs.constants import (
     STATE_CHOICES,
     TSHIRT_SIZE_CHOICES,
 )
-from programs.models import Program, RaceEthnicity, School, Student
+from programs.models import Program, ProgramDocument, RaceEthnicity, School, Student
 from programs.validators import validate_phone_number, validate_zip_code
 
 from .models import Application
@@ -745,3 +745,30 @@ class DocumentSubmissionForm(forms.Form):
         ),
         help_text="PDF preferred. Images (PNG/JPEG) are also accepted.",
     )
+
+
+class StaffDocumentUploadForm(forms.Form):
+    """Lead-mentor form to upload a signed document on behalf of an applicant."""
+
+    document = forms.ModelChoiceField(
+        label="Document",
+        queryset=ProgramDocument.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+    file = forms.FileField(
+        label="Scanned file",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "class": "form-control form-control-sm",
+                "accept": ".pdf,.png,.jpg,.jpeg",
+            }
+        ),
+        help_text="PDF preferred. Images (PNG/JPEG) are also accepted.",
+    )
+
+    def __init__(self, *args, program=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if program is not None:
+            self.fields["document"].queryset = ProgramDocument.objects.filter(
+                program=program, is_active=True
+            ).order_by("display_order", "name")

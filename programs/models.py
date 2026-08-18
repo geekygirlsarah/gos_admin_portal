@@ -48,6 +48,19 @@ def get_fernet():
     return Fernet(key)
 
 
+def _get_legacy_fernet():
+    """Return a Fernet instance using the old SECRET_KEY-derived key.
+
+    Before ``FILE_ENCRYPTION_KEY`` was introduced, ``get_fernet()`` fell
+    back to a key derived from ``SECRET_KEY``.  Records encrypted before
+    the transition can only be decrypted with that legacy key.
+    """
+    import base64
+
+    key = base64.urlsafe_b64encode(settings.SECRET_KEY[:32].encode().ljust(32, b"\0"))
+    return Fernet(key)
+
+
 class EncryptedFileField(models.FileField):
     """
     A FileField that transparently encrypts file content on save (via pre_save)
@@ -427,6 +440,30 @@ class Program(models.Model):
         if self.end_date and self.end_date < today:
             return "Inactive"
         return "Active"
+
+    @property
+    def is_applications_open(self) -> bool:
+        """Return True if applications are currently open for this program."""
+        today = timezone.now().date()
+        if not self.active:
+            return False
+        # If open date is set, check it. Default is start_date (set in save())
+        if self.applications_open and self.applications_open > today:
+            return False
+        # If close date is set, check it. Default is end_date (set in save())
+        if self.applications_close and self.applications_close < today:
+            return False
+        # If the program has ended, applications are definitely closed.
+        if self.end_date and self.end_date < today:
+            return False
+        return True
+
+    @property
+    def applications_are_invalid(self) -> bool:
+        """Return True if applications are for programs where the applications closed or the program has ended."""
+        # This is essentially the complement of is_applications_open, but
+        # explicitly about whether an *existing* application is still valid.
+        return not self.is_applications_open
 
     def save(self, *args, **kwargs):
         if not self.applications_open and self.start_date:
@@ -959,6 +996,10 @@ class Student(models.Model):
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
                 changed = True
+            target_active = not self.graduated
+            if self.user.is_active != target_active:
+                self.user.is_active = target_active
+                changed = True
             if changed:
                 self.user.save()
 
@@ -1241,7 +1282,16 @@ class Adult(models.Model):
     email_updates = models.BooleanField(
         default=False, help_text="If checked, this adult will receive email updates."
     )
-    active = models.BooleanField(default=True, db_index=True)
+    login_enabled = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Uncheck to disable this person's portal login.",
+    )
+    mentor_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Uncheck to mark this person as an inactive mentor.",
+    )
 
     # Alumni information (merged from Alumni)
     student_record = models.OneToOneField(
@@ -1277,13 +1327,16 @@ class Adult(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name"], name="adult_name_idx"),
             models.Index(
-                fields=["is_parent", "active"], name="adult_parent_active_idx"
+                fields=["is_parent", "login_enabled"],
+                name="adult_parent_login_idx",
             ),
             models.Index(
-                fields=["is_mentor", "active"], name="adult_mentor_active_idx"
+                fields=["is_mentor", "mentor_active"],
+                name="adult_mentor_active_idx",
             ),
             models.Index(
-                fields=["is_alumni", "active"], name="adult_alumni_active_idx"
+                fields=["is_alumni", "login_enabled"],
+                name="adult_alumni_login_idx",
             ),
         ]
 
@@ -1309,6 +1362,22 @@ class Adult(models.Model):
         for s in students:
             s.attached_rel = rels.get(s.pk, "parent")
         return students
+
+    def requires_background_check(self) -> bool:
+        """Whether the adult must hold PA background clearances.
+        Currently, all mentors/volunteers require them.
+        """
+        return self.is_mentor
+
+    def needs_background_check(self) -> bool:
+        """Whether the adult requires clearances AND is missing at least one valid check."""
+        if not self.requires_background_check():
+            return False
+        required_types = set(BackgroundCheckType.values)
+        valid_types = {
+            bc.check_type for bc in self.background_checks.all() if bc.is_valid
+        }
+        return not required_types.issubset(valid_types)
 
     def clean(self):
         super().clean()
@@ -1352,8 +1421,25 @@ class Adult(models.Model):
             if self.user.last_name != self.last_name:
                 self.user.last_name = self.last_name
                 changed = True
+            # Login is enabled if they have login_enabled OR if they have other active roles (parent/alumni)
+            target_active = self.login_enabled or self.is_parent or self.is_alumni
+            if self.user.is_active != target_active:
+                self.user.is_active = target_active
+                changed = True
             if changed:
                 self.user.save()
+
+    def has_accepted_current_agreement(self):
+        """Whether this adult has accepted all current active MentorAgreements."""
+        from programs.models import MentorAgreement, MentorAgreementAcceptance
+
+        active = MentorAgreement.get_all_active()
+        if not active.exists():
+            return True
+        accepted_ids = MentorAgreementAcceptance.objects.filter(
+            adult=self, agreement__in=active
+        ).values_list("agreement_id", flat=True)
+        return active.filter(id__in=accepted_ids).count() == active.count()
 
 
 class Fee(models.Model):
@@ -1898,3 +1984,160 @@ class BackgroundCheck(models.Model):
         if not expiration:
             return True
         return expiration >= timezone.localdate()
+
+
+def _mentor_agreement_upload_to(instance, filename):
+    from programs.utils.files import sanitize_upload_filename
+
+    slug = instance.slug or "unassigned"
+    filename = sanitize_upload_filename(filename)
+    return f"mentor_agreements/{slug}/{filename}"
+
+
+class MentorAgreement(models.Model):
+    """Versioned document that mentors must accept.
+
+    Each unique ``slug`` groups versions of the same document.  Only one
+    version per slug should be active at a time — ``save()`` automatically
+    deactivates other active versions of the same slug.  Content can be
+    provided as markdown *or* a uploaded document (PDF, etc.), or both.
+    """
+
+    slug = models.SlugField(
+        help_text="URL-friendly identifier that groups versions of the same document.",
+    )
+    version = models.PositiveIntegerField()
+    title = models.CharField(max_length=200)
+    content = models.TextField(
+        blank=True,
+        help_text="Markdown content of the agreement. Leave blank for document-only agreements.",
+    )
+    document = models.FileField(
+        upload_to=_mentor_agreement_upload_to,
+        blank=True,
+        max_length=255,
+        help_text="Uploaded document (PDF, etc.) for the agreement. Leave blank for markdown-only agreements.",
+    )
+    effective_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("slug", "version")
+        ordering = ["-version"]
+        verbose_name = "Mentor Agreement"
+        verbose_name_plural = "Mentor Agreements"
+
+    def __str__(self):
+        return f"{self.title} (v{self.version})"
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            MentorAgreement.objects.filter(is_active=True, slug=self.slug).exclude(
+                pk=self.pk
+            ).update(is_active=False)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_active(cls, slug=None):
+        """Return the current active agreement, optionally filtered by slug."""
+        qs = cls.objects.filter(is_active=True)
+        if slug:
+            qs = qs.filter(slug=slug)
+        return qs.first()
+
+    @classmethod
+    def get_all_active(cls):
+        """Return all active agreements (one per slug)."""
+        return cls.objects.filter(is_active=True)
+
+
+class MentorAgreementAcceptance(models.Model):
+    """Records that an Adult has accepted a specific MentorAgreement version."""
+
+    adult = models.ForeignKey(
+        Adult,
+        on_delete=models.CASCADE,
+        related_name="agreement_acceptances",
+    )
+    agreement = models.ForeignKey(
+        MentorAgreement,
+        on_delete=models.CASCADE,
+        related_name="acceptances",
+    )
+    accepted_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="IP address of the acceptor (for audit trail).",
+    )
+
+    class Meta:
+        unique_together = ("adult", "agreement")
+        ordering = ["-accepted_at"]
+
+    def __str__(self):
+        return f"{self.adult} accepted {self.agreement}"
+
+    @classmethod
+    def has_accepted_for_user(cls, user):
+        """Check if a user has accepted all current active agreements.
+
+        Returns True if there are no active agreements (graceful degradation)
+        or if the user's Adult profile has acceptances for every active version.
+        Returns False if the user has no Adult profile.
+        """
+        active = MentorAgreement.get_all_active()
+        if not active.exists():
+            return True
+        try:
+            adult = user.adult_profile
+        except (AttributeError, Adult.DoesNotExist):
+            return False
+        accepted_ids = cls.objects.filter(
+            adult=adult, agreement__in=active
+        ).values_list("agreement_id", flat=True)
+        return active.filter(id__in=accepted_ids).count() == active.count()
+
+
+def _agreement_submission_upload_to(instance, filename):
+    """Files land at MEDIA_ROOT/agreement_submissions/<adult_id>/<filename>."""
+    from programs.utils.files import sanitize_upload_filename
+
+    adult_id = instance.adult_id or "unassigned"
+    filename = sanitize_upload_filename(filename)
+    return f"agreement_submissions/{adult_id}/{filename}"
+
+
+class MentorAgreementSubmission(models.Model):
+    """A signed document uploaded by an Adult in response to a
+    :class:`MentorAgreement` that has an attached document (PDF).
+
+    One row per (adult, agreement).  Re-uploading replaces the file.
+    """
+
+    adult = models.ForeignKey(
+        Adult,
+        on_delete=models.CASCADE,
+        related_name="agreement_submissions",
+    )
+    agreement = models.ForeignKey(
+        MentorAgreement,
+        on_delete=models.CASCADE,
+        related_name="submissions",
+    )
+    file = models.FileField(
+        upload_to=_agreement_submission_upload_to,
+        max_length=255,
+    )
+    uploaded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("adult", "agreement")
+        ordering = ["-uploaded_at"]
+        verbose_name = "Mentor Agreement Submission"
+        verbose_name_plural = "Mentor Agreement Submissions"
+
+    def __str__(self):
+        return f"Signed copy for {self.agreement} by {self.adult}"

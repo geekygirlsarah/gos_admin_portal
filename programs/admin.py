@@ -8,6 +8,9 @@ from .models import (
     BackgroundCheck,
     Enrollment,
     Fee,
+    MentorAgreement,
+    MentorAgreementAcceptance,
+    MentorAgreementSubmission,
     Payment,
     Program,
     ProgramDocument,
@@ -360,7 +363,14 @@ class ParentAdmin(admin.ModelAdmin):
         "phone_type",
         "email_updates",
     )
-    list_filter = ("email_updates", "is_parent", "is_mentor", "is_alumni", "active")
+    list_filter = (
+        "email_updates",
+        "is_parent",
+        "is_mentor",
+        "is_alumni",
+        "login_enabled",
+        "mentor_active",
+    )
     search_fields = (
         "first_name",
         "preferred_first_name",
@@ -402,7 +412,8 @@ class ParentAdmin(admin.ModelAdmin):
                     "is_parent",
                     "is_mentor",
                     "is_alumni",
-                    "active",
+                    "login_enabled",
+                    "mentor_active",
                 )
             },
         ),
@@ -492,3 +503,36 @@ class SlidingScaleSettingsAdmin(admin.ModelAdmin):
 
 
 # StudentApplication admin removed; replaced by the `applications` app.
+
+
+@admin.register(MentorAgreement)
+class MentorAgreementAdmin(admin.ModelAdmin):
+    list_display = (
+        "slug",
+        "version",
+        "title",
+        "effective_date",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("is_active", "slug")
+    search_fields = ("title", "slug")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(MentorAgreementAcceptance)
+class MentorAgreementAcceptanceAdmin(admin.ModelAdmin):
+    list_display = ("adult", "agreement", "accepted_at", "ip_address")
+    list_filter = ("agreement",)
+    search_fields = ("adult__first_name", "adult__last_name")
+    autocomplete_fields = ("adult", "agreement")
+    readonly_fields = ("accepted_at",)
+
+
+@admin.register(MentorAgreementSubmission)
+class MentorAgreementSubmissionAdmin(admin.ModelAdmin):
+    list_display = ("adult", "agreement", "uploaded_at")
+    list_filter = ("agreement",)
+    search_fields = ("adult__first_name", "adult__last_name")
+    autocomplete_fields = ("adult", "agreement")
+    readonly_fields = ("uploaded_at",)

@@ -3,7 +3,7 @@ import zoneinfo
 
 from django.conf import settings
 from django.shortcuts import redirect
-from django.urls import Resolver404, resolve
+from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 
@@ -24,6 +24,7 @@ EXEMPT_URL_NAMES = {
     "privacy_policy",
     "non_discrimination_policy",
     "health",
+    "mentor_agreement",
 }
 
 EXEMPT_PATH_PREFIXES = (
@@ -122,3 +123,48 @@ class TimezoneMiddleware(MiddlewareMixin):
                 timezone.deactivate()
         else:
             timezone.deactivate()
+
+
+class MentorAgreementMiddleware(MiddlewareMixin):
+    """Redirect mentors who have not accepted all current agreements.
+
+    Runs after LoginRequiredMiddleware (so the user is already authenticated).
+    Any authenticated user with
+    ``is_mentor=True`` (or in the LeadMentor group, or a superuser) who has
+    not accepted every active :class:`MentorAgreement` is redirected to
+    the agreement page.  This applies regardless of other roles (e.g.
+    parent+mentor combos) — the policy covers everyone with mentor access.
+
+    Controlled by ``settings.MENTOR_AGREEMENT_ENABLED`` (disabled during
+    tests by default).
+    """
+
+    def process_request(self, request):
+        if not getattr(settings, "MENTOR_AGREEMENT_ENABLED", True):
+            return None
+        if not request.user.is_authenticated:
+            return None
+        # Don't redirect away from the agreement page itself.
+        if request.path.startswith("/mentor-agreement/"):
+            return None
+
+        # Skip non-portal paths (media, static, admin, API, etc.) so that
+        # file downloads, static assets, and admin pages stay accessible.
+        for prefix in EXEMPT_PATH_PREFIXES:
+            if prefix and request.path.startswith(prefix):
+                return None
+
+        # Only apply to users who have a mentor role.
+        from programs.permission_views import user_is_mentor
+
+        if not user_is_mentor(request.user):
+            return None
+
+        from programs.models import MentorAgreementAcceptance
+
+        if MentorAgreementAcceptance.has_accepted_for_user(request.user):
+            return None
+
+        # User has not accepted — redirect to the agreement page.
+        next_url = request.get_full_path()
+        return redirect(reverse("mentor_agreement") + f"?next={next_url}")

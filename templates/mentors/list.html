@@ -19,33 +19,61 @@
             <p class="text-muted">These are all the mentors in the system.</p>
         {% endif %}
     </div>
-  {% if mentors %}
+  {% if active_mentors or inactive_mentors %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">
         <thead>
           <tr>
             <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
             <th><a href="{% sort_url 'role' %}" class="text-decoration-none text-dark">Role{% sort_icon 'role' %}</a></th>
-            <th><a href="{% sort_url 'active' %}" class="text-decoration-none text-dark">Active{% sort_icon 'active' %}</a></th>
+            <th><a href="{% sort_url 'mentor_active' %}" class="text-decoration-none text-dark">Active{% sort_icon 'mentor_active' %}</a></th>
           </tr>
         </thead>
         <tbody>
-          {% for m in mentors %}
+          {% for m in active_mentors %}
             <tr>
               <td>
                 {% if m.photo %}
-                  <img src="{{ m.photo.url }}" alt="{{ m.first_name }} {{ m.last_name }}" class="avatar avatar-32 me-2"/>
+                  <img src="{{ m.photo.url }}" alt="{{ m.full_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
                 {% if perms.programs.change_adult %}
-                  <a href="{% url 'mentor_edit' m.id %}?next={{ request.path }}">{{ m.first_name }} {{ m.last_name }}</a>
+                  <a href="{% url 'mentor_edit' m.id %}?next={{ request.path }}">{{ m.full_name }}</a>
                 {% else %}
-                  {{ m.first_name }} {{ m.last_name }}
+                  {{ m.full_name }}
+                {% endif %}
+                {% if m.needs_background_check %}
+                  <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
                 {% endif %}
               </td>
               <td>{{ m.get_role_display }}</td>
-              <td><span class="badge {% if m.active %}bg-success{% else %}bg-secondary{% endif %}">{{ m.active|yesno:"Yes,No" }}</span></td>
+              <td><span class="badge bg-success">Yes</span></td>
             </tr>
           {% endfor %}
+
+          {% if inactive_mentors %}
+            <tr class="table-light">
+              <th colspan="3" class="text-muted small py-1">Inactive Mentors</th>
+            </tr>
+            {% for m in inactive_mentors %}
+              <tr class="text-muted">
+                <td>
+                  {% if m.photo %}
+                    <img src="{{ m.photo.url }}" alt="{{ m.full_name }}" class="avatar avatar-32 me-2" style="opacity: 0.6;"/>
+                  {% endif %}
+                  {% if perms.programs.change_adult %}
+                    <a href="{% url 'mentor_edit' m.id %}?next={{ request.path }}" class="text-muted">{{ m.full_name }}</a>
+                  {% else %}
+                    {{ m.full_name }}
+                  {% endif %}
+                  {% if m.needs_background_check %}
+                    <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
+                  {% endif %}
+                </td>
+                <td>{{ m.get_role_display }}</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+            {% endfor %}
+          {% endif %}
         </tbody>
       </table>
     </div>

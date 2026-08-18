@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load form_tags %}
 {% load permission_tags %}
-{% block title %}Adult: {{ adult.first_name }} {{ adult.last_name }}{% endblock %}
+{% block title %}Adult: {{ adult.full_name }}{% endblock %}
 {% block nav_adults_active %} active{% endblock %}
 {% block content %}
   {% can_write user 'adult_info' adult as can_edit_adult %}
@@ -18,12 +18,13 @@
 
   <div class="row">
     <div class="col-lg-9 col-xl-8">
-      <h1 class="h3 mb-4">{{ adult.first_name }} {{ adult.last_name }}</h1>
+      <h1 class="h3 mb-4">{{ adult.full_name }}</h1>
 
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
           <span>Identity & Roles</span>
           <div>
+            {% if not adult.login_enabled %}<span class="badge bg-secondary">Login Disabled</span>{% endif %}
             {% if adult.is_parent %}<span class="badge bg-info">Parent</span>{% endif %}
             {% if adult.is_mentor %}<span class="badge bg-primary">Mentor</span>{% endif %}
             {% if adult.is_alumni %}<span class="badge bg-success">Alumni</span>{% endif %}
@@ -44,7 +45,10 @@
                 <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ adult.preferred_first_name|default:'—' }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ adult.last_name }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ adult.pronouns|default:'—' }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Active</div><div><span class="badge {% if adult.active %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.active|yesno:"Yes,No" }}</span></div></div>
+                <div class="col-md-4"><div class="fw-semibold">Login Enabled</div><div><span class="badge {% if adult.login_enabled %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.login_enabled|yesno:"Yes,No" }}</span></div></div>
+                {% if adult.is_mentor %}
+                <div class="col-md-4"><div class="fw-semibold">Mentor Active</div><div><span class="badge {% if adult.mentor_active %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.mentor_active|yesno:"Yes,No" }}</span></div></div>
+                {% endif %}
                 {% if adult.andrew_id %}
                 <div class="col-md-4"><div class="fw-semibold">Andrew ID</div><div>{{ adult.andrew_id }}</div></div>
                 {% endif %}

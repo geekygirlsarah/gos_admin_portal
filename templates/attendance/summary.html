@@ -50,7 +50,17 @@
                 <div class="h2 mb-0">{{ summary|length }}</div>
             </div>
         </div>
-        
+
+        <div class="list-group shadow-sm">
+            <a href="{% url 'visitor_management' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-people me-2"></i>Manage Visitors</span>
+                <i class="bi bi-chevron-right small text-muted"></i>
+            </a>
+            <a href="{% url 'all_attendance' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-ul me-2"></i>All Attendance Entries</span>
+                <i class="bi bi-chevron-right small text-muted"></i>
+            </a>
+        </div>
     </div>
 </div>
 {% endblock %}

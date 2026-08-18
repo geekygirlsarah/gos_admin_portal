@@ -13,6 +13,7 @@
       {% can_read user 'attendance' student as can_view_attendance %}
       {% if can_view_attendance %}
       <a class="btn btn-outline-secondary" href="{% url 'student_attendance' student.pk %}">Attendance</a>
+      <a class="btn btn-outline-info" href="{% url 'student_hours' student.pk %}">View Hours</a>
       {% endif %}
       {% if can_edit_student %}
         <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={{ request.path }}">Edit</a>
@@ -219,6 +220,9 @@
                   {% else %}
                     {{ student.primary_contact }}
                   {% endif %}
+                  {% if not student.primary_contact.login_enabled %}
+                    <span class="badge bg-secondary">Inactive</span>
+                  {% endif %}
                 {% else %}
                   —
                 {% endif %}
@@ -232,6 +236,9 @@
                     <a href="{% url 'adult_detail' student.secondary_contact.pk %}">{{ student.secondary_contact }}</a>
                   {% else %}
                     {{ student.secondary_contact }}
+                  {% endif %}
+                  {% if not student.secondary_contact.login_enabled %}
+                    <span class="badge bg-secondary">Inactive</span>
                   {% endif %}
                 {% else %}
                   —
@@ -249,6 +256,9 @@
                           <a href="{% url 'adult_detail' p.pk %}">{{ p }}</a>
                         {% else %}
                           {{ p }}
+                        {% endif %}
+                        {% if not p.login_enabled %}
+                          <span class="badge bg-secondary">Inactive</span>
                         {% endif %}
                       </li>
                     {% endfor %}

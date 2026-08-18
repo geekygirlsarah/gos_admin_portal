@@ -22,6 +22,11 @@ urlpatterns = [
         name="application_cleanup_stale",
     ),
     path(
+        "review/messaging/",
+        views.ApplicationEmailView.as_view(),
+        name="application_review_messaging",
+    ),
+    path(
         "review/<str:app_id>/",
         views.ApplicationReviewDetailView.as_view(),
         name="application_review_detail",
@@ -55,6 +60,11 @@ urlpatterns = [
         "review/<str:app_id>/resend-email/",
         views.ApplicationResendEmailView.as_view(),
         name="application_review_resend_email",
+    ),
+    path(
+        "review/<str:app_id>/upload-document/",
+        views.ApplicationStaffDocumentUploadView.as_view(),
+        name="application_review_upload_document",
     ),
     # Step 1: welcome / start / resume
     path("", views.WelcomeView.as_view(), name="apply_start"),

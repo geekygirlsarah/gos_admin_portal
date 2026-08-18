@@ -26,6 +26,10 @@ from ..permission_views import (
     get_user_role,
 )
 from ..utils import (
+    active_adults,
+    active_alumni,
+    active_mentors,
+    active_parents,
     get_safe_url,
     redirect_back,
 )
@@ -52,8 +56,17 @@ class AdultsListView(
         "name": (Lower("first_name"), Lower("last_name")),
         "email": Lower("personal_email"),
         "phone": "phone_number",
+        "login_enabled": "login_enabled",
     }
     default_sort_field = "name"
+
+    def apply_sorting(self, qs):
+        # Always prepend -login_enabled to sorting if not already sorting by login_enabled
+        sort = self.get_sort_field()
+        qs = super().apply_sorting(qs)
+        if sort != "login_enabled":
+            qs = qs.order_by("-login_enabled", *qs.query.order_by)
+        return qs
 
     def get_queryset(self):
 
@@ -98,7 +111,7 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_parent=True).prefetch_related(
+        qs = active_parents().prefetch_related(
             "students__school", "students__enrollment_set__program"
         )
         program_id = self.kwargs.get("program_id")
@@ -138,13 +151,22 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     sort_fields = {
         "name": (Lower("first_name"), Lower("last_name")),
         "role": "role",
-        "active": "active",
+        "mentor_active": "mentor_active",
     }
     default_sort_field = "name"
 
+    def apply_sorting(self, qs):
+        # Always prepend -mentor_active to sorting if not already sorting by mentor_active
+        sort = self.get_sort_field()
+        qs = super().apply_sorting(qs)
+        if sort != "mentor_active":
+            qs = qs.order_by("-mentor_active", *qs.query.order_by)
+        return qs
+
     def get_queryset(self):
         qs = Adult.objects.filter(is_mentor=True).prefetch_related(
-            "students__enrollment_set__program"
+            "students__enrollment_set__program",
+            "background_checks",
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -156,6 +178,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
+        all_mentors = ctx["mentors"]
+        ctx["active_mentors"] = all_mentors.filter(mentor_active=True)
+        ctx["inactive_mentors"] = all_mentors.filter(mentor_active=False)
         return ctx
 
 
@@ -175,9 +200,7 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_alumni=True).prefetch_related(
-            "students__enrollment_set__program"
-        )
+        qs = active_alumni().prefetch_related("students__enrollment_set__program")
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()

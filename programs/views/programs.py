@@ -565,15 +565,30 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             messages.warning(request, "No students selected.")
             return redirect("program_assignment", pk=pk)
 
-        if not target_id:
-            messages.warning(request, f"No {assignment_type} selected.")
-            return redirect("program_assignment", pk=pk)
-
         enrollments = Enrollment.objects.filter(
             program=program, student_id__in=student_ids
         )
 
-        if assignment_type == "team":
+        if not target_id:
+            if assignment_type == "team":
+                enrollments.update(team=None)
+                messages.success(
+                    request,
+                    f"Unassigned team from {len(student_ids)} student(s).",
+                )
+            elif assignment_type == "crew":
+                enrollments.update(crew=None)
+                messages.success(
+                    request,
+                    f"Unassigned crew from {len(student_ids)} student(s).",
+                )
+            elif assignment_type == "subteam":
+                enrollments.update(subteam=None)
+                messages.success(
+                    request,
+                    f"Unassigned subteam from {len(student_ids)} student(s).",
+                )
+        elif assignment_type == "team":
             team = get_object_or_404(Team, id=target_id)
             enrollments.update(team=team)
             messages.success(
@@ -637,13 +652,13 @@ class ProgramEmailView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     students__enrollment__program=prog,
                     students__enrollment__active=True,
                     email_updates=True,
-                    active=True,
+                    login_enabled=True,
                 ).distinct():
                     e = parent.personal_email or parent.andrew_email
                     if e:
                         recipients.add(e)
             if "mentors" in groups:
-                for m in Adult.objects.filter(is_mentor=True, active=True):
+                for m in Adult.objects.filter(is_mentor=True, mentor_active=True):
                     e = m.personal_email or m.andrew_email
                     if e:
                         recipients.add(e)
@@ -807,6 +822,8 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
                 "city",
                 "state",
                 "zip_code",
+                "phone_number",
+                "personal_email",
             )
             .annotate(
                 sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
@@ -821,18 +838,51 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
             if not addr:
                 continue
             name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
-            rows.append((name or f"Student #{s.pk}", addr))
+            rows.append(
+                (
+                    name or f"Student #{s.pk}",
+                    addr,
+                    s.phone_number or "",
+                    s.personal_email or "",
+                )
+            )
             addresses.append(addr)
         points = resolve_address_points(addresses) if addresses else {}
         items = [
             {
                 "name": name,
                 "address": addr,
+                "phone": phone,
+                "email": email,
                 "latitude": points[addr][0] if points.get(addr) else None,
                 "longitude": points[addr][1] if points.get(addr) else None,
             }
-            for name, addr in rows
+            for name, addr, phone, email in rows
         ]
+        # For parent/student views, show names of students who opted out of
+        # directory sharing in an "Unlisted Students" section below the map.
+        unlisted = []
+        if role in ("Parent", "Student"):
+            unlisted_qs = (
+                Student.objects.filter(
+                    enrollment__program=program,
+                    enrollment__active=True,
+                    graduated=False,
+                    directory_consent=False,
+                )
+                .distinct()
+                .only("first_name", "legal_first_name", "last_name")
+                .annotate(
+                    sort_first=Coalesce(
+                        NullIf("first_name", Value("")), "legal_first_name"
+                    )
+                )
+                .order_by(Lower("sort_first"), Lower("last_name"))
+            )
+            for s in unlisted_qs:
+                name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+                if name:
+                    unlisted.append(name)
         if role in ("Parent", "Student"):
             back_url = reverse("profile_dashboard")
             back_label = "← Back to Dashboard"
@@ -845,6 +895,7 @@ class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View
             {
                 "program": program,
                 "items": items,
+                "unlisted": unlisted,
                 "back_url": back_url,
                 "back_label": back_label,
             },
@@ -917,6 +968,64 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
                 "grouped": grouped_items,
             },
         )
+
+
+class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+    """Export active students in a program as an Excel (.xlsx) file."""
+
+    section = "programs"
+
+    def get(self, request, pk):
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+
+        program = get_object_or_404(Program, pk=pk)
+
+        enrollments = (
+            Enrollment.objects.filter(
+                program=program, active=True, student__graduated=False
+            )
+            .select_related("student")
+            .annotate(
+                sort_first=Lower(
+                    Coalesce(
+                        NullIf("student__first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                sort_last=Lower("student__last_name"),
+            )
+            .order_by("sort_first", "sort_last")
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Students"
+        ws.append(["First Name", "Last Name", "Grade"])
+
+        for enrollment in enrollments:
+            student = enrollment.student
+            ws.append(
+                [
+                    student.first_name or student.legal_first_name,
+                    student.last_name,
+                    student.grade_display or "",
+                ]
+            )
+
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        filename = f"{program.name} - Students.xlsx"
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class ProgramDocumentCreateView(

@@ -41,6 +41,12 @@
                     </li>
                     {% endif %}
 
+                    {% if navbar_role == 'Student' %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.view_name == 'student_hours' %} active{% endif %}" href="{% url 'student_hours' user.student_profile.pk %}">My Hours</a>
+                    </li>
+                    {% endif %}
+
                     {% can_read user 'programs' current_program as can_view_program %}
                     {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
@@ -88,6 +94,9 @@
                                 <li><a class="dropdown-item" href="{% url 'attendance_active' %}">Who's Here Now</a></li>
                                 <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
                                 <li><a class="dropdown-item" href="{% url 'rfid_management' %}">RFID Management</a></li>
+                                {% if current_program %}
+                                <li><a class="dropdown-item" href="{% url 'program_hours' current_program.pk %}">Program Hours</a></li>
+                                {% endif %}
                                 {% if navbar_role == 'LeadMentor' %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'all_attendance' %}">All Program Entries</a></li>

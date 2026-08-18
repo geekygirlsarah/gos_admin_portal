@@ -38,9 +38,15 @@
             <tr>
               <td>
                 {% if a.photo %}
-                  <img src="{{ a.photo.url }}" alt="{{ a.first_name }} {{ a.last_name }}" class="avatar avatar-32 me-2"/>
+                  <img src="{{ a.photo.url }}" alt="{{ a.full_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
-                {{ a.first_name }} {{ a.last_name }}
+                {{ a.full_name }}
+                {% if not a.login_enabled %}
+                  <span class="badge bg-secondary ms-1">Login Disabled</span>
+                {% endif %}
+                {% if a.is_mentor and a.needs_background_check %}
+                  <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
+                {% endif %}
               </td>
               <td>
                 {% with e=a.personal_email %}

@@ -1,7 +1,9 @@
 from datetime import date
 from decimal import Decimal
+from io import StringIO
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import models
 from django.test import TestCase
 
@@ -100,3 +102,201 @@ class SeedDbCommandTest(TestCase):
         }
 
         self.assertEqual(first_counts, second_counts)
+
+
+class GetProgramEmailsCommandTest(TestCase):
+    def setUp(self):
+        self.program = Program.objects.create(name="Summer Robotics")
+        self.out = StringIO()
+
+        # Students
+        self.student_with_personal = Student.objects.create(
+            legal_first_name="Alice",
+            last_name="Student",
+            personal_email="alice@example.com",
+        )
+        self.student_andrew_only = Student.objects.create(
+            legal_first_name="Bob",
+            last_name="Student",
+            andrew_email="bob@andrew.cmu.edu",
+        )
+        self.student_no_email = Student.objects.create(
+            legal_first_name="Charlie",
+            last_name="Student",
+        )
+        self.graduate = Student.objects.create(
+            legal_first_name="Dana",
+            last_name="Grad",
+            personal_email="dana@example.com",
+            graduated=True,
+        )
+
+        # Enroll active students (not the graduate)
+        Enrollment.objects.create(
+            student=self.student_with_personal, program=self.program
+        )
+        Enrollment.objects.create(
+            student=self.student_andrew_only, program=self.program
+        )
+        Enrollment.objects.create(student=self.student_no_email, program=self.program)
+
+        # Parents
+        self.parent_active = Adult.objects.create(
+            first_name="Eve",
+            last_name="Parent",
+            personal_email="eve@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=True,
+        )
+        self.parent_no_updates = Adult.objects.create(
+            first_name="Frank",
+            last_name="Parent",
+            personal_email="frank@example.com",
+            is_parent=True,
+            email_updates=False,
+            login_enabled=True,
+        )
+        self.parent_inactive = Adult.objects.create(
+            first_name="Grace",
+            last_name="Parent",
+            personal_email="grace@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=False,
+        )
+
+        # Link parents to active students
+        self.parent_active.students.add(self.student_with_personal)
+        self.parent_no_updates.students.add(self.student_with_personal)
+        self.parent_inactive.students.add(self.student_with_personal)
+
+        # Mentors
+        self.mentor = Adult.objects.create(
+            first_name="Hank",
+            last_name="Mentor",
+            andrew_email="hank@andrew.cmu.edu",
+            is_mentor=True,
+            login_enabled=True,
+        )
+        self.mentor_inactive = Adult.objects.create(
+            first_name="Iris",
+            last_name="Mentor",
+            personal_email="iris@example.com",
+            is_mentor=True,
+            mentor_active=False,
+            login_enabled=False,
+        )
+
+    def test_students_flag(self):
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            "--students",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        emails = [e.strip() for e in output.split(",")]
+        self.assertIn("alice@example.com", emails)
+        self.assertIn("bob@andrew.cmu.edu", emails)
+        self.assertNotIn("dana@example.com", emails)  # graduated
+
+    def test_parents_flag(self):
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            "--parents",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        emails = [e.strip() for e in output.split(",")]
+        self.assertIn("eve@example.com", emails)
+        self.assertNotIn("frank@example.com", emails)  # email_updates=False
+        self.assertNotIn("grace@example.com", emails)  # login_enabled=False
+
+    def test_mentors_flag(self):
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            "--mentors",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        emails = [e.strip() for e in output.split(",")]
+        self.assertIn("hank@andrew.cmu.edu", emails)
+        self.assertNotIn("iris@example.com", emails)  # inactive
+
+    def test_multiple_groups(self):
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            "--students",
+            "--parents",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        emails = [e.strip() for e in output.split(",")]
+        self.assertIn("alice@example.com", emails)
+        self.assertIn("eve@example.com", emails)
+        self.assertNotIn("hank@andrew.cmu.edu", emails)
+
+    def test_no_recipients(self):
+        # Empty program, no flags — warns about no addresses
+        program = Program.objects.create(name="Empty Program")
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            program.pk,
+            "--students",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        self.assertIn("No email addresses found", output)
+
+    def test_deduplicates_emails(self):
+        # Student and parent share the same email
+        self.student_with_personal.personal_email = "shared@example.com"
+        self.student_with_personal.save()
+        self.parent_active.personal_email = "shared@example.com"
+        self.parent_active.save()
+
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            "--students",
+            "--parents",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        emails = [e.strip() for e in output.split(",")]
+        self.assertEqual(emails.count("shared@example.com"), 1)
+
+    def test_output_is_comma_separated(self):
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            "--students",
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        self.assertIn(",", output)  # multiple students → comma-separated
+
+    def test_program_id_required(self):
+        with self.assertRaises(CommandError):
+            call_command("get_program_emails", stdout=self.out)
+
+    def test_no_group_flag_warns(self):
+        call_command(
+            "get_program_emails",
+            "--program-id",
+            self.program.pk,
+            stdout=self.out,
+        )
+        output = self.out.getvalue().strip()
+        self.assertIn("No recipient groups specified", output)

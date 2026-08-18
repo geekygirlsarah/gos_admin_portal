@@ -11,20 +11,29 @@ import json
 import logging
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.utils.html import strip_tags
 from django.views import View
+from premailer import transform
 
 from audit.events import AuditEvent
 from audit.service import log_event
+from programs.models import Program
 
-from ..models import Application
+from ..forms import StaffDocumentUploadForm
+from ..models import Application, ApplicationDocumentSubmission
 from ..services import (
     ApplicationConversionError,
+    _collect_applicant_recipients,
     convert_application_to_student,
     get_primary_parent_email,
     send_application_approved_email,
@@ -107,6 +116,68 @@ class ApplicationDataEditForm(forms.Form):
         return parsed
 
 
+class ApplicationEmailForm(forms.Form):
+    program = forms.ModelChoiceField(
+        queryset=Program.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        help_text="Select the program whose applicants you want to email. Leave blank for all programs.",
+    )
+    statuses = forms.MultipleChoiceField(
+        required=True,
+        choices=Application.Status.choices,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        help_text="Choose one or more application statuses to email.",
+    )
+    subject = forms.CharField(
+        max_length=255, widget=forms.TextInput(attrs={"class": "form-control"})
+    )
+    body = forms.CharField(
+        widget=forms.Textarea(attrs={"rows": 12, "class": "form-control"}),
+        help_text="Rich text is supported. Paste content or use the editor.",
+    )
+    test_email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={"class": "form-control"}),
+        help_text="Optional: send only to this address for testing.",
+    )
+    from_account = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "form-select"})
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Build sender choices from settings
+        accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+        choices = []
+        initial_value = None
+        if accounts:
+            for acc in accounts:
+                email = acc.get("email") or ""
+                display = acc.get("display_name") or email or "Sender"
+                value = acc.get("key") or email
+                label = f"{display} <{email}>" if email else display
+                choices.append((value, label))
+            if choices:
+                initial_value = choices[0][0]
+        else:
+            default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            if default_name:
+                label = (
+                    f"Default ({default_name} <{default_email}>)"
+                    if default_email
+                    else f"Default ({default_name})"
+                )
+            else:
+                label = f"Default ({default_email})" if default_email else "Default"
+            choices = [("DEFAULT", label)]
+            initial_value = "DEFAULT"
+
+        self.fields["from_account"].choices = choices
+        self.fields["from_account"].initial = initial_value
+
+
 # ---------------------------------------------------------------------------
 # Views
 # ---------------------------------------------------------------------------
@@ -130,6 +201,7 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
         status = (request.GET.get("status") or "").strip()
         applicant_type = (request.GET.get("type") or "").strip()
         program_id = (request.GET.get("program") or "").strip()
+        open_only = (request.GET.get("open") or "").strip() == "1"
 
         valid_statuses = {c[0] for c in Application.Status.choices}
         if status and status in valid_statuses:
@@ -141,6 +213,24 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
 
         if program_id.isdigit():
             qs = qs.filter(program_id=int(program_id))
+
+        if open_only:
+            today = timezone.now().date()
+            qs = (
+                qs.filter(program__active=True)
+                .filter(
+                    models.Q(program__applications_open__lte=today)
+                    | models.Q(program__applications_open__isnull=True)
+                )
+                .filter(
+                    models.Q(program__applications_close__gte=today)
+                    | models.Q(program__applications_close__isnull=True)
+                )
+                .filter(
+                    models.Q(program__end_date__gte=today)
+                    | models.Q(program__end_date__isnull=True)
+                )
+            )
 
         # Sorting
         sort = (request.GET.get("sort") or "submitted").strip()
@@ -213,8 +303,19 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
             },
         ]
 
+        invalid_group = {
+            "title": "Closed or Ended Programs (Invalid)",
+            "apps": [],
+            "is_invalid": True,
+        }
+
         # Partition applications into groups
         for app in qs:
+            # Applications for closed/ended programs go into the special invalid group
+            if app.program and app.program.applications_are_invalid:
+                invalid_group["apps"].append(app)
+                continue
+
             found = False
             for group in grouped:
                 if app.status in group["statuses"]:
@@ -227,8 +328,12 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
                     grouped.append({"title": "Other", "statuses": [], "apps": []})
                 grouped[-1]["apps"].append(app)
 
+        # Add the invalid group at the end if it has apps
+        if invalid_group["apps"]:
+            grouped.append(invalid_group)
+
         # Remove empty groups if a filter is active
-        if status or applicant_type or program_id:
+        if status or applicant_type or program_id or open_only:
             grouped = [g for g in grouped if g["apps"]]
 
         from programs.models import Program
@@ -244,6 +349,7 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
                 "current_status": status,
                 "current_type": applicant_type,
                 "filter_program_id": program_id,
+                "open_only": open_only,
                 "current_sort": sort,
                 "current_dir": direction,
             },
@@ -301,6 +407,7 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
                 "application": application,
                 "data": application.data or {},
                 "decline_form": DeclineForm(),
+                "upload_form": StaffDocumentUploadForm(program=application.program),
                 "documents_status": documents_status,
                 "all_required_uploaded": all_required_uploaded,
                 "any_documents": any_documents,
@@ -658,4 +765,199 @@ class ApplicationConvertView(_ReviewerRequiredMixin, View):
                 f"Converted application {application.application_id} into "
                 f"student “{student}” enrolled in {application.program}.",
             )
+        return redirect("application_review_detail", app_id=application.application_id)
+
+
+class ApplicationEmailView(_ReviewerRequiredMixin, View):
+    """Bulk email messaging for applicants by status and program."""
+
+    template_name = "applications/review/email_form.html"
+
+    def get(self, request):
+        form = ApplicationEmailForm()
+        return self._render(form)
+
+    def post(self, request):
+        form = ApplicationEmailForm(request.POST)
+        if form.is_valid():
+            prog = form.cleaned_data.get("program")
+            statuses = form.cleaned_data["statuses"]
+            subject = form.cleaned_data["subject"]
+            html_body = form.cleaned_data["body"]
+
+            # Inline CSS for better email client compatibility
+            try:
+                inlined_html_body = transform(html_body)
+            except Exception:
+                inlined_html_body = html_body
+            text_body = strip_tags(inlined_html_body)
+            test_email = form.cleaned_data.get("test_email")
+
+            apps = Application.objects.filter(status__in=statuses)
+            if prog:
+                apps = apps.filter(program=prog)
+
+            recipients = set()
+            for app in apps:
+                for addr in _collect_applicant_recipients(app):
+                    recipients.add(addr)
+
+            if not recipients and not test_email:
+                messages.error(
+                    request, "No recipients found for the selected criteria."
+                )
+                return self._render(form)
+
+            to_send = [test_email] if test_email else sorted(recipients)
+
+            # Determine sender account and SMTP credentials
+            selected = form.cleaned_data.get("from_account")
+            accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+            acc = None
+            if accounts and selected and selected != "DEFAULT":
+                # Match by key or email value
+                for a in accounts:
+                    key = a.get("key") or a.get("email")
+                    if key == selected:
+                        acc = a
+                        break
+
+            # Build SMTP connection using selected account credentials if provided
+            conn_kwargs = {
+                "backend": getattr(
+                    settings,
+                    "EMAIL_BACKEND",
+                    "django.core.mail.backends.smtp.EmailBackend",
+                ),
+                "host": getattr(settings, "EMAIL_HOST", ""),
+                "port": getattr(settings, "EMAIL_PORT", 465),
+                "use_tls": getattr(settings, "EMAIL_USE_TLS", False),
+                "use_ssl": getattr(settings, "EMAIL_USE_SSL", True),
+                "timeout": getattr(settings, "EMAIL_TIMEOUT", 10),
+            }
+            if acc:
+                conn_kwargs.update(
+                    {
+                        "username": acc.get("username") or "",
+                        "password": acc.get("password") or "",
+                    }
+                )
+                from_email = acc.get("email") or getattr(
+                    settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
+                )
+                # Include display_name if provided
+                display_name = acc.get("display_name")
+                if display_name:
+                    from_email = f'"{display_name}" <{from_email}>'
+            else:
+                # Fall back to global credentials and default from address
+                conn_kwargs.update(
+                    {
+                        "username": getattr(settings, "EMAIL_HOST_USER", ""),
+                        "password": getattr(settings, "EMAIL_HOST_PASSWORD", ""),
+                    }
+                )
+                from_email = getattr(
+                    settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
+                )
+
+            try:
+                with get_connection(**conn_kwargs) as connection:
+                    for addr in to_send:
+                        msg = EmailMultiAlternatives(
+                            subject=subject,
+                            body=text_body,
+                            from_email=from_email,
+                            to=[addr],
+                            connection=connection,
+                        )
+                        msg.attach_alternative(inlined_html_body, "text/html")
+                        msg.send()
+
+                messages.success(
+                    request,
+                    f"Successfully sent email to {len(to_send)} recipient(s).",
+                )
+                return redirect("application_review_list")
+            except Exception as e:
+                logger.exception("Failed to send bulk application email")
+                messages.error(request, f"Failed to send email: {e}")
+
+        return self._render(form)
+
+    def _render(self, form):
+        return render(self.request, self.template_name, {"form": form})
+
+
+class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
+    """POST: lead mentor uploads a signed document on behalf of an applicant.
+
+    This allows paper copies received in person to be attached to the
+    application so the reviewer can mark it as approved + signed.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, app_id: str):
+        from programs.models import ProgramDocument
+
+        application = get_object_or_404(
+            Application, application_id=(app_id or "").upper()
+        )
+        form = StaffDocumentUploadForm(
+            request.POST, request.FILES, program=application.program
+        )
+        if not form.is_valid():
+            messages.error(
+                request,
+                "Please select a document and choose a file to upload.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
+
+        document = form.cleaned_data["document"]
+        submission, _created = ApplicationDocumentSubmission.objects.get_or_create(
+            application=application, document=document
+        )
+        submission.file = form.cleaned_data["file"]
+        try:
+            submission.save()
+        except SuspiciousFileOperation:
+            messages.error(
+                request,
+                "The filename of your uploaded document is too long or "
+                "contains invalid characters. Please rename the file and "
+                "try again.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
+
+        # Auto-promote from APPROVED → APPROVED_SIGNED when all required
+        # docs are now uploaded (mirrors the applicant's Step 10 logic).
+        if application.status == Application.Status.APPROVED:
+            required_doc_ids = set(
+                ProgramDocument.objects.filter(
+                    program=application.program,
+                    is_active=True,
+                    is_required=True,
+                ).values_list("pk", flat=True)
+            )
+            if required_doc_ids:
+                uploaded_doc_ids = set(
+                    ApplicationDocumentSubmission.objects.filter(
+                        application=application,
+                        document_id__in=required_doc_ids,
+                    ).values_list("document_id", flat=True)
+                )
+                if required_doc_ids.issubset(uploaded_doc_ids):
+                    application.status = Application.Status.APPROVED_SIGNED
+                    application.save(update_fields=["status", "updated_at"])
+
+        messages.success(
+            request,
+            f'Uploaded signed copy of "{document.name}" for '
+            f"{application.application_id}.",
+        )
         return redirect("application_review_detail", app_id=application.application_id)

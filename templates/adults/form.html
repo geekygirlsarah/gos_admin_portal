@@ -115,12 +115,12 @@
                 </div>
                 {% endif %}
 
-                {% if form.active %}
+                {% if form.login_enabled %}
                 <div class="card">
                   <div class="card-header bg-light">Status</div>
                   <div class="card-body">
                     <div class="row g-3">
-                      <div class="col-md-3">{% render_field form.active %}</div>
+                      <div class="col-md-3">{% render_field form.login_enabled %}</div>
                     </div>
                   </div>
                 </div>
@@ -169,6 +169,7 @@
                     <div class="row g-3">
                       {% if form.start_year %}<div class="col-md-4">{% render_field form.start_year %}</div>{% endif %}
                       {% if form.role %}<div class="col-md-4">{% render_field form.role %}</div>{% endif %}
+                      {% if form.mentor_active %}<div class="col-md-4">{% render_field form.mentor_active %}</div>{% endif %}
                       {% if form.emergency_contact_name %}<div class="col-md-6">{% render_field form.emergency_contact_name %}</div>{% endif %}
                       {% if form.emergency_contact_phone %}<div class="col-md-6">{% render_field form.emergency_contact_phone %}</div>{% endif %}
                     </div>

@@ -139,7 +139,7 @@ class KioskApiReliabilityTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Student not found.")
+        self.assertEqual(response.json()["error"], "Student not found or inactive.")
 
     def test_kiosk_tap_unknown_rfid_member_returns_400(self):
         self.client.cookies[self.cookie_name] = "1"

@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Visitor Management — Attendance{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h1 class="h3">Visitor Management</h1>
+            <p class="text-muted">Standardize and merge visitor names from kiosk entries.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'all_attendance' %}" class="btn btn-outline-secondary">View All Attendance</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Unique Visitor Names</h5>
+            <span class="badge bg-secondary">{{ visitors|length }} Names Found</span>
+        </div>
+        <div class="card-body p-0">
+            <form method="post" id="merge-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="merge" />
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="select-all" /></th>
+                                <th>Name</th>
+                                <th class="text-center">Sessions</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for visitor in visitors %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" name="selected_names" value="{{ visitor.visitor_name }}" class="form-check-input visitor-check" />
+                                </td>
+                                <td>{{ visitor.visitor_name }}</td>
+                                <td class="text-center">{{ visitor.session_count }}</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-primary single-merge" data-name="{{ visitor.visitor_name }}">Rename</button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">No visitor entries found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="p-3 bg-light border-top" id="merge-controls" style="display: none;">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-auto">
+                            <span class="fw-bold">Merge selected into:</span>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" name="target_name" id="target-name-input" class="form-control" placeholder="Corrected Name" required />
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary js-confirm" data-confirm="Are you sure you want to merge these visitor names? This will update all historical records.">Merge Names</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Modal -->
+<div class="modal fade" id="renameModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="merge" />
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Rename Visitor</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Update visitor name for all historical records.</p>
+          <div class="mb-3">
+            <label class="form-label">Original Name</label>
+            <input type="text" name="selected_names" id="rename-old-name" class="form-control-plaintext fw-bold" readonly />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">New Name</label>
+            <input type="text" name="target_name" id="rename-new-name" class="form-control" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('select-all');
+    const checks = document.querySelectorAll('.visitor-check');
+    const mergeControls = document.getElementById('merge-controls');
+    const targetInput = document.getElementById('target-name-input');
+    
+    function updateControls() {
+        const checkedCount = document.querySelectorAll('.visitor-check:checked').length;
+        mergeControls.style.display = checkedCount > 0 ? 'block' : 'none';
+        
+        if (checkedCount === 1) {
+            targetInput.value = document.querySelector('.visitor-check:checked').value;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checks.forEach(c => c.checked = selectAll.checked);
+            updateControls();
+        });
+    }
+
+    checks.forEach(c => {
+        c.addEventListener('change', updateControls);
+    });
+
+    // Single Rename
+    const renameModal = new bootstrap.Modal(document.getElementById('renameModal'));
+    const oldNameInput = document.getElementById('rename-old-name');
+    const newNameInput = document.getElementById('rename-new-name');
+
+    document.querySelectorAll('.single-merge').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const name = this.dataset.name;
+            oldNameInput.value = name;
+            newNameInput.value = name;
+            renameModal.show();
+        });
+    });
+});
+</script>
+{% endblock %}

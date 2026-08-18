@@ -22,6 +22,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Report how many addresses would be geocoded without calling the service.",
         )
+        parser.add_argument(
+            "--retry-missing",
+            action="store_true",
+            help="Also retry addresses that were previously marked as not found.",
+        )
 
     def handle(self, *args, **options):
         program_id = options.get("program")
@@ -41,11 +46,21 @@ class Command(BaseCommand):
             if addr:
                 addresses.add(addr)
 
-        cached_keys = set(
-            AddressGeocode.objects.filter(
-                address__in=[normalize_address(a) for a in addresses]
-            ).values_list("address", flat=True)
-        )
+        filter_args = {"address__in": [normalize_address(a) for a in addresses]}
+        if not options.get("retry_missing"):
+            # Only consider addresses we've never seen before (ignore "not found" ones)
+            cached_keys = set(
+                AddressGeocode.objects.filter(**filter_args).values_list(
+                    "address", flat=True
+                )
+            )
+        else:
+            # Only consider addresses that were successfully geocoded (retry "not found" ones)
+            cached_keys = set(
+                AddressGeocode.objects.filter(found=True, **filter_args).values_list(
+                    "address", flat=True
+                )
+            )
         uncached = [a for a in addresses if normalize_address(a) not in cached_keys]
 
         if options.get("dry_run"):
@@ -54,6 +69,11 @@ class Command(BaseCommand):
                 f"addresses would be geocoded."
             )
             return
+
+        # If retrying, we need to clear the old "not found" entries so resolve_address_points
+        # will actually hit the remote service again.
+        if options.get("retry_missing") and not options.get("dry_run"):
+            AddressGeocode.objects.filter(found=False, **filter_args).delete()
 
         points = resolve_address_points(addresses)
         found = sum(1 for point in points.values() if point)

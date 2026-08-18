@@ -2,9 +2,65 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-18
+
+### Added
+- **Mentor Inactive Status**: Added a separate `mentor_active` flag to the Adult model. Lead Mentors can now mark a mentor as inactive without affecting their login or other roles. Inactive mentors are grouped separately on the mentors list page with a clear section header and excluded from email lists and kiosk access.
+
+### Changed
+- **Adult `active` field renamed to `login_enabled`**: The Adult model's `active` field has been renamed to `login_enabled` for clarity. This field now exclusively controls portal login access. All references across views, templates, forms, admin, and tests have been updated. The `mentor_active` field is independent — a mentor can be inactive as a mentor (no emails, no kiosk access) while still being able to log in, and vice versa.
+
+## 2026-08-17
+
+### Added
+- **Re-encrypt student medical fields management command**: A new `python manage.py reencrypt_student_medical` command fixes garbled allergy/dietary/medical fields on Student records caused by an encryption key rotation. It tries the current key, then the legacy SECRET_KEY-derived key, and finally falls back to converted Application source data. Supports `--dry-run` to preview changes and `--all-students` to process students created outside the application flow.
+- **Staff Document Upload on Application Review**: Lead mentors can now upload signed documents on behalf of applicants directly from the application review detail page. This is useful for paper copies received in person. The form appears in the "Signed Documents" card footer with a document dropdown and file picker. Auto-promotes the application from "Approved" to "Approved + Signed" when all required documents are uploaded.
+- **Signed Document Uploads for Mentor Agreements**: Mentor agreements with an attached PDF now require mentors to download the document, sign it, and upload the signed copy before they can accept. The agreement page shows the upload status (not yet uploaded / signed copy uploaded) and the "I Agree to All" button is blocked until all required signed copies are uploaded. Markdown-only agreements still use the existing checkbox flow. Re-uploading replaces the previous signed copy. Signed files are stored in `MEDIA_ROOT/agreement_submissions/<adult_id>/`.
+- **Add grades to student names**: On the program list view, add grades next to student names.
+- **Student export**: Add a button to export student data as a CSV file. Right now just first name, last name, and grade.
+
+### Fixed
+- **Bulk Unassignment on Team/Crew Assignment Page**: Selecting students and choosing the "Unassign" option from the dropdown on the program's Team/Crew Assignment page now correctly clears the team, crew, or subteam. Previously this would show a warning and do nothing.
+
+### Changed
+- **Kiosk greetings are now randomized and personalized**: The kiosk sign-in page displays a random selection of fun, varied welcome and goodbye messages instead of the same static text every time. Student and mentor messages use first names only; visitor messages use full names. Mentor sign-in messages now include varied thank-you-for-volunteering phrases.
+- **Remove mentor block**: Remove the temporarily block preventing mentors from logging in since the needed features have been added and permissions checked.
+
+## 2026-08-16
+
+### Changed
+- **Temporary Mentor Access Block**: While mentor portal features are being finished, mentors cannot log in yet. Mentors whose only role is mentor are signed out and returned to the login page with the message "Sorry, mentors cannot log in yet. You'll receive an announcement when you can." Mentors who are also parents or alumni can still log in to manage their students' information or their alumni profile, but they won't see mentor-specific features until the block is lifted. Lead mentors are unaffected.
+- **Resolve geocoding issues**: Fixed an issue where geocoding was not working properly for some addresses by adding Mapbox as a backend service to find addresses OpenStreetMap/Nominatim didn't have.
+- **Attendance graphs**: Add in attendance graphs for students to see hours over time, and mentors to see students hours over time.
+
+## 2026-08-15
+
+### Added
+- **Visitor Management and Standardizing Names**:
+    - Added a new **Visitor Management** tool (accessible from Attendance pages) that allows Lead Mentors to see all unique visitor names and their session counts.
+    - Mentors can now **merge** multiple inconsistent visitor names (e.g., "John", "John D.", "John Doe") into a single standardized name across all historical attendance records and events.
+    - Visitor names can now be edited individually directly on the "All Program Entries" attendance page.
+- **Bulk Applicant Messaging**: Lead Mentors can now send bulk emails to applicants based on their application status and program. This is accessible via the new "Message Applicants" button on the application review list page. The feature supports rich text editing and allows filtering by multiple statuses and programs.
+- **Application Review Enhancements**:
+    - Added a filter to show only "Open applications" in the review list.
+    - Applications for programs that are closed or ended are now automatically grouped into a new "Closed or Ended Programs (Invalid)" category with clear visual indicators and badges.
+- **Enhanced Address Geocoding with Mapbox Support**:
+    - Added support for **Mapbox Geocoding API** as a primary geocoder, which provides significantly better address coverage than the default OpenStreetMap (Nominatim).
+    - Implemented a **backend-driven geocoding system** that supports multiple providers with automatic fallbacks. If Mapbox fails to find an address, the system can automatically fall back to OpenStreetMap.
+    - Added a new `--retry-missing` flag to the `geocode_student_addresses` management command. This allows Lead Mentors to re-attempt geocoding for addresses that were previously not found (e.g., when the site only used OpenStreetMap).
+    - New settings `GEOCODING_BACKENDS` and `MAPBOX_ACCESS_TOKEN` enable easy configuration of geocoding providers.
+
 ## 2026-08-13
 
 ### Added
+- **Deactivate Mentors and Adults**: Lead Mentors can now mark a mentor, parent, or alumni as "inactive" by unchecking the Active box on their profile. Inactive adults are automatically hidden from the main parent/alumni lists and will no longer receive automated emails (like fee or payment notifications).
+- **Mentor List Refinement**: Inactive mentors are no longer hidden from the mentor list; instead, they are moved to the bottom of the list and marked with an "Inactive" badge. This allows tracking past mentors while keeping the current roster focused. The main Adults list also includes inactive adults at the bottom.
+- **Background Check Badges**: Mentors who are missing required PA background clearances or have expired ones now show a "BG Check Needed" badge next to their name in the mentor and adult lists.
+- **Refined Account Access**: When an adult is marked as inactive, their portal login account is only disabled if they are NOT also a parent or alumni. Inactive mentors who are also parents or alumni can still log in to manage their students' information or their own alumni profile, but their mentor-specific permissions are revoked.
+- **Disabled Member Sign-in**: Inactive mentors and students (those marked as graduated) can no longer sign in at the attendance kiosk. They are hidden from the name search, and their RFID cards will no longer resolve if tapped.
+- **Inactive Status Visibility**: A student's profile and the main adult list now clearly label any inactive adults with an "Inactive" badge.
+- **Adult List Utilities**: Added new developer utilities `active_adults()`, `active_mentors()`, `active_parents()`, and `active_alumni()` in `programs.utils` to ensure consistent filtering across the codebase.
+
 - **Application Documents Carried Over to Student Profile**: Signed documents uploaded during the application process are now automatically copied to the student's profile upon conversion. This ensures that legal forms and other signed documents remain accessible even if the original application is deleted.
 - **Retroactive Document Migration Tool**: Added a new management command `python manage.py move_application_documents` for administrators to migrate documents for students who were converted before this feature was implemented.
 - **Student Documents in Admin**: A new "Student Documents" section has been added to the Student admin page to view all carried-over documents.

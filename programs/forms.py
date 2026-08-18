@@ -243,7 +243,8 @@ class AdultForm(forms.ModelForm):
                     "is_parent",
                     "is_mentor",
                     "is_alumni",
-                    "active",
+                    "login_enabled",
+                    "mentor_active",
                     "students",
                 ]
                 for field in protected_fields:
@@ -288,7 +289,8 @@ class AdultForm(forms.ModelForm):
             "is_mentor",
             "is_alumni",
             "students",
-            "active",
+            "login_enabled",
+            "mentor_active",
             # Mentor-specific
             "start_year",
             "role",
@@ -890,3 +892,40 @@ class BackgroundChecksForm(forms.Form):
             row.cleared = True
             row.obtained_date = obtained
             row.save()
+
+
+class MentorAgreementForm(forms.ModelForm):
+    """Form for creating / editing a Mentor Agreement from Portal Settings.
+
+    Supports both markdown content and document (PDF) uploads.  When editing an
+    existing agreement the version is auto-incremented in the view; the form
+    does **not** manage version numbers directly.
+    """
+
+    class Meta:
+        from .models import MentorAgreement as _MA
+
+        model = _MA
+        fields = [
+            "slug",
+            "title",
+            "content",
+            "document",
+            "effective_date",
+            "is_active",
+        ]
+        widgets = {
+            "slug": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. data-access-policy",
+                }
+            ),
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "content": forms.Textarea(attrs={"class": "form-control", "rows": 10}),
+            "document": forms.ClearableFileInput(attrs={"class": "form-control"}),
+            "effective_date": forms.DateInput(
+                attrs={"class": "form-control", "type": "date"}
+            ),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }

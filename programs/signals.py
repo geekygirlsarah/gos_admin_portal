@@ -227,7 +227,11 @@ def flag_clearance_due_on_enrollment(sender, instance, created, **kwargs):
 def _send_fee_notification(student, program, fee):
     from .utils import send_templated_notification
 
-    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    parents = [
+        p
+        for p in student.all_parents
+        if p.login_enabled and p.email_updates and p.personal_email
+    ]
     if not parents:
         return
 
@@ -252,7 +256,11 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
 
     student = instance.student
     program = instance.program
-    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    parents = [
+        p
+        for p in student.all_parents
+        if p.login_enabled and p.email_updates and p.personal_email
+    ]
 
     if not parents:
         return
@@ -349,7 +357,11 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
 
     context = {"student": student, "sliding_scale": sliding_scale}
 
-    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    parents = [
+        p
+        for p in student.all_parents
+        if p.login_enabled and p.email_updates and p.personal_email
+    ]
     if parents:
         send_templated_notification(
             f"Sliding Scale Application Submitted for {student}",
@@ -369,7 +381,11 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
 def _notify_sliding_scale_processed(student, sliding_scale):
     from .utils import send_templated_notification
 
-    parents = [p for p in student.all_parents if p.email_updates and p.personal_email]
+    parents = [
+        p
+        for p in student.all_parents
+        if p.login_enabled and p.email_updates and p.personal_email
+    ]
     if not parents:
         return
 

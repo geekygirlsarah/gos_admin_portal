@@ -35,7 +35,7 @@
         <tbody>
           {% for a in alumni %}
             <tr>
-              <td>{{ a.first_name }} {{ a.last_name }}</td>
+              <td>{{ a.full_name }}</td>
               <td>
                 {% with e=a.personal_email %}
                   {% if e %}<a href="mailto:{{ e }}">{{ e }}</a>{% endif %}
