@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - **Bulk Unassignment on Team/Crew Assignment Page**: Selecting students and choosing the "Unassign" option from the dropdown on the program's Team/Crew Assignment page now correctly clears the team, crew, or subteam. Previously this would show a warning and do nothing.
 
 ### Changed
+- **Kiosk greetings are now randomized and personalized**: The kiosk sign-in page displays a random selection of fun, varied welcome and goodbye messages instead of the same static text every time. Student and mentor messages use first names only; visitor messages use full names. Mentor sign-in messages now include varied thank-you-for-volunteering phrases.
 - **Remove mentor block**: Remove the temporarily block preventing mentors from logging in since the needed features have been added and permissions checked.
 
 ## 2026-08-16
