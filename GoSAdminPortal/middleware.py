@@ -2,8 +2,6 @@ import logging
 import zoneinfo
 
 from django.conf import settings
-from django.contrib import messages
-from django.contrib.auth import logout
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
@@ -84,58 +82,6 @@ class LoginRequiredMiddleware(MiddlewareMixin):
         return False
 
 
-class TemporaryMentorBlockMiddleware(MiddlewareMixin):
-    """TEMPORARY — remove once mentor portal features are ready.
-
-    Enforces ``settings.MENTOR_ACCESS_BLOCKED`` (see the comment there for the
-    full rationale). While the flag is on:
-    - a user whose only role is Mentor (no Parent/Alumni flags and not a lead
-      mentor) is logged out and redirected to the login page with a message;
-    - a user who mentors AND is a parent/alumni stays logged in; their mentor
-      role is suppressed by ``get_user_role`` so they only see non-mentor
-      features;
-    - lead mentors and superusers are unaffected.
-    """
-
-    MENTOR_BLOCK_MESSAGE = (
-        "Sorry, mentors cannot log in yet. You'll receive an announcement when "
-        "you can."
-    )
-
-    def process_request(self, request):
-        if not getattr(settings, "MENTOR_ACCESS_BLOCKED", False):
-            return None
-        if not request.user.is_authenticated:
-            return None
-
-        from programs.permission_views import (
-            user_is_alumni,
-            user_is_mentor,
-            user_is_parent,
-        )
-
-        if not user_is_mentor(request.user):
-            return None
-        # Lead mentors (and superusers) keep admin access.
-        if (
-            request.user.is_superuser
-            or request.user.groups.filter(name="LeadMentor").exists()
-        ):
-            return None
-        # Parents/alumni who also mentor may log in (mentor features are
-        # suppressed elsewhere via get_user_role).
-        if user_is_parent(request.user) or user_is_alumni(request.user):
-            return None
-
-        # Mentor is the user's only role: invalidate the session and bounce
-        # them back to the login page with a message. The message is added
-        # after logout() so it lands in the fresh session and survives the
-        # redirect.
-        logout(request)
-        messages.error(request, self.MENTOR_BLOCK_MESSAGE)
-        return redirect(settings.LOGIN_URL)
-
-
 class ApplyRateLimitMiddleware(MiddlewareMixin):
     """Throttle POST requests to the public application wizard (/apply/).
 
@@ -182,15 +128,15 @@ class TimezoneMiddleware(MiddlewareMixin):
 class MentorAgreementMiddleware(MiddlewareMixin):
     """Redirect mentors who have not accepted all current agreements.
 
-    Runs after LoginRequiredMiddleware (so the user is already authenticated)
-    and after TemporaryMentorBlockMiddleware.  Any authenticated user with
+    Runs after LoginRequiredMiddleware (so the user is already authenticated).
+    Any authenticated user with
     ``is_mentor=True`` (or in the LeadMentor group, or a superuser) who has
     not accepted every active :class:`MentorAgreement` is redirected to
     the agreement page.  This applies regardless of other roles (e.g.
     parent+mentor combos) — the policy covers everyone with mentor access.
 
     Controlled by ``settings.MENTOR_AGREEMENT_ENABLED`` (disabled during
-    tests by default, like ``MENTOR_ACCESS_BLOCKED``).
+    tests by default).
     """
 
     def process_request(self, request):

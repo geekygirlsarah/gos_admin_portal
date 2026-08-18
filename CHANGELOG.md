@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - **Add grades to student names**: On the program list view, add grades next to student names.
 - **Student export**: Add a button to export student data as a CSV file. Right now just first name, last name, and grade.
 
+### Changed
+- **Remove mentor block**: Remove the temporarily block preventing mentors from logging in since the needed features have been added and permissions checked.
+
 ## 2026-08-16
 
 ### Changed
