@@ -15,6 +15,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import SuspiciousFileOperation
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
@@ -28,7 +29,8 @@ from audit.events import AuditEvent
 from audit.service import log_event
 from programs.models import Program
 
-from ..models import Application
+from ..forms import StaffDocumentUploadForm
+from ..models import Application, ApplicationDocumentSubmission
 from ..services import (
     ApplicationConversionError,
     _collect_applicant_recipients,
@@ -405,6 +407,7 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
                 "application": application,
                 "data": application.data or {},
                 "decline_form": DeclineForm(),
+                "upload_form": StaffDocumentUploadForm(program=application.program),
                 "documents_status": documents_status,
                 "all_required_uploaded": all_required_uploaded,
                 "any_documents": any_documents,
@@ -884,3 +887,77 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
 
     def _render(self, form):
         return render(self.request, self.template_name, {"form": form})
+
+
+class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
+    """POST: lead mentor uploads a signed document on behalf of an applicant.
+
+    This allows paper copies received in person to be attached to the
+    application so the reviewer can mark it as approved + signed.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, app_id: str):
+        from programs.models import ProgramDocument
+
+        application = get_object_or_404(
+            Application, application_id=(app_id or "").upper()
+        )
+        form = StaffDocumentUploadForm(
+            request.POST, request.FILES, program=application.program
+        )
+        if not form.is_valid():
+            messages.error(
+                request,
+                "Please select a document and choose a file to upload.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
+
+        document = form.cleaned_data["document"]
+        submission, _created = ApplicationDocumentSubmission.objects.get_or_create(
+            application=application, document=document
+        )
+        submission.file = form.cleaned_data["file"]
+        try:
+            submission.save()
+        except SuspiciousFileOperation:
+            messages.error(
+                request,
+                "The filename of your uploaded document is too long or "
+                "contains invalid characters. Please rename the file and "
+                "try again.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
+
+        # Auto-promote from APPROVED → APPROVED_SIGNED when all required
+        # docs are now uploaded (mirrors the applicant's Step 10 logic).
+        if application.status == Application.Status.APPROVED:
+            required_doc_ids = set(
+                ProgramDocument.objects.filter(
+                    program=application.program,
+                    is_active=True,
+                    is_required=True,
+                ).values_list("pk", flat=True)
+            )
+            if required_doc_ids:
+                uploaded_doc_ids = set(
+                    ApplicationDocumentSubmission.objects.filter(
+                        application=application,
+                        document_id__in=required_doc_ids,
+                    ).values_list("document_id", flat=True)
+                )
+                if required_doc_ids.issubset(uploaded_doc_ids):
+                    application.status = Application.Status.APPROVED_SIGNED
+                    application.save(update_fields=["status", "updated_at"])
+
+        messages.success(
+            request,
+            f'Uploaded signed copy of "{document.name}" for '
+            f"{application.application_id}.",
+        )
+        return redirect("application_review_detail", app_id=application.application_id)

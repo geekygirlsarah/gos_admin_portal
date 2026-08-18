@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-17
 
 ### Added
+- **Staff Document Upload on Application Review**: Lead mentors can now upload signed documents on behalf of applicants directly from the application review detail page. This is useful for paper copies received in person. The form appears in the "Signed Documents" card footer with a document dropdown and file picker. Auto-promotes the application from "Approved" to "Approved + Signed" when all required documents are uploaded.
 - **Signed Document Uploads for Mentor Agreements**: Mentor agreements with an attached PDF now require mentors to download the document, sign it, and upload the signed copy before they can accept. The agreement page shows the upload status (not yet uploaded / signed copy uploaded) and the "I Agree to All" button is blocked until all required signed copies are uploaded. Markdown-only agreements still use the existing checkbox flow. Re-uploading replaces the previous signed copy. Signed files are stored in `MEDIA_ROOT/agreement_submissions/<adult_id>/`.
 - **Add grades to student names**: On the program list view, add grades next to student names.
 - **Student export**: Add a button to export student data as a CSV file. Right now just first name, last name, and grade.
