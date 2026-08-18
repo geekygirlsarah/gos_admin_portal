@@ -336,3 +336,58 @@ class AssignmentTests(TestCase):
         self.enrollment2.refresh_from_db()
         self.assertEqual(self.enrollment1.crew, self.crew)
         self.assertIsNone(self.enrollment2.crew)
+
+    def test_bulk_unassign_team(self):
+        self.enrollment1.team = self.team
+        self.enrollment1.save()
+        url = reverse("program_assignment", args=[self.program.id])
+        data = {
+            "assignment_type": "team",
+            "target_id": "",
+            "student_ids": [self.student1.id],
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.enrollment1.refresh_from_db()
+        self.assertIsNone(self.enrollment1.team)
+
+    def test_bulk_unassign_crew(self):
+        self.enrollment1.crew = self.crew
+        self.enrollment1.save()
+        url = reverse("program_assignment", args=[self.program.id])
+        data = {
+            "assignment_type": "crew",
+            "target_id": "",
+            "student_ids": [self.student1.id],
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.enrollment1.refresh_from_db()
+        self.assertIsNone(self.enrollment1.crew)
+
+    def test_bulk_unassign_subteam(self):
+        subteam = SubTeam.objects.create(name="Electrical", program=self.program)
+        self.enrollment1.subteam = subteam
+        self.enrollment1.save()
+        url = reverse("program_assignment", args=[self.program.id])
+        data = {
+            "assignment_type": "subteam",
+            "target_id": "",
+            "student_ids": [self.student1.id],
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.enrollment1.refresh_from_db()
+        self.assertIsNone(self.enrollment1.subteam)
+
+    def test_bulk_unassign_no_students_selected(self):
+        url = reverse("program_assignment", args=[self.program.id])
+        data = {
+            "assignment_type": "team",
+            "target_id": "",
+            "student_ids": [],
+        }
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+        messages_list = list(response.context["messages"])
+        self.assertTrue(any("No students selected" in str(m) for m in messages_list))

@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - **Add grades to student names**: On the program list view, add grades next to student names.
 - **Student export**: Add a button to export student data as a CSV file. Right now just first name, last name, and grade.
 
+### Fixed
+- **Bulk Unassignment on Team/Crew Assignment Page**: Selecting students and choosing the "Unassign" option from the dropdown on the program's Team/Crew Assignment page now correctly clears the team, crew, or subteam. Previously this would show a warning and do nothing.
+
 ### Changed
 - **Remove mentor block**: Remove the temporarily block preventing mentors from logging in since the needed features have been added and permissions checked.
 

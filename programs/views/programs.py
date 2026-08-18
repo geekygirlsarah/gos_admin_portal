@@ -565,15 +565,30 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             messages.warning(request, "No students selected.")
             return redirect("program_assignment", pk=pk)
 
-        if not target_id:
-            messages.warning(request, f"No {assignment_type} selected.")
-            return redirect("program_assignment", pk=pk)
-
         enrollments = Enrollment.objects.filter(
             program=program, student_id__in=student_ids
         )
 
-        if assignment_type == "team":
+        if not target_id:
+            if assignment_type == "team":
+                enrollments.update(team=None)
+                messages.success(
+                    request,
+                    f"Unassigned team from {len(student_ids)} student(s).",
+                )
+            elif assignment_type == "crew":
+                enrollments.update(crew=None)
+                messages.success(
+                    request,
+                    f"Unassigned crew from {len(student_ids)} student(s).",
+                )
+            elif assignment_type == "subteam":
+                enrollments.update(subteam=None)
+                messages.success(
+                    request,
+                    f"Unassigned subteam from {len(student_ids)} student(s).",
+                )
+        elif assignment_type == "team":
             team = get_object_or_404(Team, id=target_id)
             enrollments.update(team=team)
             messages.success(
