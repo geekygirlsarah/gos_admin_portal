@@ -73,13 +73,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         adult = getattr(user, "adult_profile", None)
         context["adult"] = adult
         if adult:
-            from programs.permission_views import mentor_access_blocked
-
-            # TEMPORARY mentor block: suppress the mentor dashboard section for
-            # blocked mentors (parents/alumni who also mentor keep their
-            # non-mentor sections).
             context["is_parent"] = adult.is_parent
-            context["is_mentor"] = adult.is_mentor and not mentor_access_blocked(user)
+            context["is_mentor"] = adult.is_mentor
             context["is_alumni"] = adult.is_alumni
 
             if adult.is_parent:
@@ -133,7 +128,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     )
                 context["parent_data"] = parent_data
 
-            if context["is_mentor"]:
+            if adult.is_mentor:
                 from programs.models import Program
 
                 # Get all programs that are currently Active
