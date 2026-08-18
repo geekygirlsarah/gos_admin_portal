@@ -227,6 +227,27 @@
           </tbody>
         </table>
       </div>
+      <div class="card-footer">
+        <form method="post"
+              enctype="multipart/form-data"
+              action="{% url 'application_review_upload_document' application.application_id %}"
+              class="row g-2 align-items-end">
+          {% csrf_token %}
+          <div class="col-auto">
+            <label class="form-label small mb-1" for="staff_doc_select">Upload signed document on behalf of applicant</label>
+            {{ upload_form.document }}
+          </div>
+          <div class="col">
+            <label class="form-label small mb-1" for="staff_doc_file">Scanned file</label>
+            {{ upload_form.file }}
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-outline-success">
+              Upload
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   {% endif %}
 

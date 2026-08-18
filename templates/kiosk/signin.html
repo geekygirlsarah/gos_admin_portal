@@ -504,6 +504,78 @@
         toast.show();
     }
 
+    // ── randomized greeting messages ────────────────────────────────────────
+
+    var MSG_STUDENT_IN = [
+        "Welcome, {name}!",
+        "Glad to see you, {name}!",
+        "Hey {name}, great to have you here!",
+        "Let's build something awesome, {name}!",
+        "{name}'s in the building!",
+        "There you are, {name}! Let's get started!",
+        "Ready to create, {name}?",
+        "Welcome back, {name}!",
+    ];
+
+    var MSG_STUDENT_OUT = [
+        "Great session, {name}! You logged {session} hours this session and {week} hours this week.",
+        "See you next time, {name}! You logged {session} hours this session and {week} hours this week.",
+        "Bye {name}! {session} hours today, {week} hours this week. Keep it up!",
+        "Later {name}! You put in {session} hours this session — {week} hours this week!",
+        "Nice work today, {name}! {session} hours this session, {week} hours this week.",
+        "Until next time, {name}! {session} hours this session and {week} hours this week.",
+    ];
+
+    var MSG_MENTOR_IN = [
+        "Welcome, {name}!",
+        "Thanks for being here, {name}!",
+        "Our students are lucky to have you, {name}!",
+        "We appreciate you, {name}!",
+        "Thanks for showing up, {name}! You make a difference!",
+        "Welcome back, {name}!",
+        "Great to see you, {name}!",
+        "{name}, thanks for volunteering today!",
+    ];
+
+    var MSG_MENTOR_OUT = [
+        "Thank you for volunteering today, {name}!",
+        "You make a difference, {name}! Thanks for today!",
+        "We appreciate you, {name}! See you next time!",
+        "Thanks for everything, {name}! Hope to see you again soon!",
+        "You're awesome, {name}! Thanks for giving your time today!",
+    ];
+
+    var MSG_VISITOR_IN = [
+        "Welcome, {name}!",
+        "Thanks for stopping by, {name}!",
+        "Good to see you, {name}!",
+        "Welcome, {name}! Glad you're here!",
+    ];
+
+    var MSG_VISITOR_OUT = [
+        "Thank you for visiting today, {name}!",
+        "We enjoyed having you, {name}!",
+        "Come back anytime, {name}!",
+        "Thanks for stopping by, {name}! See you again!",
+    ];
+
+    function pickMessage(pool) {
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    function buildMessage(pool, name, extras) {
+        var msg = pickMessage(pool);
+        msg = msg.replace(/\{name\}/g, name);
+        if (extras) {
+            for (var key in extras) {
+                if (extras.hasOwnProperty(key)) {
+                    msg = msg.replace(new RegExp("\\{" + key + "\\}", "g"), extras[key]);
+                }
+            }
+        }
+        return msg;
+    }
+
     // ── lookup student by RFID or name ───────────────────────────────────────
 
     function lookupStudent(params) {
@@ -592,16 +664,25 @@
 
                 return recordTap(payload).then(function (res) {
                     var name = (students.length > 0) ? students[0].name : query;
-                    var action = (res.event_type === "IN") ? "Welcome" : "Goodbye";
-                    var msg = action + ", " + name + "!";
-                    if (res.event_type === "OUT") {
+                    var msg;
+                    if (res.event_type === "IN") {
                         if (res.person_type === "mentor") {
-                            msg = "Thank you for volunteering today, " + name + "!";
+                            msg = buildMessage(MSG_MENTOR_IN, name);
                         } else if (res.person_type === "visitor") {
-                            msg = "Thank you for visiting today, " + name + "!";
+                            msg = buildMessage(MSG_VISITOR_IN, name);
                         } else {
-                            msg += " You logged " + (res.session_hours || 0) + " hours this session";
-                            msg += " and " + (res.week_hours || 0) + " hours this week.";
+                            msg = buildMessage(MSG_STUDENT_IN, name);
+                        }
+                    } else {
+                        if (res.person_type === "mentor") {
+                            msg = buildMessage(MSG_MENTOR_OUT, name);
+                        } else if (res.person_type === "visitor") {
+                            msg = buildMessage(MSG_VISITOR_OUT, name);
+                        } else {
+                            msg = buildMessage(MSG_STUDENT_OUT, name, {
+                                session: res.session_hours || 0,
+                                week: res.week_hours || 0,
+                            });
                         }
                     }
                     showToast(msg, true);
@@ -646,17 +727,20 @@
 
         recordTap(payload)
             .then(function (res) {
-                var action = (res.event_type === "IN") ? "Welcome" : "Goodbye";
                 var teamSuffix = teamNumber ? " (Team " + teamNumber + ")" : " (visitor)";
-                var msg = action + ", " + name + "!" + teamSuffix;
-                if (res.event_type === "OUT") {
+                var msg;
+                if (res.event_type === "IN") {
+                    msg = buildMessage(MSG_VISITOR_IN, name) + teamSuffix;
+                } else {
                     if (res.person_type === "mentor") {
-                        msg = "Thank you for volunteering today, " + name + "!";
+                        msg = buildMessage(MSG_MENTOR_OUT, name);
                     } else if (res.person_type === "visitor") {
-                        msg = "Thank you for visiting today, " + name + "!";
+                        msg = buildMessage(MSG_VISITOR_OUT, name) + teamSuffix;
                     } else {
-                        msg += " You logged " + (res.session_hours || 0) + " hours this session";
-                        msg += " and " + (res.week_hours || 0) + " hours this week.";
+                        msg = buildMessage(MSG_STUDENT_OUT, name, {
+                            session: res.session_hours || 0,
+                            week: res.week_hours || 0,
+                        }) + teamSuffix;
                     }
                 }
                 showToast(msg, true);

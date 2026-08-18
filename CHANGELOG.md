@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-17
 
 ### Added
+- **Re-encrypt student medical fields management command**: A new `python manage.py reencrypt_student_medical` command fixes garbled allergy/dietary/medical fields on Student records caused by an encryption key rotation. It tries the current key, then the legacy SECRET_KEY-derived key, and finally falls back to converted Application source data. Supports `--dry-run` to preview changes and `--all-students` to process students created outside the application flow.
+- **Staff Document Upload on Application Review**: Lead mentors can now upload signed documents on behalf of applicants directly from the application review detail page. This is useful for paper copies received in person. The form appears in the "Signed Documents" card footer with a document dropdown and file picker. Auto-promotes the application from "Approved" to "Approved + Signed" when all required documents are uploaded.
 - **Signed Document Uploads for Mentor Agreements**: Mentor agreements with an attached PDF now require mentors to download the document, sign it, and upload the signed copy before they can accept. The agreement page shows the upload status (not yet uploaded / signed copy uploaded) and the "I Agree to All" button is blocked until all required signed copies are uploaded. Markdown-only agreements still use the existing checkbox flow. Re-uploading replaces the previous signed copy. Signed files are stored in `MEDIA_ROOT/agreement_submissions/<adult_id>/`.
 - **Add grades to student names**: On the program list view, add grades next to student names.
 - **Student export**: Add a button to export student data as a CSV file. Right now just first name, last name, and grade.
 
+### Fixed
+- **Bulk Unassignment on Team/Crew Assignment Page**: Selecting students and choosing the "Unassign" option from the dropdown on the program's Team/Crew Assignment page now correctly clears the team, crew, or subteam. Previously this would show a warning and do nothing.
+
 ### Changed
+- **Kiosk greetings are now randomized and personalized**: The kiosk sign-in page displays a random selection of fun, varied welcome and goodbye messages instead of the same static text every time. Student and mentor messages use first names only; visitor messages use full names. Mentor sign-in messages now include varied thank-you-for-volunteering phrases.
 - **Remove mentor block**: Remove the temporarily block preventing mentors from logging in since the needed features have been added and permissions checked.
 
 ## 2026-08-16

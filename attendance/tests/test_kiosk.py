@@ -519,3 +519,206 @@ class KioskConfigSettingsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         config.refresh_from_db()
         self.assertFalse(config.is_active)
+
+
+class KioskFirstNameTests(TestCase):
+    """Kiosk API responses should return first-name-only for students and
+    mentors, but full names for visitors."""
+
+    def setUp(self):
+        self.client = Client()
+        self.program = make_program()
+        self.kiosk_config = KioskConfig.objects.create(
+            label="Name Test Kiosk", program=self.program
+        )
+        self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+
+        self.student = Student.objects.create(
+            legal_first_name="Ada",
+            first_name="Ada",
+            last_name="Lovelace",
+        )
+        self.mentor = Adult.objects.create(
+            first_name="Robert",
+            preferred_first_name="Bobby",
+            last_name="Martin",
+            is_mentor=True,
+        )
+        self.rfid_student = RFIDCard.objects.create(
+            uid="RFID-STU-001", student=self.student
+        )
+
+    # ── tap endpoint ───────────────────────────────────────────────────
+
+    def test_tap_student_returns_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"student_id": self.student.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Ada")
+
+    def test_tap_student_uses_first_name_over_legal(self):
+        self.student.first_name = "Addy"
+        self.student.save()
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"student_id": self.student.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Addy")
+
+    def test_tap_student_without_first_name_uses_legal(self):
+        self.student.first_name = None
+        self.student.save()
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"student_id": self.student.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Ada")
+
+    def test_tap_student_by_rfid_returns_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"rfid_uid": "RFID-STU-001"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Ada")
+
+    def test_tap_mentor_returns_preferred_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"adult_id": self.mentor.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Bobby")
+
+    def test_tap_mentor_without_preferred_uses_first_name(self):
+        self.mentor.preferred_first_name = None
+        self.mentor.save()
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"adult_id": self.mentor.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Robert")
+
+    def test_tap_visitor_returns_full_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        response = self.client.post(
+            url,
+            data=json.dumps({"visitor_name": "Jane Doe"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["student"], "Jane Doe")
+
+    # ── lookup endpoint ────────────────────────────────────────────────
+
+    def test_lookup_student_returns_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Ada"})
+        data = response.json()
+        names = [s["name"] for s in data["students"]]
+        self.assertIn("Ada", names)
+        self.assertNotIn("Ada Lovelace", names)
+
+    def test_lookup_student_by_rfid_returns_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"rfid": "RFID-STU-001"})
+        data = response.json()
+        self.assertEqual(data["students"][0]["name"], "Ada")
+
+    def test_lookup_mentor_returns_preferred_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Bobby"})
+        data = response.json()
+        names = [s["name"] for s in data["students"]]
+        self.assertIn("Bobby", names)
+        self.assertNotIn("Bobby Martin", names)
+
+    def test_lookup_mentor_without_preferred_returns_first_name(self):
+        self.mentor.preferred_first_name = None
+        self.mentor.save()
+        self.client.cookies[self.cookie_name] = "1"
+        url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
+        response = self.client.get(url, {"name": "Robert"})
+        data = response.json()
+        names = [s["name"] for s in data["students"]]
+        self.assertIn("Robert", names)
+
+    # ── who-is-here endpoint ───────────────────────────────────────────
+
+    def test_who_is_here_student_returns_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        self.client.post(
+            tap_url,
+            data=json.dumps({"student_id": self.student.pk}),
+            content_type="application/json",
+        )
+        url = reverse("api_kiosk_who_is_here", args=[self.kiosk_config.pk])
+        response = self.client.get(url)
+        data = response.json()
+        names = [p["name"] for p in data["people"]]
+        self.assertIn("Ada", names)
+        self.assertNotIn("Ada Lovelace", names)
+
+    def test_who_is_here_mentor_returns_first_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        self.client.post(
+            tap_url,
+            data=json.dumps({"adult_id": self.mentor.pk}),
+            content_type="application/json",
+        )
+        url = reverse("api_kiosk_who_is_here", args=[self.kiosk_config.pk])
+        response = self.client.get(url)
+        data = response.json()
+        names = [p["name"] for p in data["people"]]
+        self.assertIn("Bobby", names)
+        self.assertNotIn("Bobby Martin", names)
+
+    def test_who_is_here_visitor_returns_full_name(self):
+        self.client.cookies[self.cookie_name] = "1"
+        tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
+        self.client.post(
+            tap_url,
+            data=json.dumps({"visitor_name": "Jane Doe"}),
+            content_type="application/json",
+        )
+        url = reverse("api_kiosk_who_is_here", args=[self.kiosk_config.pk])
+        response = self.client.get(url)
+        data = response.json()
+        names = [p["name"] for p in data["people"]]
+        self.assertIn("Jane Doe", names)

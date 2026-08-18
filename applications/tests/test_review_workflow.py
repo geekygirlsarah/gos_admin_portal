@@ -9,12 +9,13 @@ import json
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
-from programs.models import Program
+from programs.models import Program, ProgramDocument
 
 User = get_user_model()
 
@@ -559,3 +560,151 @@ class ResendEmailTests(TestCase):
         response = self.client.post(url, {"type": "invalid"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(mail.outbox), 0)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class StaffDocumentUploadTests(TestCase):
+    """Lead mentors can upload signed documents on behalf of applicants
+    (e.g. paper copies received in person)."""
+
+    def setUp(self):
+        import datetime
+
+        self.program = Program.objects.create(
+            name="Robotics 2099",
+            start_date=datetime.date(2099, 1, 1),
+            end_date=datetime.date(2099, 6, 30),
+            active=True,
+        )
+        self.user = _reviewer_user()
+        self.client.force_login(self.user)
+        self.app = _make_application(
+            program=self.program,
+            status=Application.Status.APPROVED,
+            current_step=9,
+        )
+        self.doc = ProgramDocument.objects.create(
+            program=self.program,
+            name="Photo Release",
+            file="blank_photo_release.pdf",
+            is_required=True,
+            is_active=True,
+        )
+        self.url = reverse(
+            "application_review_upload_document",
+            kwargs={"app_id": self.app.application_id},
+        )
+
+    def test_get_returns_405(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 405)
+
+    def test_upload_document_creates_submission(self):
+        from applications.models import ApplicationDocumentSubmission
+
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+        response = self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            ApplicationDocumentSubmission.objects.filter(
+                application=self.app, document=self.doc
+            ).exists()
+        )
+
+    def test_upload_promotes_approved_to_approved_signed(self):
+        from applications.models import ApplicationDocumentSubmission
+
+        self.assertEqual(self.app.status, Application.Status.APPROVED)
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+        self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.APPROVED_SIGNED)
+
+    def test_upload_does_not_promote_if_other_required_docs_missing(self):
+        from applications.models import ApplicationDocumentSubmission
+
+        ProgramDocument.objects.create(
+            program=self.program,
+            name="Medical Form",
+            file="blank_medical.pdf",
+            is_required=True,
+            is_active=True,
+        )
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+        self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.APPROVED)
+
+    def test_upload_replaces_existing_submission(self):
+        from applications.models import ApplicationDocumentSubmission
+
+        ApplicationDocumentSubmission.objects.create(
+            application=self.app,
+            document=self.doc,
+            file=SimpleUploadedFile(
+                "old_signed.pdf", b"old-content", content_type="application/pdf"
+            ),
+        )
+        upload = SimpleUploadedFile(
+            "new_signed.pdf", b"new-content", content_type="application/pdf"
+        )
+        response = self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            ApplicationDocumentSubmission.objects.filter(
+                application=self.app, document=self.doc
+            ).count(),
+            1,
+        )
+
+    def test_upload_requires_review_permission(self):
+        self.client.logout()
+        plain = User.objects.create_user(username="plain_upload")
+        self.client.force_login(plain)
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+        response = self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+        self.assertIn(response.status_code, (302, 403))
+
+    def test_upload_rejects_invalid_document(self):
+        from applications.models import ApplicationDocumentSubmission
+
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+        response = self.client.post(self.url, {"document": 99999, "file": upload})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            ApplicationDocumentSubmission.objects.filter(application=self.app).exists()
+        )
+
+    def test_upload_rejects_missing_file(self):
+        response = self.client.post(self.url, {"document": self.doc.pk})
+        self.assertEqual(response.status_code, 302)
+        # Still redirects (error via messages), no submission created
+        from applications.models import ApplicationDocumentSubmission
+
+        self.assertFalse(
+            ApplicationDocumentSubmission.objects.filter(application=self.app).exists()
+        )
+
+    def test_upload_redirects_back_to_detail(self):
+        upload = SimpleUploadedFile(
+            "signed_release.pdf", b"signed-content", content_type="application/pdf"
+        )
+        response = self.client.post(self.url, {"document": self.doc.pk, "file": upload})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse(
+                "application_review_detail",
+                kwargs={"app_id": self.app.application_id},
+            ),
+            response.url,
+        )

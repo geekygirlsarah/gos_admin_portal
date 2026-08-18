@@ -48,6 +48,19 @@ def get_fernet():
     return Fernet(key)
 
 
+def _get_legacy_fernet():
+    """Return a Fernet instance using the old SECRET_KEY-derived key.
+
+    Before ``FILE_ENCRYPTION_KEY`` was introduced, ``get_fernet()`` fell
+    back to a key derived from ``SECRET_KEY``.  Records encrypted before
+    the transition can only be decrypted with that legacy key.
+    """
+    import base64
+
+    key = base64.urlsafe_b64encode(settings.SECRET_KEY[:32].encode().ljust(32, b"\0"))
+    return Fernet(key)
+
+
 class EncryptedFileField(models.FileField):
     """
     A FileField that transparently encrypts file content on save (via pre_save)

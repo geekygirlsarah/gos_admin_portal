@@ -23,6 +23,19 @@ from programs.utils import active_mentors, active_students
 logger = logging.getLogger(__name__)
 
 
+def _person_first_name(student=None, adult=None):
+    """Return the display first name for a student or adult.
+
+    Students: preferred ``first_name`` → ``legal_first_name``.
+    Adults/Mentors: ``preferred_first_name`` → ``first_name``.
+    """
+    if student:
+        return student.first_name or student.legal_first_name
+    if adult:
+        return adult.preferred_first_name or adult.first_name
+    return ""
+
+
 @require_POST
 def kiosk_request_code(request, kiosk_id):
     """POST /api/v1/kiosk/<id>/request_code/
@@ -189,10 +202,10 @@ def kiosk_tap(request, kiosk_id):
     student_name = None
     person_type = "visitor"
     if evt.student:
-        student_name = str(evt.student)
+        student_name = _person_first_name(student=evt.student)
         person_type = "student"
     elif evt.adult:
-        student_name = str(evt.adult)
+        student_name = _person_first_name(adult=evt.adult)
         person_type = "mentor"
     elif evt.visitor_name:
         student_name = evt.visitor_name
@@ -249,7 +262,7 @@ def kiosk_lookup(request, kiosk_id):
             results = [
                 {
                     "id": person.pk,
-                    "name": getattr(person, "preferred_full_name", str(person)),
+                    "name": _person_first_name(student=card.student, adult=card.adult),
                     "type": "student" if card.student else "mentor",
                 }
             ]
@@ -269,7 +282,7 @@ def kiosk_lookup(request, kiosk_id):
             results.append(
                 {
                     "id": s.pk,
-                    "name": getattr(s, "preferred_full_name", str(s)),
+                    "name": _person_first_name(student=s),
                     "type": "student",
                 }
             )
@@ -286,7 +299,7 @@ def kiosk_lookup(request, kiosk_id):
             results.append(
                 {
                     "id": a.pk,
-                    "name": str(a),
+                    "name": _person_first_name(adult=a),
                     "type": "mentor",
                 }
             )
@@ -312,10 +325,10 @@ def kiosk_who_is_here(request, kiosk_id):
         name = ""
         person_type = ""
         if s.student:
-            name = getattr(s.student, "preferred_full_name", str(s.student))
+            name = _person_first_name(student=s.student)
             person_type = "student"
         elif s.adult:
-            name = str(s.adult)
+            name = _person_first_name(adult=s.adult)
             person_type = "mentor"
         else:
             name = s.visitor_name

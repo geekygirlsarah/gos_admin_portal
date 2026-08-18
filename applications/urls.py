@@ -61,6 +61,11 @@ urlpatterns = [
         views.ApplicationResendEmailView.as_view(),
         name="application_review_resend_email",
     ),
+    path(
+        "review/<str:app_id>/upload-document/",
+        views.ApplicationStaffDocumentUploadView.as_view(),
+        name="application_review_upload_document",
+    ),
     # Step 1: welcome / start / resume
     path("", views.WelcomeView.as_view(), name="apply_start"),
     path("resume/", views.ResumeView.as_view(), name="apply_resume"),
