@@ -4,7 +4,6 @@ approve/decline/edit/delete, convert, and email resend."""
 from __future__ import annotations
 
 import datetime
-import json
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -227,42 +226,43 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Send decline")
 
-    def test_edit_saves_data_and_email(self):
+    def test_edit_saves_fields_and_email(self):
         url = reverse(
             "application_review_edit", kwargs={"app_id": self.app.application_id}
         )
-        new_data = {"step5": {"legal_first_name": "Grace"}}
         response = self.client.post(
             url,
             {
-                "data_json": json.dumps(new_data),
                 "email": "new-parent@example.com",
+                "step5-student__legal_first_name": "Grace",
+                "step5-student__last_name": "Hopper",
+                "step5-student__date_of_birth": "2005-03-14",
+                "step5-student__school_name": "Test High",
+                "step5-student__grade": "12",
+                "step7-primaryparent__first_name": "Pat",
+                "step7-primaryparent__last_name": "Parent",
+                "step7-primaryparent__email": "parent@example.com",
             },
         )
         self.assertEqual(response.status_code, 302)
         self.app.refresh_from_db()
-        self.assertEqual(self.app.data, new_data)
         self.assertEqual(self.app.email, "new-parent@example.com")
+        step5 = self.app.data["step5-student"]
+        self.assertEqual(step5["legal_first_name"], "Grace")
+        self.assertEqual(step5["last_name"], "Hopper")
+        # Non-spec fields stored previously are preserved.
+        self.assertEqual(step5["email"], "ada@example.com")
+        self.assertEqual(self.app.data["step7-primaryparent"]["first_name"], "Pat")
 
-    def test_edit_rejects_invalid_json(self):
+    def test_edit_get_renders_step_fields(self):
         url = reverse(
             "application_review_edit", kwargs={"app_id": self.app.application_id}
         )
-        response = self.client.post(
-            url, {"data_json": "not json {", "email": "x@example.com"}
-        )
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invalid JSON")
-
-    def test_edit_rejects_non_object_json(self):
-        url = reverse(
-            "application_review_edit", kwargs={"app_id": self.app.application_id}
-        )
-        response = self.client.post(
-            url, {"data_json": "[1, 2, 3]", "email": "x@example.com"}
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "object")
+        self.assertContains(response, "Legal first name")
+        self.assertContains(response, "Student experience")
+        self.assertContains(response, "Primary parent / guardian")
 
     def test_delete_get_renders_confirmation(self):
         url = reverse(

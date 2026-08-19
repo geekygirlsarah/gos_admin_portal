@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-19
+
+### Changed
+- **Application "Edit captured data" is now a proper form**: Instead of editing a raw JSON blob, the application review page now shows every captured field as a labeled input, grouped by wizard step and listed in the order the applicant fills them out. This makes it easy to fix a typo without remembering the JSON structure. Works for both student/parent and mentor applications.
+
 ## 2026-08-18
 
 ### Added
