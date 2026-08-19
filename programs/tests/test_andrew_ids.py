@@ -45,7 +45,7 @@ class AndrewIdValidatorTests(TestCase):
 
 class AndrewIdManagementPermissionTests(TestCase):
     def setUp(self):
-        self.password = "password123"  # nosec B106
+        self.password = "password123"  # nosec B105
         self.lead_user = User.objects.create_user(
             username="lead", password=self.password
         )
@@ -74,7 +74,7 @@ class AndrewIdManagementPermissionTests(TestCase):
 
 class AndrewIdManagementViewTests(TestCase):
     def setUp(self):
-        self.password = "password123"  # nosec B106
+        self.password = "password123"  # nosec B105
         self.lead_user = User.objects.create_user(
             username="lead", password=self.password
         )

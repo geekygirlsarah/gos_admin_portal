@@ -4,7 +4,6 @@ from django.views.generic import TemplateView
 
 from attendance.views import AttendanceImportView, student_attendance_view
 
-from .views.andrew_ids import andrew_id_management_view
 from .permission_views import (
     PortalAgreementView,
     PortalCrewView,
@@ -91,6 +90,7 @@ from .views import (
     StudentsBySchoolView,
     StudentUpdateView,
 )
+from .views.andrew_ids import andrew_id_management_view
 
 urlpatterns = [
     # Programs
