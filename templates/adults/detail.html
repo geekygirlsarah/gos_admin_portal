@@ -24,7 +24,7 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <span>Identity & Roles</span>
           <div>
-            {% if not adult.active %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+            {% if not adult.login_enabled %}<span class="badge bg-secondary">Login Disabled</span>{% endif %}
             {% if adult.is_parent %}<span class="badge bg-info">Parent</span>{% endif %}
             {% if adult.is_mentor %}<span class="badge bg-primary">Mentor</span>{% endif %}
             {% if adult.is_alumni %}<span class="badge bg-success">Alumni</span>{% endif %}
@@ -45,7 +45,10 @@
                 <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ adult.preferred_first_name|default:'—' }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ adult.last_name }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ adult.pronouns|default:'—' }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Active</div><div><span class="badge {% if adult.active %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.active|yesno:"Yes,No" }}</span></div></div>
+                <div class="col-md-4"><div class="fw-semibold">Login Enabled</div><div><span class="badge {% if adult.login_enabled %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.login_enabled|yesno:"Yes,No" }}</span></div></div>
+                {% if adult.is_mentor %}
+                <div class="col-md-4"><div class="fw-semibold">Mentor Active</div><div><span class="badge {% if adult.mentor_active %}bg-success{% else %}bg-secondary{% endif %}">{{ adult.mentor_active|yesno:"Yes,No" }}</span></div></div>
+                {% endif %}
                 {% if adult.andrew_id %}
                 <div class="col-md-4"><div class="fw-semibold">Andrew ID</div><div>{{ adult.andrew_id }}</div></div>
                 {% endif %}

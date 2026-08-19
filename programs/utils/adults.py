@@ -4,13 +4,13 @@ from ..models import Adult
 
 
 def active_adults() -> QuerySet:
-    """Return a queryset of all active adults."""
-    return Adult.objects.filter(active=True)
+    """Return a queryset of all active adults (login enabled)."""
+    return Adult.objects.filter(login_enabled=True)
 
 
 def active_mentors() -> QuerySet:
     """Return a queryset of active mentors."""
-    return active_adults().filter(is_mentor=True)
+    return Adult.objects.filter(is_mentor=True, mentor_active=True)
 
 
 def active_parents() -> QuerySet:

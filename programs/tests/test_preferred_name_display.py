@@ -25,7 +25,7 @@ class PreferredNameDisplayTest(TestCase):
             preferred_first_name="Bobby",
             last_name="Smith",
             is_mentor=True,
-            active=True,
+            login_enabled=True,
             personal_email="bobby@example.com",
         )
         self.parent = Adult.objects.create(
@@ -33,7 +33,7 @@ class PreferredNameDisplayTest(TestCase):
             preferred_first_name="Jim",
             last_name="Jones",
             is_parent=True,
-            active=True,
+            login_enabled=True,
             personal_email="jim@example.com",
             email_updates=True,
         )
@@ -42,7 +42,7 @@ class PreferredNameDisplayTest(TestCase):
             preferred_first_name="Pat",
             last_name="Lee",
             is_alumni=True,
-            active=True,
+            login_enabled=True,
             personal_email="pat@example.com",
         )
         self.legal_only = Adult.objects.create(
@@ -50,7 +50,7 @@ class PreferredNameDisplayTest(TestCase):
             last_name="Brown",
             is_mentor=True,
             is_parent=True,
-            active=True,
+            login_enabled=True,
             personal_email="michael@example.com",
             email_updates=True,
         )

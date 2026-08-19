@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-18
+
+### Added
+- **Mentor Inactive Status**: Added a separate `mentor_active` flag to the Adult model. Lead Mentors can now mark a mentor as inactive without affecting their login or other roles. Inactive mentors are grouped separately on the mentors list page with a clear section header and excluded from email lists and kiosk access.
+
+### Changed
+- **Adult `active` field renamed to `login_enabled`**: The Adult model's `active` field has been renamed to `login_enabled` for clarity. This field now exclusively controls portal login access. All references across views, templates, forms, admin, and tests have been updated. The `mentor_active` field is independent — a mentor can be inactive as a mentor (no emails, no kiosk access) while still being able to log in, and vice versa.
+
 ## 2026-08-17
 
 ### Added

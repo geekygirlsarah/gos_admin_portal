@@ -147,7 +147,7 @@ class GetProgramEmailsCommandTest(TestCase):
             personal_email="eve@example.com",
             is_parent=True,
             email_updates=True,
-            active=True,
+            login_enabled=True,
         )
         self.parent_no_updates = Adult.objects.create(
             first_name="Frank",
@@ -155,7 +155,7 @@ class GetProgramEmailsCommandTest(TestCase):
             personal_email="frank@example.com",
             is_parent=True,
             email_updates=False,
-            active=True,
+            login_enabled=True,
         )
         self.parent_inactive = Adult.objects.create(
             first_name="Grace",
@@ -163,7 +163,7 @@ class GetProgramEmailsCommandTest(TestCase):
             personal_email="grace@example.com",
             is_parent=True,
             email_updates=True,
-            active=False,
+            login_enabled=False,
         )
 
         # Link parents to active students
@@ -177,14 +177,15 @@ class GetProgramEmailsCommandTest(TestCase):
             last_name="Mentor",
             andrew_email="hank@andrew.cmu.edu",
             is_mentor=True,
-            active=True,
+            login_enabled=True,
         )
         self.mentor_inactive = Adult.objects.create(
             first_name="Iris",
             last_name="Mentor",
             personal_email="iris@example.com",
             is_mentor=True,
-            active=False,
+            mentor_active=False,
+            login_enabled=False,
         )
 
     def test_students_flag(self):
@@ -213,7 +214,7 @@ class GetProgramEmailsCommandTest(TestCase):
         emails = [e.strip() for e in output.split(",")]
         self.assertIn("eve@example.com", emails)
         self.assertNotIn("frank@example.com", emails)  # email_updates=False
-        self.assertNotIn("grace@example.com", emails)  # active=False
+        self.assertNotIn("grace@example.com", emails)  # login_enabled=False
 
     def test_mentors_flag(self):
         call_command(

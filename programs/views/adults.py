@@ -56,16 +56,16 @@ class AdultsListView(
         "name": (Lower("first_name"), Lower("last_name")),
         "email": Lower("personal_email"),
         "phone": "phone_number",
-        "active": "active",
+        "login_enabled": "login_enabled",
     }
     default_sort_field = "name"
 
     def apply_sorting(self, qs):
-        # Always prepend -active to sorting if not already sorting by active
+        # Always prepend -login_enabled to sorting if not already sorting by login_enabled
         sort = self.get_sort_field()
         qs = super().apply_sorting(qs)
-        if sort != "active":
-            qs = qs.order_by("-active", *qs.query.order_by)
+        if sort != "login_enabled":
+            qs = qs.order_by("-login_enabled", *qs.query.order_by)
         return qs
 
     def get_queryset(self):
@@ -151,16 +151,16 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     sort_fields = {
         "name": (Lower("first_name"), Lower("last_name")),
         "role": "role",
-        "active": "active",
+        "mentor_active": "mentor_active",
     }
     default_sort_field = "name"
 
     def apply_sorting(self, qs):
-        # Always prepend -active to sorting if not already sorting by active
+        # Always prepend -mentor_active to sorting if not already sorting by mentor_active
         sort = self.get_sort_field()
         qs = super().apply_sorting(qs)
-        if sort != "active":
-            qs = qs.order_by("-active", *qs.query.order_by)
+        if sort != "mentor_active":
+            qs = qs.order_by("-mentor_active", *qs.query.order_by)
         return qs
 
     def get_queryset(self):
@@ -178,6 +178,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
+        all_mentors = ctx["mentors"]
+        ctx["active_mentors"] = all_mentors.filter(mentor_active=True)
+        ctx["inactive_mentors"] = all_mentors.filter(mentor_active=False)
         return ctx
 
 

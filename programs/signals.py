@@ -230,7 +230,7 @@ def _send_fee_notification(student, program, fee):
     parents = [
         p
         for p in student.all_parents
-        if p.active and p.email_updates and p.personal_email
+        if p.login_enabled and p.email_updates and p.personal_email
     ]
     if not parents:
         return
@@ -259,7 +259,7 @@ def notify_parents_on_payment_added(sender, instance, created, **kwargs):
     parents = [
         p
         for p in student.all_parents
-        if p.active and p.email_updates and p.personal_email
+        if p.login_enabled and p.email_updates and p.personal_email
     ]
 
     if not parents:
@@ -360,7 +360,7 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
     parents = [
         p
         for p in student.all_parents
-        if p.active and p.email_updates and p.personal_email
+        if p.login_enabled and p.email_updates and p.personal_email
     ]
     if parents:
         send_templated_notification(
@@ -384,7 +384,7 @@ def _notify_sliding_scale_processed(student, sliding_scale):
     parents = [
         p
         for p in student.all_parents
-        if p.active and p.email_updates and p.personal_email
+        if p.login_enabled and p.email_updates and p.personal_email
     ]
     if not parents:
         return

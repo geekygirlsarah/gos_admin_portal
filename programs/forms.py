@@ -243,7 +243,8 @@ class AdultForm(forms.ModelForm):
                     "is_parent",
                     "is_mentor",
                     "is_alumni",
-                    "active",
+                    "login_enabled",
+                    "mentor_active",
                     "students",
                 ]
                 for field in protected_fields:
@@ -288,7 +289,8 @@ class AdultForm(forms.ModelForm):
             "is_mentor",
             "is_alumni",
             "students",
-            "active",
+            "login_enabled",
+            "mentor_active",
             # Mentor-specific
             "start_year",
             "role",

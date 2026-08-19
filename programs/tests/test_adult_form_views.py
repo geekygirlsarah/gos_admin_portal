@@ -46,7 +46,7 @@ class ParentFormDuplicateEmailTest(TestCase):
                 "is_parent": True,
                 "is_mentor": False,
                 "is_alumni": False,
-                "active": True,
+                "login_enabled": True,
             }
         )
         self.assertTrue(
@@ -70,7 +70,7 @@ class ParentFormDuplicateEmailTest(TestCase):
                 "is_parent": True,
                 "is_mentor": False,
                 "is_alumni": False,
-                "active": True,
+                "login_enabled": True,
             }
         )
         self.assertTrue(
@@ -104,7 +104,7 @@ class AdultCreateViewTest(TestCase):
                 "is_parent": True,
                 "is_mentor": False,
                 "is_alumni": False,
-                "active": True,
+                "login_enabled": True,
             },
         )
         # Should redirect on success
@@ -132,7 +132,7 @@ class AdultCreateViewTest(TestCase):
                 "is_parent": True,
                 "is_mentor": False,
                 "is_alumni": False,
-                "active": True,
+                "login_enabled": True,
             },
         )
         self.assertEqual(response.status_code, 302)

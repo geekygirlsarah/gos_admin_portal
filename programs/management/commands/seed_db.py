@@ -382,7 +382,7 @@ class Command(BaseCommand):
                     "is_parent": False,
                     "is_mentor": False,
                     "is_alumni": True,
-                    "active": True,
+                    "login_enabled": True,
                     "college": alumnus["college"],
                     "field_of_study": alumnus["field_of_study"],
                     "ok_to_contact": True,
