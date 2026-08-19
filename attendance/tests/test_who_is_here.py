@@ -65,7 +65,7 @@ class KioskWhoIsHereTests(TestCase):
         self.assertEqual(len(people), 2)
 
         names = [p["name"] for p in people]
-        self.assertIn("Jane", names)
+        self.assertIn("Jane Doe", names)
         self.assertIn("John Visitor (Team 1234)", names)
 
     def test_ui_has_who_is_here_elements(self):

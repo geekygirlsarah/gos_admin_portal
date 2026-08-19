@@ -36,6 +36,17 @@ def _person_first_name(student=None, adult=None):
     return ""
 
 
+def _person_full_name(student=None, adult=None):
+    """Return the full name for a student or adult.
+
+    Uses the same preferred-name logic as ``_person_first_name`` but appends
+    the last name (used on the Who's Here screen for emergencies).
+    """
+    first = _person_first_name(student=student, adult=adult)
+    last = (student or adult).last_name
+    return f"{first} {last}".strip()
+
+
 @require_POST
 def kiosk_request_code(request, kiosk_id):
     """POST /api/v1/kiosk/<id>/request_code/
@@ -325,10 +336,10 @@ def kiosk_who_is_here(request, kiosk_id):
         name = ""
         person_type = ""
         if s.student:
-            name = _person_first_name(student=s.student)
+            name = _person_full_name(student=s.student)
             person_type = "student"
         elif s.adult:
-            name = _person_first_name(adult=s.adult)
+            name = _person_full_name(adult=s.adult)
             person_type = "mentor"
         else:
             name = s.visitor_name
