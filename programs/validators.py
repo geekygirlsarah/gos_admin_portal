@@ -32,3 +32,22 @@ def validate_zip_code(value):
         raise ValidationError(
             _("ZIP code must be exactly 5 digits."), code="invalid_zip_code"
         )
+
+
+def validate_andrew_id(value):
+    """
+    Validates that an Andrew ID starts with a letter and contains only
+    lowercase letters and digits (at least 2 characters total).
+    """
+    if not value:
+        return
+
+    value = value.strip().lower()
+    if not re.match(r"^[a-z][a-z0-9]{1,}$", value):
+        raise ValidationError(
+            _(
+                "Andrew ID must start with a letter and contain only "
+                "lowercase letters and digits (at least 2 characters)."
+            ),
+            code="invalid_andrew_id",
+        )

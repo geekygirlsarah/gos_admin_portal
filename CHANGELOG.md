@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Merge duplicate schools**: On the Schools page there's now a "Merge Schools" action. If two entries are actually the same school (e.g. "Plum SHS" vs "Plum Senior High School"), pick the one to keep and the one to fold in. The kept school's address/contact info is preserved, any missing fields are copied over, all students are moved to the kept school, and the duplicate is removed.
+- **Andrew ID Management Page**: A new page for Lead Mentors to manage Andrew IDs across Students and Adults. Search by name, set or clear Andrew IDs with format and uniqueness validation, and manage expiration dates and sponsors for adults. Accessible from the Lead Mentor dropdown in the navigation bar.
 
 ### Changed
 - **Application "Edit captured data" is now a proper form**: Instead of editing a raw JSON blob, the application review page now shows every captured field as a labeled input, grouped by wizard step and listed in the order the applicant fills them out. This makes it easy to fix a typo without remembering the JSON structure. Works for both student/parent and mentor applications.

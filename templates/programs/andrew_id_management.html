@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Andrew ID Management{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h1 class="h3">Andrew ID Management</h1>
+        <p class="text-muted">Assign and manage CMU Andrew IDs for students and adults.</p>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-10">
+                <input type="text" name="q" class="form-control" placeholder="Search by name..." value="{{ q }}">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary">Search</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if q %}
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0">Search Results for "{{ q }}"</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Andrew ID</th>
+                    <th>Email</th>
+                    <th>Expiration</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in results %}
+                <tr>
+                    <td><strong>{{ result.person }}</strong></td>
+                    <td>
+                        <span class="badge {% if result.type == 'student' %}bg-info{% else %}bg-success{% endif %}">
+                            {{ result.type|title }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if result.person.andrew_id %}
+                            <code>{{ result.person.andrew_id }}</code>
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if result.person.andrew_email %}
+                            {{ result.person.andrew_email }}
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if result.type == 'adult' and result.person.andrew_id_expiration %}
+                            {{ result.person.andrew_id_expiration|date:"Y-m-d" }}
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" class="row g-1 align-items-center">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="set">
+                            <input type="hidden" name="person_type" value="{{ result.type }}">
+                            <input type="hidden" name="person_id" value="{{ result.person.pk }}">
+                            <div class="col-auto">
+                                <input type="text" name="andrew_id" class="form-control form-control-sm"
+                                       placeholder="Andrew ID" value="{{ result.person.andrew_id|default:'' }}" required
+                                       pattern="[a-zA-Z][a-zA-Z0-9]+" title="Must start with a letter, lowercase letters and digits only">
+                            </div>
+                            {% if result.type == 'adult' %}
+                            <div class="col-auto">
+                                <input type="date" name="andrew_id_expiration" class="form-control form-control-sm"
+                                       value="{{ result.person.andrew_id_expiration|date:'Y-m-d'|default:'' }}">
+                            </div>
+                            <div class="col-auto">
+                                <select name="andrew_id_sponsor" class="form-select form-select-sm">
+                                    <option value="">Sponsor...</option>
+                                    {% for sponsor in sponsor_choices %}
+                                    <option value="{{ sponsor.pk }}" {% if result.person.andrew_id_sponsor_id == sponsor.pk %}selected{% endif %}>
+                                        {{ sponsor }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endif %}
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                            </div>
+                        </form>
+                        {% if result.person.andrew_id %}
+                        <form method="post" class="d-inline mt-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="clear">
+                            <input type="hidden" name="person_type" value="{{ result.type }}">
+                            <input type="hidden" name="person_id" value="{{ result.person.pk }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove Andrew ID for {{ result.person }}?')">
+                                Clear
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">No students or adults found matching "{{ q }}".</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0">Currently Assigned Andrew IDs</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Andrew ID</th>
+                    <th>Email</th>
+                    <th>Expiration</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in assigned_people %}
+                <tr>
+                    <td><strong>{{ entry.person }}</strong></td>
+                    <td>
+                        <span class="badge {% if entry.type == 'student' %}bg-info{% else %}bg-success{% endif %}">
+                            {{ entry.type|title }}
+                        </span>
+                    </td>
+                    <td><code>{{ entry.person.andrew_id }}</code></td>
+                    <td>{{ entry.person.andrew_email|default:"-" }}</td>
+                    <td>
+                        {% if entry.type == 'adult' and entry.person.andrew_id_expiration %}
+                            {{ entry.person.andrew_id_expiration|date:"Y-m-d" }}
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="clear">
+                            <input type="hidden" name="person_type" value="{{ entry.type }}">
+                            <input type="hidden" name="person_id" value="{{ entry.person.pk }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove Andrew ID for {{ entry.person }}?')">
+                                Clear
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">No Andrew IDs have been assigned yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="mt-4">
+    <a href="{% url 'portal_settings' %}" class="btn btn-link">Back to Settings</a>
+</div>
+{% endblock %}
