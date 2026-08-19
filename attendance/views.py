@@ -4,13 +4,13 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Q, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_http_methods
-from django.db.models import Q, Value
-from django.db.models.functions import Coalesce, NullIf, Lower
 
 from programs.models import Adult, Program, Student
 from programs.permission_views import (
@@ -651,13 +651,20 @@ def rfid_management_view(request):
     assigned_cards = []
     if search_query:
         # Search students
-        student_qs = Student.objects.filter(
-            Q(first_name__icontains=search_query)
-            | Q(last_name__icontains=search_query)
-            | Q(legal_first_name__icontains=search_query)
-        ).annotate(
-            sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
-        ).order_by("sort_first", "last_name").prefetch_related("rfid_cards")
+        student_qs = (
+            Student.objects.filter(
+                Q(first_name__icontains=search_query)
+                | Q(last_name__icontains=search_query)
+                | Q(legal_first_name__icontains=search_query)
+            )
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("first_name", Value("")), "legal_first_name"
+                ),
+            )
+            .order_by("sort_first", "last_name")
+            .prefetch_related("rfid_cards")
+        )
         for s in student_qs[:10]:
             results.append(
                 {
@@ -685,15 +692,18 @@ def rfid_management_view(request):
                 }
             )
     else:
-        assigned_cards = (
-            RFIDCard.objects.filter(is_active=True)
-            .select_related("student", "adult")
+        assigned_cards = RFIDCard.objects.filter(is_active=True).select_related(
+            "student", "adult"
         )
     # Sort assigned cards by preferred name then last name
     assigned_cards_list = list(assigned_cards)
     assigned_cards_list.sort(
         key=lambda c: (
-            (c.student.full_name if c.student else c.adult.full_name if c.adult else "").lower()
+            (
+                c.student.full_name
+                if c.student
+                else c.adult.full_name if c.adult else ""
+            ).lower()
         )
     )
     assigned_cards = assigned_cards_list
