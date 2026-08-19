@@ -57,13 +57,13 @@ class AndrewIdManagementPermissionTests(TestCase):
         )
 
     def test_lead_mentor_can_access(self):
-        self.client.login(username="lead", password=self.password)  # nosec B106
+        self.client.login(username="lead", password=self.password)
         response = self.client.get(reverse("andrew_id_management"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Andrew ID Management")
 
     def test_regular_user_redirected(self):
-        self.client.login(username="regular", password=self.password)  # nosec B106
+        self.client.login(username="regular", password=self.password)
         response = self.client.get(reverse("andrew_id_management"))
         self.assertEqual(response.status_code, 302)
 
@@ -80,7 +80,7 @@ class AndrewIdManagementViewTests(TestCase):
         )
         Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(Group.objects.get(name="LeadMentor"))
-        self.client.login(username="lead", password=self.password)  # nosec B106
+        self.client.login(username="lead", password=self.password)
 
         self.student = Student.objects.create(
             first_name="Robert",

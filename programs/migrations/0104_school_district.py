@@ -19,24 +19,39 @@ def backfill_districts(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0103_rename_active_to_login_enabled_add_mentor_active'),
+        ("programs", "0103_rename_active_to_login_enabled_add_mentor_active"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='SchoolDistrict',
+            name="SchoolDistrict",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=150, unique=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=150, unique=True)),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
         migrations.AlterField(
-            model_name='school',
-            name='district',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='schools', to='programs.schooldistrict', verbose_name='School district'),
+            model_name="school",
+            name="district",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="schools",
+                to="programs.schooldistrict",
+                verbose_name="School district",
+            ),
         ),
         migrations.RunPython(backfill_districts, migrations.RunPython.noop),
     ]

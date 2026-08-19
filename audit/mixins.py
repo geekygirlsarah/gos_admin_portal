@@ -26,7 +26,7 @@ def _build_scope_notes(user, obj):
     # Find the actor's Adult record to get their program affiliations
     try:
         adult = user.adult_profile
-    except Exception:  # nosec B110
+    except Exception:
         return ""
 
     from programs.models import AdultStudentRelationship
