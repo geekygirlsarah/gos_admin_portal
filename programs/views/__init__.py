@@ -76,6 +76,7 @@ from .programs import (
 from .schools import (
     SchoolCreateView,
     SchoolListView,
+    SchoolMergeView,
     SchoolUpdateView,
 )
 from .students import (
@@ -145,6 +146,7 @@ __all__ = [
     "SchoolCreateView",
     "SchoolImportView",
     "SchoolListView",
+    "SchoolMergeView",
     "SchoolUpdateView",
     "SortableListViewMixin",
     "SlidingScaleApplyView",

@@ -465,6 +465,32 @@ class SchoolForm(forms.ModelForm):
         fields = ["name", "district", "street_address", "city", "state", "zip_code"]
 
 
+class SchoolMergeForm(forms.Form):
+    """Merge one school into another.
+
+    ``keep`` is the canonical school that survives. ``source`` is the school
+    to fold into ``keep`` and delete. Both are chosen via radio buttons on a
+    single table of schools so it's easy to tell which is which.
+    """
+
+    keep = forms.ModelChoiceField(
+        queryset=School.objects.all(),
+        widget=forms.RadioSelect,
+    )
+    source = forms.ModelChoiceField(
+        queryset=School.objects.all(),
+        widget=forms.RadioSelect,
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        keep = cleaned.get("keep")
+        source = cleaned.get("source")
+        if keep and source and keep.pk == source.pk:
+            self.add_error("source", "Choose a different school to merge in.")
+        return cleaned
+
+
 class ProgramForm(forms.ModelForm):
     class Meta:
         model = Program

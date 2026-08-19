@@ -64,6 +64,7 @@ from .views import (
     SchoolCreateView,
     SchoolImportView,
     SchoolListView,
+    SchoolMergeView,
     SchoolUpdateView,
     SlidingScaleApplyView,
     SlidingScaleCreateView,
@@ -529,6 +530,11 @@ urlpatterns = [
         "schools/<int:pk>/edit/",
         permission_required("programs.change_school")(SchoolUpdateView.as_view()),
         name="school_edit",
+    ),
+    path(
+        "schools/merge/",
+        permission_required("programs.change_school")(SchoolMergeView.as_view()),
+        name="school_merge",
     ),
     # Settings
     path(
