@@ -865,7 +865,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "sessions": sessions[:500],
                 "programs": programs,
                 "students": active_students().order_by("first_name", "last_name"),
-                "mentors": Adult.objects.filter(is_mentor=True).order_by("first_name", "last_name"),
+                "mentors": Adult.objects.filter(is_mentor=True).order_by(
+                    "first_name", "last_name"
+                ),
                 "selected_program_id": (
                     int(program_id) if program_id and program_id.isdigit() else None
                 ),
