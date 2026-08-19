@@ -17,6 +17,7 @@ from .models import (
     ProgramFeature,
     RolePermission,
     School,
+    SchoolDistrict,
     SlidingScale,
     SlidingScaleSettings,
     Student,
@@ -183,7 +184,20 @@ class BackgroundCheckInline(admin.TabularInline):
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
     list_display = ("name", "district", "street_address", "city", "state", "zip_code")
-    search_fields = ("name", "district", "street_address", "city", "state", "zip_code")
+    search_fields = (
+        "name",
+        "district__name",
+        "street_address",
+        "city",
+        "state",
+        "zip_code",
+    )
+
+
+@admin.register(SchoolDistrict)
+class SchoolDistrictAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
 
 
 @admin.register(Student)

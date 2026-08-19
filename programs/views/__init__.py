@@ -74,6 +74,10 @@ from .programs import (
     ProgramUpdateView,
 )
 from .schools import (
+    DistrictCreateView,
+    DistrictDeleteView,
+    DistrictListView,
+    DistrictUpdateView,
     SchoolCreateView,
     SchoolListView,
     SchoolMergeView,
@@ -143,6 +147,10 @@ __all__ = [
     "ProgramStudentQuickCreateView",
     "ProgramStudentRemoveView",
     "ProgramUpdateView",
+    "DistrictCreateView",
+    "DistrictDeleteView",
+    "DistrictListView",
+    "DistrictUpdateView",
     "SchoolCreateView",
     "SchoolImportView",
     "SchoolListView",

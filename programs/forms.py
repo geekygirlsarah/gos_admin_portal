@@ -21,6 +21,7 @@ from .models import (
     Payment,
     Program,
     School,
+    SchoolDistrict,
     SlidingScale,
     Student,
 )
@@ -463,6 +464,12 @@ class SchoolForm(forms.ModelForm):
     class Meta:
         model = School
         fields = ["name", "district", "street_address", "city", "state", "zip_code"]
+
+
+class SchoolDistrictForm(forms.ModelForm):
+    class Meta:
+        model = SchoolDistrict
+        fields = ["name"]
 
 
 class SchoolMergeForm(forms.Form):

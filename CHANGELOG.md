@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-19
 
 ### Added
+- **Manage School Districts**: Added a "Manage Districts" page (linked from the Schools page) to add, edit, and delete school districts. School districts are now proper records instead of free-text fields, so the same district name is always spelled the same way across schools. Existing district text was automatically converted to district records when this update was applied. Deleting a district removes its assignment from schools without deleting the schools themselves.
 - **Merge duplicate schools**: On the Schools page there's now a "Merge Schools" action. If two entries are actually the same school (e.g. "Plum SHS" vs "Plum Senior High School"), pick the one to keep and the one to fold in. The kept school's address/contact info is preserved, any missing fields are copied over, all students are moved to the kept school, and the duplicate is removed.
 - **Andrew ID Management Page**: A new page for Lead Mentors to manage Andrew IDs across Students and Adults. Search by name, set or clear Andrew IDs with format and uniqueness validation, and manage expiration dates and sponsors for adults. Accessible from the Lead Mentor dropdown in the navigation bar.
 

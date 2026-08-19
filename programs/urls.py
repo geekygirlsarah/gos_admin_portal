@@ -21,6 +21,10 @@ from .views import (
     AdultsListView,
     AdultUpdateView,
     AlumniListView,
+    DistrictCreateView,
+    DistrictDeleteView,
+    DistrictListView,
+    DistrictUpdateView,
     ImportDashboardView,
     MentorCreateView,
     MentorImportView,
@@ -536,6 +540,33 @@ urlpatterns = [
         "schools/merge/",
         permission_required("programs.change_school")(SchoolMergeView.as_view()),
         name="school_merge",
+    ),
+    # School district management
+    path(
+        "districts/",
+        login_required(DistrictListView.as_view()),
+        name="school_district_list",
+    ),
+    path(
+        "districts/new/",
+        permission_required("programs.add_schooldistrict")(
+            DistrictCreateView.as_view()
+        ),
+        name="school_district_create",
+    ),
+    path(
+        "districts/<int:pk>/edit/",
+        permission_required("programs.change_schooldistrict")(
+            DistrictUpdateView.as_view()
+        ),
+        name="school_district_edit",
+    ),
+    path(
+        "districts/<int:pk>/delete/",
+        permission_required("programs.delete_schooldistrict")(
+            DistrictDeleteView.as_view()
+        ),
+        name="school_district_delete",
     ),
     # Settings
     path(

@@ -2,7 +2,7 @@ from django.contrib.auth.models import Permission, User
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from programs.models import School, Student
+from programs.models import School, SchoolDistrict, Student
 
 
 class SchoolMergeTest(TestCase):
@@ -48,7 +48,8 @@ class SchoolMergeTest(TestCase):
         self.assertEqual(s2.school_id, keep.pk)
 
     def test_merge_preserves_keep_contact_data(self):
-        keep = self._school("Plum Senior High School", district="Plum Borough SD")
+        district = SchoolDistrict.objects.create(name="Plum Borough SD")
+        keep = self._school("Plum Senior High School", district=district)
         source = self._school(
             "Plum SHS",
             street_address="900 Common Rd",
@@ -62,7 +63,7 @@ class SchoolMergeTest(TestCase):
         )
 
         keep.refresh_from_db()
-        self.assertEqual(keep.district, "Plum Borough SD")
+        self.assertEqual(keep.district, district)
         self.assertEqual(keep.street_address, "900 Common Rd")
         self.assertEqual(keep.city, "Pittsburgh")
         self.assertEqual(keep.zip_code, "15239")

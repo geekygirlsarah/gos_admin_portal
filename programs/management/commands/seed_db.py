@@ -14,6 +14,7 @@ from programs.models import (
     Program,
     ProgramFeature,
     School,
+    SchoolDistrict,
     SlidingScale,
     Student,
 )
@@ -50,8 +51,10 @@ class Command(BaseCommand):
         ]
         schools = []
         for school in school_data:
+            district_name = school.pop("district")
+            district, _ = SchoolDistrict.objects.get_or_create(name=district_name)
             school_obj, _ = School.objects.update_or_create(
-                name=school["name"], defaults=school
+                name=school["name"], defaults={"district": district}
             )
             schools.append(school_obj)
         return schools

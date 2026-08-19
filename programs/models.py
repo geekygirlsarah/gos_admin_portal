@@ -473,10 +473,25 @@ class Program(models.Model):
         super().save(*args, **kwargs)
 
 
+class SchoolDistrict(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class School(models.Model):
     name = models.CharField(max_length=150, unique=True)
-    district = models.CharField(
-        max_length=150, blank=True, null=True, verbose_name="School district"
+    district = models.ForeignKey(
+        SchoolDistrict,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="schools",
+        verbose_name="School district",
     )
     street_address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
