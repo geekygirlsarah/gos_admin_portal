@@ -10,6 +10,7 @@ from programs.models import (
     AdultStudentRelationship,
     Enrollment,
     Program,
+    RolePermission,
     Student,
 )
 
@@ -401,3 +402,43 @@ class CarpoolButtonTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Carpool Map")
         self.assertContains(resp, reverse("program_student_map", args=[program.pk]))
+
+
+@override_settings(GEOCODING_DELAY_SECONDS=0)
+class ParentCarpoolPermissionTests(TestCase):
+    """Parents must always be able to access the carpool map regardless of
+    RolePermission configuration for the programs section."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="parent", password="pass12345"
+        )  # nosec B106
+        self.adult = Adult.objects.create(
+            user=self.user, first_name="Parent", last_name="One", is_parent=True
+        )
+        self.program = Program.objects.create(name="Robot Camp", active=True)
+        self.url = reverse("program_student_map", args=[self.program.pk])
+        self.client.login(username="parent", password="pass12345")  # nosec B106
+
+    def test_parent_can_access_carpool_map_when_programs_read_denied(self):
+        RolePermission.objects.create(
+            role="Parent", section="programs", can_read=False, can_write=False
+        )
+        student = Student.objects.create(
+            legal_first_name="Kid",
+            last_name="One",
+            address="100 Main St.",
+            city="Pittsburgh",
+            state="PA",
+            zip_code="15213",
+            directory_consent=True,
+        )
+        Enrollment.objects.create(student=student, program=self.program)
+        AdultStudentRelationship.objects.create(adult=self.adult, student=student)
+
+        with mock.patch(
+            "programs.utils.geocoding.requests.get", side_effect=fake_geocode
+        ):
+            resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)

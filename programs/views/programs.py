@@ -797,9 +797,8 @@ class ProgramEmailView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         return render(self.request, self.template_name, ctx)
 
 
-class ProgramStudentMapView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
+class ProgramStudentMapView(LoginRequiredMixin, View):
     template_name = "programs/map.html"
-    section = "programs"
 
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
