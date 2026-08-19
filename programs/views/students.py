@@ -289,6 +289,7 @@ class StudentDetailView(
                 "background_checks",
                 "race_ethnicities",
                 "signed_documents__program_document",
+                "enrollment_set__program",
             )
         )
 

@@ -38,9 +38,9 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - `programs/` — Core app (programs, students, adults, fees, payments, sliding scale, enrollments)
 - `applications/` — Public application wizard + staff review workflow (supersedes legacy `StudentApplication`)
 - `attendance/` — Student check-in/out logic and RFID management
-- `api/` — Versioned API and key management
+- `api/` — Kiosk API views and attendance endpoints
 - `templates/` — Django templates organized by app/role
-- `audit/` — Audit log app (inspect models before assuming it's fully wired up)
+- `audit/` — Audit log app with `AuditLog` (immutable, append-only), `AuditEvent` choices, `log_event()` service, signal-based logging, `SensitiveDataViewMixin` (with program-scope tracking), and `audit/utils.py` unified query helpers
 - `portal/` — Inspect before use; may contain legacy or shared views
 
 ## Local Development
@@ -54,6 +54,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 | Seed mentor agreement | `python manage.py seed_mentor_agreement` |
 | Start dev server | `python manage.py runserver` |
 | Run all tests | `python manage.py test` |
+| Run audit digest | `python manage.py audit_digest --days 7` |
 | Run CI checks | `.\run_ci.ps1` (Windows) or `./run_ci.sh` (Linux) |
 | Run tests with coverage | `coverage run manage.py test --parallel; coverage combine; coverage report` |
 
@@ -92,7 +93,6 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - **View Mixins**: Use `LeadMentorRequiredMixin`, `DynamicReadPermissionMixin`, or `DynamicWritePermissionMixin` (all in `programs/permission_views.py`). Do NOT use raw `has_perm()` checks for portal views.
 - **Object-Level Access**: `can_user_read`/`can_user_write` accept an `obj` argument for per-object checks (e.g., a Parent can only read their own students). Always pass `obj` when checking access to a specific record.
 - **Mentor Adult Access**: Mentors can only view Adults with `is_parent=True` who have a student in an active program. This is enforced in both the queryset and `can_user_read`.
-- **API Keys**: Authenticate via `ApiClientKey` in `api/auth.py`.
 - **One Lead Mentor group**: There is only `"LeadMentor"` (no space). A single membership grants access to all Lead Mentor features including application review.
 
 ## Testing Strategy and Contribution

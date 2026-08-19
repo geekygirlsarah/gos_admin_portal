@@ -11,7 +11,13 @@ from audit.events import AuditEvent
 from audit.logging_handlers import AuditStderrHandler, AuditStdoutHandler
 from audit.models import AuditLog
 from audit.service import log_event
-from programs.models import Adult, Enrollment, Program, Student
+from programs.models import (
+    Adult,
+    AdultStudentRelationship,
+    Enrollment,
+    Program,
+    Student,
+)
 
 User = get_user_model()
 
@@ -271,3 +277,270 @@ class AuditLogConsoleSuppressionTest(TestCase):
 
         # INFO (success) / WARNING (failure) records are suppressed outright.
         self.assertGreaterEqual(logger.level, logging.WARNING)
+
+
+class GuardianRemovedSignalTest(TestCase):
+    """Tests that deleting an AdultStudentRelationship emits GUARDIAN_REMOVED."""
+
+    def setUp(self):
+        self.student = Student.objects.create(
+            legal_first_name="Jane", last_name="Doe", graduation_year=2026
+        )
+        self.adult = Adult.objects.create(
+            first_name="John", last_name="Doe", is_parent=True
+        )
+        self.relationship = AdultStudentRelationship.objects.create(
+            adult=self.adult,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+
+    def test_delete_relationship_emits_guardian_removed(self):
+        rel_pk = self.relationship.pk
+        self.relationship.delete()
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.GUARDIAN_REMOVED,
+            resource_type="AdultStudentRelationship",
+            resource_id=str(rel_pk),
+        ).first()
+        self.assertIsNotNone(log, "GUARDIAN_REMOVED should be emitted on delete")
+        self.assertIn("John Doe", log.notes)
+        self.assertIn("Jane Doe", log.notes)
+
+    def test_queryset_delete_emits_guardian_removed(self):
+        rel_pk = self.relationship.pk
+        AdultStudentRelationship.objects.filter(pk=rel_pk).delete()
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.GUARDIAN_REMOVED,
+            resource_type="AdultStudentRelationship",
+            resource_id=str(rel_pk),
+        ).first()
+        self.assertIsNotNone(log, "GUARDIAN_REMOVED should be emitted on queryset delete")
+
+    def test_m2m_set_triggers_guardian_removed(self):
+        """Simulates what StudentForm.save() does: adults.set(selected)."""
+        student2 = Student.objects.create(
+            legal_first_name="Jim", last_name="Doe", graduation_year=2027
+        )
+        adult2 = Adult.objects.create(
+            first_name="Jane", last_name="Smith", is_parent=True
+        )
+        # student2 is related to BOTH adults initially
+        AdultStudentRelationship.objects.create(
+            adult=adult2, student=student2, relationship_to_student="parent"
+        )
+        rel = AdultStudentRelationship.objects.create(
+            adult=self.adult, student=student2, relationship_to_student="parent"
+        )
+        rel_pk = rel.pk
+
+        # Now call adults.set() which should remove the first adult
+        student2.adults.set([adult2])
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.GUARDIAN_REMOVED,
+            resource_type="AdultStudentRelationship",
+            resource_id=str(rel_pk),
+        ).first()
+        self.assertIsNotNone(log, "GUARDIAN_REMOVED should fire for m2m set removals")
+
+
+class SensitiveDataViewProgramContextTest(TestCase):
+    """Tests that SENSITIVE_DATA_VIEW notes include program scope info."""
+
+    def setUp(self):
+        self.mentor_user = User.objects.create_user(
+            username="mentorctx",
+            email="mentorctx@example.com",
+            password="password123",  # nosec B106
+            is_staff=True,
+        )
+        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.mentor_user.groups.add(lm_group)
+        self.mentor_adult = Adult.objects.create(
+            user=self.mentor_user,
+            first_name="Mentor",
+            last_name="Context",
+            is_mentor=True,
+        )
+
+        self.program_a = Program.objects.create(
+            name="Robotics", start_date="2024-01-01", end_date="2024-12-31"
+        )
+        self.program_b = Program.objects.create(
+            name="CyberPatriot", start_date="2024-01-01", end_date="2024-12-31"
+        )
+
+        self.student = Student.objects.create(
+            legal_first_name="Jane", last_name="Ctx", graduation_year=2026
+        )
+        Enrollment.objects.create(student=self.student, program=self.program_a)
+        Enrollment.objects.create(student=self.student, program=self.program_b)
+
+    def test_notes_include_student_programs(self):
+        self.client.force_login(self.mentor_user)
+        url = reverse("student_detail", kwargs={"pk": self.student.pk})
+        self.client.get(url)
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            actor=self.mentor_user,
+            resource_type="Student",
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertIn("Robotics", log.notes)
+        self.assertIn("CyberPatriot", log.notes)
+
+    def test_notes_include_scope_label(self):
+        self.client.force_login(self.mentor_user)
+        url = reverse("student_detail", kwargs={"pk": self.student.pk})
+        self.client.get(url)
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.SENSITIVE_DATA_VIEW,
+            actor=self.mentor_user,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertIn("SCOPE:", log.notes)
+
+
+class AuditDigestCommandTest(TestCase):
+    """Tests for the audit_digest management command."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="digestuser", email="digest@example.com"
+        )
+
+    def test_command_runs_without_error(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("audit_digest", "--days", "7", stdout=out)
+        output = out.getvalue()
+        self.assertIn("Audit Digest", output)
+
+    def test_command_detects_login_failures(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        # Create some failed logins
+        for i in range(5):
+            AuditLog.objects.create(
+                event=AuditEvent.LOGIN_FAILED,
+                resource_type="User",
+                resource_id="0",
+                resource_repr=f"Non-existent user: bad{i}@example.com",
+                ip_address="10.0.0.1",
+                outcome=AuditLog.FAILURE,
+            )
+
+        out = StringIO()
+        call_command("audit_digest", "--days", "7", "--threshold", "3", stdout=out)
+        output = out.getvalue()
+        self.assertIn("10.0.0.1", output)
+
+    def test_command_detects_privilege_changes(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        AuditLog.objects.create(
+            event=AuditEvent.ROLE_CHANGED,
+            resource_type="User",
+            resource_id=str(self.user.pk),
+            resource_repr=str(self.user),
+            before={"is_staff": False},
+            after={"is_staff": True},
+            actor=self.user,
+        )
+
+        out = StringIO()
+        call_command("audit_digest", "--days", "7", stdout=out)
+        output = out.getvalue()
+        self.assertIn("ROLE_CHANGED", output)
+
+    def test_command_detects_guardian_removals(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        AuditLog.objects.create(
+            event=AuditEvent.GUARDIAN_REMOVED,
+            resource_type="AdultStudentRelationship",
+            resource_id="999",
+            resource_repr="John Doe - parent to Jane Doe",
+            notes="Guardian John Doe removed from student Jane Doe.",
+        )
+
+        out = StringIO()
+        call_command("audit_digest", "--days", "7", stdout=out)
+        output = out.getvalue()
+        self.assertIn("GUARDIAN REMOVALS", output)
+        self.assertIn("John Doe - parent to Jane Doe", output)
+
+
+class AuditUtilsTest(TestCase):
+    """Tests for audit/utils.py unified query helpers."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="timelineuser", email="timeline@example.com"
+        )
+
+    def test_get_actor_timeline(self):
+        from audit.utils import get_actor_timeline
+
+        AuditLog.objects.create(
+            event=AuditEvent.USER_LOGIN,
+            resource_type="User",
+            resource_id=str(self.user.pk),
+            resource_repr=str(self.user),
+            actor=self.user,
+        )
+        AuditLog.objects.create(
+            event=AuditEvent.USER_LOGOUT,
+            resource_type="User",
+            resource_id=str(self.user.pk),
+            resource_repr=str(self.user),
+            actor=self.user,
+        )
+
+        timeline = get_actor_timeline(self.user, hours=1)
+        self.assertEqual(timeline.count(), 2)
+
+    def test_detect_session_anomalies_no_data(self):
+        from audit.utils import detect_session_anomalies
+
+        anomalies = detect_session_anomalies(hours=24)
+        self.assertEqual(anomalies.count(), 0)
+
+    def test_detect_session_anomalies_finds_mismatched_ips(self):
+        from audit.utils import detect_session_anomalies
+
+        AuditLog.objects.create(
+            event=AuditEvent.USER_LOGIN,
+            resource_type="User",
+            resource_id=str(self.user.pk),
+            resource_repr=str(self.user),
+            actor=self.user,
+            session_id="sess_abc123",
+            ip_address="192.168.1.1",
+        )
+        AuditLog.objects.create(
+            event=AuditEvent.USER_LOGIN,
+            resource_type="User",
+            resource_id=str(self.user.pk),
+            resource_repr=str(self.user),
+            actor=self.user,
+            session_id="sess_abc123",
+            ip_address="10.0.0.1",
+        )
+
+        anomalies = detect_session_anomalies(hours=1)
+        self.assertGreater(anomalies.count(), 0)
