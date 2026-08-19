@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-19
 
+### Added
+- **Andrew ID Management Page**: A new page for Lead Mentors to manage Andrew IDs across Students and Adults. Search by name, set or clear Andrew IDs with format and uniqueness validation, and manage expiration dates and sponsors for adults. Accessible from the Lead Mentor dropdown in the navigation bar.
+
 ### Changed
 - **Application "Edit captured data" is now a proper form**: Instead of editing a raw JSON blob, the application review page now shows every captured field as a labeled input, grouped by wizard step and listed in the order the applicant fills them out. This makes it easy to fix a typo without remembering the JSON structure. Works for both student/parent and mentor applications.
 
