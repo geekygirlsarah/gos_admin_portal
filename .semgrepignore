@@ -3,6 +3,27 @@
 # To ignore specific rules, use inline comments in the source code like:
 # {% csrf_token %} # nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token
 
-# We tried reformatting templates but Semgrep still reports false positives.
-# Since we have manually verified these forms have CSRF tokens, we are ignoring these files for this specific rule
-# using inline comments in the templates instead of this file, as .semgrepignore is better for excluding whole files.
+# Vendored dependencies — not our code, may cause timeouts
+programs/static/vendor/
+
+# Django migrations — auto-generated; semgrep flags schema_editor.sql_delete_table
+# which is Django's own migration machinery, not injectable user input
+programs/migrations/
+
+# Test helpers — hardcoded passwords are intentional test fixtures (already have # nosec)
+attendance/tests/base.py
+programs/tests/
+applications/tests/
+
+# False positive: semgrep can't parse Django template {% csrf_token %} tags
+# These templates all have csrf_token but semgrep's HTML parser doesn't see it.
+# If semgrep adds Django template support, remove these entries.
+templates/applications/review/decline.html
+templates/applications/review/detail.html
+templates/applications/step1_welcome.html
+templates/applications/step3_duplicate_found.html
+templates/applications/step5_student_info.html
+templates/imports/dashboard.html
+templates/programs/fee_form.html
+templates/programs/settings.html
+templates/programs/sliding_scale_review_detail.html
