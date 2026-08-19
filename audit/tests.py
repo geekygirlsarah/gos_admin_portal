@@ -317,7 +317,9 @@ class GuardianRemovedSignalTest(TestCase):
             resource_type="AdultStudentRelationship",
             resource_id=str(rel_pk),
         ).first()
-        self.assertIsNotNone(log, "GUARDIAN_REMOVED should be emitted on queryset delete")
+        self.assertIsNotNone(
+            log, "GUARDIAN_REMOVED should be emitted on queryset delete"
+        )
 
     def test_m2m_set_triggers_guardian_removed(self):
         """Simulates what StudentForm.save() does: adults.set(selected)."""

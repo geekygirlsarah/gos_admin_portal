@@ -128,9 +128,7 @@ class Command(BaseCommand):
         ).order_by("-timestamp")
         if priv_events:
             for entry in priv_events:
-                actor_name = (
-                    entry.actor.username if entry.actor else "system"
-                )
+                actor_name = entry.actor.username if entry.actor else "system"
                 self.stdout.write(
                     self.style.WARNING(
                         f"  {entry.timestamp:%Y-%m-%d %H:%M} "
@@ -209,9 +207,7 @@ class Command(BaseCommand):
         self.stdout.write("\n" + "=" * 60)
         total = len(all_flagged)
         if total:
-            self.stdout.write(
-                self.style.WARNING(f"Total flagged items: {total}")
-            )
+            self.stdout.write(self.style.WARNING(f"Total flagged items: {total}"))
         else:
             self.stdout.write(self.style.SUCCESS("No anomalies detected."))
 
