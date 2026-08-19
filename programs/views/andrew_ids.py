@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods
 
 from ..models import Adult, Student
@@ -191,5 +192,5 @@ def andrew_id_management_view(request):
 def _redirect_back(search_query):
     url = reverse("andrew_id_management")
     if search_query:
-        url = f"{url}?q={search_query}"
+        url = f"{url}?{urlencode({'q': search_query})}"
     return redirect(url)
