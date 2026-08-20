@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Merge Parents{% endblock %}
+{% block nav_parents_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'parent_list' %}">← Back to Parents</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col">
+      <h1 class="h3 mb-3">Merge Parents</h1>
+      <p class="text-muted">
+        Combine two parent records that are actually the same person (e.g. a
+        duplicate created during import or application conversion). Pick the
+        parent to <strong>keep</strong> and the parent to <strong>merge</strong>.
+        The kept parent's contact info is preserved; any missing fields are
+        copied over from the parent being merged, and all student relationships
+        are moved to the kept parent.
+      </p>
+
+      <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+        {% if form.keep.errors %}
+          <div class="alert alert-danger">Keep: {{ form.keep.errors }}</div>
+        {% endif %}
+        {% if form.source.errors %}
+          <div class="alert alert-danger">Merge: {{ form.source.errors }}</div>
+        {% endif %}
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th class="text-center">Keep</th>
+                <th class="text-center">Merge</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Student(s)</th>
+                <th>Relationship</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in parents %}
+                <tr>
+                  <td class="text-center">
+                    <input class="form-check-input" type="radio" name="keep" value="{{ p.pk }}"
+                           id="keep-{{ p.pk }}" {% if form.keep.value|stringformat:'s' == p.pk|stringformat:'s' %}checked{% endif %}>
+                  </td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="radio" name="source" value="{{ p.pk }}"
+                           id="source-{{ p.pk }}" {% if form.source.value|stringformat:'s' == p.pk|stringformat:'s' %}checked{% endif %}>
+                  </td>
+                  <td><label class="form-check-label" for="keep-{{ p.pk }}">{{ p.full_name }}</label></td>
+                  <td>{{ p.personal_email|default:'—' }}</td>
+                  <td>{{ p.phone_number|default:'—' }}</td>
+                  <td>
+                    {% if p.address %}{{ p.address }}{% endif %}
+                    {% if p.city %}{% if p.address %}, {% endif %}{{ p.city }}{% endif %}
+                    {% if p.state %} {{ p.state }}{% endif %}
+                    {% if p.zip_code %} {{ p.zip_code }}{% endif %}
+                    {% if not p.address and not p.city %}—{% endif %}
+                  </td>
+                  <td>
+                    {% for s in p.all_students %}
+                      {{ s }}{% if not forloop.last %}, {% endif %}
+                    {% empty %}
+                      —
+                    {% endfor %}
+                  </td>
+                  <td>
+                    {% for s in p.all_students %}
+                      {% if s.attached_rel %}<span class="badge bg-secondary rounded-pill">{{ s.attached_rel|title }}</span>{% endif %}
+                      {% if not forloop.last %}<br>{% endif %}
+                    {% empty %}
+                      —
+                    {% endfor %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Merge Parents</button>
+          <a class="btn btn-secondary" href="{% url 'parent_list' %}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

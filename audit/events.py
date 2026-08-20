@@ -20,5 +20,8 @@ class AuditEvent(models.TextChoices):
     USER_LOGOUT = "USER_LOGOUT", "User logged out"
     LOGIN_FAILED = "LOGIN_FAILED", "Login attempt failed"
 
+    # --- Data Merge ---
+    RECORDS_MERGED = "RECORDS_MERGED", "Duplicate records merged"
+
     # --- Sensitive Data Access ---
     SENSITIVE_DATA_VIEW = "SENSITIVE_DATA_VIEW", "Sensitive data viewed by mentor"

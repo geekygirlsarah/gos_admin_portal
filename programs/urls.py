@@ -32,6 +32,7 @@ from .views import (
     ParentCreateView,
     ParentImportView,
     ParentListView,
+    ParentMergeView,
     ParentUpdateView,
     ProgramAssignmentView,
     ProgramCreateView,
@@ -272,6 +273,11 @@ urlpatterns = [
         name="student_attendance",
     ),
     path("parents/", login_required(ParentListView.as_view()), name="parent_list"),
+    path(
+        "parents/merge/",
+        ParentMergeView.as_view(),
+        name="parent_merge",
+    ),
     path(
         "parents/import/",
         permission_required("programs.add_adult")(ParentImportView.as_view()),

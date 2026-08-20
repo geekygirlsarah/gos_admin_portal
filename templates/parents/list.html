@@ -10,6 +10,9 @@
             {% if perms.programs.add_adult %}
                 <a class="btn btn-primary" href="{% url 'parent_create' %}?next={{ request.path }}">Add Parent</a>
             {% endif %}
+            {% if perms.programs.change_adult %}
+                <a class="btn btn-outline-secondary" href="{% url 'parent_merge' %}">Merge Parents</a>
+            {% endif %}
         </div>
     </div>
     <div class="row mb-3">

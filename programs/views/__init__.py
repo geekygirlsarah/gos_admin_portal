@@ -11,6 +11,7 @@ from .adults import (
     MentorUpdateView,
     ParentCreateView,
     ParentListView,
+    ParentMergeView,
     ParentUpdateView,
 )
 from .finances import (
@@ -115,6 +116,7 @@ __all__ = [
     "ParentCreateView",
     "ParentImportView",
     "ParentListView",
+    "ParentMergeView",
     "ParentUpdateView",
     "ProgramAssignmentView",
     "ProgramCreateView",

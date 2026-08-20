@@ -3,26 +3,30 @@ from django.contrib.auth.mixins import (
     LoginRequiredMixin,
     PermissionRequiredMixin,
 )
+from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
     DetailView,
+    FormView,
     ListView,
     UpdateView,
 )
 
 from audit.mixins import SensitiveDataViewMixin
 
-from ..forms import AdultForm
 from ..constants import RELATIONSHIP_CHOICES
+from ..forms import AdultForm, ParentMergeForm
 from ..models import (
     Adult,
     AdultStudentRelationship,
     Program,
+    Student,
 )
 from ..permission_views import (
+    LeadMentorRequiredMixin,
     PassUserToFormMixin,
     can_user_read,
     get_user_role,
@@ -358,7 +362,9 @@ class AdultUpdateView(
         if adult and adult.pk:
             rels = {
                 r.student_id: (r.relationship_to_student, r.specific_relationship or "")
-                for r in adult.adultstudentrelationship_set.select_related("student").all()
+                for r in adult.adultstudentrelationship_set.select_related(
+                    "student"
+                ).all()
             }
             ctx["linked_students"] = [
                 {
@@ -366,7 +372,9 @@ class AdultUpdateView(
                     "rel": rels.get(s.pk, ("", ""))[0],
                     "specific_rel": rels.get(s.pk, ("", ""))[1],
                 }
-                for s in adult.students.select_related("school").order_by("last_name", "first_name")
+                for s in adult.students.select_related("school").order_by(
+                    "last_name", "first_name"
+                )
             ]
         return ctx
 
@@ -460,7 +468,9 @@ class MentorUpdateView(
         if adult and adult.pk:
             rels = {
                 r.student_id: (r.relationship_to_student, r.specific_relationship or "")
-                for r in adult.adultstudentrelationship_set.select_related("student").all()
+                for r in adult.adultstudentrelationship_set.select_related(
+                    "student"
+                ).all()
             }
             ctx["linked_students"] = [
                 {
@@ -468,7 +478,9 @@ class MentorUpdateView(
                     "rel": rels.get(s.pk, ("", ""))[0],
                     "specific_rel": rels.get(s.pk, ("", ""))[1],
                 }
-                for s in adult.students.select_related("school").order_by("last_name", "first_name")
+                for s in adult.students.select_related("school").order_by(
+                    "last_name", "first_name"
+                )
             ]
         return ctx
 
@@ -511,3 +523,108 @@ class MentorUpdateView(
         if safe_url:
             return safe_url
         return reverse("mentor_edit", args=[self.object.pk])
+
+
+class ParentMergeView(LeadMentorRequiredMixin, FormView):
+    """Merge two parent/adult records that represent the same person.
+
+    The ``keep`` parent survives. Missing fields are filled from the ``source``
+    parent, all student relationships are transferred, and the source is deleted.
+    """
+
+    form_class = ParentMergeForm
+    template_name = "parents/merge.html"
+    success_url = reverse_lazy("parent_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["parents"] = list(
+            active_parents().prefetch_related(
+                "students__school",
+                "students__enrollment_set__program",
+                "adultstudentrelationship_set",
+            )
+        )
+        return context
+
+    def form_valid(self, form):
+        keep = form.cleaned_data["keep"]
+        source = form.cleaned_data["source"]
+
+        with transaction.atomic():
+            source_rels = AdultStudentRelationship.objects.filter(adult=source)
+            for rel in list(source_rels):
+                existing = AdultStudentRelationship.objects.filter(
+                    adult=keep, student=rel.student
+                ).first()
+                if existing:
+                    if not existing.specific_relationship and rel.specific_relationship:
+                        existing.specific_relationship = rel.specific_relationship
+                        existing.save(update_fields=["specific_relationship"])
+                    Student.objects.filter(primary_contact_relationship=rel).update(
+                        primary_contact_relationship=existing
+                    )
+                    Student.objects.filter(secondary_contact_relationship=rel).update(
+                        secondary_contact_relationship=existing
+                    )
+                    rel.delete()
+                else:
+                    rel.adult = keep
+                    rel.save(update_fields=["adult"])
+
+            carryover_fields = [
+                "personal_email",
+                "phone_number",
+                "phone_type",
+                "address",
+                "city",
+                "state",
+                "zip_code",
+                "pronouns",
+                "can_receive_texts",
+            ]
+            changed = False
+            for field in carryover_fields:
+                keep_val = getattr(keep, field)
+                source_val = getattr(source, field)
+                if not keep_val and source_val:
+                    setattr(keep, field, source_val)
+                    changed = True
+
+            for flag in ("is_parent", "is_mentor", "is_alumni"):
+                if getattr(source, flag) and not getattr(keep, flag):
+                    setattr(keep, flag, True)
+                    changed = True
+
+            if not keep.user_id and source.user_id:
+                source_user = source.user
+                source.user = None
+                source.save(update_fields=["user"])
+                keep.user = source_user
+                changed = True
+
+            if changed:
+                keep.save()
+
+            source.delete()
+
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
+        log_event(
+            request=self.request,
+            event=AuditEvent.RECORDS_MERGED,
+            resource=keep,
+            notes=(
+                f'Parent "{source.full_name}" (pk={source.pk}) merged into '
+                f'"{keep.full_name}" (pk={keep.pk}). All student relationships '
+                f"were transferred."
+            ),
+        )
+
+        messages.success(
+            self.request,
+            f'Merged "{source.full_name}" into "{keep.full_name}". '
+            f"All student relationships were transferred.",
+        )
+        return super().form_valid(form)
