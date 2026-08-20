@@ -5,15 +5,29 @@ from django.db import migrations, models
 
 
 def backfill_districts(apps, schema_editor):
+    """Create SchoolDistrict rows from the legacy free-text district column.
+
+    Runs while School.district is still a CharField: each distinct
+    (whitespace-stripped) value becomes a SchoolDistrict, linked to its
+    schools through a temporary FK column. Blank values stay unassigned.
+    """
     School = apps.get_model("programs", "School")
     SchoolDistrict = apps.get_model("programs", "SchoolDistrict")
-    for school in School.objects.all():
-        raw = school.district_id
+    for school in School.objects.select_related("district_new"):
+        raw = (school.district or "").strip()
         if not raw:
             continue
-        district, _ = SchoolDistrict.objects.get_or_create(name=str(raw))
-        school.district = district
-        school.save()
+        district, _ = SchoolDistrict.objects.get_or_create(name=raw)
+        school.district_new = district
+        school.save(update_fields=["district_new"])
+
+
+def restore_legacy_district(apps, schema_editor):
+    """Reverse: copy district names back into the free-text column."""
+    School = apps.get_model("programs", "School")
+    for school in School.objects.select_related("district_new"):
+        school.district = school.district_new.name if school.district_new else ""
+        school.save(update_fields=["district"])
 
 
 class Migration(migrations.Migration):
@@ -41,9 +55,13 @@ class Migration(migrations.Migration):
                 "ordering": ["name"],
             },
         ),
-        migrations.AlterField(
+        # Add the FK as a new column alongside the legacy text column so the
+        # data can be converted before the old column is dropped. Altering
+        # the text column in place would make PostgreSQL cast every legacy
+        # district name to bigint and fail.
+        migrations.AddField(
             model_name="school",
-            name="district",
+            name="district_new",
             field=models.ForeignKey(
                 blank=True,
                 null=True,
@@ -53,5 +71,9 @@ class Migration(migrations.Migration):
                 verbose_name="School district",
             ),
         ),
-        migrations.RunPython(backfill_districts, migrations.RunPython.noop),
+        migrations.RunPython(backfill_districts, restore_legacy_district),
+        migrations.RemoveField(model_name="school", name="district"),
+        migrations.RenameField(
+            model_name="school", old_name="district_new", new_name="district"
+        ),
     ]
