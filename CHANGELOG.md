@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Background checks are now view-only for everyone except Lead Mentors/Admins**: Parents, mentors, students, and alumni could previously edit their own (or their child's) background-check/clearance records through their profile pages. These are now read-only for everyone except Lead Mentors and admins, who are the only ones allowed to update them.
+- **Students can now see their background-check status at a glance**: On the student profile, if the student needs PA clearances, all three checks (PA State Police, PA Child Abuse, FBI) are shown with a Valid/Missing badge and expiration date. If they don't need clearances yet (based on age), a short "Not needed for your age" message is shown instead.
 
 ## 2026-08-19
 
