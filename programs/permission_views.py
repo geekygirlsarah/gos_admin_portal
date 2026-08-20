@@ -257,6 +257,12 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
+    # Background checks are read-only for every role except Lead Mentors/admins.
+    # This must run before the "own profile and children" shortcut below, which
+    # would otherwise let parents/mentors/students edit their own clearances.
+    if section == "background_checks":
+        return False
+
     # Always allow writing own profile and children
     if obj:
         if isinstance(obj, Student):
