@@ -216,8 +216,6 @@ class StudentDetailBackgroundCheckViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         content = resp.content.decode()
         for value in BackgroundCheckType.values:
-            self.assertIn(
-                BackgroundCheckType(value).label, content, f"missing {value}"
-            )
+            self.assertIn(BackgroundCheckType(value).label, content, f"missing {value}")
         self.assertContains(resp, "Missing")
         self.assertNotContains(resp, "Not needed for your age")
