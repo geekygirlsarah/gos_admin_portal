@@ -232,6 +232,10 @@
                     {% endfor %}
                   </select>
                 </div>
+                <div class="d-flex align-items-center gap-1">
+                  <label class="form-label mb-0 small">Specific</label>
+                  <input type="text" class="form-control form-control-sm parent-specific-rel" data-parent-id="{{ p.id }}" value="{{ p.specific_rel|default:'' }}" placeholder="e.g. father, stepmom" style="width: 140px;" {% if not can_write_parents %}disabled{% endif %}>
+                </div>
                 <div class="form-check">
                   <input class="form-check-input parent-primary" type="radio" name="primary_choice" value="{{ p.id }}" {% if object.primary_contact_id == p.id %}checked{% endif %} {% if not can_write_parents %}disabled{% endif %}>
                   <label class="form-check-label">Primary</label>
@@ -287,16 +291,24 @@
           if(secondarySel){ secondarySel.value = secondary ? secondary.value : ''; }
           // relationship hidden inputs
           // remove existing
-          document.querySelectorAll('input[name^="parent_rel_"]').forEach(function(n){ n.remove(); });
+          document.querySelectorAll('input[name^="parent_rel_"],input[name^="parent_specific_rel_"]').forEach(function(n){ n.remove(); });
           items.forEach(function(it){
             var pid = it.getAttribute('data-parent-id');
             var sel = it.querySelector('select.parent-rel');
+            var specInput = it.querySelector('input.parent-specific-rel');
             if(sel){
               var input = document.createElement('input');
               input.type = 'hidden';
               input.name = 'parent_rel_' + pid;
               input.value = sel.value;
               it.closest('form').appendChild(input);
+            }
+            if(specInput){
+              var specHidden = document.createElement('input');
+              specHidden.type = 'hidden';
+              specHidden.name = 'parent_specific_rel_' + pid;
+              specHidden.value = specInput.value;
+              it.closest('form').appendChild(specHidden);
             }
           });
         }
@@ -317,6 +329,10 @@
             '    <select class="form-select form-select-sm parent-rel" data-parent-id="'+pid+'">'+
             REL_CHOICES.map(function(p){ return '<option value="'+p[0]+'">'+p[1]+'</option>'; }).join('')+
             '    </select>'+
+            '  </div>'+
+            '  <div class="d-flex align-items-center gap-1">'+
+            '    <label class="form-label mb-0 small">Specific</label>'+
+            '    <input type="text" class="form-control form-control-sm parent-specific-rel" data-parent-id="'+pid+'" placeholder="e.g. father, stepmom" style="width: 140px;">'+
             '  </div>'+
             '  <div class="form-check">'+
             '    <input class="form-check-input parent-primary" type="radio" name="primary_choice" value="'+pid+'">'+
@@ -365,7 +381,7 @@
             }
           });
           document.getElementById('parent-list').addEventListener('change', function(ev){
-            if(ev.target && (ev.target.classList.contains('parent-rel') || ev.target.classList.contains('parent-primary') || ev.target.classList.contains('parent-secondary'))){
+            if(ev.target && (ev.target.classList.contains('parent-rel') || ev.target.classList.contains('parent-primary') || ev.target.classList.contains('parent-secondary') || ev.target.classList.contains('parent-specific-rel'))){
               ensureHiddenFieldSync();
             }
           });

@@ -821,22 +821,28 @@ class Student(models.Model):
         Returns a list of unique Adult objects related to this student,
         including primary, secondary, and any additional M2M adults.
         Each Adult object has an 'attached_rel' attribute representing their
-        relationship to THIS student.
+        relationship to THIS student and a 'specific_rel' attribute for the
+        free-text specific relationship (e.g. father, stepmom).
         """
         seen_ids = set()
         result = []
 
-        # Helper to get relationship string
+        # Helper to get relationship data from the through model
         rels = {}
         if self.pk:
             rels = {
-                r.adult_id: r.relationship_to_student
+                r.adult_id: (
+                    r.relationship_to_student,
+                    r.specific_relationship or "",
+                )
                 for r in self.adultstudentrelationship_set.all()
             }
 
         def add_adult(adult):
             if adult and adult.id not in seen_ids:
-                adult.attached_rel = rels.get(adult.id, "parent")
+                rel_data = rels.get(adult.id, ("parent", ""))
+                adult.attached_rel = rel_data[0]
+                adult.specific_rel = rel_data[1]
                 result.append(adult)
                 seen_ids.add(adult.id)
 

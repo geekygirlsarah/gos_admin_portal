@@ -137,7 +137,7 @@ class StudentEmergencyContactsView(
                 "primary_contact_relationship__adult",
                 "secondary_contact_relationship__adult",
             )
-            .prefetch_related("adults")
+            .prefetch_related("adults", "adultstudentrelationship_set")
             .annotate(
                 sort_first=Coalesce(
                     NullIf("first_name", Value("")), "legal_first_name"
@@ -360,17 +360,28 @@ class StudentUpdateView(
             for k, v in self.request.POST.items()
             if k.startswith("parent_rel_")
         }
+        specific_map = {
+            k[len("parent_specific_rel_") :]: v  # noqa: E203
+            for k, v in self.request.POST.items()
+            if k.startswith("parent_specific_rel_")
+        }
         valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
         for pid_str, rel in rel_map.items():
             try:
                 pid = int(pid_str)
             except (TypeError, ValueError):
                 continue
+            defaults = {}
             if rel in valid_keys:
+                defaults["relationship_to_student"] = rel
+            specific = specific_map.get(pid_str, "")
+            if specific:
+                defaults["specific_relationship"] = specific
+            if defaults:
                 AdultStudentRelationship.objects.update_or_create(
                     adult_id=pid,
                     student=self.object,
-                    defaults={"relationship_to_student": rel},
+                    defaults=defaults,
                 )
         messages.success(self.request, "Student record saved successfully.")
         return response

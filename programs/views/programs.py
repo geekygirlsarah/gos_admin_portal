@@ -245,8 +245,13 @@ class ProgramEmergencyContactsView(
                 {
                     "student": student,
                     "primary": primary,
+                    "primary_rel": getattr(primary, "attached_rel", ""),
                     "secondary": secondary,
-                    "others": others,
+                    "secondary_rel": getattr(secondary, "attached_rel", ""),
+                    "others": [
+                        {"adult": p, "rel": getattr(p, "attached_rel", "")}
+                        for p in others
+                    ],
                 }
             )
         return render(

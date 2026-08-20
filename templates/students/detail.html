@@ -257,6 +257,7 @@
                         {% else %}
                           {{ p }}
                         {% endif %}
+                        {% if p.attached_rel %}<span class="badge bg-secondary rounded-pill">{{ p.attached_rel|title }}</span>{% endif %}
                         {% if not p.login_enabled %}
                           <span class="badge bg-secondary">Inactive</span>
                         {% endif %}

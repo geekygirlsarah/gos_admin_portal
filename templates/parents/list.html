@@ -33,6 +33,7 @@
           <tr>
             <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
             <th>Student(s)</th>
+            <th>Relationship</th>
             <th><a href="{% sort_url 'email' %}" class="text-decoration-none text-dark">Email{% sort_icon 'email' %}</a></th>
             <th><a href="{% sort_url 'phone' %}" class="text-decoration-none text-dark">Phone{% sort_icon 'phone' %}</a></th>
             <th class="text-end"></th>
@@ -43,19 +44,30 @@
             <tr>
               <td>{{ p.full_name }}</td>
               <td>
-                {% for s in p.students.all %}
-                  {{ s }}{% if not forloop.last %}, {% endif %}
+                {% for s in p.all_students %}
+                  <a href="{% url 'student_detail' s.pk %}">{{ s }}</a>{% if not forloop.last %}, {% endif %}
                 {% empty %}
-                  
+                  —
                 {% endfor %}
               </td>
               <td>
-                  {% if p.personal_email and p.email_updates %}
-                      <span class="ms-2" title="This parent receives email updates">✔️</span>
-                  {% endif %}
-                {% if p.personal_email %}<a href="mailto:{{ p.personal_email }}">{{ p.personal_email }}</a>{% endif %}
+                {% for s in p.all_students %}
+                  {% if s.attached_rel %}<span class="badge bg-secondary rounded-pill">{{ s.attached_rel|title }}</span>{% endif %}
+                  {% if not forloop.last %}<br>{% endif %}
+                {% empty %}
+                  —
+                {% endfor %}
               </td>
-              <td>{% if p.phone_number %}<a href="tel:{{ p.phone_number }}">{{ p.phone_number }}</a>{% endif %}</td>
+              <td>
+                  {% if p.personal_email %}
+                    {% if p.email_updates %}<span title="Receives email updates">✔️</span>{% endif %}
+                    <a href="mailto:{{ p.personal_email }}">{{ p.personal_email }}</a>
+                  {% endif %}
+                  {% if p.phone_number %}
+                    {% if p.personal_email %}<br>{% endif %}
+                    <a href="tel:{{ p.phone_number }}">{{ p.phone_number }}</a>
+                  {% endif %}
+              </td>
               <td class="text-end">
                 {% if perms.programs.change_adult %}
                   <a class="btn btn-sm btn-outline-secondary" href="{% url 'parent_edit' p.id %}?next={{ request.path }}">Edit</a>

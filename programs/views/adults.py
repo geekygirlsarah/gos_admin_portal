@@ -16,8 +16,10 @@ from django.views.generic import (
 from audit.mixins import SensitiveDataViewMixin
 
 from ..forms import AdultForm
+from ..constants import RELATIONSHIP_CHOICES
 from ..models import (
     Adult,
+    AdultStudentRelationship,
     Program,
 )
 from ..permission_views import (
@@ -112,7 +114,9 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_queryset(self):
         qs = active_parents().prefetch_related(
-            "students__school", "students__enrollment_set__program"
+            "students__school",
+            "students__enrollment_set__program",
+            "adultstudentrelationship_set",
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -349,7 +353,55 @@ class AdultUpdateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
+        adult = self.object
+        if adult and adult.pk:
+            rels = {
+                r.student_id: (r.relationship_to_student, r.specific_relationship or "")
+                for r in adult.adultstudentrelationship_set.select_related("student").all()
+            }
+            ctx["linked_students"] = [
+                {
+                    "student": s,
+                    "rel": rels.get(s.pk, ("", ""))[0],
+                    "specific_rel": rels.get(s.pk, ("", ""))[1],
+                }
+                for s in adult.students.select_related("school").order_by("last_name", "first_name")
+            ]
         return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        rel_map = {
+            k[len("student_rel_") :]: v  # noqa: E203
+            for k, v in self.request.POST.items()
+            if k.startswith("student_rel_")
+        }
+        specific_map = {
+            k[len("student_specific_rel_") :]: v  # noqa: E203
+            for k, v in self.request.POST.items()
+            if k.startswith("student_specific_rel_")
+        }
+        valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        for sid_str, rel in rel_map.items():
+            try:
+                sid = int(sid_str)
+            except (TypeError, ValueError):
+                continue
+            defaults = {}
+            if rel in valid_keys:
+                defaults["relationship_to_student"] = rel
+            specific = specific_map.get(sid_str, "")
+            if specific:
+                defaults["specific_relationship"] = specific
+            if defaults:
+                AdultStudentRelationship.objects.update_or_create(
+                    adult=self.object,
+                    student_id=sid,
+                    defaults=defaults,
+                )
+        messages.success(self.request, "Adult record saved successfully.")
+        return response
 
     def get_success_url(self):
         nxt = self.request.GET.get("next")
@@ -403,7 +455,55 @@ class MentorUpdateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
+        adult = self.object
+        if adult and adult.pk:
+            rels = {
+                r.student_id: (r.relationship_to_student, r.specific_relationship or "")
+                for r in adult.adultstudentrelationship_set.select_related("student").all()
+            }
+            ctx["linked_students"] = [
+                {
+                    "student": s,
+                    "rel": rels.get(s.pk, ("", ""))[0],
+                    "specific_rel": rels.get(s.pk, ("", ""))[1],
+                }
+                for s in adult.students.select_related("school").order_by("last_name", "first_name")
+            ]
         return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        rel_map = {
+            k[len("student_rel_") :]: v  # noqa: E203
+            for k, v in self.request.POST.items()
+            if k.startswith("student_rel_")
+        }
+        specific_map = {
+            k[len("student_specific_rel_") :]: v  # noqa: E203
+            for k, v in self.request.POST.items()
+            if k.startswith("student_specific_rel_")
+        }
+        valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        for sid_str, rel in rel_map.items():
+            try:
+                sid = int(sid_str)
+            except (TypeError, ValueError):
+                continue
+            defaults = {}
+            if rel in valid_keys:
+                defaults["relationship_to_student"] = rel
+            specific = specific_map.get(sid_str, "")
+            if specific:
+                defaults["specific_relationship"] = specific
+            if defaults:
+                AdultStudentRelationship.objects.update_or_create(
+                    adult=self.object,
+                    student_id=sid,
+                    defaults=defaults,
+                )
+        messages.success(self.request, "Adult record saved successfully.")
+        return response
 
     def get_success_url(self):
         next_url = self.request.GET.get("next")

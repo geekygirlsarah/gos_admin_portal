@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load sorting_tags %}
+{% load form_tags %}
 {% block title %}Student Emergency Contacts{% endblock %}
 {% block content %}
 <div class="row mb-3">
@@ -22,9 +23,11 @@
             <th>Student Phone</th>
             <th>Student Email</th>
             <th>Parent/Guardian 1</th>
+            <th>Relationship</th>
             <th>Parent/Guardian 1 Phone</th>
             <th>Parent/Guardian 1 Email</th>
             <th>Parent/Guardian 2</th>
+            <th>Relationship</th>
             <th>Parent/Guardian 2 Phone</th>
             <th>Parent/Guardian 2 Email</th>
           </tr>
@@ -45,9 +48,11 @@
                 {% if s.andrew_email %}<div class="text-muted small"><a href="mailto:{{ s.andrew_email }}">{{ s.andrew_email }}</a></div>{% endif %}
               </td>
               <td>{% if p1 %}{{ p1 }}{% endif %}</td>
+              <td>{% if p1 %}{% with rel=p1|get_relationship:s %}{% if rel %}<span class="badge bg-secondary rounded-pill">{{ rel|title }}</span>{% endif %}{% endwith %}{% endif %}</td>
               <td>{% if p1 and p1.phone_number %}<a href="tel:{{ p1.phone_number }}">{{ p1.phone_number }}</a>{% endif %}</td>
               <td>{% if p1 and p1.email %}<a href="mailto:{{ p1.email }}">{{ p1.email }}</a>{% endif %}</td>
               <td>{% if p2 %}{{ p2 }}{% endif %}</td>
+              <td>{% if p2 %}{% with rel=p2|get_relationship:s %}{% if rel %}<span class="badge bg-secondary rounded-pill">{{ rel|title }}</span>{% endif %}{% endwith %}{% endif %}</td>
               <td>{% if p2 and p2.phone_number %}<a href="tel:{{ p2.phone_number }}">{{ p2.phone_number }}</a>{% endif %}</td>
               <td>{% if p2 and p2.email %}<a href="mailto:{{ p2.email }}">{{ p2.email }}</a>{% endif %}</td>
             </tr>
@@ -92,7 +97,7 @@
               {% if p1 %}
               <hr class="my-2" />
               <div>
-                <div class="fw-semibold">Parent/Guardian 1: {{ p1 }}</div>
+                <div class="fw-semibold">Parent/Guardian 1: {{ p1 }}{% with rel=p1|get_relationship:s %}{% if rel %} <span class="badge bg-secondary rounded-pill">{{ rel|title }}</span>{% endif %}{% endwith %}</div>
                 <div class="small">
                   {% if p1.phone_number %}<span><a href="tel:{{ p1.phone_number }}">{{ p1.phone_number }}</a></span>{% endif %}
                   {% if p1.email %}<span class="ms-2"><a href="mailto:{{ p1.email }}">{{ p1.email }}</a></span>{% endif %}
@@ -102,7 +107,7 @@
 
               {% if p2 %}
               <div class="mt-2">
-                <div class="fw-semibold">Parent/Guardian 2: {{ p2 }}</div>
+                <div class="fw-semibold">Parent/Guardian 2: {{ p2 }}{% with rel=p2|get_relationship:s %}{% if rel %} <span class="badge bg-secondary rounded-pill">{{ rel|title }}</span>{% endif %}{% endwith %}</div>
                 <div class="small">
                   {% if p2.phone_number %}<span><a href="tel:{{ p2.phone_number }}">{{ p2.phone_number }}</a></span>{% endif %}
                   {% if p2.email %}<span class="ms-2"><a href="mailto:{{ p2.email }}">{{ p2.email }}</a></span>{% endif %}

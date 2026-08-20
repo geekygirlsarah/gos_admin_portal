@@ -142,3 +142,26 @@ def get_item(dictionary, key):
     if dictionary:
         return dictionary.get(key)
     return None
+
+
+@register.filter
+def get_relationship(adult, student):
+    """Get the relationship type of an adult to a student via the
+    AdultStudentRelationship through model.
+
+    Usage: {{ adult|get_relationship:student }}
+
+    Requires that the queryset has prefetched 'adultstudentrelationship_set'
+    on the student (or adult) side to avoid N+1 queries.
+    """
+    from programs.models import AdultStudentRelationship
+
+    if not adult or not student or not adult.pk or not student.pk:
+        return ""
+    # Try the through model directly
+    try:
+        return AdultStudentRelationship.objects.get(
+            adult=adult, student=student
+        ).relationship_to_student
+    except AdultStudentRelationship.DoesNotExist:
+        return ""
