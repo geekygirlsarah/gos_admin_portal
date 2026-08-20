@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-20
+
+### Changed
+- **Background checks are now view-only for everyone except Lead Mentors/Admins**: Parents, mentors, students, and alumni could previously edit their own (or their child's) background-check/clearance records through their profile pages. These are now read-only for everyone except Lead Mentors and admins, who are the only ones allowed to update them.
+
 ## 2026-08-19
 
 ### Added

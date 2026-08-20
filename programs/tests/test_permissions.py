@@ -235,6 +235,57 @@ class ProfilePermissionsTests(TestCase):
         self.assertContains(response, "Student One")
         self.assertNotContains(response, "Other Student")
 
+    def test_background_checks_read_only_for_non_lead_mentors(self):
+        from programs.permission_views import can_user_write
+
+        RolePermission.objects.update_or_create(
+            role="Parent",
+            section="background_checks",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="background_checks",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Alumni",
+            section="background_checks",
+            defaults={"can_read": True, "can_write": True},
+        )
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="background_checks",
+            defaults={"can_read": True, "can_write": True},
+        )
+        # Parents/mentors/alumni/students can never write background checks,
+        # even for their own profiles or children, even if can_write is set.
+        self.assertFalse(
+            can_user_write(self.parent_user, "background_checks", self.student)
+        )
+        self.assertFalse(
+            can_user_write(self.parent_user, "background_checks", self.parent)
+        )
+        self.assertFalse(
+            can_user_write(self.mentor_user, "background_checks", self.mentor)
+        )
+        self.assertFalse(
+            can_user_write(self.student_user, "background_checks", self.student)
+        )
+        self.assertFalse(
+            can_user_write(self.alumni_user, "background_checks", self.alumni)
+        )
+
+    def test_lead_mentor_can_write_background_checks(self):
+        from programs.permission_views import can_user_write
+
+        self.assertTrue(
+            can_user_write(self.lead_mentor_user, "background_checks", self.student)
+        )
+        self.assertTrue(
+            can_user_write(self.lead_mentor_user, "background_checks", self.parent)
+        )
+
 
 class ParentStudentEditTests(TestCase):
     def setUp(self):
@@ -296,6 +347,30 @@ class ParentStudentEditTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
+
+    def test_parent_cannot_write_background_checks_for_own_child(self):
+        from programs.permission_views import can_user_write
+
+        RolePermission.objects.update_or_create(
+            role="Parent",
+            section="background_checks",
+            defaults={"can_read": True, "can_write": True},
+        )
+        self.assertFalse(
+            can_user_write(self.parent_user, "background_checks", self.child)
+        )
+
+    def test_parent_cannot_write_background_checks_for_own_adult_profile(self):
+        from programs.permission_views import can_user_write
+
+        RolePermission.objects.update_or_create(
+            role="Parent",
+            section="background_checks",
+            defaults={"can_read": True, "can_write": True},
+        )
+        self.assertFalse(
+            can_user_write(self.parent_user, "background_checks", self.parent_adult)
+        )
 
 
 class StudentEditUpdatesExistingRecordTest(TestCase):
