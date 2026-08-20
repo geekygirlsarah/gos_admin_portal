@@ -21,6 +21,7 @@ from .models import (
     Payment,
     Program,
     School,
+    SchoolDistrict,
     SlidingScale,
     Student,
 )
@@ -463,6 +464,63 @@ class SchoolForm(forms.ModelForm):
     class Meta:
         model = School
         fields = ["name", "district", "street_address", "city", "state", "zip_code"]
+
+
+class SchoolDistrictForm(forms.ModelForm):
+    class Meta:
+        model = SchoolDistrict
+        fields = ["name"]
+
+
+class SchoolMergeForm(forms.Form):
+    """Merge one school into another.
+
+    ``keep`` is the canonical school that survives. ``source`` is the school
+    to fold into ``keep`` and delete. Both are chosen via radio buttons on a
+    single table of schools so it's easy to tell which is which.
+    """
+
+    keep = forms.ModelChoiceField(
+        queryset=School.objects.all(),
+        widget=forms.RadioSelect,
+    )
+    source = forms.ModelChoiceField(
+        queryset=School.objects.all(),
+        widget=forms.RadioSelect,
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        keep = cleaned.get("keep")
+        source = cleaned.get("source")
+        if keep and source and keep.pk == source.pk:
+            self.add_error("source", "Choose a different school to merge in.")
+        return cleaned
+
+
+class ParentMergeForm(forms.Form):
+    """Merge two parent/adult records that represent the same person.
+
+    ``keep`` is the surviving parent. ``source`` is the parent to fold into
+    ``keep`` and delete. Both are chosen via radio buttons.
+    """
+
+    keep = forms.ModelChoiceField(
+        queryset=Adult.objects.filter(is_parent=True),
+        widget=forms.RadioSelect,
+    )
+    source = forms.ModelChoiceField(
+        queryset=Adult.objects.filter(is_parent=True),
+        widget=forms.RadioSelect,
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        keep = cleaned.get("keep")
+        source = cleaned.get("source")
+        if keep and source and keep.pk == source.pk:
+            self.add_error("source", "Choose a different parent to merge in.")
+        return cleaned
 
 
 class ProgramForm(forms.ModelForm):

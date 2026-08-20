@@ -864,7 +864,10 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             {
                 "sessions": sessions[:500],
                 "programs": programs,
-                "students": active_students().order_by("last_name", "first_name"),
+                "students": active_students().order_by("first_name", "last_name"),
+                "mentors": Adult.objects.filter(is_mentor=True).order_by(
+                    "first_name", "last_name"
+                ),
                 "selected_program_id": (
                     int(program_id) if program_id and program_id.isdigit() else None
                 ),
@@ -884,8 +887,11 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             ci_raw = request.POST.get("check_in")
             co_raw = request.POST.get("check_out")
 
-            if not program_id or not ci_raw:
-                messages.error(request, "Program and check-in time are required.")
+            if not ci_raw:
+                messages.error(request, "Check-in time is required.")
+                return redirect_back(request, "all_attendance")
+            if not program_id and person_type != "mentor":
+                messages.error(request, "Program is required.")
                 return redirect_back(request, "all_attendance")
 
             ci = parse_datetime(ci_raw)
@@ -897,7 +903,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 co = timezone.make_aware(co, timezone.get_current_timezone())
 
             new_session = AttendanceSession(
-                program_id=int(program_id),
+                program_id=int(program_id) if program_id else None,
                 check_in=ci,
                 check_out=co,
             )
@@ -906,6 +912,10 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 student_id = request.POST.get("student_id")
                 if student_id and student_id.isdigit():
                     new_session.student_id = int(student_id)
+            elif person_type == "mentor":
+                adult_id = request.POST.get("adult_id")
+                if adult_id and adult_id.isdigit():
+                    new_session.adult_id = int(adult_id)
             elif person_type == "visitor":
                 new_session.visitor_name = request.POST.get("visitor_name", "").strip()
                 team_raw = request.POST.get("visitor_team_number")

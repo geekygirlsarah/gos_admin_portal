@@ -13,6 +13,7 @@ from ..models import (
     Program,
     RaceEthnicity,
     School,
+    SchoolDistrict,
     Student,
 )
 from ..utils import (
@@ -994,19 +995,24 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 obj, created_flag = School.objects.get_or_create(
                     name=school_name,
                     defaults={
-                        "district": district,
                         "street_address": street,
                         "city": city,
                         "state": state,
                         "zip_code": zip_code,
                     },
                 )
+                if district:
+                    district_obj, _ = SchoolDistrict.objects.get_or_create(
+                        name=district
+                    )
+                    obj.district = district_obj
                 if created_flag:
+                    if district:
+                        obj.save()
                     created += 1
                 elif overwrite:
                     changed = False
                     for field, value in [
-                        ("district", district),
                         ("street_address", street),
                         ("city", city),
                         ("state", state),
@@ -1015,9 +1021,15 @@ class SchoolImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         if value and getattr(obj, field) != value:
                             setattr(obj, field, value)
                             changed = True
+                    if district and obj.district_id != district_obj.pk:
+                        obj.district = district_obj
+                        changed = True
                     if changed:
                         obj.save()
                         updated += 1
+                elif district and obj.district_id != district_obj.pk:
+                    obj.save()
+                    updated += 1
             messages.success(
                 request, f"Imported {created} new, updated {updated}. Skipped {errors}."
             )

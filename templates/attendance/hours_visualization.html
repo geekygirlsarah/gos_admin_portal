@@ -5,7 +5,7 @@
 {% block title %}My Hours — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js" nonce="{{ request.csp_nonce }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
 <style>
   .cal-grid th { width: 14.28%; text-align: center; font-size: 1rem; }
   .cal-grid td { text-align: center; vertical-align: middle; height: 3.5rem; }

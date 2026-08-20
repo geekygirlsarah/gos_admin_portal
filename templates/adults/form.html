@@ -139,7 +139,7 @@
             <div id="collapseParent" class="accordion-collapse collapse {% if form.is_parent.value %}show{% endif %}" aria-labelledby="headingParent">
               <div class="accordion-body">
                 {% if form.students %}
-                <div class="card">
+                <div class="card mb-3">
                   <div class="card-header bg-light">Associated Students</div>
                   <div class="card-body">
                     <div class="row g-3">
@@ -147,8 +147,39 @@
                     </div>
                   </div>
                 </div>
-                {% else %}
-                <p class="text-muted">Associated student management is available in the student profile or main adult list.</p>
+                {% endif %}
+
+                {% if linked_students %}
+                <div class="card">
+                  <div class="card-header bg-light">Student Relationships</div>
+                  <div class="card-body">
+                    <p class="text-muted small mb-3">Set how this adult is related to each linked student.</p>
+                    <div id="student-rel-list">
+                      {% for entry in linked_students %}
+                        <div class="list-group-item d-flex align-items-center gap-3 mb-2 p-2" data-student-id="{{ entry.student.pk }}">
+                          <div class="flex-grow-1 fw-semibold">
+                            <a href="{% url 'student_detail' entry.student.pk %}" target="_blank">{{ entry.student }}</a>
+                          </div>
+                          <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <div class="d-flex align-items-center gap-1">
+                              <label class="form-label mb-0 small">Relationship</label>
+                              <select class="form-select form-select-sm student-rel" data-student-id="{{ entry.student.pk }}">
+                                <option value="">—</option>
+                                {% for k,v in RELATIONSHIP_CHOICES %}
+                                  <option value="{{ k }}" {% if entry.rel == k %}selected{% endif %}>{{ v }}</option>
+                                {% endfor %}
+                              </select>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                              <label class="form-label mb-0 small">Specific</label>
+                              <input type="text" class="form-control form-control-sm student-specific-rel" data-student-id="{{ entry.student.pk }}" value="{{ entry.specific_rel }}" placeholder="e.g. father, stepmom" style="width: 140px;">
+                            </div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
                 {% endif %}
               </div>
             </div>
@@ -275,6 +306,35 @@
         if (isParentCb) isParentCb.addEventListener('change', updateAccordions);
         if (isMentorCb) isMentorCb.addEventListener('change', updateAccordions);
         if (isAlumniCb) isAlumniCb.addEventListener('change', updateAccordions);
+
+        // Sync student relationship hidden inputs before submit
+        var form = document.querySelector('form');
+        if (form) {
+          form.addEventListener('submit', function() {
+            // Remove existing hidden inputs
+            document.querySelectorAll('input[name^="student_rel_"],input[name^="student_specific_rel_"]').forEach(function(n){ n.remove(); });
+            // Create hidden inputs for each linked student
+            document.querySelectorAll('#student-rel-list .list-group-item').forEach(function(item) {
+              var sid = item.getAttribute('data-student-id');
+              var relSel = item.querySelector('select.student-rel');
+              var specInput = item.querySelector('input.student-specific-rel');
+              if (relSel && relSel.value) {
+                var h = document.createElement('input');
+                h.type = 'hidden';
+                h.name = 'student_rel_' + sid;
+                h.value = relSel.value;
+                form.appendChild(h);
+              }
+              if (specInput && specInput.value) {
+                var h2 = document.createElement('input');
+                h2.type = 'hidden';
+                h2.name = 'student_specific_rel_' + sid;
+                h2.value = specInput.value;
+                form.appendChild(h2);
+              }
+            });
+          });
+        }
 
         // Initial sync
         updateAccordions();

@@ -39,6 +39,7 @@
               <td>
                 {% if row.primary %}
                   <div class="fw-semibold">{{ row.primary.full_name }}</div>
+                  {% if row.primary_rel %}<span class="badge bg-secondary rounded-pill">{{ row.primary_rel|title }}</span>{% endif %}
                   <div class="mt-1">
                     {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email andrew_email=row.primary.andrew_email %}
                   </div>
@@ -49,6 +50,7 @@
               <td>
                 {% if row.secondary %}
                   <div class="fw-semibold">{{ row.secondary.full_name }}</div>
+                  {% if row.secondary_rel %}<span class="badge bg-secondary rounded-pill">{{ row.secondary_rel|title }}</span>{% endif %}
                   <div class="mt-1">
                     {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email andrew_email=row.secondary.andrew_email %}
                   </div>
@@ -57,11 +59,12 @@
                 {% endif %}
               </td>
               <td>
-                {% for p in row.others %}
+                {% for entry in row.others %}
                   <div class="mb-2">
-                    <div class="fw-semibold">{{ p.full_name }}</div>
+                    <div class="fw-semibold">{{ entry.adult.full_name }}</div>
+                    {% if entry.rel %}<span class="badge bg-secondary rounded-pill">{{ entry.rel|title }}</span>{% endif %}
                     <div class="mt-1">
-                      {% include "programs/_contact_buttons.html" with phone=p.phone_number personal_email=p.personal_email andrew_email=p.andrew_email %}
+                      {% include "programs/_contact_buttons.html" with phone=entry.adult.phone_number personal_email=entry.adult.personal_email andrew_email=entry.adult.andrew_email %}
                     </div>
                   </div>
                 {% empty %}
@@ -91,7 +94,7 @@
 
               {% if row.primary %}
                 <hr class="my-2" />
-                <div class="fw-semibold">Primary Guardian: {{ row.primary.full_name }}</div>
+                <div class="fw-semibold">Primary Guardian: {{ row.primary.full_name }}{% if row.primary_rel %} <span class="badge bg-secondary rounded-pill">{{ row.primary_rel|title }}</span>{% endif %}</div>
                 <div class="mt-1">
                   {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email andrew_email=row.primary.andrew_email %}
                 </div>
@@ -99,17 +102,17 @@
 
               {% if row.secondary %}
                 <hr class="my-2" />
-                <div class="fw-semibold">Secondary Guardian: {{ row.secondary.full_name }}</div>
+                <div class="fw-semibold">Secondary Guardian: {{ row.secondary.full_name }}{% if row.secondary_rel %} <span class="badge bg-secondary rounded-pill">{{ row.secondary_rel|title }}</span>{% endif %}</div>
                 <div class="mt-1">
                   {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email andrew_email=row.secondary.andrew_email %}
                 </div>
               {% endif %}
 
-              {% for p in row.others %}
+              {% for entry in row.others %}
                 <hr class="my-2" />
-                <div class="fw-semibold">Other Contact: {{ p.full_name }}</div>
+                <div class="fw-semibold">Other Contact: {{ entry.adult.full_name }}{% if entry.rel %} <span class="badge bg-secondary rounded-pill">{{ entry.rel|title }}</span>{% endif %}</div>
                 <div class="mt-1">
-                  {% include "programs/_contact_buttons.html" with phone=p.phone_number personal_email=p.personal_email andrew_email=p.andrew_email %}
+                  {% include "programs/_contact_buttons.html" with phone=entry.adult.phone_number personal_email=entry.adult.personal_email andrew_email=entry.adult.andrew_email %}
                 </div>
               {% endfor %}
             </div>

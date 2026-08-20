@@ -38,9 +38,9 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - `programs/` — Core app (programs, students, adults, fees, payments, sliding scale, enrollments)
 - `applications/` — Public application wizard + staff review workflow (supersedes legacy `StudentApplication`)
 - `attendance/` — Student check-in/out logic and RFID management
-- `api/` — Versioned API and key management
+- `api/` — Kiosk API views and attendance endpoints
 - `templates/` — Django templates organized by app/role
-- `audit/` — Audit log app (inspect models before assuming it's fully wired up)
+- `audit/` — Audit log app with `AuditLog` (immutable, append-only), `AuditEvent` choices, `log_event()` service, signal-based logging, `SensitiveDataViewMixin` (with program-scope tracking), and `audit/utils.py` unified query helpers
 - `portal/` — Inspect before use; may contain legacy or shared views
 
 ## Local Development
@@ -54,14 +54,16 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 | Seed mentor agreement | `python manage.py seed_mentor_agreement` |
 | Start dev server | `python manage.py runserver` |
 | Run all tests | `python manage.py test` |
+| Run audit digest | `python manage.py audit_digest --days 7` |
 | Run CI checks | `.\run_ci.ps1` (Windows) or `./run_ci.sh` (Linux) |
 | Run tests with coverage | `coverage run manage.py test --parallel; coverage combine; coverage report` |
 
 ## Data Model Summary
 
 - **Program**: Central entity with fees, features, and enrollments.
+- **SchoolDistrict**: Canonical school districts (e.g. "North Allegheny School District"). `School.district` is a nullable FK to `SchoolDistrict` (`on_delete=SET_NULL`, related name `schools`), so a district can be deleted and schools simply become unassigned. Lead Mentors manage districts from the "Manage Districts" page (`school_district_list`/create/edit/delete) linked from the Schools page. Backfill from the legacy free-text `School.district` field happened in migration `0104`.
 - **Student**: Identity, school, graduation, demographics, medical, and relationships to adults. A student is considered **inactive** once marked `graduated=True`; within a program they're inactive if their `Enrollment.active` is `False` or they've graduated. When building student dropdowns/selection lists, reuse `active_students()` / `active_students_in_program(program)` in `programs/utils.py` so inactive students stay out. On program-scoped list pages, separate inactive students into their own section (as `programs/views.py` does for the program detail, assignment, photo grid, and dues-owed views). Student↔Adult links are stored in the `AdultStudentRelationship` through model (also the source of `Student.adults` / `Adult.students`). Each student's primary/secondary parent/guardian is normalized there via the `primary_contact_relationship` / `secondary_contact_relationship` FKs; `Student.primary_contact`, `Student.secondary_contact`, `Student.primary_contact_id`, and `Student.secondary_contact_id` are **compat properties** (with setters) that keep the through row and pointer in sync. When filtering on primary/secondary in queries, use the relationship FKs (e.g. `primary_contact_relationship__adult=...`) — never the compat property names.
-- **Adult**: Unified model for Parent, Mentor, Alumni, Volunteer.
+- **Adult**: Unified model for Parent, Mentor, Alumni, Volunteer. Lead Mentors can merge duplicate parent records from the "Merge Parents" page (`parent_merge`, linked from the All Parents list). The merge transfers all student relationships, fills in missing contact fields from the source, merges role flags, and transfers linked user accounts. Merges are logged via `AuditEvent.RECORDS_MERGED`.
 - **Enrollment**: Links Student ↔ Program.
 - **Fee**: Per-Program costs.
 - **Payment**: Recorded against a Fee for a Student.
@@ -91,7 +93,6 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - **View Mixins**: Use `LeadMentorRequiredMixin`, `DynamicReadPermissionMixin`, or `DynamicWritePermissionMixin` (all in `programs/permission_views.py`). Do NOT use raw `has_perm()` checks for portal views.
 - **Object-Level Access**: `can_user_read`/`can_user_write` accept an `obj` argument for per-object checks (e.g., a Parent can only read their own students). Always pass `obj` when checking access to a specific record.
 - **Mentor Adult Access**: Mentors can only view Adults with `is_parent=True` who have a student in an active program. This is enforced in both the queryset and `can_user_read`.
-- **API Keys**: Authenticate via `ApiClientKey` in `api/auth.py`.
 - **One Lead Mentor group**: There is only `"LeadMentor"` (no space). A single membership grants access to all Lead Mentor features including application review.
 
 ## Testing Strategy and Contribution

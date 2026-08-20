@@ -128,3 +128,94 @@ class BackgroundChecksViewTests(TestCase):
         self.assertIn(resp.status_code, [200, 302])
         self.assertEqual(adult.background_checks.count(), 1)
         self.assertTrue(adult.background_checks.get(check_type="fbi").cleared)
+
+
+class BackgroundCheckStatusTagTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.student_user = User.objects.create_user(
+            username="student", password="pass12345"  # nosec B106
+        )
+        self.student = Student.objects.create(
+            user=self.student_user,
+            legal_first_name="A",
+            last_name="B",
+            date_of_birth=datetime.date(2000, 1, 1),
+        )
+
+    def test_status_lists_all_three_check_types(self):
+        from django.template import Context, Template
+
+        tpl = Template(
+            "{% load form_tags %}{% for s in student|background_check_status %}"
+            "{{ s.check_type }}:{{ s.on_file }};{% endfor %}"
+        )
+        html = tpl.render(Context({"student": self.student}))
+        for value in BackgroundCheckType.values:
+            self.assertIn(f"{value}:False;", html)
+
+    def test_status_reflects_on_file_valid_check(self):
+        from django.template import Context, Template
+
+        BackgroundCheck.objects.create(
+            student=self.student,
+            check_type=BackgroundCheckType.FBI,
+            cleared=True,
+            obtained_date=datetime.date(2022, 1, 1),
+        )
+        tpl = Template(
+            "{% load form_tags %}"
+            "{% for s in student|background_check_status %}"
+            "{{ s.check_type }}:{{ s.on_file }}:{{ s.is_valid }};"
+            "{% endfor %}"
+        )
+        html = tpl.render(Context({"student": self.student}))
+        self.assertIn("fbi:True:True;", html)
+        self.assertIn("state_police:False:False;", html)
+
+
+class StudentDetailBackgroundCheckViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from programs.models import Enrollment, Program, ProgramFeature
+
+        self.student_user = User.objects.create_user(
+            username="student", password="pass12345"  # nosec B106
+        )
+        self.student = Student.objects.create(
+            user=self.student_user,
+            legal_first_name="A",
+            last_name="B",
+            date_of_birth=datetime.date(2000, 1, 1),
+        )
+        feature, _ = ProgramFeature.objects.get_or_create(
+            key="background-checks", defaults={"name": "Background Checks"}
+        )
+        self.program = Program.objects.create(name="Test Program")
+        self.program.features.add(feature)
+        Enrollment.objects.create(student=self.student, program=self.program)
+        self.client.login(username="student", password="pass12345")  # nosec B106
+
+    def test_not_required_shows_not_needed_message(self):
+        from django.urls import reverse
+
+        self.student.date_of_birth = datetime.date(2012, 1, 1)
+        self.student.save()
+        url = reverse("student_detail", args=[self.student.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Not needed for your age")
+
+    def test_required_shows_all_three_checks_with_status(self):
+        from django.urls import reverse
+
+        url = reverse("student_detail", args=[self.student.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode()
+        for value in BackgroundCheckType.values:
+            self.assertIn(BackgroundCheckType(value).label, content, f"missing {value}")
+        self.assertContains(resp, "Missing")
+        self.assertNotContains(resp, "Not needed for your age")

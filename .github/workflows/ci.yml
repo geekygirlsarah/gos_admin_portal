@@ -14,9 +14,9 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
       with:
         python-version: '3.13'
         cache: 'pip'
@@ -36,9 +36,9 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
       with:
         python-version: '3.13'
         cache: 'pip'
@@ -54,34 +54,34 @@ jobs:
   safety:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
     - name: Ensure requirements.txt is UTF-8
       run: |
         if [ -f requirements.txt ]; then
           python3 -c "content = open('requirements.txt', 'rb').read(); open('requirements.txt', 'wb').write(content.decode('utf-16' if content.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig').encode('utf-8'))"
         fi
     - name: Security Scan (safety)
-      uses: pyupio/safety-action@v1
+      uses: pyupio/safety-action@7baf6605473beffc874c1313ddf2db085c0cacf2  # v1
       with:
         api-key: ${{ secrets.SAFETY_API_KEY }}
 
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
       with:
         fetch-depth: 0
     - name: Secret Scanning (Gitleaks)
-      uses: gitleaks/gitleaks-action@v2
+      uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   trivy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
     - name: Vulnerability Scan (Trivy)
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297  # master
       with:
         scan-type: 'fs'
         ignore-unfixed: true
@@ -107,9 +107,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
       with:
         python-version: '3.13'
         cache: 'pip'

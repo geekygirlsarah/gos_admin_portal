@@ -3,7 +3,7 @@ import logging
 from django.apps import apps
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import post_migrate, post_save, pre_save
+from django.db.models.signals import post_delete, post_migrate, post_save, pre_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
@@ -120,6 +120,27 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
                 instance.user.groups.add(group)
     except Exception:
         logger.debug("Failed to add user to Adult groups", exc_info=True)
+
+
+@receiver(post_delete, sender="programs.AdultStudentRelationship")
+def audit_guardian_removed(sender, instance, **kwargs):
+    """Emit GUARDIAN_REMOVED when a guardian/parent link is deleted."""
+    from audit.events import AuditEvent
+    from audit.service import log_event
+
+    try:
+        adult_repr = str(instance.adult) if instance.adult_id else "Unknown"
+        student_repr = str(instance.student) if instance.student_id else "Unknown"
+        log_event(
+            event=AuditEvent.GUARDIAN_REMOVED,
+            resource=instance,
+            notes=(
+                f"Guardian {adult_repr} removed from student {student_repr}. "
+                f"Relationship was: {instance.get_relationship_to_student_display()}."
+            ),
+        )
+    except Exception:
+        logger.debug("Failed to audit GUARDIAN_REMOVED", exc_info=True)
 
 
 @receiver(post_save, sender="programs.AdultStudentRelationship")

@@ -11,6 +11,7 @@ from .adults import (
     MentorUpdateView,
     ParentCreateView,
     ParentListView,
+    ParentMergeView,
     ParentUpdateView,
 )
 from .finances import (
@@ -74,8 +75,13 @@ from .programs import (
     ProgramUpdateView,
 )
 from .schools import (
+    DistrictCreateView,
+    DistrictDeleteView,
+    DistrictListView,
+    DistrictUpdateView,
     SchoolCreateView,
     SchoolListView,
+    SchoolMergeView,
     SchoolUpdateView,
 )
 from .students import (
@@ -110,6 +116,7 @@ __all__ = [
     "ParentCreateView",
     "ParentImportView",
     "ParentListView",
+    "ParentMergeView",
     "ParentUpdateView",
     "ProgramAssignmentView",
     "ProgramCreateView",
@@ -142,9 +149,14 @@ __all__ = [
     "ProgramStudentQuickCreateView",
     "ProgramStudentRemoveView",
     "ProgramUpdateView",
+    "DistrictCreateView",
+    "DistrictDeleteView",
+    "DistrictListView",
+    "DistrictUpdateView",
     "SchoolCreateView",
     "SchoolImportView",
     "SchoolListView",
+    "SchoolMergeView",
     "SchoolUpdateView",
     "SortableListViewMixin",
     "SlidingScaleApplyView",

@@ -522,8 +522,9 @@ class KioskConfigSettingsTests(TestCase):
 
 
 class KioskFirstNameTests(TestCase):
-    """Kiosk API responses should return first-name-only for students and
-    mentors, but full names for visitors."""
+    """Kiosk API tap/lookup responses should return first-name-only for
+    students and mentors, but the who-is-here screen returns full names for
+    everyone (in case of emergencies)."""
 
     def setUp(self):
         self.client = Client()
@@ -679,7 +680,7 @@ class KioskFirstNameTests(TestCase):
 
     # ── who-is-here endpoint ───────────────────────────────────────────
 
-    def test_who_is_here_student_returns_first_name(self):
+    def test_who_is_here_student_returns_full_name(self):
         self.client.cookies[self.cookie_name] = "1"
         tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         self.client.post(
@@ -691,10 +692,9 @@ class KioskFirstNameTests(TestCase):
         response = self.client.get(url)
         data = response.json()
         names = [p["name"] for p in data["people"]]
-        self.assertIn("Ada", names)
-        self.assertNotIn("Ada Lovelace", names)
+        self.assertIn("Ada Lovelace", names)
 
-    def test_who_is_here_mentor_returns_first_name(self):
+    def test_who_is_here_mentor_returns_full_name(self):
         self.client.cookies[self.cookie_name] = "1"
         tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         self.client.post(
@@ -706,8 +706,7 @@ class KioskFirstNameTests(TestCase):
         response = self.client.get(url)
         data = response.json()
         names = [p["name"] for p in data["people"]]
-        self.assertIn("Bobby", names)
-        self.assertNotIn("Bobby Martin", names)
+        self.assertIn("Bobby Martin", names)
 
     def test_who_is_here_visitor_returns_full_name(self):
         self.client.cookies[self.cookie_name] = "1"

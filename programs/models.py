@@ -473,10 +473,25 @@ class Program(models.Model):
         super().save(*args, **kwargs)
 
 
+class SchoolDistrict(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class School(models.Model):
     name = models.CharField(max_length=150, unique=True)
-    district = models.CharField(
-        max_length=150, blank=True, null=True, verbose_name="School district"
+    district = models.ForeignKey(
+        SchoolDistrict,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="schools",
+        verbose_name="School district",
     )
     street_address = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
@@ -806,22 +821,28 @@ class Student(models.Model):
         Returns a list of unique Adult objects related to this student,
         including primary, secondary, and any additional M2M adults.
         Each Adult object has an 'attached_rel' attribute representing their
-        relationship to THIS student.
+        relationship to THIS student and a 'specific_rel' attribute for the
+        free-text specific relationship (e.g. father, stepmom).
         """
         seen_ids = set()
         result = []
 
-        # Helper to get relationship string
+        # Helper to get relationship data from the through model
         rels = {}
         if self.pk:
             rels = {
-                r.adult_id: r.relationship_to_student
+                r.adult_id: (
+                    r.relationship_to_student,
+                    r.specific_relationship or "",
+                )
                 for r in self.adultstudentrelationship_set.all()
             }
 
         def add_adult(adult):
             if adult and adult.id not in seen_ids:
-                adult.attached_rel = rels.get(adult.id, "parent")
+                rel_data = rels.get(adult.id, ("parent", ""))
+                adult.attached_rel = rel_data[0]
+                adult.specific_rel = rel_data[1]
                 result.append(adult)
                 seen_ids.add(adult.id)
 

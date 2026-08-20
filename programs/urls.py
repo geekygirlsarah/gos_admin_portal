@@ -20,6 +20,10 @@ from .views import (
     AdultsListView,
     AdultUpdateView,
     AlumniListView,
+    DistrictCreateView,
+    DistrictDeleteView,
+    DistrictListView,
+    DistrictUpdateView,
     ImportDashboardView,
     MentorCreateView,
     MentorImportView,
@@ -28,6 +32,7 @@ from .views import (
     ParentCreateView,
     ParentImportView,
     ParentListView,
+    ParentMergeView,
     ParentUpdateView,
     ProgramAssignmentView,
     ProgramCreateView,
@@ -64,6 +69,7 @@ from .views import (
     SchoolCreateView,
     SchoolImportView,
     SchoolListView,
+    SchoolMergeView,
     SchoolUpdateView,
     SlidingScaleApplyView,
     SlidingScaleCreateView,
@@ -85,6 +91,7 @@ from .views import (
     StudentsBySchoolView,
     StudentUpdateView,
 )
+from .views.andrew_ids import andrew_id_management_view
 
 urlpatterns = [
     # Programs
@@ -266,6 +273,11 @@ urlpatterns = [
         name="student_attendance",
     ),
     path("parents/", login_required(ParentListView.as_view()), name="parent_list"),
+    path(
+        "parents/merge/",
+        ParentMergeView.as_view(),
+        name="parent_merge",
+    ),
     path(
         "parents/import/",
         permission_required("programs.add_adult")(ParentImportView.as_view()),
@@ -530,6 +542,38 @@ urlpatterns = [
         permission_required("programs.change_school")(SchoolUpdateView.as_view()),
         name="school_edit",
     ),
+    path(
+        "schools/merge/",
+        permission_required("programs.change_school")(SchoolMergeView.as_view()),
+        name="school_merge",
+    ),
+    # School district management
+    path(
+        "districts/",
+        login_required(DistrictListView.as_view()),
+        name="school_district_list",
+    ),
+    path(
+        "districts/new/",
+        permission_required("programs.add_schooldistrict")(
+            DistrictCreateView.as_view()
+        ),
+        name="school_district_create",
+    ),
+    path(
+        "districts/<int:pk>/edit/",
+        permission_required("programs.change_schooldistrict")(
+            DistrictUpdateView.as_view()
+        ),
+        name="school_district_edit",
+    ),
+    path(
+        "districts/<int:pk>/delete/",
+        permission_required("programs.delete_schooldistrict")(
+            DistrictDeleteView.as_view()
+        ),
+        name="school_district_delete",
+    ),
     # Settings
     path(
         "settings/",
@@ -575,5 +619,10 @@ urlpatterns = [
         "settings/agreements/",
         PortalAgreementView.as_view(),
         name="portal_agreements",
+    ),
+    path(
+        "andrew-ids/",
+        andrew_id_management_view,
+        name="andrew_id_management",
     ),
 ]

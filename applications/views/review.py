@@ -7,7 +7,7 @@ gated by the ``applications.review_application`` permission. The
 
 from __future__ import annotations
 
-import json
+import datetime
 import logging
 
 from django import forms
@@ -27,7 +27,14 @@ from premailer import transform
 
 from audit.events import AuditEvent
 from audit.service import log_event
-from programs.models import Program
+from programs.constants import (
+    GRADE_CHOICES,
+    PHONE_TYPE_CHOICES,
+    RELATIONSHIP_CHOICES,
+    STATE_CHOICES,
+    TSHIRT_SIZE_CHOICES,
+)
+from programs.models import Program, RaceEthnicity
 
 from ..forms import StaffDocumentUploadForm
 from ..models import Application, ApplicationDocumentSubmission
@@ -78,42 +85,377 @@ class DeclineForm(forms.Form):
     )
 
 
-class ApplicationDataEditForm(forms.Form):
-    """Free-form edit of the JSON `data` blob captured by the wizard.
+# ---------------------------------------------------------------------------
+# Per-field edit of the captured wizard ``data``.
+#
+# The wizard stores each step's cleaned data as a top-level key in
+# ``Application.data`` (e.g. ``step5-student``). Instead of asking lead
+# mentors to hand-edit JSON, we build a form with one field per captured
+# value, grouped by step and laid out in application order. Fields that
+# start with ``_`` (e.g. ``_existing_student_id``) are internal and are
+# preserved on save but never shown.
+# ---------------------------------------------------------------------------
 
-    Lead mentors occasionally need to fix typos on behalf of the
-    applicant (e.g. a misspelled email or wrong school name). For now we
-    expose the raw JSON; a per-field UI would be a much bigger change.
+
+_EDIT_STATE = [("", "---")] + list(STATE_CHOICES)
+_EDIT_PHONE = list(PHONE_TYPE_CHOICES)
+_EDIT_RELATIONSHIP = [("", "---")] + list(RELATIONSHIP_CHOICES)
+_EDIT_TSHIRT = [("", "---")] + list(TSHIRT_SIZE_CHOICES)
+_EDIT_GRADE = [("", "—")] + [(str(v), label) for v, label in GRADE_CHOICES]
+_CLEARANCE_INTEREST = [
+    ("", "---"),
+    ("yes", "Yes, I want to start / complete clearances."),
+    ("no", "No, not at this time."),
+]
+_CLEARANCE_STATUS = [
+    ("", "---"),
+    ("have", "I already have this clearance."),
+    ("need", "I don't have this yet — I'll need to get it."),
+]
+
+
+_STUDENT_FIELDS = [
+    {"name": "legal_first_name", "label": "Legal first name", "kind": "text"},
+    {
+        "name": "first_name",
+        "label": "Preferred first name (if different)",
+        "kind": "text",
+    },
+    {"name": "last_name", "label": "Last name", "kind": "text"},
+    {"name": "pronouns", "label": "Pronouns", "kind": "text"},
+    {"name": "date_of_birth", "label": "Date of birth", "kind": "date"},
+    {"name": "address", "label": "Address", "kind": "text"},
+    {"name": "city", "label": "City", "kind": "text"},
+    {"name": "state", "label": "State", "kind": "select", "choices": _EDIT_STATE},
+    {"name": "zip_code", "label": "Zip code", "kind": "text"},
+    {"name": "personal_email", "label": "Student's personal email", "kind": "email"},
+    {"name": "phone_number", "label": "Student's phone number", "kind": "text"},
+    {
+        "name": "phone_type",
+        "label": "Phone type",
+        "kind": "select",
+        "choices": _EDIT_PHONE,
+    },
+    {"name": "can_receive_texts", "label": "Can receive texts?", "kind": "checkbox"},
+    {
+        "name": "directory_consent",
+        "label": "OK to share name, address, and phone for directory / carpool map",
+        "kind": "checkbox",
+        "initial": True,
+    },
+    {"name": "school_name", "label": "School", "kind": "text"},
+    {
+        "name": "grade",
+        "label": "Grade (K–12)",
+        "kind": "select",
+        "choices": _EDIT_GRADE,
+    },
+    {
+        "name": "graduation_year",
+        "label": "Expected graduation year",
+        "kind": "int",
+    },
+    {"name": "race_ethnicities", "label": "Race / Ethnicity", "kind": "multi"},
+    {
+        "name": "tshirt_size",
+        "label": "T-shirt size",
+        "kind": "select",
+        "choices": _EDIT_TSHIRT,
+    },
+    {"name": "allergies", "label": "Allergies", "kind": "textarea"},
+    {
+        "name": "dietary_restrictions",
+        "label": "Dietary restrictions",
+        "kind": "textarea",
+    },
+    {"name": "medical_notes", "label": "Other medical notes", "kind": "textarea"},
+]
+
+_EXPERIENCE_FIELDS = [
+    {
+        "name": "interest_reason",
+        "label": "Why are you interested in this program this season?",
+        "kind": "textarea",
+    },
+    {
+        "name": "hoped_gains",
+        "label": "What do you hope to gain from the experience?",
+        "kind": "textarea",
+    },
+    {
+        "name": "prior_robotics_experience",
+        "label": "What prior robotics experience do you have?",
+        "kind": "textarea",
+    },
+    {
+        "name": "referral_source",
+        "label": "How did you hear about Girls of Steel Robotics?",
+        "kind": "textarea",
+    },
+]
+
+_PARENT_FIELDS = [
+    {"name": "first_name", "label": "Legal first name", "kind": "text"},
+    {
+        "name": "preferred_first_name",
+        "label": "Preferred first name (if different)",
+        "kind": "text",
+    },
+    {"name": "last_name", "label": "Last name", "kind": "text"},
+    {"name": "pronouns", "label": "Pronouns", "kind": "text"},
+    {
+        "name": "relationship_to_student",
+        "label": "Relationship to student",
+        "kind": "select",
+        "choices": _EDIT_RELATIONSHIP,
+    },
+    {
+        "name": "specific_relationship",
+        "label": "Specific relationship",
+        "kind": "text",
+    },
+    {"name": "email", "label": "Email address", "kind": "email"},
+    {"name": "address", "label": "Address", "kind": "text"},
+    {"name": "city", "label": "City", "kind": "text"},
+    {"name": "state", "label": "State", "kind": "select", "choices": _EDIT_STATE},
+    {"name": "zip_code", "label": "Zip code", "kind": "text"},
+    {"name": "phone_number", "label": "Phone number", "kind": "text"},
+    {
+        "name": "phone_type",
+        "label": "Phone type",
+        "kind": "select",
+        "choices": _EDIT_PHONE,
+    },
+    {
+        "name": "can_receive_texts",
+        "label": "Can receive texts?",
+        "kind": "checkbox",
+        "initial": True,
+    },
+    {"name": "email_updates", "label": "Receive email updates", "kind": "checkbox"},
+]
+
+_HANDOFF_FIELDS = [
+    {"name": "parent_email", "label": "Parent / guardian email", "kind": "email"},
+]
+
+_MENTOR_FIELDS = [
+    {"name": "legal_first_name", "label": "Legal first name", "kind": "text"},
+    {
+        "name": "first_name",
+        "label": "Preferred first name (if different)",
+        "kind": "text",
+    },
+    {"name": "last_name", "label": "Last name", "kind": "text"},
+    {"name": "pronouns", "label": "Pronouns", "kind": "text"},
+    {"name": "phone_number", "label": "Phone number", "kind": "text"},
+    {
+        "name": "phone_type",
+        "label": "Phone type",
+        "kind": "select",
+        "choices": _EDIT_PHONE,
+    },
+    {
+        "name": "can_receive_texts",
+        "label": "Can receive texts?",
+        "kind": "checkbox",
+        "initial": True,
+    },
+    {"name": "andrew_id", "label": "Andrew ID (if you have one)", "kind": "text"},
+    {"name": "employer", "label": "Employer / affiliation", "kind": "text"},
+    {
+        "name": "notes",
+        "label": "Why are you interested in volunteering?",
+        "kind": "textarea",
+    },
+]
+
+_CLEARANCE_INTEREST_FIELDS = [
+    {
+        "name": "interested",
+        "label": "Interested in obtaining PA child-protection clearances?",
+        "kind": "select",
+        "choices": _CLEARANCE_INTEREST,
+    },
+]
+
+_CLEARANCE_DETAIL_FIELDS = [
+    {
+        "name": "paca",
+        "label": "PA Child Abuse Clearance (PACA)",
+        "kind": "select",
+        "choices": _CLEARANCE_STATUS,
+    },
+    {
+        "name": "patch",
+        "label": "PA Criminal Record Clearance (PATCH)",
+        "kind": "select",
+        "choices": _CLEARANCE_STATUS,
+    },
+    {
+        "name": "fbi",
+        "label": "FBI criminal fingerprint check",
+        "kind": "select",
+        "choices": _CLEARANCE_STATUS,
+    },
+]
+
+# (data key, section heading, [field specs]) — in application order.
+STUDENT_SECTIONS = [
+    ("step5-student", "Student information", _STUDENT_FIELDS),
+    ("step6-experience", "Student experience", _EXPERIENCE_FIELDS),
+    ("step7-primaryparent", "Primary parent / guardian", _PARENT_FIELDS),
+    ("step8-secondaryparent", "Secondary parent / guardian", _PARENT_FIELDS),
+    ("step7_handoff", "Parent handoff", _HANDOFF_FIELDS),
+]
+
+MENTOR_SECTIONS = [
+    ("mentor_info", "Mentor information", _MENTOR_FIELDS),
+    ("mentor_clearance_interest", "Clearance interest", _CLEARANCE_INTEREST_FIELDS),
+    ("mentor_clearance_detail", "Clearance details", _CLEARANCE_DETAIL_FIELDS),
+]
+
+
+def _sections_for(application) -> list:
+    if application.applicant_type == Application.Type.MENTOR:
+        return MENTOR_SECTIONS
+    return STUDENT_SECTIONS
+
+
+class ApplicationDataEditForm(forms.Form):
+    """Per-field edit of the wizard's captured ``data`` JSON.
+
+    Renders every value the wizard captures, grouped by step and laid out
+    in application order, so lead mentors can fix typos on behalf of an
+    applicant without hand-editing JSON. Internal keys (prefixed with ``_``)
+    are preserved on save and never surfaced.
+
+    The top-level ``email`` field edits the primary contact email on the
+    Application model (separate from the email fields captured inside each
+    wizard step).
     """
 
-    data_json = forms.CharField(
-        label="Captured data (JSON)",
-        widget=forms.Textarea(
-            attrs={"class": "form-control font-monospace", "rows": 20}
-        ),
-        help_text=(
-            "Edit the JSON captured by the wizard to fix typos or other "
-            "errors. Each top-level key is a wizard step (e.g. step5-student, step6-experience). "
-            "Must be valid JSON; an object is expected at the top level."
-        ),
-    )
     email = forms.EmailField(
         label="Primary contact email",
         required=False,
         widget=forms.EmailInput(attrs={"class": "form-control"}),
     )
 
-    def clean_data_json(self):
-        raw = self.cleaned_data["data_json"] or ""
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise forms.ValidationError(f"Invalid JSON: {exc}")
-        if not isinstance(parsed, dict):
-            raise forms.ValidationError(
-                "Top-level JSON value must be an object (a dict)."
+    def __init__(self, *args, sections=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sections = list(sections)
+        for _data_key, _title, fields in self.sections:
+            for spec in fields:
+                self.fields[self._field_name(_data_key, spec["name"])] = (
+                    self._make_field(spec)
+                )
+
+    @staticmethod
+    def _field_name(data_key, field_name):
+        return f"{data_key}__{field_name}"
+
+    @staticmethod
+    def _make_field(spec):
+        kind = spec["kind"]
+        label = spec.get("label")
+        help_text = spec.get("help_text", "")
+        required = False
+        attrs = {"class": "form-control"}
+        if kind == "textarea":
+            attrs["rows"] = 3
+            field = forms.CharField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                widget=forms.Textarea(attrs=attrs),
             )
-        return parsed
+        elif kind == "email":
+            field = forms.EmailField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                widget=forms.EmailInput(attrs=attrs),
+            )
+        elif kind == "date":
+            attrs["type"] = "date"
+            field = forms.DateField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                widget=forms.DateInput(attrs=attrs, format="%Y-%m-%d"),
+            )
+        elif kind == "int":
+            field = forms.IntegerField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                widget=forms.TextInput(attrs=attrs),
+            )
+        elif kind == "select":
+            field = forms.ChoiceField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                choices=spec["choices"],
+                widget=forms.Select(attrs={"class": "form-select"}),
+            )
+        elif kind == "checkbox":
+            field = forms.BooleanField(
+                label=label,
+                required=False,
+                help_text=help_text,
+                widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            )
+        elif kind == "multi":
+            field = forms.ModelMultipleChoiceField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                queryset=RaceEthnicity.objects.all().order_by("name"),
+                widget=forms.CheckboxSelectMultiple(
+                    attrs={"class": "form-check-input"}
+                ),
+            )
+        else:  # "text"
+            field = forms.CharField(
+                label=label,
+                required=required,
+                help_text=help_text,
+                widget=forms.TextInput(attrs=attrs),
+            )
+        if spec.get("initial") is not None:
+            field.initial = spec["initial"]
+        return field
+
+    def rebuild_data(self, current_data):
+        """Rebuild ``Application.data`` from submitted fields.
+
+        Only the fields represented in this form are overwritten; any other
+        keys already stored for a step (e.g. ``_existing_student_id``) are
+        preserved. Empty sections are only written back if they already
+        existed or the mentor actually entered a value.
+        """
+        current_data = dict(current_data or {})
+        data = dict(current_data)
+        for data_key, _title, fields in self.sections:
+            existing = current_data.get(data_key)
+            step = dict(existing) if isinstance(existing, dict) else {}
+            touched = False
+            for spec in fields:
+                fname = spec["name"]
+                field_name = self._field_name(data_key, fname)
+                if field_name in self.cleaned_data:
+                    value = self.cleaned_data[field_name]
+                    if spec["kind"] == "multi":
+                        value = list(value.values_list("pk", flat=True))
+                    elif hasattr(value, "isoformat"):
+                        value = value.isoformat()
+                    step[fname] = value
+                    if value not in (None, "", [], False):
+                        touched = True
+            if existing or touched:
+                data[data_key] = step
+        return data
 
 
 class ApplicationEmailForm(forms.Form):
@@ -538,42 +880,70 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
 
 
 class ApplicationEditView(_ReviewerRequiredMixin, View):
-    """Free-form edit of the captured ``data`` JSON and primary email."""
+    """Per-field edit of the captured ``data`` and primary email."""
 
     template_name = "applications/review/edit.html"
 
     def _initial(self, application: Application):
-        return {
-            "data_json": json.dumps(application.data or {}, indent=2),
-            "email": application.email,
-        }
+        sections = _sections_for(application)
+        initial = {"email": application.email}
+        data = application.data or {}
+        for data_key, _title, fields in sections:
+            step = data.get(data_key) or {}
+            for spec in fields:
+                fname = spec["name"]
+                field_name = ApplicationDataEditForm._field_name(data_key, fname)
+                if fname in step:
+                    value = step[fname]
+                    if spec["kind"] == "date":
+                        try:
+                            value = datetime.date.fromisoformat(str(value))
+                        except (TypeError, ValueError):
+                            value = None
+                    initial[field_name] = value
+                elif spec.get("initial") is not None:
+                    initial[field_name] = spec["initial"]
+        return initial
 
-    def get(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+    def _render(self, request, application, form):
+        groups = []
+        for data_key, title, fields in form.sections:
+            bound = [
+                form[ApplicationDataEditForm._field_name(data_key, spec["name"])]
+                for spec in fields
+            ]
+            groups.append({"title": title, "fields": bound})
         return render(
             request,
             self.template_name,
             {
                 "application": application,
-                "form": ApplicationDataEditForm(initial=self._initial(application)),
+                "form": form,
+                "groups": groups,
             },
         )
+
+    def get(self, request, app_id: str):
+        application = get_object_or_404(
+            Application, application_id=(app_id or "").upper()
+        )
+        form = ApplicationDataEditForm(
+            sections=_sections_for(application),
+            initial=self._initial(application),
+        )
+        return self._render(request, application, form)
 
     def post(self, request, app_id: str):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
-        form = ApplicationDataEditForm(request.POST)
+        form = ApplicationDataEditForm(
+            request.POST, sections=_sections_for(application)
+        )
         if not form.is_valid():
-            return render(
-                request,
-                self.template_name,
-                {"application": application, "form": form},
-            )
+            return self._render(request, application, form)
         old_data = application.data
-        application.data = form.cleaned_data["data_json"]
+        application.data = form.rebuild_data(application.data)
         new_email = (form.cleaned_data.get("email") or "").strip()
         if new_email:
             application.email = new_email

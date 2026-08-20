@@ -131,24 +131,32 @@
             {% requires_bg student as requires_bg %}
             {% needs_bg student as missing_bg %}
             <div>
-                This student {% if requires_bg %}<strong>requires</strong> PA background clearances (17 or older on Sept 1 of the current academic year).{% else %}does not currently require PA background clearances.{% endif %}
+                {% if requires_bg %}
+                    {% if user.pk == student.user.pk %}<strong>You</strong> need PA background clearances (17 or older on Sept 1 of the current academic year).{% else %}This student <strong>requires</strong> PA background clearances (17 or older on Sept 1 of the current academic year).{% endif %}
+                {% else %}
+                    {% if user.pk == student.user.pk %}Not needed for your age.{% else %}Not needed for this student's age.{% endif %}
+                {% endif %}
             </div>
-            {% if requires_bg and missing_bg %}
-                <div class="alert alert-warning mt-2 mb-2">One or more clearances is missing or expired.</div>
-            {% endif %}
-            <div class="row g-3 mb-2">
-                {% for check in student.background_checks.all %}
-                <div class="col-md-4">
-                    <div class="fw-semibold">{{ check.get_check_type_display }}</div>
-                    <div>
-                        <span class="badge {% if check.is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ check.is_valid|yesno:"Valid,Not Valid" }}</span>
-                        {% if check.expiration_date %} &middot; expires {{ check.expiration_date|date:'M j, Y' }}{% endif %}
+            {% if requires_bg %}
+                {% if missing_bg %}
+                    <div class="alert alert-warning mt-2 mb-2">One or more clearances is missing or expired.</div>
+                {% endif %}
+                <div class="row g-3 mb-2">
+                    {% for item in student|background_check_status %}
+                    <div class="col-md-4">
+                        <div class="fw-semibold">{{ item.display }}</div>
+                        <div>
+                            {% if item.on_file %}
+                                <span class="badge {% if item.is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ item.is_valid|yesno:"Valid,Not Valid" }}</span>
+                                {% if item.expiration_date %} &middot; expires {{ item.expiration_date|date:'M j, Y' }}{% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">Missing</span>
+                            {% endif %}
+                        </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <div class="col-12 text-muted">No background clearances on file.</div>
-                {% endfor %}
-            </div>
+            {% endif %}
         </div>
       </div>
       {% endif %}
@@ -257,6 +265,7 @@
                         {% else %}
                           {{ p }}
                         {% endif %}
+                        {% if p.attached_rel %}<span class="badge bg-secondary rounded-pill">{{ p.attached_rel|title }}</span>{% endif %}
                         {% if not p.login_enabled %}
                           <span class="badge bg-secondary">Inactive</span>
                         {% endif %}

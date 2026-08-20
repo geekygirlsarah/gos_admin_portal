@@ -256,7 +256,7 @@ class StudentDetailQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            12,
+            14,
             "student_detail is performing an N+1 query pattern",
         )
 

@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-20
+
+### Changed
+- **Background checks are now view-only for everyone except Lead Mentors/Admins**: Parents, mentors, students, and alumni could previously edit their own (or their child's) background-check/clearance records through their profile pages. These are now read-only for everyone except Lead Mentors and admins, who are the only ones allowed to update them.
+- **Students can now see their background-check status at a glance**: On the student profile, if the student needs PA clearances, all three checks (PA State Police, PA Child Abuse, FBI) are shown with a Valid/Missing badge and expiration date. If they don't need clearances yet (based on age), a short "Not needed for your age" message is shown instead.
+
+## 2026-08-19
+
+### Added
+- **Merge duplicate parents**: On the Parents page there's now a "Merge Parents" action (Lead Mentors only). If two parent records are actually the same person (e.g. created by a duplicate import or application conversion), pick the one to keep and the one to fold in. The kept parent's contact info is preserved, any missing fields are copied over, all student relationships are transferred, and the duplicate is removed. The merge is logged in the audit trail.
+- **Manage School Districts**: Added a "Manage Districts" page (linked from the Schools page) to add, edit, and delete school districts. School districts are now proper records instead of free-text fields, so the same district name is always spelled the same way across schools. Existing district text was automatically converted to district records when this update was applied. Deleting a district removes its assignment from schools without deleting the schools themselves.
+- **Merge duplicate schools**: On the Schools page there's now a "Merge Schools" action. If two entries are actually the same school (e.g. "Plum SHS" vs "Plum Senior High School"), pick the one to keep and the one to fold in. The kept school's address/contact info is preserved, any missing fields are copied over, all students are moved to the kept school, and the duplicate is removed.
+- **Andrew ID Management Page**: A new page for Lead Mentors to manage Andrew IDs across Students and Adults. Search by name, set or clear Andrew IDs with format and uniqueness validation, and manage expiration dates and sponsors for adults. Accessible from the Lead Mentor dropdown in the navigation bar.
+
+### Changed
+- **Application "Edit captured data" is now a proper form**: Instead of editing a raw JSON blob, the application review page now shows every captured field as a labeled input, grouped by wizard step and listed in the order the applicant fills them out. This makes it easy to fix a typo without remembering the JSON structure. Works for both student/parent and mentor applications.
+
 ## 2026-08-18
 
 ### Added

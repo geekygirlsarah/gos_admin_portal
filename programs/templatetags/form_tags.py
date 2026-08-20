@@ -135,6 +135,33 @@ def needs_bg(student):
 
 
 @register.filter
+def background_check_status(student):
+    """Return the status of all three PA clearance types for a student.
+
+    Each entry is a dict with ``check_type``, ``display`` (label),
+    ``on_file`` (whether a row exists), ``is_valid``, and ``expiration_date``.
+    Types with no record on file are still listed so templates can display
+    every required clearance.
+    """
+    from programs.models import BackgroundCheckType
+
+    existing = {c.check_type: c for c in student.background_checks.all()}
+    statuses = []
+    for value in BackgroundCheckType.values:
+        check = existing.get(value)
+        statuses.append(
+            {
+                "check_type": value,
+                "display": BackgroundCheckType(value).label,
+                "on_file": check is not None,
+                "is_valid": bool(check.is_valid) if check else False,
+                "expiration_date": check.expiration_date if check else None,
+            }
+        )
+    return statuses
+
+
+@register.filter
 def get_item(dictionary, key):
     """Get an item from a dictionary by key.
     Usage: {{ my_dict|get_item:my_key }}
@@ -142,3 +169,26 @@ def get_item(dictionary, key):
     if dictionary:
         return dictionary.get(key)
     return None
+
+
+@register.filter
+def get_relationship(adult, student):
+    """Get the relationship type of an adult to a student via the
+    AdultStudentRelationship through model.
+
+    Usage: {{ adult|get_relationship:student }}
+
+    Requires that the queryset has prefetched 'adultstudentrelationship_set'
+    on the student (or adult) side to avoid N+1 queries.
+    """
+    from programs.models import AdultStudentRelationship
+
+    if not adult or not student or not adult.pk or not student.pk:
+        return ""
+    # Try the through model directly
+    try:
+        return AdultStudentRelationship.objects.get(
+            adult=adult, student=student
+        ).relationship_to_student
+    except AdultStudentRelationship.DoesNotExist:
+        return ""

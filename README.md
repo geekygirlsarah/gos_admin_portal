@@ -76,7 +76,7 @@ Typical settings for email, debug, and allowed hosts can be configured directly 
 - `ADMIN_EMAILS` — Comma-separated admin emails for error notifications
 - `DEFAULT_FROM_EMAIL` — From address for outgoing emails
 - `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` — Set to "True" (default)
-- `SECURE_HSTS_SECONDS` — HSTS max-age in seconds (default: 31536000)
+- `SECURE_HSTS_SECONDS` — HSTS max-age in seconds (default: 31536000 (365 days))
 
 ## Additional Documentation
 For detailed architectural guidance, data model summaries, and coding standards (especially for AI agents), see [AGENTS.md](AGENTS.md).

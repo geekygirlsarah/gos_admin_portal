@@ -151,18 +151,25 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label fw-bold">Person Type</label>
-            <select name="person_type" id="addPersonType" class="form-select" required onchange="toggleAddPersonFields()">
+            <select name="person_type" id="addPersonType" class="form-select" required>
               <option value="student">Student</option>
+              <option value="mentor">Mentor</option>
               <option value="visitor">Visitor</option>
             </select>
           </div>
           <div id="addStudentFields">
             <div class="mb-3">
-              <label class="form-label fw-bold">Student</label>
+              <label class="form-label fw-bold" id="addPersonLabel">Student</label>
               <select name="student_id" id="addStudentId" class="form-select">
                 <option value="">-- Select Student --</option>
                 {% for st in students %}
                 <option value="{{ st.id }}">{{ st.full_name }}</option>
+                {% endfor %}
+              </select>
+              <select name="adult_id" id="addMentorId" class="form-select" style="display:none;">
+                <option value="">-- Select Mentor --</option>
+                {% for m in mentors %}
+                <option value="{{ m.id }}">{{ m.full_name }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -203,13 +210,22 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 function toggleAddPersonFields() {
   var type = document.getElementById('addPersonType').value;
-  document.getElementById('addStudentFields').style.display = type === 'student' ? '' : 'none';
+  var isStudentOrMentor = (type === 'student' || type === 'mentor');
+  document.getElementById('addStudentFields').style.display = isStudentOrMentor ? '' : 'none';
   document.getElementById('addVisitorFields').style.display = type === 'visitor' ? '' : 'none';
+  document.getElementById('addStudentId').style.display = type === 'student' ? '' : 'none';
   document.getElementById('addStudentId').required = type === 'student';
+  document.getElementById('addMentorId').style.display = type === 'mentor' ? '' : 'none';
+  document.getElementById('addMentorId').required = type === 'mentor';
   document.getElementById('addVisitorName').required = type === 'visitor';
+  document.getElementById('addPersonLabel').textContent = type === 'student' ? 'Student' : type === 'mentor' ? 'Mentor' : '';
+  var programSelect = document.querySelector('select[name="program_id"]');
+  programSelect.disabled = type === 'mentor';
+  programSelect.required = type !== 'mentor';
 }
+document.getElementById('addPersonType').addEventListener('change', toggleAddPersonFields);
 </script>
 {% endblock %}
