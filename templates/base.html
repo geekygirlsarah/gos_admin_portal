@@ -47,12 +47,19 @@
                     </li>
                     {% endif %}
 
+
                     {% can_read user 'programs' current_program as can_view_program %}
                     {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
                         </li>
+
+                        {% if navbar_role != 'Parent' and current_program.has_feature_outreach %}
+                        <li class="nav-item">
+                            <a class="nav-link{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a>
+                        </li>
+                        {% endif %}
  
                         {% can_read user 'student_info' as can_read_students %}
                         {% if can_read_students %}

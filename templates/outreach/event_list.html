@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block title %}Outreach Events - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Outreach Events</h1>
+        {% if can_add %}
+        <a href="{% url 'outreach:event_create' program.id %}" class="btn btn-primary">Add Event</a>
+        {% endif %}
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if user_role == 'Student' and my_events %}
+        <h3>My Events</h3>
+        <div class="row mb-4">
+            {% for event in my_events %}
+                {% include "outreach/_event_card.html" %}
+            {% endfor %}
+        </div>
+        <h3>Other Events</h3>
+    {% endif %}
+
+    <div class="row">
+        {% if user_role == 'Student' %}
+            {% for event in other_events %}
+                {% include "outreach/_event_card.html" %}
+            {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-light text-center border">
+                        No other upcoming outreach events scheduled.
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            {% for event in upcoming_events %}
+                {% include "outreach/_event_card.html" %}
+            {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-light text-center border">
+                        No upcoming outreach events scheduled.
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    {% if past_events %}
+    <div class="accordion mt-5 mb-4" id="pastEventsAccordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingPast">
+                <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePast" aria-expanded="false" aria-controls="collapsePast">
+                    <span class="text-muted"><i class="bi bi-clock-history me-2"></i> Past Events ({{ past_events.count }})</span>
+                </button>
+            </h2>
+            <div id="collapsePast" class="accordion-collapse collapse" aria-labelledby="headingPast" data-bs-parent="#pastEventsAccordion">
+                <div class="accordion-body bg-light">
+                    <div class="row">
+                        {% for event in past_events %}
+                            {% include "outreach/_event_card.html" %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

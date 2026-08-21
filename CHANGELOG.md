@@ -4,7 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-20
 
+### Added
+- **Outreach Events and Student Signups**: A new community outreach system where students can sign up to lead ("champions") or help at community events. Students and mentors can create events, while champions and mentors can edit them. Mentors can also delete events. Signups include capacity limits for both champions and helpers, and students can easily cancel their signups with a confirmation prompt. The Outreach page is accessible from the program-scoped navigation bar.
+- **Program-Scoped Outreach**: Outreach events are now tied to specific programs. Mentors can enable or disable the outreach feature per program from the Program Settings, ensuring that programs like summer camps or FLL teams can stay focused while older programs can manage their outreach efforts.
+- **Outreach Dashboard Integration**: Upcoming outreach events and sign-up status are now displayed on both Student and Parent dashboards when the outreach feature is enabled for a program.
+- **Outreach Map Integration**: Outreach events now display their location address and include a link to view the location on Google Maps.
+
 ### Changed
+- **Improved Outreach List**: The outreach event list now separates events the student is signed up for ("My Events") from others. Past events are now automatically collapsed into an "Archive" section at the bottom of the page. Outreach events are now consistently sorted by start date and time.
+- **Event Card Enhancements**: Outreach event cards now display the names of students signed up as champions and helpers.
+- **Nav Bar Cleanup**: The Outreach link is now hidden for users with only the Parent role, as they can access outreach info via their dashboard.
 - **Merge Parents screen is easier to read**: Parent names on the Merge Parents page are now sorted alphabetically by first name, and each name shows the parent's ID number (e.g. "Jane Doe (42)") so you can tell duplicate records apart.
 - **More missing info is filled in when merging parents**: When merging two parent records, fields that only exist on the record being merged are now copied to the kept record — including preferred first name and emergency contact name/phone. Phone type and state are also copied when the kept parent has no phone number or address of their own (previously these looked "filled in" with defaults like "cell" and "PA" and blocked copying).
 - **Background checks are now view-only for everyone except Lead Mentors/Admins**: Parents, mentors, students, and alumni could previously edit their own (or their child's) background-check/clearance records through their profile pages. These are now read-only for everyone except Lead Mentors and admins, who are the only ones allowed to update them.
