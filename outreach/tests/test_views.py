@@ -20,7 +20,7 @@ class OutreachViewTest(TestCase):
         # Mentor
         self.mentor_user = User.objects.create_user(
             username="mentor", password="password"
-        )  #nosec B106
+        )  # nosec B106
         self.mentor_adult = Adult.objects.create(
             user=self.mentor_user, is_mentor=True, mentor_active=True
         )
@@ -28,7 +28,7 @@ class OutreachViewTest(TestCase):
         # Student
         self.student_user = User.objects.create_user(
             username="student", password="password"
-        )  #nosec B106
+        )  # nosec B106
         self.student_profile = Student.objects.create(
             user=self.student_user,
             legal_first_name="Test",
@@ -40,7 +40,7 @@ class OutreachViewTest(TestCase):
         # Parent
         self.parent_user = User.objects.create_user(
             username="parent", password="password"
-        )  #nosec B106
+        )  # nosec B106
         self.parent_adult = Adult.objects.create(user=self.parent_user, is_parent=True)
 
         self.event = OutreachEvent.objects.create(
@@ -59,22 +59,22 @@ class OutreachViewTest(TestCase):
         url = reverse("outreach:event_list", args=[self.program.id])
 
         # Student
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
         # Mentor
-        self.client.login(username="mentor", password="password")  #nosec B106
+        self.client.login(username="mentor", password="password")  # nosec B106
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
         # Parent
-        self.client.login(username="parent", password="password")  #nosec B106
+        self.client.login(username="parent", password="password")  # nosec B106
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
     def test_student_can_create_event(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_create", args=[self.program.id])
         data = {
             "name": "New Event",
@@ -99,7 +99,7 @@ class OutreachViewTest(TestCase):
         )
 
     def test_mentor_can_create_event(self):
-        self.client.login(username="mentor", password="password")  #nosec B106
+        self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse("outreach:event_create", args=[self.program.id])
         data = {
             "name": "Mentor Event",
@@ -120,13 +120,13 @@ class OutreachViewTest(TestCase):
         self.assertFalse(OutreachSignup.objects.filter(event=event).exists())
 
     def test_parent_cannot_create_event(self):
-        self.client.login(username="parent", password="password")  #nosec B106
+        self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("outreach:event_create", args=[self.program.id])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)
 
     def test_signup_helper(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_signup", args=[self.program.id, self.event.pk])
         resp = self.client.post(url, {"role": OutreachSignup.HELPER})
         self.assertEqual(resp.status_code, 302)
@@ -142,7 +142,7 @@ class OutreachViewTest(TestCase):
         OutreachSignup.objects.create(
             event=self.event, student=self.student_profile, role=OutreachSignup.HELPER
         )
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_cancel", args=[self.program.id, self.event.pk])
         resp = self.client.post(url)
         self.assertEqual(resp.status_code, 302)
@@ -156,7 +156,7 @@ class OutreachViewTest(TestCase):
         OutreachSignup.objects.create(
             event=self.event, student=self.student_profile, role=OutreachSignup.CHAMPION
         )
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_edit", args=[self.program.id, self.event.pk])
         data = {
             "name": "Updated Event",
@@ -176,7 +176,7 @@ class OutreachViewTest(TestCase):
     def test_other_student_cannot_edit_event(self):
         student2_user = User.objects.create_user(
             username="student2", password="password"
-        )  #nosec B106
+        )  # nosec B106
         Student.objects.create(
             user=student2_user,
             legal_first_name="Test2",
@@ -184,13 +184,13 @@ class OutreachViewTest(TestCase):
             school=self.school,
             graduation_year=2027,
         )
-        self.client.login(username="student2", password="password")  #nosec B106
+        self.client.login(username="student2", password="password")  # nosec B106
         url = reverse("outreach:event_edit", args=[self.program.id, self.event.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)  # Redirect to dashboard
 
     def test_mentor_can_edit_and_delete_event(self):
-        self.client.login(username="mentor", password="password")  #nosec B106
+        self.client.login(username="mentor", password="password")  # nosec B106
         # Edit
         url_edit = reverse("outreach:event_edit", args=[self.program.id, self.event.pk])
         resp = self.client.post(
@@ -219,7 +219,7 @@ class OutreachViewTest(TestCase):
         self.assertFalse(OutreachEvent.objects.filter(pk=self.event.pk).exists())
 
     def test_parent_cannot_edit_event(self):
-        self.client.login(username="parent", password="password")  #nosec B106
+        self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("outreach:event_edit", args=[self.program.id, self.event.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)
@@ -227,7 +227,7 @@ class OutreachViewTest(TestCase):
     def test_outreach_disabled_program(self):
         # Disable outreach
         self.program.features.remove(self.feature)
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_list", args=[self.program.id])
         resp = self.client.get(url)
         # In this project, 404 results in a 302 redirect to home

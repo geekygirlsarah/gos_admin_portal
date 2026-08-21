@@ -19,7 +19,7 @@ class OutreachDashboardTest(TestCase):
         # Student
         self.student_user = User.objects.create_user(
             username="student", password="password"
-        )  #nosec B106
+        )  # nosec B106
         self.student_profile = Student.objects.create(
             user=self.student_user,
             legal_first_name="Test",
@@ -34,7 +34,7 @@ class OutreachDashboardTest(TestCase):
         # Parent
         self.parent_user = User.objects.create_user(
             username="parent", password="password"
-        )  #nosec B106
+        )  # nosec B106
         self.parent_adult = Adult.objects.create(user=self.parent_user, is_parent=True)
         self.parent_adult.students.add(self.student_profile)
 
@@ -51,7 +51,7 @@ class OutreachDashboardTest(TestCase):
         )
 
     def test_student_dashboard_shows_outreach(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
@@ -64,7 +64,7 @@ class OutreachDashboardTest(TestCase):
         OutreachSignup.objects.create(
             student=self.student_profile, event=self.event, role=OutreachSignup.HELPER
         )
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
@@ -72,7 +72,7 @@ class OutreachDashboardTest(TestCase):
         self.assertContains(resp, "Signed Up")
 
     def test_parent_dashboard_shows_outreach(self):
-        self.client.login(username="parent", password="password")  #nosec B106
+        self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
@@ -83,7 +83,7 @@ class OutreachDashboardTest(TestCase):
         OutreachSignup.objects.create(
             student=self.student_profile, event=self.event, role=OutreachSignup.HELPER
         )
-        self.client.login(username="parent", password="password")  #nosec B106
+        self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
@@ -91,14 +91,14 @@ class OutreachDashboardTest(TestCase):
         self.assertContains(resp, "Going")
 
     def test_parent_nav_bar_hides_outreach(self):
-        self.client.login(username="parent", password="password")  #nosec B106
+        self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
         # Check that Outreach link is NOT in nav bar
         self.assertNotContains(resp, "Outreach</a>")
 
     def test_student_nav_bar_shows_outreach_when_program_selected(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         # On dashboard, if student has 1 program, context processor sets it
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
@@ -108,7 +108,7 @@ class OutreachDashboardTest(TestCase):
 
     def test_dashboard_respects_outreach_feature_toggle(self):
         self.program.features.remove(self.outreach_feature)
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
         self.assertNotContains(resp, "Dashboard Event")

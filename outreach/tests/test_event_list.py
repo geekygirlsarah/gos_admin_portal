@@ -18,7 +18,9 @@ class OutreachEventListTest(TestCase):
         self.program = Program.objects.create(name="Test Program")
         self.program.features.add(self.feature)
 
-        self.user = User.objects.create_user(username="student", password="password")  #nosec B106
+        self.user = User.objects.create_user(
+            username="student", password="password"
+        )  # nosec B106
         self.student = Student.objects.create(
             user=self.user,
             legal_first_name="Test",
@@ -64,7 +66,7 @@ class OutreachEventListTest(TestCase):
         )
 
     def test_event_list_separation(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_list", args=[self.program.id])
         resp = self.client.get(url)
 
@@ -83,7 +85,7 @@ class OutreachEventListTest(TestCase):
         self.assertNotIn("Active Event", past_names)
 
     def test_address_and_map_link_present(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_list", args=[self.program.id])
         resp = self.client.get(url)
 
@@ -94,7 +96,7 @@ class OutreachEventListTest(TestCase):
         )
 
     def test_accordion_present_when_past_events_exist(self):
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_list", args=[self.program.id])
         resp = self.client.get(url)
 
@@ -103,7 +105,7 @@ class OutreachEventListTest(TestCase):
 
     def test_accordion_absent_when_no_past_events(self):
         OutreachEvent.objects.filter(name="Past Event").delete()
-        self.client.login(username="student", password="password")  #nosec B106
+        self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_list", args=[self.program.id])
         resp = self.client.get(url)
 

@@ -21,6 +21,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Report what would change without saving.",
         )
+        parser.add_argument(
+            "--all-students",
+            action="store_true",
+            help="Process all students (default behavior).",
+        )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -92,7 +97,10 @@ class Command(BaseCommand):
 
         from programs.models import Student
 
-        students = Student.objects.all()
+        if options["all_students"]:
+            students = Student.objects.all()
+        else:
+            students = Student.objects.filter(id__in=app_lookup.keys())
 
         legacy_fernet = _get_legacy_fernet()
         updated = 0
