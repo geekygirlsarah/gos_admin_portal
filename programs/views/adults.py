@@ -249,39 +249,22 @@ class ParentCreateView(
     template_name = "adults/form.html"
     permission_required = "programs.add_adult"
 
+    def get_initial(self):
+        initial = super().get_initial()
+        return initial
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
         return ctx
 
     def form_valid(self, form):
-        # Ensure adults created via this view are flagged as parents
-        obj = form.save(commit=False)
-        obj.is_parent = True
-        obj.save()
-        # Save many-to-many after the object exists
-        form.save_m2m()
-        # Logging for creation with changed fields
-        user = getattr(self.request, "user", None)
-        user_repr = (
-            f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}"
-            if getattr(user, "is_authenticated", False)
-            else "anonymous"
-        )
-        for f in getattr(form, "changed_data", []) or []:
-            new = form.cleaned_data.get(f, getattr(obj, f, None))
-            forms_logger.info(
-                "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
-                "Adult",
-                obj.pk,
-                "create",
-                user_repr,
-                f,
-                self._fmt_val(None),
-                self._fmt_val(new),
-            )
+        # Ensure adults created via this view are flagged as parents if the field was hidden
+        if "is_parent" not in form.fields:
+            form.instance.is_parent = True
+        response = super().form_valid(form)
         messages.success(self.request, "Parent added successfully.")
-        return redirect("parent_list")
+        return response
 
     def get_success_url(self):
         # After creating a Parent, return to the Parents listing
@@ -333,6 +316,11 @@ class AdultCreateView(
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
         return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Adult added successfully.")
+        return response
 
     def get_success_url(self):
         return reverse("adult_list")
@@ -433,11 +421,12 @@ class MentorCreateView(
 
     def get_initial(self):
         ini = super().get_initial()
-        ini["is_mentor"] = True
         return ini
 
     def form_valid(self, form):
-        form.instance.is_mentor = True
+        # Ensure adults created via this view are flagged as mentors if the field was hidden
+        if "is_mentor" not in form.fields:
+            form.instance.is_mentor = True
         return super().form_valid(form)
 
     def get_success_url(self):
