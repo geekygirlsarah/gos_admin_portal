@@ -525,6 +525,90 @@ class MentorUpdateView(
         return reverse("mentor_edit", args=[self.object.pk])
 
 
+def _transfer_parent_relationships(keep, source):
+    """Move all of ``source``'s student relationships onto ``keep``."""
+    for rel in list(AdultStudentRelationship.objects.filter(adult=source)):
+        existing = AdultStudentRelationship.objects.filter(
+            adult=keep, student=rel.student
+        ).first()
+        if existing:
+            if not existing.specific_relationship and rel.specific_relationship:
+                existing.specific_relationship = rel.specific_relationship
+                existing.save(update_fields=["specific_relationship"])
+            Student.objects.filter(primary_contact_relationship=rel).update(
+                primary_contact_relationship=existing
+            )
+            Student.objects.filter(secondary_contact_relationship=rel).update(
+                secondary_contact_relationship=existing
+            )
+            rel.delete()
+        else:
+            rel.adult = keep
+            rel.save(update_fields=["adult"])
+
+
+def _carry_over_missing_parent_fields(keep, source):
+    """Copy fields that only ``source`` has onto ``keep``.
+
+    Returns True if ``keep`` was modified. Choice fields with model defaults
+    ("cell" for phone_type, "PA" for state) look filled even when they were
+    never actually chosen, so they are only treated as missing when the value
+    they describe (phone number / address) is missing too.
+    """
+    keep_had_phone = bool(keep.phone_number)
+    keep_had_address = bool(keep.address or keep.city)
+
+    carryover_fields = [
+        "personal_email",
+        "phone_number",
+        "address",
+        "city",
+        "zip_code",
+        "pronouns",
+        "can_receive_texts",
+        "preferred_first_name",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+    ]
+    changed = False
+    for field in carryover_fields:
+        keep_val = getattr(keep, field)
+        source_val = getattr(source, field)
+        if not keep_val and source_val:
+            setattr(keep, field, source_val)
+            changed = True
+
+    if not keep_had_phone and source.phone_type:
+        keep.phone_type = source.phone_type
+        changed = True
+    if not keep_had_address and source.address and source.state:
+        keep.state = source.state
+        changed = True
+
+    return changed
+
+
+def _merge_parent_role_flags(keep, source):
+    """OR together the role flags. Returns True if ``keep`` was modified."""
+    changed = False
+    for flag in ("is_parent", "is_mentor", "is_alumni"):
+        if getattr(source, flag) and not getattr(keep, flag):
+            setattr(keep, flag, True)
+            changed = True
+    return changed
+
+
+def _transfer_parent_user_account(keep, source):
+    """Move ``source``'s linked user account to ``keep`` if it has none."""
+    if keep.user_id or not source.user_id:
+        return False
+    source_user = source.user
+    source.user = None
+    source.save(update_fields=["user"])
+    keep.user = source_user
+    return True
+
+
 class ParentMergeView(LeadMentorRequiredMixin, FormView):
     """Merge two parent/adult records that represent the same person.
 
@@ -539,7 +623,9 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["parents"] = list(
-            active_parents().prefetch_related(
+            active_parents()
+            .order_by("first_name", "last_name")
+            .prefetch_related(
                 "students__school",
                 "students__enrollment_set__program",
                 "adultstudentrelationship_set",
@@ -552,57 +638,10 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
         source = form.cleaned_data["source"]
 
         with transaction.atomic():
-            source_rels = AdultStudentRelationship.objects.filter(adult=source)
-            for rel in list(source_rels):
-                existing = AdultStudentRelationship.objects.filter(
-                    adult=keep, student=rel.student
-                ).first()
-                if existing:
-                    if not existing.specific_relationship and rel.specific_relationship:
-                        existing.specific_relationship = rel.specific_relationship
-                        existing.save(update_fields=["specific_relationship"])
-                    Student.objects.filter(primary_contact_relationship=rel).update(
-                        primary_contact_relationship=existing
-                    )
-                    Student.objects.filter(secondary_contact_relationship=rel).update(
-                        secondary_contact_relationship=existing
-                    )
-                    rel.delete()
-                else:
-                    rel.adult = keep
-                    rel.save(update_fields=["adult"])
-
-            carryover_fields = [
-                "personal_email",
-                "phone_number",
-                "phone_type",
-                "address",
-                "city",
-                "state",
-                "zip_code",
-                "pronouns",
-                "can_receive_texts",
-            ]
-            changed = False
-            for field in carryover_fields:
-                keep_val = getattr(keep, field)
-                source_val = getattr(source, field)
-                if not keep_val and source_val:
-                    setattr(keep, field, source_val)
-                    changed = True
-
-            for flag in ("is_parent", "is_mentor", "is_alumni"):
-                if getattr(source, flag) and not getattr(keep, flag):
-                    setattr(keep, flag, True)
-                    changed = True
-
-            if not keep.user_id and source.user_id:
-                source_user = source.user
-                source.user = None
-                source.save(update_fields=["user"])
-                keep.user = source_user
-                changed = True
-
+            _transfer_parent_relationships(keep, source)
+            changed = _carry_over_missing_parent_fields(keep, source)
+            changed = _merge_parent_role_flags(keep, source) or changed
+            changed = _transfer_parent_user_account(keep, source) or changed
             if changed:
                 keep.save()
 

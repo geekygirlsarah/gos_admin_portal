@@ -65,6 +65,23 @@ class ParentMergeTest(TestCase):
         self.assertContains(response, "Jane")
         self.assertContains(response, "Janet")
 
+    def test_merge_page_orders_parents_by_first_then_last_name(self):
+        zoe = self._parent("Zoe", "Adams")
+        alice = self._parent("Alice", "Zephyr")
+        mia = self._parent("Mia", "Brown")
+
+        response = self.client.get(reverse("parent_merge"))
+
+        parents = list(response.context["parents"])
+        self.assertEqual([p.pk for p in parents], [alice.pk, mia.pk, zoe.pk])
+
+    def test_merge_page_shows_parent_id_next_to_name(self):
+        p1 = self._parent("Jane", "Doe")
+
+        response = self.client.get(reverse("parent_merge"))
+
+        self.assertContains(response, f"Jane Doe ({p1.pk})")
+
     # --- Core merge tests ---
 
     def test_merge_reassigns_relationships_and_deletes_source(self):
@@ -117,6 +134,70 @@ class ParentMergeTest(TestCase):
         keep.refresh_from_db()
         self.assertEqual(keep.phone_number, "555-1234")
         self.assertEqual(keep.city, "Pittsburgh")
+
+    def test_merge_fills_all_missing_contact_fields_from_source(self):
+        keep = self._parent("Jane", "Doe")
+        source = self._parent(
+            "Janet",
+            "Doe",
+            personal_email="janet@example.com",
+            phone_number="555-5678",
+            phone_type="home",
+            address="123 Main St",
+            city="Pittsburgh",
+            state="CA",
+            zip_code="15201",
+            pronouns="she/her",
+            can_receive_texts=True,
+        )
+
+        self.client.post(
+            reverse("parent_merge"),
+            {"keep": keep.pk, "source": source.pk},
+        )
+
+        keep.refresh_from_db()
+        self.assertEqual(keep.personal_email, "janet@example.com")
+        self.assertEqual(keep.phone_number, "555-5678")
+        self.assertEqual(keep.phone_type, "home")
+        self.assertEqual(keep.address, "123 Main St")
+        self.assertEqual(keep.city, "Pittsburgh")
+        self.assertEqual(keep.state, "CA")
+        self.assertEqual(keep.zip_code, "15201")
+        self.assertEqual(keep.pronouns, "she/her")
+        self.assertTrue(keep.can_receive_texts)
+
+    def test_merge_copies_missing_emergency_contact_and_preferred_name(self):
+        keep = self._parent("Jane", "Doe")
+        source = self._parent(
+            "Janet",
+            "Doe",
+            preferred_first_name="Jan",
+            emergency_contact_name="Bob Doe",
+            emergency_contact_phone="555-4321",
+        )
+
+        self.client.post(
+            reverse("parent_merge"),
+            {"keep": keep.pk, "source": source.pk},
+        )
+
+        keep.refresh_from_db()
+        self.assertEqual(keep.preferred_first_name, "Jan")
+        self.assertEqual(keep.emergency_contact_name, "Bob Doe")
+        self.assertEqual(keep.emergency_contact_phone, "555-4321")
+
+    def test_merge_does_not_overwrite_existing_emergency_contact(self):
+        keep = self._parent("Jane", "Doe", emergency_contact_name="Existing Name")
+        source = self._parent("Janet", "Doe", emergency_contact_name="Source Name")
+
+        self.client.post(
+            reverse("parent_merge"),
+            {"keep": keep.pk, "source": source.pk},
+        )
+
+        keep.refresh_from_db()
+        self.assertEqual(keep.emergency_contact_name, "Existing Name")
 
     def test_cannot_merge_parent_into_itself(self):
         keep = self._parent("Jane", "Doe")
