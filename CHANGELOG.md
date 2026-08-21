@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-21
+
+### Changed
+- **Smart Sorting for Adults**: All adult list views (Parents, Mentors, Alumni, and All Adults) now sort by first name then last name, and prioritize preferred first names over legal names. This same smart sorting is also used in the parent merge tool and student profile dropdowns to keep names consistent across the portal.
+- **Improved RFID Management Search**: Searching for mentors on the RFID management page now includes preferred names, making it easier to find and assign cards to mentors who go by a different name.
+
 ## 2026-08-20
 
 ### Added

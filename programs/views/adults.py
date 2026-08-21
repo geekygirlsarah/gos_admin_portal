@@ -4,7 +4,8 @@ from django.contrib.auth.mixins import (
     PermissionRequiredMixin,
 )
 from django.db import transaction
-from django.db.models.functions import Lower
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
@@ -59,7 +60,10 @@ class AdultsListView(
     section = "adult_info"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "email": Lower("personal_email"),
         "phone": "phone_number",
         "login_enabled": "login_enabled",
@@ -110,7 +114,10 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "parents"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "email": Lower("personal_email"),
         "phone": "phone_number",
     }
@@ -157,7 +164,10 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "mentors"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "role": "role",
         "mentor_active": "mentor_active",
     }
@@ -198,7 +208,10 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "alumni"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "email": Lower("personal_email"),
         "phone": "phone_number",
         "college": Lower("college"),

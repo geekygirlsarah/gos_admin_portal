@@ -679,6 +679,7 @@ def rfid_management_view(request):
             Adult.objects.filter(is_mentor=True)
             .filter(
                 Q(first_name__icontains=search_query)
+                | Q(preferred_first_name__icontains=search_query)
                 | Q(last_name__icontains=search_query)
             )
             .prefetch_related("rfid_cards")

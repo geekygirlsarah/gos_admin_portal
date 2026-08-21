@@ -506,13 +506,22 @@ class ParentMergeForm(forms.Form):
     """
 
     keep = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         widget=forms.RadioSelect,
     )
     source = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         widget=forms.RadioSelect,
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs_adults = Adult.objects.filter(is_parent=True).order_by(
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        )
+        self.fields["keep"].queryset = qs_adults
+        self.fields["source"].queryset = qs_adults
 
     def clean(self):
         cleaned = super().clean()
