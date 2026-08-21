@@ -1,7 +1,12 @@
 {% extends "base.html" %}
+{% load static %}
 {% load form_tags %}
 
 {% block title %}Outreach Events - Girls of Steel Portal{% endblock %}
+
+{% block extra_head %}
+<link href="{% static 'css/dual-listbox.css' %}" rel="stylesheet">
+{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -75,5 +80,60 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Manage Signups Modal -->
+    <div class="modal fade" id="manageSignupsModal" tabindex="-1" aria-labelledby="manageSignupsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content" id="manageSignupsModalContent">
+                <div class="modal-body text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dual-listbox.js' %}" nonce="{{ request.csp_nonce }}"></script>
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const manageSignupsModal = new bootstrap.Modal(document.getElementById('manageSignupsModal'));
+    const modalContent = document.getElementById('manageSignupsModalContent');
+    const defaultContent = modalContent.innerHTML;
+
+    document.querySelectorAll('.manage-signups-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const url = this.getAttribute('data-url');
+            
+            // Show modal with spinner
+            modalContent.innerHTML = defaultContent;
+            manageSignupsModal.show();
+            
+            // Load content
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html;
+                    if (typeof initDualListbox === 'function') {
+                        initDualListbox();
+                    }
+                })
+                .catch(err => {
+                    modalContent.innerHTML = `
+                        <div class="modal-header">
+                            <h5 class="modal-title">Error</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger">Failed to load signup management content. Please try again.</div>
+                        </div>
+                    `;
+                });
+        });
+    });
+});
+</script>
 {% endblock %}

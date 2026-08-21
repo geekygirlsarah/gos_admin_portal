@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-21
 
+### Added
+- **Manual Outreach Signup Management**: Mentors and Lead Mentors can now manually add or remove students as champions or helpers for an outreach event. A new "Sign-ups" button on each event card opens a modal with a dual-list interface, making it easy to manage large groups of students while respecting event capacity limits and role exclusivity.
+
+### Fixed
+- **Outreach Sign-ups Button**: Fixed the "Sign-ups" button on outreach event cards not responding when clicked. The issue was due to the JavaScript being placed in an incorrect template block and missing security nonces.
+- **Visitor Management Fixes**: Corrected template block names and added security nonces to the Visitor Management tool to ensure consistent behavior across all portal features.
+
 ### Changed
 - **Smart Sorting for Adults**: All adult list views (Parents, Mentors, Alumni, and All Adults) now sort by first name then last name, and prioritize preferred first names over legal names. This same smart sorting is also used in the parent merge tool and student profile dropdowns to keep names consistent across the portal.
 - **Improved RFID Management Search**: Searching for mentors on the RFID management page now includes preferred names, making it easier to find and assign cards to mentors who go by a different name.

@@ -8,7 +8,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
-from outreach.forms import OutreachEventForm
+from outreach.forms import OutreachEventForm, OutreachManageSignupsForm
 from outreach.models import OutreachEvent, OutreachSignup
 from programs.models import Program
 from programs.permission_views import can_user_delete, can_user_write, get_user_role
@@ -194,5 +194,49 @@ class OutreachEventCancelView(LoginRequiredMixin, OutreachProgramMixin, View):
             messages.error(request, "You are not signed up for this event.")
         except AttributeError:
             messages.error(request, "Only students can cancel signups.")
+
+        return redirect("outreach:event_list", program_id=self.program.id)
+
+
+class OutreachEventManageSignupsView(
+    LoginRequiredMixin, OutreachProgramMixin, DynamicWritePermissionMixin, View
+):
+    section = "outreach"
+
+    def get_object(self):
+        return get_object_or_404(
+            OutreachEvent, pk=self.kwargs.get("pk"), program=self.program
+        )
+
+    def get(self, request, program_id, pk):
+        event = self.get_object()
+        form = OutreachManageSignupsForm(event=event)
+        return render(
+            request,
+            "outreach/_manage_signups_modal_content.html",
+            {
+                "event": event,
+                "form": form,
+                "program": self.program,
+            },
+        )
+
+    def post(self, request, program_id, pk):
+        event = self.get_object()
+        form = OutreachManageSignupsForm(request.POST, event=event)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Signups for {event.name} updated successfully.")
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(
+                        request,
+                        (
+                            f"{field.capitalize()}: {error}"
+                            if field != "__all__"
+                            else error
+                        ),
+                    )
 
         return redirect("outreach:event_list", program_id=self.program.id)

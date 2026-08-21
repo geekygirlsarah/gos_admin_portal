@@ -17,4 +17,9 @@ urlpatterns = [
     path(
         "<int:pk>/cancel/", views.OutreachEventCancelView.as_view(), name="event_cancel"
     ),
+    path(
+        "<int:pk>/manage-signups/",
+        views.OutreachEventManageSignupsView.as_view(),
+        name="event_manage_signups",
+    ),
 ]
