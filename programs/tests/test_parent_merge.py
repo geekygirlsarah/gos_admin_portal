@@ -4,11 +4,7 @@ from django.urls import reverse
 
 from audit.events import AuditEvent
 from audit.models import AuditLog
-from programs.models import (
-    Adult,
-    AdultStudentRelationship,
-    Student,
-)
+from programs.models import Adult, AdultStudentRelationship, Student
 
 
 class ParentMergeTest(TestCase):

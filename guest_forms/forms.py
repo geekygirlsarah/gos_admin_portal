@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import (
-    EmergencyContactRelationship,
-    GuestForm,
-    GuestFormSubmission,
-)
+from .models import EmergencyContactRelationship, GuestForm, GuestFormSubmission
 
 
 class GuestFormForm(forms.ModelForm):

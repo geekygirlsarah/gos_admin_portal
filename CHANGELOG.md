@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Smart Sorting for Adults**: All adult list views (Parents, Mentors, Alumni, and All Adults) now sort by first name then last name, and prioritize preferred first names over legal names. This same smart sorting is also used in the parent merge tool and student profile dropdowns to keep names consistent across the portal.
 - **Improved RFID Management Search**: Searching for mentors on the RFID management page now includes preferred names, making it easier to find and assign cards to mentors who go by a different name.
+- **Consistent Adult Redirections**: Saving or canceling an adult, parent, or mentor record now correctly redirects you back to your starting page (e.g., "All Adults" or "Mentors") instead of jumping to a default role page.
 
 ## 2026-08-20
 

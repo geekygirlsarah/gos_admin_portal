@@ -1,5 +1,6 @@
 from django.db import migrations
 
+
 def add_outreach_feature(apps, schema_editor):
     ProgramFeature = apps.get_model("programs", "ProgramFeature")
     ProgramFeature.objects.get_or_create(
@@ -11,9 +12,11 @@ def add_outreach_feature(apps, schema_editor):
         },
     )
 
+
 def remove_outreach_feature(apps, schema_editor):
     # Pass on reverse to avoid removing admin-created rows
     pass
+
 
 class Migration(migrations.Migration):
     dependencies = [

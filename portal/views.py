@@ -64,13 +64,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         )
                     if e.has_outreach:
                         from outreach.models import OutreachEvent
+
                         today = timezone.now().date()
                         e.upcoming_outreach = OutreachEvent.objects.filter(
                             program=e.program, start_date__gte=today
                         ).order_by("start_date", "start_time")[:3]
                         # Attach whether the student is signed up for these events
                         for event in e.upcoming_outreach:
-                            event.user_signup = event.signups.filter(student=student).first()
+                            event.user_signup = event.signups.filter(
+                                student=student
+                            ).first()
 
                     active_enrollments.append(e)
                 else:
@@ -124,13 +127,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             )
                         if e.has_outreach:
                             from outreach.models import OutreachEvent
+
                             today = timezone.now().date()
                             e.upcoming_outreach = OutreachEvent.objects.filter(
                                 program=e.program, start_date__gte=today
                             ).order_by("start_date", "start_time")[:3]
                             # Attach whether THIS child is signed up
                             for event in e.upcoming_outreach:
-                                event.user_signup = event.signups.filter(student=s).first()
+                                event.user_signup = event.signups.filter(
+                                    student=s
+                                ).first()
 
                         row = {"enrollment": e, "balance": balance}
                         if e.program.status == "Active" and e.active:

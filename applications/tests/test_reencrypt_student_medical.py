@@ -29,7 +29,7 @@ def _write_encrypted(student, plaintext_fields, fernet_instance):
         params.append(fernet_instance.encrypt(plaintext.encode()).decode())
     params.append(student.pk)
 
-    sql = f"UPDATE programs_student SET {', '.join(set_clauses)} WHERE id = %s"  # nosec B608
+    sql = f"UPDATE programs_student SET {', '.join(set_clauses)} WHERE id = %s"  #nosec B608
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
     student.refresh_from_db()

@@ -16,13 +16,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import strip_tags
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    ListView,
-    UpdateView,
-    View,
-)
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from premailer import transform
 
 from audit.events import AuditEvent
@@ -55,10 +49,7 @@ from ..permission_views import (
     can_user_write,
     get_user_role,
 )
-from ..utils import (
-    get_safe_url,
-    redirect_back,
-)
+from ..utils import get_safe_url, redirect_back
 
 cssutils.log.setLevel(logging.WARNING)
 

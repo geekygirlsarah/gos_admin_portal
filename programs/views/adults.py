@@ -1,31 +1,17 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import (
-    LoginRequiredMixin,
-    PermissionRequiredMixin,
-)
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db import transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    FormView,
-    ListView,
-    UpdateView,
-)
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
 from audit.mixins import SensitiveDataViewMixin
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..forms import AdultForm, ParentMergeForm
-from ..models import (
-    Adult,
-    AdultStudentRelationship,
-    Program,
-    Student,
-)
+from ..models import Adult, AdultStudentRelationship, Program, Student
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
@@ -280,7 +266,11 @@ class ParentCreateView(
         return response
 
     def get_success_url(self):
-        # After creating a Parent, return to the Parents listing
+        # After creating a Parent, return to the Parents listing or the 'next' URL
+        next_url = self.request.GET.get("next")
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("parent_list")
 
 
@@ -310,7 +300,7 @@ class ParentUpdateView(
         safe_url = get_safe_url(self.request, next_url)
         if safe_url:
             return safe_url
-        return reverse("parent_edit", args=[self.object.pk])
+        return reverse("parent_list")
 
 
 class AdultCreateView(
@@ -336,6 +326,10 @@ class AdultCreateView(
         return response
 
     def get_success_url(self):
+        next_url = self.request.GET.get("next")
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("adult_list")
 
 
@@ -443,6 +437,10 @@ class MentorCreateView(
         return super().form_valid(form)
 
     def get_success_url(self):
+        next_url = self.request.GET.get("next")
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("mentor_list")
 
 
@@ -524,7 +522,7 @@ class MentorUpdateView(
         safe_url = get_safe_url(self.request, next_url)
         if safe_url:
             return safe_url
-        return reverse("mentor_edit", args=[self.object.pk])
+        return reverse("mentor_list")
 
 
 def _transfer_parent_relationships(keep, source):

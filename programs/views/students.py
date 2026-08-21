@@ -1,42 +1,25 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import (
-    LoginRequiredMixin,
-    PermissionRequiredMixin,
-)
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    ListView,
-    UpdateView,
-    View,
-)
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from audit.mixins import SensitiveDataViewMixin
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..forms import StudentForm
-from ..models import (
-    Adult,
-    AdultStudentRelationship,
-    Program,
-    Student,
-)
+from ..models import Adult, AdultStudentRelationship, Program, Student
 from ..permission_views import (
     LeadMentorRequiredMixin,
     MentorOrLeadMentorRequiredMixin,
     PassUserToFormMixin,
     get_user_role,
 )
-from ..utils import (
-    get_safe_url,
-    redirect_back,
-)
+from ..utils import get_safe_url, redirect_back
 from .mixins import (
     BackgroundChecksInlineMixin,
     DynamicPermissionMixin,

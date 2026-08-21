@@ -2,10 +2,7 @@
 
 from django import template
 
-from programs.utils import (
-    calculate_grade,
-    format_grade,
-)
+from programs.utils import calculate_grade, format_grade
 
 register = template.Library()
 

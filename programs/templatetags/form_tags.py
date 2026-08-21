@@ -193,6 +193,7 @@ def get_relationship(adult, student):
     except AdultStudentRelationship.DoesNotExist:
         return ""
 
+
 @register.filter
 def multiply(value, arg):
     try:

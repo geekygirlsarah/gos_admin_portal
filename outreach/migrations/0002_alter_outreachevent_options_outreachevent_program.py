@@ -7,18 +7,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('outreach', '0001_initial'),
-        ('programs', '0104_school_district'),
+        ("outreach", "0001_initial"),
+        ("programs", "0104_school_district"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='outreachevent',
-            options={'ordering': ['start_date', 'start_time']},
+            name="outreachevent",
+            options={"ordering": ["start_date", "start_time"]},
         ),
         migrations.AddField(
-            model_name='outreachevent',
-            name='program',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='outreach_events', to='programs.program'),
+            model_name="outreachevent",
+            name="program",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="outreach_events",
+                to="programs.program",
+            ),
         ),
     ]

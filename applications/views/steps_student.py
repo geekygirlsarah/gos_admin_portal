@@ -28,11 +28,7 @@ from ..forms import (
     StudentExperienceForm,
     StudentInfoForm,
 )
-from ..models import (
-    Application,
-    ApplicationDocumentSubmission,
-    OtpVerifyResult,
-)
+from ..models import Application, ApplicationDocumentSubmission, OtpVerifyResult
 from ..rate_limiting import check_otp_send_limit, check_otp_verify_limit
 from ..services import (
     adult_to_prefill,

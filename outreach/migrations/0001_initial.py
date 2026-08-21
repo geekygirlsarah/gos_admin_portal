@@ -9,37 +9,88 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('programs', '0104_school_district'),
+        ("programs", "0104_school_district"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='OutreachEvent',
+            name="OutreachEvent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255)),
-                ('location_name', models.CharField(max_length=255)),
-                ('location_address', models.CharField(max_length=255)),
-                ('start_date', models.DateField()),
-                ('start_time', models.TimeField()),
-                ('end_date', models.DateField(blank=True, help_text='Optional for multi-day events', null=True)),
-                ('end_time', models.TimeField()),
-                ('description', models.TextField(blank=True)),
-                ('max_champions', models.PositiveIntegerField(default=1, verbose_name='Number of champions')),
-                ('max_helpers', models.PositiveIntegerField(default=5, verbose_name='Number of signups')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                ("location_name", models.CharField(max_length=255)),
+                ("location_address", models.CharField(max_length=255)),
+                ("start_date", models.DateField()),
+                ("start_time", models.TimeField()),
+                (
+                    "end_date",
+                    models.DateField(
+                        blank=True, help_text="Optional for multi-day events", null=True
+                    ),
+                ),
+                ("end_time", models.TimeField()),
+                ("description", models.TextField(blank=True)),
+                (
+                    "max_champions",
+                    models.PositiveIntegerField(
+                        default=1, verbose_name="Number of champions"
+                    ),
+                ),
+                (
+                    "max_helpers",
+                    models.PositiveIntegerField(
+                        default=5, verbose_name="Number of signups"
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='OutreachSignup',
+            name="OutreachSignup",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('role', models.CharField(choices=[('champion', 'Champion'), ('helper', 'Helper')], max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('event', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='signups', to='outreach.outreachevent')),
-                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='outreach_signups', to='programs.student')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[("champion", "Champion"), ("helper", "Helper")],
+                        max_length=20,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "event",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="signups",
+                        to="outreach.outreachevent",
+                    ),
+                ),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="outreach_signups",
+                        to="programs.student",
+                    ),
+                ),
             ],
             options={
-                'unique_together': {('student', 'event')},
+                "unique_together": {("student", "event")},
             },
         ),
     ]

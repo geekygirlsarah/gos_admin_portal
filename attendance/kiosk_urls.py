@@ -1,9 +1,6 @@
 from django.urls import path
 
-from .kiosk_views import (
-    kiosk_index,
-    kiosk_signin,
-)
+from .kiosk_views import kiosk_index, kiosk_signin
 
 urlpatterns = [
     path("", kiosk_index, name="kiosk_index"),

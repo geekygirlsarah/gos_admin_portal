@@ -18,11 +18,7 @@ from .balances import (
     program_overlaps_sliding_window,
 )
 from .geocoding import normalize_address, resolve_address_points
-from .grades import (
-    calculate_grade,
-    calculate_graduation_year,
-    format_grade,
-)
+from .grades import calculate_grade, calculate_graduation_year, format_grade
 from .images import normalize_image_field
 from .imports import (
     get_academic_year_ending,
