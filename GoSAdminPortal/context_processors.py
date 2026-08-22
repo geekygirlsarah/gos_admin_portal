@@ -1,6 +1,6 @@
 import re
 
-from programs.models import Adult, Enrollment, Program
+from programs.models import Adult, Enrollment, Program, Student
 from programs.permission_views import get_user_role
 
 
