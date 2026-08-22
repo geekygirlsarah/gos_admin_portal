@@ -76,6 +76,15 @@ class OutreachViewTest(TestCase):
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
+    def test_create_event_page_inline_script_has_csp_nonce(self):
+        # The "Add Another Shift" button relies on an inline script; it must
+        # carry the CSP nonce or the browser blocks it (see CSP header).
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = reverse("outreach:event_create", args=[self.program.id])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '<script nonce="')
+
     def test_student_can_create_event(self):
         self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_create", args=[self.program.id])

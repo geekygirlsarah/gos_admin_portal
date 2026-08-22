@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-22
+
+### Fixed
+- **"Add Another Shift" Button on Outreach Event Form**: Fixed the "Add Another Shift" button on the outreach event create/edit form not responding when clicked. The issue was a missing security nonce on the button's script, the same class of issue previously fixed for the outreach Sign-ups button and Visitor Management tool.
+
 ## 2026-08-21
 
 ### Added
