@@ -16,6 +16,7 @@ from outreach.forms import (
     OutreachShiftFormSet,
 )
 from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
+from outreach.utils import compute_outreach_stats
 from programs.models import Program
 from programs.permission_views import can_user_delete, can_user_write, get_user_role
 from programs.views.mixins import (
@@ -106,18 +107,7 @@ class OutreachEventListView(
 
                 # Add outreach stats, credited based on the specific shift
                 # signed up for (not the whole event's duration).
-                past_signups = [s for s in student_signups if s.shift.is_past]
-                upcoming_signups = [s for s in student_signups if not s.shift.is_past]
-
-                context["championed_count"] = sum(
-                    1 for s in student_signups if s.role == OutreachSignup.CHAMPION
-                )
-                context["total_outreach_hours"] = sum(
-                    s.shift.duration_hours for s in past_signups
-                )
-                context["pending_outreach_hours"] = sum(
-                    s.shift.duration_hours for s in upcoming_signups
-                )
+                context.update(compute_outreach_stats(student_signups))
             except AttributeError:
                 pass
 

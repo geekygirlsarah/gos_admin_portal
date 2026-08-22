@@ -63,26 +63,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             student, e.program
                         )
                     if e.has_outreach:
-                        from outreach.models import OutreachEvent, OutreachSignup
+                        from outreach.utils import get_student_outreach_stats
 
-                        today = timezone.now().date()
-                        outreach_events = OutreachEvent.objects.filter(
-                            program=e.program
-                        ).prefetch_related("shifts")
-                        upcoming_outreach = sorted(
-                            (
-                                ev
-                                for ev in outreach_events
-                                if ev.start_date and ev.start_date >= today
-                            ),
-                            key=lambda ev: (ev.start_date, ev.start_time),
+                        e.outreach_stats = get_student_outreach_stats(
+                            student, e.program
                         )
-                        e.upcoming_outreach = upcoming_outreach[:3]
-                        # Attach whether the student is signed up for these events
-                        for event in e.upcoming_outreach:
-                            event.user_signup = OutreachSignup.objects.filter(
-                                shift__event=event, student=student
-                            ).first()
 
                     active_enrollments.append(e)
                 else:
@@ -141,7 +126,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             outreach_events = OutreachEvent.objects.filter(
                                 program=e.program
                             ).prefetch_related("shifts")
-                            upcoming_outreach = sorted(
+                            upcoming_events = sorted(
                                 (
                                     ev
                                     for ev in outreach_events
@@ -149,12 +134,30 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                                 ),
                                 key=lambda ev: (ev.start_date, ev.start_time),
                             )
-                            e.upcoming_outreach = upcoming_outreach[:3]
-                            # Attach whether THIS child is signed up
-                            for event in e.upcoming_outreach:
-                                event.user_signup = OutreachSignup.objects.filter(
-                                    shift__event=event, student=s
-                                ).first()
+                            # Show events this child already signed up for in
+                            # full, plus a couple of others to encourage
+                            # signing up (per program, so it stays capped even
+                            # with many programs/events).
+                            signed_up_event_ids = set(
+                                OutreachSignup.objects.filter(
+                                    student=s, shift__event__program=e.program
+                                ).values_list("shift__event_id", flat=True)
+                            )
+                            signed_up = [
+                                ev
+                                for ev in upcoming_events
+                                if ev.id in signed_up_event_ids
+                            ]
+                            suggested = [
+                                ev
+                                for ev in upcoming_events
+                                if ev.id not in signed_up_event_ids
+                            ][:2]
+                            for event in signed_up:
+                                event.user_signup = True
+                            for event in suggested:
+                                event.user_signup = False
+                            e.outreach_highlights = signed_up + suggested
 
                         row = {"enrollment": e, "balance": balance}
                         if e.program.status == "Active" and e.active:
