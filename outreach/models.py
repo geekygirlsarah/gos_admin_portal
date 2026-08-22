@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from programs.models import Student
+from programs.models import Adult, Student
 
 
 class OutreachEvent(models.Model):
@@ -30,6 +30,10 @@ class OutreachEvent(models.Model):
         return OutreachSignup.objects.filter(
             shift__event=self, role=OutreachSignup.HELPER
         )
+
+    @property
+    def mentors(self):
+        return OutreachMentorSignup.objects.filter(shift__event=self)
 
     @property
     def ordered_shifts(self):
@@ -193,3 +197,32 @@ class OutreachSignup(models.Model):
                 raise ValidationError(
                     f"This shift already has the maximum number of helpers ({self.shift.max_helpers})."
                 )
+
+
+class OutreachMentorSignup(models.Model):
+    """A mentor volunteering to support a specific outreach shift.
+
+    Unlike student signups there is no champion/helper role and no
+    capacity limit — any number of mentors may support a shift.
+    """
+
+    adult = models.ForeignKey(
+        Adult,
+        on_delete=models.CASCADE,
+        related_name="outreach_mentor_signups",
+        verbose_name="Mentor",
+    )
+    shift = models.ForeignKey(
+        OutreachShift, on_delete=models.CASCADE, related_name="mentor_signups"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("adult", "shift")
+
+    def __str__(self):
+        return f"{self.adult} - {self.shift.event.name}"
+
+    @property
+    def event(self):
+        return self.shift.event

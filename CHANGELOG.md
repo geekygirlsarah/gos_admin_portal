@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-22
 
+### Added
+- **Mentor Support Signups for Outreach Events**: Mentors can now volunteer to support outreach event shifts. A "Sign up to Support (Mentor)" button appears on each shift card for mentors, and mentor names are visible to everyone on the event cards. Unlike student signups, there is no limit on the number of mentors who can support a shift, and mentors can cancel their own signups at any time.
+- **Outreach Signups on Mentor Dashboard**: The mentor dashboard now has a "My Outreach Signups" section listing the upcoming outreach shifts each mentor volunteered to support, with quick links to view the events or cancel a signup.
+
 ### Fixed
 - **"Add Another Shift" Button on Outreach Event Form**: Fixed the "Add Another Shift" button on the outreach event create/edit form not responding when clicked. The issue was a missing security nonce on the button's script, the same class of issue previously fixed for the outreach Sign-ups button and Visitor Management tool.
 
