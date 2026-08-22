@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -43,7 +44,7 @@ class OutreachChampionPermissionsTest(TestCase):
             student=self.student2, program=self.program, active=True
         )
 
-        self.event = OutreachEvent.objects.create(
+        self.event = create_outreach_event(
             program=self.program,
             name="Championed Event",
             location_name="Loc 1",
@@ -51,17 +52,19 @@ class OutreachChampionPermissionsTest(TestCase):
             start_date="2026-09-01",
             start_time="10:00:00",
             end_time="12:00:00",
-            max_champions=1,
-            max_helpers=5,
         )
+        self.shift = self.event.shifts.first()
+        self.shift.max_champions = 1
+        self.shift.max_helpers = 5
+        self.shift.save()
         OutreachSignup.objects.create(
-            student=self.student1, event=self.event, role=OutreachSignup.CHAMPION
+            student=self.student1, shift=self.shift, role=OutreachSignup.CHAMPION
         )
 
     def test_champion_can_access_manage_signups(self):
         self.client.login(username="student1", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
         resp = self.client.get(url)
         # Should be accessible because student1 is the champion
@@ -70,10 +73,10 @@ class OutreachChampionPermissionsTest(TestCase):
     def test_other_student_cannot_access_manage_signups(self):
         self.client.login(username="student2", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
         resp = self.client.get(url)
-        # Should be forbidden/redirected because student2 is not a champion
+        # Should redirect away because student2 is not a champion of this shift
         self.assertEqual(resp.status_code, 302)
 
     def test_champion_sees_manage_signups_button(self):
@@ -83,12 +86,12 @@ class OutreachChampionPermissionsTest(TestCase):
         self.assertContains(resp, "Sign-ups")
         self.assertContains(
             resp,
-            f'data-url="/programs/{self.program.id}/outreach/{self.event.pk}/manage-signups/"',
+            f'data-url="/programs/{self.program.id}/outreach/shifts/{self.shift.pk}/manage-signups/"',
         )
 
     def test_helper_does_not_see_manage_signups_button(self):
         OutreachSignup.objects.create(
-            student=self.student2, event=self.event, role=OutreachSignup.HELPER
+            student=self.student2, shift=self.shift, role=OutreachSignup.HELPER
         )
         self.client.login(username="student2", password="password")  # nosec B106
         url = reverse("outreach:event_list", args=[self.program.id])

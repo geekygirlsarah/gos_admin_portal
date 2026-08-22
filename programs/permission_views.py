@@ -258,11 +258,17 @@ def can_user_write(user, section, obj=None):
         return True
     if role == "Student" and section == "outreach":
         if obj:
-            from outreach.models import OutreachEvent, OutreachSignup
+            from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
 
             if isinstance(obj, OutreachEvent):
                 return OutreachSignup.objects.filter(
-                    event=obj,
+                    shift__event=obj,
+                    student=user.student_profile,
+                    role=OutreachSignup.CHAMPION,
+                ).exists()
+            if isinstance(obj, OutreachShift):
+                return OutreachSignup.objects.filter(
+                    shift=obj,
                     student=user.student_profile,
                     role=OutreachSignup.CHAMPION,
                 ).exists()

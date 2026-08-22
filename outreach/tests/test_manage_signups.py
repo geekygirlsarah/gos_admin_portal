@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -50,7 +51,7 @@ class OutreachManageSignupsTest(TestCase):
             student=self.student2, program=self.program, active=True
         )
 
-        self.event = OutreachEvent.objects.create(
+        self.event = create_outreach_event(
             program=self.program,
             name="Test Event",
             location_name="Test Location",
@@ -58,14 +59,16 @@ class OutreachManageSignupsTest(TestCase):
             start_date="2026-09-01",
             start_time="10:00:00",
             end_time="12:00:00",
-            max_champions=2,
-            max_helpers=5,
         )
+        self.shift = self.event.shifts.first()
+        self.shift.max_champions = 2
+        self.shift.max_helpers = 5
+        self.shift.save()
 
     def test_manage_signups_view_accessible_to_mentor(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
@@ -78,19 +81,30 @@ class OutreachManageSignupsTest(TestCase):
         self.assertContains(resp, "js/dual-listbox.js")
         self.assertContains(resp, "css/dual-listbox.css")
 
-    def test_manage_signups_view_forbidden_for_student(self):
+    def test_manage_signups_view_accessible_to_shift_champion(self):
+        OutreachSignup.objects.create(
+            shift=self.shift, student=self.student1, role=OutreachSignup.CHAMPION
+        )
         self.client.login(username="student1", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
         resp = self.client.get(url)
-        # Should redirect to home or some other page since it's unauthorized
+        self.assertEqual(resp.status_code, 200)
+
+    def test_manage_signups_view_forbidden_for_non_champion_student(self):
+        self.client.login(username="student1", password="password")  # nosec B106
+        url = reverse(
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
+        )
+        resp = self.client.get(url)
+        # student1 is not a champion of this shift, so access is denied
         self.assertEqual(resp.status_code, 302)
 
     def test_mentor_can_add_students(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
 
         # Add student1 as champion and student2 as helper
@@ -100,49 +114,49 @@ class OutreachManageSignupsTest(TestCase):
 
         self.assertTrue(
             OutreachSignup.objects.filter(
-                event=self.event, student=self.student1, role=OutreachSignup.CHAMPION
+                shift=self.shift, student=self.student1, role=OutreachSignup.CHAMPION
             ).exists()
         )
         self.assertTrue(
             OutreachSignup.objects.filter(
-                event=self.event, student=self.student2, role=OutreachSignup.HELPER
+                shift=self.shift, student=self.student2, role=OutreachSignup.HELPER
             ).exists()
         )
 
     def test_mentor_can_remove_students(self):
         OutreachSignup.objects.create(
-            event=self.event, student=self.student1, role=OutreachSignup.CHAMPION
+            shift=self.shift, student=self.student1, role=OutreachSignup.CHAMPION
         )
 
         self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
 
         # Post empty lists should remove all
         data = {"champions": [], "helpers": []}
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)
-        self.assertFalse(OutreachSignup.objects.filter(event=self.event).exists())
+        self.assertFalse(OutreachSignup.objects.filter(shift=self.shift).exists())
 
     def test_validation_cannot_be_both(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
 
         data = {"champions": [self.student1.pk], "helpers": [self.student1.pk]}
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)
-        self.assertFalse(OutreachSignup.objects.filter(event=self.event).exists())
+        self.assertFalse(OutreachSignup.objects.filter(shift=self.shift).exists())
 
     def test_validation_exceed_limits(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         url = reverse(
-            "outreach:event_manage_signups", args=[self.program.id, self.event.pk]
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
         )
 
-        # event.max_champions is 2. Let's create another student.
+        # shift.max_champions is 2. Let's create another student.
         student3_user = User.objects.create_user(
             username="student3", password="password"
         )  # nosec B106
@@ -161,4 +175,4 @@ class OutreachManageSignupsTest(TestCase):
         }
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)
-        self.assertFalse(OutreachSignup.objects.filter(event=self.event).exists())
+        self.assertFalse(OutreachSignup.objects.filter(shift=self.shift).exists())

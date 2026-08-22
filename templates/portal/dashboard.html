@@ -98,36 +98,15 @@ STUDENT DASHBOARD
                         </div>
                     </div>
 
-                    {# Outreach events #}
+                    {# Outreach stats #}
                     <div class="col-md-6">
                         <div class="card border-secondary h-100">
                             <div class="card-body">
-                                <h6 class="card-title text-muted">Upcoming Outreach Events</h6>
+                                <h6 class="card-title text-muted">Outreach</h6>
                                 {% if enrollment.has_outreach %}
-                                    {% if enrollment.upcoming_outreach %}
-                                        <ul class="list-unstyled mb-0">
-                                            {% for event in enrollment.upcoming_outreach %}
-                                                <li class="mb-2">
-                                                    <div class="d-flex justify-content-between align-items-start">
-                                                        <div>
-                                                            <a href="{% url 'outreach:event_list' enrollment.program.id %}" class="fw-bold text-decoration-none">{{ event.name }}</a><br>
-                                                            <small class="text-muted">{{ event.start_date|date:"M j" }} @ {{ event.location_name }}</small>
-                                                        </div>
-                                                        {% if event.user_signup %}
-                                                            <span class="badge bg-success rounded-pill">Signed Up</span>
-                                                        {% else %}
-                                                            <a href="{% url 'outreach:event_list' enrollment.program.id %}" class="btn btn-sm btn-outline-primary py-0">Join</a>
-                                                        {% endif %}
-                                                    </div>
-                                                </li>
-                                            {% endfor %}
-                                        </ul>
-                                        <div class="mt-2 pt-2 border-top">
-                                            <a href="{% url 'outreach:event_list' enrollment.program.id %}" class="small text-decoration-none">View all events &raquo;</a>
-                                        </div>
-                                    {% else %}
-                                        <p class="text-muted small mb-0">No upcoming outreach events.</p>
-                                    {% endif %}
+                                    <p class="mb-1"><strong>{{ enrollment.outreach_stats.championed_count|default:"0" }}</strong> events championed</p>
+                                    <p class="mb-2 text-muted small"><strong>{{ enrollment.outreach_stats.total_outreach_hours|floatformat:1|default:"0.0" }}</strong> hours completed</p>
+                                    <a href="{% url 'outreach:event_list' enrollment.program.id %}" class="btn btn-sm btn-outline-primary">View Outreach Events</a>
                                 {% else %}
                                     <p class="text-muted mb-0 small">Not available for this program.</p>
                                 {% endif %}
@@ -267,11 +246,11 @@ PARENT DASHBOARD
                             <div class="col-md-6">
                                 <div class="card border-secondary h-100">
                                     <div class="card-body py-2">
-                                        <h6 class="card-title text-muted small mb-1">Upcoming Outreach Events</h6>
+                                        <h6 class="card-title text-muted small mb-1">Outreach Events</h6>
                                         {% if row.enrollment.has_outreach %}
-                                            {% if row.enrollment.upcoming_outreach %}
+                                            {% if row.enrollment.outreach_highlights %}
                                                 <ul class="list-unstyled mb-0">
-                                                    {% for event in row.enrollment.upcoming_outreach %}
+                                                    {% for event in row.enrollment.outreach_highlights %}
                                                         <li class="mb-1">
                                                             <div class="d-flex justify-content-between align-items-center">
                                                                 <small class="fw-bold">{{ event.name }} ({{ event.start_date|date:"M j" }})</small>
@@ -284,6 +263,9 @@ PARENT DASHBOARD
                                                         </li>
                                                     {% endfor %}
                                                 </ul>
+                                                <div class="mt-1 pt-1 border-top">
+                                                    <a href="{% url 'outreach:event_list' row.enrollment.program.id %}" class="small text-decoration-none">View all events &raquo;</a>
+                                                </div>
                                             {% else %}
                                                 <p class="text-muted small mb-0">No upcoming outreach events.</p>
                                             {% endif %}

@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -39,7 +40,7 @@ class OutreachStatsTest(TestCase):
         )
 
         # 2 hour event, championed (PAST)
-        self.event1 = OutreachEvent.objects.create(
+        self.event1 = create_outreach_event(
             program=self.program,
             name="Event 1",
             location_name="Loc 1",
@@ -47,15 +48,15 @@ class OutreachStatsTest(TestCase):
             start_date=date(2026, 8, 1),
             start_time=time(10, 0),
             end_time=time(12, 0),
-            max_champions=2,
-            max_helpers=5,
         )
         OutreachSignup.objects.create(
-            student=self.student, event=self.event1, role=OutreachSignup.CHAMPION
+            student=self.student,
+            shift=self.event1.shifts.first(),
+            role=OutreachSignup.CHAMPION,
         )
 
         # 3 hour event, helped (PAST)
-        self.event2 = OutreachEvent.objects.create(
+        self.event2 = create_outreach_event(
             program=self.program,
             name="Event 2",
             location_name="Loc 2",
@@ -63,11 +64,11 @@ class OutreachStatsTest(TestCase):
             start_date=date(2026, 8, 2),
             start_time=time(13, 0),
             end_time=time(16, 0),
-            max_champions=2,
-            max_helpers=5,
         )
         OutreachSignup.objects.create(
-            student=self.student, event=self.event2, role=OutreachSignup.HELPER
+            student=self.student,
+            shift=self.event2.shifts.first(),
+            role=OutreachSignup.HELPER,
         )
 
     def test_event_duration_hours(self):
