@@ -3,7 +3,18 @@ from django.forms import widgets
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
+from programs.utils import get_contrast_color
+
 register = template.Library()
+
+
+@register.filter
+def contrast_color(value):
+    """
+    Returns 'black' or 'white' based on the contrast of the input hex color.
+    Usage: {{ team.color|contrast_color }}
+    """
+    return get_contrast_color(value)
 
 
 @register.filter(name="add_class")
@@ -192,3 +203,19 @@ def get_relationship(adult, student):
         ).relationship_to_student
     except AdultStudentRelationship.DoesNotExist:
         return ""
+
+
+@register.filter
+def multiply(value, arg):
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return 0
+
+
+@register.filter
+def divide(value, arg):
+    try:
+        return float(value) / float(arg)
+    except (ValueError, TypeError, ZeroDivisionError):
+        return 0

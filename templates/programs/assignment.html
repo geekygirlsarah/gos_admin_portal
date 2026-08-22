@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load form_tags %}
 {% block title %}Team/Crew Assignment: {{ program.name }}{% endblock %}
 
 {% block content %}
@@ -73,21 +74,21 @@
                                     </td>
                                     <td>
                                         {% if e.team %}
-                                            <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}</span>
+                                            <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}</span>
                                         {% else %}
                                             <span class="text-muted small">None</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if e.crew %}
-                                            <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                                            <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
                                         {% else %}
                                             <span class="text-muted small">None</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if e.subteam %}
-                                            <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
+                                            <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
                                         {% else %}
                                             <span class="text-muted small">None</span>
                                         {% endif %}
@@ -127,21 +128,21 @@
                                 </td>
                                 <td>
                                     {% if e.team %}
-                                        <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}</span>
+                                        <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}</span>
                                     {% else %}
                                         <span class="text-muted small">None</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if e.crew %}
-                                        <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                                        <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
                                     {% else %}
                                         <span class="text-muted small">None</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if e.subteam %}
-                                        <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
+                                        <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
                                     {% else %}
                                         <span class="text-muted small">None</span>
                                     {% endif %}
@@ -233,6 +234,12 @@ document.addEventListener('DOMContentLoaded', function() {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;
+            // Calculate brightness for contrast
+            var r = parseInt(color.substr(1, 2), 16);
+            var g = parseInt(color.substr(3, 2), 16);
+            var b = parseInt(color.substr(5, 2), 16);
+            var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            badge.style.color = brightness > 128 ? 'black' : 'white';
         }
     });
 });

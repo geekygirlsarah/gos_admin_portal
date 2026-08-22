@@ -63,6 +63,12 @@ document.addEventListener('DOMContentLoaded', function() {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;
+            // Calculate brightness for contrast
+            var r = parseInt(color.substr(1, 2), 16);
+            var g = parseInt(color.substr(3, 2), 16);
+            var b = parseInt(color.substr(5, 2), 16);
+            var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            badge.style.color = brightness > 128 ? 'black' : 'white';
         }
     });
 });

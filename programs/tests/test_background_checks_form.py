@@ -3,12 +3,7 @@ import datetime
 from django.test import TestCase
 
 from programs.forms import BackgroundChecksForm
-from programs.models import (
-    Adult,
-    BackgroundCheck,
-    BackgroundCheckType,
-    Student,
-)
+from programs.models import Adult, BackgroundCheck, BackgroundCheckType, Student
 
 
 class BackgroundChecksFormTests(TestCase):

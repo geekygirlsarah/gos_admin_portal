@@ -1,0 +1,115 @@
+{% load form_tags %}
+<div class="col-md-6 col-lg-4 mb-4">
+    <div class="card h-100 shadow-sm">
+        <div class="card-body">
+            <h5 class="card-title text-primary">{{ event.name }}</h5>
+            <h6 class="card-subtitle mb-2 text-muted">
+                <i class="bi bi-geo-alt"></i> {{ event.location_name }}
+                <a href="https://www.google.com/maps/search/?api=1&query={{ event.location_address|urlencode }}" target="_blank" class="ms-1 text-decoration-none" title="View on Map">
+                    <i class="bi bi-map"></i>
+                </a>
+            </h6>
+            {% if event.location_address %}
+            <p class="card-text small text-muted mb-2">
+                {{ event.location_address }}
+            </p>
+            {% endif %}
+            <p class="card-text">
+                <small class="text-muted">
+                    <i class="bi bi-calendar-event"></i> {{ event.start_date }}
+                    {% if event.end_date %} to {{ event.end_date }}{% endif %}<br>
+                    <i class="bi bi-clock"></i> {{ event.start_time|time:"g:i A" }} - {{ event.end_time|time:"g:i A" }}
+                </small>
+            </p>
+            <div class="mb-3">
+                <p class="card-text">{{ event.description|truncatewords:20 }}</p>
+            </div>
+            
+            <div class="mb-3 small">
+                <div class="d-flex justify-content-between">
+                    <span><strong>Champions:</strong></span>
+                    <span>{{ event.champions.count }} / {{ event.max_champions }}</span>
+                </div>
+                <div class="progress mb-1" style="height: 5px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {% if event.max_champions > 0 %}{{ event.champions.count|add:"0"|multiply:100|divide:event.max_champions }}{% else %}0{% endif %}%"></div>
+                </div>
+                {% if event.champions %}
+                <ul class="list-unstyled mb-2 text-muted small">
+                    {% for signup in event.champions %}
+                        <li><i class="bi bi-person-fill"></i> {{ signup.student.full_name }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="d-flex justify-content-between">
+                    <span><strong>Helpers:</strong></span>
+                    <span>{{ event.helpers.count }} / {{ event.max_helpers }}</span>
+                </div>
+                <div class="progress mb-1" style="height: 5px;">
+                    <div class="progress-bar bg-info" role="progressbar" style="width: {% if event.max_helpers > 0 %}{{ event.helpers.count|add:"0"|multiply:100|divide:event.max_helpers }}{% else %}0{% endif %}%"></div>
+                </div>
+                {% if event.helpers %}
+                <ul class="list-unstyled mb-2 text-muted small">
+                    {% for signup in event.helpers %}
+                        <li><i class="bi bi-person"></i> {{ signup.student.full_name }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+
+            {% if user_role == 'Student' %}
+                {% if event.id in student_signups %}
+                    <div class="alert alert-info py-2 small mb-2 text-center">
+                        You are a <strong>{{ student_signup_roles|get_item:event.id|capfirst }}</strong>
+                    </div>
+                    <form action="{% url 'outreach:event_cancel' program.id event.pk %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm w-100 js-confirm" data-confirm="Are you sure you want to cancel your signup for {{ event.name }}?">Cancel Signup</button>
+                    </form>
+                {% else %}
+                    <div class="d-grid gap-2">
+                        {% if event.champions.count < event.max_champions %}
+                        <form action="{% url 'outreach:event_signup' program.id event.pk %}" method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="role" value="champion">
+                            <button type="submit" class="btn btn-success btn-sm w-100">Sign up as Champion</button>
+                        </form>
+                        {% endif %}
+                        
+                        {% if event.helpers.count < event.max_helpers %}
+                        <form action="{% url 'outreach:event_signup' program.id event.pk %}" method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="role" value="helper">
+                            <button type="submit" class="btn btn-outline-success btn-sm w-100">Sign up as Helper</button>
+                        </form>
+                        {% endif %}
+                        
+                        {% if event.champions.count >= event.max_champions and event.helpers.count >= event.max_helpers %}
+                            <button class="btn btn-secondary btn-sm disabled">Event Full</button>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="card-footer bg-transparent border-top-0 pb-3">
+            <div class="d-flex gap-2 align-items-center justify-content-between">
+                <div>
+                    {% if user_role == 'Mentor' or user_role == 'LeadMentor' or student_signup_roles|get_item:event.id == 'champion' %}
+                    <button type="button" class="btn btn-outline-primary btn-sm manage-signups-btn" 
+                            data-url="{% url 'outreach:event_manage_signups' program.id event.pk %}">
+                        Sign-ups
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-2">
+                    {% if user_role == 'Mentor' or user_role == 'LeadMentor' or student_signup_roles|get_item:event.id == 'champion' %}
+                    <a href="{% url 'outreach:event_edit' program.id event.pk %}" class="btn btn-link btn-sm text-secondary p-0">Edit</a>
+                    {% endif %}
+                    {% if user_role == 'Mentor' or user_role == 'LeadMentor' %}
+                    <a href="{% url 'outreach:event_delete' program.id event.pk %}" class="btn btn-link btn-sm text-danger p-0">Delete</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

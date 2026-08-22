@@ -11,11 +11,7 @@ from django.views.decorators.cache import never_cache
 
 from ..forms import ResumeApplicationForm
 from ..models import Application, SiteSettings
-from ..services import (
-    PENDING_STATUSES,
-    applications_for_user,
-    get_program_buckets,
-)
+from ..services import PENDING_STATUSES, applications_for_user, get_program_buckets
 from .utils import (
     TOTAL_STEPS,
     _auto_authorize_handoff,

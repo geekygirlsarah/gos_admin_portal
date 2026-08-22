@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% load static %}
+{% load form_tags %}
+
+{% block title %}Outreach Events - Girls of Steel Portal{% endblock %}
+
+{% block extra_head %}
+<link href="{% static 'css/dual-listbox.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Outreach Events</h1>
+        <div class="d-flex gap-2">
+            {% if user_role == 'LeadMentor' or user_role == 'Mentor' %}
+            <button class="btn btn-outline-secondary" id="studentStatsBtn" data-url="{% url 'outreach:student_stats' program.id %}">
+                <i class="bi bi-bar-chart-line me-1"></i> Student Stats
+            </button>
+            {% endif %}
+            {% if can_add %}
+            <a href="{% url 'outreach:event_create' program.id %}" class="btn btn-primary">Add Event</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if user_role == 'Student' %}
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card border-primary shadow-sm">
+                <div class="card-body d-flex align-items-center justify-content-around py-3 text-center">
+                    <div>
+                        <div class="h4 mb-0 fw-bold text-primary">{{ championed_count }}</div>
+                        <div class="small text-muted text-uppercase fw-semibold">Events Championed</div>
+                    </div>
+                    <div class="vr mx-3"></div>
+                    <div>
+                        <div class="h4 mb-0 fw-bold text-primary">{{ total_outreach_hours|floatformat:1 }}</div>
+                        <div class="small text-muted text-uppercase fw-semibold">Completed Hours</div>
+                    </div>
+                    <div class="vr mx-3"></div>
+                    <div>
+                        <div class="h4 mb-0 fw-bold text-secondary">{{ pending_outreach_hours|floatformat:1 }}</div>
+                        <div class="small text-muted text-uppercase fw-semibold">Pending Hours</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if user_role == 'Student' and my_events %}
+        <h3>My Events</h3>
+        <div class="row mb-4">
+            {% for event in my_events %}
+                {% include "outreach/_event_card.html" %}
+            {% endfor %}
+        </div>
+        <h3>Other Events</h3>
+    {% endif %}
+
+    <div class="row">
+        {% if user_role == 'Student' %}
+            {% for event in other_events %}
+                {% include "outreach/_event_card.html" %}
+            {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-light text-center border">
+                        No other upcoming outreach events scheduled.
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            {% for event in upcoming_events %}
+                {% include "outreach/_event_card.html" %}
+            {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-light text-center border">
+                        No upcoming outreach events scheduled.
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    {% if past_events %}
+    <div class="accordion mt-5 mb-4" id="pastEventsAccordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingPast">
+                <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePast" aria-expanded="false" aria-controls="collapsePast">
+                    <span class="text-muted"><i class="bi bi-clock-history me-2"></i> Past Events ({{ past_events|length }})</span>
+                </button>
+            </h2>
+            <div id="collapsePast" class="accordion-collapse collapse" aria-labelledby="headingPast" data-bs-parent="#pastEventsAccordion">
+                <div class="accordion-body bg-light">
+                    <div class="row">
+                        {% for event in past_events %}
+                            {% include "outreach/_event_card.html" %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Manage Signups Modal -->
+    <div class="modal fade" id="manageSignupsModal" tabindex="-1" aria-labelledby="manageSignupsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content" id="manageSignupsModalContent">
+                <div class="modal-body text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Student Stats Modal -->
+    <div class="modal fade" id="studentStatsModal" tabindex="-1" aria-labelledby="studentStatsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content" id="studentStatsModalContent">
+                <div class="modal-body text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/dual-listbox.js' %}" nonce="{{ request.csp_nonce }}"></script>
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const manageSignupsModal = new bootstrap.Modal(document.getElementById('manageSignupsModal'));
+    const modalContent = document.getElementById('manageSignupsModalContent');
+    const defaultContent = modalContent.innerHTML;
+
+    const studentStatsModal = new bootstrap.Modal(document.getElementById('studentStatsModal'));
+    const studentStatsContent = document.getElementById('studentStatsModalContent');
+    const studentStatsDefault = studentStatsContent.innerHTML;
+
+    document.getElementById('studentStatsBtn')?.addEventListener('click', function() {
+        const url = this.getAttribute('data-url');
+        studentStatsContent.innerHTML = studentStatsDefault;
+        studentStatsModal.show();
+
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                studentStatsContent.innerHTML = html;
+            })
+            .catch(err => {
+                studentStatsContent.innerHTML = `
+                    <div class="modal-header">
+                        <h5 class="modal-title">Error</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger">Failed to load student stats. Please try again.</div>
+                    </div>
+                `;
+            });
+    });
+
+    document.querySelectorAll('.manage-signups-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const url = this.getAttribute('data-url');
+            
+            // Show modal with spinner
+            modalContent.innerHTML = defaultContent;
+            manageSignupsModal.show();
+            
+            // Load content
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html;
+                    if (typeof initDualListbox === 'function') {
+                        initDualListbox();
+                    }
+                })
+                .catch(err => {
+                    modalContent.innerHTML = `
+                        <div class="modal-header">
+                            <h5 class="modal-title">Error</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger">Failed to load signup management content. Please try again.</div>
+                        </div>
+                    `;
+                });
+        });
+    });
+});
+</script>
+{% endblock %}

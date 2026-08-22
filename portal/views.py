@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -61,6 +62,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         e.attendance_stats = get_student_attendance_stats(
                             student, e.program
                         )
+                    if e.has_outreach:
+                        from outreach.models import OutreachEvent
+
+                        today = timezone.now().date()
+                        e.upcoming_outreach = OutreachEvent.objects.filter(
+                            program=e.program, start_date__gte=today
+                        ).order_by("start_date", "start_time")[:3]
+                        # Attach whether the student is signed up for these events
+                        for event in e.upcoming_outreach:
+                            event.user_signup = event.signups.filter(
+                                student=student
+                            ).first()
+
                     active_enrollments.append(e)
                 else:
                     other_enrollments.append(e)
@@ -111,6 +125,18 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             e.attendance_stats = get_student_attendance_stats(
                                 s, e.program
                             )
+                        if e.has_outreach:
+                            from outreach.models import OutreachEvent
+
+                            today = timezone.now().date()
+                            e.upcoming_outreach = OutreachEvent.objects.filter(
+                                program=e.program, start_date__gte=today
+                            ).order_by("start_date", "start_time")[:3]
+                            # Attach whether THIS child is signed up
+                            for event in e.upcoming_outreach:
+                                event.user_signup = event.signups.filter(
+                                    student=s
+                                ).first()
 
                         row = {"enrollment": e, "balance": balance}
                         if e.program.status == "Active" and e.active:

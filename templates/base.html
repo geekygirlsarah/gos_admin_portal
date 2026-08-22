@@ -45,17 +45,33 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.view_name == 'student_hours' %} active{% endif %}" href="{% url 'student_hours' user.student_profile.pk %}">My Hours</a>
                     </li>
+                    {% for p in student_outreach_programs %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
+                    </li>
+                    {% endfor %}
                     {% endif %}
+
 
                     {% can_read user 'programs' current_program as can_view_program %}
                     {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
+                        {% if navbar_role != 'Student' %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
                         </li>
+                        {% endif %}
+
+                        {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' or navbar_role == 'Alumni' %}
+                            {% if current_program.has_feature_outreach %}
+                            <li class="nav-item">
+                                <a class="nav-link{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a>
+                            </li>
+                            {% endif %}
+                        {% endif %}
  
                         {% can_read user 'student_info' as can_read_students %}
-                        {% if can_read_students %}
+                        {% if can_read_students and navbar_role != 'Student' %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#students">Students</a>
                         </li>

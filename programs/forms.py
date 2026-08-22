@@ -76,6 +76,7 @@ class StudentForm(forms.ModelForm):
         ]
         widgets = {
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),
+            "andrew_id_expiration": forms.DateInput(attrs={"type": "date"}),
             # Render as clear, clickable checkboxes (fixes empty button appearance)
             "race_ethnicities": forms.CheckboxSelectMultiple(),
             "directory_consent": forms.CheckboxInput(
@@ -109,6 +110,18 @@ class StudentForm(forms.ModelForm):
             self.fields["primary_contact"].queryset = qs_adults
         if "secondary_contact" in self.fields:
             self.fields["secondary_contact"].queryset = qs_adults
+
+        # Sort Andrew ID sponsor by first name (Preferred, then legal if no preferred),
+        # and limit to Mentors only.
+        if "andrew_id_sponsor" in self.fields:
+            self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
+                is_mentor=True
+            ).order_by(
+                Lower(
+                    Coalesce(NullIf("preferred_first_name", Value("")), "first_name")
+                ),
+                Lower("last_name"),
+            )
 
         # When editing, pre-populate parents from the reverse relation
         instance = getattr(self, "instance", None)
@@ -257,6 +270,18 @@ class AdultForm(forms.ModelForm):
         if "students" in self.fields:
             self.fields["students"].queryset = active_students().order_by(
                 Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower("last_name"),
+            )
+
+        # Sort Andrew ID sponsor by first name (Preferred, then legal if no preferred),
+        # and limit to Mentors only.
+        if "andrew_id_sponsor" in self.fields:
+            self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
+                is_mentor=True
+            ).order_by(
+                Lower(
+                    Coalesce(NullIf("preferred_first_name", Value("")), "first_name")
+                ),
                 Lower("last_name"),
             )
 
@@ -506,13 +531,22 @@ class ParentMergeForm(forms.Form):
     """
 
     keep = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         widget=forms.RadioSelect,
     )
     source = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         widget=forms.RadioSelect,
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs_adults = Adult.objects.filter(is_parent=True).order_by(
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        )
+        self.fields["keep"].queryset = qs_adults
+        self.fields["source"].queryset = qs_adults
 
     def clean(self):
         cleaned = super().clean()

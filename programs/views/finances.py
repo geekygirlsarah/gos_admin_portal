@@ -5,10 +5,7 @@ from decimal import ROUND_HALF_DOWN, Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.mixins import (
-    LoginRequiredMixin,
-    PermissionRequiredMixin,
-)
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
@@ -46,11 +43,7 @@ from ..permission_views import (
     get_user_role,
     user_is_parent,
 )
-from ..utils import (
-    get_student_balance_data,
-    get_student_program_balance,
-    redirect_back,
-)
+from ..utils import get_student_balance_data, get_student_program_balance, redirect_back
 from .mixins import (
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,

@@ -131,6 +131,8 @@
       {% can_write user 'cmu_andrew' form.instance as can_write_cmu %}
       <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id %}{% else %}{% render_field form.andrew_id readonly=True %}{% endif %}</div>
       <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_email %}{% else %}{% render_field form.andrew_email readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id_expiration %}{% else %}{% render_field form.andrew_id_expiration readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_id_sponsor %}{% else %}{% render_field form.andrew_id_sponsor disabled=True %}{% endif %}</div>
     </div>
   </div>
 </div>

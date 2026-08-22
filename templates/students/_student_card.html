@@ -1,3 +1,4 @@
+{% load form_tags %}
 {% with s=item.student|default:item team=item.team crew=item.crew %}
   <div class="col">
     <div class="card h-100 text-center">
@@ -14,10 +15,10 @@
         <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
         <div class="mt-1 d-flex flex-wrap justify-content-center gap-1">
           {% if team %}
-            <span class="badge rounded-pill team-badge" data-color="{{ team.color }}">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
+            <span class="badge rounded-pill team-badge" data-color="{{ team.color }}" style="background-color: {{ team.color }}; color: {{ team.color|contrast_color }};">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
           {% endif %}
           {% if crew %}
-            <span class="badge rounded-pill crew-badge" data-color="{{ crew.color }}">{{ crew.name }}</span>
+            <span class="badge rounded-pill crew-badge" data-color="{{ crew.color }}" style="background-color: {{ crew.color }}; color: {{ crew.color|contrast_color }};">{{ crew.name }}</span>
           {% endif %}
           {% if show_inactive %}
             <span class="badge bg-secondary ms-2">Inactive</span>

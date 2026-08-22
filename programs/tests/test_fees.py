@@ -7,13 +7,7 @@ from django.core import mail
 from django.test import TestCase, override_settings
 
 from programs.forms import PaymentForm, ProgramEmailForm, SlidingScaleForm
-from programs.models import (
-    Enrollment,
-    Fee,
-    Program,
-    SlidingScale,
-    Student,
-)
+from programs.models import Enrollment, Fee, Program, SlidingScale, Student
 from programs.views import compute_sliding_discount_rounded
 
 

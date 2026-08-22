@@ -1,30 +1,17 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import (
-    LoginRequiredMixin,
-    PermissionRequiredMixin,
-)
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db import transaction
-from django.db.models.functions import Lower
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    FormView,
-    ListView,
-    UpdateView,
-)
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
 from audit.mixins import SensitiveDataViewMixin
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..forms import AdultForm, ParentMergeForm
-from ..models import (
-    Adult,
-    AdultStudentRelationship,
-    Program,
-    Student,
-)
+from ..models import Adult, AdultStudentRelationship, Program, Student
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
@@ -59,7 +46,10 @@ class AdultsListView(
     section = "adult_info"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "email": Lower("personal_email"),
         "phone": "phone_number",
         "login_enabled": "login_enabled",
@@ -110,7 +100,10 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "parents"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "email": Lower("personal_email"),
         "phone": "phone_number",
     }
@@ -157,7 +150,10 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "mentors"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "role": "role",
         "mentor_active": "mentor_active",
     }
@@ -198,7 +194,10 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "alumni"
 
     sort_fields = {
-        "name": (Lower("first_name"), Lower("last_name")),
+        "name": (
+            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower("last_name"),
+        ),
         "email": Lower("personal_email"),
         "phone": "phone_number",
         "college": Lower("college"),
@@ -249,42 +248,29 @@ class ParentCreateView(
     template_name = "adults/form.html"
     permission_required = "programs.add_adult"
 
+    def get_initial(self):
+        initial = super().get_initial()
+        return initial
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
         return ctx
 
     def form_valid(self, form):
-        # Ensure adults created via this view are flagged as parents
-        obj = form.save(commit=False)
-        obj.is_parent = True
-        obj.save()
-        # Save many-to-many after the object exists
-        form.save_m2m()
-        # Logging for creation with changed fields
-        user = getattr(self.request, "user", None)
-        user_repr = (
-            f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}"
-            if getattr(user, "is_authenticated", False)
-            else "anonymous"
-        )
-        for f in getattr(form, "changed_data", []) or []:
-            new = form.cleaned_data.get(f, getattr(obj, f, None))
-            forms_logger.info(
-                "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
-                "Adult",
-                obj.pk,
-                "create",
-                user_repr,
-                f,
-                self._fmt_val(None),
-                self._fmt_val(new),
-            )
+        # Ensure adults created via this view are flagged as parents if the field was hidden
+        if "is_parent" not in form.fields:
+            form.instance.is_parent = True
+        response = super().form_valid(form)
         messages.success(self.request, "Parent added successfully.")
-        return redirect("parent_list")
+        return response
 
     def get_success_url(self):
-        # After creating a Parent, return to the Parents listing
+        # After creating a Parent, return to the Parents listing or the 'next' URL
+        next_url = self.request.GET.get("next")
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("parent_list")
 
 
@@ -314,7 +300,7 @@ class ParentUpdateView(
         safe_url = get_safe_url(self.request, next_url)
         if safe_url:
             return safe_url
-        return reverse("parent_edit", args=[self.object.pk])
+        return reverse("parent_list")
 
 
 class AdultCreateView(
@@ -334,7 +320,16 @@ class AdultCreateView(
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
         return ctx
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Adult added successfully.")
+        return response
+
     def get_success_url(self):
+        next_url = self.request.GET.get("next")
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("adult_list")
 
 
@@ -433,14 +428,19 @@ class MentorCreateView(
 
     def get_initial(self):
         ini = super().get_initial()
-        ini["is_mentor"] = True
         return ini
 
     def form_valid(self, form):
-        form.instance.is_mentor = True
+        # Ensure adults created via this view are flagged as mentors if the field was hidden
+        if "is_mentor" not in form.fields:
+            form.instance.is_mentor = True
         return super().form_valid(form)
 
     def get_success_url(self):
+        next_url = self.request.GET.get("next")
+        safe_url = get_safe_url(self.request, next_url)
+        if safe_url:
+            return safe_url
         return reverse("mentor_list")
 
 
@@ -522,7 +522,91 @@ class MentorUpdateView(
         safe_url = get_safe_url(self.request, next_url)
         if safe_url:
             return safe_url
-        return reverse("mentor_edit", args=[self.object.pk])
+        return reverse("mentor_list")
+
+
+def _transfer_parent_relationships(keep, source):
+    """Move all of ``source``'s student relationships onto ``keep``."""
+    for rel in list(AdultStudentRelationship.objects.filter(adult=source)):
+        existing = AdultStudentRelationship.objects.filter(
+            adult=keep, student=rel.student
+        ).first()
+        if existing:
+            if not existing.specific_relationship and rel.specific_relationship:
+                existing.specific_relationship = rel.specific_relationship
+                existing.save(update_fields=["specific_relationship"])
+            Student.objects.filter(primary_contact_relationship=rel).update(
+                primary_contact_relationship=existing
+            )
+            Student.objects.filter(secondary_contact_relationship=rel).update(
+                secondary_contact_relationship=existing
+            )
+            rel.delete()
+        else:
+            rel.adult = keep
+            rel.save(update_fields=["adult"])
+
+
+def _carry_over_missing_parent_fields(keep, source):
+    """Copy fields that only ``source`` has onto ``keep``.
+
+    Returns True if ``keep`` was modified. Choice fields with model defaults
+    ("cell" for phone_type, "PA" for state) look filled even when they were
+    never actually chosen, so they are only treated as missing when the value
+    they describe (phone number / address) is missing too.
+    """
+    keep_had_phone = bool(keep.phone_number)
+    keep_had_address = bool(keep.address or keep.city)
+
+    carryover_fields = [
+        "personal_email",
+        "phone_number",
+        "address",
+        "city",
+        "zip_code",
+        "pronouns",
+        "can_receive_texts",
+        "preferred_first_name",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+    ]
+    changed = False
+    for field in carryover_fields:
+        keep_val = getattr(keep, field)
+        source_val = getattr(source, field)
+        if not keep_val and source_val:
+            setattr(keep, field, source_val)
+            changed = True
+
+    if not keep_had_phone and source.phone_type:
+        keep.phone_type = source.phone_type
+        changed = True
+    if not keep_had_address and source.address and source.state:
+        keep.state = source.state
+        changed = True
+
+    return changed
+
+
+def _merge_parent_role_flags(keep, source):
+    """OR together the role flags. Returns True if ``keep`` was modified."""
+    changed = False
+    for flag in ("is_parent", "is_mentor", "is_alumni"):
+        if getattr(source, flag) and not getattr(keep, flag):
+            setattr(keep, flag, True)
+            changed = True
+    return changed
+
+
+def _transfer_parent_user_account(keep, source):
+    """Move ``source``'s linked user account to ``keep`` if it has none."""
+    if keep.user_id or not source.user_id:
+        return False
+    source_user = source.user
+    source.user = None
+    source.save(update_fields=["user"])
+    keep.user = source_user
+    return True
 
 
 class ParentMergeView(LeadMentorRequiredMixin, FormView):
@@ -539,7 +623,9 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["parents"] = list(
-            active_parents().prefetch_related(
+            active_parents()
+            .order_by("first_name", "last_name")
+            .prefetch_related(
                 "students__school",
                 "students__enrollment_set__program",
                 "adultstudentrelationship_set",
@@ -552,57 +638,10 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
         source = form.cleaned_data["source"]
 
         with transaction.atomic():
-            source_rels = AdultStudentRelationship.objects.filter(adult=source)
-            for rel in list(source_rels):
-                existing = AdultStudentRelationship.objects.filter(
-                    adult=keep, student=rel.student
-                ).first()
-                if existing:
-                    if not existing.specific_relationship and rel.specific_relationship:
-                        existing.specific_relationship = rel.specific_relationship
-                        existing.save(update_fields=["specific_relationship"])
-                    Student.objects.filter(primary_contact_relationship=rel).update(
-                        primary_contact_relationship=existing
-                    )
-                    Student.objects.filter(secondary_contact_relationship=rel).update(
-                        secondary_contact_relationship=existing
-                    )
-                    rel.delete()
-                else:
-                    rel.adult = keep
-                    rel.save(update_fields=["adult"])
-
-            carryover_fields = [
-                "personal_email",
-                "phone_number",
-                "phone_type",
-                "address",
-                "city",
-                "state",
-                "zip_code",
-                "pronouns",
-                "can_receive_texts",
-            ]
-            changed = False
-            for field in carryover_fields:
-                keep_val = getattr(keep, field)
-                source_val = getattr(source, field)
-                if not keep_val and source_val:
-                    setattr(keep, field, source_val)
-                    changed = True
-
-            for flag in ("is_parent", "is_mentor", "is_alumni"):
-                if getattr(source, flag) and not getattr(keep, flag):
-                    setattr(keep, flag, True)
-                    changed = True
-
-            if not keep.user_id and source.user_id:
-                source_user = source.user
-                source.user = None
-                source.save(update_fields=["user"])
-                keep.user = source_user
-                changed = True
-
+            _transfer_parent_relationships(keep, source)
+            changed = _carry_over_missing_parent_fields(keep, source)
+            changed = _merge_parent_role_flags(keep, source) or changed
+            changed = _transfer_parent_user_account(keep, source) or changed
             if changed:
                 keep.save()
 

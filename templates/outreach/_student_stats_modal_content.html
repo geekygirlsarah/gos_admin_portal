@@ -1,0 +1,45 @@
+<div class="modal-header">
+    <h5 class="modal-title" id="studentStatsModalLabel">Student Outreach Stats - {{ program.name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Student Name</th>
+                    <th class="text-center">Events Championed</th>
+                    <th class="text-center">Completed Hours</th>
+                    <th class="text-center">Pending Hours</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in student_stats %}
+                <tr>
+                    <td>{{ stat.name }}</td>
+                    <td class="text-center">
+                        <span class="badge {% if stat.championed > 0 %}bg-primary{% else %}bg-secondary{% endif %} rounded-pill">
+                            {{ stat.championed }}
+                        </span>
+                    </td>
+                    <td class="text-center fw-bold text-primary">
+                        {{ stat.hours|floatformat:1 }}
+                    </td>
+                    <td class="text-center text-muted">
+                        {{ stat.pending_hours|floatformat:1 }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                        No active students found in this program.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+</div>

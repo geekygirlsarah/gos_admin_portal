@@ -9,7 +9,7 @@
     <div class="col-auto">
       {% can_write user 'adult_info' as can_add_adult %}
       {% if can_add_adult %}
-        <a class="btn btn-primary" href="{% url 'parent_create' %}?next={{ request.path }}">Add Adult</a>
+        <a class="btn btn-primary" href="{% url 'adult_create' %}?next={{ request.path }}">Add Adult</a>
       {% endif %}
     </div>
   </div>

@@ -147,6 +147,8 @@ def can_user_read(user, section, obj=None):
         default_read = True
         if role == "Mentor" and section == "attendance":
             default_read = False
+        if role == "Student" and section == "outreach":
+            default_read = True
         can_read_section = perm.can_read if perm else default_read
 
     # Only Lead Mentors and Parents can view payments/fees/sliding scale
@@ -179,8 +181,8 @@ def can_user_read(user, section, obj=None):
                     student__adults=adult, program=obj.program
                 ).exists()
             if isinstance(obj, Program):
-                # Parents cannot view programs directly
-                return False
+                # Parents can see programs their students are enrolled in
+                return obj.enrollment_set.filter(student__adults=adult).exists()
         except (Adult.DoesNotExist, AttributeError):
             return False
 
@@ -203,8 +205,8 @@ def can_user_read(user, section, obj=None):
                     student__adults=adult, program=obj.program
                 ).exists()
             if isinstance(obj, Program):
-                # Parents cannot view programs directly
-                return False
+                # Parents can see programs their students are enrolled in
+                return obj.enrollment_set.filter(student__adults=adult).exists()
         except (Adult.DoesNotExist, AttributeError):
             return False
     elif role == "Alumni" and obj:
@@ -233,8 +235,8 @@ def can_user_read(user, section, obj=None):
                 # is ever added.
                 return False
             if isinstance(obj, Program):
-                # Students cannot view programs directly
-                return False
+                # Students can see programs they are enrolled in
+                return obj.enrollment_set.filter(student=student).exists()
         except (Student.DoesNotExist, AttributeError):
             return False
     elif role == "Mentor" and obj:
@@ -253,6 +255,19 @@ def can_user_read(user, section, obj=None):
 def can_user_write(user, section, obj=None):
     role = get_user_role(user)
     if role == "LeadMentor":
+        return True
+    if role == "Student" and section == "outreach":
+        if obj:
+            from outreach.models import OutreachEvent, OutreachSignup
+
+            if isinstance(obj, OutreachEvent):
+                return OutreachSignup.objects.filter(
+                    event=obj,
+                    student=user.student_profile,
+                    role=OutreachSignup.CHAMPION,
+                ).exists()
+        return True
+    if role == "Mentor" and section == "outreach":
         return True
     if role is None:
         return False
@@ -345,6 +360,10 @@ def can_user_delete(user, section, obj=None):
 
     # Mentors can add/edit attendance but never delete it
     if role == "Mentor" and section == "attendance":
+        return False
+
+    # Students can never delete outreach events
+    if role == "Student" and section == "outreach":
         return False
 
     # For all other sections/roles, delete tracks write permission

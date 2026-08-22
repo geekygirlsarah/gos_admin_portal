@@ -24,11 +24,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--all-students",
             action="store_true",
-            help=(
-                "Process ALL students, not just those linked to converted "
-                "Applications. Use this for students created outside the "
-                "application flow (e.g. via admin or seed_db)."
-            ),
+            help="Process all students (default behavior).",
         )
 
     # ------------------------------------------------------------------
@@ -96,17 +92,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        all_students = options["all_students"]
 
         app_lookup = self._build_app_lookup()
 
         from programs.models import Student
 
-        students = (
-            Student.objects.all()
-            if all_students
-            else Student.objects.filter(id__in=app_lookup.keys())
-        )
+        if options["all_students"]:
+            students = Student.objects.all()
+        else:
+            students = Student.objects.filter(id__in=app_lookup.keys())
 
         legacy_fernet = _get_legacy_fernet()
         updated = 0
