@@ -638,6 +638,19 @@ class Student(models.Model):
 
     andrew_id = models.CharField(max_length=50, blank=True, null=True)
     andrew_email = models.EmailField(blank=True, null=True)
+    andrew_id_expiration = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Expiration date of this Andrew ID.",
+    )
+    andrew_id_sponsor = models.ForeignKey(
+        "Adult",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sponsored_student_andrew_ids",
+        help_text="The Adult (mentor) who sponsored this Andrew ID.",
+    )
 
     school = models.ForeignKey(
         "School",

@@ -1,7 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Q, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import urlencode
@@ -16,8 +17,9 @@ def _person_sort_key(person):
 
 
 def _get_adult_sponsor_choices():
-    return Adult.objects.filter(Q(andrew_id__isnull=False) & ~Q(andrew_id="")).order_by(
-        "first_name", "last_name"
+    return Adult.objects.filter(is_mentor=True).order_by(
+        Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+        Lower("last_name"),
     )
 
 
@@ -130,17 +132,16 @@ def andrew_id_management_view(request):
             person.andrew_id = raw_id
             person.andrew_email = auto_email
 
-            if person_type == "adult":
-                expiration = request.POST.get("andrew_id_expiration", "").strip()
-                sponsor_id = request.POST.get("andrew_id_sponsor", "").strip()
-                if expiration:
-                    person.andrew_id_expiration = expiration
-                else:
-                    person.andrew_id_expiration = None
-                if sponsor_id:
-                    person.andrew_id_sponsor = get_object_or_404(Adult, pk=sponsor_id)
-                else:
-                    person.andrew_id_sponsor = None
+            expiration = request.POST.get("andrew_id_expiration", "").strip()
+            sponsor_id = request.POST.get("andrew_id_sponsor", "").strip()
+            if expiration:
+                person.andrew_id_expiration = expiration
+            else:
+                person.andrew_id_expiration = None
+            if sponsor_id:
+                person.andrew_id_sponsor = get_object_or_404(Adult, pk=sponsor_id)
+            else:
+                person.andrew_id_sponsor = None
 
             try:
                 person.full_clean()
@@ -166,9 +167,8 @@ def andrew_id_management_view(request):
             old_id = person.andrew_id or ""
             person.andrew_id = None
             person.andrew_email = None
-            if person_type == "adult":
-                person.andrew_id_expiration = None
-                person.andrew_id_sponsor = None
+            person.andrew_id_expiration = None
+            person.andrew_id_sponsor = None
             person.save()
 
             messages.success(

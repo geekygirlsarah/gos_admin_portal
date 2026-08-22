@@ -64,7 +64,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if result.type == 'adult' and result.person.andrew_id_expiration %}
+                        {% if result.person.andrew_id_expiration %}
                             {{ result.person.andrew_id_expiration|date:"Y-m-d" }}
                         {% else %}
                             <span class="text-muted">&mdash;</span>
@@ -81,7 +81,6 @@
                                        placeholder="Andrew ID" value="{{ result.person.andrew_id|default:'' }}" required
                                        pattern="[a-zA-Z][a-zA-Z0-9]+" title="Must start with a letter, lowercase letters and digits only">
                             </div>
-                            {% if result.type == 'adult' %}
                             <div class="col-auto">
                                 <input type="date" name="andrew_id_expiration" class="form-control form-control-sm"
                                        value="{{ result.person.andrew_id_expiration|date:'Y-m-d'|default:'' }}">
@@ -96,7 +95,6 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            {% endif %}
                             <div class="col-auto">
                                 <button type="submit" class="btn btn-sm btn-primary">Save</button>
                             </div>
@@ -152,7 +150,7 @@
                     <td><code>{{ entry.person.andrew_id }}</code></td>
                     <td>{{ entry.person.andrew_email|default:"-" }}</td>
                     <td>
-                        {% if entry.type == 'adult' and entry.person.andrew_id_expiration %}
+                        {% if entry.person.andrew_id_expiration %}
                             {{ entry.person.andrew_id_expiration|date:"Y-m-d" }}
                         {% else %}
                             <span class="text-muted">&mdash;</span>
