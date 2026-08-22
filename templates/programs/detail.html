@@ -62,13 +62,13 @@
                 {% endif %}
                 <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
                 {% if e.team %}
-                  <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
+                  <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                 {% endif %}
                 {% if e.crew %}
-                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
                 {% endif %}
                 {% if e.subteam %}
-                  <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
+                  <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
                 {% endif %}
                 {% if 'background-checks' in program.feature_keys %}
                 {% needs_bg s as missing_bg %}
@@ -113,13 +113,13 @@
                 {% endif %}
                 <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
                 {% if e.team %}
-                  <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
+                  <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                 {% endif %}
                 {% if e.crew %}
-                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}">{{ e.crew.name }}</span>
+                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
                 {% endif %}
                 {% if e.subteam %}
-                  <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}">{{ e.subteam.name }}</span>
+                  <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
                 {% endif %}
                 {% needs_bg s as missing_bg %}
                   {% if missing_bg %}
@@ -203,6 +203,12 @@ document.addEventListener('DOMContentLoaded', function() {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;
+            // Calculate brightness for contrast
+            var r = parseInt(color.substr(1, 2), 16);
+            var g = parseInt(color.substr(3, 2), 16);
+            var b = parseInt(color.substr(5, 2), 16);
+            var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            badge.style.color = brightness > 128 ? 'black' : 'white';
         }
     });
 });

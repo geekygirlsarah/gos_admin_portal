@@ -17,6 +17,7 @@ from .balances import (
     get_student_program_balance,
     program_overlaps_sliding_window,
 )
+from .colors import get_contrast_color
 from .geocoding import normalize_address, resolve_address_points
 from .grades import calculate_grade, calculate_graduation_year, format_grade
 from .images import normalize_image_field
@@ -66,6 +67,8 @@ __all__ = [
     # geocoding
     "normalize_address",
     "resolve_address_points",
+    # colors
+    "get_contrast_color",
     # urls
     "generate_signed_parent_url",
     "get_safe_url",

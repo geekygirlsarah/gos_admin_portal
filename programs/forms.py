@@ -117,7 +117,9 @@ class StudentForm(forms.ModelForm):
             self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
                 is_mentor=True
             ).order_by(
-                Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+                Lower(
+                    Coalesce(NullIf("preferred_first_name", Value("")), "first_name")
+                ),
                 Lower("last_name"),
             )
 
@@ -277,7 +279,9 @@ class AdultForm(forms.ModelForm):
             self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
                 is_mentor=True
             ).order_by(
-                Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+                Lower(
+                    Coalesce(NullIf("preferred_first_name", Value("")), "first_name")
+                ),
                 Lower("last_name"),
             )
 

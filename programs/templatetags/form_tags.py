@@ -3,7 +3,18 @@ from django.forms import widgets
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
+from programs.utils import get_contrast_color
+
 register = template.Library()
+
+
+@register.filter
+def contrast_color(value):
+    """
+    Returns 'black' or 'white' based on the contrast of the input hex color.
+    Usage: {{ team.color|contrast_color }}
+    """
+    return get_contrast_color(value)
 
 
 @register.filter(name="add_class")
