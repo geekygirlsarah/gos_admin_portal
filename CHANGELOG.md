@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **Visitor Management Fixes**: Corrected template block names and added security nonces to the Visitor Management tool to ensure consistent behavior across all portal features.
 
 ### Changed
+- **Outreach Events Now Support Multiple Shifts**: Instead of a single start/end date and time, an outreach event can now have one or more "shifts" (e.g. a morning shift and an afternoon shift for an all-day event). The event's overall start and end are automatically determined by the earliest and latest shifts. Existing events were automatically converted so their original start/end became their first shift. Students now sign up as a champion or helper for a specific shift (rather than the whole event), and each shift has its own champion/helper capacity.
 - **Smart Sorting for Adults**: All adult list views (Parents, Mentors, Alumni, and All Adults) now sort by first name then last name, and prioritize preferred first names over legal names. This same smart sorting is also used in the parent merge tool and student profile dropdowns to keep names consistent across the portal.
 - **Improved RFID Management Search**: Searching for mentors on the RFID management page now includes preferred names, making it easier to find and assign cards to mentors who go by a different name.
 - **Consistent Adult Redirections**: Saving or canceling an adult, parent, or mentor record now correctly redirects you back to your starting page (e.g., "All Adults" or "Mentors") instead of jumping to a default role page.

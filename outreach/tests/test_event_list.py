@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Program, ProgramFeature, School, Student
 
 
@@ -32,7 +33,7 @@ class OutreachEventListTest(TestCase):
         today = timezone.now().date()
 
         # Upcoming event
-        self.upcoming = OutreachEvent.objects.create(
+        self.upcoming = create_outreach_event(
             program=self.program,
             name="Upcoming Event",
             location_name="Future Loc",
@@ -43,7 +44,7 @@ class OutreachEventListTest(TestCase):
         )
 
         # Past event
-        self.past = OutreachEvent.objects.create(
+        self.past = create_outreach_event(
             program=self.program,
             name="Past Event",
             location_name="Old Loc",
@@ -54,7 +55,7 @@ class OutreachEventListTest(TestCase):
         )
 
         # Multi-day event that is currently active (should be upcoming)
-        self.active = OutreachEvent.objects.create(
+        self.active = create_outreach_event(
             program=self.program,
             name="Active Event",
             location_name="Current Loc",

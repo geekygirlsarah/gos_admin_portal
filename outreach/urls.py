@@ -12,15 +12,19 @@ urlpatterns = [
         "<int:pk>/delete/", views.OutreachEventDeleteView.as_view(), name="event_delete"
     ),
     path(
-        "<int:pk>/signup/", views.OutreachEventSignupView.as_view(), name="event_signup"
+        "shifts/<int:shift_pk>/signup/",
+        views.OutreachShiftSignupView.as_view(),
+        name="shift_signup",
     ),
     path(
-        "<int:pk>/cancel/", views.OutreachEventCancelView.as_view(), name="event_cancel"
+        "shifts/<int:shift_pk>/cancel/",
+        views.OutreachShiftCancelView.as_view(),
+        name="shift_cancel",
     ),
     path(
-        "<int:pk>/manage-signups/",
-        views.OutreachEventManageSignupsView.as_view(),
-        name="event_manage_signups",
+        "shifts/<int:shift_pk>/manage-signups/",
+        views.OutreachShiftManageSignupsView.as_view(),
+        name="shift_manage_signups",
     ),
     path(
         "student-stats/",

@@ -63,16 +63,25 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             student, e.program
                         )
                     if e.has_outreach:
-                        from outreach.models import OutreachEvent
+                        from outreach.models import OutreachEvent, OutreachSignup
 
                         today = timezone.now().date()
-                        e.upcoming_outreach = OutreachEvent.objects.filter(
-                            program=e.program, start_date__gte=today
-                        ).order_by("start_date", "start_time")[:3]
+                        outreach_events = OutreachEvent.objects.filter(
+                            program=e.program
+                        ).prefetch_related("shifts")
+                        upcoming_outreach = sorted(
+                            (
+                                ev
+                                for ev in outreach_events
+                                if ev.start_date and ev.start_date >= today
+                            ),
+                            key=lambda ev: (ev.start_date, ev.start_time),
+                        )
+                        e.upcoming_outreach = upcoming_outreach[:3]
                         # Attach whether the student is signed up for these events
                         for event in e.upcoming_outreach:
-                            event.user_signup = event.signups.filter(
-                                student=student
+                            event.user_signup = OutreachSignup.objects.filter(
+                                shift__event=event, student=student
                             ).first()
 
                     active_enrollments.append(e)
@@ -126,16 +135,25 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                                 s, e.program
                             )
                         if e.has_outreach:
-                            from outreach.models import OutreachEvent
+                            from outreach.models import OutreachEvent, OutreachSignup
 
                             today = timezone.now().date()
-                            e.upcoming_outreach = OutreachEvent.objects.filter(
-                                program=e.program, start_date__gte=today
-                            ).order_by("start_date", "start_time")[:3]
+                            outreach_events = OutreachEvent.objects.filter(
+                                program=e.program
+                            ).prefetch_related("shifts")
+                            upcoming_outreach = sorted(
+                                (
+                                    ev
+                                    for ev in outreach_events
+                                    if ev.start_date and ev.start_date >= today
+                                ),
+                                key=lambda ev: (ev.start_date, ev.start_time),
+                            )
+                            e.upcoming_outreach = upcoming_outreach[:3]
                             # Attach whether THIS child is signed up
                             for event in e.upcoming_outreach:
-                                event.user_signup = event.signups.filter(
-                                    student=s
+                                event.user_signup = OutreachSignup.objects.filter(
+                                    shift__event=event, student=s
                                 ).first()
 
                         row = {"enrollment": e, "balance": balance}

@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Program, ProgramFeature, School, Student
 
 
@@ -43,7 +44,7 @@ class OutreachViewTest(TestCase):
         )  # nosec B106
         self.parent_adult = Adult.objects.create(user=self.parent_user, is_parent=True)
 
-        self.event = OutreachEvent.objects.create(
+        self.event = create_outreach_event(
             program=self.program,
             name="Test Event",
             location_name="Test Location",
@@ -51,9 +52,11 @@ class OutreachViewTest(TestCase):
             start_date="2026-09-01",
             start_time="10:00:00",
             end_time="12:00:00",
-            max_champions=1,
-            max_helpers=2,
         )
+        self.shift = self.event.shifts.first()
+        self.shift.max_champions = 1
+        self.shift.max_helpers = 2
+        self.shift.save()
 
     def test_list_view_accessible_to_all_logged_in(self):
         url = reverse("outreach:event_list", args=[self.program.id])
@@ -80,11 +83,15 @@ class OutreachViewTest(TestCase):
             "name": "New Event",
             "location_name": "New Loc",
             "location_address": "456 New St",
-            "start_date": "2026-09-02",
-            "start_time": "14:00:00",
-            "end_time": "16:00:00",
-            "max_champions": 1,
-            "max_helpers": 5,
+            "shifts-TOTAL_FORMS": "1",
+            "shifts-INITIAL_FORMS": "0",
+            "shifts-MIN_NUM_FORMS": "0",
+            "shifts-MAX_NUM_FORMS": "1000",
+            "shifts-0-date": "2026-09-02",
+            "shifts-0-start_time": "14:00:00",
+            "shifts-0-end_time": "16:00:00",
+            "shifts-0-max_champions": 1,
+            "shifts-0-max_helpers": 5,
         }
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)
@@ -94,7 +101,9 @@ class OutreachViewTest(TestCase):
         self.assertEqual(event.program, self.program)
         self.assertTrue(
             OutreachSignup.objects.filter(
-                event=event, student=self.student_profile, role=OutreachSignup.CHAMPION
+                shift__event=event,
+                student=self.student_profile,
+                role=OutreachSignup.CHAMPION,
             ).exists()
         )
 
@@ -105,11 +114,15 @@ class OutreachViewTest(TestCase):
             "name": "Mentor Event",
             "location_name": "Loc",
             "location_address": "Addr",
-            "start_date": "2026-09-03",
-            "start_time": "14:00:00",
-            "end_time": "16:00:00",
-            "max_champions": 1,
-            "max_helpers": 5,
+            "shifts-TOTAL_FORMS": "1",
+            "shifts-INITIAL_FORMS": "0",
+            "shifts-MIN_NUM_FORMS": "0",
+            "shifts-MAX_NUM_FORMS": "1000",
+            "shifts-0-date": "2026-09-03",
+            "shifts-0-start_time": "14:00:00",
+            "shifts-0-end_time": "16:00:00",
+            "shifts-0-max_champions": 1,
+            "shifts-0-max_helpers": 5,
         }
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)
@@ -117,7 +130,7 @@ class OutreachViewTest(TestCase):
         # Mentors are NOT champions
         event = OutreachEvent.objects.get(name="Mentor Event")
         self.assertEqual(event.program, self.program)
-        self.assertFalse(OutreachSignup.objects.filter(event=event).exists())
+        self.assertFalse(OutreachSignup.objects.filter(shift__event=event).exists())
 
     def test_parent_cannot_create_event(self):
         self.client.login(username="parent", password="password")  # nosec B106
@@ -127,12 +140,12 @@ class OutreachViewTest(TestCase):
 
     def test_signup_helper(self):
         self.client.login(username="student", password="password")  # nosec B106
-        url = reverse("outreach:event_signup", args=[self.program.id, self.event.pk])
+        url = reverse("outreach:shift_signup", args=[self.program.id, self.shift.pk])
         resp = self.client.post(url, {"role": OutreachSignup.HELPER})
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(
             OutreachSignup.objects.filter(
-                event=self.event,
+                shift=self.shift,
                 student=self.student_profile,
                 role=OutreachSignup.HELPER,
             ).exists()
@@ -140,33 +153,39 @@ class OutreachViewTest(TestCase):
 
     def test_signup_cancel(self):
         OutreachSignup.objects.create(
-            event=self.event, student=self.student_profile, role=OutreachSignup.HELPER
+            shift=self.shift, student=self.student_profile, role=OutreachSignup.HELPER
         )
         self.client.login(username="student", password="password")  # nosec B106
-        url = reverse("outreach:event_cancel", args=[self.program.id, self.event.pk])
+        url = reverse("outreach:shift_cancel", args=[self.program.id, self.shift.pk])
         resp = self.client.post(url)
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(
             OutreachSignup.objects.filter(
-                event=self.event, student=self.student_profile
+                shift=self.shift, student=self.student_profile
             ).exists()
         )
 
     def test_champion_can_edit_event(self):
         OutreachSignup.objects.create(
-            event=self.event, student=self.student_profile, role=OutreachSignup.CHAMPION
+            shift=self.shift, student=self.student_profile, role=OutreachSignup.CHAMPION
         )
         self.client.login(username="student", password="password")  # nosec B106
         url = reverse("outreach:event_edit", args=[self.program.id, self.event.pk])
+        shift = self.event.shifts.first()
         data = {
             "name": "Updated Event",
             "location_name": "Test Location",
             "location_address": "123 Test St",
-            "start_date": "2026-09-01",
-            "start_time": "10:00:00",
-            "end_time": "12:00:00",
-            "max_champions": 1,
-            "max_helpers": 2,
+            "shifts-TOTAL_FORMS": "1",
+            "shifts-INITIAL_FORMS": "1",
+            "shifts-MIN_NUM_FORMS": "0",
+            "shifts-MAX_NUM_FORMS": "1000",
+            "shifts-0-id": shift.pk,
+            "shifts-0-date": "2026-09-01",
+            "shifts-0-start_time": "10:00:00",
+            "shifts-0-end_time": "12:00:00",
+            "shifts-0-max_champions": 1,
+            "shifts-0-max_helpers": 2,
         }
         resp = self.client.post(url, data)
         self.assertEqual(resp.status_code, 302)
@@ -193,17 +212,23 @@ class OutreachViewTest(TestCase):
         self.client.login(username="mentor", password="password")  # nosec B106
         # Edit
         url_edit = reverse("outreach:event_edit", args=[self.program.id, self.event.pk])
+        shift = self.event.shifts.first()
         resp = self.client.post(
             url_edit,
             {
                 "name": "Mentor Updated",
                 "location_name": "Test Location",
                 "location_address": "123 Test St",
-                "start_date": "2026-09-01",
-                "start_time": "10:00:00",
-                "end_time": "12:00:00",
-                "max_champions": 1,
-                "max_helpers": 2,
+                "shifts-TOTAL_FORMS": "1",
+                "shifts-INITIAL_FORMS": "1",
+                "shifts-MIN_NUM_FORMS": "0",
+                "shifts-MAX_NUM_FORMS": "1000",
+                "shifts-0-id": shift.pk,
+                "shifts-0-date": "2026-09-01",
+                "shifts-0-start_time": "10:00:00",
+                "shifts-0-end_time": "12:00:00",
+                "shifts-0-max_champions": 1,
+                "shifts-0-max_helpers": 2,
             },
         )
         self.assertEqual(resp.status_code, 302)

@@ -1,6 +1,6 @@
 from django import forms
 
-from outreach.models import OutreachEvent, OutreachSignup
+from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
 from programs.models import Student
 from programs.utils import active_students_in_program
 from programs.widgets import DualListboxWidget
@@ -13,41 +13,41 @@ class OutreachEventForm(forms.ModelForm):
             "name",
             "location_name",
             "location_address",
-            "start_date",
-            "start_time",
-            "end_date",
-            "end_time",
             "description",
-            "max_champions",
-            "max_helpers",
         ]
+
+
+class OutreachShiftForm(forms.ModelForm):
+    class Meta:
+        model = OutreachShift
+        fields = ["date", "start_time", "end_time", "max_champions", "max_helpers"]
         widgets = {
-            "start_date": forms.DateInput(attrs={"type": "date"}),
-            "end_date": forms.DateInput(attrs={"type": "date"}),
+            "date": forms.DateInput(attrs={"type": "date"}),
             "start_time": forms.TimeInput(attrs={"type": "time"}),
             "end_time": forms.TimeInput(attrs={"type": "time"}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
-        start_date = cleaned_data.get("start_date")
+        date = cleaned_data.get("date")
         start_time = cleaned_data.get("start_time")
-        end_date = cleaned_data.get("end_date")
         end_time = cleaned_data.get("end_time")
 
-        if start_date and start_time and end_time:
-            from datetime import datetime
-
-            start_dt = datetime.combine(start_date, start_time)
-            if end_date:
-                end_dt = datetime.combine(end_date, end_time)
-            else:
-                end_dt = datetime.combine(start_date, end_time)
-
-            if end_dt <= start_dt:
-                raise forms.ValidationError("End time must be after start time.")
+        if date and start_time and end_time and end_time <= start_time:
+            raise forms.ValidationError("End time must be after start time.")
 
         return cleaned_data
+
+
+OutreachShiftFormSet = forms.inlineformset_factory(
+    OutreachEvent,
+    OutreachShift,
+    form=OutreachShiftForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
 
 
 class OutreachManageSignupsForm(forms.Form):
@@ -67,17 +67,17 @@ class OutreachManageSignupsForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
-        self.event = kwargs.pop("event")
+        self.shift = kwargs.pop("shift")
         super().__init__(*args, **kwargs)
-        active_students = active_students_in_program(self.event.program)
+        active_students = active_students_in_program(self.shift.event.program)
         self.fields["champions"].queryset = active_students
         self.fields["helpers"].queryset = active_students
 
         # Set initial values
-        self.fields["champions"].initial = self.event.champions.values_list(
+        self.fields["champions"].initial = self.shift.champions.values_list(
             "student_id", flat=True
         )
-        self.fields["helpers"].initial = self.event.helpers.values_list(
+        self.fields["helpers"].initial = self.shift.helpers.values_list(
             "student_id", flat=True
         )
 
@@ -95,13 +95,13 @@ class OutreachManageSignupsForm(forms.Form):
                 )
 
         # Check limits
-        if champions and champions.count() > self.event.max_champions:
+        if champions and champions.count() > self.shift.max_champions:
             raise forms.ValidationError(
-                f"Maximum number of champions is {self.event.max_champions}."
+                f"Maximum number of champions is {self.shift.max_champions}."
             )
-        if helpers and helpers.count() > self.event.max_helpers:
+        if helpers and helpers.count() > self.shift.max_helpers:
             raise forms.ValidationError(
-                f"Maximum number of helpers is {self.event.max_helpers}."
+                f"Maximum number of helpers is {self.shift.max_helpers}."
             )
 
         return cleaned_data
@@ -112,12 +112,12 @@ class OutreachManageSignupsForm(forms.Form):
 
         # Remove old signups not in the new lists
         all_new_student_ids = [s.id for s in champions] + [s.id for s in helpers]
-        self.event.signups.exclude(student_id__in=all_new_student_ids).delete()
+        self.shift.signups.exclude(student_id__in=all_new_student_ids).delete()
 
         # Update or create champions
         for student in champions:
             OutreachSignup.objects.update_or_create(
-                event=self.event,
+                shift=self.shift,
                 student=student,
                 defaults={"role": OutreachSignup.CHAMPION},
             )
@@ -125,7 +125,7 @@ class OutreachManageSignupsForm(forms.Form):
         # Update or create helpers
         for student in helpers:
             OutreachSignup.objects.update_or_create(
-                event=self.event,
+                shift=self.shift,
                 student=student,
                 defaults={"role": OutreachSignup.HELPER},
             )

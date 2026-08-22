@@ -1,14 +1,14 @@
 {% load form_tags %}
 <div class="modal-header">
-    <h5 class="modal-title" id="manageSignupsModalLabel{{ event.pk }}">Manage Sign-ups: {{ event.name }}</h5>
+    <h5 class="modal-title" id="manageSignupsModalLabel{{ shift.pk }}">Manage Sign-ups: {{ shift.event.name }} ({{ shift.date }})</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
-<form method="post" action="{% url 'outreach:event_manage_signups' program.id event.pk %}">
+<form method="post" action="{% url 'outreach:shift_manage_signups' program.id shift.pk %}">
     {% csrf_token %}
     <div class="modal-body">
         <p class="text-muted small mb-4">
-            Add or remove students for this event. A student can only be assigned to one role (Champion or Helper).
-            Maximums: {{ event.max_champions }} Champions, {{ event.max_helpers }} Helpers.
+            Add or remove students for this shift. A student can only be assigned to one role (Champion or Helper).
+            Maximums: {{ shift.max_champions }} Champions, {{ shift.max_helpers }} Helpers.
         </p>
         
         <div class="mb-4">

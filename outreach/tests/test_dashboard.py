@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -38,7 +39,7 @@ class OutreachDashboardTest(TestCase):
         self.parent_adult = Adult.objects.create(user=self.parent_user, is_parent=True)
         self.parent_adult.students.add(self.student_profile)
 
-        self.event = OutreachEvent.objects.create(
+        self.event = create_outreach_event(
             program=self.program,
             name="Dashboard Event",
             location_name="Loc",
@@ -46,9 +47,11 @@ class OutreachDashboardTest(TestCase):
             start_date=timezone.now().date(),
             start_time="10:00:00",
             end_time="12:00:00",
-            max_champions=1,
-            max_helpers=5,
         )
+        self.shift = self.event.shifts.first()
+        self.shift.max_champions = 1
+        self.shift.max_helpers = 5
+        self.shift.save()
 
     def test_student_dashboard_shows_outreach(self):
         self.client.login(username="student", password="password")  # nosec B106
@@ -62,7 +65,7 @@ class OutreachDashboardTest(TestCase):
 
     def test_student_dashboard_shows_signed_up_badge(self):
         OutreachSignup.objects.create(
-            student=self.student_profile, event=self.event, role=OutreachSignup.HELPER
+            student=self.student_profile, shift=self.shift, role=OutreachSignup.HELPER
         )
         self.client.login(username="student", password="password")  # nosec B106
         url = reverse("profile_dashboard")
@@ -81,7 +84,7 @@ class OutreachDashboardTest(TestCase):
 
     def test_parent_dashboard_shows_going_badge(self):
         OutreachSignup.objects.create(
-            student=self.student_profile, event=self.event, role=OutreachSignup.HELPER
+            student=self.student_profile, shift=self.shift, role=OutreachSignup.HELPER
         )
         self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("profile_dashboard")

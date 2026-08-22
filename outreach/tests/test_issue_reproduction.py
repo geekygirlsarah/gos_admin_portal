@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from outreach.models import OutreachEvent, OutreachSignup
+from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -35,7 +36,7 @@ class OutreachStatsHoursTest(TestCase):
         today = timezone.now().date()
 
         # Past event (1 hour)
-        self.past_event = OutreachEvent.objects.create(
+        self.past_event = create_outreach_event(
             program=self.program,
             name="Past Event",
             location_name="Loc 1",
@@ -45,11 +46,13 @@ class OutreachStatsHoursTest(TestCase):
             end_time=time(11, 0),
         )
         OutreachSignup.objects.create(
-            student=self.student, event=self.past_event, role=OutreachSignup.CHAMPION
+            student=self.student,
+            shift=self.past_event.shifts.first(),
+            role=OutreachSignup.CHAMPION,
         )
 
         # Upcoming event (2 hours)
-        self.upcoming_event = OutreachEvent.objects.create(
+        self.upcoming_event = create_outreach_event(
             program=self.program,
             name="Upcoming Event",
             location_name="Loc 2",
@@ -59,7 +62,9 @@ class OutreachStatsHoursTest(TestCase):
             end_time=time(12, 0),
         )
         OutreachSignup.objects.create(
-            student=self.student, event=self.upcoming_event, role=OutreachSignup.HELPER
+            student=self.student,
+            shift=self.upcoming_event.shifts.first(),
+            role=OutreachSignup.HELPER,
         )
 
     def test_stats_include_upcoming_champions(self):
@@ -68,7 +73,7 @@ class OutreachStatsHoursTest(TestCase):
         but total_outreach_hours only includes past ones.
         """
         today = timezone.now().date()
-        upcoming_event = OutreachEvent.objects.create(
+        upcoming_event = create_outreach_event(
             program=self.program,
             name="Upcoming Champ Event",
             location_name="Loc U",
@@ -78,7 +83,9 @@ class OutreachStatsHoursTest(TestCase):
             end_time=time(12, 0),
         )
         OutreachSignup.objects.create(
-            student=self.student, event=upcoming_event, role=OutreachSignup.CHAMPION
+            student=self.student,
+            shift=upcoming_event.shifts.first(),
+            role=OutreachSignup.CHAMPION,
         )
 
         self.client.login(username="student1", password="password")  # nosec B106
