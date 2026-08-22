@@ -28,6 +28,27 @@ class OutreachEventForm(forms.ModelForm):
             "end_time": forms.TimeInput(attrs={"type": "time"}),
         }
 
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get("start_date")
+        start_time = cleaned_data.get("start_time")
+        end_date = cleaned_data.get("end_date")
+        end_time = cleaned_data.get("end_time")
+
+        if start_date and start_time and end_time:
+            from datetime import datetime
+
+            start_dt = datetime.combine(start_date, start_time)
+            if end_date:
+                end_dt = datetime.combine(end_date, end_time)
+            else:
+                end_dt = datetime.combine(start_date, end_time)
+
+            if end_dt <= start_dt:
+                raise forms.ValidationError("End time must be after start time.")
+
+        return cleaned_data
+
 
 class OutreachManageSignupsForm(forms.Form):
     champions = forms.ModelMultipleChoiceField(

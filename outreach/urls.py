@@ -22,4 +22,9 @@ urlpatterns = [
         views.OutreachEventManageSignupsView.as_view(),
         name="event_manage_signups",
     ),
+    path(
+        "student-stats/",
+        views.OutreachStudentStatsView.as_view(),
+        name="student_stats",
+    ),
 ]

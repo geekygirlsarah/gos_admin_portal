@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.db.models.functions import Coalesce
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -58,10 +58,9 @@ class OutreachEventListView(
             .order_by("start_date", "start_time")
         )
 
-        upcoming_events = events.filter(effective_end_date__gte=today)
-        past_events = events.filter(effective_end_date__lt=today).order_by(
-            "-start_date", "-start_time"
-        )
+        upcoming_events = [e for e in events if not e.is_past]
+        past_events = [e for e in events if e.is_past]
+        past_events.sort(key=lambda e: (e.start_date, e.start_time), reverse=True)
 
         context["upcoming_events"] = upcoming_events
         context["past_events"] = past_events
@@ -69,21 +68,41 @@ class OutreachEventListView(
         if role == "Student":
             try:
                 student = user.student_profile
-                context["my_events"] = upcoming_events.filter(
-                    signups__student=student
-                ).distinct()
-                context["other_events"] = upcoming_events.exclude(
-                    signups__student=student
-                )
-                context["student_signups"] = OutreachSignup.objects.filter(
-                    student=student, event__program=self.program
-                ).values_list("event_id", flat=True)
-                context["student_signup_roles"] = {
-                    s.event_id: s.role
-                    for s in OutreachSignup.objects.filter(
+
+                # Get student signups for this program
+                student_signups = list(
+                    OutreachSignup.objects.filter(
                         student=student, event__program=self.program
-                    )
+                    ).select_related("event")
+                )
+
+                student_signup_ids = {s.event_id for s in student_signups}
+
+                context["my_events"] = [
+                    e for e in upcoming_events if e.id in student_signup_ids
+                ]
+                context["other_events"] = [
+                    e for e in upcoming_events if e.id not in student_signup_ids
+                ]
+
+                context["student_signups"] = list(student_signup_ids)
+                context["student_signup_roles"] = {
+                    s.event_id: s.role for s in student_signups
                 }
+
+                # Add outreach stats
+                past_signups = [s for s in student_signups if s.event.is_past]
+                upcoming_signups = [s for s in student_signups if not s.event.is_past]
+
+                context["championed_count"] = sum(
+                    1 for s in student_signups if s.role == OutreachSignup.CHAMPION
+                )
+                context["total_outreach_hours"] = sum(
+                    s.event.duration_hours for s in past_signups
+                )
+                context["pending_outreach_hours"] = sum(
+                    s.event.duration_hours for s in upcoming_signups
+                )
             except AttributeError:
                 pass
 
@@ -240,3 +259,56 @@ class OutreachEventManageSignupsView(
                     )
 
         return redirect("outreach:event_list", program_id=self.program.id)
+
+
+class OutreachStudentStatsView(
+    LoginRequiredMixin, OutreachProgramMixin, DynamicReadPermissionMixin, View
+):
+    section = "outreach"
+
+    def get(self, request, program_id):
+        from programs.utils import active_students_in_program
+
+        students = (
+            active_students_in_program(self.program)
+            .annotate(display_first_name=Coalesce("first_name", "legal_first_name"))
+            .order_by("display_first_name", "last_name")
+        )
+
+        # Prefetch signups and events to avoid N+1
+        students = students.prefetch_related(
+            Prefetch(
+                "outreach_signups",
+                queryset=OutreachSignup.objects.filter(
+                    event__program=self.program
+                ).select_related("event"),
+                to_attr="program_signups",
+            )
+        )
+
+        student_stats = []
+        for student in students:
+            signups = student.program_signups
+            past_signups = [s for s in signups if s.event.is_past]
+            championed = sum(1 for s in signups if s.role == OutreachSignup.CHAMPION)
+            hours = sum(s.event.duration_hours for s in past_signups)
+            pending_hours = sum(
+                s.event.duration_hours for s in signups if not s.event.is_past
+            )
+            student_stats.append(
+                {
+                    "name": student.full_name,
+                    "championed": championed,
+                    "hours": hours,
+                    "pending_hours": pending_hours,
+                }
+            )
+
+        return render(
+            request,
+            "outreach/_student_stats_modal_content.html",
+            {
+                "student_stats": student_stats,
+                "program": self.program,
+            },
+        )

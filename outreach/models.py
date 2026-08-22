@@ -44,12 +44,47 @@ class OutreachEvent(models.Model):
 
     @property
     def is_past(self):
+        from datetime import datetime
+
         from django.utils import timezone
 
-        today = timezone.now().date()
+        now = timezone.now()
         if self.end_date:
-            return self.end_date < today
-        return self.start_date < today
+            end_dt = datetime.combine(self.end_date, self.end_time)
+        else:
+            end_dt = datetime.combine(self.start_date, self.end_time)
+
+        if timezone.is_naive(end_dt):
+            end_dt = timezone.make_aware(end_dt)
+
+        return end_dt < now
+
+    @property
+    def duration_hours(self):
+        from datetime import datetime
+
+        start = datetime.combine(self.start_date, self.start_time)
+        if self.end_date:
+            end = datetime.combine(self.end_date, self.end_time)
+        else:
+            end = datetime.combine(self.start_date, self.end_time)
+
+        diff = end - start
+        return max(0, diff.total_seconds() / 3600.0)
+
+    def clean(self):
+        from datetime import datetime
+
+        super().clean()
+        if self.start_date and self.start_time and self.end_time:
+            start_dt = datetime.combine(self.start_date, self.start_time)
+            if self.end_date:
+                end_dt = datetime.combine(self.end_date, self.end_time)
+            else:
+                end_dt = datetime.combine(self.start_date, self.end_time)
+
+            if end_dt <= start_dt:
+                raise ValidationError("End time must be after start time.")
 
 
 class OutreachSignup(models.Model):

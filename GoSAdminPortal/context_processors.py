@@ -96,9 +96,24 @@ def navbar_context(request):
         except (AttributeError, Exception):
             pass
 
+    # Injects student_outreach_programs for the nav bar
+    student_outreach_programs = []
+    if role == "Student":
+        try:
+            student = request.user.student_profile
+            active_enrollments = Enrollment.objects.filter(
+                student=student, active=True
+            ).select_related("program")
+            for e in active_enrollments:
+                if e.program.features.filter(key="outreach").exists():
+                    student_outreach_programs.append(e.program)
+        except (Student.DoesNotExist, AttributeError):
+            pass
+
     return {
         "current_program": current_program,
         "navbar_role": role,
+        "student_outreach_programs": student_outreach_programs,
         # Flag-style helpers: an Adult can hold several roles at once (e.g. a
         # parent who also mentors), so expose each independently rather than
         # relying on the single navbar_role string.

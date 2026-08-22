@@ -94,7 +94,7 @@
         <div class="card-footer bg-transparent border-top-0 pb-3">
             <div class="d-flex gap-2 align-items-center justify-content-between">
                 <div>
-                    {% if user_role == 'Mentor' or user_role == 'LeadMentor' %}
+                    {% if user_role == 'Mentor' or user_role == 'LeadMentor' or student_signup_roles|get_item:event.id == 'champion' %}
                     <button type="button" class="btn btn-outline-primary btn-sm manage-signups-btn" 
                             data-url="{% url 'outreach:event_manage_signups' program.id event.pk %}">
                         Sign-ups
