@@ -134,11 +134,20 @@ class DashboardStatusTests(TestCase):
         # Should also show Withdrawn Program because the program itself is ACTIVE
         self.assertContains(response, "Withdrawn Program")
 
-        # Should NOT show Upcoming or Inactive programs
-        self.assertNotContains(response, "Upcoming Program")
+        # Upcoming programs are visible too so mentors can prepare
+        # (rosters/emails) before a program starts; inactive ones are not.
+        self.assertContains(response, "Upcoming Program")
         self.assertNotContains(response, "Inactive Program")
+
+        # Status badges distinguish current from upcoming programs
+        # (Active Program + Withdrawn Program are current; one is upcoming).
+        self.assertContains(response, ">Current</span>", count=2)
+        self.assertContains(response, ">Upcoming</span>", count=1)
 
         # Should have a link to details
         self.assertContains(
             response, reverse("program_detail", args=[self.active_program.pk])
+        )
+        self.assertContains(
+            response, reverse("program_detail", args=[self.upcoming_program.pk])
         )

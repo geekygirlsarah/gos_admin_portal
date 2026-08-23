@@ -56,6 +56,11 @@
                     {% can_read user 'programs' current_program as can_view_program %}
                     {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
+                        {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
+                        <li class="nav-item">
+                            <a class="nav-link{% if request.resolver_match.view_name == 'program_list' %} active{% endif %}" href="{% url 'program_list' %}">Programs</a>
+                        </li>
+                        {% endif %}
                         {% if navbar_role != 'Student' %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
@@ -90,6 +95,8 @@
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
                             </li>
+                        {% endif %}
+                        {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
                             </li>
@@ -97,7 +104,7 @@
  
                     {% else %}
                         {# ── No program selected or no access: show minimal nav ── #}
-                        {% if navbar_role == 'LeadMentor' %}
+                        {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
                         <li class="nav-item"><a class="nav-link" href="/programs/">Programs</a></li>
                         {% endif %}
                     {% endif %}

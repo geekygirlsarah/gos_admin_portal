@@ -337,14 +337,20 @@ MENTOR DASHBOARD
 {% endcomment %}
 {% if adult and is_mentor %}
 <section class="mb-5">
-    <h2 class="h4 mb-3">Active Programs</h2>
+    <h2 class="h4 mb-3">Current &amp; Upcoming Programs</h2>
     {% if mentor_active_programs %}
         <div class="row row-cols-1 row-cols-md-2 g-4">
             {% for prog in mentor_active_programs %}
                 <div class="col">
                     <div class="card h-100 border-primary shadow-sm">
                         <div class="card-body">
-                            <h5 class="card-title text-primary">{{ prog.name }}</h5>
+                            <h5 class="card-title text-primary">{{ prog.name }}
+                                {% if prog.status == 'Upcoming' %}
+                                    <span class="badge bg-warning text-dark ms-1 align-middle">Upcoming</span>
+                                {% elif prog.status == 'Active' %}
+                                    <span class="badge bg-success ms-1 align-middle">Current</span>
+                                {% endif %}
+                            </h5>
                             {% if prog.start_date or prog.end_date %}
                                 <p class="card-text small text-muted mb-2">
                                     <i class="bi bi-calendar3 me-1"></i>

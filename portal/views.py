@@ -178,9 +178,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             if adult.is_mentor:
                 from programs.models import Program
 
-                # Get all programs that are currently Active
+                # Get all programs that are currently Active or Upcoming so
+                # mentors can prepare (rosters, emails) before a program starts.
                 all_active = Program.objects.filter(active=True).order_by("name")
-                mentor_active_programs = [p for p in all_active if p.status == "Active"]
+                mentor_active_programs = [
+                    p for p in all_active if p.status in ("Active", "Upcoming")
+                ]
                 context["mentor_active_programs"] = mentor_active_programs
 
                 # Upcoming outreach shifts this mentor volunteered to support.

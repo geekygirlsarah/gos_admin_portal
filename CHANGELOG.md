@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-22
 
 ### Added
+- **Mentor Access to Upcoming Programs**: Mentors can now see and open upcoming (future) programs from the Programs page and their dashboard, with the same access they have for currently running programs. This lets mentors review rosters before a program starts. Past and inactive programs remain hidden.
+- **Mentors Can Send Program Emails**: Mentors can now send emails to a program's students, parents, and mentors — for current and upcoming programs alike. A "Send Email" button now appears on the program page and an "Email Program" link appears in the navigation bar for mentors.
+- **Programs Link in Mentor Navigation**: Mentors now have a "Programs" item in the top navigation bar, so they can always get back to the program list. The list shows all active programs: past programs are listed with their dates but shown as plain text (not clickable), while current and upcoming programs open as before.
+- **Current/Upcoming Badges on Mentor Dashboard**: Program cards on the mentor dashboard now show a "Current" or "Upcoming" badge so it's easy to tell which programs are running now versus starting later.
 - **Mentor Support Signups for Outreach Events**: Mentors can now volunteer to support outreach event shifts. A "Sign up to Support (Mentor)" button appears on each shift card for mentors, and mentor names are visible to everyone on the event cards. Unlike student signups, there is no limit on the number of mentors who can support a shift, and mentors can cancel their own signups at any time.
 - **Outreach Signups on Mentor Dashboard**: The mentor dashboard now has a "My Outreach Signups" section listing the upcoming outreach shifts each mentor volunteered to support, with quick links to view the events or cancel a signup.
 

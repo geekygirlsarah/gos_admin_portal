@@ -241,8 +241,9 @@ def can_user_read(user, section, obj=None):
             return False
     elif role == "Mentor" and obj:
         if isinstance(obj, Program):
-            # Mentors can only view active programs
-            return obj.status == "Active"
+            # Mentors can view current and upcoming programs (e.g. to review
+            # rosters before a program starts); past/inactive stay hidden.
+            return obj.status in ("Active", "Upcoming")
         if isinstance(obj, Adult):
             # Mentors can only view Parents with a student in an active program
             if not obj.is_parent:
