@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-22
 
 ### Added
+- **Inline Editing on Andrew IDs Page**: On the Andrew ID management page, each name in the "Currently Assigned" list is now a link that expands an edit form right in the table row, so you can update the expiration date or sponsor without searching for the person first.
 - **Confirm Before Sending Bulk Emails**: The "Send Email" buttons on all email pages (program messaging, applicant messaging, and balance-sheet emails) now open a confirmation pop-up first. It recaps exactly who the message will go to (students, parents/guardians, mentors, or a test send to yourself), which outgoing address it will come from, and the subject line, and shows a preview of the message. The "Confirm & Send" button stays disabled until you also tick a box confirming the message is written on behalf of Girls of Steel Robotics.
 - **Mentor Access to Upcoming Programs**: Mentors can now see and open upcoming (future) programs from the Programs page and their dashboard, with the same access they have for currently running programs. This lets mentors review rosters before a program starts. Past and inactive programs remain hidden.
 - **Mentors Can Send Program Emails**: Mentors can now send emails to a program's students, parents, and mentors — for current and upcoming programs alike. A "Send Email" button now appears on the program page and an "Email Program" link appears in the navigation bar for mentors.

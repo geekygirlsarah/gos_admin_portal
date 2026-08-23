@@ -141,7 +141,15 @@
             <tbody>
                 {% for entry in assigned_people %}
                 <tr>
-                    <td><strong>{{ entry.person }}</strong></td>
+                    <td>
+                        <button type="button" class="btn btn-link p-0 text-decoration-none fw-semibold"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#edit-{{ entry.type }}-{{ entry.person.pk }}"
+                                aria-expanded="false"
+                                aria-controls="edit-{{ entry.type }}-{{ entry.person.pk }}">
+                            {{ entry.person }}
+                        </button>
+                    </td>
                     <td>
                         <span class="badge {% if entry.type == 'student' %}bg-info{% else %}bg-success{% endif %}">
                             {{ entry.type|title }}
@@ -165,6 +173,41 @@
                             <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove Andrew ID for {{ entry.person }}?')">
                                 Clear
                             </button>
+                        </form>
+                    </td>
+                </tr>
+                <tr class="collapse" id="edit-{{ entry.type }}-{{ entry.person.pk }}">
+                    <td colspan="6" class="bg-light">
+                        <form method="post" class="row g-2 align-items-end py-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="set">
+                            <input type="hidden" name="person_type" value="{{ entry.type }}">
+                            <input type="hidden" name="person_id" value="{{ entry.person.pk }}">
+                            <div class="col-auto">
+                                <label class="form-label mb-0 small text-muted">Andrew ID</label>
+                                <input type="text" name="andrew_id" class="form-control form-control-sm"
+                                       value="{{ entry.person.andrew_id }}" required
+                                       pattern="[a-zA-Z][a-zA-Z0-9]+" title="Must start with a letter, lowercase letters and digits only">
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label mb-0 small text-muted">Expiration</label>
+                                <input type="date" name="andrew_id_expiration" class="form-control form-control-sm"
+                                       value="{{ entry.person.andrew_id_expiration|date:'Y-m-d'|default:'' }}">
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label mb-0 small text-muted">Sponsor</label>
+                                <select name="andrew_id_sponsor" class="form-select form-select-sm">
+                                    <option value="">Sponsor...</option>
+                                    {% for sponsor in sponsor_choices %}
+                                    <option value="{{ sponsor.pk }}" {% if entry.person.andrew_id_sponsor_id == sponsor.pk %}selected{% endif %}>
+                                        {{ sponsor }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                            </div>
                         </form>
                     </td>
                 </tr>
