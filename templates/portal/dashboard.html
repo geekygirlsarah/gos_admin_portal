@@ -337,14 +337,20 @@ MENTOR DASHBOARD
 {% endcomment %}
 {% if adult and is_mentor %}
 <section class="mb-5">
-    <h2 class="h4 mb-3">Active Programs</h2>
+    <h2 class="h4 mb-3">Current &amp; Upcoming Programs</h2>
     {% if mentor_active_programs %}
         <div class="row row-cols-1 row-cols-md-2 g-4">
             {% for prog in mentor_active_programs %}
                 <div class="col">
                     <div class="card h-100 border-primary shadow-sm">
                         <div class="card-body">
-                            <h5 class="card-title text-primary">{{ prog.name }}</h5>
+                            <h5 class="card-title text-primary">{{ prog.name }}
+                                {% if prog.status == 'Upcoming' %}
+                                    <span class="badge bg-warning text-dark ms-1 align-middle">Upcoming</span>
+                                {% elif prog.status == 'Active' %}
+                                    <span class="badge bg-success ms-1 align-middle">Current</span>
+                                {% endif %}
+                            </h5>
                             {% if prog.start_date or prog.end_date %}
                                 <p class="card-text small text-muted mb-2">
                                     <i class="bi bi-calendar3 me-1"></i>
@@ -367,6 +373,39 @@ MENTOR DASHBOARD
             <p class="mb-0">No active programs found at this time. You can view past programs or manage your account below.</p>
             <hr>
             <a href="{% url 'program_list' %}" class="btn btn-sm btn-outline-primary">View All Programs</a>
+        </div>
+    {% endif %}
+</section>
+
+<section class="mb-5">
+    <h2 class="h4 mb-3">My Outreach Signups</h2>
+    {% if mentor_outreach_signups %}
+        <div class="card shadow-sm">
+            <ul class="list-group list-group-flush">
+                {% for signup in mentor_outreach_signups %}
+                <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center py-3">
+                    <div class="me-3">
+                        <strong class="d-block">{{ signup.event.name }}</strong>
+                        <small class="text-muted">
+                            <i class="bi bi-calendar-event me-1"></i>{{ signup.shift.date|date:"N j, Y" }}
+                            <i class="bi bi-clock ms-2 me-1"></i>{{ signup.shift.start_time|time:"g:i A" }} &ndash; {{ signup.shift.end_time|time:"g:i A" }}
+                            <span class="ms-2"><i class="bi bi-geo-alt me-1"></i>{{ signup.event.location_name }}</span>
+                        </small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'outreach:event_list' signup.event.program_id %}" class="btn btn-sm btn-outline-primary">View Events</a>
+                        <form action="{% url 'outreach:shift_mentor_cancel' signup.event.program_id signup.shift_id %}" method="post" class="mb-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to cancel your support signup for this shift?">Cancel</button>
+                        </form>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% else %}
+        <div class="alert alert-light border shadow-sm mb-0">
+            You are not signed up to support any upcoming outreach events. Find events on a program's Outreach page.
         </div>
     {% endif %}
 </section>

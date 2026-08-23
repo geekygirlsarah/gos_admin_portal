@@ -34,7 +34,7 @@
                 {% for program in future_programs %}
                   <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
-                      <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                      {% can_read user 'programs' program as can_open_program %}{% if can_open_program %}<a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>{% else %}<span>{{ program.name }}</span>{% endif %}
                       {% if program.start_date %}
                         <small class="text-muted ms-2">starts {{ program.start_date }}</small>
                       {% endif %}
@@ -53,7 +53,7 @@
                 {% for program in current_programs %}
                   <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
-                      <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                      {% can_read user 'programs' program as can_open_program %}{% if can_open_program %}<a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>{% else %}<span>{{ program.name }}</span>{% endif %}
                       {% if program.start_date or program.end_date %}
                         <small class="text-muted ms-2">
                           {% if program.start_date %}{{ program.start_date }}{% endif %}
@@ -77,7 +77,7 @@
                   {% for program in year_programs %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                       <div>
-                        <a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>
+                        {% can_read user 'programs' program as can_open_program %}{% if can_open_program %}<a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>{% else %}<span>{{ program.name }}</span>{% endif %}
                         {% if program.end_date %}
                           <small class="text-muted ms-2">ended {{ program.end_date }}</small>
                         {% endif %}

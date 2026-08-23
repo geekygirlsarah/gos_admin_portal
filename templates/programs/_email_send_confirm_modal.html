@@ -1,0 +1,51 @@
+{% comment %}
+Shared send-confirmation modal for bulk email forms (program messaging,
+applicant messaging, and balance-sheet emails). Include this inside (or
+right after) the form and load static js/email_send_confirm.js. The form
+must have the class "js-email-send-confirm".
+{% endcomment %}
+<div
+  class="modal fade"
+  id="emailSendConfirmModal"
+  tabindex="-1"
+  aria-labelledby="emailSendConfirmModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="emailSendConfirmModalLabel">Confirm Before Sending</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Double-check everything below before this email goes out.</p>
+        <dl class="row mb-3">
+          <dt class="col-sm-3" id="email-confirm-audience-label">Sending to</dt>
+          <dd class="col-sm-9" data-email-confirm-audience>&mdash;</dd>
+
+          <dt class="col-sm-3" id="email-confirm-sender-label">Send from</dt>
+          <dd class="col-sm-9" data-email-confirm-sender>&mdash;</dd>
+
+          <dt class="col-sm-3" id="email-confirm-subject-label">Subject</dt>
+          <dd class="col-sm-9 fw-semibold" data-email-confirm-subject>&mdash;</dd>
+        </dl>
+        <div class="small mb-1 fw-semibold">Message preview</div>
+        <div
+          class="border rounded bg-light overflow-auto vh-25 mb-3"
+          data-email-confirm-preview
+          aria-label="Message preview"
+        ></div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="email-confirm-on-behalf">
+          <label class="form-check-label" for="email-confirm-on-behalf">
+            This message is written on behalf of Girls of Steel Robotics.
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Not Yet &mdash; Go Back</button>
+        <button type="button" class="btn btn-primary" id="email-confirm-send" disabled>Confirm &amp; Send</button>
+      </div>
+    </div>
+  </div>
+</div>

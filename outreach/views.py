@@ -15,10 +15,20 @@ from outreach.forms import (
     OutreachManageSignupsForm,
     OutreachShiftFormSet,
 )
-from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
+from outreach.models import (
+    OutreachEvent,
+    OutreachMentorSignup,
+    OutreachShift,
+    OutreachSignup,
+)
 from outreach.utils import compute_outreach_stats
 from programs.models import Program
-from programs.permission_views import can_user_delete, can_user_write, get_user_role
+from programs.permission_views import (
+    can_user_delete,
+    can_user_write,
+    get_user_role,
+    user_is_mentor,
+)
 from programs.views.mixins import (
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
@@ -51,7 +61,12 @@ class OutreachEventListView(
 
     def get_queryset(self):
         return OutreachEvent.objects.filter(program=self.program).prefetch_related(
-            "shifts"
+            Prefetch(
+                "shifts",
+                queryset=OutreachShift.objects.prefetch_related(
+                    "signups__student", "mentor_signups__adult"
+                ),
+            )
         )
 
     def get_context_data(self, **kwargs):
@@ -112,6 +127,21 @@ class OutreachEventListView(
                 pass
 
         context["can_add"] = can_user_write(user, "outreach")
+
+        # Mentor support signups: any mentor (or lead mentor) may volunteer
+        # for a shift; there is no capacity limit.
+        context["viewer_is_mentor"] = user_is_mentor(user) or role == "LeadMentor"
+        context["mentor_signup_shift_ids"] = set()
+        try:
+            context["mentor_signup_shift_ids"] = set(
+                OutreachMentorSignup.objects.filter(
+                    adult=user.adult_profile,
+                    shift__event__program=self.program,
+                ).values_list("shift_id", flat=True)
+            )
+        except AttributeError:
+            pass
+
         return context
 
 
@@ -263,6 +293,69 @@ class OutreachShiftCancelView(LoginRequiredMixin, OutreachProgramMixin, View):
             messages.error(request, "You are not signed up for this shift.")
         except AttributeError:
             messages.error(request, "Only students can cancel signups.")
+
+        return redirect("outreach:event_list", program_id=self.program.id)
+
+
+class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, View):
+    """Let a mentor volunteer to support a specific shift.
+
+    There is no capacity limit for mentor support signups.
+    """
+
+    def post(self, request, program_id, shift_pk):
+        shift = get_object_or_404(
+            OutreachShift, pk=shift_pk, event__program=self.program
+        )
+        role = get_user_role(request.user)
+        if not (user_is_mentor(request.user) or role == "LeadMentor"):
+            messages.error(
+                request, "Only mentors can sign up to support outreach shifts."
+            )
+            return redirect("outreach:event_list", program_id=self.program.id)
+
+        try:
+            adult = request.user.adult_profile
+        except AttributeError:
+            messages.error(
+                request,
+                "We couldn't find your mentor profile to sign you up. "
+                "Please contact a Lead Mentor.",
+            )
+            return redirect("outreach:event_list", program_id=self.program.id)
+
+        signup, created = OutreachMentorSignup.objects.get_or_create(
+            adult=adult, shift=shift
+        )
+        if created:
+            messages.success(
+                request,
+                f"Thanks! You are signed up to support {shift.event.name} on {shift.date}.",
+            )
+        else:
+            messages.info(
+                request,
+                f"You are already signed up to support {shift.event.name} on {shift.date}.",
+            )
+
+        return redirect("outreach:event_list", program_id=self.program.id)
+
+
+class OutreachShiftMentorCancelView(LoginRequiredMixin, OutreachProgramMixin, View):
+    def post(self, request, program_id, shift_pk):
+        shift = get_object_or_404(
+            OutreachShift, pk=shift_pk, event__program=self.program
+        )
+        try:
+            signup = OutreachMentorSignup.objects.get(
+                adult=request.user.adult_profile, shift=shift
+            )
+            signup.delete()
+            messages.success(request, "Support signup cancelled.")
+        except OutreachMentorSignup.DoesNotExist:
+            messages.error(request, "You are not signed up to support this shift.")
+        except AttributeError:
+            messages.error(request, "Only mentors can cancel support signups.")
 
         return redirect("outreach:event_list", program_id=self.program.id)
 

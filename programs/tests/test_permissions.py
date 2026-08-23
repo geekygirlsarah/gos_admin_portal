@@ -549,12 +549,13 @@ class ProgramPermissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
 
-    def test_mentor_cannot_view_upcoming_program(self):
+    def test_mentor_can_view_upcoming_program(self):
+        # Mentors get the same access to upcoming programs as current ones
+        # (e.g. to review rosters and send emails before a program starts).
         self.client.login(username="mentor_user", password="password123")  # nosec B106
         url = reverse("program_detail", args=[self.upcoming_program.pk])
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("home"))
+        self.assertEqual(response.status_code, 200)
 
     def test_mentor_cannot_view_inactive_program(self):
         self.client.login(username="mentor_user", password="password123")  # nosec B106
@@ -595,9 +596,29 @@ class ProgramPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         programs = response.context["programs"]
         self.assertIn(self.active_program, programs)
-        self.assertNotIn(self.past_program, programs)
-        self.assertNotIn(self.upcoming_program, programs)
+        self.assertIn(self.upcoming_program, programs)
+        # Past programs are listed read-only (names/dates only, no access).
+        self.assertIn(self.past_program, programs)
         self.assertNotIn(self.inactive_program, programs)
+
+    def test_mentor_home_lists_past_programs_without_links(self):
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_list"))
+        self.assertEqual(response.status_code, 200)
+        # Past programs are listed ...
+        self.assertContains(response, "Past Program")
+        # ... but are not clickable for mentors.
+        self.assertNotContains(response, f'href="/programs/{self.past_program.pk}/"')
+        # Current and upcoming programs remain clickable.
+        self.assertContains(response, f'href="/programs/{self.active_program.pk}/"')
+        self.assertContains(response, f'href="/programs/{self.upcoming_program.pk}/"')
+        # Inactive programs are still hidden entirely.
+        self.assertNotContains(response, "Inactive Program")
+
+    def test_mentor_navbar_shows_programs_link(self):
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_list"))
+        self.assertContains(response, 'href="/programs/">Programs</a>')
 
     def test_program_list_empty_for_student(self):
         self.client.login(username="student_user", password="password123")  # nosec B106
@@ -605,6 +626,59 @@ class ProgramPermissionTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context["programs"]), 0)
+
+    def test_mentor_can_access_program_email_for_active_program(self):
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        url = reverse("program_email", args=[self.active_program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_mentor_can_send_email_for_upcoming_program(self):
+        from django.core import mail
+
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        url = reverse("program_email", args=[self.upcoming_program.pk])
+        data = {
+            "program": self.upcoming_program.pk,
+            "recipient_groups": ["mentors"],
+            "subject": "Upcoming Program Kickoff",
+            "body": "<p>Hello mentors</p>",
+            "from_account": "DEFAULT",
+            "test_email": "check@example.com",
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("check@example.com", mail.outbox[0].to)
+
+    def test_mentor_cannot_access_program_email_for_past_program(self):
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        url = reverse("program_email", args=[self.past_program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+    def test_parent_cannot_access_program_email_even_for_own_childs_program(self):
+        child = Student.objects.create(first_name="Child", last_name="OfParent")
+        AdultStudentRelationship.objects.create(
+            adult=self.parent_adult, student=child, relationship_to_student="parent"
+        )
+        Enrollment.objects.create(student=child, program=self.active_program)
+        self.client.login(username="parent_user", password="password123")  # nosec B106
+        url = reverse("program_email", args=[self.active_program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+    def test_student_cannot_access_program_email(self):
+        Enrollment.objects.create(
+            student=self.student_profile, program=self.active_program
+        )
+        self.client.login(username="student_user", password="password123")  # nosec B106
+        url = reverse("program_email", args=[self.active_program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
 
 
 class FinancePermissionTests(TestCase):

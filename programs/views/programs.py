@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives, get_connection
-from django.db.models import Q, Value
+from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -63,13 +63,10 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
         role = get_user_role(self.request.user)
         if role == "Mentor":
-            # Only show active programs to Mentors
-            today = timezone.localdate()
-            qs = (
-                qs.filter(active=True)
-                .filter(Q(start_date__isnull=True) | Q(start_date__lte=today))
-                .filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
-            )
+            # Mentors see all active programs. Current and upcoming ones are
+            # fully accessible; past ones are listed read-only (their detail
+            # pages stay blocked via can_user_read).
+            qs = qs.filter(active=True)
         elif role in ("Student", "Parent", "Alumni"):
             # Students and Parents should not see the program list
             return Program.objects.none()
@@ -615,8 +612,33 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         return redirect("program_assignment", pk=pk)
 
 
-class ProgramEmailView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+class ProgramEmailView(LoginRequiredMixin, View):
+    """Send a bulk email to a program's contacts.
+
+    Lead Mentors can email any program; Mentors can email programs they can
+    read (current and upcoming). Program-wide messaging without a fixed
+    program stays Lead Mentor-only.
+    """
+
     template_name = "programs/email_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            role = get_user_role(request.user)
+            pk = kwargs.get("pk")
+            if pk:
+                program = get_object_or_404(Program, pk=pk)
+                allowed = role in ("LeadMentor", "Mentor") and can_user_read(
+                    request.user, "programs", program
+                )
+            else:
+                allowed = role == "LeadMentor"
+            if not allowed:
+                messages.error(
+                    request, "You do not have permission to access that section."
+                )
+                return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk=None):
         program = get_object_or_404(Program, pk=pk) if pk else None

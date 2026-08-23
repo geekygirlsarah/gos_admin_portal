@@ -55,7 +55,33 @@
                         {% endfor %}
                     </ul>
                     {% endif %}
+
+                    {% if shift.mentor_signups.all %}
+                    <div><span><strong>Mentors:</strong> {{ shift.mentor_signups.count }}</span></div>
+                    <ul class="list-unstyled mb-2 text-muted small">
+                        {% for mentor_signup in shift.mentor_signups.all %}
+                            <li><i class="bi bi-person-badge"></i> {{ mentor_signup.adult.full_name }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
                 </div>
+
+                {% if viewer_is_mentor %}
+                    {% if shift.id in mentor_signup_shift_ids %}
+                        <div class="alert alert-info py-2 small mb-2 text-center">
+                            You are signed up to <strong>support</strong> this shift
+                        </div>
+                        <form action="{% url 'outreach:shift_mentor_cancel' program.id shift.pk %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger btn-sm w-100 js-confirm" data-confirm="Are you sure you want to cancel your support signup for this shift?">Cancel Support Signup</button>
+                        </form>
+                    {% else %}
+                        <form action="{% url 'outreach:shift_mentor_signup' program.id shift.pk %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Sign up to Support (Mentor)</button>
+                        </form>
+                    {% endif %}
+                {% endif %}
 
                 {% if user_role == 'Student' %}
                     {% if shift.id in student_signup_shift_ids %}

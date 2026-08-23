@@ -313,6 +313,58 @@ class AndrewIdManagementViewTests(TestCase):
         self.student.refresh_from_db()
         self.assertIsNone(self.student.andrew_id)
 
+    def test_assigned_list_has_expandable_edit_row(self):
+        self.student.andrew_id = "rstudent"
+        self.student.andrew_email = "rstudent@andrew.cmu.edu"
+        self.student.save()
+
+        response = self.client.get(reverse("andrew_id_management"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+
+        toggle_id = f"edit-student-{self.student.pk}"
+        # The name toggles an expandable edit row.
+        self.assertIn('data-bs-toggle="collapse"', content)
+        self.assertIn(f'data-bs-target="#{toggle_id}"', content)
+        self.assertIn(f'id="{toggle_id}"', content)
+
+        # The expanded row carries the prefilled edit form fields.
+        section = content[content.index(f'id="{toggle_id}"') :]
+        section = section[: section.index("</tr>")]
+        self.assertIn('name="action" value="set"', section)
+        self.assertIn('value="rstudent"', section)
+        self.assertIn('name="andrew_id_expiration"', section)
+        self.assertIn('name="andrew_id_sponsor"', section)
+
+    def test_edit_from_assigned_list_updates_fields(self):
+        sponsor = Adult.objects.create(
+            first_name="Sponsor",
+            last_name="Person",
+            is_mentor=True,
+            andrew_id="sponsor",
+            andrew_email="sponsor@andrew.cmu.edu",
+        )
+        self.student.andrew_id = "rstudent"
+        self.student.andrew_email = "rstudent@andrew.cmu.edu"
+        self.student.save()
+
+        response = self.client.post(
+            reverse("andrew_id_management"),
+            {
+                "action": "set",
+                "person_type": "student",
+                "person_id": self.student.pk,
+                "andrew_id": "rstudent",
+                "andrew_id_expiration": "2027-03-01",
+                "andrew_id_sponsor": str(sponsor.pk),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.andrew_id, "rstudent")
+        self.assertEqual(self.student.andrew_id_expiration, date(2027, 3, 1))
+        self.assertEqual(self.student.andrew_id_sponsor_id, sponsor.pk)
+
     def test_assigned_list_sorted_by_name(self):
         self.student.andrew_id = "rstudent"
         self.student.save()

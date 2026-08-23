@@ -22,6 +22,16 @@ urlpatterns = [
         name="shift_cancel",
     ),
     path(
+        "shifts/<int:shift_pk>/mentor-signup/",
+        views.OutreachShiftMentorSignupView.as_view(),
+        name="shift_mentor_signup",
+    ),
+    path(
+        "shifts/<int:shift_pk>/mentor-cancel/",
+        views.OutreachShiftMentorCancelView.as_view(),
+        name="shift_mentor_cancel",
+    ),
+    path(
         "shifts/<int:shift_pk>/manage-signups/",
         views.OutreachShiftManageSignupsView.as_view(),
         name="shift_manage_signups",
