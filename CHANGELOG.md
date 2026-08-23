@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-22
 
 ### Added
+- **Confirm Before Sending Bulk Emails**: The "Send Email" buttons on all email pages (program messaging, applicant messaging, and balance-sheet emails) now open a confirmation pop-up first. It recaps exactly who the message will go to (students, parents/guardians, mentors, or a test send to yourself), which outgoing address it will come from, and the subject line, and shows a preview of the message. The "Confirm & Send" button stays disabled until you also tick a box confirming the message is written on behalf of Girls of Steel Robotics.
 - **Mentor Access to Upcoming Programs**: Mentors can now see and open upcoming (future) programs from the Programs page and their dashboard, with the same access they have for currently running programs. This lets mentors review rosters before a program starts. Past and inactive programs remain hidden.
 - **Mentors Can Send Program Emails**: Mentors can now send emails to a program's students, parents, and mentors — for current and upcoming programs alike. A "Send Email" button now appears on the program page and an "Email Program" link appears in the navigation bar for mentors.
 - **Programs Link in Mentor Navigation**: Mentors now have a "Programs" item in the top navigation bar, so they can always get back to the program list. The list shows all active programs: past programs are listed with their dates but shown as plain text (not clickable), while current and upcoming programs open as before.

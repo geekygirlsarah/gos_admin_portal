@@ -28,7 +28,7 @@
           {% endif %}
       {% endfor %}
 
-    <form method="post" class="needs-validation" novalidate>
+    <form method="post" class="needs-validation js-email-send-confirm" novalidate>
       {% csrf_token %}
 
       <!-- Audience -->
@@ -97,6 +97,7 @@
         </div>
       </div>
 
+      {% include 'programs/_email_send_confirm_modal.html' %}
     </form>
   </div>
 </div>
@@ -107,4 +108,5 @@
     <script src="{% static 'vendor/quill/2.0.3/quill.js' %}"></script>
     <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}"></script>
     <script src="{% static 'js/email_form.js' %}"></script>
+    <script src="{% static 'js/email_send_confirm.js' %}"></script>
 {% endblock %}
