@@ -25,7 +25,11 @@ class PhoneValidationTestCase(TestCase):
         with self.assertRaises(ValidationError):
             student.full_clean()
 
-        student.phone_number = "12345678901"
+        student.phone_number = "123456789012"
+        with self.assertRaises(ValidationError):
+            student.full_clean()
+
+        student.phone_number = "21255512345"
         with self.assertRaises(ValidationError):
             student.full_clean()
 
@@ -33,6 +37,18 @@ class PhoneValidationTestCase(TestCase):
         student.full_clean()
 
         student.phone_number = "(123) 456-7890"
+        student.full_clean()
+
+        student.phone_number = "1-412-555-1234"
+        student.full_clean()
+
+        student.phone_number = "+1 (412) 555-1234"
+        student.full_clean()
+
+        student.phone_number = ""
+        student.full_clean()
+
+        student.phone_number = None
         student.full_clean()
 
     def test_adult_model_phone_validation(self):
@@ -51,6 +67,36 @@ class PhoneValidationTestCase(TestCase):
             with self.assertRaises(ValidationError):
                 adult.full_clean()
             setattr(adult, field, original_val)
+
+        adult.phone_number = "123456789012"
+        with self.assertRaises(ValidationError):
+            adult.full_clean()
+
+        adult.phone_number = "21255512345"
+        with self.assertRaises(ValidationError):
+            adult.full_clean()
+
+        adult.phone_number = "1-412-555-1234"
+        adult.full_clean()
+
+        adult.phone_number = "+1 (412) 555-1234"
+        adult.full_clean()
+
+        adult.phone_number = ""
+        adult.full_clean()
+
+        adult.phone_number = None
+        adult.full_clean()
+
+        adult.emergency_contact_phone = "123456789012"
+        with self.assertRaises(ValidationError):
+            adult.full_clean()
+
+        adult.emergency_contact_phone = ""
+        adult.full_clean()
+
+        adult.emergency_contact_phone = None
+        adult.full_clean()
 
     def test_student_form_validation(self):
         form_data = {
