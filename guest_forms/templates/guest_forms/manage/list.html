@@ -25,7 +25,6 @@
                             <tr>
                                 <th>Form</th>
                                 <th>Slug</th>
-                                <th>Type</th>
                                 <th>Required</th>
                                 <th>Active</th>
                                 <th>Order</th>
@@ -38,11 +37,6 @@
                             <tr>
                                 <td><strong>{{ form.name }}</strong></td>
                                 <td><code>{{ form.slug }}</code></td>
-                                <td>
-                                    <span class="badge bg-{% if form.form_type == 'student' %}primary{% else %}success{% endif %}">
-                                        {{ form.form_type|title }}
-                                    </span>
-                                </td>
                                 <td>{% if form.is_required %}<i class="bi bi-check text-success"></i>{% else %}<i class="bi bi-x text-muted"></i>{% endif %}</td>
                                 <td>{% if form.is_active %}<i class="bi bi-check text-success"></i>{% else %}<i class="bi bi-x text-muted"></i>{% endif %}</td>
                                 <td>{{ form.display_order }}</td>

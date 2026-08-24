@@ -73,8 +73,8 @@
                                 <td>{% if submission.team_number %}{{ submission.team_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
                                 <td>{{ submission.guest_form.name }}</td>
                                 <td>
-                                    <span class="badge bg-{% if submission.guest_form.form_type == 'student' %}primary{% else %}success{% endif %}">
-                                        {{ submission.guest_form.form_type|title }}
+                                    <span class="badge bg-{% if submission.participant_type == 'student' %}primary{% else %}success{% endif %}">
+                                        {{ submission.get_participant_type_display }}
                                     </span>
                                 </td>
                                 <td>{{ submission.submitted_at|date:"M j, Y H:i" }}</td>

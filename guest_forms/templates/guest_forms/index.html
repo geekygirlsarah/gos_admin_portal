@@ -20,9 +20,6 @@
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ form.name }}</strong>
-                                        <span class="badge bg-{% if form.form_type == 'student' %}primary{% else %}success{% endif %} ms-2">
-                                            {{ form.form_type|title }}
-                                        </span>
                                         {% if form.description %}
                                             <div class="small text-muted mt-1">{{ form.description|truncatewords:20 }}</div>
                                         {% endif %}

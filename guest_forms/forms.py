@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import EmergencyContactRelationship, GuestForm, GuestFormSubmission
+from .models import (
+    EmergencyContactRelationship,
+    GuestForm,
+    GuestFormSubmission,
+    ParticipantType,
+)
 
 
 class GuestFormForm(forms.ModelForm):
@@ -14,7 +19,6 @@ class GuestFormForm(forms.ModelForm):
         model = GuestForm
         fields = [
             "slug",
-            "form_type",
             "name",
             "description",
             "file",
@@ -59,6 +63,7 @@ class GuestFormSubmissionForm(forms.ModelForm):
     class Meta:
         model = GuestFormSubmission
         fields = [
+            "participant_type",
             "participant_first_name",
             "participant_last_name",
             "email",
@@ -74,6 +79,7 @@ class GuestFormSubmissionForm(forms.ModelForm):
             "file",
         ]
         widgets = {
+            "participant_type": forms.Select(attrs={"class": "form-select"}),
             "participant_first_name": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "First Name"}
             ),
@@ -117,6 +123,7 @@ class GuestFormSubmissionForm(forms.ModelForm):
             "file": forms.ClearableFileInput(attrs={"class": "form-control"}),
         }
         labels = {
+            "participant_type": "I am filling this out as a",
             "participant_first_name": "Participant First Name",
             "participant_last_name": "Participant Last Name",
             "email": "Email Address",

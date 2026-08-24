@@ -102,8 +102,8 @@
 
                         <dt class="col-sm-3">Type</dt>
                         <dd class="col-sm-9">
-                            <span class="badge bg-{% if submission.guest_form.form_type == 'student' %}primary{% else %}success{% endif %}">
-                                {{ submission.guest_form.form_type|title }}
+                            <span class="badge bg-{% if submission.participant_type == 'student' %}primary{% else %}success{% endif %}">
+                                {{ submission.get_participant_type_display }}
                             </span>
                         </dd>
                     </dl>

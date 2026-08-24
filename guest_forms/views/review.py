@@ -33,7 +33,7 @@ class GuestFormReviewListView(GuestFormReviewRequiredMixin, View):
         search = (request.GET.get("search") or "").strip()
 
         if form_type and form_type in {"student", "adult"}:
-            qs = qs.filter(guest_form__form_type=form_type)
+            qs = qs.filter(participant_type=form_type)
 
         if form_id.isdigit():
             qs = qs.filter(guest_form_id=int(form_id))
