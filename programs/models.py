@@ -432,6 +432,10 @@ class Program(models.Model):
         return self.has_feature("outreach")
 
     @property
+    def has_feature_badges(self) -> bool:
+        return self.has_feature("badges")
+
+    @property
     def status(self) -> str:
         """Return 'Active', 'Upcoming', or 'Inactive' based on active flag and dates."""
         from django.utils import timezone

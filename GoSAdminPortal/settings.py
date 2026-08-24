@@ -149,6 +149,7 @@ INSTALLED_APPS = [
     "portal",
     "guest_forms",
     "outreach",
+    "badges",
     "pghistory",
     "pgtrigger",
     "audit",

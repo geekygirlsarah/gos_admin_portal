@@ -79,6 +79,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         # ── Adult profile (parent / mentor / alumni) ─────────────────────────
         adult = getattr(user, "adult_profile", None)
+        # ── Badges (student + parent visibility) ─────────────────────────────
+        try:
+            from badges.models import StudentBadge
+            if student:
+                context["badges_earned"] = StudentBadge.objects.filter(student=student).select_related("badge", "awarded_by")
+                context["badges_count"] = context["badges_earned"].count()
+            elif adult and getattr(adult, "is_parent", False):
+                linked = adult.all_students()
+                context["badges_by_student"] = {s: list(StudentBadge.objects.filter(student=s).select_related("badge","awarded_by")) for s in linked}
+        except Exception:
+            pass
         context["adult"] = adult
         if adult:
             context["is_parent"] = adult.is_parent

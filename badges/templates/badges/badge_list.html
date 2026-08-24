@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Badges - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="mb-0"><i class="bi bi-award me-2"></i>Skill Badges</h1>
+  {% if is_lead_mentor %}
+    <a href="{% url 'badges:create' %}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Badge</a>
+  {% endif %}
+</div>
+
+{% if is_lead_mentor %}
+<div class="alert alert-light border small text-muted">Add new badges with the button above, or use <strong>Edit</strong> / <strong>Delete</strong> on each card.</div>
+{% endif %}
+
+{% if awards %}
+<div class="card border-success mb-4">
+  <div class="card-header bg-success text-white"><i class="bi bi-check-circle me-1"></i>My Earned Badges ({{ awards|length }})</div>
+  <div class="card-body">
+    <div class="row g-2">
+      {% for sb in awards %}
+      <div class="col-auto">
+        <a href="{% url 'badges:detail' sb.badge.pk %}" class="badge bg-success text-decoration-none p-2">
+          {% if sb.badge.icon %}<img src="{{ sb.badge.icon.url }}" alt="" style="width:20px;height:20px;object-fit:cover" class="me-1 rounded">{% endif %}
+          {{ sb.badge.name }} Lvl {{ sb.badge.level }}
+        </a>
+        <small class="text-muted ms-1">by {{ sb.awarded_by|default:"—" }} {{ sb.awarded_at|date:"M j, Y" }}</small>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<ul class="nav nav-pills mb-3" id="catFilter">
+  <li class="nav-item"><button class="nav-link active" data-filter="all">All</button></li>
+  {% for cat, _ in categories %}
+  <li class="nav-item"><button class="nav-link" data-filter="{{ cat }}">{{ cat }}</button></li>
+  {% endfor %}
+</ul>
+
+<div class="row g-4" id="badgeGrid">
+{% for b in badges %}
+  <div class="col-md-6 col-lg-4 badge-card" data-category="{{ b.category }}">
+    <div class="card h-100 shadow-sm {% if b.id in earned_ids %}border-success{% endif %}">
+      {% if b.icon %}
+        <img src="{{ b.icon.url }}" class="card-img-top p-3" alt="{{ b.name }}" style="height:120px;object-fit:contain">
+      {% endif %}
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <h5 class="card-title mb-1">{{ b.name }} <span class="badge bg-secondary">Lvl {{ b.level }}</span></h5>
+          <span class="badge bg-light text-dark border">{{ b.category }}</span>
+        </div>
+        {% if b.id in earned_ids %}<span class="badge bg-success mb-2"><i class="bi bi-check-lg"></i> Earned</span>{% endif %}
+        <p class="card-text small text-muted">{{ b.description|truncatewords:18|default:"No description." }}</p>
+        {% if b.prerequisites.all %}
+          <p class="small mb-1"><strong>Prerequisites:</strong> {% for p in b.prerequisites.all %}<span class="badge bg-warning text-dark">{{ p }}</span> {% endfor %}</p>
+        {% endif %}
+        <p class="small mb-1"><strong>Skills:</strong> {{ b.skills_required|truncatewords:12|default:"—" }}</p>
+        {% if show_how %}
+          <div class="alert alert-light border small py-2 mb-2"><strong>How to earn (mentor only):</strong><br>{{ b.how_to_earn|linebreaksbr|default:"—" }}</div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent d-flex gap-2">
+        <a href="{% url 'badges:detail' b.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+        {% if is_lead_mentor %}
+          <a href="{% url 'badges:edit' b.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+          <a href="{% url 'badges:delete' b.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% empty %}
+  <div class="col-12"><div class="alert alert-info">No badges yet. {% if is_lead_mentor %}<a href="{% url 'badges:create' %}">Create the first one</a>.{% endif %}</div></div>
+{% endfor %}
+</div>
+
+<script nonce="{{ request.csp_nonce }}">
+document.querySelectorAll('#catFilter [data-filter]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('#catFilter .nav-link').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const f=btn.dataset.filter;
+    document.querySelectorAll('.badge-card').forEach(c=>{
+      c.style.display = (f==='all' || c.dataset.category===f) ? '' : 'none';
+    });
+  });
+});
+</script>
+{% endblock %}

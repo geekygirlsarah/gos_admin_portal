@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Edit{% else %}Add{% endif %} Badge - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <h1 class="mb-0">{% if object %}Edit {{ object }}{% else %}<i class="bi bi-award me-2"></i>Add New Badge{% endif %}</h1>
+  <a href="{% url 'badges:list' %}" class="btn btn-outline-secondary ms-auto">Back to Badges</a>
+</div>
+
+{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light"><strong>Badge Details</strong></div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+              {{ form.name }}{% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Level <span class="text-danger">*</span></label>
+              {{ form.level }}{% if form.level.errors %}<div class="invalid-feedback d-block">{{ form.level.errors }}</div>{% endif %}
+              <div class="form-text">Name + Level must be unique.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Category</label>
+              {{ form.category }}{% if form.category.errors %}<div class="invalid-feedback d-block">{{ form.category.errors }}</div>{% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Icon</label>
+              {{ form.icon }}{% if form.icon.errors %}<div class="invalid-feedback d-block">{{ form.icon.errors }}</div>{% endif %}
+              {% if form.icon.help_text %}<div class="form-text">{{ form.icon.help_text }}</div>{% endif %}
+              {% if object and object.icon %}<div class="mt-2"><img src="{{ object.icon.url }}" alt="" style="height:48px;object-fit:contain" class="border rounded p-1"> <small class="text-muted">Current icon</small></div>{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Description</label>
+              {{ form.description }}{% if form.description.errors %}<div class="invalid-feedback d-block">{{ form.description.errors }}</div>{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Skills Required <span class="badge bg-success">Visible to students</span></label>
+              {{ form.skills_required }}{% if form.skills_required.errors %}<div class="invalid-feedback d-block">{{ form.skills_required.errors }}</div>{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">How to Earn <span class="badge bg-warning text-dark">Mentor only</span></label>
+              {{ form.how_to_earn }}{% if form.how_to_earn.errors %}<div class="invalid-feedback d-block">{{ form.how_to_earn.errors }}</div>{% endif %}
+              <div class="form-text">Not shown to students/parents — describe how mentors should test.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Badge</button>
+        <a href="{% url 'badges:list' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light"><strong>Prerequisites</strong></div>
+        <div class="card-body">
+          {{ form.prerequisites }}{% if form.prerequisites.errors %}<div class="invalid-feedback d-block">{{ form.prerequisites.errors }}</div>{% endif %}
+          {% if form.prerequisites.help_text %}<div class="form-text">{{ form.prerequisites.help_text }}</div>{% endif %}
+          <hr>
+          <p class="small text-muted mb-0">Badges that must be earned first. Leave empty if none.</p>
+        </div>
+      </div>
+      <div class="alert alert-light border small mt-3">
+        <i class="bi bi-info-circle me-1"></i>Tip: Use distinct names per year if needed, e.g. <em>“Prototyping Level 2 (2026)”</em> to keep <code>name+level</code> unique.
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
