@@ -35,20 +35,21 @@ class BadgeListView(LoginRequiredMixin, View):
         badges = Badge.objects.prefetch_related("prerequisites").all()
         student = None
         earned_ids = set()
-        if hasattr(request.user, "student_profile"):
-            try:
-                student = request.user.student_profile
-                earned_ids = set(
-                    StudentBadge.objects.filter(student=student).values_list(
-                        "badge_id", flat=True
-                    )
+        student_profile = getattr(request.user, "student_profile", None)
+        if student_profile:
+            student = student_profile
+            earned_ids = set(
+                StudentBadge.objects.filter(student=student).values_list(
+                    "badge_id", flat=True
                 )
-            except:
-                pass
+            )
         student_id = request.GET.get("student")
         if student_id:
             try:
                 s = Student.objects.get(pk=student_id)
+            except (Student.DoesNotExist, ValueError, TypeError):
+                s = None
+            if s:
                 from programs.permission_views import can_user_read
 
                 if can_user_read(request.user, "badges", s):
@@ -58,8 +59,6 @@ class BadgeListView(LoginRequiredMixin, View):
                             "badge_id", flat=True
                         )
                     )
-            except:
-                pass
         role = get_user_role(request.user)
         show_how = role in ("LeadMentor", "Mentor")
         is_lead = role == "LeadMentor"
@@ -117,19 +116,13 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
             except (ValueError, TypeError):
                 pass
         else:
-            # try navbar current_program from session-like header: fallback to active enrollments sorted
-            try:
-                from GoSAdminPortal.context_processors import navbar_context
-
-                # lightweight: if user is viewing badges from a program page, referrer may contain program
-                ref = self.request.META.get("HTTP_REFERER", "")
-                mm = re.search(r"/programs/(\d+)/", ref)
-                if mm:
-                    qs = qs.filter(
-                        enrollment__program_id=int(mm.group(1)), enrollment__active=True
-                    ).distinct()
-            except Exception:
-                pass
+            # if user is viewing badges from a program page, referrer may contain program
+            ref = self.request.META.get("HTTP_REFERER", "")
+            mm = re.search(r"/programs/(\d+)/", ref)
+            if mm:
+                qs = qs.filter(
+                    enrollment__program_id=int(mm.group(1)), enrollment__active=True
+                ).distinct()
         from django.db.models import Value
         from django.db.models.functions import Coalesce, Lower, NullIf
 

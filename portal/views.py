@@ -82,7 +82,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # ── Badges (student + parent visibility) ─────────────────────────────
         try:
             from badges.models import StudentBadge
-
+        except ImportError:
+            StudentBadge = None
+        if StudentBadge:
             if student:
                 context["badges_earned"] = StudentBadge.objects.filter(
                     student=student
@@ -98,8 +100,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     )
                     for s in linked
                 }
-        except Exception:
-            pass
         context["adult"] = adult
         if adult:
             context["is_parent"] = adult.is_parent
