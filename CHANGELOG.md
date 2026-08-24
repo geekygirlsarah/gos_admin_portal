@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-24
 
 ### Fixed
+- **No More Fee Emails for Inactive Students**: When a new fee is added to a program, parents of students who have graduated or whose enrollment has been deactivated no longer receive the "New Fee Added" email. Only families of active students are notified.
 - **Phone Numbers with a Leading "1" Now Accepted**: The guest forms (and other phone fields) previously rejected numbers entered with a leading country code, like "+1 412 555 1234" or "1-412-555-1234", even though the number itself was correct. These now work; only genuinely wrong digit counts are rejected.
 
 ### Changed

@@ -173,8 +173,10 @@ def notify_parents_on_fee_added(sender, instance, created, **kwargs):
     from .models import Enrollment
 
     program = instance.program
-    # Find all students enrolled in this program
-    enrollments = Enrollment.objects.filter(program=program).select_related("student")
+    # Find all active students enrolled in this program
+    enrollments = Enrollment.objects.filter(
+        program=program, active=True, student__graduated=False
+    ).select_related("student")
 
     for enrollment in enrollments:
         student = enrollment.student
@@ -246,7 +248,16 @@ def flag_clearance_due_on_enrollment(sender, instance, created, **kwargs):
 
 
 def _send_fee_notification(student, program, fee):
+    from .models import Enrollment
     from .utils import send_templated_notification
+
+    # Never notify for inactive students (graduated or deactivated enrollment)
+    if student.graduated:
+        return
+    if Enrollment.objects.filter(student=student, program=program).exclude(
+        active=True
+    ).exists():
+        return
 
     parents = [
         p
