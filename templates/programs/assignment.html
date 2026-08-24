@@ -108,7 +108,7 @@
                 <h2 class="h5 mb-0">Students No Longer Active</h2>
             </div>
             <div class="card-body">
-                <p class="text-muted small">These students are no longer active in this program and cannot be assigned to a team/crew.</p>
+                <p class="text-muted small">These students are no longer active in this program and cannot be assigned to a team/crew. You can clear their tags to tidy up.</p>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
@@ -117,6 +117,7 @@
                                 <th>Current Team</th>
                                 <th>Current Crew</th>
                                 <th>Current SubTeam</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -145,6 +146,15 @@
                                         <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
                                     {% else %}
                                         <span class="text-muted small">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if e.team or e.crew or e.subteam %}
+                                    <form method="post" class="d-inline" onsubmit="return confirm('Remove all tags from {{ e.student.first_name|default:e.student.legal_first_name }} {{ e.student.last_name }}?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="clear_enrollment_id" value="{{ e.pk }}">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Clear all tags">Clear Tags</button>
+                                    </form>
                                     {% endif %}
                                 </td>
                             </tr>
