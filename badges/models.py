@@ -22,7 +22,9 @@ class BadgeCategory(models.TextChoices):
 class Badge(models.Model):
     name = models.CharField(max_length=200)
     icon = models.ImageField(upload_to=badge_icon_upload_to, blank=True, null=True)
-    category = models.CharField(max_length=30, choices=BadgeCategory.choices, default=BadgeCategory.GENERAL)
+    category = models.CharField(
+        max_length=30, choices=BadgeCategory.choices, default=BadgeCategory.GENERAL
+    )
     level = models.PositiveSmallIntegerField(default=1)
     description = models.TextField(blank=True)
     skills_required = models.TextField(blank=True, help_text="Visible to students")
@@ -38,9 +40,16 @@ class Badge(models.Model):
 
 
 class StudentBadge(models.Model):
-    student = models.ForeignKey("programs.Student", on_delete=models.CASCADE, related_name="badges")
+    student = models.ForeignKey(
+        "programs.Student", on_delete=models.CASCADE, related_name="badges"
+    )
     badge = models.ForeignKey(Badge, on_delete=models.CASCADE, related_name="awards")
-    awarded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="awarded_badges")
+    awarded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="awarded_badges",
+    )
     awarded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

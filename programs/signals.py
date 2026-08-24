@@ -254,9 +254,11 @@ def _send_fee_notification(student, program, fee):
     # Never notify for inactive students (graduated or deactivated enrollment)
     if student.graduated:
         return
-    if Enrollment.objects.filter(student=student, program=program).exclude(
-        active=True
-    ).exists():
+    if (
+        Enrollment.objects.filter(student=student, program=program)
+        .exclude(active=True)
+        .exists()
+    ):
         return
 
     parents = [

@@ -1711,7 +1711,9 @@ class SlidingScale(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["status", "-created_at"], name="slidingscale_status_idx"),
+            models.Index(
+                fields=["status", "-created_at"], name="slidingscale_status_idx"
+            ),
             models.Index(
                 fields=["student", "status", "-date", "-created_at"],
                 name="slidingscale_active_lookup_idx",

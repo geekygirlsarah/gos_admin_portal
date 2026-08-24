@@ -6,17 +6,22 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('guest_forms', '0009_alter_guestform_file_alter_guestformsubmission_file'),
+        ("guest_forms", "0009_alter_guestform_file_alter_guestformsubmission_file"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='guestform',
-            name='form_type',
+            model_name="guestform",
+            name="form_type",
         ),
         migrations.AddField(
-            model_name='guestformsubmission',
-            name='participant_type',
-            field=models.CharField(choices=[('student', 'Student'), ('adult', 'Adult')], default='student', help_text='Whether this submission is for a student or an adult.', max_length=10),
+            model_name="guestformsubmission",
+            name="participant_type",
+            field=models.CharField(
+                choices=[("student", "Student"), ("adult", "Adult")],
+                default="student",
+                help_text="Whether this submission is for a student or an adult.",
+                max_length=10,
+            ),
         ),
     ]

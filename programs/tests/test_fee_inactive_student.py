@@ -4,7 +4,14 @@ from django.contrib.auth.models import User
 from django.core import mail
 from django.test import TestCase
 
-from programs.models import Adult, AdultStudentRelationship, Enrollment, Fee, Program, Student
+from programs.models import (
+    Adult,
+    AdultStudentRelationship,
+    Enrollment,
+    Fee,
+    Program,
+    Student,
+)
 
 
 class InactiveStudentFeeNotificationTests(TestCase):

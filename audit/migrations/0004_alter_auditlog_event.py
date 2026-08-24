@@ -6,13 +6,37 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('audit', '0003_alter_auditlog_event'),
+        ("audit", "0003_alter_auditlog_event"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='auditlog',
-            name='event',
-            field=models.CharField(choices=[('ADMISSION_DECISION', 'Admission decision made'), ('CONTACT_INFO_UPDATED', 'Contact/address info updated'), ('GUARDIAN_ADDED', 'Guardian/parent added to student'), ('GUARDIAN_REMOVED', 'Guardian/parent removed from student'), ('ENROLLMENT_CHANGED', 'Enrollment status changed'), ('ACCOUNT_CREATED', 'User account created'), ('ACCOUNT_DEACTIVATED', 'User account deactivated'), ('ROLE_CHANGED', 'User role changed'), ('PASSWORD_RESET', 'Password reset by admin'), ('USER_LOGIN', 'User logged in'), ('USER_LOGOUT', 'User logged out'), ('LOGIN_FAILED', 'Login attempt failed'), ('RECORDS_MERGED', 'Duplicate records merged'), ('SENSITIVE_DATA_VIEW', 'Sensitive data viewed by mentor'), ('BADGE_AWARDED', 'Badge awarded to student'), ('BADGE_REVOKED', 'Badge revoked from student'), ('BADGE_CREATED', 'Badge created'), ('BADGE_UPDATED', 'Badge updated'), ('BADGE_DELETED', 'Badge deleted')], db_index=True, max_length=50),
+            model_name="auditlog",
+            name="event",
+            field=models.CharField(
+                choices=[
+                    ("ADMISSION_DECISION", "Admission decision made"),
+                    ("CONTACT_INFO_UPDATED", "Contact/address info updated"),
+                    ("GUARDIAN_ADDED", "Guardian/parent added to student"),
+                    ("GUARDIAN_REMOVED", "Guardian/parent removed from student"),
+                    ("ENROLLMENT_CHANGED", "Enrollment status changed"),
+                    ("ACCOUNT_CREATED", "User account created"),
+                    ("ACCOUNT_DEACTIVATED", "User account deactivated"),
+                    ("ROLE_CHANGED", "User role changed"),
+                    ("PASSWORD_RESET", "Password reset by admin"),
+                    ("USER_LOGIN", "User logged in"),
+                    ("USER_LOGOUT", "User logged out"),
+                    ("LOGIN_FAILED", "Login attempt failed"),
+                    ("RECORDS_MERGED", "Duplicate records merged"),
+                    ("SENSITIVE_DATA_VIEW", "Sensitive data viewed by mentor"),
+                    ("BADGE_AWARDED", "Badge awarded to student"),
+                    ("BADGE_REVOKED", "Badge revoked from student"),
+                    ("BADGE_CREATED", "Badge created"),
+                    ("BADGE_UPDATED", "Badge updated"),
+                    ("BADGE_DELETED", "Badge deleted"),
+                ],
+                db_index=True,
+                max_length=50,
+            ),
         ),
     ]

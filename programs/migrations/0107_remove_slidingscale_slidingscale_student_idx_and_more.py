@@ -7,29 +7,34 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('programs', '0106_remove_student_insert_insert_and_more'),
+        ("programs", "0106_remove_student_insert_insert_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='slidingscale',
-            name='slidingscale_student_idx',
+            model_name="slidingscale",
+            name="slidingscale_student_idx",
         ),
         migrations.RemoveIndex(
-            model_name='slidingscale',
-            name='slidingscale_status_idx',
+            model_name="slidingscale",
+            name="slidingscale_status_idx",
         ),
         migrations.RemoveIndex(
-            model_name='slidingscale',
-            name='slidingscale_active_lookup_idx',
+            model_name="slidingscale",
+            name="slidingscale_active_lookup_idx",
         ),
         migrations.AddIndex(
-            model_name='slidingscale',
-            index=models.Index(fields=['status', '-created_at'], name='slidingscale_status_idx'),
+            model_name="slidingscale",
+            index=models.Index(
+                fields=["status", "-created_at"], name="slidingscale_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='slidingscale',
-            index=models.Index(fields=['student', 'status', '-date', '-created_at'], name='slidingscale_active_lookup_idx'),
+            model_name="slidingscale",
+            index=models.Index(
+                fields=["student", "status", "-date", "-created_at"],
+                name="slidingscale_active_lookup_idx",
+            ),
         ),
     ]
