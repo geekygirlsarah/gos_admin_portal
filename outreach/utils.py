@@ -14,8 +14,8 @@ def compute_outreach_stats(signups):
     upcoming_signups = [s for s in signups if not s.shift.is_past]
 
     return {
-        "championed_count": sum(
-            1 for s in signups if s.role == OutreachSignup.CHAMPION
+        "championed_count": len(
+            set(s.shift.event_id for s in signups if s.role == OutreachSignup.CHAMPION)
         ),
         "total_outreach_hours": sum(s.shift.duration_hours for s in past_signups),
         "pending_outreach_hours": sum(s.shift.duration_hours for s in upcoming_signups),

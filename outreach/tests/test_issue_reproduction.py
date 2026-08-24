@@ -98,3 +98,51 @@ class OutreachStatsHoursTest(TestCase):
         self.assertContains(resp, "1.0")
         # Pending hours should be 4.0 (2h upcoming helper + 2h upcoming championed)
         self.assertContains(resp, "4.0")
+
+    def test_champion_count_multiple_shifts_one_event(self):
+        """
+        If a student champions two shifts at the same event, it should only count as 1 credit.
+        """
+        from outreach.models import OutreachShift
+        from outreach.utils import get_student_outreach_stats
+
+        # Create an event with two shifts
+        event = create_outreach_event(
+            program=self.program,
+            name="Multi-shift Event",
+            location_name="Loc M",
+            location_address="Addr M",
+            start_date=date(2026, 9, 1),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+        )
+        # Add a second shift to the same event
+        shift2 = OutreachShift.objects.create(
+            event=event,
+            date=date(2026, 9, 1),
+            start_time=time(13, 0),
+            end_time=time(15, 0),
+        )
+
+        # Student champions both shifts
+        OutreachSignup.objects.create(
+            student=self.student,
+            shift=event.shifts.first(),
+            role=OutreachSignup.CHAMPION,
+        )
+        OutreachSignup.objects.create(
+            student=self.student,
+            shift=shift2,
+            role=OutreachSignup.CHAMPION,
+        )
+
+        stats = get_student_outreach_stats(self.student, self.program)
+
+        # Currently this will fail and be 2 because it counts signups.
+        # We want it to be 1 because it's the same event.
+        # (Note: Alice already has 1 championed from setUp, and 1 from test_stats_include_upcoming_champions if it ran,
+        # but this is a fresh test case, so only the ones from setUp count.)
+        # SetUp has: self.past_event (championed) -> 1
+        # Plus this event (2 shifts) -> should be 1
+        # Total should be 2.
+        self.assertEqual(stats["championed_count"], 2)
