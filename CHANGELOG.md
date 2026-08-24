@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-24
+
+### Changed
+- **Optimized Sliding Scale Performance**: Improved the database speed when looking up active sliding scale discounts and reviewing pending applications. Added a new composite index (`slidingscale_active_lookup_idx`) that speeds up the calculations for student balances and ensures the sliding scale review queue loads quickly, even with many records on file.
+
 ## 2026-08-22
 
 ### Added
