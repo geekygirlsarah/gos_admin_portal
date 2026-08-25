@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-25
+
+### Changed
+- **Faster Pages**: The Students, Parents, and Mentors lists and the Student, Parent, and photo grid pages now issue noticeably fewer database queries per page load, so they render faster on large rosters. The navigation bar also resolves program features (like the Badges and Outreach links) once per page instead of repeatedly. One small side effect: the "My Badges" account-menu link is now shown based on the user's role — students see it as before, and everyone sees it when the current program has the badges feature enabled.
+
 ## 2026-08-24
 
 ### Added
