@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-25
 
+### Added
+- **New Navigation Links for Previously Hidden Pages**: Three pages existed in the portal with no way to reach them by clicking anything — "Create New Program", the bulk Import Dashboard (CSV/XLSX imports for students, parents, mentors, schools, relationships, and attendance), and the "All Student Photos" grid. Lead Mentors can now reach all three from the navigation bar (New Program and Import Dashboard under Admin, All Student Photos under Students).
+
 ### Changed
 - **Faster Pages**: The Students, Parents, and Mentors lists and the Student, Parent, and photo grid pages now issue noticeably fewer database queries per page load, so they render faster on large rosters. The navigation bar also resolves program features (like the Badges and Outreach links) once per page instead of repeatedly. One small side effect: the "My Badges" account-menu link is now shown based on the user's role — students see it as before, and everyone sees it when the current program has the badges feature enabled.
 - **Reorganized Navigation Bar**: The navigation bar had grown a long, flat list of links, so it's now grouped into clearer menus. For Mentors and Lead Mentors, the current program's links (Overview, Students, Outreach, Badges, Emergency Contacts, Dues Owed, Email Program) are now combined into a single dropdown named after the program instead of sitting side-by-side. The Lead Mentor "Admin" menu, which had grown to about 15 items, is now split into four focused menus: Students, Adults, Applications, and Admin (Messaging/Settings/Audit Logs). The Attendance menu also gained a "Visitor Management" shortcut and clearer grouping, and the redundant "All Programs" link (a duplicate of the existing "Programs" link) was removed.

@@ -132,6 +132,7 @@
                             <a class="nav-link dropdown-toggle" href="#" id="studentsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Students</a>
                             <ul class="dropdown-menu" aria-labelledby="studentsAdminDropdown">
                                 <li><a class="dropdown-item" href="/programs/students/">All Students</a></li>
+                                <li><a class="dropdown-item" href="{% url 'student_photos' %}">All Student Photos</a></li>
                                 <li><a class="dropdown-item" href="{% url 'students_by_grade' %}">Students by Grade</a></li>
                                 <li><a class="dropdown-item" href="{% url 'students_by_school' %}">Students by School</a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -162,6 +163,9 @@
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
                             <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <li><a class="dropdown-item" href="{% url 'program_create' %}">New Program</a></li>
+                                <li><a class="dropdown-item" href="{% url 'import_dashboard' %}">Data Imports</a></li>
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Messaging</a></li>
                                 <li><a class="dropdown-item" href="{% url 'portal_settings' %}">Settings</a></li>
                                 <li><hr class="dropdown-divider"></li>

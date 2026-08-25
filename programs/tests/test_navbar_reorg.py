@@ -118,3 +118,37 @@ class StudentBadgesLinkNotDuplicatedTests(TestCase):
         nav_end = response.content.find(b"</nav>", nav_start)
         nav_content = response.content[nav_start:nav_end]
         self.assertEqual(nav_content.count(b">Badges<"), 1)
+
+
+class PreviouslyOrphanedPagesNowLinkedTests(TestCase):
+    """These pages existed with no link anywhere in the app (not even a
+    button on another page) prior to this fix; they're now reachable from
+    the Lead Mentor dropdowns."""
+
+    def setUp(self):
+        self.lead_mentor = User.objects.create_user(
+            username="lead_mentor", password="password123"
+        )  # nosec B106
+        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.lead_mentor.groups.add(lm_group)
+
+    def _login(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+
+    def test_new_program_link_added_to_admin_dropdown(self):
+        self._login()
+        response = self.client.get(reverse("program_list"))
+        self.assertContains(response, reverse("program_create"))
+        self.assertContains(response, "New Program")
+
+    def test_import_dashboard_link_added_to_admin_dropdown(self):
+        self._login()
+        response = self.client.get(reverse("program_list"))
+        self.assertContains(response, reverse("import_dashboard"))
+        self.assertContains(response, "Import Dashboard")
+
+    def test_all_student_photos_link_added_to_students_dropdown(self):
+        self._login()
+        response = self.client.get(reverse("program_list"))
+        self.assertContains(response, reverse("student_photos"))
+        self.assertContains(response, "All Student Photos")
