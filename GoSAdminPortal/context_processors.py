@@ -52,6 +52,10 @@ def navbar_context(request):
     navbar_is_parent = bool(adult_flags.get("is_parent") or "Parent" in group_names)
     navbar_is_mentor = bool(adult_flags.get("is_mentor") or "Mentor" in group_names)
     navbar_is_alumni = bool(adult_flags.get("is_alumni") or "Alumni" in group_names)
+    # Students resolve their profile from the role rather than hitting
+    # ``user.student_profile`` here (and in templates), which would otherwise
+    # cost a query on every page for users who aren't students.
+    navbar_is_student = role == "Student"
 
     # Try to extract a program pk from the URL path, e.g. /programs/42/...
     current_program = None
@@ -62,6 +66,15 @@ def navbar_context(request):
             current_program = Program.objects.get(pk=program_pk)
         except Program.DoesNotExist:
             current_program = None
+
+    # Resolve the enabled feature keys once per request so template checks
+    # like "has badges/outreach nav links" don't re-query per condition.
+    if current_program is not None:
+        program_feature_keys = set(
+            current_program.features.values_list("key", flat=True)
+        )
+    else:
+        program_feature_keys = set()
 
     # If no program in URL, try to auto-select for Students/Parents who only have one
     if current_program is None and role in ("Student", "Parent", "Mentor", "Alumni"):
@@ -112,6 +125,8 @@ def navbar_context(request):
 
     return {
         "current_program": current_program,
+        "current_program_has_badges": "badges" in program_feature_keys,
+        "current_program_has_outreach": "outreach" in program_feature_keys,
         "navbar_role": role,
         "student_outreach_programs": student_outreach_programs,
         # Flag-style helpers: an Adult can hold several roles at once (e.g. a
@@ -120,4 +135,5 @@ def navbar_context(request):
         "navbar_is_parent": navbar_is_parent,
         "navbar_is_mentor": navbar_is_mentor,
         "navbar_is_alumni": navbar_is_alumni,
+        "navbar_is_student": navbar_is_student,
     }

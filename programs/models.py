@@ -296,6 +296,7 @@ class ProgramFeature(models.Model):
       - 'discord' — show/collect Discord fields and related UI
       - 'background-checks' — show/collect background clearance fields and logic
       - 'cmu-andrew' — show/collect CMU Andrew ID related fields
+      - 'badges' — show/collect student badges and badge awards
     """
 
     key = models.SlugField(

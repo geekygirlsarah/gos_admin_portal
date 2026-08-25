@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-25
+
+### Changed
+- **Faster Pages**: The Students, Parents, and Mentors lists and the Student, Parent, and photo grid pages now issue noticeably fewer database queries per page load, so they render faster on large rosters. The navigation bar also resolves program features (like the Badges and Outreach links) once per page instead of repeatedly. One small side effect: the "My Badges" account-menu link is now shown based on the user's role — students see it as before, and everyone sees it when the current program has the badges feature enabled.
+
 ## 2026-08-24
+
+### Added
+- **Badges Feature Toggle**: Added a new `badges` Program Feature that can be enabled per-program. When enabled, students in that program see a "Badges" link in the navigation and a "Badges earned" section on their dashboard. Students and parents can also access "My Badges" from the account dropdown. Badges are global — earned badges follow students across programs — but the navigation and dashboard sections only appear for programs with the feature enabled. Lead Mentors can toggle the badges feature from the program edit page.
 
 ### Fixed
 - **No More Fee Emails for Inactive Students**: When a new fee is added to a program, parents of students who have graduated or whose enrollment has been deactivated no longer receive the "New Fee Added" email. Only families of active students are notified.

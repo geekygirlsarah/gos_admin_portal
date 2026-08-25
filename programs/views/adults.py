@@ -182,9 +182,12 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
-        all_mentors = ctx["mentors"]
-        ctx["active_mentors"] = all_mentors.filter(mentor_active=True)
-        ctx["inactive_mentors"] = all_mentors.filter(mentor_active=False)
+        # Split the already-evaluated (and prefetched) list in Python.
+        # Calling .filter() here would re-execute the whole list query and
+        # its prefetches once per section.
+        mentors = list(ctx["mentors"])
+        ctx["active_mentors"] = [m for m in mentors if m.mentor_active]
+        ctx["inactive_mentors"] = [m for m in mentors if not m.mentor_active]
         return ctx
 
 
@@ -228,6 +231,13 @@ class AdultDetailView(
     template_name = "adults/detail.html"
     context_object_name = "adult"
     section = "adult_info"
+
+    def get_object(self, queryset=None):
+        # Cache the fetched record: DynamicPermissionMixin's test_func calls
+        # get_object() before DetailView.get() does it again.
+        if getattr(self, "object", None) is None:
+            self.object = super().get_object(queryset)
+        return self.object
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

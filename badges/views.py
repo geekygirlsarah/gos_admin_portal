@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -24,14 +25,20 @@ from .forms import BadgeForm
 from .models import Badge, StudentBadge
 
 
-def has_badges_feature():
-    from programs.models import ProgramFeature
-
-    return ProgramFeature.objects.filter(key="badges").exists()
-
-
 class BadgeListView(LoginRequiredMixin, View):
     def get(self, request):
+        # If accessed with ?program=X, gate on that program's feature
+        program_id = request.GET.get("program")
+        if program_id:
+            from programs.models import Program
+
+            try:
+                program = Program.objects.get(pk=int(program_id))
+            except (Program.DoesNotExist, ValueError, TypeError):
+                raise Http404("Program not found.")
+            if not program.has_feature("badges"):
+                raise Http404("Badges are not enabled for this program.")
+
         badges = Badge.objects.prefetch_related("prerequisites").all()
         student = None
         earned_ids = set()
@@ -64,6 +71,17 @@ class BadgeListView(LoginRequiredMixin, View):
         is_lead = role == "LeadMentor"
         from .models import BadgeCategory
 
+        # Check if the active student is enrolled in at least one badge-enabled program
+        enrolled_in_badge_program = False
+        if student:
+            from programs.models import Enrollment
+
+            enrolled_in_badge_program = Enrollment.objects.filter(
+                student=student,
+                active=True,
+                program__features__key="badges",
+            ).exists()
+
         return render(
             request,
             "badges/badge_list.html",
@@ -80,6 +98,7 @@ class BadgeListView(LoginRequiredMixin, View):
                     else []
                 ),
                 "is_lead_mentor": is_lead,
+                "enrolled_in_badge_program": enrolled_in_badge_program,
                 "categories": BadgeCategory.choices,
             },
         )
@@ -106,6 +125,18 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
         m = re.match(r"^/programs/(\d+)/", self.request.path)
         # badges are global, but when accessed with ?program=ID or via current_program context, filter to that program
         program_id = self.request.GET.get("program") or (m.group(1) if m else None)
+
+        # Gate on feature when a program context is present
+        if program_id:
+            from programs.models import Program
+
+            try:
+                program = Program.objects.get(pk=int(program_id))
+            except (Program.DoesNotExist, ValueError, TypeError):
+                raise Http404("Program not found.")
+            if not program.has_feature("badges"):
+                raise Http404("Badges are not enabled for this program.")
+
         # also check context processor's current_program via query param fallback
         qs = S.objects.all()
         if program_id:
