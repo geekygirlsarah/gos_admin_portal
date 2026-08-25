@@ -769,8 +769,12 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
             Application.Status.APPROVED,
             Application.Status.APPROVED_SIGNED,
             Application.Status.CONVERTED,
+            Application.Status.DECLINED,
         ):
-            messages.info(request, "Application is already approved.")
+            if application.status == Application.Status.DECLINED:
+                messages.info(request, "Cannot approve a declined application.")
+            else:
+                messages.info(request, "Application is already approved.")
             return redirect(
                 "application_review_detail", app_id=application.application_id
             )
@@ -820,10 +824,32 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
 
     template_name = "applications/review/decline.html"
 
+    def _check_already_declined(self, request, application):
+        """Return True if the application is already DECLINED/CONVERTED."""
+        if application.status in (
+            Application.Status.DECLINED,
+            Application.Status.CONVERTED,
+        ):
+            messages.info(
+                request,
+                "This application has already been "
+                + (
+                    "converted."
+                    if application.status == Application.Status.CONVERTED
+                    else "declined."
+                ),
+            )
+            return True
+        return False
+
     def get(self, request, app_id: str):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
+        if self._check_already_declined(request, application):
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
         return render(
             request,
             self.template_name,
@@ -834,6 +860,10 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
+        if self._check_already_declined(request, application):
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
         form = DeclineForm(request.POST)
         if not form.is_valid():
             return render(

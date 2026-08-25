@@ -48,7 +48,7 @@
           <form method="post" action="{% url 'application_review_approve' application.application_id %}">
             {% csrf_token %}
             <button class="btn btn-success w-100" type="submit"
-                    {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}disabled{% endif %}>
+                    {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' or application.status == 'declined' %}disabled{% endif %}>
               Approve
             </button>
           </form>
@@ -80,10 +80,14 @@
               </button>
             </form>
           {% endif %}
-          <a class="btn btn-warning"
-             href="{% url 'application_review_decline' application.application_id %}">
-            Decline…
-          </a>
+          {% if application.status == 'declined' %}
+            <button class="btn btn-warning w-100" type="button" disabled>Already Declined</button>
+          {% else %}
+            <a class="btn btn-warning"
+               href="{% url 'application_review_decline' application.application_id %}">
+              Decline…
+            </a>
+          {% endif %}
           <a class="btn btn-outline-primary"
              href="{% url 'application_review_edit' application.application_id %}">
             Edit captured data

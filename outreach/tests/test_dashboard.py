@@ -174,12 +174,14 @@ class OutreachDashboardTest(TestCase):
         self.assertNotContains(resp, "Event C")
         self.assertNotContains(resp, "Event D")
 
-    def test_parent_nav_bar_hides_outreach(self):
+    def test_parent_nav_bar_shows_outreach(self):
         self.client.login(username="parent", password="password")  # nosec B106
         url = reverse("profile_dashboard")
         resp = self.client.get(url)
-        # Check that Outreach link is NOT in nav bar
-        self.assertNotContains(resp, "Outreach</a>")
+        # Parents can already read a program's outreach events (and the
+        # Dashboard already surfaces outreach highlights), so the nav bar's
+        # program dropdown now shows the Outreach link for them too.
+        self.assertContains(resp, "Outreach</a>")
 
     def test_student_nav_bar_shows_outreach_when_program_selected(self):
         self.client.login(username="student", password="password")  # nosec B106

@@ -4,8 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-25
 
+### Added
+- **New Navigation Links for Previously Hidden Pages**: Three pages existed in the portal with no way to reach them by clicking anything — "Create New Program", the bulk Import Dashboard (CSV/XLSX imports for students, parents, mentors, schools, relationships, and attendance), and the "All Student Photos" grid. Lead Mentors can now reach all three from the navigation bar (New Program and Import Dashboard under Admin, All Student Photos under Students).
+- **Easier Navigation for Students and Parents**: "Dashboard" is now a top-level navigation link for Students and Parents, so their main hub (hours, balances, outreach highlights, badges, carpool map) is one click away instead of only reachable from the account menu. Students now also have a "Carpool Map" link next to My Hours/Outreach/Badges (previously only reachable via a button on the Dashboard). Parents can now see "Outreach" and "Carpool Map" in their program dropdown as well, matching the access they already had and the info already shown on their Dashboard.
+
 ### Changed
 - **Faster Pages**: The Students, Parents, and Mentors lists and the Student, Parent, and photo grid pages now issue noticeably fewer database queries per page load, so they render faster on large rosters. The navigation bar also resolves program features (like the Badges and Outreach links) once per page instead of repeatedly. One small side effect: the "My Badges" account-menu link is now shown based on the user's role — students see it as before, and everyone sees it when the current program has the badges feature enabled.
+- **Reorganized Navigation Bar**: The navigation bar had grown a long, flat list of links, so it's now grouped into clearer menus. For Mentors and Lead Mentors, the current program's links (Overview, Students, Outreach, Badges, Emergency Contacts, Dues Owed, Email Program) are now combined into a single dropdown named after the program instead of sitting side-by-side. The Lead Mentor "Admin" menu, which had grown to about 15 items, is now split into four focused menus: Students, Adults, Applications, and Admin (Messaging/Settings/Audit Logs). The Attendance menu also gained a "Visitor Management" shortcut and clearer grouping, and the redundant "All Programs" link (a duplicate of the existing "Programs" link) was removed.
+- **"Carpool Map" is now its own navigation menu**: Instead of a single link tied to whichever program happened to be in view, "Carpool Map" is now a standalone top-level dropdown for Students and Parents, listing each of their currently-active (not past, not future) programs as a menu item, so it's clearer at a glance and works the same way for both roles.
+- **"Applications" menu now only has application reviews**: The Lead Mentor "Applications" dropdown previously mixed real application-review pages (Program Applications, Sliding Scale Applications) with two data-management tools (Manage Guest Forms, Manage Andrew IDs) that didn't fit the "Applications" theme. Those two tools now live in a new "Manage Data" menu, so "Applications" only contains actual application reviews.
+
+### Fixed
+- **Badges Link No Longer Duplicated for Students**: Students whose current program had the Badges feature enabled previously saw the "Badges" link appear twice in the navigation bar. It now appears once.
+- **Badges/Outreach Links Now Show Correctly for Auto-Selected Programs**: When a Student, Parent, Mentor, or Alumni only had one program (so it was automatically selected rather than chosen from a program-specific page), the navigation bar could incorrectly hide the Badges and Outreach links even when those features were enabled for that program. This is now fixed.
+- **Carpool Map Link No Longer Lists Every Program**: The Student navigation bar previously listed a "Carpool Map" link for every program the student had ever been enrolled in, including past and future ones. It now only appears for the program currently in view, matching how the Parent version already behaves.
 
 ## 2026-08-24
 

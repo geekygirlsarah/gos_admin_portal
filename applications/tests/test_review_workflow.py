@@ -226,6 +226,61 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Send decline")
 
+    def test_cannot_decline_already_declined(self):
+        """Re-declining a DECLINED application should be blocked."""
+        self.app.status = Application.Status.DECLINED
+        self.app.save()
+        mail.outbox = []
+        url = reverse(
+            "application_review_decline", kwargs={"app_id": self.app.application_id}
+        )
+        response = self.client.post(url, {"reason": "Trying again."})
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.DECLINED)
+        self.assertNotEqual(self.app.decline_reason, "Trying again.")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_cannot_approve_declined_application(self):
+        """Approving a DECLINED application should be blocked."""
+        self.app.status = Application.Status.DECLINED
+        self.app.save()
+        mail.outbox = []
+        url = reverse(
+            "application_review_approve", kwargs={"app_id": self.app.application_id}
+        )
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.Status.DECLINED)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_decline_get_redirects_when_already_declined(self):
+        """GET on the decline form for a DECLINED app redirects to detail."""
+        self.app.status = Application.Status.DECLINED
+        self.app.save()
+        url = reverse(
+            "application_review_decline", kwargs={"app_id": self.app.application_id}
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"/apply/review/{self.app.application_id}/", response.url)
+
+    def test_detail_shows_disabled_buttons_for_declined(self):
+        """Detail page for a DECLINED app should disable Approve and Decline."""
+        self.app.status = Application.Status.DECLINED
+        self.app.save()
+        url = reverse(
+            "application_review_detail", kwargs={"app_id": self.app.application_id}
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        # The decline link should not be present (replaced by disabled button)
+        decline_url = reverse(
+            "application_review_decline", kwargs={"app_id": self.app.application_id}
+        )
+        self.assertNotContains(response, decline_url)
+
     def test_edit_saves_fields_and_email(self):
         url = reverse(
             "application_review_edit", kwargs={"app_id": self.app.application_id}
