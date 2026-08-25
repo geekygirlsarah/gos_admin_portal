@@ -14,6 +14,10 @@ def validate_phone_number(value):
     # Strip all non-digit characters
     digits = re.sub(r"\D", "", value)
 
+    # Allow an optional leading US country code (+1 / 1-)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+
     if len(digits) != 10:
         raise ValidationError(
             _("Phone number must be exactly 10 digits."), code="invalid_phone_number"

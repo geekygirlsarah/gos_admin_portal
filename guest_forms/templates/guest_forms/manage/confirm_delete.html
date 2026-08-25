@@ -16,14 +16,6 @@
                     </div>
 
                     <dl class="row">
-                        <dt class="col-sm-3">Type</dt>
-                        <dd class="col-sm-9">
-                            <span class="badge bg-{% if guest_form.form_type == 'student' %}primary{% else %}success{% endif %}">
-                                {{ guest_form.form_type|title }}
-                            </span>
-                        </dd>
-                        <dt class="col-sm-3">Program</dt>
-                        <dd class="col-sm-9">{{ guest_form.program.name }}</dd>
                         <dt class="col-sm-3">Submissions</dt>
                         <dd class="col-sm-9">{{ guest_form.submissions.count }}</dd>
                     </dl>

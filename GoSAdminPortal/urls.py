@@ -46,6 +46,7 @@ urlpatterns = [
     # Public kiosk attendance sign-in pages (no login required)
     path("kiosk/", include("attendance.kiosk_urls")),
     path("attendance/", include("attendance.urls")),
+    path("badges/", include("badges.urls")),
     path("programs/<int:program_id>/outreach/", include("outreach.urls")),
     # Public guest permission forms (no login required)
     path("guest/", include("guest_forms.urls")),

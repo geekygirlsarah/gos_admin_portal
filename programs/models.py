@@ -432,6 +432,10 @@ class Program(models.Model):
         return self.has_feature("outreach")
 
     @property
+    def has_feature_badges(self) -> bool:
+        return self.has_feature("badges")
+
+    @property
     def status(self) -> str:
         """Return 'Active', 'Upcoming', or 'Inactive' based on active flag and dates."""
         from django.utils import timezone
@@ -1707,10 +1711,11 @@ class SlidingScale(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["student"], name="slidingscale_student_idx"),
-            models.Index(fields=["status"], name="slidingscale_status_idx"),
             models.Index(
-                fields=["student", "status", "date", "expiration_date"],
+                fields=["status", "-created_at"], name="slidingscale_status_idx"
+            ),
+            models.Index(
+                fields=["student", "status", "-date", "-created_at"],
                 name="slidingscale_active_lookup_idx",
             ),
         ]

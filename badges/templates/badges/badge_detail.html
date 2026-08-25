@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ object }} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'badges:list' %}" class="btn btn-sm btn-outline-secondary">&laquo; All Badges</a>
+  {% if is_lead_mentor %}
+    <a href="{% url 'badges:edit' object.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+    <a href="{% url 'badges:delete' object.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-md-4 text-center">
+    {% if object.icon %}<img src="{{ object.icon.url }}" alt="{{ object.name }}" class="img-fluid rounded border p-3" style="max-height:200px;object-fit:contain">{% else %}<div class="border rounded p-5 text-muted"><i class="bi bi-award" style="font-size:4rem"></i></div>{% endif %}
+    <h3 class="mt-3">{{ object.name }} <span class="badge bg-secondary">Level {{ object.level }}</span></h3>
+    <span class="badge bg-light text-dark border">{{ object.category }}</span>
+    {% if object.prerequisites.all %}<div class="mt-2 small">Prerequisites: {% for p in object.prerequisites.all %}<a href="{% url 'badges:detail' p.pk %}" class="badge bg-warning text-dark text-decoration-none">{{ p }}</a> {% endfor %}</div>{% endif %}
+  </div>
+  <div class="col-md-8">
+    <div class="card mb-3"><div class="card-body">
+      <h5>Description</h5><p>{{ object.description|linebreaksbr|default:"No description." }}</p>
+      <h5>Skills Required <small class="text-muted">(visible to students)</small></h5><p>{{ object.skills_required|linebreaksbr|default:"—" }}</p>
+      {% if show_how %}<div class="alert alert-info"><h5>How to Earn <small>(mentor only)</small></h5><p class="mb-0">{{ object.how_to_earn|linebreaksbr|default:"—" }}</p></div>{% endif %}
+    </div></div>
+
+    {% if can_award %}
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Award Badge to Student</span>
+        {% if current_program %}<span class="badge bg-primary">{{ current_program.name }}</span>{% endif %}
+      </div>
+      <div class="card-body">
+        {% if current_program %}
+          <div class="alert alert-light border small">Showing students in <strong>{{ current_program.name }}</strong> (active enrollments). <a href="{% url 'badges:detail' object.pk %}">Show all students</a></div>
+        {% elif filter_program_id %}
+          <div class="alert alert-light border small">Filtered to program #{{ filter_program_id }}. <a href="{% url 'badges:detail' object.pk %}">Show all students</a></div>
+        {% endif %}
+        <form method="post" action="{% url 'badges:award' object.pk %}{% if filter_program_id %}?program={{ filter_program_id }}{% endif %}" class="row g-2 align-items-end">
+          {% csrf_token %}
+          <div class="col">
+            <label class="form-label">Student</small></label>
+            <select name="student_id" class="form-select" required>
+              <option value="">— select student —</option>
+              {% for s in students %}<option value="{{ s.pk }}">{{ s }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-auto"><button type="submit" class="btn btn-success">Award</button></div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-header">Awarded To ({{ awards|length }})</div>
+      <ul class="list-group list-group-flush">
+        {% for sb in awards %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span><a href="{% url 'student_detail' sb.student.pk %}">{{ sb.student }}</a> — {{ sb.awarded_at|date:"M j, Y g:i A" }} by {% if sb.awarded_by and sb.awarded_by.adult_profile %}{{ sb.awarded_by.adult_profile }}{% elif sb.awarded_by %}{{ sb.awarded_by.get_full_name|default:sb.awarded_by.email|default:sb.awarded_by.username }}{% else %}—{% endif %}</span>
+          {% if is_lead_mentor %}
+          <form method="post" action="{% url 'badges:revoke' object.pk %}" class="ms-2">
+            {% csrf_token %}<input type="hidden" name="student_id" value="{{ sb.student.pk }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Revoke this badge?">Revoke</button>
+          </form>
+          {% endif %}
+        </li>
+        {% empty %}<li class="list-group-item text-muted">No students have earned this badge yet.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

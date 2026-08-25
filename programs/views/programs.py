@@ -559,6 +559,35 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
     def post(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
+
+        # Single-student "Clear All Tags" button
+        clear_enrollment_id = request.POST.get("clear_enrollment_id")
+        if clear_enrollment_id:
+            enrollment = get_object_or_404(
+                Enrollment, pk=clear_enrollment_id, program=program
+            )
+            cleared = []
+            if enrollment.team_id:
+                cleared.append("team")
+            if enrollment.crew_id:
+                cleared.append("crew")
+            if enrollment.subteam_id:
+                cleared.append("subteam")
+            enrollment.team = None
+            enrollment.crew = None
+            enrollment.subteam = None
+            enrollment.save()
+            name = enrollment.student.first_name or enrollment.student.legal_first_name
+            messages.success(
+                request,
+                (
+                    f"Cleared {', '.join(cleared) or 'tags'} from {name} {enrollment.student.last_name}."
+                    if cleared
+                    else f"{name} {enrollment.student.last_name} had no tags to clear."
+                ),
+            )
+            return redirect("program_assignment", pk=pk)
+
         assignment_type = request.POST.get("assignment_type")
         target_id = request.POST.get("target_id")
         student_ids = request.POST.getlist("student_ids")

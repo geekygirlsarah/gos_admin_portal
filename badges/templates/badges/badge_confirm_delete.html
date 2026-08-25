@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Delete {{ object }}?</h1>
+<p class="text-danger">This will remove the badge and all student awards. This action is logged.</p>
+<form method="post">{% csrf_token %}<button type="submit" class="btn btn-danger">Confirm Delete</button> <a href="{% url 'badges:list' %}" class="btn btn-outline-secondary">Cancel</a></form>
+{% endblock %}

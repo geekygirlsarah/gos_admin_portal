@@ -25,3 +25,10 @@ class AuditEvent(models.TextChoices):
 
     # --- Sensitive Data Access ---
     SENSITIVE_DATA_VIEW = "SENSITIVE_DATA_VIEW", "Sensitive data viewed by mentor"
+
+    # --- Badges ---
+    BADGE_AWARDED = "BADGE_AWARDED", "Badge awarded to student"
+    BADGE_REVOKED = "BADGE_REVOKED", "Badge revoked from student"
+    BADGE_CREATED = "BADGE_CREATED", "Badge created"
+    BADGE_UPDATED = "BADGE_UPDATED", "Badge updated"
+    BADGE_DELETED = "BADGE_DELETED", "Badge deleted"

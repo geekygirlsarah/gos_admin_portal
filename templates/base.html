@@ -50,6 +50,9 @@
                         <a class="nav-link{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
                     </li>
                     {% endfor %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if 'badges' in request.path %} active{% endif %}" href="{% url 'badges:list' %}">Badges</a>
+                    </li>
                     {% endif %}
 
 
@@ -74,7 +77,10 @@
                             </li>
                             {% endif %}
                         {% endif %}
- 
+                        <li class="nav-item">
+                            <a class="nav-link{% if 'badges' in request.path %} active{% endif %}" href="{% url 'badges:list' %}{% if current_program %}?program={{ current_program.pk }}{% endif %}">Badges</a>
+                        </li>
+  
                         {% can_read user 'student_info' as can_read_students %}
                         {% if can_read_students and navbar_role != 'Student' %}
                         <li class="nav-item">

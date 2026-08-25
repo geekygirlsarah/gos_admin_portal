@@ -438,7 +438,13 @@ class OutreachStudentStatsView(
         for student in students:
             signups = student.program_signups
             past_signups = [s for s in signups if s.shift.is_past]
-            championed = sum(1 for s in signups if s.role == OutreachSignup.CHAMPION)
+            championed = len(
+                set(
+                    s.shift.event_id
+                    for s in signups
+                    if s.role == OutreachSignup.CHAMPION
+                )
+            )
             hours = sum(s.shift.duration_hours for s in past_signups)
             pending_hours = sum(
                 s.shift.duration_hours for s in signups if not s.shift.is_past

@@ -15,8 +15,7 @@ class GuestFormSubmissionEmailTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.guest_form = GuestForm.objects.create(
-            form_type="adult",
-            name="Adult Waiver",
+            name="Photo Release",
             slug="adult-waiver",
             file=SimpleUploadedFile(
                 "form.pdf", b"%PDF-1.4 fake pdf", content_type="application/pdf"
@@ -30,6 +29,7 @@ class GuestFormSubmissionEmailTests(TestCase):
 
     def _valid_post_data(self):
         return {
+            "participant_type": "student",
             "participant_first_name": "Alex",
             "participant_last_name": "Smith",
             "email": "alex@example.com",
@@ -63,9 +63,35 @@ class GuestFormSubmissionEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
         self.assertEqual(email.to, ["alex@example.com"])
-        self.assertIn("Adult Waiver", email.subject)
+        self.assertIn("Photo Release", email.subject)
         self.assertIn("Alex Smith", email.body)
-        self.assertIn("Adult Waiver", email.body)
+        self.assertIn("Photo Release", email.body)
+
+    def test_submission_stores_participant_type(self):
+        resp = self.client.post(
+            reverse("guest_form_detail", args=[self.guest_form.slug]),
+            self._valid_post_data(),
+        )
+        self.assertEqual(resp.status_code, 302)
+        submission = GuestFormSubmission.objects.get(
+            guest_form=self.guest_form, email="alex@example.com"
+        )
+        self.assertEqual(submission.participant_type, "student")
+
+    def test_submission_requires_participant_type(self):
+        data = self._valid_post_data()
+        del data["participant_type"]
+        resp = self.client.post(
+            reverse("guest_form_detail", args=[self.guest_form.slug]), data
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(GuestFormSubmission.objects.exists())
+
+    def test_detail_page_renders_participant_type_choice(self):
+        resp = self.client.get(
+            reverse("guest_form_detail", args=[self.guest_form.slug])
+        )
+        self.assertContains(resp, 'name="participant_type"')
 
     def test_invalid_submission_sends_no_email(self):
         data = self._valid_post_data()

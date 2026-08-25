@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import enum
-
 from django.db import models
 from django.utils.text import slugify
 
@@ -11,11 +9,11 @@ from programs.constants import PHONE_TYPE_CHOICES
 from programs.validators import validate_phone_number
 
 
-class GuestFormType(enum.StrEnum):
-    """Type of guest form."""
+class ParticipantType(models.TextChoices):
+    """Whether a submission is for a student or an adult participant."""
 
-    STUDENT = "student"
-    ADULT = "adult"
+    STUDENT = "student", "Student"
+    ADULT = "adult", "Adult"
 
 
 class EmergencyContactRelationship(models.TextChoices):
@@ -43,8 +41,8 @@ def _guest_submission_upload_to(instance, filename):
 class GuestForm(models.Model):
     """A guest permission form.
 
-    Lead mentors can create and manage these forms. Each form has a type
-    (student or adult) that determines what fields are shown to the guest.
+    Lead mentors can create and manage these forms. Guests choose whether
+    they are submitting as a student or an adult when they fill out the form.
     """
 
     class Meta:
@@ -61,11 +59,6 @@ class GuestForm(models.Model):
         unique=True,
         blank=True,
         help_text="URL-friendly identifier for direct links (e.g. 'photo-release').",
-    )
-    form_type = models.CharField(
-        max_length=10,
-        choices=[(t.value, t.value.title()) for t in GuestFormType],
-        help_text="Whether this form is for students or adults.",
     )
     name = models.CharField(
         max_length=200,
@@ -129,7 +122,13 @@ class GuestFormSubmission(models.Model):
         related_name="submissions",
     )
 
-    # Participant information (used for both student and adult)
+    # Participant information
+    participant_type = models.CharField(
+        max_length=10,
+        choices=ParticipantType.choices,
+        default=ParticipantType.STUDENT,
+        help_text="Whether this submission is for a student or an adult.",
+    )
     participant_first_name = models.CharField(max_length=150, blank=True, default="")
     participant_last_name = models.CharField(max_length=150, blank=True, default="")
     email = models.EmailField(blank=True, default="")

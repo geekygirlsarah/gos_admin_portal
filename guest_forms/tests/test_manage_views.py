@@ -29,7 +29,6 @@ class GuestFormManageViewTests(TestCase):
 
     def _valid_post_data(self, **overrides):
         data = {
-            "form_type": "student",
             "name": "Photo Release",
             "description": "",
             "is_required": "on",
@@ -47,10 +46,13 @@ class GuestFormManageViewTests(TestCase):
         self.assertContains(resp, 'name="legal_notices_url"')
         self.assertContains(resp, 'name="safety_guidelines_url"')
 
+    def test_manage_form_has_no_form_type(self):
+        """Regression: form_type moved from GuestForm to the submission itself."""
+        resp = self.client.get(reverse("guest_form_create"))
+        self.assertNotContains(resp, 'name="form_type"')
+
     def test_edit_page_renders_url_fields(self):
-        guest_form = GuestForm.objects.create(
-            form_type="adult", name="Adult Waiver", file=self._pdf()
-        )
+        guest_form = GuestForm.objects.create(name="Adult Waiver", file=self._pdf())
         resp = self.client.get(reverse("guest_form_edit", args=[guest_form.pk]))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'name="legal_notices_url"')
@@ -65,9 +67,7 @@ class GuestFormManageViewTests(TestCase):
         self.assertTrue(GuestForm.objects.filter(name="Photo Release").exists())
 
     def test_update_post_saves_changes(self):
-        guest_form = GuestForm.objects.create(
-            form_type="student", name="Old Name", file=self._pdf()
-        )
+        guest_form = GuestForm.objects.create(name="Old Name", file=self._pdf())
         data = self._valid_post_data(name="New Name")
         data["file"] = self._pdf()
         resp = self.client.post(reverse("guest_form_edit", args=[guest_form.pk]), data)
