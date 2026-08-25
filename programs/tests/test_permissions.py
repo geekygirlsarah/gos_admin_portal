@@ -588,6 +588,7 @@ class ProgramPermissionTests(TestCase):
         self.assertFalse(response.context.get("can_view_attendance"))
         self.assertFalse(response.context.get("can_manage_fees"))
         self.assertFalse(response.context.get("can_manage_students"))
+        self.assertFalse(response.context.get("can_view_documents"))
 
     def test_program_list_filtered_for_mentor(self):
         self.client.login(username="mentor_user", password="password123")  # nosec B106

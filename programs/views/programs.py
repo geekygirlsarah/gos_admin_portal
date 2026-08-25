@@ -317,9 +317,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["can_manage_fees"] = False
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
-            ctx["can_view_documents"] = can_user_read(
-                self.request.user, "student_documents"
-            )
+            ctx["can_view_documents"] = False
         else:
             ctx["can_manage_students"] = can_user_write(
                 self.request.user, "student_info"
