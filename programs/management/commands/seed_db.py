@@ -1,8 +1,10 @@
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from badges.models import Badge, StudentBadge
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -39,6 +41,7 @@ class Command(BaseCommand):
         self._seed_fees(programs, today)
         self._seed_sliding_scales(programs, students, today)
         self._seed_payments(enrollments, programs, today)
+        self._seed_badges(students, programs)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded database"))
 
@@ -84,6 +87,12 @@ class Command(BaseCommand):
                 "name": "T-shirt Sizes",
                 "description": "Enable T-shirt size field collection.",
                 "display_order": 40,
+            },
+            {
+                "key": "badges",
+                "name": "Badges",
+                "description": "Enable student badges for this program.",
+                "display_order": 60,
             },
         ]
 
@@ -155,6 +164,7 @@ class Command(BaseCommand):
                     "background-checks",
                     "cmu-andrew",
                     "tshirt-size",
+                    "badges",
                 ],
             },
             {
@@ -614,15 +624,134 @@ class Command(BaseCommand):
                     paid_via="credit_card",
                     defaults={"notes": "Seed: second installment paid"},
                 )
-            elif status_selector == 1:
-                Payment.objects.update_or_create(
-                    student=enrollment.student,
-                    program=enrollment.program,
-                    paid_on=paid_on,
-                    amount=Decimal("150.00"),
-                    paid_via="cash",
-                    defaults={"notes": "Seed: partial payment"},
-                )
+                elif status_selector == 1:
+                    Payment.objects.update_or_create(
+                        student=enrollment.student,
+                        program=enrollment.program,
+                        paid_on=paid_on,
+                        amount=Decimal("150.00"),
+                        paid_via="cash",
+                        defaults={"notes": "Seed: partial payment"},
+                    )
+
+    def _seed_badges(self, students, programs):
+        from badges.models import BadgeCategory
+
+        badge_data = [
+            {
+                "name": "Robotics Foundations",
+                "category": BadgeCategory.BASICS,
+                "level": 1,
+                "description": "Completed introductory robotics concepts and safety training.",
+                "skills_required": "Basic understanding of robot components and safety protocols.",
+                "how_to_earn": "Attend all 3 foundations sessions and pass the safety quiz.",
+            },
+            {
+                "name": "Robotics Foundations",
+                "category": BadgeCategory.BASICS,
+                "level": 2,
+                "description": "Demonstrated proficiency in advanced robotics fundamentals.",
+                "skills_required": "Gear ratios, torque calculations, and basic sensor integration.",
+                "how_to_earn": "Complete the mid-season technical assessment.",
+            },
+            {
+                "name": "CAD Design",
+                "category": BadgeCategory.DESIGN,
+                "level": 1,
+                "description": "Created a functional 3D model of a robot subsystem.",
+                "skills_required": "Fusion 360 or SolidWorks basics, sketch creation, and extrusion.",
+                "how_to_earn": "Submit a CAD model of a drivetrain subsystem reviewed by a mentor.",
+            },
+            {
+                "name": "Programming",
+                "category": BadgeCategory.SOFTWARE,
+                "level": 1,
+                "description": "Wrote and deployed code to control a robot drivetrain.",
+                "skills_required": "Java or Python basics, motor control, and joystick input.",
+                "how_to_earn": "Demonstrate autonomous and teleop code on the practice robot.",
+            },
+            {
+                "name": "Programming",
+                "category": BadgeCategory.SOFTWARE,
+                "level": 2,
+                "description": "Implemented autonomous path planning and sensor-based decision making.",
+                "skills_required": "PID control, path following, and vision processing.",
+                "how_to_earn": "Score above threshold in the autonomous challenge at scrimmages.",
+            },
+            {
+                "name": "Team Spirit",
+                "category": BadgeCategory.GENERAL,
+                "level": 1,
+                "description": "Demonstrated outstanding teamwork and positive attitude.",
+                "skills_required": "N/A",
+                "how_to_earn": "Nominated by peers and confirmed by mentors.",
+            },
+            {
+                "name": "Safety Expert",
+                "category": BadgeCategory.GENERAL,
+                "level": 1,
+                "description": "Completed advanced safety training and served as a safety captain.",
+                "skills_required": "All foundational safety modules plus lockout/tagout procedures.",
+                "how_to_earn": "Pass the advanced safety exam and serve as safety captain at 2 events.",
+            },
+            {
+                "name": "Outreach Champion",
+                "category": BadgeCategory.GENERAL,
+                "level": 1,
+                "description": "Led community outreach events to inspire the next generation of STEM leaders.",
+                "skills_required": "Public speaking, event planning, and demonstrated community impact.",
+                "how_to_earn": "Organize and lead at least 2 outreach events with documented attendance.",
+            },
+        ]
+
+        badges = []
+        for data in badge_data:
+            badge, _ = Badge.objects.update_or_create(
+                name=data["name"],
+                level=data["level"],
+                defaults={
+                    "category": data["category"],
+                    "description": data["description"],
+                    "skills_required": data["skills_required"],
+                    "how_to_earn": data["how_to_earn"],
+                },
+            )
+            badges.append(badge)
+
+        # Find a mentor user to award badges
+        User = get_user_model()
+        mentor_user = User.objects.filter(is_staff=True).first()
+        if not mentor_user:
+            mentor_user = User.objects.first()
+
+        if mentor_user and badges:
+            # Award badges to the first few students
+            award_map = {
+                0: [0, 3, 5],      # Ava: Robotics Foundations L1, Programming L1, Team Spirit
+                1: [0, 1, 2, 5],   # Mia: Robotics Foundations L1+L2, CAD L1, Team Spirit
+                2: [0, 3, 6],      # Zoe: Robotics Foundations L1, Programming L1, Safety Expert
+                3: [0, 1, 4, 7],   # Lila: Robotics Foundations L1+L2, Programming L2, Outreach Champion
+                4: [0, 5],         # Nora: Robotics Foundations L1, Team Spirit
+                5: [0, 2, 5],      # Ruby: Robotics Foundations L1, CAD L1, Team Spirit
+            }
+
+            # Find a program with badges enabled to link the awards context
+            badges_program = None
+            for p in programs:
+                if p.has_feature("badges"):
+                    badges_program = p
+                    break
+
+            for student_idx, badge_indices in award_map.items():
+                if student_idx < len(students):
+                    student = students[student_idx]
+                    for badge_idx in badge_indices:
+                        if badge_idx < len(badges):
+                            StudentBadge.objects.get_or_create(
+                                student=student,
+                                badge=badges[badge_idx],
+                                defaults={"awarded_by": mentor_user},
+                            )
 
 
 def _seed_clearances(adult, paca, patch, fbi, expires):

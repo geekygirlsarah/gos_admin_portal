@@ -80,26 +80,46 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # ── Adult profile (parent / mentor / alumni) ─────────────────────────
         adult = getattr(user, "adult_profile", None)
         # ── Badges (student + parent visibility) ─────────────────────────────
+        # Only show badges if the student has been enrolled in at least one
+        # program with the badges feature enabled.
+        context["has_badges"] = False
         try:
             from badges.models import StudentBadge
         except ImportError:
             StudentBadge = None
         if StudentBadge:
+            from programs.models import Enrollment
+
             if student:
-                context["badges_earned"] = StudentBadge.objects.filter(
-                    student=student
-                ).select_related("badge", "awarded_by")
-                context["badges_count"] = context["badges_earned"].count()
+                has_badges_feature = Enrollment.objects.filter(
+                    student=student,
+                    active=True,
+                    program__features__key="badges",
+                ).exists()
+                context["has_badges"] = has_badges_feature
+                if has_badges_feature:
+                    context["badges_earned"] = StudentBadge.objects.filter(
+                        student=student
+                    ).select_related("badge", "awarded_by")
+                    context["badges_count"] = context["badges_earned"].count()
             elif adult and getattr(adult, "is_parent", False):
                 linked = adult.all_students()
-                context["badges_by_student"] = {
-                    s: list(
-                        StudentBadge.objects.filter(student=s).select_related(
-                            "badge", "awarded_by"
+                # Check if any linked student has badges enabled
+                parent_has_badges = Enrollment.objects.filter(
+                    student__in=linked,
+                    active=True,
+                    program__features__key="badges",
+                ).exists()
+                context["has_badges"] = parent_has_badges
+                if parent_has_badges:
+                    context["badges_by_student"] = {
+                        s: list(
+                            StudentBadge.objects.filter(student=s).select_related(
+                                "badge", "awarded_by"
+                            )
                         )
-                    )
-                    for s in linked
-                }
+                        for s in linked
+                    }
         context["adult"] = adult
         if adult:
             context["is_parent"] = adult.is_parent
