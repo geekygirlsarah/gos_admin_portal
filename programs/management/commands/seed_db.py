@@ -624,15 +624,15 @@ class Command(BaseCommand):
                     paid_via="credit_card",
                     defaults={"notes": "Seed: second installment paid"},
                 )
-                elif status_selector == 1:
-                    Payment.objects.update_or_create(
-                        student=enrollment.student,
-                        program=enrollment.program,
-                        paid_on=paid_on,
-                        amount=Decimal("150.00"),
-                        paid_via="cash",
-                        defaults={"notes": "Seed: partial payment"},
-                    )
+            elif status_selector == 1:
+                Payment.objects.update_or_create(
+                    student=enrollment.student,
+                    program=enrollment.program,
+                    paid_on=paid_on,
+                    amount=Decimal("150.00"),
+                    paid_via="cash",
+                    defaults={"notes": "Seed: partial payment"},
+                )
 
     def _seed_badges(self, students, programs):
         from badges.models import BadgeCategory
@@ -727,12 +727,25 @@ class Command(BaseCommand):
         if mentor_user and badges:
             # Award badges to the first few students
             award_map = {
-                0: [0, 3, 5],      # Ava: Robotics Foundations L1, Programming L1, Team Spirit
-                1: [0, 1, 2, 5],   # Mia: Robotics Foundations L1+L2, CAD L1, Team Spirit
-                2: [0, 3, 6],      # Zoe: Robotics Foundations L1, Programming L1, Safety Expert
-                3: [0, 1, 4, 7],   # Lila: Robotics Foundations L1+L2, Programming L2, Outreach Champion
-                4: [0, 5],         # Nora: Robotics Foundations L1, Team Spirit
-                5: [0, 2, 5],      # Ruby: Robotics Foundations L1, CAD L1, Team Spirit
+                0: [
+                    0,
+                    3,
+                    5,
+                ],  # Ava: Robotics Foundations L1, Programming L1, Team Spirit
+                1: [0, 1, 2, 5],  # Mia: Robotics Foundations L1+L2, CAD L1, Team Spirit
+                2: [
+                    0,
+                    3,
+                    6,
+                ],  # Zoe: Robotics Foundations L1, Programming L1, Safety Expert
+                3: [
+                    0,
+                    1,
+                    4,
+                    7,
+                ],  # Lila: Robotics Foundations L1+L2, Programming L2, Outreach Champion
+                4: [0, 5],  # Nora: Robotics Foundations L1, Team Spirit
+                5: [0, 2, 5],  # Ruby: Robotics Foundations L1, CAD L1, Team Spirit
             }
 
             # Find a program with badges enabled to link the awards context
