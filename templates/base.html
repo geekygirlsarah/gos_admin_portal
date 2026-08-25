@@ -57,7 +57,6 @@
                     {% endif %}
                     {% endif %}
 
-
                     {% can_read user 'programs' current_program as can_view_program %}
                     {% if current_program and can_view_program %}
                         {# ── Program-scoped navigation ── #}
@@ -66,52 +65,39 @@
                             <a class="nav-link{% if request.resolver_match.view_name == 'program_list' %} active{% endif %}" href="{% url 'program_list' %}">Programs</a>
                         </li>
                         {% endif %}
+
                         {% if navbar_role != 'Student' %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}">{{ current_program.name }}</a>
-                        </li>
-                        {% endif %}
-
-                        {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' or navbar_role == 'Alumni' %}
-                            {% if current_program_has_outreach %}
-                            <li class="nav-item">
-                                <a class="nav-link{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a>
-                            </li>
-                            {% endif %}
-                        {% endif %}
-                        {% if current_program_has_badges %}
-                        <li class="nav-item">
-                            <a class="nav-link{% if 'badges' in request.path %} active{% endif %}" href="{% url 'badges:list' %}{% if current_program %}?program={{ current_program.pk }}{% endif %}">Badges</a>
-                        </li>
-                        {% endif %}
-  
-                        {% can_read user 'student_info' as can_read_students %}
-                        {% if can_read_students and navbar_role != 'Student' %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'program_detail' current_program.pk %}#students">Students</a>
-                        </li>
-                        {% endif %}
- 
-                        {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
-                            {% can_read user 'adult_info' as can_read_adults %}
-                            {% if can_read_adults %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{% url 'program_emergency_contacts' current_program.pk %}">Emergency Contacts</a>
-                            </li>
-                            {% endif %}
-                        {% endif %}
-
-                        {% if navbar_role == 'LeadMentor' %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a>
+                            {% can_read user 'student_info' as can_read_students %}
+                            {# ── Everything about the current program grouped into one dropdown ── #}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="currentProgramDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ current_program.name }}</a>
+                                <ul class="dropdown-menu" aria-labelledby="currentProgramDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}">Overview</a></li>
+                                    {% if can_read_students %}
+                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}#students">Students</a></li>
+                                    {% endif %}
+                                    {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' or navbar_role == 'Alumni' %}
+                                        {% if current_program_has_outreach %}
+                                        <li><a class="dropdown-item{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a></li>
+                                        {% endif %}
+                                    {% endif %}
+                                    {% if current_program_has_badges %}
+                                    <li><a class="dropdown-item{% if 'badges' in request.path %} active{% endif %}" href="{% url 'badges:list' %}?program={{ current_program.pk }}">Badges</a></li>
+                                    {% endif %}
+                                    {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
+                                        {% can_read user 'adult_info' as can_read_adults %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        {% if can_read_adults %}
+                                        <li><a class="dropdown-item" href="{% url 'program_emergency_contacts' current_program.pk %}">Emergency Contacts</a></li>
+                                        {% endif %}
+                                        {% if navbar_role == 'LeadMentor' %}
+                                        <li><a class="dropdown-item" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a></li>
+                                        {% endif %}
+                                        <li><a class="dropdown-item" href="{% url 'program_email' current_program.pk %}">Email Program</a></li>
+                                    {% endif %}
+                                </ul>
                             </li>
                         {% endif %}
-                        {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{% url 'program_email' current_program.pk %}">Email Program</a>
-                            </li>
-                        {% endif %}
- 
                     {% else %}
                         {# ── No program selected or no access: show minimal nav ── #}
                         {% if navbar_role == 'LeadMentor' or navbar_role == 'Mentor' %}
@@ -125,12 +111,14 @@
                             <a class="nav-link dropdown-toggle" href="#" id="attendanceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Attendance</a>
                             <ul class="dropdown-menu" aria-labelledby="attendanceDropdown">
                                 <li><a class="dropdown-item" href="{% url 'attendance_active' %}">Who's Here Now</a></li>
-                                <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
-                                <li><a class="dropdown-item" href="{% url 'rfid_management' %}">RFID Management</a></li>
                                 {% if current_program %}
                                 <li><a class="dropdown-item" href="{% url 'program_hours' current_program.pk %}">Program Hours</a></li>
                                 {% endif %}
+                                <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'rfid_management' %}">RFID Management</a></li>
                                 {% if navbar_role == 'LeadMentor' %}
+                                <li><a class="dropdown-item" href="{% url 'visitor_management' %}">Visitor Management</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'all_attendance' %}">All Program Entries</a></li>
                                 {% endif %}
@@ -138,32 +126,43 @@
                         </li>
                     {% endif %}
 
-                    {# ── Admin dropdown for LeadMentors ── #}
+                    {# ── LeadMentor admin dropdowns, split by topic so each stays short ── #}
                     {% if navbar_role == 'LeadMentor' %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
-                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                                <li><a class="dropdown-item" href="/programs/">All Programs</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                            <a class="nav-link dropdown-toggle" href="#" id="studentsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Students</a>
+                            <ul class="dropdown-menu" aria-labelledby="studentsAdminDropdown">
                                 <li><a class="dropdown-item" href="/programs/students/">All Students</a></li>
                                 <li><a class="dropdown-item" href="{% url 'students_by_grade' %}">Students by Grade</a></li>
                                 <li><a class="dropdown-item" href="{% url 'students_by_school' %}">Students by School</a></li>
-                                <li><a class="dropdown-item" href="{% url 'student_emergency_contacts' %}">Emergency Contacts</a></li>
                                 <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'student_emergency_contacts' %}">Emergency Contacts</a></li>
+                                <li><a class="dropdown-item" href="/programs/schools/">Schools</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adultsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Adults</a>
+                            <ul class="dropdown-menu" aria-labelledby="adultsAdminDropdown">
                                 <li><a class="dropdown-item" href="{% url 'adult_list' %}">All Adults</a></li>
                                 <li><a class="dropdown-item" href="{% url 'parent_list' %}">All Parents</a></li>
                                 <li><a class="dropdown-item" href="{% url 'mentor_list' %}">All Mentors</a></li>
                                 <li><a class="dropdown-item" href="{% url 'alumni_list' %}">All Alumni</a></li>
-                                <li><hr class="dropdown-divider"></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="applicationsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Applications</a>
+                            <ul class="dropdown-menu" aria-labelledby="applicationsAdminDropdown">
                                 {% if perms.applications.review_application %}
                                     <li><a class="dropdown-item" href="{% url 'application_review_list' %}">All Applications</a></li>
                                 {% endif %}
-                                <li><a class="dropdown-item" href="/programs/schools/">Schools</a></li>
-                                <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Messaging</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'sliding_scale_review_list' %}">Sliding Scale Applications</a></li>
                                 <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Guest Forms</a></li>
                                 <li><a class="dropdown-item" href="{% url 'andrew_id_management' %}">Andrew IDs</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
+                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Messaging</a></li>
                                 <li><a class="dropdown-item" href="{% url 'portal_settings' %}">Settings</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="/admin/audit/auditlog/">Audit Logs</a></li>

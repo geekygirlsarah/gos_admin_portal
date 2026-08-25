@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Faster Pages**: The Students, Parents, and Mentors lists and the Student, Parent, and photo grid pages now issue noticeably fewer database queries per page load, so they render faster on large rosters. The navigation bar also resolves program features (like the Badges and Outreach links) once per page instead of repeatedly. One small side effect: the "My Badges" account-menu link is now shown based on the user's role — students see it as before, and everyone sees it when the current program has the badges feature enabled.
+- **Reorganized Navigation Bar**: The navigation bar had grown a long, flat list of links, so it's now grouped into clearer menus. For Mentors and Lead Mentors, the current program's links (Overview, Students, Outreach, Badges, Emergency Contacts, Dues Owed, Email Program) are now combined into a single dropdown named after the program instead of sitting side-by-side. The Lead Mentor "Admin" menu, which had grown to about 15 items, is now split into four focused menus: Students, Adults, Applications, and Admin (Messaging/Settings/Audit Logs). The Attendance menu also gained a "Visitor Management" shortcut and clearer grouping, and the redundant "All Programs" link (a duplicate of the existing "Programs" link) was removed.
+
+### Fixed
+- **Badges Link No Longer Duplicated for Students**: Students whose current program had the Badges feature enabled previously saw the "Badges" link appear twice in the navigation bar. It now appears once.
+- **Badges/Outreach Links Now Show Correctly for Auto-Selected Programs**: When a Student, Parent, Mentor, or Alumni only had one program (so it was automatically selected rather than chosen from a program-specific page), the navigation bar could incorrectly hide the Badges and Outreach links even when those features were enabled for that program. This is now fixed.
 
 ## 2026-08-24
 

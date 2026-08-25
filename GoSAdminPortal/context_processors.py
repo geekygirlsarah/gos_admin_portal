@@ -67,15 +67,6 @@ def navbar_context(request):
         except Program.DoesNotExist:
             current_program = None
 
-    # Resolve the enabled feature keys once per request so template checks
-    # like "has badges/outreach nav links" don't re-query per condition.
-    if current_program is not None:
-        program_feature_keys = set(
-            current_program.features.values_list("key", flat=True)
-        )
-    else:
-        program_feature_keys = set()
-
     # If no program in URL, try to auto-select for Students/Parents who only have one
     if current_program is None and role in ("Student", "Parent", "Mentor", "Alumni"):
         try:
@@ -108,6 +99,17 @@ def navbar_context(request):
                 current_program = programs[0]
         except (AttributeError, Exception):
             pass
+
+    # Resolve the enabled feature keys once per request so template checks
+    # like "has badges/outreach nav links" don't re-query per condition.
+    # This runs *after* the auto-select above so an auto-selected program's
+    # features (e.g. badges/outreach) are reflected in the nav too.
+    if current_program is not None:
+        program_feature_keys = set(
+            current_program.features.values_list("key", flat=True)
+        )
+    else:
+        program_feature_keys = set()
 
     # Injects student_outreach_programs for the nav bar
     student_outreach_programs = []
