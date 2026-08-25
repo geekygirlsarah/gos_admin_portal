@@ -16,6 +16,41 @@ def wizard_context(request):
     return {"warnings": None}
 
 
+def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
+    """Resolve student_outreach_programs / carpool_map_programs for the nav
+    bar. carpool_map_programs feeds the standalone "Carpool Map" dropdown:
+    only the Student's/Parent's children's currently-active (not past, not
+    inactive) enrollments, never every program ever joined.
+    """
+    student_outreach_programs = []
+    carpool_map_programs = []
+    if role == "Student":
+        try:
+            student = request.user.student_profile
+            active_enrollments = Enrollment.objects.filter(
+                student=student, active=True
+            ).select_related("program")
+            for e in active_enrollments:
+                carpool_map_programs.append(e.program)
+                if e.program.features.filter(key="outreach").exists():
+                    student_outreach_programs.append(e.program)
+        except (Student.DoesNotExist, AttributeError):
+            pass
+    elif navbar_is_parent:
+        try:
+            adult = request.user.adult_profile
+            students = adult.all_students()
+            carpool_map_programs = list(
+                Program.objects.filter(
+                    enrollment__student__in=students, enrollment__active=True
+                ).distinct()
+            )
+        except (Adult.DoesNotExist, AttributeError):
+            pass
+
+    return student_outreach_programs, carpool_map_programs
+
+
 def navbar_context(request):
     """
     Injects navbar-related context into every template:
@@ -111,19 +146,9 @@ def navbar_context(request):
     else:
         program_feature_keys = set()
 
-    # Injects student_outreach_programs for the nav bar
-    student_outreach_programs = []
-    if role == "Student":
-        try:
-            student = request.user.student_profile
-            active_enrollments = Enrollment.objects.filter(
-                student=student, active=True
-            ).select_related("program")
-            for e in active_enrollments:
-                if e.program.features.filter(key="outreach").exists():
-                    student_outreach_programs.append(e.program)
-        except (Student.DoesNotExist, AttributeError):
-            pass
+    student_outreach_programs, carpool_map_programs = (
+        _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent)
+    )
 
     return {
         "current_program": current_program,
@@ -131,6 +156,7 @@ def navbar_context(request):
         "current_program_has_outreach": "outreach" in program_feature_keys,
         "navbar_role": role,
         "student_outreach_programs": student_outreach_programs,
+        "carpool_map_programs": carpool_map_programs,
         # Flag-style helpers: an Adult can hold several roles at once (e.g. a
         # parent who also mentors), so expose each independently rather than
         # relying on the single navbar_role string.
