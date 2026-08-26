@@ -69,7 +69,7 @@
                         <a class="nav-link{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
                     </li>
                     {% endfor %}
-                    {% if current_program_has_badges or user_has_any_badge_program or navbar_badge_count %}
+                    {% if user_has_any_badge_program %}
                     <li class="nav-item">
                         <a class="nav-link{% if 'badges' in request.path %} active{% endif %}" href="{% url 'badges:list' %}">Badges{% if navbar_badge_count %} <span class="badge bg-info text-dark">{{ navbar_badge_count }}</span>{% endif %}</a>
                     </li>
@@ -216,9 +216,9 @@
                 <div class="d-xl-none border-top border-secondary mt-2 pt-2">
                     <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">Dashboard</a>
                     <a class="btn btn-outline-light w-100 mb-1" href="{% url 'my_profile' %}">My Profile</a>
-                    {% if navbar_role != 'Mentor' and navbar_role != 'LeadMentor' %}{% if navbar_is_student or current_program_has_badges or user_has_any_badge_program or navbar_badge_count %}
+                    {% if navbar_is_student and user_has_any_badge_program %}
                     <a class="btn btn-outline-light w-100 mb-1" href="{% url 'badges:list' %}{% if current_program %}?program={{ current_program.pk }}{% endif %}">My Badges{% if navbar_badge_count %} <span class="badge bg-info text-dark">{{ navbar_badge_count }}</span>{% endif %}</a>
-                    {% endif %}{% endif %}
+                    {% endif %}
                     <a class="btn btn-outline-light w-100" href="/accounts/logout/">Logout</a>
                 </div>
             </div>
@@ -237,9 +237,9 @@
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenuDropdown">
                     <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">Dashboard</a></li>
                     <li><a class="dropdown-item" href="{% url 'my_profile' %}">My Profile</a></li>
-                    {% if navbar_role != 'Mentor' and navbar_role != 'LeadMentor' %}{% if navbar_is_student or current_program_has_badges or user_has_any_badge_program or navbar_badge_count %}
+                    {% if navbar_is_student and user_has_any_badge_program %}
                     <li><a class="dropdown-item" href="{% url 'badges:list' %}{% if current_program %}?program={{ current_program.pk }}{% endif %}">My Badges{% if navbar_badge_count %} <span class="badge bg-info text-dark">{{ navbar_badge_count }}</span>{% endif %}</a></li>
-                    {% endif %}{% endif %}
+                    {% endif %}
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="/accounts/logout/">Logout</a></li>
                 </ul>

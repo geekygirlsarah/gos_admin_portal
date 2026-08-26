@@ -445,9 +445,10 @@ class NavbarBadgeCountTests(TestCase):
 
     @unittest.skipIf(Badge is None, "badges app not installed")
     def test_student_with_earned_badges_sees_link_even_without_badge_program(self):
-        """A student who earned badges in a past program should still see
-        the Badges link in the main nav even if their current program
-        doesn't have the badges feature."""
+        """A student who earned badges in a past program should NOT see
+        the Badges link when they are no longer enrolled in a badge-enabled
+        program. Badges are only visible within a program with the feature
+        enabled."""
         self.student.enrollment_set.all().delete()
         Enrollment.objects.create(
             student=self.student, program=self.other_program, active=True
@@ -459,5 +460,4 @@ class NavbarBadgeCountTests(TestCase):
         main_nav_start = response.content.find(b'<ul class="navbar-nav')
         main_nav_end = response.content.find(b"</ul>", main_nav_start)
         main_nav = response.content[main_nav_start:main_nav_end]
-        self.assertIn(b"Badges", main_nav)
-        self.assertIn(b"1", main_nav)
+        self.assertNotIn(b"Badges", main_nav)
