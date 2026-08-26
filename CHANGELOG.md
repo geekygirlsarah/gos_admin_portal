@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-25
 
 ### Added
+- **Attendance Hours Chart**: A new mentor-facing page (`/attendance/hours-chart/`) that shows a bar chart of total hours per student for a selected program, with configurable average-hours/week reference lines (default: 3, 6, 9 hrs/wk). Mentors can filter by date range, add/remove/customize average lines (value and color), and download the chart as a PNG image. Accessible from the Attendance dropdown in the navigation bar.
+
+### Added
+- **Badge Count in Navigation Bar**: The Badges link in the navigation bar now shows a count of how many badges the student (or a parent's child) has earned. The count appears as a small badge indicator next to the link in the main nav, account dropdown, and mobile menu.
+- **Broader Badge Visibility**: The Badges navigation link now appears whenever the student has earned badges in any program, not just when the current program has the badges feature enabled. This means students who earned badges in a past program can still access them from the navbar.
 - **New Navigation Links for Previously Hidden Pages**: Three pages existed in the portal with no way to reach them by clicking anything — "Create New Program", the bulk Import Dashboard (CSV/XLSX imports for students, parents, mentors, schools, relationships, and attendance), and the "All Student Photos" grid. Lead Mentors can now reach all three from the navigation bar (New Program and Import Dashboard under Admin, All Student Photos under Students).
 - **Easier Navigation for Students and Parents**: "Dashboard" is now a top-level navigation link for Students and Parents, so their main hub (hours, balances, outreach highlights, badges, carpool map) is one click away instead of only reachable from the account menu. Students now also have a "Carpool Map" link next to My Hours/Outreach/Badges (previously only reachable via a button on the Dashboard). Parents can now see "Outreach" and "Carpool Map" in their program dropdown as well, matching the access they already had and the info already shown on their Dashboard.
 
