@@ -51,6 +51,50 @@ def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
     return student_outreach_programs, carpool_map_programs
 
 
+def _navbar_badge_data(request, role, navbar_is_parent):
+    """Resolve badge count and badge-program membership for the navbar.
+
+    Returns ``(badge_count, has_any_badge_program)`` where:
+    * ``badge_count`` is the number of ``StudentBadge`` records for the user
+      (students) or their children (parents).  Zero for other roles.
+    * ``has_any_badge_program`` is ``True`` when the user (or their children)
+      is enrolled in at least one program with the ``badges`` feature enabled.
+    """
+    badge_count = 0
+    has_any_badge_program = False
+
+    try:
+        from badges.models import StudentBadge
+    except ImportError:
+        return badge_count, has_any_badge_program
+
+    if role == "Student":
+        try:
+            student = request.user.student_profile
+        except (Student.DoesNotExist, AttributeError):
+            return badge_count, has_any_badge_program
+        badge_count = StudentBadge.objects.filter(student=student).count()
+        has_any_badge_program = Enrollment.objects.filter(
+            student=student,
+            active=True,
+            program__features__key="badges",
+        ).exists()
+    elif navbar_is_parent:
+        try:
+            adult = request.user.adult_profile
+            children = adult.all_students()
+        except (Adult.DoesNotExist, AttributeError):
+            return badge_count, has_any_badge_program
+        badge_count = StudentBadge.objects.filter(student__in=children).count()
+        has_any_badge_program = Enrollment.objects.filter(
+            student__in=children,
+            active=True,
+            program__features__key="badges",
+        ).exists()
+
+    return badge_count, has_any_badge_program
+
+
 def navbar_context(request):
     """
     Injects navbar-related context into every template:
@@ -150,6 +194,10 @@ def navbar_context(request):
         _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent)
     )
 
+    navbar_badge_count, user_has_any_badge_program = _navbar_badge_data(
+        request, role, navbar_is_parent
+    )
+
     return {
         "current_program": current_program,
         "current_program_has_badges": "badges" in program_feature_keys,
@@ -157,6 +205,8 @@ def navbar_context(request):
         "navbar_role": role,
         "student_outreach_programs": student_outreach_programs,
         "carpool_map_programs": carpool_map_programs,
+        "navbar_badge_count": navbar_badge_count,
+        "user_has_any_badge_program": user_has_any_badge_program,
         # Flag-style helpers: an Adult can hold several roles at once (e.g. a
         # parent who also mentors), so expose each independently rather than
         # relying on the single navbar_role string.

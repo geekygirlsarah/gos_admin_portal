@@ -2,6 +2,8 @@
 flat list of links). See CHANGELOG.md for the user-facing summary.
 """
 
+import unittest
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
@@ -14,6 +16,12 @@ from programs.models import (
     ProgramFeature,
     Student,
 )
+
+try:
+    from badges.models import Badge, StudentBadge
+except ImportError:
+    Badge = None
+    StudentBadge = None
 
 
 class LeadMentorAdminDropdownSplitTests(TestCase):
@@ -328,3 +336,130 @@ class CarpoolMapStandaloneDropdownTests(TestCase):
         response = self.client.get(reverse("profile_dashboard"))
         nav_content = self._nav_content(response)
         self.assertNotIn(b"carpoolMapDropdown", nav_content)
+
+
+class NavbarBadgeCountTests(TestCase):
+    """The navbar Badges link should show a count of earned badges and
+    should be visible whenever the user either has earned badges or is
+    enrolled in a program with the badges feature — not just when the
+    *current* program has badges."""
+
+    def setUp(self):
+        self.badges_feature = ProgramFeature.objects.get(key="badges")
+        self.program = Program.objects.create(name="Badge Program", active=True)
+        self.program.features.add(self.badges_feature)
+
+        self.other_program = Program.objects.create(
+            name="Other Program", active=True
+        )
+
+        self.student_user = User.objects.create_user(
+            username="student1", password="password123"
+        )  # nosec B106
+        self.student = Student.objects.create(
+            user=self.student_user, first_name="Alice", last_name="Zuberg"
+        )
+        Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
+        )
+
+        self.parent_user = User.objects.create_user(
+            username="parent1", password="password123"
+        )  # nosec B106
+        self.parent_adult = Adult.objects.create(
+            user=self.parent_user,
+            first_name="Parent",
+            last_name="One",
+            is_parent=True,
+        )
+        AdultStudentRelationship.objects.create(
+            adult=self.parent_adult,
+            student=self.student,
+            relationship_to_student="parent",
+        )
+
+    def _nav_content(self, response):
+        nav_start = response.content.find(b'<nav class="navbar')
+        nav_end = response.content.find(b"</nav>", nav_start)
+        return response.content[nav_start:nav_end]
+
+    def _nav_contains_badges_link(self, nav_content):
+        return b"Badges" in nav_content
+
+    @unittest.skipIf(Badge is None, "badges app not installed")
+    def test_student_sees_badge_count_when_has_earned_badges(self):
+        badge = Badge.objects.create(name="Soldering", level=1)
+        StudentBadge.objects.create(student=self.student, badge=badge)
+        self.client.login(username="student1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        nav_content = self._nav_content(response)
+        self.assertIn(b"Badges", nav_content)
+        self.assertIn(b"badge", nav_content)
+        self.assertIn(b"1", nav_content)
+
+    def test_student_sees_badges_link_when_enrolled_in_badge_program(self):
+        self.client.login(username="student1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        nav_content = self._nav_content(response)
+        self.assertIn(b"Badges", nav_content)
+
+    def test_student_no_badges_link_when_no_badge_program(self):
+        self.student.enrollment_set.all().delete()
+        Enrollment.objects.create(
+            student=self.student, program=self.other_program, active=True
+        )
+        self.client.login(username="student1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        # The main nav area (before the mobile/account sections) should not
+        # contain a "Badges" link when no program has the feature.
+        main_nav_start = response.content.find(b'<ul class="navbar-nav')
+        main_nav_end = response.content.find(b'</ul>', main_nav_start)
+        main_nav = response.content[main_nav_start:main_nav_end]
+        self.assertNotIn(b"Badges", main_nav)
+
+    @unittest.skipIf(Badge is None, "badges app not installed")
+    def test_parent_sees_child_badge_count(self):
+        badge = Badge.objects.create(name="Design", level=1)
+        StudentBadge.objects.create(student=self.student, badge=badge)
+        self.client.login(username="parent1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        nav_content = self._nav_content(response)
+        self.assertIn(b"Badges", nav_content)
+        self.assertIn(b"1", nav_content)
+
+    def test_parent_sees_badges_link_when_child_in_badge_program(self):
+        self.client.login(username="parent1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        nav_content = self._nav_content(response)
+        self.assertIn(b"Badges", nav_content)
+
+    def test_student_badge_count_reflects_multiple_earned(self):
+        if Badge is None:
+            self.skipTest("badges app not installed")
+        badge1 = Badge.objects.create(name="Soldering", level=1)
+        badge2 = Badge.objects.create(name="CAD", level=1)
+        StudentBadge.objects.create(student=self.student, badge=badge1)
+        StudentBadge.objects.create(student=self.student, badge=badge2)
+        self.client.login(username="student1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        nav_content = self._nav_content(response)
+        self.assertIn(b"2", nav_content)
+
+    @unittest.skipIf(Badge is None, "badges app not installed")
+    def test_student_with_earned_badges_sees_link_even_without_badge_program(self):
+        """A student who earned badges in a past program should still see
+        the Badges link in the main nav even if their current program
+        doesn't have the badges feature."""
+        self.student.enrollment_set.all().delete()
+        Enrollment.objects.create(
+            student=self.student, program=self.other_program, active=True
+        )
+        badge = Badge.objects.create(name="Soldering", level=1)
+        StudentBadge.objects.create(student=self.student, badge=badge)
+        self.client.login(username="student1", password="password123")  # nosec B106
+        response = self.client.get(reverse("profile_dashboard"))
+        main_nav_start = response.content.find(b'<ul class="navbar-nav')
+        main_nav_end = response.content.find(b'</ul>', main_nav_start)
+        main_nav = response.content[main_nav_start:main_nav_end]
+        self.assertIn(b"Badges", main_nav)
+        self.assertIn(b"1", main_nav)
