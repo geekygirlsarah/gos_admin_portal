@@ -268,6 +268,8 @@ class RolePermission(models.Model):
         ("fees", "Programs - Fees"),
         ("programs", "Programs - General"),
         ("team_assignments", "Programs - Team Assignments"),
+        ("badge_award", "Badges - Award"),
+        ("badge_manage", "Badges - Create / Manage"),
     ]
     ROLE_CHOICES = [
         ("Mentor", "Mentor"),

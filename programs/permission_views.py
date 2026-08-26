@@ -149,6 +149,8 @@ def can_user_read(user, section, obj=None):
             default_read = False
         if role == "Mentor" and section == "team_assignments":
             default_read = False
+        if role == "Mentor" and section in ("badge_award", "badge_manage"):
+            default_read = False
         if role == "Student" and section == "outreach":
             default_read = True
         can_read_section = perm.can_read if perm else default_read
@@ -168,6 +170,10 @@ def can_user_read(user, section, obj=None):
         if role == "Mentor" and obj and isinstance(obj, Program):
             if obj.status not in ("Active", "Upcoming"):
                 return False
+
+    if section in ("badge_award", "badge_manage"):
+        if role not in ("Mentor", "LeadMentor"):
+            return False
 
     # Object-level restriction for Parents — including parents who also carry
     # the mentor/alumni flags — on finance sections. The single-role branches
@@ -334,6 +340,10 @@ def can_user_write(user, section, obj=None):
         if role == "Mentor" and obj and isinstance(obj, Program):
             if obj.status not in ("Active", "Upcoming"):
                 return False
+
+    if section in ("badge_award", "badge_manage"):
+        if role not in ("Mentor", "LeadMentor"):
+            return False
 
     # Object-level restriction for Parents and Students
     if role == "Parent" and obj:

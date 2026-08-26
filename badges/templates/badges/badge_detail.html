@@ -3,7 +3,7 @@
 {% block content %}
 <div class="mb-3">
   <a href="{% url 'badges:list' %}" class="btn btn-sm btn-outline-secondary">&laquo; All Badges</a>
-  {% if is_lead_mentor %}
+  {% if can_manage %}
     <a href="{% url 'badges:edit' object.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
     <a href="{% url 'badges:delete' object.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
   {% endif %}
@@ -56,7 +56,7 @@
         {% for sb in awards %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <span><a href="{% url 'student_detail' sb.student.pk %}">{{ sb.student }}</a> — {{ sb.awarded_at|date:"M j, Y g:i A" }} by {% if sb.awarded_by and sb.awarded_by.adult_profile %}{{ sb.awarded_by.adult_profile }}{% elif sb.awarded_by %}{{ sb.awarded_by.get_full_name|default:sb.awarded_by.email|default:sb.awarded_by.username }}{% else %}—{% endif %}</span>
-          {% if is_lead_mentor %}
+          {% if can_manage %}
           <form method="post" action="{% url 'badges:revoke' object.pk %}" class="ms-2">
             {% csrf_token %}<input type="hidden" name="student_id" value="{{ sb.student.pk }}">
             <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Revoke this badge?">Revoke</button>

@@ -17,12 +17,39 @@ from audit.service import log_event
 from programs.models import Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
+    can_user_read,
     can_user_write,
     get_user_role,
 )
 
 from .forms import BadgeForm
 from .models import Badge, StudentBadge
+
+
+class BadgeAwardPermissionMixin:
+    """Allows awarding only if user has badge_award write (LeadMentor always)."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not can_user_write(request.user, "badge_award"):
+            from django.contrib import messages as _messages
+            from django.shortcuts import redirect as _redirect
+
+            _messages.error(request, "You do not have permission to award badges.")
+            return _redirect("badges:list")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class BadgeManagePermissionMixin:
+    """Allows create/edit/delete only if user has badge_manage write."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not can_user_write(request.user, "badge_manage"):
+            from django.contrib import messages as _messages
+            from django.shortcuts import redirect as _redirect
+
+            _messages.error(request, "You do not have permission to manage badges.")
+            return _redirect("badges:list")
+        return super().dispatch(request, *args, **kwargs)
 
 
 class BadgeListView(LoginRequiredMixin, View):
@@ -69,6 +96,8 @@ class BadgeListView(LoginRequiredMixin, View):
         role = get_user_role(request.user)
         show_how = role in ("LeadMentor", "Mentor")
         is_lead = role == "LeadMentor"
+        can_award = can_user_write(request.user, "badge_award")
+        can_manage = can_user_write(request.user, "badge_manage")
         from .models import BadgeCategory
 
         # Check if the active student is enrolled in at least one badge-enabled program
@@ -98,6 +127,8 @@ class BadgeListView(LoginRequiredMixin, View):
                     else []
                 ),
                 "is_lead_mentor": is_lead,
+                "can_award": can_award,
+                "can_manage": can_manage,
                 "enrolled_in_badge_program": enrolled_in_badge_program,
                 "categories": BadgeCategory.choices,
             },
@@ -113,7 +144,8 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
         role = get_user_role(self.request.user)
         ctx["show_how"] = role in ("LeadMentor", "Mentor")
         ctx["is_lead_mentor"] = role == "LeadMentor"
-        ctx["can_award"] = role in ("LeadMentor", "Mentor")
+        ctx["can_award"] = can_user_write(self.request.user, "badge_award")
+        ctx["can_manage"] = can_user_write(self.request.user, "badge_manage")
         ctx["awards"] = StudentBadge.objects.filter(badge=self.object).select_related(
             "student", "awarded_by", "awarded_by__adult_profile"
         )
@@ -168,7 +200,7 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class BadgeCreateView(LeadMentorRequiredMixin, CreateView):
+class BadgeCreateView(LoginRequiredMixin, BadgeManagePermissionMixin, CreateView):
     model = Badge
     form_class = BadgeForm
     template_name = "badges/badge_form.html"
@@ -190,7 +222,7 @@ class BadgeCreateView(LeadMentorRequiredMixin, CreateView):
         return resp
 
 
-class BadgeUpdateView(LeadMentorRequiredMixin, UpdateView):
+class BadgeUpdateView(LoginRequiredMixin, BadgeManagePermissionMixin, UpdateView):
     model = Badge
     form_class = BadgeForm
     template_name = "badges/badge_form.html"
@@ -210,7 +242,7 @@ class BadgeUpdateView(LeadMentorRequiredMixin, UpdateView):
         return resp
 
 
-class BadgeDeleteView(LeadMentorRequiredMixin, DeleteView):
+class BadgeDeleteView(LoginRequiredMixin, BadgeManagePermissionMixin, DeleteView):
     model = Badge
     template_name = "badges/badge_confirm_delete.html"
     success_url = reverse_lazy("badges:list")
@@ -226,11 +258,8 @@ class BadgeDeleteView(LeadMentorRequiredMixin, DeleteView):
         return super().form_valid(form)
 
 
-class BadgeAwardView(LoginRequiredMixin, View):
+class BadgeAwardView(LoginRequiredMixin, BadgeAwardPermissionMixin, View):
     def post(self, request, pk):
-        if get_user_role(request.user) not in ("LeadMentor", "Mentor"):
-            messages.error(request, "Permission denied")
-            return redirect("badges:list")
         badge = get_object_or_404(Badge, pk=pk)
         student_id = request.POST.get("student_id")
         student = get_object_or_404(Student, pk=student_id)
@@ -257,7 +286,7 @@ class BadgeAwardView(LoginRequiredMixin, View):
         return redirect("badges:detail", pk=badge.pk)
 
 
-class BadgeRevokeView(LeadMentorRequiredMixin, View):
+class BadgeRevokeView(LoginRequiredMixin, BadgeManagePermissionMixin, View):
     def post(self, request, pk):
         badge = get_object_or_404(Badge, pk=pk)
         student_id = request.POST.get("student_id")
