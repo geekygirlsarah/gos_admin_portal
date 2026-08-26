@@ -1316,7 +1316,11 @@ def attendance_hours_chart_view(request):
     sessions = sessions.select_related("student")
 
     # --- Compute overall start for weeks_elapsed ---
-    if selected_program and selected_program.start_date:
+    # When the user explicitly picks dates, use those; fall back to program
+    # start_date, then to the earliest session.
+    if dates_explicitly_set and date_from:
+        overall_start_date = date_from
+    elif selected_program and selected_program.start_date:
         overall_start_date = selected_program.start_date
     elif date_from:
         overall_start_date = date_from
@@ -1327,13 +1331,18 @@ def attendance_hours_chart_view(request):
     if overall_start_date:
         end_date = date_to or now.date()
         days = (end_date - overall_start_date).days
-        weeks_elapsed = max((days // 7) + 1, 1)
+        weeks_elapsed = max((days + 6) // 7, 1)
     else:
         weeks_elapsed = 1
 
     # --- Aggregate per student ---
     student_stats = (
-        sessions.values("student__id", "student__first_name", "student__last_name")
+        sessions.values(
+            "student__id",
+            "student__first_name",
+            "student__legal_first_name",
+            "student__last_name",
+        )
         .annotate(
             total_minutes=Sum("duration_minutes"),
             session_count=Count("id"),
@@ -1348,7 +1357,8 @@ def attendance_hours_chart_view(request):
     total_hours_all = 0.0
 
     for stat in student_stats:
-        name = f"{stat['student__first_name']} {stat['student__last_name']}"
+        display_first = stat["student__first_name"] or stat["student__legal_first_name"]
+        name = f"{display_first} {stat['student__last_name']}"
         hours = round((stat["total_minutes"] or 0) / 60.0, 1)
         total_hours_all += hours
         chart_labels.append(name)
@@ -1366,9 +1376,32 @@ def attendance_hours_chart_view(request):
         )
 
     total_hours_all = round(total_hours_all, 1)
+    student_count = len(student_list)
     avg_hours_per_week = (
         round(total_hours_all / weeks_elapsed, 1) if weeks_elapsed > 0 else 0
     )
+
+    # Per-line exceeded counts
+    exceeded_counts = []
+    for line in avg_lines:
+        threshold = round(line["value"] * max(weeks_elapsed, 1), 1)
+        count = sum(1 for s in student_list if s["avg_per_week"] >= line["value"])
+        exceeded_counts.append(
+            {"label": line["value"], "color": line["color"], "count": count}
+        )
+
+    # Sort toggle
+    sort_by = request.GET.get("sort", "hours")
+    if sort_by == "alpha":
+        student_list.sort(key=lambda s: s["name"].lower())
+        paired = sorted(zip(chart_labels, chart_data), key=lambda p: p[0].lower())
+    else:
+        student_list.sort(key=lambda s: s["total_hours"], reverse=True)
+        paired = list(
+            sorted(zip(chart_labels, chart_data), key=lambda p: p[1], reverse=True)
+        )
+    chart_labels = [p[0] for p in paired]
+    chart_data = [p[1] for p in paired]
 
     # Build annotation lines: Y position = avg_hrs_per_week * weeks_elapsed
     annotation_lines = []
@@ -1385,6 +1418,21 @@ def attendance_hours_chart_view(request):
             }
         )
 
+    # Build clean sort URLs
+    from urllib.parse import urlencode
+
+    base_params = {}
+    if program_id:
+        base_params["program_id"] = program_id
+    if date_from_str:
+        base_params["date_from"] = date_from_str
+    if date_to_str:
+        base_params["date_to"] = date_to_str
+    if avg_lines_json_str:
+        base_params["avg_lines"] = avg_lines_json_str
+    sort_hours_url = f"?{urlencode(base_params)}&sort=hours"
+    sort_alpha_url = f"?{urlencode(base_params)}&sort=alpha"
+
     return render(
         request,
         "attendance/hours_chart.html",
@@ -1399,9 +1447,13 @@ def attendance_hours_chart_view(request):
             "chart_labels_json": json.dumps(chart_labels),
             "chart_data_json": json.dumps(chart_data),
             "student_list": student_list,
-            "total_hours": total_hours_all,
+            "student_count": student_count,
             "avg_hours_per_week": avg_hours_per_week,
+            "exceeded_counts": exceeded_counts,
             "weeks_elapsed": weeks_elapsed,
+            "sort_by": sort_by,
+            "sort_hours_url": sort_hours_url,
+            "sort_alpha_url": sort_alpha_url,
             "overall_start_date": overall_start_date,
         },
     )
