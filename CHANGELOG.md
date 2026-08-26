@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-26
+
+### Fixed
+- **Attendance Hours Chart**: Fixed an issue where the attendance hours chart was not displaying correctly.
+- **Badge Count in Navigation Bar**: The Badges link in the navigation bar now shows a count of how many badges the student (or a parent's child) has earned. The count appears as a small badge indicator next to the link in the main nav, account dropdown, and mobile menu.
+- **Broader Badge Visibility**: The Badges navigation link now appears whenever the student has earned badges in any program, not just when the current program has the badges feature enabled. This means students who earned badges in a past program can still access them from the navbar.
+- **Page footer and hamburger menu**: Fixed footer alignment issues and the navbar not collapsing sometimes when it was too long to be visible.
+
 ## 2026-08-25
 
 ### Added
