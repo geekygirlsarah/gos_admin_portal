@@ -3,6 +3,7 @@ from django.urls import include, path
 from . import kiosk_views
 
 kiosk_patterns = [
+    path("ping/", kiosk_views.kiosk_ping, name="api_kiosk_ping"),
     path(
         "request_code/", kiosk_views.kiosk_request_code, name="api_kiosk_request_code"
     ),

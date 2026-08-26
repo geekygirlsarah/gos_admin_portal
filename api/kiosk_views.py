@@ -47,6 +47,15 @@ def _person_full_name(student=None, adult=None):
     return f"{first} {last}".strip()
 
 
+@require_GET
+def kiosk_ping(request, kiosk_id):
+    """GET /api/v1/kiosk/<id>/ping/
+    Lightweight health check. Verifies the kiosk config exists and the server is up.
+    """
+    _get_kiosk_or_404(kiosk_id)
+    return JsonResponse({"ok": True})
+
+
 @require_POST
 def kiosk_request_code(request, kiosk_id):
     """POST /api/v1/kiosk/<id>/request_code/
