@@ -349,9 +349,7 @@ class NavbarBadgeCountTests(TestCase):
         self.program = Program.objects.create(name="Badge Program", active=True)
         self.program.features.add(self.badges_feature)
 
-        self.other_program = Program.objects.create(
-            name="Other Program", active=True
-        )
+        self.other_program = Program.objects.create(name="Other Program", active=True)
 
         self.student_user = User.objects.create_user(
             username="student1", password="password123"
@@ -413,7 +411,7 @@ class NavbarBadgeCountTests(TestCase):
         # The main nav area (before the mobile/account sections) should not
         # contain a "Badges" link when no program has the feature.
         main_nav_start = response.content.find(b'<ul class="navbar-nav')
-        main_nav_end = response.content.find(b'</ul>', main_nav_start)
+        main_nav_end = response.content.find(b"</ul>", main_nav_start)
         main_nav = response.content[main_nav_start:main_nav_end]
         self.assertNotIn(b"Badges", main_nav)
 
@@ -459,7 +457,7 @@ class NavbarBadgeCountTests(TestCase):
         self.client.login(username="student1", password="password123")  # nosec B106
         response = self.client.get(reverse("profile_dashboard"))
         main_nav_start = response.content.find(b'<ul class="navbar-nav')
-        main_nav_end = response.content.find(b'</ul>', main_nav_start)
+        main_nav_end = response.content.find(b"</ul>", main_nav_start)
         main_nav = response.content[main_nav_start:main_nav_end]
         self.assertIn(b"Badges", main_nav)
         self.assertIn(b"1", main_nav)
