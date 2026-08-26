@@ -27,33 +27,44 @@
       {% endif %}
       <hr>
         {% if role == 'LeadMentor' or role == 'Mentor' %}
-        <div class="mt-4 d-flex flex-wrap gap-2">
-            {% if role == 'LeadMentor' and perms.applications.review_application %}
-              <a class="btn btn-primary" href="{% url 'application_review_list' %}?program={{ program.id }}">Review Applications</a>
-            {% endif %}
-            <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
-            {% if role == 'LeadMentor' %}
-              <a class="btn btn-outline-dark" href="{% url 'program_dues_owed' program.id %}">All Dues Owed</a>
-            {% endif %}
-            <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
-            {% if can_view_documents %}
-              <a class="btn btn-outline-dark" href="{% url 'program_student_documents' program.id %}">Signed Documents</a>
-            {% endif %}
-            <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
-            <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
-            <a class="btn btn-outline-dark" href="{% url 'program_student_export' program.id %}">Export Students</a>
-            {% if role == 'LeadMentor' %}
-              <a class="btn btn-outline-primary" href="{% url 'program_assignment' program.id %}">Assign Teams/Crews</a>
-            {% endif %}
-            {% if 'signout-sheet' in program.feature_keys %}
-              <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
-            {% endif %}
+        <div class="mt-4">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="small fw-semibold text-muted text-uppercase" style="min-width: 8rem;">Manage Program</span>
+            <div class="d-flex flex-wrap gap-2">
+              {% if role == 'LeadMentor' and perms.applications.review_application %}
+                <a class="btn btn-primary" href="{% url 'application_review_list' %}?program={{ program.id }}">Review Applications</a>
+              {% endif %}
+              <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
+              {% can_write user 'team_assignments' program as can_assign_teams %}
+              {% if can_assign_teams %}
+                <a class="btn btn-outline-primary" href="{% url 'program_assignment' program.id %}">Assign Teams/Crews</a>
+              {% endif %}
+              {% if 'signout-sheet' in program.feature_keys %}
+                <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
+              {% endif %}
+            </div>
+          </div>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="small fw-semibold text-muted text-uppercase" style="min-width: 8rem;">Views</span>
+            <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
+              {% if can_view_documents %}
+                <a class="btn btn-outline-dark" href="{% url 'program_student_documents' program.id %}">Signed Documents</a>
+              {% endif %}
+              <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
+              <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
+              <a class="btn btn-outline-dark" href="{% url 'program_student_export' program.id %}">Export Students</a>
+            </div>
+          </div>
         </div>
         {% elif role == 'Student' %}
-        <div class="mt-4 d-flex flex-wrap gap-2">
-            <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
-            <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
-            <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Carpool Map</a>
+        <div class="mt-4 d-flex flex-wrap align-items-center gap-2">
+            <span class="small fw-semibold text-muted text-uppercase" style="min-width: 8rem;">Views</span>
+            <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
+              <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
+              <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Carpool Map</a>
+            </div>
         </div>
         {% endif %}
         <div><br/></div>
@@ -168,30 +179,16 @@
       {% endif %}
 
       {% if can_manage_students %}
-        <div class="row g-4">
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header">Add Existing Student</div>
-              <div class="card-body">
-                <form method="post" action="{% url 'program_student_add' program.id %}">
-                  {% csrf_token %}
-                  <div class="mb-3">{{ add_existing_form.as_p }}</div>
-                  <button class="btn btn-primary" type="submit">Add to Program</button>
-                </form>
+        <div class="card">
+          <div class="card-header">Add Existing Student</div>
+          <div class="card-body">
+            <form method="post" action="{% url 'program_student_add' program.id %}">
+              {% csrf_token %}
+              <div class="d-flex gap-2 align-items-end">
+                <div class="flex-grow-1 mb-0">{{ add_existing_form.as_p }}</div>
+                <button class="btn btn-primary mb-3 flex-shrink-0" type="submit">Add to Program</button>
               </div>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-header">Quickly Create New Student</div>
-              <div class="card-body">
-                <form method="post" action="{% url 'program_student_quick_create' program.id %}">
-                  {% csrf_token %}
-                  <div class="mb-3">{{ quick_create_form.as_p }}</div>
-                  <button class="btn btn-success" type="submit">Create and Add</button>
-                </form>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       {% endif %}
@@ -206,6 +203,9 @@
             {% endif %}
             {% if can_add_payment %}
               <a class="btn btn-outline-secondary" href="{% url 'program_payment_create' program.id %}">Record a Payment</a>
+            {% endif %}
+            {% if role == 'LeadMentor' %}
+              <a class="btn btn-outline-dark" href="{% url 'program_dues_owed' program.id %}">All Dues Owed</a>
             {% endif %}
           </div>
         </div>

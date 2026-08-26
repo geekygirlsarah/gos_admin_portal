@@ -32,6 +32,7 @@ from ..permission_views import (
     LeadMentorRequiredMixin,
     MentorOrLeadMentorRequiredMixin,
     PassUserToFormMixin,
+    TeamAssignmentPermissionMixin,
     can_user_read,
     can_user_write,
     get_user_role,
@@ -479,7 +480,7 @@ class ProgramStudentQuickCreateView(LoginRequiredMixin, PermissionRequiredMixin,
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+class ProgramEnrollmentUpdateView(LoginRequiredMixin, TeamAssignmentPermissionMixin, View):
     def post(self, request, pk):
         enrollment_id = request.POST.get("enrollment_id")
         team_id = request.POST.get("team_id")
@@ -489,11 +490,17 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
 
         updated_fields = []
+        # Only LeadMentors may toggle active status; mentors limited to team/crew/subteam
+        role = get_user_role(request.user)
         if active is not None:
-            new_active = active.lower() == "true"
-            if enrollment.active != new_active:
-                enrollment.active = new_active
-                updated_fields.append("Active status")
+            if role != "LeadMentor":
+                # Silently ignore active toggle for non-lead mentors
+                pass
+            else:
+                new_active = active.lower() == "true"
+                if enrollment.active != new_active:
+                    enrollment.active = new_active
+                    updated_fields.append("Active status")
 
         if team_id is not None:
             if team_id:
@@ -543,7 +550,7 @@ class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, View):
     template_name = "programs/assignment.html"
 
     def get(self, request, pk):

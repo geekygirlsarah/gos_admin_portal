@@ -267,6 +267,7 @@ class RolePermission(models.Model):
         ("sliding_scale", "Payments - Sliding Scale"),
         ("fees", "Programs - Fees"),
         ("programs", "Programs - General"),
+        ("team_assignments", "Programs - Team Assignments"),
     ]
     ROLE_CHOICES = [
         ("Mentor", "Mentor"),
