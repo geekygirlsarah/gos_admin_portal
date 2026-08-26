@@ -9,6 +9,11 @@ urlpatterns = [
         name="student_hours",
     ),
     path(
+        "hours-chart/",
+        views.attendance_hours_chart_view,
+        name="attendance_hours_chart",
+    ),
+    path(
         "program-hours/<int:program_id>/",
         views.program_hours_view,
         name="program_hours",

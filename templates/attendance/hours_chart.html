@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load permission_tags %}
+
+{% block title %}Attendance Hours Chart{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js" integrity="sha384-3N9GHhCtN3CQef6tNfqgZlv7sQLYIkcChN+uaTZ7xVdzKYp/SjBNPxa92+hM7EAY" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h1 class="mb-1">Attendance Hours Chart</h1>
+  <p class="text-muted mb-4">Total hours per student with configurable average-lines.</p>
+
+  {# ── Filters ── #}
+  <div class="card mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label for="program_id" class="form-label">Program</label>
+          <select class="form-select form-select-sm" id="program_id" name="program_id">
+            <option value="">-- Select Program --</option>
+            {% for p in programs %}
+            <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+              {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="date_from" class="form-label">Start Date</label>
+          <input type="date" class="form-control form-control-sm" id="date_from" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="col-md-2">
+          <label for="date_to" class="form-label">End Date</label>
+          <input type="date" class="form-control form-control-sm" id="date_to" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Average Lines (hrs/wk)</label>
+          <div id="avgLinesContainer">
+            {% for line in avg_lines %}
+            <div class="input-group input-group-sm mb-1 avg-line-row">
+              <input type="number" class="form-control form-control-sm avg-line-value" value="{{ line.value }}" min="0" step="0.5" style="max-width: 70px;">
+              <input type="color" class="form-control form-control-sm form-control-color avg-line-color" value="{{ line.color }}" style="max-width: 42px;">
+              <button type="button" class="btn btn-outline-danger btn-sm remove-line" title="Remove line">&times;</button>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-outline-secondary btn-sm mt-1" id="addLineBtn">
+            <i class="bi bi-plus"></i> Add Line
+          </button>
+        </div>
+        <div class="col-md-2">
+          <input type="hidden" id="avgLinesInput" name="avg_lines" value="">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-funnel"></i> Apply
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if selected_program %}
+    {% if student_list %}
+  {# ── Stats row ── #}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card text-center h-100">
+        <div class="card-body">
+          <h6 class="card-title text-muted">Total Hours</h6>
+          <p class="display-6 fw-bold mb-0">{{ total_hours }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-center h-100">
+        <div class="card-body">
+          <h6 class="card-title text-muted">Avg Hours / Week</h6>
+          <p class="display-6 fw-bold mb-0">{{ avg_hours_per_week }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card text-center h-100">
+        <div class="card-body">
+          <h6 class="card-title text-muted">Weeks Elapsed</h6>
+          <p class="display-6 fw-bold mb-0">{{ weeks_elapsed }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Bar chart ── #}
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Hours per Student — {{ selected_program.name }}{% if selected_program.year_display %} ({{ selected_program.year_display }}){% endif %}</span>
+      <button class="btn btn-sm btn-outline-secondary" id="downloadChart">
+        <i class="bi bi-download"></i> Download PNG
+      </button>
+    </div>
+    <div class="card-body">
+      <div style="height: {{ student_list|length|add:1 }}rem; min-height: 350px; max-height: 700px;">
+        <canvas id="studentHoursChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# ── Student hours table ── #}
+  <div class="card">
+    <div class="card-header">Student Hours</div>
+    <div class="table-responsive">
+      <table class="table table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th class="text-end">Total Hours</th>
+            <th class="text-end">Avg Hrs/Wk</th>
+            <th class="text-end">Sessions</th>
+            <th>Last Attended</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in student_list %}
+          <tr>
+            <td>{{ s.name }}</td>
+            <td class="text-end">{{ s.total_hours }}</td>
+            <td class="text-end">{{ s.avg_per_week }}</td>
+            <td class="text-end">{{ s.session_count }}</td>
+            <td>{% if s.last_attended %}{{ s.last_attended|date:"N j, Y" }}{% else %}—{% endif %}</td>
+            <td>
+              <a href="{% url 'student_hours' s.id %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-graph-up"></i> View Hours
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+    {% else %}
+  <div class="alert alert-info">
+    No attendance data found for the selected filters.
+  </div>
+    {% endif %}
+  {% else %}
+  <div class="alert alert-info">
+    Select a program to view attendance hours.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+  var labels = {{ chart_labels_json|safe }};
+  var data = {{ chart_data_json|safe }};
+  var annotationLines = {{ annotation_lines_json|safe }};
+
+  if (labels.length > 0) {
+    var ctx = document.getElementById('studentHoursChart');
+    if (ctx) {
+      var annotations = {};
+      annotationLines.forEach(function(line, i) {
+        annotations['line' + i] = {
+          type: 'line',
+          yMin: line.y,
+          yMax: line.y,
+          borderColor: line.color,
+          borderWidth: 2,
+          borderDash: [6, 4],
+          label: {
+            display: true,
+            content: line.label,
+            position: 'start',
+            backgroundColor: line.color,
+            color: '#fff',
+            font: { size: 11, weight: 'bold' },
+            padding: { top: 2, bottom: 2, left: 6, right: 6 }
+          }
+        };
+      });
+
+      var chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Total Hours',
+            data: data,
+            backgroundColor: 'rgba(13, 110, 253, 0.7)',
+            borderColor: '#0d6efd',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            annotation: { annotations: annotations },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.parsed.y + ' hours';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Hours' }
+            },
+            x: {
+              title: { display: true, text: 'Students' }
+            }
+          }
+        }
+      });
+
+      document.getElementById('downloadChart').addEventListener('click', function() {
+        var link = document.createElement('a');
+        link.download = 'attendance-hours-chart.png';
+        link.href = chart.toBase64Image();
+        link.click();
+      });
+    }
+  }
+
+  // --- Dynamic avg lines ---
+  var container = document.getElementById('avgLinesContainer');
+  var addBtn = document.getElementById('addLineBtn');
+
+  addBtn.addEventListener('click', function() {
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1 avg-line-row';
+    row.innerHTML =
+      '<input type="number" class="form-control form-control-sm avg-line-value" value="3" min="0" step="0.5" style="max-width: 70px;">' +
+      '<input type="color" class="form-control form-control-sm form-control-color avg-line-color" value="#dc3545" style="max-width: 42px;">' +
+      '<button type="button" class="btn btn-outline-danger btn-sm remove-line" title="Remove line">&times;</button>';
+    container.appendChild(row);
+  });
+
+  container.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-line')) {
+      var rows = container.querySelectorAll('.avg-line-row');
+      if (rows.length > 1) {
+        e.target.closest('.avg-line-row').remove();
+      }
+    }
+  });
+
+  // Serialize avg lines into hidden input before submit
+  var form = container.closest('form');
+  form.addEventListener('submit', function() {
+    var lines = [];
+    container.querySelectorAll('.avg-line-row').forEach(function(row) {
+      lines.push({
+        value: parseFloat(row.querySelector('.avg-line-value').value) || 0,
+        color: row.querySelector('.avg-line-color').value
+      });
+    });
+    document.getElementById('avgLinesInput').value = JSON.stringify(lines);
+  });
+});
+</script>
+{% endblock %}

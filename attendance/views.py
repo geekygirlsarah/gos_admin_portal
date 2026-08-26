@@ -1228,6 +1228,186 @@ def student_hours_view(request, pk):
 
 
 @login_required
+def attendance_hours_chart_view(request):
+    """Mentor attendance hours bar chart with configurable average-lines."""
+    import json
+    from datetime import date, datetime
+
+    from django.db.models import Count, Max, Sum
+
+    if not can_user_read(request.user, "attendance"):
+        messages.error(request, "You do not have permission to view attendance.")
+        return redirect("home")
+
+    programs = Program.objects.filter(
+        features__key="attendance", active=True
+    ).distinct()
+
+    program_id = request.GET.get("program_id")
+    selected_program = None
+    if program_id and program_id.isdigit():
+        selected_program = programs.filter(id=int(program_id)).first()
+
+    # --- Date range ---
+    tz = timezone.get_current_timezone()
+    now = timezone.now()
+
+    date_from_str = request.GET.get("date_from", "")
+    date_to_str = request.GET.get("date_to", "")
+
+    # When a program is selected and the user hasn't supplied explicit dates,
+    # default to the program's date window (clamped to today if end is future).
+    dates_explicitly_set = "date_from" in request.GET or "date_to" in request.GET
+    if selected_program and not dates_explicitly_set:
+        if selected_program.start_date:
+            date_from_str = selected_program.start_date.isoformat()
+        if selected_program.end_date and selected_program.end_date < now.date():
+            date_to_str = selected_program.end_date.isoformat()
+        else:
+            date_to_str = now.date().isoformat()
+
+    date_from = None
+    date_to = None
+    if date_from_str:
+        try:
+            date_from = datetime.strptime(date_from_str, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    if date_to_str:
+        try:
+            date_to = datetime.strptime(date_to_str, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    # --- Average lines ---
+    default_avg_lines = [
+        {"value": 3, "color": "#dc3545"},
+        {"value": 6, "color": "#fd7e14"},
+        {"value": 9, "color": "#198754"},
+    ]
+    avg_lines_json_str = request.GET.get("avg_lines", "")
+    avg_lines = default_avg_lines
+    if avg_lines_json_str:
+        try:
+            parsed = json.loads(avg_lines_json_str)
+            if isinstance(parsed, list) and parsed:
+                avg_lines = [
+                    {
+                        "value": float(item.get("value", 3)),
+                        "color": str(item.get("color", "#dc3545")),
+                    }
+                    for item in parsed
+                ]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+
+    # --- Sessions query ---
+    sessions = AttendanceSession.objects.filter(student__isnull=False)
+    if selected_program:
+        sessions = sessions.filter(program=selected_program)
+    if date_from:
+        sessions = sessions.filter(
+            check_in__date__gte=date_from,
+        )
+    if date_to:
+        sessions = sessions.filter(
+            check_in__date__lte=date_to,
+        )
+    sessions = sessions.select_related("student")
+
+    # --- Compute overall start for weeks_elapsed ---
+    if selected_program and selected_program.start_date:
+        overall_start_date = selected_program.start_date
+    elif date_from:
+        overall_start_date = date_from
+    else:
+        earliest = sessions.order_by("check_in").first()
+        overall_start_date = earliest.check_in.date() if earliest else None
+
+    if overall_start_date:
+        end_date = date_to or now.date()
+        days = (end_date - overall_start_date).days
+        weeks_elapsed = max((days // 7) + 1, 1)
+    else:
+        weeks_elapsed = 1
+
+    # --- Aggregate per student ---
+    student_stats = (
+        sessions.values("student__id", "student__first_name", "student__last_name")
+        .annotate(
+            total_minutes=Sum("duration_minutes"),
+            session_count=Count("id"),
+            last_attended=Max("check_in"),
+        )
+        .order_by("-total_minutes")
+    )
+
+    chart_labels = []
+    chart_data = []
+    student_list = []
+    total_hours_all = 0.0
+
+    for stat in student_stats:
+        name = f"{stat['student__first_name']} {stat['student__last_name']}"
+        hours = round((stat["total_minutes"] or 0) / 60.0, 1)
+        total_hours_all += hours
+        chart_labels.append(name)
+        chart_data.append(hours)
+        student_weeks = max(weeks_elapsed, 1)
+        student_list.append(
+            {
+                "id": stat["student__id"],
+                "name": name,
+                "total_hours": hours,
+                "avg_per_week": round(hours / student_weeks, 1),
+                "session_count": stat["session_count"],
+                "last_attended": stat["last_attended"],
+            }
+        )
+
+    total_hours_all = round(total_hours_all, 1)
+    avg_hours_per_week = (
+        round(total_hours_all / weeks_elapsed, 1) if weeks_elapsed > 0 else 0
+    )
+
+    # Build annotation lines: Y position = avg_hrs_per_week * weeks_elapsed
+    annotation_lines = []
+    for line in avg_lines:
+        y_pos = round(line["value"] * weeks_elapsed, 1)
+        line_value = line["value"]
+        label_value = int(line_value) if line_value == int(line_value) else line_value
+        total_value = int(y_pos) if y_pos == int(y_pos) else y_pos
+        annotation_lines.append(
+            {
+                "y": y_pos,
+                "color": line["color"],
+                "label": f"{label_value} hrs/wk = {total_value} hrs",
+            }
+        )
+
+    return render(
+        request,
+        "attendance/hours_chart.html",
+        {
+            "programs": programs,
+            "selected_program": selected_program,
+            "date_from": date_from_str,
+            "date_to": date_to_str,
+            "avg_lines": avg_lines,
+            "avg_lines_json": json.dumps(avg_lines),
+            "annotation_lines_json": json.dumps(annotation_lines),
+            "chart_labels_json": json.dumps(chart_labels),
+            "chart_data_json": json.dumps(chart_data),
+            "student_list": student_list,
+            "total_hours": total_hours_all,
+            "avg_hours_per_week": avg_hours_per_week,
+            "weeks_elapsed": weeks_elapsed,
+            "overall_start_date": overall_start_date,
+        },
+    )
+
+
+@login_required
 def program_hours_view(request, program_id):
     """Mentor attendance dashboard: bar chart of hours per student in a program."""
     program = get_object_or_404(Program, pk=program_id)
