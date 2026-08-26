@@ -157,15 +157,28 @@ class ProgramStudentPhotoListView(
 
     def get_queryset(self):
         qs = Enrollment.objects.filter(program=self.program).select_related(
-            "student", "team", "crew"
+            "student", "team", "crew", "subteam"
         )
 
-        qs = self.filter_students_by_role(
-            qs,
-            adults_field="student__adults",
-            student_field="student",
-            empty_queryset=Enrollment.objects.none(),
-        )
+        role = get_user_role(self.request.user)
+        if role == "Student":
+            try:
+                student = self.request.user.student_profile
+                # Students may view the photo grid for programs they are enrolled in,
+                # seeing all active peers (like ProgramDetailView). Hide other programs.
+                if not Enrollment.objects.filter(
+                    program=self.program, student=student
+                ).exists():
+                    return Enrollment.objects.none()
+            except (Student.DoesNotExist, AttributeError):
+                return Enrollment.objects.none()
+        else:
+            qs = self.filter_students_by_role(
+                qs,
+                adults_field="student__adults",
+                student_field="student",
+                empty_queryset=Enrollment.objects.none(),
+            )
 
         return qs.annotate(
             sort_first=Lower(
@@ -180,6 +193,7 @@ class ProgramStudentPhotoListView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["program"] = self.program
+        ctx["role"] = get_user_role(self.request.user)
         # Compatibility for the template which expects 'students'
         ctx["students"] = ctx["enrollments"]
         # Split the page's enrollments into active and inactive sections so
@@ -191,6 +205,9 @@ class ProgramStudentPhotoListView(
         ctx["inactive_enrollments"] = [
             e for e in page_enrollments if not (e.active and not e.student.graduated)
         ]
+        if ctx["role"] == "Student":
+            # Students see only active peers
+            ctx["inactive_enrollments"] = []
         return ctx
 
 
@@ -275,7 +292,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         # Prepare annotated queryset for consistent sorting
         base_qs = (
             Enrollment.objects.filter(program=program)
-            .select_related("student", "student__user", "team", "crew")
+            .select_related("student", "student__user", "team", "crew", "subteam")
             .annotate(
                 sort_first=Lower(
                     Coalesce(
@@ -311,13 +328,17 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["teams"] = Team.objects.all()
         ctx["crews"] = program.crews.all()
 
-        if role == "Mentor":
+        if role in ("Mentor", "Student"):
             ctx["can_manage_students"] = False
             ctx["can_add_payment"] = False
             ctx["can_manage_fees"] = False
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
             ctx["can_view_documents"] = False
+            if role == "Student":
+                # Students see only active peers, no inactive section
+                ctx["inactive_enrollments"] = Enrollment.objects.none()
+                ctx["inactive_students"] = []
         else:
             ctx["can_manage_students"] = can_user_write(
                 self.request.user, "student_info"

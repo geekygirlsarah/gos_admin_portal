@@ -49,6 +49,12 @@
               <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
             {% endif %}
         </div>
+        {% elif role == 'Student' %}
+        <div class="mt-4 d-flex flex-wrap gap-2">
+            <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
+            <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
+            <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Carpool Map</a>
+        </div>
         {% endif %}
         <div><br/></div>
 
@@ -60,11 +66,19 @@
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {% if s.photo %}
-                  <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
+                  {% if role == 'Student' %}
                     <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-32 me-2"/>
-                  </a>
+                  {% else %}
+                    <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
+                      <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-32 me-2"/>
+                    </a>
+                  {% endif %}
                 {% endif %}
-                <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
+                {% if role == 'Student' %}
+                  <span>{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</span>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
+                {% else %}
+                  <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
+                {% endif %}
                 {% if e.team %}
                   <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                 {% endif %}
@@ -74,13 +88,14 @@
                 {% if e.subteam %}
                   <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
                 {% endif %}
-                {% if 'background-checks' in program.feature_keys %}
+                {% if role != 'Student' and 'background-checks' in program.feature_keys %}
                 {% needs_bg s as missing_bg %}
                   {% if missing_bg %}
                       <span class="badge bg-warning text-dark ms-2">BG Check Needed</span>
                   {% endif %}
                 {% endif %}
               </div>
+              {% if role != 'Student' %}
               <div class="d-flex gap-2 align-items-center">
                 {% if can_view_payments %}
                 <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
@@ -95,6 +110,7 @@
                   </form>
                 {% endif %}
               </div>
+              {% endif %}
             </li>
             {% endwith %}
           {% endfor %}
@@ -103,7 +119,7 @@
         <div class="alert alert-info">No active students currently enrolled.</div>
       {% endif %}
 
-      {% if inactive_enrollments %}
+      {% if role != 'Student' and inactive_enrollments %}
         <h3 class="h6">Students No Longer Active</h3>
         <ul class="list-group mb-4">
           {% for e in inactive_enrollments %}

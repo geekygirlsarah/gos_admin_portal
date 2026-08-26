@@ -1,4 +1,5 @@
 import re
+from datetime import date
 
 from programs.models import Adult, Enrollment, Program, Student
 from programs.permission_views import get_user_role
@@ -27,9 +28,11 @@ def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
     if role == "Student":
         try:
             student = request.user.student_profile
-            active_enrollments = Enrollment.objects.filter(
-                student=student, active=True
-            ).select_related("program")
+            active_enrollments = (
+                Enrollment.objects.filter(student=student, active=True)
+                .select_related("program")
+                .order_by("-program__start_date", "-program__end_date", "-program__id")
+            )
             for e in active_enrollments:
                 carpool_map_programs.append(e.program)
                 if e.program.features.filter(key="outreach").exists():
@@ -198,6 +201,22 @@ def navbar_context(request):
         request, role, navbar_is_parent
     )
 
+    # Student program navigation: active programs the student is enrolled in,
+    # used for the "My Program(s)" navbar dropdown. Most recent program first
+    # (by start_date desc, then end_date desc) so students see their current
+    # program at the top.
+    navbar_student_programs = carpool_map_programs if role == "Student" else []
+    if navbar_student_programs:
+        navbar_student_programs = sorted(
+            navbar_student_programs,
+            key=lambda p: (
+                p.start_date or date.min,
+                p.end_date or date.min,
+                p.pk,
+            ),
+            reverse=True,
+        )
+
     return {
         "current_program": current_program,
         "current_program_has_badges": "badges" in program_feature_keys,
@@ -205,6 +224,7 @@ def navbar_context(request):
         "navbar_role": role,
         "student_outreach_programs": student_outreach_programs,
         "carpool_map_programs": carpool_map_programs,
+        "navbar_student_programs": navbar_student_programs,
         "navbar_badge_count": navbar_badge_count,
         "user_has_any_badge_program": user_has_any_badge_program,
         # Flag-style helpers: an Adult can hold several roles at once (e.g. a

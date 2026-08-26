@@ -1,8 +1,8 @@
 {% load form_tags %}
-{% with s=item.student|default:item team=item.team crew=item.crew %}
+{% with s=item.student|default:item team=item.team crew=item.crew subteam=item.subteam %}
   <div class="col">
     <div class="card h-100 text-center">
-      <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+      {% if role == 'Student' %}
         {% if s.photo %}
           <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
         {% else %}
@@ -10,15 +10,32 @@
             <span class="text-muted">No Photo</span>
           </div>
         {% endif %}
-      </a>
+      {% else %}
+        <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+          {% if s.photo %}
+            <img src="{{ s.photo.url }}" class="card-img-top" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" style="height:180px; object-fit: cover;">
+          {% else %}
+            <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px;">
+              <span class="text-muted">No Photo</span>
+            </div>
+          {% endif %}
+        </a>
+      {% endif %}
       <div class="card-body p-2">
-        <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+        {% if role == 'Student' %}
+          <span class="small fw-semibold">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</span>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
+        {% else %}
+          <a class="small fw-semibold text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+        {% endif %}
         <div class="mt-1 d-flex flex-wrap justify-content-center gap-1">
           {% if team %}
             <span class="badge rounded-pill team-badge" data-color="{{ team.color }}" style="background-color: {{ team.color }}; color: {{ team.color|contrast_color }};">{{ team.team_type }} {{ team.number }}{% if team.name %} {{ team.name }}{% endif %}</span>
           {% endif %}
           {% if crew %}
             <span class="badge rounded-pill crew-badge" data-color="{{ crew.color }}" style="background-color: {{ crew.color }}; color: {{ crew.color|contrast_color }};">{{ crew.name }}</span>
+          {% endif %}
+          {% if subteam %}
+            <span class="badge rounded-pill subteam-badge" data-color="{{ subteam.color }}" style="background-color: {{ subteam.color }}; color: {{ subteam.color|contrast_color }};">{{ subteam.name }}</span>
           {% endif %}
           {% if show_inactive %}
             <span class="badge bg-secondary ms-2">Inactive</span>

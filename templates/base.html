@@ -51,6 +51,22 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.view_name == 'student_hours' %} active{% endif %}" href="{% url 'student_hours' user.student_profile.pk %}">My Hours</a>
                     </li>
+                    {% if navbar_student_programs %}
+                    {% if navbar_student_programs|length == 1 %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if current_program and current_program.pk == navbar_student_programs.0.pk %} active{% endif %}" href="{% url 'program_detail' navbar_student_programs.0.pk %}">My Program</a>
+                    </li>
+                    {% else %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle{% if current_program and current_program in navbar_student_programs %} active{% endif %}" href="#" id="studentProgramsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">My Programs</a>
+                        <ul class="dropdown-menu" aria-labelledby="studentProgramsDropdown">
+                            {% for p in navbar_student_programs %}
+                            <li><a class="dropdown-item{% if current_program and current_program.pk == p.pk %} active{% endif %}" href="{% url 'program_detail' p.pk %}">{{ p.name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    {% endif %}
+                    {% endif %}
                     {% for p in student_outreach_programs %}
                     <li class="nav-item">
                         <a class="nav-link{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
