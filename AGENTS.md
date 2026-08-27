@@ -99,6 +99,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 
 ## Testing Strategy and Contribution
 
+- **Upgrade-Aware Test Runner**: `TEST_RUNNER = "GoSAdminPortal.test_runner.UpgradeAwareTestRunner"` (see `GoSAdminPortal/test_runner.py`) escalates Django's `RemovedInDjango70Warning`/`RemovedInNextVersionWarning` to test errors, so any use of APIs deprecated in the current Django release fails the suite. Do not disable this; fix the deprecated usage instead.
 - **Location**: Tests live in `programs/tests/`, `applications/tests/`, and `attendance/tests/` (with `test_models.py`, `test_views.py`, `test_kiosk.py`, `test_permissions.py`, `test_reliability.py`, `test_who_is_here.py`).
 - **Story Integration Tests**: For complex lifecycles (e.g., Application -> Conversion -> Financials), use "Story" tests that exercise multiple views and signals in a single test case (see `programs/tests/test_integration_flows.py` for examples). These help catch regressions in side-effects (like emails or balance calculations) that unit tests often miss.
 - **TDD Requirement**: When fixing bugs, add a reproducer test file (e.g., `test_issue_reproduction.py`) before applying the fix.

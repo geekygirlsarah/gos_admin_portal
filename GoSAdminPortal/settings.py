@@ -218,11 +218,11 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
-        "DEFAULT_AUTO_FIELD": "django.db.models.AutoField",
     }
 }
 if os.getenv("DATABASE_URL", None):
     db_config = dj_database_url.config(conn_max_age=600)
+    db_config["CONNECTION_HEALTH_CHECKS"] = True
     if "test" in sys.argv:
         db_config["CONN_MAX_AGE"] = 0
     DATABASES["default"] = db_config
@@ -286,6 +286,10 @@ MEDIA_ROOT = "media/"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Fail tests when the code uses APIs deprecated in the current Django release,
+# so deprecated usages surface in CI instead of accumulating.
+TEST_RUNNER = "GoSAdminPortal.test_runner.UpgradeAwareTestRunner"
 
 # Use project templates for form widgets
 FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
