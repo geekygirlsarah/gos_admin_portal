@@ -17,5 +17,5 @@ class StudentAdminFormTests(TestCase):
         form_class = admin.get_form(request=None)
 
         # Sanity check: some known fields are present
-        self.assertIn("first_name", form_class.base_fields)
+        self.assertIn("preferred_first_name", form_class.base_fields)
         self.assertIn("last_name", form_class.base_fields)

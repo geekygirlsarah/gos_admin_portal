@@ -25,7 +25,7 @@ class AllAttendanceEntriesTests(TestCase):
         self.mentor_user.groups.add(self.mentor_group)
 
         self.program = make_program()
-        self.student = make_student(first_name="Test", last_name="Student")
+        self.student = make_student(preferred_first_name="Test", last_name="Student")
         self.session = AttendanceSession.objects.create(
             program=self.program, student=self.student, check_in=timezone.now()
         )
@@ -124,7 +124,7 @@ class AllAttendanceEntriesTests(TestCase):
         self.assertEqual(visitor_session.visitor_team_number, 5678)
 
     def test_sorting_attendance_sessions(self):
-        student2 = make_student(first_name="Alpha", last_name="Alpha")
+        student2 = make_student(preferred_first_name="Alpha", last_name="Alpha")
         AttendanceSession.objects.create(
             program=self.program,
             student=student2,
@@ -276,7 +276,7 @@ class AttendanceNewViewsTests(TestCase):
 
         self.program = make_program()
         self.student = make_student(
-            first_name="John", last_name="Doe", graduation_year=2026
+            preferred_first_name="John", last_name="Doe", graduation_year=2026
         )
 
         self.session = AttendanceSession.objects.create(
@@ -294,7 +294,7 @@ class AttendanceNewViewsTests(TestCase):
 
     def test_who_is_here_mentor_shows_as_mentor_not_visitor(self):
         mentor = Adult.objects.create(
-            first_name="Alice", last_name="Mentor", is_mentor=True
+            legal_first_name="Alice", last_name="Mentor", is_mentor=True
         )
         AttendanceSession.objects.create(
             program=self.program, adult=mentor, check_in=timezone.now()
@@ -312,7 +312,7 @@ class AttendanceNewViewsTests(TestCase):
             username="regular_mentor", password="password"
         )  # nosec B106
         mentor = Adult.objects.create(
-            user=mentor_user, first_name="Reg", last_name="Mentor", is_mentor=True
+            user=mentor_user, legal_first_name="Reg", last_name="Mentor", is_mentor=True
         )
 
         RolePermission.objects.update_or_create(
@@ -390,7 +390,7 @@ class AttendanceNewViewsTests(TestCase):
 
     def test_rfid_management_assign_mentor(self):
         mentor = Adult.objects.create(
-            first_name="Jane", last_name="Mentor", is_mentor=True
+            legal_first_name="Jane", last_name="Mentor", is_mentor=True
         )
         url = reverse("rfid_management") + "?q=Jane"
         response = self.client.post(
@@ -431,7 +431,10 @@ class AttendanceImportPermissionTests(TestCase):
             username="mentor_user", password="password123"  # nosec B106
         )
         Adult.objects.create(
-            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor_user,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
         RolePermission.objects.update_or_create(
             role="Mentor",
@@ -443,14 +446,17 @@ class AttendanceImportPermissionTests(TestCase):
             username="parent_user", password="password123"  # nosec B106
         )
         Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="User",
+            is_parent=True,
         )
 
         self.student_user = User.objects.create_user(
             username="student_user", password="password123"  # nosec B106
         )
         Student.objects.create(
-            user=self.student_user, first_name="Student", last_name="User"
+            user=self.student_user, preferred_first_name="Student", last_name="User"
         )
 
         self.url = reverse("attendance_import")
@@ -491,15 +497,17 @@ class StudentAttendanceObjectPermissionTests(TestCase):
         )
         self.parent = Adult.objects.create(
             user=self.parent_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Two",
             is_parent=True,
         )
 
-        self.child = make_student(first_name="My", last_name="Child")
+        self.child = make_student(preferred_first_name="My", last_name="Child")
         self.parent.students.add(self.child)
 
-        self.other_student = make_student(first_name="Other", last_name="Student")
+        self.other_student = make_student(
+            preferred_first_name="Other", last_name="Student"
+        )
 
     def test_parent_can_view_own_child_attendance(self):
         self.client.login(username="parent_user2", password="password123")  # nosec B106
@@ -521,7 +529,10 @@ class StudentAttendanceRoleTests(TestCase):
             username="mentor_user3", password="password123"  # nosec B106
         )
         Adult.objects.create(
-            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor_user,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
 
         self.role_perm = RolePermission.objects.update_or_create(
@@ -534,14 +545,14 @@ class StudentAttendanceRoleTests(TestCase):
             username="student_user1", password="password123"  # nosec B106
         )
         self.student1 = make_student(
-            user=self.student_user1, first_name="Student", last_name="One"
+            user=self.student_user1, preferred_first_name="Student", last_name="One"
         )
 
         self.student_user2 = User.objects.create_user(
             username="student_user2", password="password123"  # nosec B106
         )
         self.student2 = make_student(
-            user=self.student_user2, first_name="Student", last_name="Two"
+            user=self.student_user2, preferred_first_name="Student", last_name="Two"
         )
 
     def test_mentor_can_view_attendance_by_default(self):
@@ -588,12 +599,12 @@ class MentorAttendanceDeleteViewTests(TestCase):
         )
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="Deleter",
             is_mentor=True,
         )
 
-        self.student = make_student(first_name="Del", last_name="Student")
+        self.student = make_student(preferred_first_name="Del", last_name="Student")
 
         self.session = AttendanceSession.objects.create(
             program=self.program,
@@ -632,7 +643,7 @@ class MentorWhoIsHereClosePermissionTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="WhoIsHere",
             is_mentor=True,
         )
@@ -646,7 +657,7 @@ class MentorWhoIsHereClosePermissionTests(TestCase):
         )  # nosec B106
 
         self.program = make_program()
-        self.student = make_student(first_name="Stale", last_name="Student")
+        self.student = make_student(preferred_first_name="Stale", last_name="Student")
         self.stale_session = AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
@@ -677,7 +688,7 @@ class MentorRFIDDeletePermissionTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="RFID",
             is_mentor=True,
         )
@@ -688,7 +699,7 @@ class MentorRFIDDeletePermissionTests(TestCase):
         )
         self.client.login(username="mentor_rfid", password="password123")  # nosec B106
 
-        self.student = make_student(first_name="RFID", last_name="Student")
+        self.student = make_student(preferred_first_name="RFID", last_name="Student")
         from attendance.models import RFIDCard
 
         self.card = RFIDCard.objects.create(

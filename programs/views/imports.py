@@ -125,8 +125,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     if p:
                         if overwrite:
                             changed_parent = False
-                            if first and p.first_name != first:
-                                p.first_name = first
+                            if first and p.legal_first_name != first:
+                                p.legal_first_name = first
                                 changed_parent = True
                             if last and p.last_name != last:
                                 p.last_name = last
@@ -137,7 +137,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 # Next try by name match
                 if first and last:
                     p = Adult.objects.filter(
-                        first_name__iexact=first, last_name__iexact=last
+                        legal_first_name__iexact=first, last_name__iexact=last
                     ).first()
                     if p:
                         if (
@@ -152,7 +152,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 # If we have at least one of name or email, create
                 if first or last or email:
                     return Adult.objects.create(
-                        first_name=first
+                        legal_first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
                         personal_email=email or None,
@@ -218,7 +218,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     last_name=last,
                     legal_first_name=legal_first,
                     defaults={
-                        "first_name": first if first != legal_first else None,
+                        "preferred_first_name": first if first != legal_first else None,
                         "pronouns": pronouns,
                         "date_of_birth": dob,
                         "address": address,
@@ -246,7 +246,7 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     changed = False
                     # Strings and relations
                     for field, value in [
-                        ("first_name", first),
+                        ("preferred_first_name", first),
                         ("pronouns", pronouns),
                         ("address", address),
                         ("city", city),
@@ -450,7 +450,7 @@ class ParentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     "Phone Number",
                 )
                 obj, created_flag = Adult.objects.get_or_create(
-                    first_name=first,
+                    legal_first_name=first,
                     last_name=last,
                     defaults={
                         "personal_email": email,
@@ -639,7 +639,7 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 if count == 0 and first and first != legal_first:
                     # Try match on preferred first + last (+dob)
                     qs = Student.objects.filter(
-                        last_name__iexact=last, first_name__iexact=first
+                        last_name__iexact=last, preferred_first_name__iexact=first
                     )
                     if dob:
                         qs = qs.filter(date_of_birth=dob)
@@ -654,14 +654,14 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     p = Adult.objects.filter(personal_email__iexact=email).first()
                 if not p and first and last:
                     p = Adult.objects.filter(
-                        first_name__iexact=first, last_name__iexact=last
+                        legal_first_name__iexact=first, last_name__iexact=last
                     ).first()
                 created = False
                 if not p:
                     if dry_run or not can_create_parents:
                         return None, False, True  # would create
                     p = Adult.objects.create(
-                        first_name=first
+                        legal_first_name=first
                         or (email.split("@")[0] if email else "Parent"),
                         last_name=last or "(contact)",
                         personal_email=email or None,
@@ -883,7 +883,7 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 andrew_email = val(d, "andrew_email", "Andrew Email")
                 role = val(d, "role", "Role") or "mentor"
                 obj, created_flag = Adult.objects.get_or_create(
-                    first_name=first,
+                    legal_first_name=first,
                     last_name=last,
                     defaults={
                         "personal_email": email,

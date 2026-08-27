@@ -298,7 +298,7 @@ class AdapterEmailProvisioningTest(TestCase):
         from programs.models import Adult
 
         return Adult.objects.create(
-            first_name=kwargs.get("first_name", "Ada"),
+            legal_first_name=kwargs.get("legal_first_name", "Ada"),
             last_name=kwargs.get("last_name", "Lovelace"),
             personal_email=email,
             login_enabled=True,
@@ -342,7 +342,7 @@ class AdapterEmailProvisioningTest(TestCase):
         user = User.objects.create_user(
             username="adultuser", email="adultuser@example.com"
         )
-        adult = self._make_adult("adultuser@example.com", first_name="Ada")
+        adult = self._make_adult("adultuser@example.com", legal_first_name="Ada")
         adult.user = user
         adult.save(update_fields=["user"])
         result = _find_or_provision_user_for_email("adultuser@example.com")
@@ -396,7 +396,7 @@ class AdapterEmailProvisioningTest(TestCase):
         from programs.models import Adult
 
         Adult.objects.create(
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="Smith",
             is_mentor=True,
             andrew_email="msmith@andrew.cmu.edu",
@@ -432,7 +432,7 @@ class LoginPolicyByRoleTest(TestCase):
         from programs.models import Adult
 
         defaults = dict(
-            first_name="Ada",
+            legal_first_name="Ada",
             last_name="Lovelace",
         )
         defaults.update(kwargs)

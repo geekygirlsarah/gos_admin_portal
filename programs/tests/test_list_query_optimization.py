@@ -65,7 +65,7 @@ class ListViewQueryOptimizationTest(TestCase):
         # Link the same two adults to every student as primary/secondary.
         self.adults = [
             Adult.objects.create(
-                first_name=f"Parent{i}",
+                legal_first_name=f"Parent{i}",
                 last_name="Doe",
                 is_parent=True,
             )
@@ -87,12 +87,14 @@ class ListViewQueryOptimizationTest(TestCase):
         # Mentors/alumni: each linked to two students.
         self.mentors = [
             Adult.objects.create(
-                first_name=f"Mentor{i}", last_name="Doe", is_mentor=True
+                legal_first_name=f"Mentor{i}", last_name="Doe", is_mentor=True
             )
             for i in range(self.NUM)
         ]
         self.alumni = [
-            Adult.objects.create(first_name=f"Alum{i}", last_name="Doe", is_alumni=True)
+            Adult.objects.create(
+                legal_first_name=f"Alum{i}", last_name="Doe", is_alumni=True
+            )
             for i in range(self.NUM)
         ]
         for i, mentor in enumerate(self.mentors):
@@ -218,13 +220,13 @@ class StudentDetailQueryOptimizationTest(TestCase):
 
         school = School.objects.create(name="High School")
         parent1 = Adult.objects.create(
-            first_name="Mom", last_name="Doe", is_parent=True
+            legal_first_name="Mom", last_name="Doe", is_parent=True
         )
         parent2 = Adult.objects.create(
-            first_name="Dad", last_name="Doe", is_parent=True
+            legal_first_name="Dad", last_name="Doe", is_parent=True
         )
         self.student = Student.objects.create(
-            legal_first_name="Jane", last_name="Doe", school=school
+            preferred_first_name="Jane", last_name="Doe", school=school
         )
         AdultStudentRelationship.objects.create(adult=parent1, student=self.student)
         AdultStudentRelationship.objects.create(adult=parent2, student=self.student)
@@ -272,7 +274,7 @@ class AdultDetailQueryOptimizationTest(TestCase):
         self.client.force_login(self.user)
 
         self.adult = Adult.objects.create(
-            first_name="Mom", last_name="Doe", is_parent=True
+            legal_first_name="Mom", last_name="Doe", is_parent=True
         )
         for i in range(3):
             student = Student.objects.create(

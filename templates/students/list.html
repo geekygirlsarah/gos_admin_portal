@@ -45,9 +45,9 @@
             <tr>
               <td>
                 {% if s.photo %}
-                  <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-32 me-2"/>
+                  <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
-                <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.display_name }}</a>
               </td>
               <td>{{ s.school|default:"" }}</td>
               <td>{{ s.graduation_year|default:"" }}</td>

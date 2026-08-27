@@ -48,7 +48,7 @@ class IntegrationFlowTests(TestCase):
 
         self.parent_adult = Adult.objects.create(
             user=self.parent_user,
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Parent",
             personal_email="parent@example.com",
             is_parent=True,

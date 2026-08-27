@@ -26,7 +26,7 @@ class BackgroundCheckModelTests(TestCase):
         with self.assertRaises(ValidationError):
             BackgroundCheck(
                 student=student,
-                adult=Adult.objects.create(first_name="C", last_name="D"),
+                adult=Adult.objects.create(legal_first_name="C", last_name="D"),
                 check_type=BackgroundCheckType.FBI,
                 cleared=True,
             ).clean()
@@ -82,7 +82,7 @@ class BackgroundCheckModelTests(TestCase):
         student = Student.objects.create(
             legal_first_name="A", last_name="B", date_of_birth=datetime.date(2000, 1, 1)
         )
-        adult = Adult.objects.create(first_name="C", last_name="D")
+        adult = Adult.objects.create(legal_first_name="C", last_name="D")
         bc_s = BackgroundCheck.objects.create(
             student=student, check_type=BackgroundCheckType.FBI, cleared=True
         )

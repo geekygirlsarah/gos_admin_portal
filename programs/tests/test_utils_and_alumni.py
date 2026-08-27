@@ -77,7 +77,6 @@ class AlumniConversionTests(TestCase):
     def _make_student(self, **kwargs):
         defaults = {
             "legal_first_name": "Sam",
-            "first_name": "Sam",
             "last_name": "Jones",
         }
         defaults.update(kwargs)
@@ -85,17 +84,17 @@ class AlumniConversionTests(TestCase):
 
     def test_find_matching_alumni_adult_by_personal_email(self):
         adult = Adult.objects.create(
-            first_name="Sam", last_name="Jones", personal_email="sam@example.com"
+            legal_first_name="Sam", last_name="Jones", personal_email="sam@example.com"
         )
         student = self._make_student(personal_email="SAM@example.com")
         self.assertEqual(find_matching_alumni_adult(student), adult)
 
     def test_find_matching_alumni_adult_by_name_and_flag(self):
         adult = Adult.objects.create(
-            first_name="Sam", last_name="Jones", is_alumni=True
+            legal_first_name="Sam", last_name="Jones", is_alumni=True
         )
         non_alumni = Adult.objects.create(
-            first_name="Sam", last_name="Jones", is_alumni=False
+            legal_first_name="Sam", last_name="Jones", is_alumni=False
         )
         student = self._make_student()
         match = find_matching_alumni_adult(student)
@@ -119,7 +118,7 @@ class AlumniConversionTests(TestCase):
     def test_convert_student_to_alumni_updates_existing(self):
         # Match by personal_email so the existing Adult is found and updated.
         existing = Adult.objects.create(
-            first_name="Sam",
+            legal_first_name="Sam",
             last_name="Jones",
             personal_email="sam@example.com",
             is_alumni=False,

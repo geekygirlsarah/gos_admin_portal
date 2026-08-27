@@ -32,6 +32,7 @@ from ..permission_views import (
     LeadMentorRequiredMixin,
     MentorOrLeadMentorRequiredMixin,
     PassUserToFormMixin,
+    TeamAssignmentPermissionMixin,
     can_user_read,
     can_user_write,
     get_user_role,
@@ -157,20 +158,33 @@ class ProgramStudentPhotoListView(
 
     def get_queryset(self):
         qs = Enrollment.objects.filter(program=self.program).select_related(
-            "student", "team", "crew"
+            "student", "team", "crew", "subteam"
         )
 
-        qs = self.filter_students_by_role(
-            qs,
-            adults_field="student__adults",
-            student_field="student",
-            empty_queryset=Enrollment.objects.none(),
-        )
+        role = get_user_role(self.request.user)
+        if role == "Student":
+            try:
+                student = self.request.user.student_profile
+                # Students may view the photo grid for programs they are enrolled in,
+                # seeing all active peers (like ProgramDetailView). Hide other programs.
+                if not Enrollment.objects.filter(
+                    program=self.program, student=student
+                ).exists():
+                    return Enrollment.objects.none()
+            except (Student.DoesNotExist, AttributeError):
+                return Enrollment.objects.none()
+        else:
+            qs = self.filter_students_by_role(
+                qs,
+                adults_field="student__adults",
+                student_field="student",
+                empty_queryset=Enrollment.objects.none(),
+            )
 
         return qs.annotate(
             sort_first=Lower(
                 Coalesce(
-                    NullIf("student__first_name", Value("")),
+                    NullIf("student__preferred_first_name", Value("")),
                     "student__legal_first_name",
                 )
             ),
@@ -180,6 +194,7 @@ class ProgramStudentPhotoListView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["program"] = self.program
+        ctx["role"] = get_user_role(self.request.user)
         # Compatibility for the template which expects 'students'
         ctx["students"] = ctx["enrollments"]
         # Split the page's enrollments into active and inactive sections so
@@ -191,6 +206,9 @@ class ProgramStudentPhotoListView(
         ctx["inactive_enrollments"] = [
             e for e in page_enrollments if not (e.active and not e.student.graduated)
         ]
+        if ctx["role"] == "Student":
+            # Students see only active peers
+            ctx["inactive_enrollments"] = []
         return ctx
 
 
@@ -230,7 +248,7 @@ class ProgramEmergencyContactsView(
             .prefetch_related("adults", "adultstudentrelationship_set")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
@@ -275,11 +293,11 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         # Prepare annotated queryset for consistent sorting
         base_qs = (
             Enrollment.objects.filter(program=program)
-            .select_related("student", "student__user", "team", "crew")
+            .select_related("student", "student__user", "team", "crew", "subteam")
             .annotate(
                 sort_first=Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),
@@ -311,13 +329,17 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         ctx["teams"] = Team.objects.all()
         ctx["crews"] = program.crews.all()
 
-        if role == "Mentor":
+        if role in ("Mentor", "Student"):
             ctx["can_manage_students"] = False
             ctx["can_add_payment"] = False
             ctx["can_manage_fees"] = False
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
             ctx["can_view_documents"] = False
+            if role == "Student":
+                # Students see only active peers, no inactive section
+                ctx["inactive_enrollments"] = Enrollment.objects.none()
+                ctx["inactive_students"] = []
         else:
             ctx["can_manage_students"] = can_user_write(
                 self.request.user, "student_info"
@@ -370,7 +392,7 @@ class ProgramStudentDocumentsView(
             .annotate(
                 sort_first=Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),
@@ -458,7 +480,9 @@ class ProgramStudentQuickCreateView(LoginRequiredMixin, PermissionRequiredMixin,
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+class ProgramEnrollmentUpdateView(
+    LoginRequiredMixin, TeamAssignmentPermissionMixin, View
+):
     def post(self, request, pk):
         enrollment_id = request.POST.get("enrollment_id")
         team_id = request.POST.get("team_id")
@@ -468,11 +492,17 @@ class ProgramEnrollmentUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
 
         updated_fields = []
+        # Only LeadMentors may toggle active status; mentors limited to team/crew/subteam
+        role = get_user_role(request.user)
         if active is not None:
-            new_active = active.lower() == "true"
-            if enrollment.active != new_active:
-                enrollment.active = new_active
-                updated_fields.append("Active status")
+            if role != "LeadMentor":
+                # Silently ignore active toggle for non-lead mentors
+                pass
+            else:
+                new_active = active.lower() == "true"
+                if enrollment.active != new_active:
+                    enrollment.active = new_active
+                    updated_fields.append("Active status")
 
         if team_id is not None:
             if team_id:
@@ -522,7 +552,7 @@ class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, View):
     template_name = "programs/assignment.html"
 
     def get(self, request, pk):
@@ -575,7 +605,7 @@ class ProgramAssignmentView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             enrollment.crew = None
             enrollment.subteam = None
             enrollment.save()
-            name = enrollment.student.first_name or enrollment.student.legal_first_name
+            name = enrollment.student.display_name
             messages.success(
                 request,
                 (
@@ -868,7 +898,7 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
         students = (
             qs.distinct()
             .only(
-                "first_name",
+                "preferred_first_name",
                 "legal_first_name",
                 "last_name",
                 "address",
@@ -879,7 +909,9 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
                 "personal_email",
             )
             .annotate(
-                sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
@@ -890,7 +922,7 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
             addr = ", ".join([p for p in parts if p]).strip(", ")
             if not addr:
                 continue
-            name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+            name = (s.display_name or "").strip()
             rows.append(
                 (
                     name or f"Student #{s.pk}",
@@ -924,16 +956,16 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
                     directory_consent=False,
                 )
                 .distinct()
-                .only("first_name", "legal_first_name", "last_name")
+                .only("preferred_first_name", "legal_first_name", "last_name")
                 .annotate(
                     sort_first=Coalesce(
-                        NullIf("first_name", Value("")), "legal_first_name"
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
                     )
                 )
                 .order_by(Lower("sort_first"), Lower("last_name"))
             )
             for s in unlisted_qs:
-                name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+                name = (s.display_name or "").strip()
                 if name:
                     unlisted.append(name)
         if role in ("Parent", "Student"):
@@ -967,7 +999,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
             .all()
             .annotate(
                 sort_first=Lower(
-                    Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
                 ),
                 sort_last=Lower("last_name"),
             )
@@ -1001,7 +1035,7 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             .select_related("school")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by("school__name", Lower("sort_first"), Lower("last_name"))
@@ -1044,7 +1078,7 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             .annotate(
                 sort_first=Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),
@@ -1062,7 +1096,7 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             student = enrollment.student
             ws.append(
                 [
-                    student.first_name or student.legal_first_name,
+                    student.preferred_first_name or student.legal_first_name,
                     student.last_name,
                     student.grade_display or "",
                 ]

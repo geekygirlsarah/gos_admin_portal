@@ -39,14 +39,14 @@ class ApplicationsForUserTests(TestCase):
         self.student_user = _student_user()
         self.student = Student.objects.create(
             user=self.student_user,
-            first_name="Student",
+            preferred_first_name="Student",
             last_name="One",
             personal_email="student@example.com",
         )
         self.parent_user = _parent_user()
         self.parent = Adult.objects.create(
             user=self.parent_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="One",
             personal_email="parent@example.com",
             is_parent=True,
@@ -127,7 +127,7 @@ class DashboardPendingApplicationsTests(TestCase):
         self.student_user = _student_user()
         self.student = Student.objects.create(
             user=self.student_user,
-            first_name="Student",
+            preferred_first_name="Student",
             last_name="One",
             personal_email="student@example.com",
         )
@@ -165,7 +165,7 @@ class ApplicationWithdrawViewTests(TestCase):
         self.student_user = _student_user()
         self.student = Student.objects.create(
             user=self.student_user,
-            first_name="Student",
+            preferred_first_name="Student",
             last_name="One",
             personal_email="student@example.com",
         )
@@ -226,7 +226,7 @@ class HandoffResumeFromDashboardTests(TestCase):
         self.parent_user = _parent_user()
         self.parent = Adult.objects.create(
             user=self.parent_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="One",
             personal_email="parent@example.com",
             is_parent=True,
@@ -258,7 +258,7 @@ class HandoffResumeFromDashboardTests(TestCase):
         )
         Adult.objects.create(
             user=other,
-            first_name="Other",
+            legal_first_name="Other",
             last_name="Parent",
             personal_email="other@example.com",
             is_parent=True,

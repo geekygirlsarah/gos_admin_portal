@@ -20,7 +20,7 @@ def _approved_mentor_app(**overrides) -> Application:
     data = {
         "mentor_info": {
             "legal_first_name": "Alex",
-            "first_name": "Alex",
+            "preferred_first_name": "Alex",
             "last_name": "Lee",
             "pronouns": "they/them",
             "phone_number": "555-444-1212",
@@ -67,7 +67,7 @@ class MentorConversionTests(TestCase):
 
         adult = convert_application_to_student(app)
 
-        self.assertEqual(adult.first_name, "Alex")
+        self.assertEqual(adult.legal_first_name, "Alex")
         self.assertEqual(adult.preferred_first_name, "Alex")
         self.assertEqual(adult.last_name, "Lee")
         self.assertEqual(adult.personal_email, "mentor@example.com")
@@ -166,7 +166,7 @@ class MentorReviewToConversionStoryTest(TestCase):
             data={
                 "mentor_info": {
                     "legal_first_name": "Alex",
-                    "first_name": "Alex",
+                    "preferred_first_name": "Alex",
                     "last_name": "Lee",
                     "discord_username": "alexlee",
                     "andrew_id": "alexlee",
@@ -197,7 +197,7 @@ class MentorReviewToConversionStoryTest(TestCase):
         self.assertEqual(app.status, Application.Status.CONVERTED)
 
         adult = Adult.objects.get(is_mentor=True)
-        self.assertEqual(adult.first_name, "Alex")
+        self.assertEqual(adult.legal_first_name, "Alex")
         self.assertEqual(adult.last_name, "Lee")
         self.assertEqual(adult.personal_email, "newmentor@example.com")
         self.assertFalse(adult.is_parent)

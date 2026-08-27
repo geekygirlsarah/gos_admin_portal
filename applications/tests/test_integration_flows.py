@@ -161,7 +161,7 @@ class ApplicationIntegrationFlowTests(TestCase):
         response = self.client.post(
             reverse("apply_step7", args=[app_id]),
             {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "email": "parent@example.com",
@@ -181,7 +181,7 @@ class ApplicationIntegrationFlowTests(TestCase):
         response = self.client.post(
             reverse("apply_step8", args=[app_id]),
             {
-                "first_name": "Mary",
+                "legal_first_name": "Mary",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "phone_number": "412-555-1213",
@@ -294,7 +294,7 @@ class ApplicationIntegrationFlowTests(TestCase):
         response = self.client.post(
             reverse("apply_step7", args=[app_id]),
             {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "email": "parent@example.com",
@@ -314,7 +314,7 @@ class ApplicationIntegrationFlowTests(TestCase):
         response = self.client.post(
             reverse("apply_step8", args=[app_id]),
             {
-                "first_name": "Mary",
+                "legal_first_name": "Mary",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "phone_number": "412-555-1213",

@@ -34,9 +34,9 @@
           <tr>
             <td>
               {% if s.photo %}
-                <img src="{{ s.photo.url }}" alt="{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}" class="avatar avatar-28 me-2"/>
+                <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-28 me-2"/>
               {% endif %}
-              {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}
+              {{ s.display_name }}
             </td>
             <td>{{ s.school|default:"" }}</td>
             <td>{{ s.graduation_year|default:"" }}</td>

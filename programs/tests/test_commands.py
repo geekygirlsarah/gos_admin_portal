@@ -142,7 +142,7 @@ class GetProgramEmailsCommandTest(TestCase):
 
         # Parents
         self.parent_active = Adult.objects.create(
-            first_name="Eve",
+            preferred_first_name="Eve",
             last_name="Parent",
             personal_email="eve@example.com",
             is_parent=True,
@@ -150,7 +150,7 @@ class GetProgramEmailsCommandTest(TestCase):
             login_enabled=True,
         )
         self.parent_no_updates = Adult.objects.create(
-            first_name="Frank",
+            legal_first_name="Frank",
             last_name="Parent",
             personal_email="frank@example.com",
             is_parent=True,
@@ -158,7 +158,7 @@ class GetProgramEmailsCommandTest(TestCase):
             login_enabled=True,
         )
         self.parent_inactive = Adult.objects.create(
-            first_name="Grace",
+            legal_first_name="Grace",
             last_name="Parent",
             personal_email="grace@example.com",
             is_parent=True,
@@ -173,14 +173,14 @@ class GetProgramEmailsCommandTest(TestCase):
 
         # Mentors
         self.mentor = Adult.objects.create(
-            first_name="Hank",
+            preferred_first_name="Hank",
             last_name="Mentor",
             andrew_email="hank@andrew.cmu.edu",
             is_mentor=True,
             login_enabled=True,
         )
         self.mentor_inactive = Adult.objects.create(
-            first_name="Iris",
+            legal_first_name="Iris",
             last_name="Mentor",
             personal_email="iris@example.com",
             is_mentor=True,

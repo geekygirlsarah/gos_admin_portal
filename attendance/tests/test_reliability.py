@@ -31,10 +31,10 @@ class AttendanceServiceReliabilityTests(TestCase):
     def setUp(self):
         self.program = make_program("Service Program")
         self.student = make_student(
-            first_name="Service", last_name="Student", graduation_year=2027
+            preferred_first_name="Service", last_name="Student", graduation_year=2027
         )
         self.other_student = make_student(
-            first_name="Other", last_name="Student", graduation_year=2027
+            preferred_first_name="Other", last_name="Student", graduation_year=2027
         )
 
     def test_auto_in_or_out_closes_stale_open_session_from_previous_day(self):
@@ -118,7 +118,7 @@ class KioskApiReliabilityTests(TestCase):
         )
         self.cookie_name = _cookie_name(self.kiosk.pk)
         self.student = make_student(
-            first_name="Kiosk", last_name="Student", graduation_year=2027
+            preferred_first_name="Kiosk", last_name="Student", graduation_year=2027
         )
 
     def test_kiosk_tap_invalid_json_returns_400(self):
@@ -189,10 +189,10 @@ class RFIDManagementReliabilityTests(TestCase):
         self.client.login(username="admin", password="password")  # nosec B106
 
         self.student_a = make_student(
-            first_name="Student", last_name="A", graduation_year=2027
+            preferred_first_name="Student", last_name="A", graduation_year=2027
         )
         self.student_b = make_student(
-            first_name="Student", last_name="B", graduation_year=2027
+            preferred_first_name="Student", last_name="B", graduation_year=2027
         )
 
     def test_assign_existing_uid_reassigns_single_card_record(self):

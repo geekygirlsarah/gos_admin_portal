@@ -351,7 +351,7 @@ def student_to_prefill(student) -> dict:
         return {}
     return {
         "legal_first_name": student.legal_first_name or "",
-        "first_name": student.first_name or "",
+        "preferred_first_name": student.preferred_first_name or "",
         "last_name": student.last_name or "",
         "pronouns": student.pronouns or "",
         "date_of_birth": student.date_of_birth,
@@ -390,7 +390,7 @@ def adult_to_prefill(adult, student=None) -> dict:
             specific_relationship = asr.specific_relationship
 
     return {
-        "first_name": adult.first_name or "",
+        "legal_first_name": adult.legal_first_name or "",
         "preferred_first_name": adult.preferred_first_name or "",
         "last_name": adult.last_name or "",
         "pronouns": adult.pronouns or "",
@@ -678,15 +678,11 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
     if not parent_data:
         return None
     email = (parent_data.get("email") or "").strip()
-    # Handle both Parent (first_name) and Mentor (legal_first_name) styles
-    legal_first = (parent_data.get("legal_first_name") or "").strip()
-    first_name = (legal_first or parent_data.get("first_name") or "").strip()
+    legal_first = (
+        parent_data.get("legal_first_name") or parent_data.get("first_name") or ""
+    ).strip()
+    preferred_first = (parent_data.get("preferred_first_name") or "").strip()
     last_name = (parent_data.get("last_name") or "").strip()
-
-    # Preferred name: if legal_first was used for first_name, then first_name is preferred
-    preferred = ""
-    if legal_first and parent_data.get("first_name"):
-        preferred = parent_data.get("first_name").strip()
 
     # Andrew ID -> andrew_email
     andrew_id = (parent_data.get("andrew_id") or "").strip()
@@ -697,17 +693,17 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
         else:
             andrew_email = f"{andrew_id}@andrew.cmu.edu"
 
-    if not email and not andrew_email and not (first_name and last_name):
+    if not email and not andrew_email and not (legal_first and last_name):
         return None
 
     adult = None
     if email:
         qs = Adult.objects.filter(personal_email__iexact=email)
-        if first_name and last_name:
+        if legal_first and last_name:
             # Prefer an exact name+email match so that two people sharing
             # the same email (e.g. a mother and father) get separate records.
             exact = qs.filter(
-                first_name__iexact=first_name, last_name__iexact=last_name
+                legal_first_name__iexact=legal_first, last_name__iexact=last_name
             ).first()
             adult = exact if exact is not None else None
         else:
@@ -717,7 +713,7 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
 
     if adult is None:
         adult = Adult(
-            first_name=first_name or "(unknown)",
+            legal_first_name=legal_first or "(unknown)",
             last_name=last_name or "(unknown)",
             personal_email=email or None,
             andrew_email=andrew_email or None,
@@ -730,8 +726,8 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
         if value and not getattr(adult, field, None):
             setattr(adult, field, value)
 
-    _fill("first_name", first_name)
-    _fill("preferred_first_name", preferred)
+    _fill("legal_first_name", legal_first)
+    _fill("preferred_first_name", preferred_first)
     _fill("last_name", last_name)
     _fill("personal_email", email)
     _fill("andrew_email", andrew_email)
@@ -830,7 +826,10 @@ def _student_from_application(application: Application):
             setattr(student, field, value)
 
     _fill("legal_first_name", step5.get("legal_first_name"))
-    _fill("first_name", step5.get("first_name"))
+    _fill(
+        "preferred_first_name",
+        step5.get("preferred_first_name") or step5.get("first_name"),
+    )
     _fill("last_name", step5.get("last_name"))
     _fill("pronouns", step5.get("pronouns"))
     if step5.get("date_of_birth") and not student.date_of_birth:

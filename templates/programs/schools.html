@@ -34,7 +34,7 @@
                   <tr>
                     <td>
                       <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
-                        {{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}
+                        {{ s.display_name }}
                       </a>
                     </td>
                     <td>{{ s.graduation_year|default:"" }}</td>

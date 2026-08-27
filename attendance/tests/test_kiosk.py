@@ -259,7 +259,7 @@ class KioskOTPUntockTests(TestCase):
         self.program = make_program("OTP Program")
         self.kiosk = KioskConfig.objects.create(label="OTP Kiosk", program=self.program)
         self.mentor = Adult.objects.create(
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="Joe",
             andrew_email="mentor@andrew.cmu.edu",
             is_mentor=True,
@@ -366,9 +366,7 @@ class KioskProxyLookupTests(TestCase):
             label="Lookup Test Kiosk", program=self.program
         )
         self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.student = Student.objects.create(
-            legal_first_name="Bob", first_name="Bob", last_name="Jones"
-        )
+        self.student = Student.objects.create(legal_first_name="Bob", last_name="Jones")
         self.rfid = RFIDCard.objects.create(uid="RFID999", student=self.student)
 
     def test_lookup_without_cookie_returns_403(self):
@@ -405,7 +403,7 @@ class KioskProxyLookupTests(TestCase):
 
     def test_lookup_by_student_preferred_name(self):
         student = Student.objects.create(
-            legal_first_name="Barbara", first_name="Babs", last_name="Smith"
+            legal_first_name="Barbara", preferred_first_name="Babs", last_name="Smith"
         )
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
@@ -417,7 +415,7 @@ class KioskProxyLookupTests(TestCase):
 
     def test_lookup_by_student_legal_name(self):
         student = Student.objects.create(
-            legal_first_name="Barbara", first_name="Babs", last_name="Smith"
+            legal_first_name="Barbara", preferred_first_name="Babs", last_name="Smith"
         )
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
@@ -429,7 +427,7 @@ class KioskProxyLookupTests(TestCase):
 
     def test_lookup_by_mentor_preferred_name(self):
         mentor = Adult.objects.create(
-            first_name="Robert",
+            legal_first_name="Robert",
             preferred_first_name="Bobby",
             last_name="Martin",
             is_mentor=True,
@@ -444,8 +442,8 @@ class KioskProxyLookupTests(TestCase):
 
     def test_lookup_by_mentor_legal_name(self):
         mentor = Adult.objects.create(
-            first_name="Robert",
-            preferred_first_name="Rob",
+            preferred_first_name="Robert",
+            legal_first_name="Rob",
             last_name="Martin",
             is_mentor=True,
         )
@@ -536,11 +534,11 @@ class KioskFirstNameTests(TestCase):
 
         self.student = Student.objects.create(
             legal_first_name="Ada",
-            first_name="Ada",
+            preferred_first_name="Ada",
             last_name="Lovelace",
         )
         self.mentor = Adult.objects.create(
-            first_name="Robert",
+            legal_first_name="Robert",
             preferred_first_name="Bobby",
             last_name="Martin",
             is_mentor=True,
@@ -564,7 +562,7 @@ class KioskFirstNameTests(TestCase):
         self.assertEqual(data["student"], "Ada")
 
     def test_tap_student_uses_first_name_over_legal(self):
-        self.student.first_name = "Addy"
+        self.student.preferred_first_name = "Addy"
         self.student.save()
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
@@ -578,7 +576,7 @@ class KioskFirstNameTests(TestCase):
         self.assertEqual(data["student"], "Addy")
 
     def test_tap_student_without_first_name_uses_legal(self):
-        self.student.first_name = None
+        self.student.preferred_first_name = None
         self.student.save()
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])

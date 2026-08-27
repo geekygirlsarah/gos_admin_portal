@@ -419,7 +419,9 @@ class OutreachStudentStatsView(
 
         students = (
             active_students_in_program(self.program)
-            .annotate(display_first_name=Coalesce("first_name", "legal_first_name"))
+            .annotate(
+                display_first_name=Coalesce("preferred_first_name", "legal_first_name")
+            )
             .order_by("display_first_name", "last_name")
         )
 

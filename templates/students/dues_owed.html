@@ -22,9 +22,9 @@
             <tr>
               <td>
                 {% if r.student.photo %}
-                  <img src="{{ r.student.photo.url }}" alt="{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}" class="avatar avatar-32 me-2"/>
+                  <img src="{{ r.student.photo.url }}" alt="{{ r.student.display_name }}" class="avatar avatar-32 me-2"/>
                 {% endif %}
-                <a class="text-decoration-none" href="{% url 'student_detail' r.student.pk %}">{{ r.student.first_name|default:r.student.legal_first_name }} {{ r.student.last_name }}</a>
+                <a class="text-decoration-none" href="{% url 'student_detail' r.student.pk %}">{{ r.student.display_name }}</a>
               </td>
               <td>{{ r.student.school|default:'' }}</td>
               <td class="text-end">${{ r.amount_owed|floatformat:2 }}</td>

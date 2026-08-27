@@ -23,8 +23,11 @@ class SubmittedNamesReproductionTest(TestCase):
             status=Application.Status.SUBMITTED,
             data={
                 "step5-student": {"legal_first_name": "Jane", "last_name": "Doe"},
-                "step7-primaryparent": {"first_name": "John", "last_name": "Doe"},
-                "step8-secondaryparent": {"first_name": "Mary", "last_name": "Doe"},
+                "step7-primaryparent": {"legal_first_name": "John", "last_name": "Doe"},
+                "step8-secondaryparent": {
+                    "legal_first_name": "Mary",
+                    "last_name": "Doe",
+                },
             },
         )
         url = reverse("apply_submitted", kwargs={"app_id": application.application_id})
@@ -57,7 +60,7 @@ class SubmittedNamesReproductionTest(TestCase):
             status=Application.Status.SUBMITTED,
             data={
                 "step5-student": {"legal_first_name": "Jane", "last_name": "Doe"},
-                "step7-primaryparent": {"first_name": "John", "last_name": "Doe"},
+                "step7-primaryparent": {"legal_first_name": "John", "last_name": "Doe"},
                 "step8-secondaryparent": {"_skipped": True},
             },
         )

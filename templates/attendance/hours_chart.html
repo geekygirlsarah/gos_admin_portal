@@ -66,15 +66,15 @@
     {% if student_list %}
   {# ── Stats row ── #}
   <div class="row g-3 mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card text-center h-100">
         <div class="card-body">
-          <h6 class="card-title text-muted">Total Hours</h6>
-          <p class="display-6 fw-bold mb-0">{{ total_hours }}</p>
+          <h6 class="card-title text-muted">Students</h6>
+          <p class="display-6 fw-bold mb-0">{{ student_count }}</p>
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card text-center h-100">
         <div class="card-body">
           <h6 class="card-title text-muted">Avg Hours / Week</h6>
@@ -82,11 +82,21 @@
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card text-center h-100">
         <div class="card-body">
           <h6 class="card-title text-muted">Weeks Elapsed</h6>
           <p class="display-6 fw-bold mb-0">{{ weeks_elapsed }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center h-100">
+        <div class="card-body">
+          <h6 class="card-title text-muted">Exceeded Averages</h6>
+          {% for ec in exceeded_counts %}
+          <span class="badge" style="background-color: {{ ec.color }};">{{ ec.label }} hrs/wk: {{ ec.count }}</span>
+          {% endfor %}
         </div>
       </div>
     </div>
@@ -96,9 +106,15 @@
   <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span>Hours per Student — {{ selected_program.name }}{% if selected_program.year_display %} ({{ selected_program.year_display }}){% endif %}</span>
-      <button class="btn btn-sm btn-outline-secondary" id="downloadChart">
-        <i class="bi bi-download"></i> Download PNG
-      </button>
+      <div>
+        <div class="btn-group btn-group-sm me-2" role="group">
+          <a href="{{ sort_hours_url }}" class="btn btn-outline-secondary {% if sort_by == 'hours' %}active{% endif %}">Sort by Hours</a>
+          <a href="{{ sort_alpha_url }}" class="btn btn-outline-secondary {% if sort_by == 'alpha' %}active{% endif %}">A → Z</a>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" id="downloadChart">
+          <i class="bi bi-download"></i> Download PNG
+        </button>
+      </div>
     </div>
     <div class="card-body">
       <div style="height: {{ student_list|length|add:1 }}rem; min-height: 350px; max-height: 700px;">

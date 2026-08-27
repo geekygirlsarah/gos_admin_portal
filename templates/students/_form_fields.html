@@ -11,7 +11,7 @@
     <div class="row g-3">
       {% can_write user 'identity' form.instance as can_write_identity %}
       <div class="col-md-4">{% if can_write_identity %}{% render_field form.legal_first_name %}{% else %}{% render_field form.legal_first_name readonly=True %}{% endif %}</div>
-      <div class="col-md-4">{% if can_write_identity %}{% render_field form.first_name %}{% else %}{% render_field form.first_name readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_identity %}{% render_field form.preferred_first_name %}{% else %}{% render_field form.preferred_first_name readonly=True %}{% endif %}</div>
       <div class="col-md-4">{% if can_write_identity %}{% render_field form.last_name %}{% else %}{% render_field form.last_name readonly=True %}{% endif %}</div>
       <div class="col-md-4">{% if can_write_identity %}{% render_field form.pronouns %}{% else %}{% render_field form.pronouns readonly=True %}{% endif %}</div>
       <div class="col-md-4">{% if can_write_identity %}{% render_field form.date_of_birth %}{% else %}{% render_field form.date_of_birth readonly=True %}{% endif %}</div>

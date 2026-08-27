@@ -10,7 +10,7 @@ class OutreachModelTest(TestCase):
     def setUp(self):
         self.school = School.objects.create(name="Test School")
         self.student = Student.objects.create(
-            first_name="Test",
+            preferred_first_name="Test",
             last_name="Student",
             school=self.school,
             graduation_year=2027,
@@ -55,7 +55,7 @@ class OutreachModelTest(TestCase):
         )
 
         student2 = Student.objects.create(
-            first_name="Test2",
+            preferred_first_name="Test2",
             last_name="Student2",
             school=self.school,
             graduation_year=2027,
@@ -77,7 +77,7 @@ class OutreachModelTest(TestCase):
         )
 
         student2 = Student.objects.create(
-            first_name="Test2",
+            preferred_first_name="Test2",
             last_name="Student2",
             school=self.school,
             graduation_year=2027,

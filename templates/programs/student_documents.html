@@ -31,7 +31,7 @@
               <tr {% if not row.active %}class="table-light text-muted"{% endif %}>
                 <td>
                   <a href="{% url 'student_detail' row.student.pk %}" class="text-decoration-none {% if not row.active %}text-muted{% endif %}">
-                    {{ row.student.last_name }}, {{ row.student.first_name|default:row.student.legal_first_name }}
+                    {{ row.student.last_name }}, {{ row.student.preferred_first_name|default:row.student.legal_first_name }}
                   </a>
                   {% if not row.active %}
                     <span class="badge bg-secondary ms-1">Inactive</span>

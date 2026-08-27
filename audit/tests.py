@@ -147,13 +147,16 @@ class AuthenticationAuditLogTest(TestCase):
         self.mentor.groups.add(lm_group)
 
         Adult.objects.create(
-            user=self.mentor, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
 
         self.student = Student.objects.create(
             legal_first_name="Jane", last_name="Doe", graduation_year=2025
         )
-        self.parent = Adult.objects.create(first_name="John", last_name="Doe")
+        self.parent = Adult.objects.create(legal_first_name="John", last_name="Doe")
 
     def test_login_logging(self):
         self.client.login(username="testuser", password="password123")  # nosec B106
@@ -287,7 +290,7 @@ class GuardianRemovedSignalTest(TestCase):
             legal_first_name="Jane", last_name="Doe", graduation_year=2026
         )
         self.adult = Adult.objects.create(
-            first_name="John", last_name="Doe", is_parent=True
+            legal_first_name="John", last_name="Doe", is_parent=True
         )
         self.relationship = AdultStudentRelationship.objects.create(
             adult=self.adult,
@@ -327,7 +330,7 @@ class GuardianRemovedSignalTest(TestCase):
             legal_first_name="Jim", last_name="Doe", graduation_year=2027
         )
         adult2 = Adult.objects.create(
-            first_name="Jane", last_name="Smith", is_parent=True
+            legal_first_name="Jane", last_name="Smith", is_parent=True
         )
         # student2 is related to BOTH adults initially
         AdultStudentRelationship.objects.create(
@@ -363,7 +366,7 @@ class SensitiveDataViewProgramContextTest(TestCase):
         self.mentor_user.groups.add(lm_group)
         self.mentor_adult = Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="Context",
             is_mentor=True,
         )

@@ -27,7 +27,7 @@ class ProfilePermissionsTests(TestCase):
         )  # nosec B106
         self.student = Student.objects.create(
             user=self.student_user,
-            first_name="Student",
+            preferred_first_name="Student",
             last_name="One",
             personal_email="student@example.com",
         )
@@ -35,13 +35,18 @@ class ProfilePermissionsTests(TestCase):
             username="other_student", password="password123"
         )  # nosec B106
         self.other_student = Student.objects.create(
-            user=self.other_student_user, first_name="Other", last_name="Student"
+            user=self.other_student_user,
+            preferred_first_name="Other",
+            last_name="Student",
         )
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
         )  # nosec B106
         self.parent = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="One", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="One",
+            is_parent=True,
         )
         AdultStudentRelationship.objects.create(
             adult=self.parent, student=self.student, relationship_to_student="parent"
@@ -51,7 +56,7 @@ class ProfilePermissionsTests(TestCase):
         )  # nosec B106
         self.other_parent = Adult.objects.create(
             user=self.other_parent_user,
-            first_name="Other",
+            legal_first_name="Other",
             last_name="Parent",
             is_parent=True,
         )
@@ -59,14 +64,17 @@ class ProfilePermissionsTests(TestCase):
             username="mentor_user", password="password123"
         )  # nosec B106
         self.mentor = Adult.objects.create(
-            user=self.mentor_user, first_name="Mentor", last_name="One", is_mentor=True
+            user=self.mentor_user,
+            legal_first_name="Mentor",
+            last_name="One",
+            is_mentor=True,
         )
         self.alumni_user = User.objects.create_user(
             username="alumni_user", password="password123"
         )  # nosec B106
         self.alumni = Adult.objects.create(
             user=self.alumni_user,
-            first_name="Alumni",
+            legal_first_name="Alumni",
             last_name="One",
             is_alumni=True,
             student_record=self.other_student,
@@ -293,16 +301,19 @@ class ParentStudentEditTests(TestCase):
             username="parent_user", password="password123"
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="One", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="One",
+            is_parent=True,
         )
-        self.child = Student.objects.create(first_name="Child", last_name="One")
+        self.child = Student.objects.create(legal_first_name="Child", last_name="One")
         AdultStudentRelationship.objects.create(
             adult=self.parent_adult,
             student=self.child,
             relationship_to_student="parent",
         )
         self.other_student = Student.objects.create(
-            first_name="Other", last_name="Student"
+            preferred_first_name="Other", last_name="Student"
         )
         RolePermission.objects.update_or_create(
             role="Parent",
@@ -477,19 +488,25 @@ class ProgramPermissionTests(TestCase):
             username="mentor_user", password="password123"
         )  # nosec B106
         self.mentor_adult = Adult.objects.create(
-            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor_user,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="User",
+            is_parent=True,
         )
         self.student_user = User.objects.create_user(
             username="student_user", password="password123"
         )  # nosec B106
         self.student_profile = Student.objects.create(
-            user=self.student_user, first_name="Student", last_name="User"
+            user=self.student_user, preferred_first_name="Student", last_name="User"
         )
         today = timezone.now().date()
         self.active_program = Program.objects.create(
@@ -660,7 +677,9 @@ class ProgramPermissionTests(TestCase):
         self.assertEqual(response.url, reverse("home"))
 
     def test_parent_cannot_access_program_email_even_for_own_childs_program(self):
-        child = Student.objects.create(first_name="Child", last_name="OfParent")
+        child = Student.objects.create(
+            preferred_first_name="Child", last_name="OfParent"
+        )
         AdultStudentRelationship.objects.create(
             adult=self.parent_adult, student=child, relationship_to_student="parent"
         )
@@ -693,25 +712,34 @@ class FinancePermissionTests(TestCase):
             username="mentor_user", password="password123"
         )  # nosec B106
         Adult.objects.create(
-            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor_user,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
         self.parent_user = User.objects.create_user(
             username="parent_user", password="password123"
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="User",
+            is_parent=True,
         )
         self.student_user = User.objects.create_user(
             username="student_user", password="password123"
         )  # nosec B106
         self.student_profile = Student.objects.create(
-            user=self.student_user, first_name="Student", last_name="User"
+            user=self.student_user, preferred_first_name="Student", last_name="User"
         )
         self.alumni_user = User.objects.create_user(
             username="alumni_user", password="password123"
         )  # nosec B106
         Adult.objects.create(
-            user=self.alumni_user, first_name="Alumni", last_name="User", is_alumni=True
+            user=self.alumni_user,
+            legal_first_name="Alumni",
+            last_name="User",
+            is_alumni=True,
         )
         self.program = Program.objects.create(name="Test Program", active=True)
         Enrollment.objects.create(
@@ -756,7 +784,9 @@ class FinancePermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_parent_cannot_view_other_student_balance_sheet(self):
-        other_student = Student.objects.create(first_name="Other", last_name="Student")
+        other_student = Student.objects.create(
+            preferred_first_name="Other", last_name="Student"
+        )
         self.client.login(username="parent_user", password="password123")  # nosec B106
         url = reverse(
             "program_student_balance", args=[self.program.pk, other_student.pk]
@@ -771,7 +801,7 @@ class FinancePermissionTests(TestCase):
         )  # nosec B106
         parent_mentor = Adult.objects.create(
             user=parent_mentor_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Mentor",
             is_parent=True,
             is_mentor=True,
@@ -797,12 +827,14 @@ class FinancePermissionTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=parent_mentor_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Mentor",
             is_parent=True,
             is_mentor=True,
         )
-        other_student = Student.objects.create(first_name="Other", last_name="Student")
+        other_student = Student.objects.create(
+            preferred_first_name="Other", last_name="Student"
+        )
         self.client.login(
             username="parent_mentor_user2", password="password123"
         )  # nosec B106
@@ -821,7 +853,7 @@ class FinancePermissionTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Mentor",
             is_parent=True,
             is_mentor=True,
@@ -857,7 +889,7 @@ class MentorAdultAccessTests(TestCase):
         )
         self.mentor = Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
         )
@@ -871,31 +903,31 @@ class MentorAdultAccessTests(TestCase):
             name="Inactive Program", active=False
         )
         self.parent_with_active = Adult.objects.create(
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Active",
             is_parent=True,
         )
         self.student_active = Student.objects.create(
-            first_name="Active", last_name="Student"
+            preferred_first_name="Active", last_name="Student"
         )
         self.parent_with_active.students.add(self.student_active)
         Enrollment.objects.create(
             student=self.student_active, program=self.active_program
         )
         self.parent_with_inactive = Adult.objects.create(
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Inactive",
             is_parent=True,
         )
         self.student_inactive = Student.objects.create(
-            first_name="Inactive", last_name="Student"
+            preferred_first_name="Inactive", last_name="Student"
         )
         self.parent_with_inactive.students.add(self.student_inactive)
         Enrollment.objects.create(
             student=self.student_inactive, program=self.inactive_program
         )
         self.non_parent_adult = Adult.objects.create(
-            first_name="Just",
+            legal_first_name="Just",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -942,7 +974,7 @@ class RoleProtectionTests(TestCase):
         )  # nosec B106
         self.mentor_profile = Adult.objects.create(
             user=self.mentor_user,
-            first_name="Regular",
+            legal_first_name="Regular",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -961,7 +993,7 @@ class RoleProtectionTests(TestCase):
     def test_mentor_cannot_uncheck_is_mentor_flag(self):
         url = reverse("adult_edit", args=[self.mentor_profile.pk])
         data = {
-            "first_name": "Regular",
+            "legal_first_name": "Regular",
             "last_name": "Mentor Updated",
             "personal_email": "mentor@example.com",
         }
@@ -978,7 +1010,10 @@ class RoleProtectionTests(TestCase):
             username="parent_user", password="pass"
         )  # nosec B106
         parent_profile = Adult.objects.create(
-            user=parent_user, first_name="Parent", last_name="User", is_parent=True
+            user=parent_user,
+            legal_first_name="Parent",
+            last_name="User",
+            is_parent=True,
         )
         perm = Permission.objects.get(codename="change_adult")
         parent_user.user_permissions.add(perm)
@@ -990,7 +1025,7 @@ class RoleProtectionTests(TestCase):
         self.client.login(username="parent_user", password="pass")  # nosec B106
         url = reverse("parent_edit", args=[parent_profile.pk])
         data = {
-            "first_name": "Parent",
+            "legal_first_name": "Parent",
             "last_name": "Updated",
             "personal_email": "parent@example.com",
             "students": [1, 2, 3],
@@ -1005,7 +1040,7 @@ class RoleProtectionTests(TestCase):
         self.client.login(username="lead", password="pass")  # nosec B106
         url = reverse("adult_edit", args=[self.mentor_profile.pk])
         data = {
-            "first_name": "Regular",
+            "legal_first_name": "Regular",
             "last_name": "Mentor",
             "personal_email": "mentor@example.com",
             "is_mentor": "on",
@@ -1030,7 +1065,10 @@ class PortalPermissionsUpdateTests(TestCase):
             username="mentor_user_perm", password=self.password
         )
         Adult.objects.create(
-            user=self.mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor_user,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
         self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
         self.mentor_user.groups.add(self.mentor_group)
@@ -1109,7 +1147,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="User",
             is_mentor=True,
             is_parent=True,
@@ -1125,7 +1163,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="User",
             is_mentor=False,
             is_parent=True,
@@ -1141,7 +1179,7 @@ class GetUserRoleTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="User",
             is_mentor=False,
             is_parent=False,
@@ -1155,7 +1193,9 @@ class GetUserRoleTests(TestCase):
         user = User.objects.create_user(
             username="stu", password="password123"
         )  # nosec B106
-        Student.objects.create(user=user, first_name="Student", last_name="User")
+        Student.objects.create(
+            user=user, preferred_first_name="Student", last_name="User"
+        )
         self.assertEqual(get_user_role(user), "Student")
 
     def test_lead_mentor_group_overrides_profiles(self):
@@ -1165,7 +1205,7 @@ class GetUserRoleTests(TestCase):
             username="lm_with_profile", password="password123"
         )  # nosec B106
         Adult.objects.create(
-            user=user, first_name="Test", last_name="User", is_mentor=True
+            user=user, legal_first_name="Test", last_name="User", is_mentor=True
         )
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         user.groups.add(lm_group)
@@ -1228,7 +1268,7 @@ class UserRoleFlagTests(TestCase):
             username="parent_only", password="password123"
         )  # nosec B106
         Adult.objects.create(
-            user=user, first_name="Test", last_name="User", is_parent=True
+            user=user, legal_first_name="Test", last_name="User", is_parent=True
         )
         self.assertTrue(user_is_parent(user))
         self.assertFalse(user_is_mentor(user))
@@ -1246,7 +1286,7 @@ class UserRoleFlagTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="User",
             is_parent=True,
             is_mentor=True,
@@ -1267,7 +1307,7 @@ class UserRoleFlagTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="User",
             is_parent=True,
             is_mentor=True,
@@ -1284,7 +1324,7 @@ class UserRoleFlagTests(TestCase):
             username="mentor_only", password="password123"
         )  # nosec B106
         Adult.objects.create(
-            user=user, first_name="Test", last_name="User", is_mentor=True
+            user=user, legal_first_name="Test", last_name="User", is_mentor=True
         )
         self.assertFalse(user_is_parent(user))
 
@@ -1337,7 +1377,7 @@ class SignalGroupAssignmentTests(TestCase):
             username="mentor1", password="password"
         )  # nosec B106
         adult = Adult.objects.create(
-            first_name="Mel",
+            legal_first_name="Mel",
             last_name="Mentor",
             is_mentor=True,
             user=user,
@@ -1351,7 +1391,7 @@ class SignalGroupAssignmentTests(TestCase):
             username="parent1", password="password"
         )  # nosec B106
         adult = Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Parent",
             is_parent=True,
             user=user,

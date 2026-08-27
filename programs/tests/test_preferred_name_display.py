@@ -21,7 +21,7 @@ class PreferredNameDisplayTest(TestCase):
         self.client.login(username="leadmentor", password="password")  # nosec B106
 
         self.mentor = Adult.objects.create(
-            first_name="Robert",
+            legal_first_name="Robert",
             preferred_first_name="Bobby",
             last_name="Smith",
             is_mentor=True,
@@ -29,7 +29,7 @@ class PreferredNameDisplayTest(TestCase):
             personal_email="bobby@example.com",
         )
         self.parent = Adult.objects.create(
-            first_name="James",
+            legal_first_name="James",
             preferred_first_name="Jim",
             last_name="Jones",
             is_parent=True,
@@ -38,7 +38,7 @@ class PreferredNameDisplayTest(TestCase):
             email_updates=True,
         )
         self.alumni = Adult.objects.create(
-            first_name="Patricia",
+            legal_first_name="Patricia",
             preferred_first_name="Pat",
             last_name="Lee",
             is_alumni=True,
@@ -46,7 +46,7 @@ class PreferredNameDisplayTest(TestCase):
             personal_email="pat@example.com",
         )
         self.legal_only = Adult.objects.create(
-            first_name="Michael",
+            legal_first_name="Michael",
             last_name="Brown",
             is_mentor=True,
             is_parent=True,
@@ -55,7 +55,9 @@ class PreferredNameDisplayTest(TestCase):
             email_updates=True,
         )
 
-        self.student = Student.objects.create(first_name="Test", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Test", last_name="Student"
+        )
         self.parent.students.add(self.student)
         self.legal_only.students.add(self.student)
 

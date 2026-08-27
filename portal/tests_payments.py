@@ -25,11 +25,13 @@ class ParentPaymentsViewTests(TestCase):
         )
         self.parent = Adult.objects.create(
             user=self.parent_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="User",
             is_parent=True,
         )
-        self.student = Student.objects.create(first_name="Student", last_name="One")
+        self.student = Student.objects.create(
+            preferred_first_name="Student", last_name="One"
+        )
         AdultStudentRelationship.objects.create(
             adult=self.parent,
             student=self.student,
@@ -41,7 +43,7 @@ class ParentPaymentsViewTests(TestCase):
         )
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
         )
@@ -50,7 +52,7 @@ class ParentPaymentsViewTests(TestCase):
             username="student_user", password=password
         )
         Student.objects.create(
-            user=self.student_user, first_name="Student", last_name="User"
+            user=self.student_user, preferred_first_name="Student", last_name="User"
         )
 
         self.lead_mentor_user = User.objects.create_user(
@@ -109,7 +111,7 @@ class ParentPaymentsViewTests(TestCase):
         )
         parent_mentor = Adult.objects.create(
             user=parent_mentor_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Mentor",
             is_parent=True,
             is_mentor=True,
@@ -133,7 +135,7 @@ class ParentPaymentsViewTests(TestCase):
         )
         parent_mentor = Adult.objects.create(
             user=parent_mentor_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Mentor",
             is_parent=True,
             is_mentor=True,

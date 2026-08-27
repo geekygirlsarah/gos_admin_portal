@@ -14,20 +14,20 @@
         <dl class="row mb-1">
             {% if step5_data %}
                 <dt class="col-sm-4">Student</dt>
-                <dd class="col-sm-8">{{ step5_data.first_name|default:step5_data.legal_first_name }} {{ step5_data.last_name }}</dd>
+                <dd class="col-sm-8">{{ step5_data.preferred_first_name|default:step5_data.legal_first_name }} {{ step5_data.last_name }}</dd>
             {% elif mentor_info_data %}
                 <dt class="col-sm-4">Mentor</dt>
-                <dd class="col-sm-8">{{ mentor_info_data.first_name|default:mentor_info_data.legal_first_name }} {{ mentor_info_data.last_name }}</dd>
+                <dd class="col-sm-8">{{ mentor_info_data.preferred_first_name|default:mentor_info_data.legal_first_name }} {{ mentor_info_data.last_name }}</dd>
             {% endif %}
 
             {% if step7_data %}
                 <dt class="col-sm-4">Primary adult contact</dt>
-                <dd class="col-sm-8">{{ step7_data.first_name }} {{ step7_data.last_name }}</dd>
+                <dd class="col-sm-8">{{ step7_data.legal_first_name }} {{ step7_data.last_name }}</dd>
             {% endif %}
 
             {% if step8_data and not step8_skipped %}
                 <dt class="col-sm-4">Secondary adult contact</dt>
-                <dd class="col-sm-8">{{ step8_data.first_name }} {{ step8_data.last_name }}</dd>
+                <dd class="col-sm-8">{{ step8_data.legal_first_name }} {{ step8_data.last_name }}</dd>
             {% endif %}
         </dl>
     {% endif %}

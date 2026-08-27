@@ -17,7 +17,7 @@ class StudentParentLinkInvariantTest(TestCase):
     """
 
     def test_setting_primary_contact_keeps_both_sides_in_sync(self):
-        parent = Adult.objects.create(first_name="Prim", last_name="Parent")
+        parent = Adult.objects.create(legal_first_name="Prim", last_name="Parent")
         student = Student.objects.create(
             legal_first_name="Kid", last_name="Student", primary_contact=parent
         )
@@ -31,10 +31,10 @@ class StudentParentLinkInvariantTest(TestCase):
         )
 
     def test_setting_primary_and_secondary_creates_two_through_rows(self):
-        primary = Adult.objects.create(first_name="Prim", last_name="Parent")
-        secondary = Adult.objects.create(first_name="Sec", last_name="Parent")
+        primary = Adult.objects.create(legal_first_name="Prim", last_name="Parent")
+        secondary = Adult.objects.create(legal_first_name="Sec", last_name="Parent")
         student = Student.objects.create(
-            legal_first_name="Kid",
+            preferred_first_name="Kid",
             last_name="Student",
             primary_contact=primary,
             secondary_contact=secondary,
@@ -51,10 +51,10 @@ class StudentParentLinkInvariantTest(TestCase):
         self.assertIn(student, secondary.all_students())
 
     def test_all_parents_dedupes_primary_secondary_and_m2m(self):
-        primary = Adult.objects.create(first_name="Prim", last_name="Parent")
-        secondary = Adult.objects.create(first_name="Sec", last_name="Parent")
+        primary = Adult.objects.create(legal_first_name="Prim", last_name="Parent")
+        secondary = Adult.objects.create(legal_first_name="Sec", last_name="Parent")
         student = Student.objects.create(
-            legal_first_name="Kid",
+            preferred_first_name="Kid",
             last_name="Student",
             primary_contact=primary,
             secondary_contact=secondary,

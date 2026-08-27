@@ -169,8 +169,10 @@ class AttendanceSessionIndexTests(TestCase):
 class AttendanceModelReliabilityTests(TestCase):
     def setUp(self):
         self.program = make_program("Model Program")
-        self.student = make_student(first_name="Model", last_name="Student")
-        self.adult = make_adult(first_name="Model", last_name="Mentor", is_mentor=True)
+        self.student = make_student(preferred_first_name="Model", last_name="Student")
+        self.adult = make_adult(
+            legal_first_name="Model", last_name="Mentor", is_mentor=True
+        )
 
     def test_rfid_card_owner_constraint_requires_exactly_one_owner(self):
         from django.db import IntegrityError, transaction
@@ -205,7 +207,9 @@ class AttendanceModelReliabilityTests(TestCase):
 class MentorAttendanceTests(TestCase):
     def setUp(self):
         self.program = make_program()
-        self.mentor = make_adult(first_name="Mentor", last_name="User", is_mentor=True)
+        self.mentor = make_adult(
+            legal_first_name="Mentor", last_name="User", is_mentor=True
+        )
 
     def test_mentor_rfid_association(self):
         rfid = RFIDCard.objects.create(uid="M123456", adult=self.mentor)

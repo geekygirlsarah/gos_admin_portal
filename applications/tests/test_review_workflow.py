@@ -37,7 +37,7 @@ def _make_application(**overrides):
                 "email": "ada@example.com",
             },
             "step7-primaryparent": {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "email": "parent@example.com",
             },
@@ -294,7 +294,7 @@ class ApproveDeclineEditDeleteTests(TestCase):
                 "step5-student__date_of_birth": "2005-03-14",
                 "step5-student__school_name": "Test High",
                 "step5-student__grade": "12",
-                "step7-primaryparent__first_name": "Pat",
+                "step7-primaryparent__legal_first_name": "Pat",
                 "step7-primaryparent__last_name": "Parent",
                 "step7-primaryparent__email": "parent@example.com",
             },
@@ -307,7 +307,9 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertEqual(step5["last_name"], "Hopper")
         # Non-spec fields stored previously are preserved.
         self.assertEqual(step5["email"], "ada@example.com")
-        self.assertEqual(self.app.data["step7-primaryparent"]["first_name"], "Pat")
+        self.assertEqual(
+            self.app.data["step7-primaryparent"]["legal_first_name"], "Pat"
+        )
 
     def test_edit_get_renders_step_fields(self):
         url = reverse(
@@ -359,7 +361,7 @@ class ConvertToStudentTests(TestCase):
             data={
                 "step5-student": {
                     "legal_first_name": "Ada",
-                    "first_name": "Ada",
+                    "preferred_first_name": "Ada",
                     "last_name": "Lovelace",
                     "personal_email": "ada@example.com",
                     "school_name": "Allderdice High School",
@@ -367,14 +369,14 @@ class ConvertToStudentTests(TestCase):
                     "date_of_birth": "2010-01-01",
                 },
                 "step7-primaryparent": {
-                    "first_name": "Pat",
+                    "legal_first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "phone_number": "555-444-0100",
                     "phone_type": "cell",
                 },
                 "step8-secondaryparent": {
-                    "first_name": "Sam",
+                    "legal_first_name": "Sam",
                     "last_name": "Parent",
                     "email": "sam@example.com",
                 },

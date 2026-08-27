@@ -46,7 +46,7 @@ class BackgroundChecksFormTests(TestCase):
         self.assertFalse(student.background_checks.filter(pk=existing.pk).exists())
 
     def test_save_creates_rows_for_adult(self):
-        adult = Adult.objects.create(first_name="C", last_name="D")
+        adult = Adult.objects.create(legal_first_name="C", last_name="D")
         form = BackgroundChecksForm(
             data={
                 "cleared_fbi": "on",
@@ -62,7 +62,7 @@ class BackgroundChecksFormTests(TestCase):
 
     def test_requires_exactly_one_holder(self):
         student = Student.objects.create(legal_first_name="A", last_name="B")
-        adult = Adult.objects.create(first_name="C", last_name="D")
+        adult = Adult.objects.create(legal_first_name="C", last_name="D")
         with self.assertRaises(ValueError):
             BackgroundChecksForm(data={}).save()
         with self.assertRaises(ValueError):
@@ -109,12 +109,12 @@ class BackgroundChecksViewTests(TestCase):
     def test_adult_edit_saves_background_checks_for_lead_mentor(self):
         from django.urls import reverse
 
-        adult = Adult.objects.create(first_name="C", last_name="D")
+        adult = Adult.objects.create(legal_first_name="C", last_name="D")
         url = reverse("adult_edit", args=[adult.pk])
         resp = self.client.post(
             url,
             {
-                "first_name": "C",
+                "legal_first_name": "C",
                 "last_name": "D",
                 "cleared_fbi": "on",
                 "obtained_fbi": "2021-03-01",

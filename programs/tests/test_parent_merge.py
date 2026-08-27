@@ -20,9 +20,9 @@ class ParentMergeTest(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    def _parent(self, first_name="Jane", last_name="Doe", **kwargs):
+    def _parent(self, legal_first_name="Jane", last_name="Doe", **kwargs):
         defaults = {
-            "first_name": first_name,
+            "legal_first_name": legal_first_name,
             "last_name": last_name,
             "is_parent": True,
             "login_enabled": True,
@@ -30,9 +30,9 @@ class ParentMergeTest(TestCase):
         defaults.update(kwargs)
         return Adult.objects.create(**defaults)
 
-    def _student(self, first_name="Test", last_name="Student", **kwargs):
+    def _student(self, preferred_first_name="Test", last_name="Student", **kwargs):
         defaults = {
-            "legal_first_name": first_name,
+            "preferred_first_name": preferred_first_name,
             "last_name": last_name,
             "graduation_year": 2026,
         }

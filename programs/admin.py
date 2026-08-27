@@ -65,9 +65,9 @@ class BackgroundCheckAdmin(admin.ModelAdmin):
     )
     list_filter = ("check_type", "cleared")
     search_fields = (
-        "student__first_name",
+        "student__preferred_first_name",
         "student__last_name",
-        "adult__first_name",
+        "adult__legal_first_name",
         "adult__last_name",
     )
 
@@ -150,7 +150,7 @@ class PaymentAdmin(admin.ModelAdmin):
     )
     list_filter = ("program", "paid_on", "paid_via")
     search_fields = (
-        "student__first_name",
+        "student__preferred_first_name",
         "student__last_name",
         "program__name",
     )
@@ -204,7 +204,7 @@ class SchoolDistrictAdmin(admin.ModelAdmin):
 class StudentAdmin(admin.ModelAdmin):
     form = StudentForm
     list_display = (
-        "first_name",
+        "preferred_first_name",
         "legal_first_name",
         "last_name",
         "pronouns",
@@ -216,7 +216,7 @@ class StudentAdmin(admin.ModelAdmin):
     )
     list_filter = ("graduated", "on_discord", "seen_once", "graduation_year")
     search_fields = (
-        "first_name",
+        "preferred_first_name",
         "legal_first_name",
         "last_name",
         "pronouns",
@@ -236,7 +236,7 @@ class StudentAdmin(admin.ModelAdmin):
             "Identity",
             {
                 "fields": (
-                    "first_name",
+                    "preferred_first_name",
                     "legal_first_name",
                     "last_name",
                     "pronouns",
@@ -365,7 +365,7 @@ class StudentAdmin(admin.ModelAdmin):
 class ParentAdmin(admin.ModelAdmin):
     form = AdultForm
     list_display = (
-        "first_name",
+        "legal_first_name",
         "preferred_first_name",
         "last_name",
         "is_parent",
@@ -386,7 +386,7 @@ class ParentAdmin(admin.ModelAdmin):
         "mentor_active",
     )
     search_fields = (
-        "first_name",
+        "legal_first_name",
         "preferred_first_name",
         "last_name",
         "personal_email",
@@ -400,7 +400,7 @@ class ParentAdmin(admin.ModelAdmin):
             "Name",
             {
                 "fields": (
-                    "first_name",
+                    "legal_first_name",
                     "preferred_first_name",
                     "last_name",
                     "pronouns",
@@ -501,7 +501,7 @@ class SlidingScaleAdmin(admin.ModelAdmin):
         "updated_at",
     )
     list_filter = ("status",)
-    search_fields = ("student__first_name", "student__last_name")
+    search_fields = ("student__preferred_first_name", "student__last_name")
     autocomplete_fields = ("student", "applied_by")
 
 
@@ -538,7 +538,7 @@ class MentorAgreementAdmin(admin.ModelAdmin):
 class MentorAgreementAcceptanceAdmin(admin.ModelAdmin):
     list_display = ("adult", "agreement", "accepted_at", "ip_address")
     list_filter = ("agreement",)
-    search_fields = ("adult__first_name", "adult__last_name")
+    search_fields = ("adult__legal_first_name", "adult__last_name")
     autocomplete_fields = ("adult", "agreement")
     readonly_fields = ("accepted_at",)
 
@@ -547,6 +547,6 @@ class MentorAgreementAcceptanceAdmin(admin.ModelAdmin):
 class MentorAgreementSubmissionAdmin(admin.ModelAdmin):
     list_display = ("adult", "agreement", "uploaded_at")
     list_filter = ("agreement",)
-    search_fields = ("adult__first_name", "adult__last_name")
+    search_fields = ("adult__legal_first_name", "adult__last_name")
     autocomplete_fields = ("adult", "agreement")
     readonly_fields = ("uploaded_at",)

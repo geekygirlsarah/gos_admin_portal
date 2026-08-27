@@ -14,7 +14,7 @@
     {% for student_row in student_rows %}
       <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>{{ student_row.student.first_name|default:student_row.student.legal_first_name }} {{ student_row.student.last_name }}</strong>
+          <strong>{{ student_row.student.display_name }}</strong>
           <span class="fw-semibold">Student Total Owed: ${{ student_row.student_total_owed|floatformat:2 }}</span>
         </div>
         <div class="card-body p-0">
@@ -72,7 +72,7 @@
               <li class="list-group-item">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <div>
-                    <strong>{{ student_row.student.first_name|default:student_row.student.legal_first_name }} {{ student_row.student.last_name }}:</strong>
+                    <strong>{{ student_row.student.display_name }}:</strong>
                     {% if student_row.sliding_scale %}
                       On the sliding scale ({{ student_row.sliding_scale.percent }}% discount){% if student_row.sliding_scale.expiration_date %}, valid through {{ student_row.sliding_scale.expiration_date }}{% else %}, no expiration{% endif %}.
                     {% elif student_row.sliding_scale_pending %}

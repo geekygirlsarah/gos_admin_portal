@@ -34,14 +34,14 @@ class MentorSignupModelTest(TestCase):
         self.shift = self.event.shifts.first()
 
     def test_create_mentor_signup(self):
-        adult = Adult.objects.create(first_name="Mentor", last_name="One")
+        adult = Adult.objects.create(legal_first_name="Mentor", last_name="One")
         signup = OutreachMentorSignup.objects.create(adult=adult, shift=self.shift)
         self.assertEqual(signup.event, self.event)
         self.assertIn(signup, self.shift.mentor_signups.all())
         self.assertEqual(str(signup), "Mentor One - Test Event")
 
     def test_adult_cannot_sign_up_twice_for_same_shift(self):
-        adult = Adult.objects.create(first_name="Mentor", last_name="One")
+        adult = Adult.objects.create(legal_first_name="Mentor", last_name="One")
         OutreachMentorSignup.objects.create(adult=adult, shift=self.shift)
         with self.assertRaises(Exception):
             OutreachMentorSignup.objects.create(adult=adult, shift=self.shift)
@@ -49,7 +49,7 @@ class MentorSignupModelTest(TestCase):
     def test_no_limit_on_mentors_per_shift(self):
         # Unlike student champion/helper roles there is no capacity cap.
         for i in range(10):
-            adult = Adult.objects.create(first_name="M", last_name=str(i))
+            adult = Adult.objects.create(legal_first_name="M", last_name=str(i))
             OutreachMentorSignup.objects.create(adult=adult, shift=self.shift)
         self.assertEqual(self.shift.mentor_signups.count(), 10)
 
@@ -59,8 +59,8 @@ class MentorSignupModelTest(TestCase):
             start_time=time(13, 0),
             end_time=time(15, 0),
         )
-        adult1 = Adult.objects.create(first_name="Mentor", last_name="One")
-        adult2 = Adult.objects.create(first_name="Mentor", last_name="Two")
+        adult1 = Adult.objects.create(legal_first_name="Mentor", last_name="One")
+        adult2 = Adult.objects.create(legal_first_name="Mentor", last_name="Two")
         OutreachMentorSignup.objects.create(adult=adult1, shift=self.shift)
         OutreachMentorSignup.objects.create(adult=adult2, shift=second_shift)
         self.assertEqual(self.event.mentors.count(), 2)
@@ -80,7 +80,7 @@ class MentorSignupViewTest(TestCase):
         )  # nosec B106
         self.mentor_adult = Adult.objects.create(
             user=self.mentor_user,
-            first_name="Molly",
+            legal_first_name="Molly",
             last_name="Mentor",
             is_mentor=True,
             mentor_active=True,
@@ -105,7 +105,7 @@ class MentorSignupViewTest(TestCase):
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
             user=self.parent_user,
-            first_name="Paula",
+            legal_first_name="Paula",
             last_name="Parent",
             is_parent=True,
         )
@@ -201,7 +201,7 @@ class MentorSignupViewTest(TestCase):
         )  # nosec B106
         other_adult = Adult.objects.create(
             user=other_user,
-            first_name="Olive",
+            legal_first_name="Olive",
             last_name="Other",
             is_mentor=True,
             mentor_active=True,
@@ -230,7 +230,7 @@ class MentorSignupVisibilityTest(TestCase):
         )  # nosec B106
         self.mentor_adult = Adult.objects.create(
             user=self.mentor_user,
-            first_name="Molly",
+            legal_first_name="Molly",
             last_name="Mentor",
             is_mentor=True,
             mentor_active=True,
@@ -283,7 +283,7 @@ class MentorSignupVisibilityTest(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=other_user,
-            first_name="Olive",
+            legal_first_name="Olive",
             last_name="Other",
             is_mentor=True,
             mentor_active=True,

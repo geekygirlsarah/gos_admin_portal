@@ -66,7 +66,7 @@ class OutreachMentorSignupAdmin(admin.ModelAdmin):
     )
     list_select_related = ("shift__event", "adult")
     search_fields = (
-        "adult__first_name",
+        "adult__legal_first_name",
         "adult__last_name",
         "shift__event__name",
     )

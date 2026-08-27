@@ -47,7 +47,7 @@ class ImportSyncTests(TestCase):
         self.assertEqual(response.status_code, 200)
         student = Student.objects.get(last_name="Lovelace")
         self.assertEqual(student.legal_first_name, "Augusta Ada")
-        self.assertEqual(student.first_name, "Ada")
+        self.assertEqual(student.preferred_first_name, "Ada")
         self.assertEqual(student.graduation_year, 2027)
 
     def test_parent_import_marks_imported_adult_as_parent(self):
@@ -61,11 +61,11 @@ class ImportSyncTests(TestCase):
         response = self._upload_csv("parent_import", csv_text)
 
         self.assertEqual(response.status_code, 200)
-        parent = Adult.objects.get(first_name="Marie", last_name="Curie")
+        parent = Adult.objects.get(legal_first_name="Marie", last_name="Curie")
         self.assertTrue(parent.is_parent)
 
     def test_mentor_import_marks_existing_adult_as_mentor(self):
-        adult = Adult.objects.create(first_name="Grace", last_name="Hopper")
+        adult = Adult.objects.create(legal_first_name="Grace", last_name="Hopper")
         self.assertFalse(adult.is_mentor)
 
         csv_text = "\n".join(
@@ -86,7 +86,7 @@ class ImportSyncTests(TestCase):
     def test_relationship_import_links_even_without_relationship_label(self):
         student = Student.objects.create(
             legal_first_name="Katherine",
-            first_name="Katherine",
+            preferred_first_name="Katherine",
             last_name="Johnson",
             date_of_birth="2008-08-26",
         )
@@ -201,14 +201,14 @@ class ImportSampleCsvIntegrationTests(TestCase):
     def test_relationships_sample_csv_round_trips_through_relationship_import(self):
         Student.objects.create(
             legal_first_name="Augusta Ada",
-            first_name="Ada",
+            preferred_first_name="Ada",
             last_name="Lovelace",
             andrew_id="alovelac",
             date_of_birth="2005-12-10",
         )
         Student.objects.create(
             legal_first_name="Katherine",
-            first_name="Katherine",
+            preferred_first_name="Katherine",
             last_name="Johnson",
             date_of_birth="2008-08-26",
         )

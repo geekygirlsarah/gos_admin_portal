@@ -289,7 +289,7 @@ class Command(BaseCommand):
             parent, _ = Adult.objects.update_or_create(
                 personal_email=email,
                 defaults={
-                    "first_name": first_name,
+                    "legal_first_name": first_name,
                     "last_name": last_name,
                     "is_parent": True,
                     "is_mentor": False,
@@ -303,7 +303,7 @@ class Command(BaseCommand):
 
         mentor_data = [
             {
-                "first_name": "Sally",
+                "legal_first_name": "Sally",
                 "last_name": "Ride",
                 "email": "seed.mentor1@gos.example",
                 "role": "mentor",
@@ -313,7 +313,7 @@ class Command(BaseCommand):
                 "expires": date(this_year + 1, 12, 31),
             },
             {
-                "first_name": "Barbara",
+                "legal_first_name": "Barbara",
                 "last_name": "McClintock",
                 "email": "seed.mentor2@gos.example",
                 "role": "volunteer",
@@ -323,7 +323,7 @@ class Command(BaseCommand):
                 "expires": date(this_year + 1, 12, 31),
             },
             {
-                "first_name": "Hypatia",
+                "legal_first_name": "Hypatia",
                 "last_name": "Alexandria",
                 "email": "seed.mentor3@gos.example",
                 "role": "chaperone",
@@ -333,7 +333,7 @@ class Command(BaseCommand):
                 "expires": date(this_year + 1, 12, 31),
             },
             {
-                "first_name": "Vera",
+                "legal_first_name": "Vera",
                 "last_name": "Rubin",
                 "email": "seed.mentor4@gos.example",
                 "role": "mentor",
@@ -349,7 +349,7 @@ class Command(BaseCommand):
             mentor, _ = Adult.objects.update_or_create(
                 personal_email=mentor_info["email"],
                 defaults={
-                    "first_name": mentor_info["first_name"],
+                    "legal_first_name": mentor_info["legal_first_name"],
                     "last_name": mentor_info["last_name"],
                     "is_parent": False,
                     "is_mentor": True,
@@ -370,14 +370,14 @@ class Command(BaseCommand):
 
         alumni_data = [
             {
-                "first_name": "Hedy",
+                "legal_first_name": "Hedy",
                 "last_name": "Lamarr",
                 "personal_email": "seed.alumni1@gos.example",
                 "college": "Carnegie Mellon University",
                 "field_of_study": "Electrical Engineering",
             },
             {
-                "first_name": "Dorothy",
+                "legal_first_name": "Dorothy",
                 "last_name": "Vaughan",
                 "personal_email": "seed.alumni2@gos.example",
                 "college": "University of Pittsburgh",
@@ -390,7 +390,7 @@ class Command(BaseCommand):
             alum, _ = Adult.objects.update_or_create(
                 personal_email=alumnus["personal_email"],
                 defaults={
-                    "first_name": alumnus["first_name"],
+                    "legal_first_name": alumnus["legal_first_name"],
                     "last_name": alumnus["last_name"],
                     "is_parent": False,
                     "is_mentor": False,
@@ -448,7 +448,7 @@ class Command(BaseCommand):
                 personal_email=f"seed.student{idx + 1}@gos.example",
                 defaults={
                     "legal_first_name": first_name,
-                    "first_name": first_name,
+                    "preferred_first_name": first_name,
                     "last_name": last_name,
                     "school": schools[idx % len(schools)],
                     "graduation_year": graduation_year,

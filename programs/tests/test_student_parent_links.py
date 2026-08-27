@@ -26,7 +26,7 @@ class StudentParentLinksTest(TestCase):
 
         # Create Adult (Parent)
         self.parent = Adult.objects.create(
-            first_name="John",
+            legal_first_name="John",
             last_name="Smith",
             personal_email="john@example.com",
             is_parent=True,

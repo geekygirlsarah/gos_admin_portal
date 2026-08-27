@@ -117,7 +117,7 @@ _CLEARANCE_STATUS = [
 _STUDENT_FIELDS = [
     {"name": "legal_first_name", "label": "Legal first name", "kind": "text"},
     {
-        "name": "first_name",
+        "name": "preferred_first_name",
         "label": "Preferred first name (if different)",
         "kind": "text",
     },
@@ -195,7 +195,7 @@ _EXPERIENCE_FIELDS = [
 ]
 
 _PARENT_FIELDS = [
-    {"name": "first_name", "label": "Legal first name", "kind": "text"},
+    {"name": "legal_first_name", "label": "Legal first name", "kind": "text"},
     {
         "name": "preferred_first_name",
         "label": "Preferred first name (if different)",
@@ -242,7 +242,7 @@ _HANDOFF_FIELDS = [
 _MENTOR_FIELDS = [
     {"name": "legal_first_name", "label": "Legal first name", "kind": "text"},
     {
-        "name": "first_name",
+        "name": "preferred_first_name",
         "label": "Preferred first name (if different)",
         "kind": "text",
     },

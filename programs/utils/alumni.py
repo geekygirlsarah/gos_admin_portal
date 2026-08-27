@@ -23,7 +23,7 @@ def find_matching_alumni_adult(student):
             return a
 
     first = (
-        getattr(student, "first_name", None)
+        getattr(student, "preferred_first_name", None)
         or getattr(student, "legal_first_name", None)
         or ""
     ).strip()
@@ -40,7 +40,7 @@ def find_matching_alumni_adult(student):
             if first and last:
                 a = Adult.objects.filter(
                     personal_email__iexact=e,
-                    first_name__iexact=first,
+                    legal_first_name__iexact=first,
                     last_name__iexact=last,
                 ).first()
                 if a:
@@ -53,7 +53,7 @@ def find_matching_alumni_adult(student):
     # 3. Name match if already flagged as alumni
     if first and last:
         return Adult.objects.filter(
-            first_name__iexact=first, last_name__iexact=last, is_alumni=True
+            legal_first_name__iexact=first, last_name__iexact=last, is_alumni=True
         ).first()
     return None
 
@@ -75,8 +75,8 @@ def convert_student_to_alumni(student):
     created = False
     if adult is None:
         adult = Adult.objects.create(
-            first_name=student.legal_first_name or "",
-            preferred_first_name=student.first_name,
+            legal_first_name=student.legal_first_name or "",
+            preferred_first_name=student.preferred_first_name,
             last_name=student.last_name or "",
             pronouns=student.pronouns,
             address=student.address,
@@ -114,7 +114,7 @@ def convert_student_to_alumni(student):
 
         # Copy missing fields from student to adult
         fields_to_copy = {
-            "preferred_first_name": "first_name",
+            "preferred_first_name": "preferred_first_name",
             "pronouns": "pronouns",
             "address": "address",
             "city": "city",

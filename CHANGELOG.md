@@ -2,12 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-26
+
+### Added
+- **Consistent Name Fields & Display Name Property**: Both Student and Adult models now use the same field names: `legal_first_name`, `preferred_first_name`, and `last_name`. Previously, `first_name` meant "preferred" on Student but "legal" on Adult — the same field name had different meanings on each model. A new `display_name` property on both models automatically shows the preferred first name (falling back to legal) plus last name, replacing the manual `first_name|default:legal_first_name` fallback chains scattered across ~30 template files.
+- **Mentor Team Assignments (with toggle)**: Mentors can now be granted access to assign Teams/Crews/SubTeams to students from the “Assign Teams/Crews” page. Access is controlled by a new Portal Settings → Permissions toggle “Programs - Team Assignments” (Mentor Read/Write). When enabled, mentors can bulk-assign or clear teams/crews/subteams for active students; the inline Active toggle remains Lead Mentor-only. Past/inactive programs stay hidden — mentors are blocked from opening or editing them, even with the toggle on. Lead Mentors always have access. The “Assign Teams/Crews” button on the program page now respects the same toggle.
+- **Badge Permissions Split into Two Toggles**: Portal Settings → Permissions now has “Badges - Award” and “Badges - Create / Manage” so mentor access can be granted separately. “Award” controls awarding a badge to a student from the badge detail page; “Create / Manage” controls creating, editing, deleting badges and revoking an awarded badge. Both are off by default for Mentors; Lead Mentors always have access. The toggles are created automatically the first time a Lead Mentor visits Portal Settings.
+
+### Changed
+- **Badge Pages Now Respect Permissions**: Creating/editing/deleting badges, awarding a badge, and revoking a badge are now gated by the new toggles (previously award was hard-coded to any Mentor, and create/edit/delete/revoke was hard-coded to LeadMentor only). In-page buttons (“Add Badge”, “Edit”, “Delete”, “Award”, “Revoke”) hide when the mentor lacks the relevant permission.
+- **Badge Navigation Now Permission-Gated**: The “Badges” link in the program dropdown (when the current program has the Badges feature) now hides for mentors who have neither “Badges - Award” nor “Badges - Create / Manage” enabled. Students’ “Badges/My Badges” links are unchanged.
+
+### Fixed
+- **Attendance Hours Chart**: Fixed an issue where the attendance hours chart was not displaying correctly.
+- **Badge Count in Navigation Bar**: The Badges link in the navigation bar now shows a count of how many badges the student (or a parent's child) has earned. The count appears as a small badge indicator next to the link in the main nav, account dropdown, and mobile menu.
+- **Broader Badge Visibility**: The Badges navigation link now appears whenever the student has earned badges in any program, not just when the current program has the badges feature enabled. This means students who earned badges in a past program can still access them from the navbar.
+- **Page footer and hamburger menu**: Fixed footer alignment issues and the navbar not collapsing sometimes when it was too long to be visible.
+
 ## 2026-08-25
 
 ### Added
 - **Attendance Hours Chart**: A new mentor-facing page (`/attendance/hours-chart/`) that shows a bar chart of total hours per student for a selected program, with configurable average-hours/week reference lines (default: 3, 6, 9 hrs/wk). Mentors can filter by date range, add/remove/customize average lines (value and color), and download the chart as a PNG image. Accessible from the Attendance dropdown in the navigation bar.
-
-### Added
 - **Badge Count in Navigation Bar**: The Badges link in the navigation bar now shows a count of how many badges the student (or a parent's child) has earned. The count appears as a small badge indicator next to the link in the main nav, account dropdown, and mobile menu.
 - **Broader Badge Visibility**: The Badges navigation link now appears whenever the student has earned badges in any program, not just when the current program has the badges feature enabled. This means students who earned badges in a past program can still access them from the navbar.
 - **New Navigation Links for Previously Hidden Pages**: Three pages existed in the portal with no way to reach them by clicking anything — "Create New Program", the bulk Import Dashboard (CSV/XLSX imports for students, parents, mentors, schools, relationships, and attendance), and the "All Student Photos" grid. Lead Mentors can now reach all three from the navigation bar (New Program and Import Dashboard under Admin, All Student Photos under Students).
@@ -35,8 +50,6 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **One Guest Form Type**: Guest permission forms no longer have to be set up separately as "student" or "adult" forms — there is now just one kind of form. When filling one out, the guest simply picks whether they are submitting as a student or an adult, and that choice is shown on the submission when staff review it.
-
-### Changed
 - **Optimized Sliding Scale Performance**: Improved the database speed when looking up active sliding scale discounts and reviewing pending applications. Added a new composite index (`slidingscale_active_lookup_idx`) that speeds up the calculations for student balances and ensures the sliding scale review queue loads quickly, even with many records on file.
 
 ## 2026-08-22

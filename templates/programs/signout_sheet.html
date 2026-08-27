@@ -56,12 +56,12 @@
                     {{ s.last_name }}
                 </td>
                 <td>
-                    {{ s.first_name|default:s.legal_first_name }}
+                    {{ s.preferred_first_name|default:s.legal_first_name }}
                 </td>
                 <td>
                     {% for p in s.all_parents %}
                         <div class="mb-1">
-                            {{ p.preferred_first_name|default:p.first_name }} {{ p.last_name }}
+                            {{ p.display_name }}
                             {% if p.phone_number %} — {{ p.phone_number }}{% endif %}
                         </div>
                     {% endfor %}

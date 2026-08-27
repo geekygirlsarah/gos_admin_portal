@@ -27,8 +27,8 @@ class AttendanceHoursChartViewTests(TestCase):
             name="Fall Bot",
             start_date=timezone.now().date() - timedelta(days=60),
         )
-        self.student1 = make_student(first_name="Alice", last_name="Smith")
-        self.student2 = make_student(first_name="Bob", last_name="Jones")
+        self.student1 = make_student(preferred_first_name="Alice", last_name="Smith")
+        self.student2 = make_student(preferred_first_name="Bob", last_name="Jones")
         Enrollment.objects.create(
             student=self.student1, program=self.program, active=True
         )
@@ -127,9 +127,10 @@ class AttendanceHoursChartViewTests(TestCase):
     def test_stats_displayed(self):
         response = self.client.get(self.program_url)
         content = response.content.decode()
-        self.assertIn("Total Hours", content)
+        self.assertIn("Students", content)
         self.assertIn("Avg Hours / Week", content)
         self.assertIn("Weeks Elapsed", content)
+        self.assertIn("Exceeded Averages", content)
 
     def test_average_lines_in_chart(self):
         response = self.client.get(self.program_url)
@@ -181,7 +182,6 @@ class AttendanceHoursChartViewTests(TestCase):
         content = response.content.decode()
         self.assertIn("Alice Smith", content)
         self.assertIn("Bob Jones", content)
-        self.assertIn("Total Hours", content)
         self.assertIn("Sessions", content)
 
     def test_student_sorted_by_hours(self):
@@ -259,3 +259,68 @@ class AttendanceHoursChartViewTests(TestCase):
         response = self.client.get(self.program_url)
         content = response.content.decode()
         self.assertIn("hrs/wk =", content)
+
+    def test_preferred_first_name_used(self):
+        self.student1.preferred_first_name = "Alicia"
+        self.student1.save()
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn("Alicia Smith", content)
+
+    def test_fallback_to_legal_first_name(self):
+        self.student1.preferred_first_name = ""
+        self.student1.save()
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn(self.student1.legal_first_name + " Smith", content)
+
+    def test_sort_alpha(self):
+        url = f"{self.program_url}&sort=alpha"
+        response = self.client.get(url)
+        content = response.content.decode()
+        alice_pos = content.find("Alice Smith")
+        bob_pos = content.find("Bob Jones")
+        self.assertGreater(alice_pos, -1)
+        self.assertGreater(bob_pos, -1)
+        self.assertLess(alice_pos, bob_pos)
+
+    def test_sort_hours_default(self):
+        now = timezone.now()
+        for i in range(5):
+            check_in = now - timedelta(days=100 + i, hours=3)
+            check_out = check_in + timedelta(hours=2)
+            AttendanceSession.objects.create(
+                program=self.program,
+                student=self.student1,
+                check_in=check_in,
+                check_out=check_out,
+                duration_minutes=120,
+            )
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        alice_pos = content.find("Alice Smith")
+        bob_pos = content.find("Bob Jones")
+        self.assertLess(alice_pos, bob_pos)
+
+    def test_sort_toggle_buttons_present(self):
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn("Sort by Hours", content)
+        self.assertIn("A → Z", content)
+
+    def test_weeks_elapsed_uses_date_from(self):
+        date_from = (timezone.now().date() - timedelta(days=14)).isoformat()
+        date_to = timezone.now().date().isoformat()
+        url = (
+            f"{self.url}?program_id={self.program.pk}"
+            f"&date_from={date_from}&date_to={date_to}"
+        )
+        response = self.client.get(url)
+        content = response.content.decode()
+        self.assertIn("2", content)
+
+    def test_exceeded_counts_displayed(self):
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn("Exceeded Averages", content)
+        self.assertIn("hrs/wk:", content)

@@ -18,7 +18,7 @@ def _person_sort_key(person):
 
 def _get_adult_sponsor_choices():
     return Adult.objects.filter(is_mentor=True).order_by(
-        Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+        Lower(Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")),
         Lower("last_name"),
     )
 
@@ -39,7 +39,7 @@ def andrew_id_management_view(request):
 
     if search_query:
         student_qs = Student.objects.filter(
-            Q(first_name__icontains=search_query)
+            Q(preferred_first_name__icontains=search_query)
             | Q(last_name__icontains=search_query)
             | Q(legal_first_name__icontains=search_query)
         )
@@ -52,7 +52,8 @@ def andrew_id_management_view(request):
             )
 
         adult_qs = Adult.objects.filter(
-            Q(first_name__icontains=search_query) | Q(last_name__icontains=search_query)
+            Q(legal_first_name__icontains=search_query)
+            | Q(last_name__icontains=search_query)
         )
         for a in adult_qs[:20]:
             results.append(

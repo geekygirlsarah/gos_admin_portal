@@ -31,7 +31,7 @@
           {% for row in rows %}
             <tr>
               <td>
-                <a class="text-decoration-none fw-semibold" href="{% url 'student_detail' row.student.pk %}?next={{ request.path }}">{{ row.student.first_name|default:row.student.legal_first_name }} {{ row.student.last_name }}</a>
+                <a class="text-decoration-none fw-semibold" href="{% url 'student_detail' row.student.pk %}?next={{ request.path }}">{{ row.student.display_name }}</a>
                 <div class="mt-1">
                   {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email andrew_email=row.student.andrew_email %}
                 </div>
@@ -86,7 +86,7 @@
           <div class="card h-100">
             <div class="card-body">
               <h5 class="card-title mb-1">
-                <a class="text-decoration-none" href="{% url 'student_detail' row.student.pk %}?next={{ request.path }}">{{ row.student.first_name|default:row.student.legal_first_name }} {{ row.student.last_name }}</a>
+                <a class="text-decoration-none" href="{% url 'student_detail' row.student.pk %}?next={{ request.path }}">{{ row.student.display_name }}</a>
               </h5>
               <div class="mt-2">
                 {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email andrew_email=row.student.andrew_email %}

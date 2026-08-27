@@ -101,7 +101,7 @@ class MentorFlowTests(TestCase):
 
     def test_mentor_otp_success_blocks_existing_mentor(self):
         Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Mentor",
             personal_email="onfile@example.com",
             is_mentor=True,
@@ -123,7 +123,7 @@ class MentorFlowTests(TestCase):
 
     def test_mentor_blocked_page_renders(self):
         Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Mentor",
             personal_email="onfile@example.com",
             is_mentor=True,
@@ -170,7 +170,7 @@ class MentorFlowTests(TestCase):
             reverse("apply_mentor_info", kwargs={"app_id": app.application_id}),
             {
                 "legal_first_name": "Alex",
-                "first_name": "",
+                "preferred_first_name": "",
                 "last_name": "Lee",
                 "phone_number": "555-444-1212",
                 "phone_type": "cell",

@@ -205,6 +205,21 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             active_rows.append(row)
                         else:
                             other_rows.append(row)
+                    # ── Badges per student (for parent dashboard box) ──────────────
+                    badges_for_student = []
+                    has_badges_for_student = False
+                    if StudentBadge is not None:
+                        has_badges_for_student = Enrollment.objects.filter(
+                            student=s,
+                            active=True,
+                            program__features__key="badges",
+                        ).exists()
+                        if has_badges_for_student:
+                            badges_for_student = list(
+                                StudentBadge.objects.filter(student=s).select_related(
+                                    "badge", "awarded_by"
+                                )
+                            )
                     parent_data.append(
                         {
                             "student": s,
@@ -212,6 +227,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             "other_rows": other_rows,
                             "program_rows": active_rows
                             + other_rows,  # Keep for compatibility
+                            "has_badges": has_badges_for_student,
+                            "badges": badges_for_student,
+                            "badges_count": len(badges_for_student),
                         }
                     )
                 context["parent_data"] = parent_data
@@ -290,7 +308,9 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
         enrollments = (
             Enrollment.objects.filter(student__in=self.parent_adult.all_students())
             .select_related("student", "program")
-            .order_by("student__last_name", "student__first_name", "program__name")
+            .order_by(
+                "student__last_name", "student__preferred_first_name", "program__name"
+            )
         )
 
         students = {}
@@ -348,7 +368,9 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
             key=lambda row: (
                 (row["student"].last_name or "").lower(),
                 (
-                    row["student"].first_name or row["student"].legal_first_name or ""
+                    row["student"].preferred_first_name
+                    or row["student"].legal_first_name
+                    or ""
                 ).lower(),
             ),
         )

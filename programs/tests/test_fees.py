@@ -14,7 +14,9 @@ from programs.views import compute_sliding_discount_rounded
 class FeeDueDateTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program")
-        self.student = Student.objects.create(first_name="John", last_name="Doe")
+        self.student = Student.objects.create(
+            preferred_first_name="John", last_name="Doe"
+        )
         Enrollment.objects.create(student=self.student, program=self.program)
 
     def test_fee_due_date_field(self):

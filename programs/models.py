@@ -267,6 +267,9 @@ class RolePermission(models.Model):
         ("sliding_scale", "Payments - Sliding Scale"),
         ("fees", "Programs - Fees"),
         ("programs", "Programs - General"),
+        ("team_assignments", "Programs - Team Assignments"),
+        ("badge_award", "Badges - Award"),
+        ("badge_manage", "Badges - Create / Manage"),
     ]
     ROLE_CHOICES = [
         ("Mentor", "Mentor"),
@@ -603,8 +606,8 @@ class Student(models.Model):
         related_name="student_profile",
     )
     legal_first_name = models.CharField(max_length=150, verbose_name="Legal first name")
-    first_name = models.CharField(
-        max_length=150, blank=True, null=True, verbose_name="First name"
+    preferred_first_name = models.CharField(
+        max_length=150, blank=True, null=True, verbose_name="Preferred first name"
     )
     last_name = models.CharField(max_length=150, db_index=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
@@ -912,9 +915,12 @@ class Student(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["first_name", "last_name"]
+        ordering = ["preferred_first_name", "last_name"]
         indexes = [
-            models.Index(fields=["last_name", "first_name"], name="student_name_idx"),
+            models.Index(
+                fields=["last_name", "preferred_first_name"],
+                name="student_name_idx",
+            ),
             models.Index(
                 fields=["school", "graduation_year"], name="student_school_grad_idx"
             ),
@@ -922,12 +928,16 @@ class Student(models.Model):
         ]
 
     @property
+    def display_name(self):
+        first = self.preferred_first_name or self.legal_first_name
+        return f"{first} {self.last_name}".strip()
+
+    @property
     def full_name(self):
-        pref = self.first_name or self.legal_first_name
-        return f"{pref} {self.last_name}".strip()
+        return self.display_name
 
     def __str__(self):
-        return self.full_name or f"Student #{self.pk}"
+        return self.display_name or f"Student #{self.pk}"
 
     def _prune_dangling_contacts(self):
         """Clear relationship pointers whose Adult is missing.
@@ -1031,7 +1041,7 @@ class Student(models.Model):
 
         # Sync Student name to User account if linked
         if self.user:
-            target_first = self.first_name or self.legal_first_name
+            target_first = self.preferred_first_name or self.legal_first_name
             changed = False
             if self.user.first_name != target_first:
                 self.user.first_name = target_first
@@ -1230,8 +1240,10 @@ class Adult(models.Model):
     )
 
     # Identity
-    first_name = models.CharField(max_length=150)
-    preferred_first_name = models.CharField(max_length=150, blank=True, null=True)
+    legal_first_name = models.CharField(max_length=150, verbose_name="Legal first name")
+    preferred_first_name = models.CharField(
+        max_length=150, blank=True, null=True, verbose_name="Preferred first name"
+    )
     last_name = models.CharField(max_length=150)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
 
@@ -1366,9 +1378,11 @@ class Adult(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["last_name", "first_name"]
+        ordering = ["last_name", "legal_first_name"]
         indexes = [
-            models.Index(fields=["last_name", "first_name"], name="adult_name_idx"),
+            models.Index(
+                fields=["last_name", "legal_first_name"], name="adult_name_idx"
+            ),
             models.Index(
                 fields=["is_parent", "login_enabled"],
                 name="adult_parent_login_idx",
@@ -1384,12 +1398,16 @@ class Adult(models.Model):
         ]
 
     @property
+    def display_name(self):
+        first = self.preferred_first_name or self.legal_first_name
+        return f"{first} {self.last_name}".strip()
+
+    @property
     def full_name(self):
-        pref = self.preferred_first_name or self.first_name
-        return f"{pref} {self.last_name}".strip()
+        return self.display_name
 
     def __str__(self):
-        return self.full_name
+        return self.display_name
 
     def all_students(self):
         """Return a list of Student objects related to this adult,
@@ -1456,7 +1474,7 @@ class Adult(models.Model):
         # Sync Adult name to User account if linked
         if self.user:
             # Prefer preferred_first_name if set
-            target_first = self.preferred_first_name or self.first_name
+            target_first = self.preferred_first_name or self.legal_first_name
             changed = False
             if self.user.first_name != target_first:
                 self.user.first_name = target_first
@@ -1783,7 +1801,7 @@ class FeeAssignment(models.Model):
             "fee__program__name",
             "fee__name",
             "student__last_name",
-            "student__first_name",
+            "student__preferred_first_name",
         ]
 
     def __str__(self):

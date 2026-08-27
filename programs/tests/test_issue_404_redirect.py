@@ -25,7 +25,7 @@ class Redirect404Tests(TestCase):
 
         # Link user to an Adult profile with Parent role
         self.adult = Adult.objects.create(
-            user=self.user, first_name="Test", last_name="Parent", is_parent=True
+            user=self.user, legal_first_name="Test", last_name="Parent", is_parent=True
         )
 
     def test_non_existent_student_redirects_to_home(self):
@@ -61,7 +61,9 @@ class Redirect404Tests(TestCase):
         )
 
     def test_unauthorized_student_redirects(self):
-        other_student = Student.objects.create(first_name="Other", last_name="Student")
+        other_student = Student.objects.create(
+            preferred_first_name="Other", last_name="Student"
+        )
         self.client.login(username="testuser", password="password123")  # nosec B106
         url = reverse("student_detail", args=[other_student.pk])
         response = self.client.get(url)

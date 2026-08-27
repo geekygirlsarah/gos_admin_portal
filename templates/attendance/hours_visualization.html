@@ -2,7 +2,7 @@
 {% load static %}
 {% load permission_tags %}
 
-{% block title %}My Hours — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
+{% block title %}My Hours — {{ student.display_name }}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
@@ -20,7 +20,7 @@
 
 {% block content %}
 <div class="container my-4">
-  <h1 class="mb-3">Attendance Hours — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</h1>
+  <h1 class="mb-3">Attendance Hours — {{ student.display_name }}</h1>
 
   {# ── Program filter ── #}
   <div class="mb-4">

@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 def _person_first_name(student=None, adult=None):
     """Return the display first name for a student or adult.
 
-    Students: preferred ``first_name`` → ``legal_first_name``.
-    Adults/Mentors: ``preferred_first_name`` → ``first_name``.
+    Students: ``preferred_first_name`` → ``legal_first_name``.
+    Adults/Mentors: ``preferred_first_name`` → ``legal_first_name``.
     """
     if student:
-        return student.first_name or student.legal_first_name
+        return student.preferred_first_name or student.legal_first_name
     if adult:
-        return adult.preferred_first_name or adult.first_name
+        return adult.preferred_first_name or adult.legal_first_name
     return ""
 
 
@@ -294,7 +294,7 @@ def kiosk_lookup(request, kiosk_id):
         student_qs = active_students()
         for part in parts:
             student_qs = student_qs.filter(
-                Q(first_name__icontains=part)
+                Q(preferred_first_name__icontains=part)
                 | Q(last_name__icontains=part)
                 | Q(legal_first_name__icontains=part)
             )
@@ -311,7 +311,7 @@ def kiosk_lookup(request, kiosk_id):
         adult_qs = active_mentors()
         for part in parts:
             adult_qs = adult_qs.filter(
-                Q(first_name__icontains=part)
+                Q(legal_first_name__icontains=part)
                 | Q(preferred_first_name__icontains=part)
                 | Q(last_name__icontains=part)
             )

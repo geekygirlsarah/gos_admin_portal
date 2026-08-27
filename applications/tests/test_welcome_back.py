@@ -50,7 +50,7 @@ class LatestProgramHelpersTests(TestCase):
 
     def test_latest_program_for_adult_uses_their_students(self):
         adult = Adult.objects.create(
-            first_name="P",
+            legal_first_name="P",
             last_name="Q",
             personal_email="p@example.com",
             is_parent=True,
@@ -113,13 +113,13 @@ class Step7WelcomeBackBannerTests(TestCase):
             start_date=datetime.date(2023, 9, 1),
         )
         adult = Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Parent",
             personal_email="parent@example.com",
             is_parent=True,
         )
         student = Student.objects.create(
-            legal_first_name="Kid",
+            preferred_first_name="Kid",
             last_name="Parent",
             primary_contact=adult,
         )
@@ -159,7 +159,7 @@ class Step7WelcomeBackBannerTests(TestCase):
 
         # Mary is the primary contact for an existing student.
         mary = Adult.objects.create(
-            first_name="Mary",
+            legal_first_name="Mary",
             last_name="Smith",
             personal_email=shared_email,
             is_parent=True,
@@ -177,7 +177,7 @@ class Step7WelcomeBackBannerTests(TestCase):
 
         # John shares the same email but is only a secondary contact.
         john = Adult.objects.create(
-            first_name="John",
+            legal_first_name="John",
             last_name="Smith",
             personal_email=shared_email,
             is_parent=True,

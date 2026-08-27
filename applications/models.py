@@ -317,7 +317,13 @@ class Application(models.Model):
         """Friendly name of the student from step 5 data."""
         data = self.data or {}
         step5 = data.get("step5-student") or {}
-        first = (step5.get("first_name") or step5.get("legal_first_name") or "").strip()
+        # Support legacy "first_name" key (was the preferred name) and new keys
+        first = (
+            step5.get("preferred_first_name")
+            or step5.get("first_name")
+            or step5.get("legal_first_name")
+            or ""
+        ).strip()
         last = (step5.get("last_name") or "").strip()
         if first and last:
             return f"{first} {last}"
@@ -328,7 +334,8 @@ class Application(models.Model):
         """Friendly name of the primary parent from step 7 data."""
         data = self.data or {}
         step6 = data.get("step7-primaryparent") or {}
-        first = (step6.get("first_name") or "").strip()
+        # Support legacy "first_name" key (was the legal name for parents) and new keys
+        first = (step6.get("legal_first_name") or step6.get("first_name") or "").strip()
         last = (step6.get("last_name") or "").strip()
         if first and last:
             return f"{first} {last}"
@@ -341,7 +348,8 @@ class Application(models.Model):
         step7 = data.get("step8-secondaryparent") or {}
         if step7.get("_skipped"):
             return ""
-        first = (step7.get("first_name") or "").strip()
+        # Support legacy "first_name" key (was the legal name for parents) and new keys
+        first = (step7.get("legal_first_name") or step7.get("first_name") or "").strip()
         last = (step7.get("last_name") or "").strip()
         if first and last:
             return f"{first} {last}"
@@ -352,7 +360,13 @@ class Application(models.Model):
         """Friendly name of the mentor from mentor_info data."""
         data = self.data or {}
         minfo = data.get("mentor_info") or {}
-        first = (minfo.get("first_name") or minfo.get("legal_first_name") or "").strip()
+        # Support legacy "first_name" key (was the preferred name) and new keys
+        first = (
+            minfo.get("preferred_first_name")
+            or minfo.get("first_name")
+            or minfo.get("legal_first_name")
+            or ""
+        ).strip()
         last = (minfo.get("last_name") or "").strip()
         if first and last:
             return f"{first} {last}"

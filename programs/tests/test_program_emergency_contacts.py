@@ -23,13 +23,16 @@ class ProgramEmergencyContactsTests(TestCase):
             username="mentor_user", password="password123"
         )  # nosec B106
         Adult.objects.create(
-            user=self.mentor, first_name="Mentor", last_name="User", is_mentor=True
+            user=self.mentor,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
 
         self.program = Program.objects.create(name="Test Program", active=True)
 
         self.active_student = Student.objects.create(
-            first_name="Active",
+            preferred_first_name="Active",
             last_name="Student",
             personal_email="student@example.com",
             andrew_email="student@andrew.cmu.edu",
@@ -40,7 +43,7 @@ class ProgramEmergencyContactsTests(TestCase):
         )
 
         self.inactive_student = Student.objects.create(
-            first_name="Inactive",
+            preferred_first_name="Inactive",
             last_name="Student",
             personal_email="inactive@example.com",
         )
@@ -49,7 +52,7 @@ class ProgramEmergencyContactsTests(TestCase):
         )
 
         self.graduated_student = Student.objects.create(
-            first_name="Graduated",
+            preferred_first_name="Graduated",
             last_name="Student",
             personal_email="graduated@example.com",
             graduated=True,
@@ -59,21 +62,21 @@ class ProgramEmergencyContactsTests(TestCase):
         )
 
         self.parent_one = Adult.objects.create(
-            first_name="Parent",
+            preferred_first_name="Parent",
             last_name="One",
             is_parent=True,
             personal_email="parentone@example.com",
             phone_number="412-555-0101",
         )
         self.parent_two = Adult.objects.create(
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Two",
             is_parent=True,
             personal_email="parenttwo@example.com",
             phone_number="412-555-0102",
         )
         self.parent_three = Adult.objects.create(
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Three",
             is_parent=True,
             personal_email="parentthree@example.com",

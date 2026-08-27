@@ -36,12 +36,14 @@ class MentorAttendanceReadPermissionTests(TestCase):
         )
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
         )
 
-        self.student = Student.objects.create(first_name="Test", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Test", last_name="Student"
+        )
         Enrollment.objects.create(student=self.student, program=self.active_program)
 
         RolePermission.objects.update_or_create(
@@ -73,12 +75,14 @@ class MentorAttendanceWritePermissionTests(TestCase):
         )
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="Writer",
             is_mentor=True,
         )
 
-        self.student = Student.objects.create(first_name="Write", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Write", last_name="Student"
+        )
 
         RolePermission.objects.update_or_create(
             role="Mentor",
@@ -102,12 +106,14 @@ class MentorAttendanceDeleteViewTests(TestCase):
         )
         Adult.objects.create(
             user=self.mentor_user,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="Deleter",
             is_mentor=True,
         )
 
-        self.student = Student.objects.create(first_name="Del", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Del", last_name="Student"
+        )
 
         self.session = AttendanceSession.objects.create(
             program=self.program,
@@ -143,10 +149,10 @@ class StudentAttendancePermissionTests(TestCase):
             username="student_own", password="password123"  # nosec B106
         )
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Own", last_name="Student"
+            user=self.student_user, preferred_first_name="Own", last_name="Student"
         )
         self.other_student = Student.objects.create(
-            first_name="Other", last_name="Student"
+            preferred_first_name="Other", last_name="Student"
         )
 
     def test_student_can_read_own_attendance(self):
@@ -170,15 +176,17 @@ class ParentAttendancePermissionTests(TestCase):
         )
         self.parent = Adult.objects.create(
             user=self.parent_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="User",
             is_parent=True,
         )
-        self.child = Student.objects.create(first_name="Child", last_name="Student")
+        self.child = Student.objects.create(
+            preferred_first_name="Child", last_name="Student"
+        )
         self.parent.students.add(self.child)
 
         self.other_student = Student.objects.create(
-            first_name="Other", last_name="Child"
+            preferred_first_name="Other", last_name="Child"
         )
 
     def test_parent_can_read_own_child_attendance(self):
@@ -198,7 +206,9 @@ class VisitorAttendancePermissionTests(TestCase):
         self.visitor_user = User.objects.create_user(
             username="visitor_att", password="password123"  # nosec B106
         )
-        self.student = Student.objects.create(first_name="Any", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Any", last_name="Student"
+        )
 
     def test_visitor_cannot_read_attendance(self):
         self.assertFalse(
@@ -220,7 +230,9 @@ class LeadMentorAttendancePermissionTests(TestCase):
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(lm_group)
 
-        self.student = Student.objects.create(first_name="Any", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Any", last_name="Student"
+        )
 
     def test_lead_mentor_can_read_attendance(self):
         self.assertTrue(can_user_read(self.lead_user, "attendance", obj=self.student))

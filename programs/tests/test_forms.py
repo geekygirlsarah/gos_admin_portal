@@ -3,17 +3,17 @@ import datetime
 from django import forms
 from django.test import TestCase
 
-from programs.forms import StudentForm
+from programs.forms import AdultForm, StudentForm
 from programs.models import Adult
 
 
 class StudentFormTests(TestCase):
     def setUp(self):
         self.parent1 = Adult.objects.create(
-            first_name="Alex", last_name="Parent", is_parent=True
+            legal_first_name="Alex", last_name="Parent", is_parent=True
         )
         self.parent2 = Adult.objects.create(
-            first_name="Sage", last_name="Guardian", is_parent=True
+            legal_first_name="Sage", last_name="Guardian", is_parent=True
         )
 
     def test_primary_and_secondary_must_differ(self):
@@ -71,3 +71,60 @@ class StudentFormTests(TestCase):
         # but let's see if it's in the initial attribute.
         # Actually ModelForm fields have `initial` attribute based on model's default.
         self.assertEqual(form.fields["state"].initial, "PA")
+
+
+class AdultFormAndrewIdSponsorTests(TestCase):
+    """Tests for AdultForm.andrew_id_sponsor queryset filtering and ordering.
+
+    Integrated from test_issue_reproduction.py - verifies sponsor dropdown
+    only shows mentors and sorts by preferred_first_name/first_name then last_name.
+    """
+
+    def setUp(self):
+        self.mentor1 = Adult.objects.create(
+            legal_first_name="Zebra", last_name="Alpha", is_mentor=True
+        )
+        self.mentor2 = Adult.objects.create(
+            legal_first_name="Alice",
+            preferred_first_name="Betty",
+            last_name="Gamma",
+            is_mentor=True,
+        )
+        self.mentor3 = Adult.objects.create(
+            legal_first_name="Charlie", last_name="Delta", is_mentor=True
+        )
+        self.parent = Adult.objects.create(
+            legal_first_name="Parent", last_name="User", is_parent=True, is_mentor=False
+        )
+        self.alumni = Adult.objects.create(
+            legal_first_name="Alumni", last_name="User", is_alumni=True, is_mentor=False
+        )
+
+    def test_andrew_id_sponsor_queryset_filters_mentors_only(self):
+        form = AdultForm()
+        queryset = form.fields["andrew_id_sponsor"].queryset
+        queryset_ids = list(queryset.values_list("id", flat=True))
+
+        for m_id in [self.mentor1.id, self.mentor2.id, self.mentor3.id]:
+            self.assertIn(m_id, queryset_ids, f"Mentor {m_id} should be in queryset")
+
+        self.assertNotIn(
+            self.parent.id, queryset_ids, "Parent should not be in queryset"
+        )
+        self.assertNotIn(
+            self.alumni.id, queryset_ids, "Alumni should not be in queryset"
+        )
+
+    def test_andrew_id_sponsor_queryset_sorted_by_preferred_first_name(self):
+        form = AdultForm()
+        queryset = form.fields["andrew_id_sponsor"].queryset
+
+        # Expected order: Betty Gamma (Alice->Betty), Charlie Delta, Zebra Alpha
+        expected_order = [self.mentor2.id, self.mentor3.id, self.mentor1.id]
+        actual_order = list(queryset.values_list("id", flat=True))
+
+        self.assertEqual(
+            actual_order,
+            expected_order,
+            f"Expected order {expected_order}, got {actual_order}",
+        )

@@ -72,7 +72,7 @@
                 <div class="fw-semibold">Assigned Students:</div>
                 <ul>
                 {% for s in assigned_students %}
-                    <li>{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</li>
+                    <li>{{ s.display_name }}</li>
                 {% endfor %}
                 </ul>
             </div>
@@ -93,7 +93,7 @@
                     {% for p in payments %}
                         <tr>
                             <td>{{ p.paid_at }}</td>
-                            <td>{{ p.student.first_name|default:p.student.legal_first_name }} {{ p.student.last_name }}</td>
+                            <td>{{ p.student.display_name }}</td>
                             <td class="text-end">${{ p.amount|floatformat:2 }}</td>
                             <td>{{ p.get_paid_via_display }}</td>
                         </tr>

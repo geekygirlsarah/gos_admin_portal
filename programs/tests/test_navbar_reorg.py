@@ -123,7 +123,7 @@ class StudentBadgesLinkNotDuplicatedTests(TestCase):
             username="student1", password="password123"
         )  # nosec B106
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Alice", last_name="Zuberg"
+            user=self.student_user, preferred_first_name="Alice", last_name="Zuberg"
         )
         Enrollment.objects.create(
             student=self.student, program=self.program, active=True
@@ -185,7 +185,7 @@ class StudentDashboardAndCarpoolMapLinkTests(TestCase):
             username="student1", password="password123"
         )  # nosec B106
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Alice", last_name="Zuberg"
+            user=self.student_user, preferred_first_name="Alice", last_name="Zuberg"
         )
         Enrollment.objects.create(
             student=self.student, program=self.program, active=True
@@ -225,9 +225,12 @@ class ParentDashboardAndProgramDropdownTests(TestCase):
             username="parent_user", password="password123"
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="One", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="One",
+            is_parent=True,
         )
-        self.child = Student.objects.create(first_name="Child", last_name="One")
+        self.child = Student.objects.create(legal_first_name="Child", last_name="One")
         AdultStudentRelationship.objects.create(
             adult=self.parent_adult,
             student=self.child,
@@ -276,7 +279,7 @@ class CarpoolMapStandaloneDropdownTests(TestCase):
             username="student1", password="password123"
         )  # nosec B106
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Alice", last_name="Zuberg"
+            user=self.student_user, preferred_first_name="Alice", last_name="Zuberg"
         )
         Enrollment.objects.create(
             student=self.student, program=self.past_program, active=False
@@ -355,7 +358,7 @@ class NavbarBadgeCountTests(TestCase):
             username="student1", password="password123"
         )  # nosec B106
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Alice", last_name="Zuberg"
+            user=self.student_user, preferred_first_name="Alice", last_name="Zuberg"
         )
         Enrollment.objects.create(
             student=self.student, program=self.program, active=True
@@ -366,7 +369,7 @@ class NavbarBadgeCountTests(TestCase):
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
             user=self.parent_user,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="One",
             is_parent=True,
         )
@@ -445,9 +448,10 @@ class NavbarBadgeCountTests(TestCase):
 
     @unittest.skipIf(Badge is None, "badges app not installed")
     def test_student_with_earned_badges_sees_link_even_without_badge_program(self):
-        """A student who earned badges in a past program should still see
-        the Badges link in the main nav even if their current program
-        doesn't have the badges feature."""
+        """A student who earned badges in a past program should NOT see
+        the Badges link when they are no longer enrolled in a badge-enabled
+        program. Badges are only visible within a program with the feature
+        enabled."""
         self.student.enrollment_set.all().delete()
         Enrollment.objects.create(
             student=self.student, program=self.other_program, active=True
@@ -459,5 +463,4 @@ class NavbarBadgeCountTests(TestCase):
         main_nav_start = response.content.find(b'<ul class="navbar-nav')
         main_nav_end = response.content.find(b"</ul>", main_nav_start)
         main_nav = response.content[main_nav_start:main_nav_end]
-        self.assertIn(b"Badges", main_nav)
-        self.assertIn(b"1", main_nav)
+        self.assertNotIn(b"Badges", main_nav)

@@ -38,7 +38,7 @@ def _make_application(**overrides):
                 "_existing_student_id": 7,
             },
             "step7-primaryparent": {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "email": "parent@example.com",
             },
@@ -107,7 +107,7 @@ class ReviewEditFormTests(TestCase):
             {
                 "step5-student__legal_first_name": "Grace",
                 "step5-student__last_name": "Hopper",
-                "step7-primaryparent__first_name": "Pam",
+                "step7-primaryparent__legal_first_name": "Pam",
                 "step7-primaryparent__email": "pam@example.com",
             },
         )
@@ -118,7 +118,9 @@ class ReviewEditFormTests(TestCase):
         self.assertEqual(step5["last_name"], "Hopper")
         # Internal keys that aren't in the form are preserved.
         self.assertEqual(step5["_existing_student_id"], 7)
-        self.assertEqual(self.app.data["step7-primaryparent"]["first_name"], "Pam")
+        self.assertEqual(
+            self.app.data["step7-primaryparent"]["legal_first_name"], "Pam"
+        )
 
     def test_post_updates_application_email(self):
         response = self.client.post(self.url, {"email": "new-parent@example.com"})
