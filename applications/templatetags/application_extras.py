@@ -55,6 +55,7 @@ FIELD_LABELS = {
 # Fields not in this list will appear at the end in their original order.
 PREFERRED_FIELD_ORDER = [
     "legal_first_name",
+    "preferred_first_name",
     "first_name",
     "last_name",
     "pronouns",

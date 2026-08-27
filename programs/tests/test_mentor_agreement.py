@@ -159,7 +159,7 @@ class MentorAgreementAcceptanceTests(TestCase):
         )
         self.adult = Adult.objects.create(
             user=self.user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -314,7 +314,7 @@ class MentorAgreementMiddlewareTests(TestCase):
         )
         Adult.objects.create(
             user=self.mentor,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
         )
@@ -324,7 +324,7 @@ class MentorAgreementMiddlewareTests(TestCase):
         )
         Adult.objects.create(
             user=self.parent_mentor,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Mentor",
             is_mentor=True,
             is_parent=True,
@@ -337,7 +337,7 @@ class MentorAgreementMiddlewareTests(TestCase):
         self.lead_mentor.groups.add(lead_group)
         Adult.objects.create(
             user=self.lead_mentor,
-            first_name="Lead",
+            legal_first_name="Lead",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -347,7 +347,7 @@ class MentorAgreementMiddlewareTests(TestCase):
         )
         Adult.objects.create(
             user=self.parent_only,
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Only",
             is_parent=True,
         )
@@ -469,7 +469,7 @@ class MentorAgreementMiddlewareDisabledTests(TestCase):
             username="mentor", password="password123"  # nosec B106
         )
         Adult.objects.create(
-            user=user, first_name="Mentor", last_name="User", is_mentor=True
+            user=user, legal_first_name="Mentor", last_name="User", is_mentor=True
         )
         self.client.force_login(user)
         response = self.client.get(reverse("profile_dashboard"))
@@ -497,7 +497,7 @@ class MentorAgreementViewTests(TestCase):
         )
         self.adult = Adult.objects.create(
             user=self.mentor,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
         )
@@ -661,7 +661,7 @@ class PortalAgreementViewTests(TestCase):
         self.lead.groups.add(lead_group)
         Adult.objects.create(
             user=self.lead,
-            first_name="Lead",
+            legal_first_name="Lead",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -803,7 +803,7 @@ class PortalAgreementViewTests(TestCase):
             username="regular", password="password123"  # nosec B106
         )
         Adult.objects.create(
-            user=user, first_name="Regular", last_name="User", is_mentor=True
+            user=user, legal_first_name="Regular", last_name="User", is_mentor=True
         )
         self.client.force_login(user)
         response = self.client.get("/programs/settings/?tab=agreements")
@@ -831,7 +831,7 @@ class MentorAgreementSubmissionTests(TestCase):
         )
         self.adult = Adult.objects.create(
             user=self.user,
-            first_name="Test",
+            legal_first_name="Test",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -864,7 +864,7 @@ class MentorAgreementSubmissionTests(TestCase):
             username="mentor2", password="password123"  # nosec B106
         )
         adult2 = Adult.objects.create(
-            user=user2, first_name="Test2", last_name="Mentor2", is_mentor=True
+            user=user2, legal_first_name="Test2", last_name="Mentor2", is_mentor=True
         )
         MentorAgreementSubmission.objects.create(
             adult=self.adult, agreement=self.agreement, file="signed/test.pdf"
@@ -912,7 +912,7 @@ class MentorAgreementUploadViewTests(TestCase):
         )
         self.adult = Adult.objects.create(
             user=self.mentor,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
         )

@@ -334,7 +334,7 @@ class AttendanceImportView(View):
             ln = (last_name or "").strip()
             if fn and ln:
                 student = Student.objects.filter(
-                    first_name__iexact=fn, last_name__iexact=ln
+                    preferred_first_name__iexact=fn, last_name__iexact=ln
                 ).first()
                 if student:
                     return student
@@ -653,13 +653,13 @@ def rfid_management_view(request):
         # Search students
         student_qs = (
             Student.objects.filter(
-                Q(first_name__icontains=search_query)
+                Q(preferred_first_name__icontains=search_query)
                 | Q(last_name__icontains=search_query)
                 | Q(legal_first_name__icontains=search_query)
             )
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by("sort_first", "last_name")
@@ -678,7 +678,7 @@ def rfid_management_view(request):
         adult_qs = (
             Adult.objects.filter(is_mentor=True)
             .filter(
-                Q(first_name__icontains=search_query)
+                Q(legal_first_name__icontains=search_query)
                 | Q(preferred_first_name__icontains=search_query)
                 | Q(last_name__icontains=search_query)
             )
@@ -865,9 +865,11 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             {
                 "sessions": sessions[:500],
                 "programs": programs,
-                "students": active_students().order_by("first_name", "last_name"),
+                "students": active_students().order_by(
+                    "preferred_first_name", "last_name"
+                ),
                 "mentors": Adult.objects.filter(is_mentor=True).order_by(
-                    "first_name", "last_name"
+                    "preferred_first_name", "last_name"
                 ),
                 "selected_program_id": (
                     int(program_id) if program_id and program_id.isdigit() else None
@@ -1339,7 +1341,7 @@ def attendance_hours_chart_view(request):
     student_stats = (
         sessions.values(
             "student__id",
-            "student__first_name",
+            "student__preferred_first_name",
             "student__legal_first_name",
             "student__last_name",
         )
@@ -1357,7 +1359,9 @@ def attendance_hours_chart_view(request):
     total_hours_all = 0.0
 
     for stat in student_stats:
-        display_first = stat["student__first_name"] or stat["student__legal_first_name"]
+        display_first = (
+            stat["student__preferred_first_name"] or stat["student__legal_first_name"]
+        )
         name = f"{display_first} {stat['student__last_name']}"
         hours = round((stat["total_minutes"] or 0) / 60.0, 1)
         total_hours_all += hours
@@ -1481,7 +1485,7 @@ def program_hours_view(request, program_id):
     # Aggregate per student
     student_stats = (
         sessions.filter(student__isnull=False)
-        .values("student__id", "student__first_name", "student__last_name")
+        .values("student__id", "student__preferred_first_name", "student__last_name")
         .annotate(
             total_minutes=Sum("duration_minutes"),
             session_count=Count("id"),
@@ -1497,7 +1501,7 @@ def program_hours_view(request, program_id):
     student_list = []
 
     for stat in student_stats:
-        name = f"{stat['student__first_name']} {stat['student__last_name']}"
+        name = f"{stat['student__preferred_first_name']} {stat['student__last_name']}"
         hours = round((stat["total_minutes"] or 0) / 60.0, 1)
         chart_labels.append(name)
         chart_data.append(hours)

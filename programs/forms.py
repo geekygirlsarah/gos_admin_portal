@@ -100,7 +100,9 @@ class StudentForm(forms.ModelForm):
 
         # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
         qs_adults = Adult.objects.filter(is_parent=True).order_by(
-            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         )
         # Parents (multi-select used for custom picker)
@@ -118,7 +120,9 @@ class StudentForm(forms.ModelForm):
                 is_mentor=True
             ).order_by(
                 Lower(
-                    Coalesce(NullIf("preferred_first_name", Value("")), "first_name")
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
                 ),
                 Lower("last_name"),
             )
@@ -224,7 +228,11 @@ class AddExistingStudentToProgramForm(forms.Form):
             active_students()
             .exclude(id__in=program.students.values_list("id", flat=True))
             .order_by(
-                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
                 Lower("last_name"),
             )
         )
@@ -233,7 +241,7 @@ class AddExistingStudentToProgramForm(forms.Form):
 class QuickCreateStudentForm(forms.ModelForm):
     class Meta:
         model = Student
-        fields = ["first_name", "last_name"]
+        fields = ["preferred_first_name", "last_name"]
 
 
 class AdultForm(forms.ModelForm):
@@ -269,7 +277,11 @@ class AdultForm(forms.ModelForm):
         # and exclude inactive (graduated) students.
         if "students" in self.fields:
             self.fields["students"].queryset = active_students().order_by(
-                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
                 Lower("last_name"),
             )
 
@@ -280,7 +292,9 @@ class AdultForm(forms.ModelForm):
                 is_mentor=True
             ).order_by(
                 Lower(
-                    Coalesce(NullIf("preferred_first_name", Value("")), "first_name")
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
                 ),
                 Lower("last_name"),
             )
@@ -298,7 +312,7 @@ class AdultForm(forms.ModelForm):
     class Meta:
         model = Adult
         fields = [
-            "first_name",
+            "legal_first_name",
             "preferred_first_name",
             "last_name",
             "pronouns",
@@ -370,7 +384,9 @@ class PaymentForm(forms.ModelForm):
         # Restrict student choices to those actively enrolled in this program
         # (excludes inactive enrollments and graduated students)
         self.fields["student"].queryset = active_students_in_program(program).order_by(
-            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         )
         # Store program for use in the view when saving
@@ -423,7 +439,9 @@ class SlidingScaleForm(forms.ModelForm):
         else:
             students = active_students()
         self.fields["student"].queryset = students.order_by(
-            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         )
 
@@ -542,7 +560,9 @@ class ParentMergeForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         qs_adults = Adult.objects.filter(is_parent=True).order_by(
-            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         )
         self.fields["keep"].queryset = qs_adults
@@ -705,7 +725,7 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
         )
 
         balance = total_fees - total_sliding - total_payments
-        return f"{student.first_name or student.legal_first_name} {student.last_name} (${balance:,.2f})"
+        return f"{student.preferred_first_name or student.legal_first_name} {student.last_name} (${balance:,.2f})"
 
 
 class ProgramEmailBalancesForm(forms.Form):
@@ -792,7 +812,11 @@ class ProgramEmailBalancesForm(forms.Form):
             self.fields["student"].queryset = active_students_in_program(
                 program
             ).order_by(
-                Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
                 Lower("last_name"),
             )
 
@@ -820,7 +844,9 @@ class FeeAssignmentEditForm(forms.Form):
         # name then last name (case-insensitive; uses legal_first_name as
         # fallback). Inactive (graduated/dropped) students are excluded.
         self.fields["students"].queryset = active_students_in_program(program).order_by(
-            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         )
         # Preselect currently assigned students (if any)

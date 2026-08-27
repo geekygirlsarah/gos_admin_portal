@@ -67,7 +67,9 @@ class StudentListView(
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         qs = qs.annotate(
-            sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
+            sort_first=Coalesce(
+                NullIf("preferred_first_name", Value("")), "legal_first_name"
+            ),
         )
         return self.apply_sorting(qs)
 
@@ -92,7 +94,9 @@ class StudentPhotoListView(LoginRequiredMixin, StudentQuerysetRoleMixin, ListVie
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         return qs.annotate(
-            sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name"),
+            sort_first=Coalesce(
+                NullIf("preferred_first_name", Value("")), "legal_first_name"
+            ),
         ).order_by(Lower("sort_first"), Lower("last_name"))
 
 
@@ -123,7 +127,7 @@ class StudentEmergencyContactsView(
             .prefetch_related("adults", "adultstudentrelationship_set")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
         )
@@ -150,7 +154,7 @@ class StudentsByGradeView(LoginRequiredMixin, StudentQuerysetRoleMixin, ListView
             qs.select_related("school")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by("graduation_year", Lower("sort_first"), Lower("last_name"))
@@ -228,7 +232,7 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
             qs.select_related("school")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by("school__name", Lower("sort_first"), Lower("last_name"))
@@ -461,7 +465,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
         students = (
             Student.objects.filter(graduation_year=year, graduated=False)
             .annotate(
-                sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
@@ -497,7 +503,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
                 return HttpResponseRedirect(f"{base_url}?{query.urlencode()}")
             return redirect("student_bulk_convert_select")
 
-        qs = Student.objects.filter(pk__in=ids).order_by("last_name", "first_name")
+        qs = Student.objects.filter(pk__in=ids).order_by(
+            "last_name", "preferred_first_name"
+        )
 
         if action == "preview":
             # Build preview info without writing changes against Adults flagged as alumni

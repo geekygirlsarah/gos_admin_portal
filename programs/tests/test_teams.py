@@ -203,7 +203,9 @@ class SubTeamTests(TestCase):
         self.subteam = SubTeam.objects.create(
             name="Test SubTeam", program=self.program, color="#ff0000"
         )
-        self.student = Student.objects.create(first_name="Test", last_name="Student")
+        self.student = Student.objects.create(
+            legal_first_name="Test", last_name="Student"
+        )
         self.enrollment = Enrollment.objects.create(
             student=self.student, program=self.program
         )

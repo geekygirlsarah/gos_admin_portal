@@ -19,9 +19,13 @@ class DualListboxRenderingTest(TestCase):
         self.user.save()
 
         # Create some students
-        self.s1 = Student.objects.create(first_name="Alice", last_name="Alpha")
-        self.s2 = Student.objects.create(first_name="Bob", last_name="Bravo")
-        self.s3 = Student.objects.create(first_name="Charlie", last_name="Charlie")
+        self.s1 = Student.objects.create(
+            preferred_first_name="Alice", last_name="Alpha"
+        )
+        self.s2 = Student.objects.create(preferred_first_name="Bob", last_name="Bravo")
+        self.s3 = Student.objects.create(
+            preferred_first_name="Charlie", last_name="Charlie"
+        )
 
     def test_adult_form_students_field_rendering(self):
         """

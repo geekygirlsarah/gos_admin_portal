@@ -14,7 +14,7 @@ class AdultAccordionTest(TestCase):
         )  # nosec B106
         self.client.login(username="admin", password="password")  # nosec B106
         self.adult = Adult.objects.create(
-            first_name="Test",
+            legal_first_name="Test",
             last_name="Adult",
             is_mentor=True,
             is_parent=False,

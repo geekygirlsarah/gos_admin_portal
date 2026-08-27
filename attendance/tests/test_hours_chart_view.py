@@ -27,8 +27,8 @@ class AttendanceHoursChartViewTests(TestCase):
             name="Fall Bot",
             start_date=timezone.now().date() - timedelta(days=60),
         )
-        self.student1 = make_student(first_name="Alice", last_name="Smith")
-        self.student2 = make_student(first_name="Bob", last_name="Jones")
+        self.student1 = make_student(preferred_first_name="Alice", last_name="Smith")
+        self.student2 = make_student(preferred_first_name="Bob", last_name="Jones")
         Enrollment.objects.create(
             student=self.student1, program=self.program, active=True
         )
@@ -261,14 +261,14 @@ class AttendanceHoursChartViewTests(TestCase):
         self.assertIn("hrs/wk =", content)
 
     def test_preferred_first_name_used(self):
-        self.student1.first_name = "Alicia"
+        self.student1.preferred_first_name = "Alicia"
         self.student1.save()
         response = self.client.get(self.program_url)
         content = response.content.decode()
         self.assertIn("Alicia Smith", content)
 
     def test_fallback_to_legal_first_name(self):
-        self.student1.first_name = ""
+        self.student1.preferred_first_name = ""
         self.student1.save()
         response = self.client.get(self.program_url)
         content = response.content.decode()

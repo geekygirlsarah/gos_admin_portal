@@ -51,7 +51,7 @@ def _find_or_provision_user_for_email(email):
                 )
             )
         )
-        .order_by("-is_primary_contact", "last_name", "first_name")
+        .order_by("-is_primary_contact", "last_name", "preferred_first_name")
     )
 
     adult = adult_qs.filter(user__isnull=False).first() or adult_qs.first()
@@ -112,10 +112,10 @@ def _find_or_provision_user_for_email(email):
         first = ""
         last = ""
         if student:
-            first = student.first_name or student.legal_first_name
+            first = student.preferred_first_name or student.legal_first_name
             last = student.last_name
         elif adult:
-            first = adult.first_name
+            first = adult.preferred_first_name or adult.legal_first_name
             last = adult.last_name
         user = _provision_user(email_lower, first, last)
 

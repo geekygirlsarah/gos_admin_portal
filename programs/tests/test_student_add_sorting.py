@@ -14,19 +14,19 @@ class StudentSortingTest(TestCase):
         # Create students in unsorted order
         # Use a mix of None and empty string for first_name to test Coalesce behavior
         self.s1 = Student.objects.create(
-            legal_first_name="Zeno", last_name="A", first_name=None
+            legal_first_name="Zeno", last_name="A", preferred_first_name=None
         )
         self.s2 = Student.objects.create(
-            legal_first_name="Alice", last_name="Z", first_name=""
+            legal_first_name="Alice", last_name="Z", preferred_first_name=""
         )
         self.s3 = Student.objects.create(
-            legal_first_name="Bob", last_name="B", first_name=None
+            legal_first_name="Bob", last_name="B", preferred_first_name=None
         )
         self.s4 = Student.objects.create(
-            legal_first_name="Charlie", last_name="C", first_name=""
+            legal_first_name="Charlie", last_name="C", preferred_first_name=""
         )
         self.s5 = Student.objects.create(
-            legal_first_name="adam", last_name="D", first_name=None
+            legal_first_name="adam", last_name="D", preferred_first_name=None
         )
 
     def test_add_existing_student_form_sorting(self):
@@ -41,7 +41,7 @@ class StudentSortingTest(TestCase):
         # 5. Zeno (A)
 
         def get_sort_name(s):
-            return (s.first_name or s.legal_first_name).lower()
+            return (s.preferred_first_name or s.legal_first_name).lower()
 
         names = [get_sort_name(s) for s in students]
         self.assertEqual(names, ["adam", "alice", "bob", "charlie", "zeno"])
@@ -58,7 +58,7 @@ class StudentSortingTest(TestCase):
         students = list(form.fields["student"].queryset)
 
         def get_sort_name(s):
-            return (s.first_name or s.legal_first_name).lower()
+            return (s.preferred_first_name or s.legal_first_name).lower()
 
         names = [get_sort_name(s) for s in students]
         self.assertEqual(names, ["adam", "alice", "bob", "charlie", "zeno"])
@@ -75,7 +75,7 @@ class StudentSortingTest(TestCase):
         students = list(form.fields["student"].queryset)
 
         def get_sort_name(s):
-            return (s.first_name or s.legal_first_name).lower()
+            return (s.preferred_first_name or s.legal_first_name).lower()
 
         names = [get_sort_name(s) for s in students]
         self.assertEqual(names, ["adam", "alice", "bob", "charlie", "zeno"])

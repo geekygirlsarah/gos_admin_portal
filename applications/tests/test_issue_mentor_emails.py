@@ -54,7 +54,7 @@ class MentorEmailsReproductionTests(TestCase):
                     "last_name": "Doe",
                 },
                 "step7-primaryparent": {
-                    "first_name": "John",
+                    "legal_first_name": "John",
                     "last_name": "Doe",
                     "email": "parent@example.com",
                 },

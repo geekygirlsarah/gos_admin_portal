@@ -49,7 +49,7 @@ class AlumniConversionImprovedTests(TestCase):
     def test_conversion_updates_existing_adult_and_links(self):
         # Setup existing adult (maybe a mentor who was also a student?)
         existing_adult = Adult.objects.create(
-            first_name="Grad",
+            legal_first_name="Grad",
             last_name="Student",
             personal_email="student@example.com",
             is_alumni=False,

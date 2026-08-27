@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load form_tags %}
 {% load permission_tags %}
-{% block title %}Student: {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
+{% block title %}Student: {{ student.display_name }}{% endblock %}
 {% block nav_students_active %} active{% endblock %}
 {% block content %}
   {% can_write user 'student_info' student as can_edit_student %}
@@ -23,7 +23,7 @@
 
   <div class="row">
     <div class="col-lg-9 col-xl-8">
-      <h1 class="h3 mb-4">{{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</h1>
+      <h1 class="h3 mb-4">{{ student.display_name }}</h1>
 
       {% can_read user 'identity' student as can_read_identity %}
       {% if can_read_identity %}
@@ -41,7 +41,7 @@
             <div class="col-md-9">
               <div class="row g-2">
                 <div class="col-md-4"><div class="fw-semibold">Legal first name</div><div>{{ student.legal_first_name }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ student.first_name|default:'—' }}</div></div>
+                <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ student.preferred_first_name|default:'—' }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ student.last_name }}</div></div>
                 <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ student.pronouns|default:'—' }}</div></div>
                 <div class="col-md-2"><div class="fw-semibold">Age</div><div>{{ student.age|default:'—' }}</div></div>

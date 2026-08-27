@@ -21,7 +21,7 @@ class InactiveStudentFeeNotificationTests(TestCase):
             username="parent", password="password"
         )  # nosec B106
         self.parent = Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Parent",
             is_parent=True,
             login_enabled=True,
@@ -30,7 +30,7 @@ class InactiveStudentFeeNotificationTests(TestCase):
             user=parent_user,
         )
         self.student = Student.objects.create(
-            first_name="Sam",
+            preferred_first_name="Sam",
             last_name="Student",
             date_of_birth="2010-01-01",
         )

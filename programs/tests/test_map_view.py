@@ -208,7 +208,7 @@ class ParentConsentTests(TestCase):
             username="parent", password="pass12345"
         )  # nosec B106
         self.adult = Adult.objects.create(
-            user=self.user, first_name="Parent", last_name="One", is_parent=True
+            user=self.user, legal_first_name="Parent", last_name="One", is_parent=True
         )
         self.client.login(username="parent", password="pass12345")  # nosec B106
 
@@ -374,7 +374,7 @@ class CarpoolButtonTests(TestCase):
             username="parent", password="pass12345"
         )  # nosec B106
         adult = Adult.objects.create(
-            user=user, first_name="Parent", last_name="One", is_parent=True
+            user=user, legal_first_name="Parent", last_name="One", is_parent=True
         )
         program = Program.objects.create(name="Robot Camp", active=True)
         student = Student.objects.create(legal_first_name="Kid", last_name="One")
@@ -414,7 +414,7 @@ class ParentCarpoolPermissionTests(TestCase):
             username="parent", password="pass12345"
         )  # nosec B106
         self.adult = Adult.objects.create(
-            user=self.user, first_name="Parent", last_name="One", is_parent=True
+            user=self.user, legal_first_name="Parent", last_name="One", is_parent=True
         )
         self.program = Program.objects.create(name="Robot Camp", active=True)
         self.url = reverse("program_student_map", args=[self.program.pk])

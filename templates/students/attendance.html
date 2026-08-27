@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load permission_tags %}
-{% block title %}Attendance — {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}{% endblock %}
+{% block title %}Attendance — {{ student.display_name }}{% endblock %}
 
 {% block content %}
 <div class="container my-4">
-  <h1>Attendance for {{ student.first_name|default:student.legal_first_name }} {{ student.last_name }}</h1>
+  <h1>Attendance for {{ student.display_name }}</h1>
 
   {% if error %}
   <div class="alert alert-danger">{{ error }}</div>

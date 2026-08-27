@@ -19,7 +19,7 @@ class KioskWhoIsHereTests(TestCase):
             program=self.program,
         )
         self.student = make_student(
-            first_name="Jane", last_name="Doe", graduation_year=2025
+            preferred_first_name="Jane", last_name="Doe", graduation_year=2025
         )
         self.client.cookies[f"kiosk_unlocked_{self.kiosk.pk}"] = "1"
 
@@ -47,7 +47,7 @@ class KioskWhoIsHereTests(TestCase):
             check_in=timezone.now(),
         )
         closed_student = make_student(
-            first_name="Closed", last_name="Student", graduation_year=2025
+            preferred_first_name="Closed", last_name="Student", graduation_year=2025
         )
         AttendanceSession.objects.create(
             program=self.program,

@@ -24,7 +24,7 @@ class DashboardStatusTests(TestCase):
             username="student", password="password123"  # nosec B106
         )
         self.student = Student.objects.create(
-            user=self.student_user, first_name="Student", last_name="User"
+            user=self.student_user, preferred_first_name="Student", last_name="User"
         )
 
         # Setup Parent
@@ -32,7 +32,10 @@ class DashboardStatusTests(TestCase):
             username="parent", password="password123"  # nosec B106
         )
         self.parent = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="User", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="User",
+            is_parent=True,
         )
         AdultStudentRelationship.objects.create(
             adult=self.parent, student=self.student, relationship_to_student="parent"
@@ -122,7 +125,10 @@ class DashboardStatusTests(TestCase):
             username="mentor", password="password123"  # nosec B106
         )
         Adult.objects.create(
-            user=mentor_user, first_name="Mentor", last_name="User", is_mentor=True
+            user=mentor_user,
+            legal_first_name="Mentor",
+            last_name="User",
+            is_mentor=True,
         )
 
         self.client.login(username="mentor", password="password123")  # nosec B106

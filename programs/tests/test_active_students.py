@@ -28,31 +28,35 @@ class ActiveStudentDropdownTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Season")
         self.other_program = Program.objects.create(name="Past Season")
-        self.active = Student.objects.create(first_name="Active", last_name="A")
+        self.active = Student.objects.create(legal_first_name="Active", last_name="A")
         Enrollment.objects.create(
             student=self.active, program=self.program, active=True
         )
-        self.dropped = Student.objects.create(first_name="Dropped", last_name="B")
+        self.dropped = Student.objects.create(
+            preferred_first_name="Dropped", last_name="B"
+        )
         Enrollment.objects.create(
             student=self.dropped, program=self.program, active=False
         )
         self.graduated = Student.objects.create(
-            first_name="Grad", last_name="C", graduated=True
+            preferred_first_name="Grad", last_name="C", graduated=True
         )
         Enrollment.objects.create(
             student=self.graduated, program=self.program, active=True
         )
         self.other_program_student = Student.objects.create(
-            first_name="Other", last_name="D"
+            preferred_first_name="Other", last_name="D"
         )
         Enrollment.objects.create(
             student=self.other_program_student,
             program=self.other_program,
             active=True,
         )
-        self.unenrolled = Student.objects.create(first_name="New", last_name="E")
+        self.unenrolled = Student.objects.create(
+            preferred_first_name="New", last_name="E"
+        )
         self.graduated_unenrolled = Student.objects.create(
-            first_name="Old Grad", last_name="F", graduated=True
+            preferred_first_name="Old Grad", last_name="F", graduated=True
         )
 
     def test_add_existing_student_form_excludes_graduated(self):
@@ -153,16 +157,18 @@ class ProgramStudentListSeparationTests(TestCase):
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
-        self.active = Student.objects.create(first_name="Active", last_name="A")
+        self.active = Student.objects.create(legal_first_name="Active", last_name="A")
         self.active_enrollment = Enrollment.objects.create(
             student=self.active, program=self.program, active=True
         )
-        self.dropped = Student.objects.create(first_name="Dropped", last_name="B")
+        self.dropped = Student.objects.create(
+            preferred_first_name="Dropped", last_name="B"
+        )
         self.dropped_enrollment = Enrollment.objects.create(
             student=self.dropped, program=self.program, active=False
         )
         self.graduated = Student.objects.create(
-            first_name="Grad", last_name="C", graduated=True
+            preferred_first_name="Grad", last_name="C", graduated=True
         )
         self.graduated_enrollment = Enrollment.objects.create(
             student=self.graduated, program=self.program, active=True
@@ -202,7 +208,7 @@ class InactiveStudentTest(TestCase):
             end_date="2026-12-31",
         )
         self.student = Student.objects.create(
-            first_name="Active",
+            preferred_first_name="Active",
             last_name="Student",
             personal_email="active@example.com",
         )
@@ -210,7 +216,7 @@ class InactiveStudentTest(TestCase):
             student=self.student, program=self.program, active=True
         )
         self.inactive_student = Student.objects.create(
-            first_name="Inactive",
+            preferred_first_name="Inactive",
             last_name="Student",
             personal_email="inactive@example.com",
         )

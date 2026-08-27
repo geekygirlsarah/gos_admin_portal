@@ -34,12 +34,12 @@ def _approved_application(program, **overrides):
         data={
             "step5-student": {"legal_first_name": "Ada", "last_name": "Lovelace"},
             "step7-primaryparent": {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "email": "parent@example.com",
             },
             "step8-secondaryparent": {
-                "first_name": "Sam",
+                "legal_first_name": "Sam",
                 "last_name": "Spouse",
                 "relationship_to_student": "guardian",
             },

@@ -191,7 +191,7 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
 
         ctx["students"] = qs.annotate(
             sort_first=Lower(
-                Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),
             sort_last=Lower("last_name"),
         ).order_by("sort_first", "sort_last")

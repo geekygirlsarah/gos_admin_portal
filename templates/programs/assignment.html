@@ -70,7 +70,7 @@
                                         <input class="form-check-input student-checkbox" type="checkbox" name="student_ids" value="{{ e.student.id }}">
                                     </td>
                                     <td>
-                                        {{ e.student.first_name|default:e.student.legal_first_name }} {{ e.student.last_name }}
+                                        {{ e.student.display_name }}
                                     </td>
                                     <td>
                                         {% if e.team %}
@@ -124,7 +124,7 @@
                             {% for e in inactive_enrollments %}
                             <tr class="table-secondary">
                                 <td>
-                                    {{ e.student.first_name|default:e.student.legal_first_name }} {{ e.student.last_name }}
+                                    {{ e.student.display_name }}
                                     <span class="badge bg-secondary ms-2">Inactive</span>
                                 </td>
                                 <td>
@@ -150,7 +150,7 @@
                                 </td>
                                 <td>
                                     {% if e.team or e.crew or e.subteam %}
-                                    <form method="post" class="d-inline" onsubmit="return confirm('Remove all tags from {{ e.student.first_name|default:e.student.legal_first_name }} {{ e.student.last_name }}?');">
+                                    <form method="post" class="d-inline" onsubmit="return confirm('Remove all tags from {{ e.student.display_name }}?');">
                                         {% csrf_token %}
                                         <input type="hidden" name="clear_enrollment_id" value="{{ e.pk }}">
                                         <button type="submit" class="btn btn-outline-danger btn-sm" title="Clear all tags">Clear Tags</button>

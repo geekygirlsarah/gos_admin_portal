@@ -39,7 +39,7 @@ def make_lead_mentor_user(username="lead_mentor", password="password123"):  # no
 def make_mentor_user(username="mentor", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
-        user=user, first_name="Mentor", last_name="User", is_mentor=True
+        user=user, legal_first_name="Mentor", last_name="User", is_mentor=True
     )
     RolePermission.objects.update_or_create(
         role="Mentor",
@@ -52,17 +52,21 @@ def make_mentor_user(username="mentor", password="password123"):  # nosec B107
 def make_parent_user(username="parent", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
-        user=user, first_name="Parent", last_name="User", is_parent=True
+        user=user, legal_first_name="Parent", last_name="User", is_parent=True
     )
     return user
 
 
-def make_student(first_name="Test", last_name="Student", **kwargs):
-    return Student.objects.create(first_name=first_name, last_name=last_name, **kwargs)
+def make_student(preferred_first_name="Test", last_name="Student", **kwargs):
+    return Student.objects.create(
+        preferred_first_name=preferred_first_name, last_name=last_name, **kwargs
+    )
 
 
-def make_adult(first_name="Adult", last_name="User", **kwargs):
-    return Adult.objects.create(first_name=first_name, last_name=last_name, **kwargs)
+def make_adult(legal_first_name="Adult", last_name="User", **kwargs):
+    return Adult.objects.create(
+        legal_first_name=legal_first_name, last_name=last_name, **kwargs
+    )
 
 
 def make_client():

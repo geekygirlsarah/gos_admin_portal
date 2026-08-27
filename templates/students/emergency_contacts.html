@@ -39,7 +39,7 @@
             {% with p1=s.primary_contact|default_if_none:p1_fallback p2=s.secondary_contact|default_if_none:p2_fallback %}
             <tr>
               <td>
-                <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.display_name }}</a>
               </td>
               <td>{{ s.school|default:"" }}</td>
               <td>{% if s.phone_number %}<a href="tel:{{ s.phone_number }}">{{ s.phone_number }}</a>{% endif %}</td>
@@ -77,7 +77,7 @@
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-start">
                 <h5 class="card-title mb-1">
-                  <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.first_name|default:s.legal_first_name }} {{ s.last_name }}</a>
+                  <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">{{ s.display_name }}</a>
                 </h5>
                 {% if s.school %}<span class="badge text-bg-light">{{ s.school }}</span>{% endif %}
               </div>

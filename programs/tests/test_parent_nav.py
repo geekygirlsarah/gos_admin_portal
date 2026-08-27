@@ -12,11 +12,14 @@ class ParentNavigationTests(TestCase):
             username="parent_user", password="password123"
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
-            user=self.parent_user, first_name="Parent", last_name="One", is_parent=True
+            user=self.parent_user,
+            legal_first_name="Parent",
+            last_name="One",
+            is_parent=True,
         )
 
         # Create their child
-        self.child = Student.objects.create(first_name="Child", last_name="One")
+        self.child = Student.objects.create(legal_first_name="Child", last_name="One")
         AdultStudentRelationship.objects.create(
             adult=self.parent_adult,
             student=self.child,

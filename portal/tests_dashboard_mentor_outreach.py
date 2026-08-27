@@ -24,7 +24,7 @@ class MentorDashboardOutreachTests(TestCase):
         )  # nosec B106
         self.mentor = Adult.objects.create(
             user=self.mentor_user,
-            first_name="Molly",
+            legal_first_name="Molly",
             last_name="Mentor",
             is_mentor=True,
         )
@@ -92,7 +92,10 @@ class MentorDashboardOutreachTests(TestCase):
             username="parent", password="password"
         )  # nosec B106
         Adult.objects.create(
-            user=parent_user, first_name="Paula", last_name="Parent", is_parent=True
+            user=parent_user,
+            legal_first_name="Paula",
+            last_name="Parent",
+            is_parent=True,
         )
         self.client.login(username="parent", password="password")  # nosec B106
         resp = self.client.get(reverse("profile_dashboard"))

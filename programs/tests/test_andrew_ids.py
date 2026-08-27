@@ -83,17 +83,17 @@ class AndrewIdManagementViewTests(TestCase):
         self.client.login(username="lead", password=self.password)
 
         self.student = Student.objects.create(
-            first_name="Robert",
+            preferred_first_name="Robert",
             last_name="Student",
             legal_first_name="Robert",
         )
         self.mentor = Adult.objects.create(
-            first_name="Sarah",
+            legal_first_name="Sarah",
             last_name="Mentor",
             is_mentor=True,
         )
         self.parent = Adult.objects.create(
-            first_name="Alex",
+            legal_first_name="Alex",
             last_name="Parent",
             is_parent=True,
         )
@@ -116,12 +116,12 @@ class AndrewIdManagementViewTests(TestCase):
 
     def test_search_sorted_by_name(self):
         Student.objects.create(
-            first_name="Zachary",
+            preferred_first_name="Zachary",
             last_name="Anderson",
             legal_first_name="Zachary",
         )
         Student.objects.create(
-            first_name="Alice",
+            preferred_first_name="Alice",
             last_name="Zhang",
             legal_first_name="Alice",
         )
@@ -181,7 +181,7 @@ class AndrewIdManagementViewTests(TestCase):
 
     def test_set_andrew_id_with_sponsor(self):
         sponsor = Adult.objects.create(
-            first_name="Sponsor",
+            legal_first_name="Sponsor",
             last_name="Person",
             is_mentor=True,
             andrew_id="sponsor",
@@ -222,9 +222,9 @@ class AndrewIdManagementViewTests(TestCase):
         self.student.andrew_id = "taken"
         self.student.save()
         new_student = Student.objects.create(
-            first_name="Other",
-            last_name="Student",
             legal_first_name="Other",
+            last_name="Student",
+            preferred_first_name="Other",
         )
         url = reverse("andrew_id_management") + "?q=Other"
         response = self.client.post(
@@ -338,7 +338,7 @@ class AndrewIdManagementViewTests(TestCase):
 
     def test_edit_from_assigned_list_updates_fields(self):
         sponsor = Adult.objects.create(
-            first_name="Sponsor",
+            legal_first_name="Sponsor",
             last_name="Person",
             is_mentor=True,
             andrew_id="sponsor",

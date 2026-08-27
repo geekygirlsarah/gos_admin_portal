@@ -620,7 +620,7 @@ class Step5StudentInfoView(View):
         welcome_back = None
         if prefill_student is not None:
             display_name = (
-                prefill_student.first_name
+                prefill_student.preferred_first_name
                 or prefill_student.legal_first_name
                 or str(prefill_student)
             )
@@ -880,7 +880,11 @@ class Step7PrimaryParentView(View):
         # the applicant has already saved step7 data in a previous visit.
         saved = (application.data or {}).get("step7-primaryparent") or {}
         if existing_adult is not None and not saved and mode == "form":
-            display_name = existing_adult.first_name or str(existing_adult)
+            display_name = (
+                existing_adult.preferred_first_name
+                or existing_adult.legal_first_name
+                or str(existing_adult)
+            )
             welcome_back = {
                 "name": display_name,
                 "last_program": latest_program_for_adult(existing_adult),
@@ -894,7 +898,7 @@ class Step7PrimaryParentView(View):
         step8_data = (application.data or {}).get("step8-secondaryparent") or {}
         if step8_data:
             has_secondary = True
-            first = step8_data.get("first_name") or ""
+            first = step8_data.get("legal_first_name") or ""
             last = step8_data.get("last_name") or ""
             secondary_name = " ".join(filter(None, [first, last])) or None
         if not has_secondary:
@@ -910,7 +914,15 @@ class Step7PrimaryParentView(View):
                     sc = student.secondary_contact
                     secondary_name = (
                         " ".join(
-                            filter(None, [sc.first_name or "", sc.last_name or ""])
+                            filter(
+                                None,
+                                [
+                                    sc.preferred_first_name
+                                    or sc.legal_first_name
+                                    or "",
+                                    sc.last_name or "",
+                                ],
+                            )
                         )
                         or None
                     )
@@ -932,7 +944,15 @@ class Step7PrimaryParentView(View):
                     sc = linked_student.secondary_contact
                     secondary_name = (
                         " ".join(
-                            filter(None, [sc.first_name or "", sc.last_name or ""])
+                            filter(
+                                None,
+                                [
+                                    sc.preferred_first_name
+                                    or sc.legal_first_name
+                                    or "",
+                                    sc.last_name or "",
+                                ],
+                            )
                         )
                         or None
                     )

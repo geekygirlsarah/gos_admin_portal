@@ -10,10 +10,10 @@ from programs.models import Adult
 class StudentFormTests(TestCase):
     def setUp(self):
         self.parent1 = Adult.objects.create(
-            first_name="Alex", last_name="Parent", is_parent=True
+            legal_first_name="Alex", last_name="Parent", is_parent=True
         )
         self.parent2 = Adult.objects.create(
-            first_name="Sage", last_name="Guardian", is_parent=True
+            legal_first_name="Sage", last_name="Guardian", is_parent=True
         )
 
     def test_primary_and_secondary_must_differ(self):
@@ -82,22 +82,22 @@ class AdultFormAndrewIdSponsorTests(TestCase):
 
     def setUp(self):
         self.mentor1 = Adult.objects.create(
-            first_name="Zebra", last_name="Alpha", is_mentor=True
+            legal_first_name="Zebra", last_name="Alpha", is_mentor=True
         )
         self.mentor2 = Adult.objects.create(
-            first_name="Alice",
+            legal_first_name="Alice",
             preferred_first_name="Betty",
             last_name="Gamma",
             is_mentor=True,
         )
         self.mentor3 = Adult.objects.create(
-            first_name="Charlie", last_name="Delta", is_mentor=True
+            legal_first_name="Charlie", last_name="Delta", is_mentor=True
         )
         self.parent = Adult.objects.create(
-            first_name="Parent", last_name="User", is_parent=True, is_mentor=False
+            legal_first_name="Parent", last_name="User", is_parent=True, is_mentor=False
         )
         self.alumni = Adult.objects.create(
-            first_name="Alumni", last_name="User", is_alumni=True, is_mentor=False
+            legal_first_name="Alumni", last_name="User", is_alumni=True, is_mentor=False
         )
 
     def test_andrew_id_sponsor_queryset_filters_mentors_only(self):

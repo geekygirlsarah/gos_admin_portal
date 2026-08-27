@@ -830,7 +830,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
             students_qs = students_qs.filter(pk=selected_student.pk)
 
         students = students_qs.order_by(
-            Lower(Coalesce(NullIf("first_name", Value("")), "legal_first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         )
 
@@ -1014,7 +1016,7 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             .order_by(
                 Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),

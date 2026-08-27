@@ -308,7 +308,9 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
         enrollments = (
             Enrollment.objects.filter(student__in=self.parent_adult.all_students())
             .select_related("student", "program")
-            .order_by("student__last_name", "student__first_name", "program__name")
+            .order_by(
+                "student__last_name", "student__preferred_first_name", "program__name"
+            )
         )
 
         students = {}
@@ -366,7 +368,9 @@ class ParentPaymentsView(ParentPaymentsAccessMixin, View):
             key=lambda row: (
                 (row["student"].last_name or "").lower(),
                 (
-                    row["student"].first_name or row["student"].legal_first_name or ""
+                    row["student"].preferred_first_name
+                    or row["student"].legal_first_name
+                    or ""
                 ).lower(),
             ),
         )

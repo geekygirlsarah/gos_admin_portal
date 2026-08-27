@@ -47,7 +47,7 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
 
         form = ParentInfoForm(
             data={
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "email": "name+parent@email.com",
@@ -64,7 +64,7 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
 
         form = ParentInfoForm(
             data={
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "email": "name@email.com",
@@ -81,7 +81,7 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
 
         form = ParentInfoForm(
             data={
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "relationship_to_student": "parent",
                 "email": "parent@email.com",
@@ -123,8 +123,11 @@ class EmailNamesTest(TestCase):
             status=Application.Status.SUBMITTED,
             data={
                 "step5-student": {"legal_first_name": "Jane", "last_name": "Doe"},
-                "step7-primaryparent": {"first_name": "John", "last_name": "Doe"},
-                "step8-secondaryparent": {"first_name": "Mary", "last_name": "Doe"},
+                "step7-primaryparent": {"legal_first_name": "John", "last_name": "Doe"},
+                "step8-secondaryparent": {
+                    "legal_first_name": "Mary",
+                    "last_name": "Doe",
+                },
             },
         )
         self.mentor_app = Application.objects.create(

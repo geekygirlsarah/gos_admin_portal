@@ -16,7 +16,7 @@ class DashboardAttendanceTests(TestCase):
             username="testuser", password="password"  # nosec B106
         )
         self.student = Student.objects.create(
-            first_name="Test", last_name="Student", user=self.user
+            preferred_first_name="Test", last_name="Student", user=self.user
         )
         self.program = Program.objects.create(
             name="Test Program",
@@ -89,7 +89,7 @@ class DashboardAttendanceTests(TestCase):
             username="parentuser", password="password"  # nosec B106
         )
         parent_adult = Adult.objects.create(
-            user=parent_user, is_parent=True, first_name="Parent"
+            user=parent_user, is_parent=True, legal_first_name="Parent"
         )
         parent_adult.students.add(self.student)
 

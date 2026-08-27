@@ -154,12 +154,12 @@ class AdultToPrefillAttributeErrorTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)
         self.adult = Adult.objects.create(
-            first_name="Volida",
+            legal_first_name="Volida",
             last_name="Abdurazakova",
             personal_email="volida@example.com",
         )
         self.student = Student.objects.create(
-            first_name="Zebo",
+            preferred_first_name="Zebo",
             last_name="Sarkarov",
             secondary_contact=self.adult,
         )
@@ -184,7 +184,7 @@ class AdultToPrefillAttributeErrorTest(TestCase):
 
         data = adult_to_prefill(self.adult, student=self.student)
         self.assertEqual(data["relationship_to_student"], "parent")
-        self.assertEqual(data["first_name"], "Volida")
+        self.assertEqual(data["legal_first_name"], "Volida")
 
     def test_view_no_longer_triggers_attribute_error(self):
         url = reverse("apply_step8", kwargs={"app_id": self.application.application_id})

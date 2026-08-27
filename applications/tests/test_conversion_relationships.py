@@ -31,12 +31,12 @@ class ConversionRelationshipTests(TestCase):
                 "date_of_birth": "2010-01-01",
             },
             "step7-primaryparent": {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "email": "pat@example.com",
             },
             "step8-secondaryparent": {
-                "first_name": "Sam",
+                "legal_first_name": "Sam",
                 "last_name": "Parent",
                 "email": "sam@example.com",
             },
@@ -93,7 +93,7 @@ class ConversionRelationshipTests(TestCase):
         Test that conversion reuses existing adults matched by email.
         """
         existing_parent = Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Parent",
             personal_email="pat@example.com",
             is_parent=True,
@@ -107,7 +107,7 @@ class ConversionRelationshipTests(TestCase):
                 "date_of_birth": "2010-01-01",
             },
             "step7-primaryparent": {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "email": "pat@example.com",
             },
@@ -136,7 +136,7 @@ class ConversionRelationshipTests(TestCase):
         linked to the new student without duplicates or breaking old link.
         """
         existing_parent = Adult.objects.create(
-            first_name="Pat",
+            legal_first_name="Pat",
             last_name="Parent",
             personal_email="pat@example.com",
             is_parent=True,
@@ -158,7 +158,7 @@ class ConversionRelationshipTests(TestCase):
                 "date_of_birth": "2010-01-01",
             },
             "step7-primaryparent": {
-                "first_name": "Pat",
+                "legal_first_name": "Pat",
                 "last_name": "Parent",
                 "email": "pat@example.com",
             },
@@ -192,7 +192,7 @@ class ConversionRelationshipTests(TestCase):
         up linked to the same parent record, and all relationships are correct.
         """
         parent_data = {
-            "first_name": "Pat",
+            "legal_first_name": "Pat",
             "last_name": "Parent",
             "email": "pat@example.com",
         }
@@ -263,12 +263,12 @@ class ConversionRelationshipTests(TestCase):
                 "date_of_birth": "2010-01-01",
             },
             "step7-primaryparent": {
-                "first_name": "Mary",
+                "legal_first_name": "Mary",
                 "last_name": "Smith",
                 "email": "shared@example.com",
             },
             "step8-secondaryparent": {
-                "first_name": "John",
+                "legal_first_name": "John",
                 "last_name": "Smith",
                 "email": "shared@example.com",
             },
@@ -285,8 +285,8 @@ class ConversionRelationshipTests(TestCase):
         self.assertNotEqual(primary.pk, secondary.pk)
 
         # Names must be preserved correctly
-        self.assertEqual(primary.first_name, "Mary")
-        self.assertEqual(secondary.first_name, "John")
+        self.assertEqual(primary.legal_first_name, "Mary")
+        self.assertEqual(secondary.legal_first_name, "John")
 
         # Both should be linked to the student
         self.assertIn(
@@ -303,7 +303,7 @@ class ConversionRelationshipTests(TestCase):
         """
         other_program = Program.objects.create(name="Other Program")
         parent_data = {
-            "first_name": "Pat",
+            "legal_first_name": "Pat",
             "last_name": "Parent",
             "email": "pat@example.com",
         }
@@ -377,7 +377,7 @@ class DuplicateApplicationConversionTests(TestCase):
                     "date_of_birth": "2010-06-15",
                 },
                 "step7-primaryparent": {
-                    "first_name": "Jane",
+                    "legal_first_name": "Jane",
                     "last_name": "Doe",
                     "email": parent_email,
                 },
@@ -440,7 +440,7 @@ class DuplicateApplicationConversionTests(TestCase):
             status=Application.Status.DRAFT,
             data={
                 "step7-primaryparent": {
-                    "first_name": "Jane",
+                    "legal_first_name": "Jane",
                     "last_name": "Doe",
                     "email": "parent@example.com",
                 },

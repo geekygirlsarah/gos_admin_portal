@@ -30,10 +30,12 @@ class RefactorStudentParentLinksMigrationTest(TestCase):
         )
 
     def test_keeps_existing_relationships_and_points_at_through_rows(self):
-        primary = self.Adult.objects.create(first_name="Prim", last_name="Parent")
-        secondary = self.Adult.objects.create(first_name="Sec", last_name="Parent")
+        primary = self.Adult.objects.create(legal_first_name="Prim", last_name="Parent")
+        secondary = self.Adult.objects.create(
+            legal_first_name="Sec", last_name="Parent"
+        )
         student = self.Student.objects.create(
-            legal_first_name="Kid",
+            preferred_first_name="Kid",
             last_name="Student",
             primary_contact=primary,
             secondary_contact=secondary,
@@ -54,9 +56,9 @@ class RefactorStudentParentLinksMigrationTest(TestCase):
         self.assertEqual(student.secondary_contact, secondary)
 
     def test_is_idempotent_and_reuses_existing_through_rows(self):
-        primary = self.Adult.objects.create(first_name="Prim", last_name="Parent")
+        primary = self.Adult.objects.create(legal_first_name="Prim", last_name="Parent")
         student = self.Student.objects.create(
-            legal_first_name="Kid",
+            preferred_first_name="Kid",
             last_name="Student",
             primary_contact=primary,
         )
@@ -77,10 +79,10 @@ class RefactorStudentParentLinksMigrationTest(TestCase):
 
     def test_marks_linked_adults_as_parents(self):
         not_yet_parent = self.Adult.objects.create(
-            first_name="Prim", last_name="Parent", is_parent=False
+            legal_first_name="Prim", last_name="Parent", is_parent=False
         )
         student = self.Student.objects.create(
-            legal_first_name="Kid",
+            preferred_first_name="Kid",
             last_name="Student",
             primary_contact=not_yet_parent,
         )

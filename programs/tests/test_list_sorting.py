@@ -48,13 +48,17 @@ class ListSortingTest(TestCase):
 
         # Create adults for sorting test
         Adult.objects.create(
-            first_name="John", last_name="Doe", personal_email="john@example.com"
+            legal_first_name="John", last_name="Doe", personal_email="john@example.com"
         )
         Adult.objects.create(
-            first_name="Jane", last_name="Smith", personal_email="jane@example.com"
+            legal_first_name="Jane",
+            last_name="Smith",
+            personal_email="jane@example.com",
         )
         Adult.objects.create(
-            first_name="Alice", last_name="Brown", personal_email="alice@example.com"
+            legal_first_name="Alice",
+            last_name="Brown",
+            personal_email="alice@example.com",
         )
 
         # Create applications for sorting test

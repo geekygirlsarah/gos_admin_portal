@@ -43,7 +43,7 @@ class PortalDashboardContactBoxRemovalTests(TestCase):
         )  # nosec B106
         Adult.objects.create(
             user=self.mentor,
-            first_name="Mentor",
+            legal_first_name="Mentor",
             last_name="User",
             is_mentor=True,
             phone_number="412-555-0100",

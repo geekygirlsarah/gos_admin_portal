@@ -15,33 +15,31 @@ class AndrewIdExtensionTest(TestCase):
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_user = User.objects.create_user(
             username="leadmentor", password="password"
-        )  #nosec B106
+        )  # nosec B106
         self.lead_user.groups.add(self.lead_group)
 
         # Create some adults
         # Mentors
         self.mentor1 = Adult.objects.create(
-            first_name="Zebra", last_name="Alpha", is_mentor=True
+            legal_first_name="Zebra", last_name="Alpha", is_mentor=True
         )
         self.mentor2 = Adult.objects.create(
-            first_name="Alice",
+            legal_first_name="Alice",
             preferred_first_name="Betty",
             last_name="Gamma",
             is_mentor=True,
         )
         self.mentor3 = Adult.objects.create(
-            first_name="Charlie", last_name="Delta", is_mentor=True
+            legal_first_name="Charlie", last_name="Delta", is_mentor=True
         )
 
         # Non-mentors
         self.parent = Adult.objects.create(
-            first_name="Parent", last_name="User", is_parent=True, is_mentor=False
+            legal_first_name="Parent", last_name="User", is_parent=True, is_mentor=False
         )
 
         # Student
-        self.student = Student.objects.create(
-            first_name="Stu", last_name="Dent", legal_first_name="Stu"
-        )
+        self.student = Student.objects.create(legal_first_name="Stu", last_name="Dent")
 
     def test_student_form_andrew_id_sponsor_queryset(self):
         form = StudentForm()
@@ -77,7 +75,7 @@ class AndrewIdExtensionTest(TestCase):
         self.assertEqual(actual_order, expected_order)
 
     def test_andrew_id_management_view_student_save(self):
-        self.client.login(username="leadmentor", password="password")  #nosec B106
+        self.client.login(username="leadmentor", password="password")  # nosec B106
         url = reverse("andrew_id_management")
 
         # Save Andrew ID, expiration and sponsor for student
@@ -104,7 +102,7 @@ class AndrewIdExtensionTest(TestCase):
         self.student.andrew_id_sponsor = self.mentor2
         self.student.save()
 
-        self.client.login(username="leadmentor", password="password")  #nosec B106
+        self.client.login(username="leadmentor", password="password")  # nosec B106
         url = reverse("andrew_id_management")
 
         # Clear Andrew ID for student

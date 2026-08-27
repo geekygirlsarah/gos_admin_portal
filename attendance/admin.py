@@ -16,9 +16,9 @@ class RFIDCardAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
     search_fields = (
         "uid",
-        "student__first_name",
+        "student__preferred_first_name",
         "student__last_name",
-        "adult__first_name",
+        "adult__legal_first_name",
         "adult__last_name",
     )
 
@@ -40,9 +40,9 @@ class AttendanceEventAdmin(admin.ModelAdmin):
     search_fields = (
         "visitor_name",
         "rfid_uid",
-        "student__first_name",
+        "student__preferred_first_name",
         "student__last_name",
-        "adult__first_name",
+        "adult__legal_first_name",
         "adult__last_name",
     )
     date_hierarchy = "occurred_at"
@@ -63,9 +63,9 @@ class AttendanceSessionAdmin(admin.ModelAdmin):
     list_filter = ("program",)
     search_fields = (
         "visitor_name",
-        "student__first_name",
+        "student__preferred_first_name",
         "student__last_name",
-        "adult__first_name",
+        "adult__legal_first_name",
         "adult__last_name",
     )
     date_hierarchy = "check_in"

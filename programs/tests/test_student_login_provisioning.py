@@ -31,7 +31,7 @@ class StudentLoginProvisioningTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.student = Student.objects.create(
-            first_name="Alice",
+            preferred_first_name="Alice",
             last_name="Smith",
             personal_email="alice@example.com",
         )
@@ -102,7 +102,7 @@ class ParentLoginProvisioningTests(TestCase):
 
     def setUp(self):
         self.parent = Adult.objects.create(
-            first_name="Bob",
+            legal_first_name="Bob",
             last_name="Smith",
             personal_email="bob@example.com",
             is_parent=True,

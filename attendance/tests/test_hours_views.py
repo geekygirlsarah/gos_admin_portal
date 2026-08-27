@@ -27,7 +27,7 @@ class StudentHoursViewTests(TestCase):
             name="Fall Bot",
             start_date=timezone.now().date() - timedelta(days=60),
         )
-        self.student = make_student(first_name="Alice", last_name="Smith")
+        self.student = make_student(preferred_first_name="Alice", last_name="Smith")
         Enrollment.objects.create(
             student=self.student, program=self.program, active=True
         )
@@ -66,7 +66,7 @@ class StudentHoursViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_student_cannot_access_other_student(self):
-        other_student = make_student(first_name="Bob", last_name="Jones")
+        other_student = make_student(preferred_first_name="Bob", last_name="Jones")
         other_url = reverse("student_hours", args=[other_student.pk])
         user = User.objects.create_user(
             username="alice2", password="password123"  # nosec B106
@@ -86,7 +86,7 @@ class StudentHoursViewTests(TestCase):
         self.assertContains(response, "Alice Smith")
 
     def test_parent_cannot_access_other_student(self):
-        other_student = make_student(first_name="Carol", last_name="Lee")
+        other_student = make_student(preferred_first_name="Carol", last_name="Lee")
         other_url = reverse("student_hours", args=[other_student.pk])
         parent_user = make_parent_user(username="parent2")
         adult = Adult.objects.get(user=parent_user)
@@ -190,7 +190,7 @@ class StudentHoursViewTests(TestCase):
         self.assertIn(month_names[prev_month], response.content.decode())
 
     def test_empty_state(self):
-        empty_student = make_student(first_name="Empty", last_name="Student")
+        empty_student = make_student(preferred_first_name="Empty", last_name="Student")
         url = reverse("student_hours", args=[empty_student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -219,8 +219,8 @@ class ProgramHoursViewTests(TestCase):
             name="Fall Bot",
             start_date=timezone.now().date() - timedelta(days=60),
         )
-        self.student1 = make_student(first_name="Alice", last_name="Smith")
-        self.student2 = make_student(first_name="Bob", last_name="Jones")
+        self.student1 = make_student(preferred_first_name="Alice", last_name="Smith")
+        self.student2 = make_student(preferred_first_name="Bob", last_name="Jones")
         Enrollment.objects.create(
             student=self.student1, program=self.program, active=True
         )

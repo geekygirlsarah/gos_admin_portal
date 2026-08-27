@@ -21,13 +21,13 @@ class AdultSortingTest(TestCase):
         # 3. Charlie (pref: Alice) Brown -> Alice Brown
 
         Adult.objects.create(
-            first_name="Aaron", preferred_first_name="Zander", last_name="Smith"
+            legal_first_name="Aaron", preferred_first_name="Zander", last_name="Smith"
         )
         Adult.objects.create(
-            first_name="Bob", preferred_first_name="", last_name="Jones"
+            legal_first_name="Bob", preferred_first_name="", last_name="Jones"
         )
         Adult.objects.create(
-            first_name="Charlie", preferred_first_name="Alice", last_name="Brown"
+            legal_first_name="Charlie", preferred_first_name="Alice", last_name="Brown"
         )
 
     def test_adults_list_sorting(self):

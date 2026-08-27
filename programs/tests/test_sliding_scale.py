@@ -51,7 +51,7 @@ class SlidingScaleApplicationTests(TestCase):
             username="mentor", password="password", email="mentor@example.com"
         )  # nosec B106
         self.parent_adult = Adult.objects.create(
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="User",
             personal_email="parent@example.com",
             is_parent=True,

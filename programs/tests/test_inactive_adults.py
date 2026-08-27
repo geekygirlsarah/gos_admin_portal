@@ -20,7 +20,7 @@ class InactiveAdultTest(TestCase):
 
         # Create active mentors (mentor_active controls mentor behavior)
         self.active_mentor = Adult.objects.create(
-            first_name="Active",
+            legal_first_name="Active",
             last_name="Mentor",
             is_mentor=True,
             mentor_active=True,
@@ -28,7 +28,7 @@ class InactiveAdultTest(TestCase):
             personal_email="active_mentor@example.com",
         )
         self.inactive_mentor = Adult.objects.create(
-            first_name="Inactive",
+            legal_first_name="Inactive",
             last_name="Mentor",
             is_mentor=True,
             mentor_active=False,
@@ -38,7 +38,7 @@ class InactiveAdultTest(TestCase):
 
         # Create active parents (login_enabled controls login)
         self.active_parent = Adult.objects.create(
-            first_name="Active",
+            legal_first_name="Active",
             last_name="Parent",
             is_parent=True,
             login_enabled=True,
@@ -46,7 +46,7 @@ class InactiveAdultTest(TestCase):
             email_updates=True,
         )
         self.inactive_parent = Adult.objects.create(
-            first_name="Inactive",
+            legal_first_name="Inactive",
             last_name="Parent",
             is_parent=True,
             login_enabled=False,
@@ -54,7 +54,9 @@ class InactiveAdultTest(TestCase):
             email_updates=True,
         )
 
-        self.student = Student.objects.create(first_name="Test", last_name="Student")
+        self.student = Student.objects.create(
+            preferred_first_name="Test", last_name="Student"
+        )
         self.active_parent.students.add(self.student)
         self.inactive_parent.students.add(self.student)
 
@@ -211,7 +213,7 @@ class InactiveAdultTest(TestCase):
             username="active_m_user", password="password"
         )  # nosec B106
         Adult.objects.create(
-            first_name="Active",
+            legal_first_name="Active",
             last_name="MentorUser",
             is_mentor=True,
             mentor_active=True,
@@ -225,7 +227,7 @@ class InactiveAdultTest(TestCase):
             username="inactive_m_user", password="password"
         )  # nosec B106
         Adult.objects.create(
-            first_name="Inactive",
+            legal_first_name="Inactive",
             last_name="MentorUser",
             is_mentor=True,
             mentor_active=False,
@@ -248,7 +250,7 @@ class InactiveAdultTest(TestCase):
             username="independent_user", password="password"
         )  # nosec B106
         mentor = Adult.objects.create(
-            first_name="Independent",
+            legal_first_name="Independent",
             last_name="Mentor",
             is_mentor=True,
             mentor_active=False,

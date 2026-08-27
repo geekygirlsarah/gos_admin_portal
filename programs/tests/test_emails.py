@@ -25,10 +25,12 @@ class EmailBalancesTest(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
         self.program = Program.objects.create(name="Test Program", active=True)
-        self.s1 = Student.objects.create(first_name="Alice", last_name="Alpha")
+        self.s1 = Student.objects.create(
+            preferred_first_name="Alice", last_name="Alpha"
+        )
         Enrollment.objects.create(student=self.s1, program=self.program)
         self.a1 = Adult.objects.create(
-            first_name="P1",
+            preferred_first_name="P1",
             last_name="A1",
             personal_email="a1@example.com",
             email_updates=True,
@@ -36,10 +38,10 @@ class EmailBalancesTest(TestCase):
         self.s1.primary_contact = self.a1
         self.s1.save()
 
-        self.s2 = Student.objects.create(first_name="Bob", last_name="Beta")
+        self.s2 = Student.objects.create(preferred_first_name="Bob", last_name="Beta")
         Enrollment.objects.create(student=self.s2, program=self.program)
         self.a2 = Adult.objects.create(
-            first_name="P2",
+            preferred_first_name="P2",
             last_name="A2",
             personal_email="a2@example.com",
             email_updates=True,
@@ -53,10 +55,12 @@ class EmailBalancesTest(TestCase):
 
         FeeAssignment.objects.create(fee=f1, student=self.s2)
 
-        self.s3 = Student.objects.create(first_name="Charlie", last_name="Gamma")
+        self.s3 = Student.objects.create(
+            preferred_first_name="Charlie", last_name="Gamma"
+        )
         Enrollment.objects.create(student=self.s3, program=self.program)
         self.a3 = Adult.objects.create(
-            first_name="P3",
+            preferred_first_name="P3",
             last_name="A3",
             personal_email="a3@example.com",
             email_updates=True,
@@ -127,9 +131,11 @@ class EmailBalancesTest(TestCase):
 class AutoEmailNotificationsTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)
-        self.student = Student.objects.create(first_name="Alice", last_name="Alpha")
+        self.student = Student.objects.create(
+            preferred_first_name="Alice", last_name="Alpha"
+        )
         self.parent = Adult.objects.create(
-            first_name="Parent",
+            legal_first_name="Parent",
             last_name="Alpha",
             personal_email="parent@example.com",
             email_updates=True,

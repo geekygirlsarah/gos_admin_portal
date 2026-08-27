@@ -120,7 +120,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
             data={
                 "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
                 "step7-primaryparent": {
-                    "first_name": "Pat",
+                    "legal_first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "email_updates": False,
@@ -130,7 +130,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {
-                "first_name": "Sam",
+                "legal_first_name": "Sam",
                 "last_name": "Spouse",
                 "relationship_to_student": "guardian",
                 "address": "123 Main St",
@@ -160,7 +160,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
             data={
                 "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
                 "step7-primaryparent": {
-                    "first_name": "Pat",
+                    "legal_first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "email_updates": True,
@@ -170,7 +170,7 @@ class ParentNotificationOptInReproductionTests(TestCase):
         response = self.client.post(
             reverse("apply_step8", kwargs={"app_id": app.application_id}),
             {
-                "first_name": "Sam",
+                "legal_first_name": "Sam",
                 "last_name": "Spouse",
                 "relationship_to_student": "guardian",
                 "address": "123 Main St",
@@ -197,13 +197,13 @@ class ParentNotificationOptInReproductionTests(TestCase):
             data={
                 "step5-student": {"legal_first_name": "Grace", "last_name": "Hopper"},
                 "step7-primaryparent": {
-                    "first_name": "Pat",
+                    "legal_first_name": "Pat",
                     "last_name": "Parent",
                     "email": "parent@example.com",
                     "email_updates": False,
                 },
                 "step8-secondaryparent": {
-                    "first_name": "Sam",
+                    "legal_first_name": "Sam",
                     "last_name": "Spouse",
                     "relationship_to_student": "guardian",
                     "email_updates": False,

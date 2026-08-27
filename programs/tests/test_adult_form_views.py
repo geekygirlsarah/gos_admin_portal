@@ -31,7 +31,7 @@ class ParentFormDuplicateEmailTest(TestCase):
     def test_parent_form_allows_duplicate_email(self):
         # Pre-existing adult with the shared email
         Adult.objects.create(
-            first_name="Mary",
+            legal_first_name="Mary",
             last_name="Smith",
             personal_email="shared@example.com",
             is_parent=True,
@@ -39,7 +39,7 @@ class ParentFormDuplicateEmailTest(TestCase):
         # A second adult form submission with the same email should be valid
         form = AdultForm(
             data={
-                "first_name": "John",
+                "legal_first_name": "John",
                 "last_name": "Smith",
                 "personal_email": "shared@example.com",
                 "email_updates": False,
@@ -56,14 +56,14 @@ class ParentFormDuplicateEmailTest(TestCase):
 
     def test_adult_form_allows_duplicate_email(self):
         Adult.objects.create(
-            first_name="Mary",
+            legal_first_name="Mary",
             last_name="Smith",
             personal_email="shared@example.com",
             is_parent=True,
         )
         form = AdultForm(
             data={
-                "first_name": "John",
+                "legal_first_name": "John",
                 "last_name": "Smith",
                 "personal_email": "shared@example.com",
                 "email_updates": False,
@@ -97,7 +97,7 @@ class AdultCreateViewTest(TestCase):
         response = self.client.post(
             url,
             {
-                "first_name": "Jane",
+                "legal_first_name": "Jane",
                 "last_name": "Doe",
                 "personal_email": "jane@example.com",
                 "email_updates": False,
@@ -116,7 +116,7 @@ class AdultCreateViewTest(TestCase):
     def test_post_adult_create_duplicate_email_allowed(self):
         """Two adults with the same email must both be creatable via the view."""
         Adult.objects.create(
-            first_name="Mary",
+            legal_first_name="Mary",
             last_name="Smith",
             personal_email="shared@example.com",
             is_parent=True,
@@ -125,7 +125,7 @@ class AdultCreateViewTest(TestCase):
         response = self.client.post(
             url,
             {
-                "first_name": "John",
+                "legal_first_name": "John",
                 "last_name": "Smith",
                 "personal_email": "shared@example.com",
                 "email_updates": False,
@@ -197,7 +197,7 @@ class AdultEditViewRoleFieldsTest(TestCase):
         self.user, self.password = _make_staff()
         self.client.login(username="staff", password=self.password)
         self.adult = Adult.objects.create(
-            first_name="Test",
+            legal_first_name="Test",
             last_name="Adult",
             is_mentor=True,
         )

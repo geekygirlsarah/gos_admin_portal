@@ -32,11 +32,11 @@ class EmailNamesTest(TestCase):
                     "last_name": "Doe",
                 },
                 "step7-primaryparent": {
-                    "first_name": "John",
+                    "legal_first_name": "John",
                     "last_name": "Doe",
                 },
                 "step8-secondaryparent": {
-                    "first_name": "Mary",
+                    "legal_first_name": "Mary",
                     "last_name": "Doe",
                 },
             },

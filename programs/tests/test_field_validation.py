@@ -18,6 +18,7 @@ class PhoneValidationTestCase(TestCase):
         date_of_birth_year = date.today().year - 12
         student = Student(
             legal_first_name="Test",
+            preferred_first_name="Test",
             last_name="Student",
             phone_number="12345",
             date_of_birth=date(date_of_birth_year, 1, 1),
@@ -53,7 +54,7 @@ class PhoneValidationTestCase(TestCase):
 
     def test_adult_model_phone_validation(self):
         adult = Adult(
-            first_name="Test",
+            legal_first_name="Test",
             last_name="Adult",
             phone_number="1234567890",
             emergency_contact_phone="1234567890",
@@ -145,7 +146,7 @@ class PhoneValidationTestCase(TestCase):
 
         form = ParentInfoForm(
             data={
-                "first_name": "A",
+                "legal_first_name": "A",
                 "last_name": "B",
                 "email": "a@b.com",
                 "phone_number": "123",
@@ -161,7 +162,7 @@ class PhoneValidationTestCase(TestCase):
 
         form = ParentInfoForm(
             data={
-                "first_name": "A",
+                "legal_first_name": "A",
                 "last_name": "B",
                 "email": "a@b.com",
                 "phone_number": "1234567890",
@@ -201,6 +202,7 @@ class ZipValidationTestCase(TestCase):
     def test_student_model_zip_validation(self):
         student = Student(
             legal_first_name="Test",
+            preferred_first_name="Test",
             last_name="Student",
             date_of_birth="2010-01-01",
         )

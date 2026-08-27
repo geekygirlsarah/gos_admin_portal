@@ -184,7 +184,7 @@ class ProgramStudentPhotoListView(
         return qs.annotate(
             sort_first=Lower(
                 Coalesce(
-                    NullIf("student__first_name", Value("")),
+                    NullIf("student__preferred_first_name", Value("")),
                     "student__legal_first_name",
                 )
             ),
@@ -248,7 +248,7 @@ class ProgramEmergencyContactsView(
             .prefetch_related("adults", "adultstudentrelationship_set")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
@@ -297,7 +297,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             .annotate(
                 sort_first=Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),
@@ -392,7 +392,7 @@ class ProgramStudentDocumentsView(
             .annotate(
                 sort_first=Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),
@@ -480,7 +480,9 @@ class ProgramStudentQuickCreateView(LoginRequiredMixin, PermissionRequiredMixin,
         return redirect("program_detail", pk=program.pk)
 
 
-class ProgramEnrollmentUpdateView(LoginRequiredMixin, TeamAssignmentPermissionMixin, View):
+class ProgramEnrollmentUpdateView(
+    LoginRequiredMixin, TeamAssignmentPermissionMixin, View
+):
     def post(self, request, pk):
         enrollment_id = request.POST.get("enrollment_id")
         team_id = request.POST.get("team_id")
@@ -603,7 +605,7 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             enrollment.crew = None
             enrollment.subteam = None
             enrollment.save()
-            name = enrollment.student.first_name or enrollment.student.legal_first_name
+            name = enrollment.student.display_name
             messages.success(
                 request,
                 (
@@ -896,7 +898,7 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
         students = (
             qs.distinct()
             .only(
-                "first_name",
+                "preferred_first_name",
                 "legal_first_name",
                 "last_name",
                 "address",
@@ -907,7 +909,9 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
                 "personal_email",
             )
             .annotate(
-                sort_first=Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
@@ -918,7 +922,7 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
             addr = ", ".join([p for p in parts if p]).strip(", ")
             if not addr:
                 continue
-            name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+            name = (s.display_name or "").strip()
             rows.append(
                 (
                     name or f"Student #{s.pk}",
@@ -952,16 +956,16 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
                     directory_consent=False,
                 )
                 .distinct()
-                .only("first_name", "legal_first_name", "last_name")
+                .only("preferred_first_name", "legal_first_name", "last_name")
                 .annotate(
                     sort_first=Coalesce(
-                        NullIf("first_name", Value("")), "legal_first_name"
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
                     )
                 )
                 .order_by(Lower("sort_first"), Lower("last_name"))
             )
             for s in unlisted_qs:
-                name = f"{(s.first_name or s.legal_first_name or '').strip()} {s.last_name}".strip()
+                name = (s.display_name or "").strip()
                 if name:
                     unlisted.append(name)
         if role in ("Parent", "Student"):
@@ -995,7 +999,9 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
             .all()
             .annotate(
                 sort_first=Lower(
-                    Coalesce(NullIf("first_name", Value("")), "legal_first_name")
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
                 ),
                 sort_last=Lower("last_name"),
             )
@@ -1029,7 +1035,7 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             .select_related("school")
             .annotate(
                 sort_first=Coalesce(
-                    NullIf("first_name", Value("")), "legal_first_name"
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
                 ),
             )
             .order_by("school__name", Lower("sort_first"), Lower("last_name"))
@@ -1072,7 +1078,7 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             .annotate(
                 sort_first=Lower(
                     Coalesce(
-                        NullIf("student__first_name", Value("")),
+                        NullIf("student__preferred_first_name", Value("")),
                         "student__legal_first_name",
                     )
                 ),
@@ -1090,7 +1096,7 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             student = enrollment.student
             ws.append(
                 [
-                    student.first_name or student.legal_first_name,
+                    student.preferred_first_name or student.legal_first_name,
                     student.last_name,
                     student.grade_display or "",
                 ]

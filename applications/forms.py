@@ -191,7 +191,7 @@ class StudentInfoForm(forms.Form):
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    first_name = forms.CharField(
+    preferred_first_name = forms.CharField(
         label="Preferred first name (if different)",
         max_length=150,
         required=False,
@@ -432,7 +432,7 @@ class StudentExperienceForm(forms.Form):
 class ParentInfoForm(forms.Form):
     """Step 6 (primary) and Step 7 (secondary) parent/guardian info."""
 
-    first_name = forms.CharField(
+    legal_first_name = forms.CharField(
         label="Legal first name",
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
@@ -634,7 +634,7 @@ class MentorInfoForm(forms.Form):
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
-    first_name = forms.CharField(
+    preferred_first_name = forms.CharField(
         label="Preferred first name (if different)",
         max_length=150,
         required=False,

@@ -47,7 +47,9 @@ class AdultsListView(
 
     sort_fields = {
         "name": (
-            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         ),
         "email": Lower("personal_email"),
@@ -101,7 +103,9 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     sort_fields = {
         "name": (
-            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         ),
         "email": Lower("personal_email"),
@@ -151,7 +155,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     sort_fields = {
         "name": (
-            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         ),
         "role": "role",
@@ -198,7 +204,9 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     sort_fields = {
         "name": (
-            Lower(Coalesce(NullIf("preferred_first_name", Value("")), "first_name")),
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
             Lower("last_name"),
         ),
         "email": Lower("personal_email"),
@@ -378,7 +386,7 @@ class AdultUpdateView(
                     "specific_rel": rels.get(s.pk, ("", ""))[1],
                 }
                 for s in adult.students.select_related("school").order_by(
-                    "last_name", "first_name"
+                    "last_name", "preferred_first_name"
                 )
             ]
         return ctx
@@ -489,7 +497,7 @@ class MentorUpdateView(
                     "specific_rel": rels.get(s.pk, ("", ""))[1],
                 }
                 for s in adult.students.select_related("school").order_by(
-                    "last_name", "first_name"
+                    "last_name", "preferred_first_name"
                 )
             ]
         return ctx
@@ -634,7 +642,7 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
         context = super().get_context_data(**kwargs)
         context["parents"] = list(
             active_parents()
-            .order_by("first_name", "last_name")
+            .order_by("legal_first_name", "last_name")
             .prefetch_related(
                 "students__school",
                 "students__enrollment_set__program",
