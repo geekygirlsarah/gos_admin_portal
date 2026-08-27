@@ -23,9 +23,8 @@ cssutils==2.11.1
 defusedxml==0.7.1
 dj-config-url==0.1.1
 dj-database-url==3.0.1
-Django==5.2.17
-django-allauth==65.17.0
-django-csp==4.0
+Django==6.1
+django-allauth==65.19.1
 django-formtools==2.6.1
 django-pghistory==3.9.2
 django-pgtrigger==4.17.0

@@ -99,7 +99,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script nonce="{{ request.csp_nonce }}">
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
     var familySizeInput = document.getElementById('{{ form.family_size.id_for_label }}');
     var agiInput = document.getElementById('{{ form.adjusted_gross_income.id_for_label }}');

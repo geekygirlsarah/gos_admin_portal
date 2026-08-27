@@ -58,7 +58,7 @@
 </form>
 
 {% if student_address %}
-<script nonce="{{ request.csp_nonce }}">
+<script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function() {
         const btn = document.getElementById('copy-address-btn');
         if (btn) {

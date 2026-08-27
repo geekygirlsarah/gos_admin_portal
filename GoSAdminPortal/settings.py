@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 import dj_database_url
-from csp import constants
 from django.contrib.messages import constants as message_constants
+from django.utils.csp import CSP
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -135,8 +135,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Sites framework is required by allauth
     "django.contrib.sites",
-    # Security: Content Security Policy
-    "csp",
     # Allauth apps
     "allauth",
     "allauth.account",
@@ -158,7 +156,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # CSP must run early
-    "csp.middleware.CSPMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -192,7 +190,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 # CSP nonce for inline scripts
-                "csp.context_processors.nonce",
+                "django.template.context_processors.csp",
                 # Navbar context (current program, user role)
                 "GoSAdminPortal.context_processors.navbar_context",
                 # Wizard-step template defaults (e.g. `warnings`)
@@ -272,7 +270,11 @@ if not DEBUG:
 
     # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
     # and renames the files with unique names for each version to support long-term caching
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 else:
     STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
@@ -403,34 +405,32 @@ GEOCODING_TIMEOUT = int(os.getenv("GEOCODING_TIMEOUT", "10"))
 GEOCODING_DELAY_SECONDS = float(os.getenv("GEOCODING_DELAY_SECONDS", "1.0"))
 MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
 
-# Content Security Policy (django-csp)
+# Content Security Policy (Django built-in CSP)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
-CONTENT_SECURITY_POLICY = {
-    "DIRECTIVES": {
-        "base-uri": ["'self'"],
-        "default-src": ["'self'"],
-        "font-src": ["'self'", "https://cdn.jsdelivr.net", "data:"],
-        "frame-ancestors": ["'self'"],
-        "img-src": [
-            "'self'",
-            "data:",
-            "*.tile.openstreetmap.org",
-            "https://unpkg.com",
-        ],
-        "object-src": ["'none'"],
-        "script-src": [
-            "'self'",
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            constants.NONCE,
-        ],
-        "style-src": [
-            "'self'",
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "'unsafe-inline'",
-        ],
-    }
+SECURE_CSP = {
+    "base-uri": [CSP.SELF],
+    "default-src": [CSP.SELF],
+    "font-src": [CSP.SELF, "https://cdn.jsdelivr.net", "data:"],
+    "frame-ancestors": [CSP.SELF],
+    "img-src": [
+        CSP.SELF,
+        "data:",
+        "*.tile.openstreetmap.org",
+        "https://unpkg.com",
+    ],
+    "object-src": [CSP.NONE],
+    "script-src": [
+        CSP.SELF,
+        "https://cdn.jsdelivr.net",
+        "https://unpkg.com",
+        CSP.NONCE,
+    ],
+    "style-src": [
+        CSP.SELF,
+        "https://cdn.jsdelivr.net",
+        "https://unpkg.com",
+        CSP.UNSAFE_INLINE,
+    ],
 }
 
 # Multiple sender accounts for messaging UI. Each item should be a dict with keys:

@@ -4,7 +4,7 @@
   {% load static %}
   <link href="{% static 'vendor/quill/2.0.3/quill.snow.css' %}" rel="stylesheet">
   <link href="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.css' %}" rel="stylesheet">
-  <style nonce="{{ request.csp_nonce }}">
+  <style nonce="{{ csp_nonce }}">
     #editor { height: 300px; }
     .ql-editor table { border-collapse: collapse; width: 100%; }
     .ql-editor table td, .ql-editor table th { border: 1px solid #dee2e6; padding: 6px; }
@@ -90,20 +90,20 @@
   {% load static %}
   <script src="{% static 'vendor/quill/2.0.3/quill.js' %}"></script>
   <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}"></script>
-  <script nonce="{{ request.csp_nonce }}">
+  <script nonce="{{ csp_nonce }}">
     (function(){
       if (typeof window.quillBetterTable === 'undefined') {
         var s = document.createElement('script');
         s.src = 'https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js';
         s.async = true;
-        s.nonce = "{{ request.csp_nonce }}";
+        s.nonce = "{{ csp_nonce }}";
         document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
       }
     })();
   </script>
   <script src="{% static 'js/email_form.js' %}"></script>
   <script src="{% static 'js/email_send_confirm.js' %}"></script>
-  <script nonce="{{ request.csp_nonce }}">
+  <script nonce="{{ csp_nonce }}">
     (function() {
       function toggleStudentSelect() {
         const recipientFilter = document.getElementById('id_recipient_filter');

@@ -141,8 +141,8 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/dual-listbox.js' %}" nonce="{{ request.csp_nonce }}"></script>
-<script nonce="{{ request.csp_nonce }}">
+<script src="{% static 'js/dual-listbox.js' %}" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const manageSignupsModal = new bootstrap.Modal(document.getElementById('manageSignupsModal'));
     const modalContent = document.getElementById('manageSignupsModalContent');

@@ -5,7 +5,7 @@
 {% block extra_head %}
   {{ form.media.css }}
   {% for js in form.media|media_scripts %}
-    <script src="{% static js %}" nonce="{{ request.csp_nonce }}"></script>
+    <script src="{% static js %}" nonce="{{ csp_nonce }}"></script>
   {% endfor %}
 {% endblock %}
 {% block content %}
@@ -269,7 +269,7 @@
     </div>
   </div>
 
-  <script nonce="{{ request.csp_nonce }}">
+  <script nonce="{{ csp_nonce }}">
     (function () {
       function init() {
         var isParentCb = document.getElementById('id_is_parent');

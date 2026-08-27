@@ -73,7 +73,7 @@ class RFIDCard(models.Model):
         ordering = ["uid"]
         constraints = [
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(student__isnull=False, adult__isnull=True)
                     | models.Q(student__isnull=True, adult__isnull=False)
                 ),
