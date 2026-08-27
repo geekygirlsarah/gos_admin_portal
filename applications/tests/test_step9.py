@@ -63,7 +63,6 @@ def _make_signed_upload(name="signed.pdf", content=b"signed-bytes"):
 
 @override_settings(
     MEDIA_ROOT=_TMP_MEDIA,
-    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
 )
 class Step9DocumentsTests(TestCase):
     @classmethod

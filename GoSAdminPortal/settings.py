@@ -312,22 +312,38 @@ ACCOUNT_FORMS = {
     "request_login_code": "GoSAdminPortal.adapter.ProvisioningRequestLoginCodeForm",
 }
 
-# Email (SMTP) configuration via environment variables
-# Default to console backend if no user is provided to avoid crashes in staging/dev
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
-if not EMAIL_BACKEND:
+# Email (SMTP) configuration via environment variables (Django 6.1+ MAILERS).
+# Default to console backend if no user is provided to avoid crashes in staging/dev.
+# Only SMTP mailers receive transport options (host/port/credentials); the
+# console/locmem backends would reject them as unknown OPTIONS.
+_mail_backend = os.getenv("EMAIL_BACKEND")
+if not _mail_backend:
     if os.getenv("EMAIL_HOST_USER"):
-        EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+        _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
     else:
-        EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+        _mail_backend = "django.core.mail.backends.console.EmailBackend"
 
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.fastmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() in ["1", "true", "yes"]
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() in ["1", "true", "yes"]
-EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
+_smtp_options = {
+    "host": os.getenv("EMAIL_HOST", "smtp.fastmail.com"),
+    "port": int(os.getenv("EMAIL_PORT", "465")),
+    "username": os.getenv("EMAIL_HOST_USER", ""),
+    "password": os.getenv("EMAIL_HOST_PASSWORD", ""),
+    "use_tls": os.getenv("EMAIL_USE_TLS", "False").lower() in ["1", "true", "yes"],
+    "use_ssl": os.getenv("EMAIL_USE_SSL", "True").lower() in ["1", "true", "yes"],
+    "timeout": int(os.getenv("EMAIL_TIMEOUT", "30")),
+}
+
+MAILERS = {
+    "default": {
+        "BACKEND": _mail_backend,
+        "OPTIONS": (
+            dict(_smtp_options)
+            if _mail_backend == "django.core.mail.backends.smtp.EmailBackend"
+            else {}
+        ),
+    },
+}
+
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "")
 DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Admin")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
@@ -455,13 +471,33 @@ if _email_accounts_env:
         # Fallback: leave empty if JSON is invalid
         EMAIL_SENDER_ACCOUNTS = []
 
+# One MAILERS alias per sender account so the messaging UI can select a
+# connection with that account's credentials via `mail.mailers["sender_<key>"]`.
+# Only meaningful when the SMTP backend is in use. The account dropdown in the
+# views matches on `key or email`; keep the alias scheme in sync with
+# `programs/utils/notifications.get_sender_connection()`.
+if _mail_backend == "django.core.mail.backends.smtp.EmailBackend":
+    for _account in EMAIL_SENDER_ACCOUNTS:
+        _account_key = _account.get("key") or _account.get("email")
+        if not _account_key:
+            continue
+        _account_options = dict(_smtp_options)
+        _account_options["username"] = _account.get("username") or ""
+        _account_options["password"] = _account.get("password") or ""
+        MAILERS[f"sender_{_account_key}"] = {
+            "BACKEND": _mail_backend,
+            "OPTIONS": _account_options,
+        }
+
 # Administrators who get error emails
 # Provide comma-separated emails via ADMIN_EMAILS env var, e.g., "admin1@example.com,admin2@example.com"
 ADMIN_EMAILS = [
     e.strip() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
 ]
-ADMINS = tuple((f"Admin {i + 1}", email) for i, email in enumerate(ADMIN_EMAILS))
-MANAGERS = ADMINS
+# Django 6.0+ deprecated the (name, address) tuple format: ADMINS/MANAGERS
+# must now be lists of plain email address strings.
+ADMINS = ADMIN_EMAILS
+MANAGERS = list(ADMINS)
 
 # Logging configuration: verbose console + email admins on server errors when DEBUG=False
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

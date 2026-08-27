@@ -1,7 +1,7 @@
 """Tests for parent-specific flows: handoff security, opt-in defaults, email prefill."""
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -71,7 +71,6 @@ class HandoffSecurityReproductionTests(TestCase):
         self.assertContains(response, "Please provide the primary adult contact")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ParentNotificationOptInReproductionTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(

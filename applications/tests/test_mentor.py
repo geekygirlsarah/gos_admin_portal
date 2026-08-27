@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 from applications.models import Application
@@ -23,7 +23,6 @@ def _make_verified_mentor_app(email: str = "newmentor@example.com") -> Applicati
     return app
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class MentorFlowTests(TestCase):
     def setUp(self):
         mail.outbox = []

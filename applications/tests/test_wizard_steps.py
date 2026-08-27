@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,7 +26,6 @@ def _verified(**kwargs):
     return Application.objects.create(**defaults)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step5StudentInfoTests(TestCase):
     def setUp(self):
         School.objects.get_or_create(name="Pittsburgh High")
@@ -145,7 +144,6 @@ class Step5StudentInfoTests(TestCase):
         self.assertContains(response2, 'value="Anna"')
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step6ExperienceTests(TestCase):
     def setUp(self):
         self.app = _verified(current_step=6)
@@ -179,7 +177,6 @@ class Step6ExperienceTests(TestCase):
         self.assertEqual(self.app.current_step, 7)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step7PrimaryParentTests(TestCase):
     def setUp(self):
         mail.outbox = []
@@ -266,7 +263,6 @@ class Step7PrimaryParentTests(TestCase):
         self.assertGreaterEqual(app.current_step, 8)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step8SecondaryParentTests(TestCase):
     def test_secondary_parent_is_required(self):
         app = _verified(current_step=8)
@@ -306,7 +302,6 @@ class Step8SecondaryParentTests(TestCase):
         )
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step9ConfirmTests(TestCase):
     def setUp(self):
         today = timezone.localdate()
@@ -430,7 +425,6 @@ class Step9ConfirmTests(TestCase):
         self.assertContains(response, app.application_id)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step5ValidationTests(TestCase):
     """Step 5 form validation: birthdate, grade, and t-shirt field."""
 
@@ -545,7 +539,6 @@ class Step5ValidationTests(TestCase):
         )
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class GradeValidationTests(TestCase):
     def setUp(self):
         self.school, _ = School.objects.get_or_create(name="Pittsburgh High")
@@ -651,7 +644,6 @@ class TshirtFieldTests(TestCase):
         self.assertIn("tshirt_size", form.fields)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class RenumberingTests(TestCase):
     def setUp(self):
         School.objects.get_or_create(name="Pittsburgh High")
@@ -702,7 +694,6 @@ class RenumberingTests(TestCase):
         self.assertContains(response, "Review and submit")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step8RepopulationTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
@@ -744,7 +735,6 @@ class Step8RepopulationTests(TestCase):
         self.assertContains(response, 'value="Secondary"')
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class SwapParentsViewTests(TestCase):
     """Tests for the swap-parents endpoint."""
 
@@ -870,7 +860,6 @@ class SwapParentsViewTests(TestCase):
         self.assertEqual(app.data["step7-primaryparent"]["legal_first_name"], "Joe")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step7SwapBoxVisibilityTests(TestCase):
     """Swap box on step 7 should appear when a secondary contact exists."""
 
@@ -955,7 +944,6 @@ class Step7SwapBoxVisibilityTests(TestCase):
         self.assertContains(response, "Swap primary")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ResumeRedirectsToCurrentStepTests(TestCase):
     """Resume should land users on the right step 5/6/7/8/9."""
 
@@ -996,7 +984,6 @@ class ResumeRedirectsToCurrentStepTests(TestCase):
         )
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step7AddressCopyTests(TestCase):
     def test_step7_has_student_address_in_context(self):
         app = Application.objects.create(

@@ -2,13 +2,12 @@
 
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 from guest_forms.models import GuestForm, GuestFormSubmission
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class GuestFormSubmissionEmailTests(TestCase):
     """Regression: submitting a guest form must email the submitter a confirmation."""
 

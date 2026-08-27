@@ -16,7 +16,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import SuspiciousFileOperation
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives
 from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -35,6 +35,7 @@ from programs.constants import (
     TSHIRT_SIZE_CHOICES,
 )
 from programs.models import Program, RaceEthnicity
+from programs.utils.notifications import get_sender_connection
 
 from ..forms import StaffDocumentUploadForm
 from ..models import Application, ApplicationDocumentSubmission
@@ -1210,59 +1211,12 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
 
             to_send = [test_email] if test_email else sorted(recipients)
 
-            # Determine sender account and SMTP credentials
+            # Determine sender account and SMTP connection
             selected = form.cleaned_data.get("from_account")
-            accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
-            acc = None
-            if accounts and selected and selected != "DEFAULT":
-                # Match by key or email value
-                for a in accounts:
-                    key = a.get("key") or a.get("email")
-                    if key == selected:
-                        acc = a
-                        break
-
-            # Build SMTP connection using selected account credentials if provided
-            conn_kwargs = {
-                "backend": getattr(
-                    settings,
-                    "EMAIL_BACKEND",
-                    "django.core.mail.backends.smtp.EmailBackend",
-                ),
-                "host": getattr(settings, "EMAIL_HOST", ""),
-                "port": getattr(settings, "EMAIL_PORT", 465),
-                "use_tls": getattr(settings, "EMAIL_USE_TLS", False),
-                "use_ssl": getattr(settings, "EMAIL_USE_SSL", True),
-                "timeout": getattr(settings, "EMAIL_TIMEOUT", 10),
-            }
-            if acc:
-                conn_kwargs.update(
-                    {
-                        "username": acc.get("username") or "",
-                        "password": acc.get("password") or "",
-                    }
-                )
-                from_email = acc.get("email") or getattr(
-                    settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
-                )
-                # Include display_name if provided
-                display_name = acc.get("display_name")
-                if display_name:
-                    from_email = f'"{display_name}" <{from_email}>'
-            else:
-                # Fall back to global credentials and default from address
-                conn_kwargs.update(
-                    {
-                        "username": getattr(settings, "EMAIL_HOST_USER", ""),
-                        "password": getattr(settings, "EMAIL_HOST_PASSWORD", ""),
-                    }
-                )
-                from_email = getattr(
-                    settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
-                )
+            connection, from_email = get_sender_connection(selected)
 
             try:
-                with get_connection(**conn_kwargs) as connection:
+                with connection:
                     for addr in to_send:
                         msg = EmailMultiAlternatives(
                             subject=subject,

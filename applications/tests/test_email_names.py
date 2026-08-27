@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from applications.models import Application
 from applications.services import (
@@ -14,7 +14,6 @@ from applications.services import (
 from programs.models import Program
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class EmailNamesTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(

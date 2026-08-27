@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -68,7 +68,6 @@ class LatestProgramHelpersTests(TestCase):
         self.assertEqual(str(latest_program_for_adult(adult)), "Spring 2024 (2024)")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step5WelcomeBackBannerTests(TestCase):
     def test_banner_shown_when_prefilling_from_existing_student(self):
         program = Program.objects.create(
@@ -105,7 +104,6 @@ class Step5WelcomeBackBannerTests(TestCase):
         self.assertNotContains(response, "Welcome back")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step7WelcomeBackBannerTests(TestCase):
     def test_banner_shown_when_prefilling_from_existing_adult(self):
         program = Program.objects.create(

@@ -8,7 +8,7 @@ import secrets
 import string
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import mailers, send_mail
 
 LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
@@ -34,6 +34,41 @@ def get_lead_mentor_notification_email():
     sliding scale applications). Configurable via LEAD_MENTOR_NOTIFICATION_EMAIL.
     """
     return getattr(settings, "LEAD_MENTOR_NOTIFICATION_EMAIL", LEAD_MENTOR_EMAIL)
+
+
+def get_sender_connection(from_account):
+    """Return an ``(email_backend, from_email)`` pair for the messaging UI.
+
+    ``from_account`` is the ``from_account`` form value: ``"DEFAULT"`` (or an
+    unrecognized value) selects the default MAILERS mailer and the default
+    from address; any other value is matched against ``EMAIL_SENDER_ACCOUNTS``
+    by ``key`` or ``email`` and selects the ``sender_<key>`` mailer configured
+    in settings with that account's SMTP credentials.
+
+    The alias scheme here must stay in sync with the ``MAILERS`` entries built
+    in ``GoSAdminPortal/settings.py``.
+    """
+    accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+    acc = None
+    if accounts and from_account and from_account != "DEFAULT":
+        for a in accounts:
+            if (a.get("key") or a.get("email")) == from_account:
+                acc = a
+                break
+
+    if acc:
+        alias = f"sender_{acc.get('key') or acc.get('email')}"
+        from_email = acc.get("email") or settings.DEFAULT_FROM_EMAIL
+        display_name = acc.get("display_name")
+        if display_name:
+            from_email = f'"{display_name}" <{from_email}>'
+    else:
+        alias = "default"
+        from_email = settings.DEFAULT_FROM_EMAIL or "no-reply@example.com"
+        name = getattr(settings, "DEFAULT_FROM_NAME", None)
+        if name:
+            from_email = f'"{name}" <{from_email}>'
+    return mailers[alias], from_email
 
 
 def send_templated_notification(

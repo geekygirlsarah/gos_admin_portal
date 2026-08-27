@@ -5,7 +5,6 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
-from django.utils.deprecation import MiddlewareMixin
 
 from applications.rate_limiting import (
     get_client_ip,
@@ -40,16 +39,15 @@ EXEMPT_PATH_PREFIXES = (
 )
 
 
-class LoginRequiredMiddleware(MiddlewareMixin):
+class LoginRequiredMiddleware:
     """Redirect anonymous users to login for all pages except exempt ones."""
 
-    def process_request(self, request):
-        if request.user.is_authenticated:
-            return None
+    def __init__(self, get_response):
+        self.get_response = get_response
 
-        if self._is_exempt(request.path):
-            return None
-
+    def __call__(self, request):
+        if request.user.is_authenticated or self._is_exempt(request.path):
+            return self.get_response(request)
         return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
 
     def _is_exempt(self, path):
@@ -82,7 +80,7 @@ class LoginRequiredMiddleware(MiddlewareMixin):
         return False
 
 
-class ApplyRateLimitMiddleware(MiddlewareMixin):
+class ApplyRateLimitMiddleware:
     """Throttle POST requests to the public application wizard (/apply/).
 
     The wizard is exempt from :class:`LoginRequiredMiddleware`, so anonymous
@@ -92,29 +90,33 @@ class ApplyRateLimitMiddleware(MiddlewareMixin):
     per application) are enforced in the wizard views themselves.
     """
 
-    def process_request(self, request):
-        if not getattr(settings, "APPLY_RATE_LIMIT_ENABLED", True):
-            return None
-        if request.method != "POST" or not request.path.startswith("/apply/"):
-            return None
+    def __init__(self, get_response):
+        self.get_response = get_response
 
-        allowed, retry_after = rate_limit_hit(
-            "ip",
-            get_client_ip(request),
-            getattr(settings, "APPLY_IP_POST_LIMIT", 10),
-            getattr(settings, "APPLY_IP_POST_WINDOW_SECONDS", 60),
-        )
-        if not allowed:
-            return rate_limited_response(request, retry_after)
-        return None
+    def __call__(self, request):
+        if getattr(settings, "APPLY_RATE_LIMIT_ENABLED", True) and (
+            request.method == "POST" and request.path.startswith("/apply/")
+        ):
+            allowed, retry_after = rate_limit_hit(
+                "ip",
+                get_client_ip(request),
+                getattr(settings, "APPLY_IP_POST_LIMIT", 10),
+                getattr(settings, "APPLY_IP_POST_WINDOW_SECONDS", 60),
+            )
+            if not allowed:
+                return rate_limited_response(request, retry_after)
+        return self.get_response(request)
 
 
-class TimezoneMiddleware(MiddlewareMixin):
+class TimezoneMiddleware:
     """
     Middleware to activate the user's preferred timezone from the session.
     """
 
-    def process_request(self, request):
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
         tzname = request.session.get("django_timezone")
         if tzname:
             try:
@@ -123,9 +125,10 @@ class TimezoneMiddleware(MiddlewareMixin):
                 timezone.deactivate()
         else:
             timezone.deactivate()
+        return self.get_response(request)
 
 
-class MentorAgreementMiddleware(MiddlewareMixin):
+class MentorAgreementMiddleware:
     """Redirect mentors who have not accepted all current agreements.
 
     Runs after LoginRequiredMiddleware (so the user is already authenticated).
@@ -139,31 +142,34 @@ class MentorAgreementMiddleware(MiddlewareMixin):
     tests by default).
     """
 
-    def process_request(self, request):
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
         if not getattr(settings, "MENTOR_AGREEMENT_ENABLED", True):
-            return None
+            return self.get_response(request)
         if not request.user.is_authenticated:
-            return None
+            return self.get_response(request)
         # Don't redirect away from the agreement page itself.
         if request.path.startswith("/mentor-agreement/"):
-            return None
+            return self.get_response(request)
 
         # Skip non-portal paths (media, static, admin, API, etc.) so that
         # file downloads, static assets, and admin pages stay accessible.
         for prefix in EXEMPT_PATH_PREFIXES:
             if prefix and request.path.startswith(prefix):
-                return None
+                return self.get_response(request)
 
         # Only apply to users who have a mentor role.
         from programs.permission_views import user_is_mentor
 
         if not user_is_mentor(request.user):
-            return None
+            return self.get_response(request)
 
         from programs.models import MentorAgreementAcceptance
 
         if MentorAgreementAcceptance.has_accepted_for_user(request.user):
-            return None
+            return self.get_response(request)
 
         # User has not accepted — redirect to the agreement page.
         next_url = request.get_full_path()

@@ -24,7 +24,6 @@ from applications.rate_limiting import rate_limit_hit, rate_limited_response
 from GoSAdminPortal.middleware import ApplyRateLimitMiddleware
 
 LIMITS_ENABLED = {"TESTING": False, "APPLY_RATE_LIMIT_ENABLED": True}
-LOCMEM_EMAIL = {"EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend"}
 
 
 class RateLimitHitTests(TestCase):
@@ -154,7 +153,7 @@ class ApplyRateLimitDisabledTests(TestCase):
             self.assertEqual(response.status_code, 302)
 
 
-@override_settings(**LIMITS_ENABLED, **LOCMEM_EMAIL)
+@override_settings(**LIMITS_ENABLED)
 class OtpSendRateLimitTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -223,7 +222,7 @@ class OtpSendRateLimitTests(TestCase):
         self.assertEqual(response.status_code, 429)
 
 
-@override_settings(**LIMITS_ENABLED, **LOCMEM_EMAIL, APPLY_IP_POST_LIMIT=100)
+@override_settings(**LIMITS_ENABLED, APPLY_IP_POST_LIMIT=100)
 class OtpVerifyRateLimitTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -260,7 +259,7 @@ class OtpVerifyRateLimitTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-@override_settings(TESTING=False, APPLY_RATE_LIMIT_ENABLED=False, **LOCMEM_EMAIL)
+@override_settings(TESTING=False, APPLY_RATE_LIMIT_ENABLED=False)
 class OtpLimitDisabledTests(TestCase):
     """Even outside the test suite, a disabled limiter must never trip."""
 

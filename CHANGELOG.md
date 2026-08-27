@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-27
+
+### Changed
+- **Email configuration now uses Django 6.1's `MAILERS` setting**: The legacy `EMAIL_*` settings were replaced with a single `MAILERS` dict, migrating the project off Django's deprecated email-backend settings (required for Django 6.1). Sender-account mailboxes (`EMAIL_SENDER_ACCOUNTS`) are now wired through their own mailer aliases, and the health check, notification sending, and bulk email pages use the new mailer API. Admins are now configured as a list of email strings as Django 6.1 requires.
+- **Middleware updated to Django 6.1 style**: All five project middleware classes (login-required, apply rate limiting, timezone, mentor agreement, active program) were converted from the removed `MiddlewareMixin` pattern to modern `__call__`-based middleware.
+
+### Fixed
+- **Tests updated for the email-setting migration**: Test-only overrides of the legacy `EMAIL_BACKEND` setting were removed, and the async middleware tests now invoke the new-style middleware the way Django's request handler does.
+
 ## 2026-08-26
 
 ### Added

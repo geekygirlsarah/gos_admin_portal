@@ -1,7 +1,6 @@
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
@@ -43,6 +42,7 @@ from ..utils import (
     redirect_back,
     resolve_address_points,
 )
+from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
@@ -753,61 +753,9 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
             to_send = [test_email] if test_email else sorted(recipients)
 
-            # Determine sender account and SMTP credentials
+            # Determine sender connection (selected sender account, or default)
             selected = form.cleaned_data.get("from_account")
-            accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
-            acc = None
-            if accounts and selected and selected != "DEFAULT":
-                # Match by key or email value
-                for a in accounts:
-                    key = a.get("key") or a.get("email")
-                    if key == selected:
-                        acc = a
-                        break
-            # Build SMTP connection using selected account credentials if provided
-            conn_kwargs = {
-                "backend": getattr(
-                    settings,
-                    "EMAIL_BACKEND",
-                    "django.core.mail.backends.smtp.EmailBackend",
-                ),
-                "host": getattr(settings, "EMAIL_HOST", ""),
-                "port": getattr(settings, "EMAIL_PORT", 465),
-                "use_tls": getattr(settings, "EMAIL_USE_TLS", False),
-                "use_ssl": getattr(settings, "EMAIL_USE_SSL", True),
-                "timeout": getattr(settings, "EMAIL_TIMEOUT", 10),
-            }
-            if acc:
-                conn_kwargs.update(
-                    {
-                        "username": acc.get("username") or "",
-                        "password": acc.get("password") or "",
-                    }
-                )
-                from_email = acc.get("email") or getattr(
-                    settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
-                )
-                # Include display_name if provided
-                display_name = acc.get("display_name")
-                if display_name:
-                    from_email = f'"{display_name}" <{from_email}>'
-            else:
-                # Fall back to global credentials and default from address
-                conn_kwargs.update(
-                    {
-                        "username": getattr(settings, "EMAIL_HOST_USER", ""),
-                        "password": getattr(settings, "EMAIL_HOST_PASSWORD", ""),
-                    }
-                )
-                from_email = getattr(
-                    settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
-                )
-                # Include sender name from settings if available
-                sender_name = getattr(settings, "DEFAULT_FROM_NAME", None)
-                if sender_name:
-                    from_email = f'"{sender_name}" <{from_email}>'
-
-            connection = get_connection(**conn_kwargs)
+            connection, from_email = get_sender_connection(selected)
             # For test sends, put recipient in the To field (some SMTP providers reject emails with empty To)
             if test_email:
                 email = EmailMultiAlternatives(
@@ -846,7 +794,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
             )
 
             try:
-                sent_count = email.send(fail_silently=False)
+                sent_count = email.send()
                 logger.info(
                     "ProgramEmail: email sent successfully | from=%s | to_count=%d | subject=%s | sent_count=%s",
                     from_email,
