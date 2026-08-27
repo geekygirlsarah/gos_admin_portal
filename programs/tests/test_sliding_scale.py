@@ -10,6 +10,7 @@ from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from programs.forms import SlidingScaleForm
 from programs.models import (
@@ -251,7 +252,7 @@ class SlidingScaleApplicationTests(TestCase):
             percent=Decimal("50.00"),
             status=SlidingScale.STATUS_APPROVED,
             reviewed_by=self.lead_mentor_user,
-            reviewed_at=datetime.datetime.now(),
+            reviewed_at=timezone.now(),
         )
         self.client.login(username="lead", password="password")  # nosec B106
         response = self.client.get(reverse("sliding_scale_review_list"))
