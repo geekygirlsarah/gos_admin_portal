@@ -120,7 +120,6 @@ jobs:
     - name: Django System Check
       run: |
         python manage.py check
-        python manage.py check --deploy
     - name: Run Migrations
       run: python manage.py migrate --noinput
     - name: Run Tests with Coverage

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-28
 
 ### Changed
+- **Deployment-mode system check moved to the Render build step**: The `python manage.py check --deploy` step was removed from GitHub Actions (where it can't pass, since CI has no production environment variables) and added to `build.sh`, where Render supplies the real production settings it's designed to validate. This clears a wall of false-alarm security warnings in PR checks while still catching genuine misconfigurations at deploy time.
+- **Email backend no longer defaults to the console backend**: Django 6.1 added a system check that rejects development-only email backends in the default mailer, which broke `python manage.py check` in environments without SMTP credentials (like CI). The default mailer now uses the SMTP backend directly; local developers who want emails printed to the console can still set `EMAIL_BACKEND` explicitly.
+
+### Changed
 - **Web server now recycles workers to prevent memory exhaustion (deployment hardening)**: The Render "Start Command" moved from the dashboard into a versioned `start.sh` script at the repo root. The production server now recycles its worker every ~1000 requests (with jitter) instead of running one long-lived worker that never returns memory to the OS. This prevents slow memory buildup from eventually pushing the instance over its memory limit — which had caused a few server crashes. The server also logs one line per request so traffic can be correlated with resource usage. Point Render's Start Command at `./start.sh`.
 
 ## 2026-08-27

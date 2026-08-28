@@ -112,4 +112,10 @@ The CI suite performs the following:
 - Configure ALLOWED_HOSTS and DEBUG in settings.
 - Serve static files with whitenoise or via your web server.
 
-Presently it's deployed on Render using a web service and their PostgreSQL database.
+### Render configuration
+The project is deployed on Render as a web service with a managed PostgreSQL database. Point Render's dashboard at the version-controlled scripts in the repo root:
+
+- **Build Command**: `./build.sh` — installs dependencies, runs `python manage.py check --deploy` (with the real production environment variables, so it catches genuine misconfigurations at deploy time rather than in CI), collects static files, and applies migrations.
+- **Start Command**: `./start.sh` — starts the production server (gunicorn + uvicorn). The worker is recycled every ~1000 requests (with jitter) to prevent memory exhaustion; see the script for details.
+
+The `--deploy` system check is deliberately **not** run in GitHub Actions or the local `run_ci` scripts, because those environments have no production environment variables and would only produce security warnings that don't reflect the deployed configuration.

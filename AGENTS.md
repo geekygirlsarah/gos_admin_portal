@@ -118,7 +118,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - Use Bootstrap to ensure a consistent appearance.
 - Avoid inline styles if possible.
 - Ensure pages remain accessible and responsive.
-- Add to `CHANGELOG.md` for user-facing changes, and describe them in a way that general users can understand. Keep entries already in there and just add on to it.
+- Add to `CHANGELOG.md` for changes, and describe them in a way that general users can understand. Keep entries already in there and just add on to it.
 - Update `AGENTS.md` with any significant changes to the project architecture.
 - While you should update the Django admin site to reflect changes in the project architecture, usually a page needs to be edited in the main app as well.
 - Ask before making significant changes to architecture, and write tests to ensure they will work after.

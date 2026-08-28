@@ -317,15 +317,18 @@ ACCOUNT_FORMS = {
 }
 
 # Email (SMTP) configuration via environment variables (Django 6.1+ MAILERS).
-# Default to console backend if no user is provided to avoid crashes in staging/dev.
-# Only SMTP mailers receive transport options (host/port/credentials); the
-# console/locmem backends would reject them as unknown OPTIONS.
+# Default to the SMTP backend; without credentials it just can't connect, which
+# is fine for `manage.py check` and tests (Django's test runner swaps in the
+# locmem backend). We deliberately avoid assigning a development-only backend
+# (console/locmem) to MAILERS["default"] because Django 6.1's system check
+# (mail.E001) rejects them when no credentials are present. For local dev that
+# prints emails to the console instead, set EMAIL_BACKEND explicitly to
+# django.core.mail.backends.console.EmailBackend.
+# Only SMTP mailers receive transport options (host/port/credentials); other
+# backends would reject them as unknown OPTIONS.
 _mail_backend = os.getenv("EMAIL_BACKEND")
 if not _mail_backend:
-    if os.getenv("EMAIL_HOST_USER"):
-        _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
-    else:
-        _mail_backend = "django.core.mail.backends.console.EmailBackend"
+    _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
 
 _smtp_options = {
     "host": os.getenv("EMAIL_HOST", "smtp.fastmail.com"),
