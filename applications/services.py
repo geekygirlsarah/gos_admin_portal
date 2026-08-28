@@ -57,7 +57,10 @@ def _should_send_async() -> bool:
     In tests, we want synchronous delivery to avoid race conditions in assertions.
     """
 
-    if settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend":
+    if (
+        settings.MAILERS.get("default", {}).get("BACKEND", "")
+        == "django.core.mail.backends.locmem.EmailBackend"
+    ):
         return False
     # If the user has a custom setting, respect it
     return getattr(settings, "EMAIL_ASYNC", True)
@@ -92,7 +95,6 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
                 message=body,
                 from_email=_from_email(),
                 recipient_list=[application.email],
-                fail_silently=False,
             )
         except Exception:
             logger.exception(
@@ -432,7 +434,7 @@ def _send_html_email(
         if html_body:
             msg.attach_alternative(html_body, "text/html")
         try:
-            msg.send(fail_silently=False)
+            msg.send()
         except Exception:  # pragma: no cover - defensive
             logger.exception("Failed to send email %r to %r", subject, recipients)
         finally:

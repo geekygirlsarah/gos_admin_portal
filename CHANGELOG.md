@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-28
+
+### Changed
+- **Deployment-mode system check moved to the Render build step**: The `python manage.py check --deploy` step was removed from GitHub Actions (where it can't pass, since CI has no production environment variables) and added to `build.sh`, where Render supplies the real production settings it's designed to validate. This clears a wall of false-alarm security warnings in PR checks while still catching genuine misconfigurations at deploy time.
+- **Email backend no longer defaults to the console backend**: Django 6.1 added a system check that rejects development-only email backends in the default mailer, which broke `python manage.py check` in environments without SMTP credentials (like CI). The default mailer now uses the SMTP backend directly; local developers who want emails printed to the console can still set `EMAIL_BACKEND` explicitly.
+
+### Changed
+- **Web server now recycles workers to prevent memory exhaustion (deployment hardening)**: The Render "Start Command" moved from the dashboard into a versioned `start.sh` script at the repo root. The production server now recycles its worker every ~1000 requests (with jitter) instead of running one long-lived worker that never returns memory to the OS. This prevents slow memory buildup from eventually pushing the instance over its memory limit — which had caused a few server crashes. The server also logs one line per request so traffic can be correlated with resource usage. Point Render's Start Command at `./start.sh`.
+
+### Fixed
+- **Audit log admin no longer uses a deprecated Django API**: The `AuditLogAdmin.get_actions()` override now accepts the `action_location` argument, removing the `RemovedInDjango70Warning` that was failing the Audit Logs admin page and CSV export during CI.
+- **Quieter test output**: Tests that deliberately trigger `/health` "unhealthy" responses now suppress the expected `Service Unavailable` error logs, and the test runner creates the `staticfiles/` directory when it's missing so WhiteNoise no longer complains about it on fresh CI checkouts.
+
+## 2026-08-27
+
+### Changed
+- **Upgraded Django version**: Upgraded from Django 5.2 to Django 6.1
+- **Email configuration now uses Django 6.1's `MAILERS` setting**: The legacy `EMAIL_*` settings were replaced with a single `MAILERS` dict, migrating the project off Django's deprecated email-backend settings (required for Django 6.1). Sender-account mailboxes (`EMAIL_SENDER_ACCOUNTS`) are now wired through their own mailer aliases, and the health check, notification sending, and bulk email pages use the new mailer API. Admins are now configured as a list of email strings as Django 6.1 requires.
+- **Middleware updated to Django 6.1 style**: All five project middleware classes (login-required, apply rate limiting, timezone, mentor agreement, active program) were converted from the removed `MiddlewareMixin` pattern to modern `__call__`-based middleware.
+- **Tests now fail on deprecated Django APIs**: The test runner escalates Django's "removed in the next version" deprecation warnings to test failures, so our code can't silently drift toward the next Django upgrade. The PostgreSQL connection also enables `CONNECTION_HEALTH_CHECKS` (pairs with the existing `CONN_MAX_AGE` pool), and the local SQLite database no longer overrides the primary-key type, keeping generated migrations consistent with production.
+
+### Fixed
+- **Tests updated for the email-setting migration**: Test-only overrides of the legacy `EMAIL_BACKEND` setting were removed, and the async middleware tests now invoke the new-style middleware the way Django's request handler does.
+
 ## 2026-08-26
 
 ### Added

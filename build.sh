@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 set -o errexit
 
-#rm -rf appvenv
-#python3 -m venv appvenv
+# Build command for the Render web service. Point Render's "Build Command"
+# at this script (./build.sh).
 
-#appvenv/bin/pip install --no-cache-dir -r requirements.txt
+# Install pip, then install requirements
+python -m pip install --upgrade pip
 python -m pip install --no-cache-dir -r requirements.txt
 
-#appvenv/bin/python manage.py collectstatic --no-input
-#appvenv/bin/python manage.py migrate
+# Run the deployment-mode system check. Local dev / CI can't pass --deploy
+# (they lack production env vars and DEBUG stays on), so run it here, in the
+# build step, where Render provides the real production settings the check is
+# designed to validate.
+python manage.py check --deploy
+
+# Collect static files for serving, then migrate
 python manage.py collectstatic --no-input
 python manage.py migrate

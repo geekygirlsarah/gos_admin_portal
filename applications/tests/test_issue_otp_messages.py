@@ -17,14 +17,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application, OtpVerifyResult
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class OtpVerifyResultTests(TestCase):
     def test_wrong_code_is_invalid_not_expired(self):
         app = Application.objects.create(email="user@example.com")
@@ -50,7 +49,6 @@ class OtpVerifyResultTests(TestCase):
         self.assertIs(app.verify_otp(code), OtpVerifyResult.TOO_MANY_ATTEMPTS)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step3ErrorMessageTests(TestCase):
     def test_wrong_code_shows_did_not_match_not_expired(self):
         app = Application.objects.create(
@@ -110,7 +108,6 @@ class Step3ErrorMessageTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class Step2IssuesOtpTests(TestCase):
     def test_step2_post_issues_and_emails_otp(self):
         app = Application.objects.create(applicant_type="parent")

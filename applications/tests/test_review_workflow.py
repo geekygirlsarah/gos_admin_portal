@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -78,7 +78,6 @@ def _reviewer_user(username="lead"):
     return user
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class LeadMentorsGroupTests(TestCase):
     """After bootstrap, the LeadMentor group exists with the review perm."""
 
@@ -94,7 +93,6 @@ class LeadMentorsGroupTests(TestCase):
         )
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ReviewPermissionGatingTests(TestCase):
     def setUp(self):
         self.app = _make_application()
@@ -127,7 +125,6 @@ class ReviewPermissionGatingTests(TestCase):
         self.assertContains(response, self.app.application_id)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ReviewListFilterTests(TestCase):
     def setUp(self):
         self.submitted = _make_application(
@@ -158,7 +155,6 @@ class ReviewListFilterTests(TestCase):
         self.assertContains(response, self.declined.application_id)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ApproveDeclineEditDeleteTests(TestCase):
     def setUp(self):
         self.app = _make_application()
@@ -337,7 +333,6 @@ class ApproveDeclineEditDeleteTests(TestCase):
         self.assertFalse(Application.objects.filter(application_id=app_id).exists())
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ConvertToStudentTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(
@@ -482,7 +477,6 @@ class ConvertToStudentTests(TestCase):
         self.assertEqual(app.status, Application.Status.APPROVED_SIGNED)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class LeadMentorGroupMergeTests(TestCase):
     """After the group merge, the single 'LeadMentor' group grants
     access to the application review pages."""
@@ -549,7 +543,6 @@ class LeadMentorGroupMergeTests(TestCase):
         )
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class ResendEmailTests(TestCase):
     def setUp(self):
         self.app = _make_application()
@@ -619,7 +612,6 @@ class ResendEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class StaffDocumentUploadTests(TestCase):
     """Lead mentors can upload signed documents on behalf of applicants
     (e.g. paper copies received in person)."""

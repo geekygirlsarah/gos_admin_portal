@@ -19,7 +19,6 @@ from applications.services import (
 from programs.models import Program
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class EmailSenderNameReproductionTest(TestCase):
     def test_default_from_email_with_name(self):
         app = Application.objects.create(email="test@example.com")
@@ -112,7 +111,6 @@ class EmailSubaddressingValidationReproductionTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class EmailNamesTest(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)

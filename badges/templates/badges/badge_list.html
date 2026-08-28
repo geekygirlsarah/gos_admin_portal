@@ -85,7 +85,7 @@
 {% endfor %}
 </div>
 
-<script nonce="{{ request.csp_nonce }}">
+<script nonce="{{ csp_nonce }}">
 document.querySelectorAll('#catFilter [data-filter]').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('#catFilter .nav-link').forEach(b=>b.classList.remove('active'));

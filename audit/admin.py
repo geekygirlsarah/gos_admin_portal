@@ -2,6 +2,7 @@ import csv
 import json
 
 from django.contrib import admin
+from django.contrib.admin import ActionLocation
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.utils.html import format_html
@@ -141,8 +142,8 @@ class AuditLogAdmin(_LeadMentorOnly, admin.ModelAdmin):
     # Only expose the export action; never expose delete.
     actions = ["export_as_csv"]
 
-    def get_actions(self, request):
-        actions = super().get_actions(request)
+    def get_actions(self, request, action_location=ActionLocation.CHANGE_LIST):
+        actions = super().get_actions(request, action_location=action_location)
         actions.pop("delete_selected", None)
         return actions
 

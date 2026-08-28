@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 import dj_database_url
-from csp import constants
 from django.contrib.messages import constants as message_constants
+from django.utils.csp import CSP
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -135,8 +135,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Sites framework is required by allauth
     "django.contrib.sites",
-    # Security: Content Security Policy
-    "csp",
     # Allauth apps
     "allauth",
     "allauth.account",
@@ -158,7 +156,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # CSP must run early
-    "csp.middleware.CSPMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -192,7 +190,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 # CSP nonce for inline scripts
-                "csp.context_processors.nonce",
+                "django.template.context_processors.csp",
                 # Navbar context (current program, user role)
                 "GoSAdminPortal.context_processors.navbar_context",
                 # Wizard-step template defaults (e.g. `warnings`)
@@ -220,11 +218,11 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
-        "DEFAULT_AUTO_FIELD": "django.db.models.AutoField",
     }
 }
 if os.getenv("DATABASE_URL", None):
     db_config = dj_database_url.config(conn_max_age=600)
+    db_config["CONNECTION_HEALTH_CHECKS"] = True
     if "test" in sys.argv:
         db_config["CONN_MAX_AGE"] = 0
     DATABASES["default"] = db_config
@@ -272,7 +270,11 @@ if not DEBUG:
 
     # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
     # and renames the files with unique names for each version to support long-term caching
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 else:
     STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
@@ -284,6 +286,10 @@ MEDIA_ROOT = "media/"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Fail tests when the code uses APIs deprecated in the current Django release,
+# so deprecated usages surface in CI instead of accumulating.
+TEST_RUNNER = "GoSAdminPortal.test_runner.UpgradeAwareTestRunner"
 
 # Use project templates for form widgets
 FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
@@ -310,22 +316,41 @@ ACCOUNT_FORMS = {
     "request_login_code": "GoSAdminPortal.adapter.ProvisioningRequestLoginCodeForm",
 }
 
-# Email (SMTP) configuration via environment variables
-# Default to console backend if no user is provided to avoid crashes in staging/dev
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
-if not EMAIL_BACKEND:
-    if os.getenv("EMAIL_HOST_USER"):
-        EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    else:
-        EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Email (SMTP) configuration via environment variables (Django 6.1+ MAILERS).
+# Default to the SMTP backend; without credentials it just can't connect, which
+# is fine for `manage.py check` and tests (Django's test runner swaps in the
+# locmem backend). We deliberately avoid assigning a development-only backend
+# (console/locmem) to MAILERS["default"] because Django 6.1's system check
+# (mail.E001) rejects them when no credentials are present. For local dev that
+# prints emails to the console instead, set EMAIL_BACKEND explicitly to
+# django.core.mail.backends.console.EmailBackend.
+# Only SMTP mailers receive transport options (host/port/credentials); other
+# backends would reject them as unknown OPTIONS.
+_mail_backend = os.getenv("EMAIL_BACKEND")
+if not _mail_backend:
+    _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
 
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.fastmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() in ["1", "true", "yes"]
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "True").lower() in ["1", "true", "yes"]
-EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "30"))
+_smtp_options = {
+    "host": os.getenv("EMAIL_HOST", "smtp.fastmail.com"),
+    "port": int(os.getenv("EMAIL_PORT", "465")),
+    "username": os.getenv("EMAIL_HOST_USER", ""),
+    "password": os.getenv("EMAIL_HOST_PASSWORD", ""),
+    "use_tls": os.getenv("EMAIL_USE_TLS", "False").lower() in ["1", "true", "yes"],
+    "use_ssl": os.getenv("EMAIL_USE_SSL", "True").lower() in ["1", "true", "yes"],
+    "timeout": int(os.getenv("EMAIL_TIMEOUT", "30")),
+}
+
+MAILERS = {
+    "default": {
+        "BACKEND": _mail_backend,
+        "OPTIONS": (
+            dict(_smtp_options)
+            if _mail_backend == "django.core.mail.backends.smtp.EmailBackend"
+            else {}
+        ),
+    },
+}
+
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "")
 DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Admin")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
@@ -403,34 +428,32 @@ GEOCODING_TIMEOUT = int(os.getenv("GEOCODING_TIMEOUT", "10"))
 GEOCODING_DELAY_SECONDS = float(os.getenv("GEOCODING_DELAY_SECONDS", "1.0"))
 MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
 
-# Content Security Policy (django-csp)
+# Content Security Policy (Django built-in CSP)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
-CONTENT_SECURITY_POLICY = {
-    "DIRECTIVES": {
-        "base-uri": ["'self'"],
-        "default-src": ["'self'"],
-        "font-src": ["'self'", "https://cdn.jsdelivr.net", "data:"],
-        "frame-ancestors": ["'self'"],
-        "img-src": [
-            "'self'",
-            "data:",
-            "*.tile.openstreetmap.org",
-            "https://unpkg.com",
-        ],
-        "object-src": ["'none'"],
-        "script-src": [
-            "'self'",
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            constants.NONCE,
-        ],
-        "style-src": [
-            "'self'",
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "'unsafe-inline'",
-        ],
-    }
+SECURE_CSP = {
+    "base-uri": [CSP.SELF],
+    "default-src": [CSP.SELF],
+    "font-src": [CSP.SELF, "https://cdn.jsdelivr.net", "data:"],
+    "frame-ancestors": [CSP.SELF],
+    "img-src": [
+        CSP.SELF,
+        "data:",
+        "*.tile.openstreetmap.org",
+        "https://unpkg.com",
+    ],
+    "object-src": [CSP.NONE],
+    "script-src": [
+        CSP.SELF,
+        "https://cdn.jsdelivr.net",
+        "https://unpkg.com",
+        CSP.NONCE,
+    ],
+    "style-src": [
+        CSP.SELF,
+        "https://cdn.jsdelivr.net",
+        "https://unpkg.com",
+        CSP.UNSAFE_INLINE,
+    ],
 }
 
 # Multiple sender accounts for messaging UI. Each item should be a dict with keys:
@@ -455,13 +478,33 @@ if _email_accounts_env:
         # Fallback: leave empty if JSON is invalid
         EMAIL_SENDER_ACCOUNTS = []
 
+# One MAILERS alias per sender account so the messaging UI can select a
+# connection with that account's credentials via `mail.mailers["sender_<key>"]`.
+# Only meaningful when the SMTP backend is in use. The account dropdown in the
+# views matches on `key or email`; keep the alias scheme in sync with
+# `programs/utils/notifications.get_sender_connection()`.
+if _mail_backend == "django.core.mail.backends.smtp.EmailBackend":
+    for _account in EMAIL_SENDER_ACCOUNTS:
+        _account_key = _account.get("key") or _account.get("email")
+        if not _account_key:
+            continue
+        _account_options = dict(_smtp_options)
+        _account_options["username"] = _account.get("username") or ""
+        _account_options["password"] = _account.get("password") or ""
+        MAILERS[f"sender_{_account_key}"] = {
+            "BACKEND": _mail_backend,
+            "OPTIONS": _account_options,
+        }
+
 # Administrators who get error emails
 # Provide comma-separated emails via ADMIN_EMAILS env var, e.g., "admin1@example.com,admin2@example.com"
 ADMIN_EMAILS = [
     e.strip() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()
 ]
-ADMINS = tuple((f"Admin {i + 1}", email) for i, email in enumerate(ADMIN_EMAILS))
-MANAGERS = ADMINS
+# Django 6.0+ deprecated the (name, address) tuple format: ADMINS/MANAGERS
+# must now be lists of plain email address strings.
+ADMINS = ADMIN_EMAILS
+MANAGERS = list(ADMINS)
 
 # Logging configuration: verbose console + email admins on server errors when DEBUG=False
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

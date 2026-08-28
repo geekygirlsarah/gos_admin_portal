@@ -248,9 +248,10 @@ class AccountAdapter(DefaultAccountAdapter):
                 if close_connections:
                     close_old_connections()
 
-        if (
-            settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend"
-            or not getattr(settings, "EMAIL_ASYNC", True)
+        if settings.MAILERS.get("default", {}).get(
+            "BACKEND", ""
+        ) == "django.core.mail.backends.locmem.EmailBackend" or not getattr(
+            settings, "EMAIL_ASYNC", True
         ):
             _send()
         else:

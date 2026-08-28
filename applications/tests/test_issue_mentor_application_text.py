@@ -9,7 +9,7 @@ student/parent applicants keep the existing wording.
 from __future__ import annotations
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 from applications.models import Application
@@ -17,7 +17,6 @@ from applications.services import send_application_submitted_email
 from programs.models import Program
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class MentorApplicationTextReproductionTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Test Program", active=True)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -18,7 +18,6 @@ from applications.models import (
 from programs.models import Program
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class WizardFlowTests(TestCase):
     def setUp(self):
         today = timezone.localdate()

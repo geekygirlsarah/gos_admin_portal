@@ -67,7 +67,7 @@
       </div>
       {% endif %}
 
-      <script nonce="{{ request.csp_nonce }}">
+      <script nonce="{{ csp_nonce }}">
         (function(){
           function calcGraduationYearFromGrade(grade){
             if(grade === '' || grade === null || grade === undefined) return '';
@@ -137,7 +137,7 @@
 {% block extra_head %}
   {{ form.media.css }}
   {% for js in form.media|media_scripts %}
-    <script src="{% static js %}" nonce="{{ request.csp_nonce }}"></script>
+    <script src="{% static js %}" nonce="{{ csp_nonce }}"></script>
   {% endfor %}
   <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet" integrity="sha384-Y87xRkYcSpzXkX0m0O6Cq5C9S6Vp9Z8X7p3V7p3V7p3V7p3V7p3V7p3V7p3V7p3" crossorigin="anonymous">
   <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet" integrity="sha384-3bljoW7l4nTgpxifNAuotLa4NYLtoKwBGpmJ1B9bLTb+sIyQ2RnFBAkbkj1Xq257" crossorigin="anonymous">
@@ -158,9 +158,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-vIPrwVp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js" integrity="sha384-DZEVpSJ4pM9MDuXkgydQD2RzczjPKUOeRgRpYNZ5fyMlf14Pn/3dZbgIpdtH2YRb" crossorigin="anonymous" nonce="{{ request.csp_nonce }}"></script>
-  <script nonce="{{ request.csp_nonce }}">
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-vIPrwVp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10" crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js" integrity="sha384-DZEVpSJ4pM9MDuXkgydQD2RzczjPKUOeRgRpYNZ5fyMlf14Pn/3dZbgIpdtH2YRb" crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+  <script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function() {
         const schoolSelect = document.getElementById("id_school");
         if (schoolSelect) {

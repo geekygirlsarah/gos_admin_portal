@@ -8,7 +8,7 @@ A Django-based administrative portal for managing programs, students, parents, a
 3. Increase the data reliability of our participant data.
 
 ## Prerequisites
-- Python 3.11+ (recommended)
+- Python 3.12+ (Django 6.1 requires Python 3.12 or newer)
 - pip
 - (Optional) virtualenv or venv
 
@@ -52,7 +52,7 @@ The repository is organized into several Django apps:
 - `templates/`: Centralized Bootstrap 5 templates, organized by app and user role.
 
 ## Key Technologies
-- **Django 5.2**: Web framework with global login enforcement.
+- **Django 6.1**: Web framework with global login enforcement and modern `__call__`-based middleware.
 - **django-allauth**: Handles authentication via Email OTP (no passwords required for most users).
 - **Bootstrap 5**: Responsive UI and components.
 - **PostgreSQL**: Production database (SQLite is used for local development).
@@ -71,6 +71,8 @@ Typical settings for email, debug, and allowed hosts can be configured directly 
 - `EMAIL_HOST_USER` — SMTP username for sending OTP login emails (required for allauth email OTP)
 - `EMAIL_HOST_PASSWORD` — SMTP password for the above account
 
+Outgoing email is configured through Django 6.1's `MAILERS` setting (the legacy `EMAIL_*` settings are gone). The default mailer is built from the `EMAIL_HOST*` variables above; message senders such as OTP login emails reuse the default mailer in tests via Django's automated `MAILERS` override. When `EMAIL_SENDER_ACCOUNTS_JSON` is set, each sender account gets its own mailer alias for the bulk-email pages.
+
 **Recommended in production:**
 - `DATABASE_URL` — PostgreSQL connection string (defaults to SQLite if not set)
 - `ADMIN_EMAILS` — Comma-separated admin emails for error notifications
@@ -84,6 +86,8 @@ For detailed architectural guidance, data model summaries, and coding standards 
 ## Running Tests
 Tests are located in each app's `tests/` directory. Run all tests with:
    python manage.py test --parallel
+
+The test runner (`GoSAdminPortal.test_runner.UpgradeAwareTestRunner`) escalates Django's "removed in the next version" deprecation warnings to test failures, so deprecated API usage surfaces in CI instead of waiting for the next Django upgrade.
 
 To run specific integration flows:
    python manage.py test programs.tests.test_integration_flows
@@ -108,4 +112,10 @@ The CI suite performs the following:
 - Configure ALLOWED_HOSTS and DEBUG in settings.
 - Serve static files with whitenoise or via your web server.
 
-Presently it's deployed on Render using a web service and their PostgreSQL database.
+### Render configuration
+The project is deployed on Render as a web service with a managed PostgreSQL database. Point Render's dashboard at the version-controlled scripts in the repo root:
+
+- **Build Command**: `./build.sh` — installs dependencies, runs `python manage.py check --deploy` (with the real production environment variables, so it catches genuine misconfigurations at deploy time rather than in CI), collects static files, and applies migrations.
+- **Start Command**: `./start.sh` — starts the production server (gunicorn + uvicorn). The worker is recycled every ~1000 requests (with jitter) to prevent memory exhaustion; see the script for details.
+
+The `--deploy` system check is deliberately **not** run in GitHub Actions or the local `run_ci` scripts, because those environments have no production environment variables and would only produce security warnings that don't reflect the deployed configuration.

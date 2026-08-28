@@ -3,7 +3,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -144,7 +144,6 @@ def _ensure_review_permission():
     return perm
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class MentorReviewToConversionStoryTest(TestCase):
     """End-to-end: submitted mentor application -> approve -> convert."""
 

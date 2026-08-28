@@ -867,7 +867,7 @@ discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) 
 {% endblock %}
 
 {% block extra_scripts %}
-<script nonce="{{ request.csp_nonce }}">
+<script nonce="{{ csp_nonce }}">
     // Maintain tab state after POST
     var activeTab = "{{ active_tab|escapejs }}";
     if (activeTab) {

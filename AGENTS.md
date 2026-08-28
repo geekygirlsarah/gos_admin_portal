@@ -53,6 +53,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 | Seed dev data | `python manage.py seed_db` |
 | Seed mentor agreement | `python manage.py seed_mentor_agreement` |
 | Start dev server | `python manage.py runserver` |
+| Start production web server (Render) | `./start.sh` (gunicorn + uvicorn; see the file for the `--max-requests` recycling rationale) |
 | Run all tests | `python manage.py test` |
 | Run audit digest | `python manage.py audit_digest --days 7` |
 | Run CI checks | `.\run_ci.ps1` (Windows) or `./run_ci.sh` (Linux) |
@@ -99,6 +100,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 
 ## Testing Strategy and Contribution
 
+- **Upgrade-Aware Test Runner**: `TEST_RUNNER = "GoSAdminPortal.test_runner.UpgradeAwareTestRunner"` (see `GoSAdminPortal/test_runner.py`) escalates Django's `RemovedInDjango70Warning`/`RemovedInNextVersionWarning` to test errors, so any use of APIs deprecated in the current Django release fails the suite. Do not disable this; fix the deprecated usage instead.
 - **Location**: Tests live in `programs/tests/`, `applications/tests/`, and `attendance/tests/` (with `test_models.py`, `test_views.py`, `test_kiosk.py`, `test_permissions.py`, `test_reliability.py`, `test_who_is_here.py`).
 - **Story Integration Tests**: For complex lifecycles (e.g., Application -> Conversion -> Financials), use "Story" tests that exercise multiple views and signals in a single test case (see `programs/tests/test_integration_flows.py` for examples). These help catch regressions in side-effects (like emails or balance calculations) that unit tests often miss.
 - **TDD Requirement**: When fixing bugs, add a reproducer test file (e.g., `test_issue_reproduction.py`) before applying the fix.
@@ -116,7 +118,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - Use Bootstrap to ensure a consistent appearance.
 - Avoid inline styles if possible.
 - Ensure pages remain accessible and responsive.
-- Add to `CHANGELOG.md` for user-facing changes, and describe them in a way that general users can understand. Keep entries already in there and just add on to it.
+- Add to `CHANGELOG.md` for changes, and describe them in a way that general users can understand. Keep entries already in there and just add on to it.
 - Update `AGENTS.md` with any significant changes to the project architecture.
 - While you should update the Django admin site to reflect changes in the project architecture, usually a page needs to be edited in the main app as well.
 - Ask before making significant changes to architecture, and write tests to ensure they will work after.

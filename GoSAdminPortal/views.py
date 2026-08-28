@@ -34,7 +34,7 @@ def health(request):
     email_status = cache.get(EMAIL_HEALTH_CACHE_KEY)
     if email_status is None:
         try:
-            conn = mail.get_connection()
+            conn = mail.mailers.default
             conn.open()
             conn.close()
             email_status = "ok"
