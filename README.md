@@ -115,7 +115,8 @@ The CI suite performs the following:
 ### Render configuration
 The project is deployed on Render as a web service with a managed PostgreSQL database. Point Render's dashboard at the version-controlled scripts in the repo root:
 
-- **Build Command**: `./build.sh` — installs dependencies, runs `python manage.py check --deploy` (with the real production environment variables, so it catches genuine misconfigurations at deploy time rather than in CI), collects static files, and applies migrations.
+- **Build Command**: `./build.sh` — installs dependencies, runs `python manage.py check --deploy` (with the real production environment variables, so it catches genuine misconfigurations at deploy time rather than in CI), and collects static files.
+- **Pre-Deploy Command**: `./pre_deploy.sh` — runs `python manage.py migrate`. Migrations run here, after the build and before the new release goes live, so schema changes apply once per deploy (not per build instance) and only once the new code is live.
 - **Start Command**: `./start.sh` — starts the production server (gunicorn + uvicorn). The worker is recycled every ~1000 requests (with jitter) to prevent memory exhaustion; see the script for details.
 
 The `--deploy` system check is deliberately **not** run in GitHub Actions or the local `run_ci` scripts, because those environments have no production environment variables and would only produce security warnings that don't reflect the deployed configuration.

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-08-28
 
 ### Changed
+- **Database migrations moved to a Render pre-deploy step**: `python manage.py migrate` was removed from `build.sh` and moved into a new versioned `pre_deploy.sh` at the repo root. Migrations now run once after the build and before the new release goes live, so schema changes apply per deploy (not per build instance) and only once the new code is live. Point Render's Pre-Deploy Command at `./pre_deploy.sh`; `build.sh` now only installs dependencies, runs the deployment-mode check, and collects static files.
 - **Deployment-mode system check moved to the Render build step**: The `python manage.py check --deploy` step was removed from GitHub Actions (where it can't pass, since CI has no production environment variables) and added to `build.sh`, where Render supplies the real production settings it's designed to validate. This clears a wall of false-alarm security warnings in PR checks while still catching genuine misconfigurations at deploy time.
 - **Email backend no longer defaults to the console backend**: Django 6.1 added a system check that rejects development-only email backends in the default mailer, which broke `python manage.py check` in environments without SMTP credentials (like CI). The default mailer now uses the SMTP backend directly; local developers who want emails printed to the console can still set `EMAIL_BACKEND` explicitly.
 
