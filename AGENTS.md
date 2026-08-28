@@ -53,6 +53,7 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 | Seed dev data | `python manage.py seed_db` |
 | Seed mentor agreement | `python manage.py seed_mentor_agreement` |
 | Start dev server | `python manage.py runserver` |
+| Start production web server (Render) | `./start.sh` (gunicorn + uvicorn; see the file for the `--max-requests` recycling rationale) |
 | Run all tests | `python manage.py test` |
 | Run audit digest | `python manage.py audit_digest --days 7` |
 | Run CI checks | `.\run_ci.ps1` (Windows) or `./run_ci.sh` (Linux) |

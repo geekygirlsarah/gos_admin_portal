@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
+# Set up script to fail if any of these commands fail
 set -o errexit
 
-#rm -rf appvenv
-#python3 -m venv appvenv
-
-#appvenv/bin/pip install --no-cache-dir -r requirements.txt
+# Install pip, then install requirements
+python -m pip install --upgrade pip
 python -m pip install --no-cache-dir -r requirements.txt
 
-#appvenv/bin/python manage.py collectstatic --no-input
-#appvenv/bin/python manage.py migrate
+# Collect static files for serving, then migrate
 python manage.py collectstatic --no-input
 python manage.py migrate
