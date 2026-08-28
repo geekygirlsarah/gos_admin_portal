@@ -1,4 +1,6 @@
 import datetime
+import logging
+from contextlib import contextmanager
 
 from asgiref.sync import async_to_sync, sync_to_async
 from django.contrib.auth.models import AnonymousUser, User
@@ -8,6 +10,22 @@ from django.urls import reverse
 
 from GoSAdminPortal.adapter import _find_or_provision_user_for_email
 from GoSAdminPortal.middleware import LoginRequiredMiddleware
+
+
+@contextmanager
+def _silenced_django_request_logs():
+    """Suppress ``django.request`` ERROR lines (e.g. deliberate 503s).
+
+    Some tests intentionally trigger 5xx responses (like the health check's
+    "unhealthy" paths), which Django logs at ERROR and which would otherwise
+    pollute the test output with scary but expected tracebacks.
+    """
+    logger = logging.getLogger("django.request")
+    logger.disabled = True
+    try:
+        yield
+    finally:
+        logger.disabled = False
 
 
 class MiddlewareAsyncTest(TestCase):
@@ -195,42 +213,45 @@ class HealthCheckViewTest(TestCase):
         """When the DB connection is broken, /health returns 503."""
         from unittest import mock
 
-        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
-            mock_conn.cursor.side_effect = Exception("DB connection failed")
-            response = self.client.get(reverse("health"))
-            self.assertEqual(response.status_code, 503)
-            self.assertJSONEqual(
-                response.content, {"status": "unhealthy", "db": "unavailable"}
-            )
+        with _silenced_django_request_logs():
+            with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+                mock_conn.cursor.side_effect = Exception("DB connection failed")
+                response = self.client.get(reverse("health"))
+                self.assertEqual(response.status_code, 503)
+                self.assertJSONEqual(
+                    response.content, {"status": "unhealthy", "db": "unavailable"}
+                )
         """When cursor creation or query raises, /health returns 503."""
         from unittest import mock
 
-        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
-            mock_conn.cursor.side_effect = Exception("DB connection refused")
-            response = self.client.get(reverse("health"))
-            self.assertEqual(response.status_code, 503)
-            self.assertJSONEqual(
-                response.content, {"status": "unhealthy", "db": "unavailable"}
-            )
+        with _silenced_django_request_logs():
+            with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+                mock_conn.cursor.side_effect = Exception("DB connection refused")
+                response = self.client.get(reverse("health"))
+                self.assertEqual(response.status_code, 503)
+                self.assertJSONEqual(
+                    response.content, {"status": "unhealthy", "db": "unavailable"}
+                )
 
     def test_health_reports_email_down(self):
         """When the email backend is unreachable, /health returns 503."""
         from unittest import mock
 
-        with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
-            mock_conn.cursor.return_value.__enter__.return_value.fetchone.return_value = (
-                1,
-            )
-            with mock.patch("GoSAdminPortal.views.mail") as mock_mail:
-                mock_mail.mailers.default.open.side_effect = Exception(
-                    "SMTP connection refused"
+        with _silenced_django_request_logs():
+            with mock.patch("GoSAdminPortal.views.connection") as mock_conn:
+                mock_conn.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+                    1,
                 )
-                response = self.client.get(reverse("health"))
-                self.assertEqual(response.status_code, 503)
-                self.assertJSONEqual(
-                    response.content,
-                    {"status": "unhealthy", "db": "ok", "email": "unavailable"},
-                )
+                with mock.patch("GoSAdminPortal.views.mail") as mock_mail:
+                    mock_mail.mailers.default.open.side_effect = Exception(
+                        "SMTP connection refused"
+                    )
+                    response = self.client.get(reverse("health"))
+                    self.assertEqual(response.status_code, 503)
+                    self.assertJSONEqual(
+                        response.content,
+                        {"status": "unhealthy", "db": "ok", "email": "unavailable"},
+                    )
 
     def test_health_reports_all_ok(self):
         """When DB and email are both healthy, /health returns 200 with details."""

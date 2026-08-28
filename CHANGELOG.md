@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Web server now recycles workers to prevent memory exhaustion (deployment hardening)**: The Render "Start Command" moved from the dashboard into a versioned `start.sh` script at the repo root. The production server now recycles its worker every ~1000 requests (with jitter) instead of running one long-lived worker that never returns memory to the OS. This prevents slow memory buildup from eventually pushing the instance over its memory limit — which had caused a few server crashes. The server also logs one line per request so traffic can be correlated with resource usage. Point Render's Start Command at `./start.sh`.
 
+### Fixed
+- **Audit log admin no longer uses a deprecated Django API**: The `AuditLogAdmin.get_actions()` override now accepts the `action_location` argument, removing the `RemovedInDjango70Warning` that was failing the Audit Logs admin page and CSV export during CI.
+- **Quieter test output**: Tests that deliberately trigger `/health` "unhealthy" responses now suppress the expected `Service Unavailable` error logs, and the test runner creates the `staticfiles/` directory when it's missing so WhiteNoise no longer complains about it on fresh CI checkouts.
+
 ## 2026-08-27
 
 ### Changed
