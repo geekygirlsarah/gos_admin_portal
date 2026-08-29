@@ -14,6 +14,5 @@ python -m pip install --no-cache-dir -r requirements.txt
 # designed to validate.
 python manage.py check --deploy
 
-# Collect static files for serving. (Migrations moved to pre_deploy.sh so
-# they run once, after build, before the new release goes live on Render.)
+# Collect static files for serving.
 python manage.py collectstatic --no-input
