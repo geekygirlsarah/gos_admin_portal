@@ -64,7 +64,7 @@ Typical settings for email, debug, and allowed hosts can be configured directly 
 **Required in production:**
 - `FILE_ENCRYPTION_KEY` — Fernet key for encrypting medical/tax documents and sensitive fields.
   Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-  If this key is rotated, all existing encrypted data (EncryptedFileField, EncryptedTextField, EncryptedCharField) must be re-encrypted using a data migration script.
+  If this key is rotated, re-encrypt existing data with `python manage.py reencrypt_encrypted_data --old-file-key <old key>` (see "Key rotation" below).
 - `SECRET_KEY` — Django secret key for cryptographic signing. Must NOT use the default insecure value.
   Generate with: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
 - `ALLOWED_HOSTS` — Comma-separated list of your production domain(s), e.g., `example.com,www.example.com`
@@ -79,6 +79,25 @@ Outgoing email is configured through Django 6.1's `MAILERS` setting (the legacy 
 - `DEFAULT_FROM_EMAIL` — From address for outgoing emails
 - `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` — Set to "True" (default)
 - `SECURE_HSTS_SECONDS` — HSTS max-age in seconds (default: 31536000 (365 days))
+- `OLD_SECRET_KEY` — Optional. The `SECRET_KEY` in use before the most recent rotation. When set, it is placed in `SECRET_KEY_FALLBACKS` so data signed with the old key still validates. This is also used as a legacy decryptor by `reencrypt_encrypted_data`.
+
+## Key rotation
+Encrypted fields (`EncryptedTextField`/`EncryptedCharField`/`EncryptedFileField`) are always encrypted/decrypted with the **current** `FILE_ENCRYPTION_KEY`. Rotating it (or `SECRET_KEY`) makes existing encrypted data unreadable until it is re-encrypted.
+
+Re-encrypt after a rotation with the management command (run it during a maintenance window; use `--dry-run` first):
+
+```
+python manage.py reencrypt_encrypted_data --old-file-key <old FILE_ENCRYPTION_KEY>
+```
+
+- `--old-file-key` / `OLD_FILE_ENCRYPTION_KEY` — a rotated-away `FILE_ENCRYPTION_KEY`.
+- `--old-secret-key` / `OLD_SECRET_KEY` — a rotated-away `SECRET_KEY` (legacy file-encryption key was derived from `SECRET_KEY` before `FILE_ENCRYPTION_KEY` existed).
+- `--new-file-key` / `NEW_FILE_ENCRYPTION_KEY` — optional. Re-encrypt to a key other than the currently configured one, e.g. to pre-encrypt all data with the new key *before* deploying it.
+- `--dry-run` — preview what would change without writing anything.
+
+The command covers every encrypted field in the project (Student medical fields and `TaxForm.file` uploads today, and any future `Encrypted*Field` automatically). Student medical fields that no supplied key can open fall back to the converted Application source data. `reencrypt_student_medical` remains available as a focused version for student medical fields only.
+
+If you also rotate `SECRET_KEY`, keep `OLD_SECRET_KEY` pointed at the pre-rotation value until all re-encryption is finished.
 
 ## Additional Documentation
 For detailed architectural guidance, data model summaries, and coding standards (especially for AI agents), see [AGENTS.md](AGENTS.md).
@@ -115,7 +134,8 @@ The CI suite performs the following:
 ### Render configuration
 The project is deployed on Render as a web service with a managed PostgreSQL database. Point Render's dashboard at the version-controlled scripts in the repo root:
 
-- **Build Command**: `./build.sh` — installs dependencies, runs `python manage.py check --deploy` (with the real production environment variables, so it catches genuine misconfigurations at deploy time rather than in CI), collects static files, and applies migrations.
+- **Build Command**: `./build.sh` — installs dependencies, runs `python manage.py check --deploy` (with the real production environment variables, so it catches genuine misconfigurations at deploy time rather than in CI), and collects static files.
+- **Pre-Deploy Command**: `./pre_deploy.sh` — runs `python manage.py migrate`. Migrations run here, after the build and before the new release goes live, so schema changes apply once per deploy (not per build instance) and only once the new code is live.
 - **Start Command**: `./start.sh` — starts the production server (gunicorn + uvicorn). The worker is recycled every ~1000 requests (with jitter) to prevent memory exhaustion; see the script for details.
 
 The `--deploy` system check is deliberately **not** run in GitHub Actions or the local `run_ci` scripts, because those environments have no production environment variables and would only produce security warnings that don't reflect the deployed configuration.
