@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-29
+
+### Added
+- **Digital sign-out for parents/guardians**: A new public sign-out page (`/signout/<id>/`) lets a parent on a tablet pick their student and draw their signature in a box (using the `signature_pad` JavaScript library) to digitally sign the student out. Like the existing kiosk pages, it's login-exempt and controlled by an admin-managed "Digital Sign-out Station" row that links a label to a program. Each submission is recorded with the student, the parent-entered name, the drawn signature image, and a timestamp, and is viewable in the Django admin (Attendance → Digital sign-outs). Program pages can link to the station's public URL so it's easy to reach.
+
+### Changed
+- **Signing out no longer re-prompts / shows "resend form data"**: The sign-out page now uses a redirect-after-submit flow, so pressing "Done" (or refreshing) returns to a clean form to sign out the next student without the browser nagging about resubmitting or creating a duplicate record. Only one student can be signed out at a time, and the same student can't be signed out twice in a day.
+- **Signature canvas now aligns with your finger or stylus**: The drawing pad's internal resolution is matched to its on-screen size, so strokes no longer drift away from where you draw (no more "zoomed-in" line).
+- **Already-signed-out students are dimmed on the station**: Students signed out today show a dimmed "Signed out" badge so parents can see who's already been picked up. Tapping a dimmed name reveals "…signed out. Click here to undo" and, after confirming, undoes (deletes) that sign-out so a mistaken check-out can be corrected.
+- **The confirmation page's "Done" button is now a plain link**: It reliably takes you back to a fresh form to sign out the next student (no JavaScript or re-submission involved), and picking a different student now clears the previous one's "click here to undo" hint.
+- **Signatures are previewed on the program's sign-out page**: The "Recent Sign-outs" table now shows a thumbnail of each drawn signature right below the parent's name instead of just a "View" link; clicking it opens the full-size image.
+- **Undoing a sign-out from the tablet is more reliable**: Tapping an already-signed-out student's "Click here to undo" now sends the undo request directly (instead of submitting a hidden form), so mistaken check-outs can be corrected on more tablet browsers.
+- **The station stays unlocked for 8 hours**: A mentor who arms the sign-out station keeps it open on the tablet for 8 hours (was 7 days), so it can't be left unlocked indefinitely.
+- **Parents pick who's signing out from a dropdown**: On the tablet, after choosing a student, the parent selects their own name from a dropdown of that student's linked parent/guardian accounts, or types a name for anyone not on file. The chosen name is saved with the sign-out.
+- **Mentors can mark who's here today**: The program's sign-out page now has a "Who's Here Today?" card where mentors can mark active students Present or Absent for the day (one record per student per day). Students marked absent are hidden from the tablet's picker, so they can't be signed out; unmarked students are treated as present.
+- **One "Parent sign-outs" setting turns on both the printable sheet and the digital station**: The program feature previously named "Printable Sign-out Sheet" has been renamed "Parent sign-outs" and now also controls whether the "Digital Sign-out" button appears on the program page — enabling it shows both, disabling it hides both.
+
 ## 2026-08-28
 
 ### Added

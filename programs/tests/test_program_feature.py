@@ -1,4 +1,6 @@
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.urls import reverse
 
 from programs.forms import ProgramForm
 from programs.models import Program, ProgramFeature
@@ -37,3 +39,36 @@ class ProgramFeatureTests(TestCase):
         # Check that the feature is available to be selected for this program
         features = ProgramFeature.objects.all()
         self.assertTrue(features.filter(key="tshirt-size").exists())
+
+
+class SignoutSheetFeatureTests(TestCase):
+    """The single 'signout-sheet' feature turns on both the printable sheet
+    and the digital sign-out station on the program detail page."""
+
+    def setUp(self):
+        self.lead_mentor = User.objects.create_user(
+            username="lead_mentor", password="password123"
+        )  # nosec B106
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.lead_mentor.groups.add(group)
+        self.program = Program.objects.create(name="Test Program", active=True)
+        self.signout_feature, _ = ProgramFeature.objects.get_or_create(
+            key="signout-sheet",
+            defaults={"name": "Parent sign-outs"},
+        )
+        self.detail_url = reverse("program_detail", args=[self.program.pk])
+
+    def _render(self):
+        self.client.force_login(self.lead_mentor)
+        return self.client.get(self.detail_url)
+
+    def test_buttons_hidden_when_feature_disabled(self):
+        response = self._render()
+        self.assertNotContains(response, "Print Sign-out Sheet")
+        self.assertNotContains(response, "Digital Sign-out")
+
+    def test_both_buttons_render_when_feature_enabled(self):
+        self.program.features.add(self.signout_feature)
+        response = self._render()
+        self.assertContains(response, "Print Sign-out Sheet")
+        self.assertContains(response, "Digital Sign-out")

@@ -1,0 +1,310 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ config.label }} — Sign Out</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <style>
+        body { background-color: #bad3fe; color: #000; min-height: 100vh; }
+        .kiosk-header { background-color: #bad3fe; padding: 1.5rem 0 0.5rem; }
+        .kiosk-header h1 { font-size: 3rem; color: #000; margin: 0; }
+        .card { background-color: #fff; border: 1px solid #aac4f0; color: #000; }
+        .card-header { background-color: #d6e8ff; border-bottom: 1px solid #aac4f0; color: #000; }
+        .card-header h4 { color: #000; font-size: 1.8rem; }
+        .form-control, .form-select { background-color: #fff; border: 1px solid #7aaee8; color: #000; font-size: 1.8rem; padding: 1rem 1.25rem; }
+        .form-control:focus, .form-select:focus { background-color: #fff; color: #000; border-color: #3a7bd5; box-shadow: 0 0 0 0.25rem rgba(58, 123, 213, 0.25); }
+        .btn-signin { background-color: #3a7bd5; border-color: #3a7bd5; color: #fff; font-size: 1.8rem; padding: 1rem 2.5rem; }
+        .btn-signin:hover { background-color: #2c62b0; border-color: #2c62b0; color: #fff; }
+        .btn-secondary-lg { font-size: 1.6rem; padding: 1rem 2.5rem; }
+        label { font-size: 1.4rem; color: #222; }
+        .program-badge { background-color: #d6e8ff; border: 1px solid #7aaee8; color: #1a4a8a; padding: 0.5rem 1rem; border-radius: 1.5rem; font-size: 1.2rem; }
+        .text-muted { color: #555 !important; }
+        .sig-pad-wrap { border: 2px solid #7aaee8; border-radius: 0.5rem; background: #fff; }
+        .sig-pad { width: 100%; height: 220px; touch-action: none; }
+        .student-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
+        .student-choice { font-size: 1.6rem; text-align: center; padding: 1.25rem 0.5rem; border: 2px solid #7aaee8; border-radius: 0.5rem; cursor: pointer; user-select: none; background: #fff; color: #000; }
+        .student-choice.selected { background-color: #3a7bd5; border-color: #3a7bd5; color: #fff; }
+        .student-choice.signed-out { opacity: 0.6; border-style: dashed; }
+        .student-choice.signed-out .signed-badge { display: inline-block; font-size: 1rem; }
+        .student-choice .undo-hint { display: none; }
+        .student-choice.signed-out.undo-confirm { opacity: 1; border-style: solid; border-color: #d43f3f; background-color: #fff3f3; }
+        .student-choice.signed-out.undo-confirm .student-name { display: none; }
+        .student-choice.signed-out.undo-confirm .signed-badge { display: none; }
+        .student-choice.signed-out.undo-confirm .undo-hint { display: block; }
+        .undo-hint { font-size: 1.1rem; color: #a22; }
+        .notice { background-color: #d4edda; border: 1px solid #b7dfb9; color: #155724; font-size: 1.5rem; }
+        .success-check { color: #28a745; font-size: 5rem; }
+        .success-name { font-size: 3rem; }
+        .success-student { font-size: 2rem; color: #333; }
+    </style>
+</head>
+<body>
+<header class="kiosk-header text-center mb-4">
+    <div class="container">
+        <div class="row justify-content-center mb-2">
+            <div class="col-auto">
+                <img src="{% static 'img/gos_logo.png' %}" class="img-fluid" style="max-height: 120px;" alt="Girls of Steel Logo">
+            </div>
+        </div>
+        <h1>{{ config.label }}</h1>
+        <p class="mb-0"><span class="program-badge">{{ program.name }}</span></p>
+    </div>
+</header>
+
+<div class="container" style="max-width: 900px;">
+{% if not is_unlocked %}
+    {# ── Locked / unlock-needed screen ─────────────────────────────────────── #}
+    <div class="text-center mt-5">
+        <div style="font-size: 5rem;">&#128274;</div>
+        <h2 class="mt-3" style="font-size: 2.5rem;">This sign-out station is locked.</h2>
+        <p class="lead text-muted" style="font-size: 1.5rem;">
+            A mentor needs to unlock it from the program page before students can be signed out.
+        </p>
+    </div>
+{% elif success %}
+    {# ── Success screen ───────────────────────────────────────────────────── #}
+    <div class="text-center mt-5">
+        <div class="success-check">&#10004;</div>
+        <h2 class="success-name">Signed Out!</h2>
+        <p class="success-student">
+            {% if signout.student %}{{ signout.student.display_name }}{% else %}Student{% endif %}
+            was signed out at {{ signout.signed_at|date:"g:i A" }}
+        </p>
+        <a id="doneBtn" role="button" class="btn btn-signin mt-4" href="{% url 'digital_signout' config.pk %}">Done</a>
+    </div>
+{% else %}
+    <form id="signoutForm" method="post" action="{% url 'digital_signout' config.pk %}">
+        {% csrf_token %}
+
+        {% if error %}
+        <div class="alert alert-danger py-3" role="alert" style="font-size: 1.5rem;">{{ error }}</div>
+        {% endif %}
+        {% if notice == "undone" %}
+        <div class="alert notice py-3" role="alert">Sign-out undone. The student is active again.</div>
+        {% endif %}
+
+        <div class="card shadow mb-4">
+            <div class="card-header"><h4 class="mb-0">1. Who are you picking up?</h4></div>
+            <div class="card-body p-4">
+                {% if students %}
+                <div class="student-picker" id="studentPicker">
+                    {% for s in students %}
+                    <div
+                        class="student-choice{% if selected_student and selected_student.pk == s.pk %} selected{% endif %}{% if s.today_signout %} signed-out{% endif %}"
+                        data-student-id="{{ s.pk }}"
+                        {% if s.today_signout %}data-signed-out="{{ s.today_signout.pk }}"{% endif %}
+                        data-role="button"
+                        tabindex="0"
+                    >
+                        <span class="student-name">{{ s.preferred_first_name|default:s.legal_first_name }} {{ s.last_name }}</span>
+                        {% if s.today_signout %}
+                        <span class="signed-badge badge bg-warning text-dark">Signed out</span>
+                        <span class="undo-hint">{{ s.preferred_first_name|default:s.legal_first_name }} signed out. <strong>Click here to undo</strong></span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <input type="hidden" name="student_id" id="studentId" value="{% if selected_student %}{{ selected_student.pk }}{% endif %}">
+                {% else %}
+                <p class="text-muted h5 mb-0">There are no students currently enrolled to sign out.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow mb-4">
+            <div class="card-header"><h4 class="mb-0">2. Sign your name</h4></div>
+            <div class="card-body p-4">
+                <div class="mb-3">
+                    <label for="signedBySelect" class="form-label">Who is signing out?</label>
+                    <select id="signedBySelect" class="form-select">
+                        <option value="">— Pick a parent/guardian —</option>
+                        <option value="__manual__">Someone else — type a name</option>
+                    </select>
+                    <div id="manualGroup" class="mt-2 d-none">
+                        <label for="signedByName" class="form-label">Your full name</label>
+                        <input type="text" id="signedByName" class="form-control" value="{{ signed_by_name }}" placeholder="Parent/Guardian name" autocomplete="off">
+                    </div>
+                    <input type="hidden" name="signed_by_name" id="signedByNameHidden">
+                </div>
+                <label class="form-label">Draw your signature in the box</label>
+                <div class="sig-pad-wrap">
+                    <canvas id="sigCanvas" class="sig-pad"></canvas>
+                </div>
+                <input type="hidden" name="signature" id="signatureData">
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="button" id="clearSigBtn" class="btn btn-outline-secondary btn-secondary-lg">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-grid">
+            <button type="submit" id="submitBtn" class="btn btn-signin">Sign Student Out</button>
+        </div>
+    </form>
+
+    {# Hidden form used to undo a sign-out (submitted only after confirmation). #}
+    <form id="undoForm" method="post" action="{% url 'digital_signout' config.pk %}" class="d-none">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="undo">
+        <input type="hidden" name="signout_id" id="undoSignoutId">
+    </form>
+
+    {{ parents_by_student|json_script:"parentsByStudent" }}
+{% endif %}
+</div>
+
+<script src="{% static 'vendor/signature_pad/5.0.4/signature_pad.umd.min.js' %}"></script>
+<script nonce="{{ csp_nonce }}">
+(function () {
+    "use strict";
+
+{% if not is_unlocked %}
+    {# Station is locked — nothing to do #}
+{% elif success %}
+    {# "Done" is a plain link that GETs back to a fresh form, so another
+       student can be signed out. No JS needed — refreshing/re-loading the
+       page never re-submits the previous POST. #}
+{% else %}
+    var canvas = document.getElementById("sigCanvas");
+    var signaturePad = new SignaturePad(canvas, {
+        minWidth: 1.2,
+        maxWidth: 3,
+        penColor: "#000",
+    });
+
+    // Match the canvas's internal pixel buffer to its on-screen (CSS) size.
+    // SignaturePad maps pointer coordinates via getBoundingClientRect() (CSS
+    // px), so if the internal size differs from the layout size the strokes
+    // get stretched and the line drifts away from the finger/stylus.
+    function fitCanvas() {
+        var w = canvas.offsetWidth || canvas.clientWidth;
+        var h = canvas.offsetHeight || canvas.clientHeight;
+        if (w === 0 || h === 0) { return; }
+        if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+            signaturePad.clear();
+        }
+    }
+    fitCanvas();
+    window.addEventListener("resize", fitCanvas);
+
+    var studentIdInput = document.getElementById("studentId");
+    var undoForm = document.getElementById("undoForm");
+    var undoCsrf = undoForm.querySelector("input[name=csrfmiddlewaretoken]").value;
+    var undoActionUrl = undoForm.action;
+
+    // Parent/guardian picker for "who is signing out". The dropdown is filled
+    // with the selected student's linked parents (see parents_by_student),
+    // with a manual fallback for anyone not on file.
+    var parentsByStudent = JSON.parse(document.getElementById("parentsByStudent").textContent);
+    var signedBySelect = document.getElementById("signedBySelect");
+    var manualGroup = document.getElementById("manualGroup");
+    var signedByName = document.getElementById("signedByName");
+    var signedByNameHidden = document.getElementById("signedByNameHidden");
+
+    function populateParents(studentId) {
+        // Reset to the placeholder, keeping the "Someone else" option.
+        signedBySelect.innerHTML = "";
+        var ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = "— Pick a parent/guardian —";
+        signedBySelect.appendChild(ph);
+        (parentsByStudent[studentId] || []).forEach(function (name) {
+            var opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            signedBySelect.appendChild(opt);
+        });
+        var other = document.createElement("option");
+        other.value = "__manual__";
+        other.textContent = "Someone else — type a name";
+        signedBySelect.appendChild(other);
+        // Show the manual box when there are no linked parents, so a parent
+        // who isn't on the account can still type their name.
+        manualGroup.classList.toggle("d-none", (parentsByStudent[studentId] || []).length > 0);
+        signedBySelect.value = "";
+        signedByNameHidden.value = "";
+    }
+    signedBySelect.addEventListener("change", function () {
+        if (signedBySelect.value === "__manual__") {
+            manualGroup.classList.remove("d-none");
+            signedByName.focus();
+        } else {
+            manualGroup.classList.add("d-none");
+        }
+    });
+
+    var choices = document.querySelectorAll(".student-choice");
+    choices.forEach(function (el) {
+        var isSignedOut = el.getAttribute("data-signed-out");
+        function select() {
+            // Turning on a selection also hides any previously-armed "click
+            // here to undo" wording on an already-signed-out student.
+            choices.forEach(function (c) {
+                c.classList.remove("selected");
+                c.classList.remove("undo-confirm");
+            });
+            el.classList.add("selected");
+            studentIdInput.value = el.getAttribute("data-student-id");
+            populateParents(studentIdInput.value);
+        }
+        function handleTap() {
+            if (!isSignedOut) { select(); return; }
+            // Signed-out student: first tap reveals "[name] Signed out.
+            // Click here to undo"; a second tap confirms and submits.
+            if (!el.classList.contains("undo-confirm")) {
+                choices.forEach(function (c) { c.classList.remove("undo-confirm"); });
+                el.classList.add("undo-confirm");
+                return;
+            }
+            var name = el.querySelector(".student-name").textContent;
+            if (window.confirm(name + " was signed out. Undo this sign-out?")) {
+                // POST the undo ourselves (fetch) rather than submitting the
+                // hidden form, which is unreliable on some tablet browsers.
+                // Sending the CSRF token + following the 302 is fully handled,
+                // so after undo we land back on the fresh, un-dimmed form.
+                var fd = new FormData();
+                fd.append("csrfmiddlewaretoken", undoCsrf);
+                fd.append("action", "undo");
+                fd.append("signout_id", isSignedOut);
+                fetch(undoActionUrl, { method: "POST", body: fd, credentials: "same-origin" })
+                    .then(function (resp) { window.location.href = resp.url || undoActionUrl; })
+                    .catch(function () { window.location.reload(); });
+            }
+        }
+        el.addEventListener("click", handleTap);
+        el.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleTap(); }
+        });
+    });
+
+    document.getElementById("clearSigBtn").addEventListener("click", function () {
+        signaturePad.clear();
+    });
+
+    document.getElementById("signoutForm").addEventListener("submit", function (e) {
+        if (!studentIdInput.value) {
+            e.preventDefault();
+            alert("Please select the student you are signing out.");
+            return;
+        }
+        // Write the chosen signer name into the hidden field the server reads.
+        // A real parent comes from the dropdown; "__manual__" or a student
+        // with no linked parents falls back to the typed name.
+        if (signedBySelect.value && signedBySelect.value !== "__manual__") {
+            signedByNameHidden.value = signedBySelect.value;
+        } else {
+            signedByNameHidden.value = signedByName.value.trim();
+        }
+        if (!signaturePad.isEmpty()) {
+            document.getElementById("signatureData").value = signaturePad.toDataURL("image/png");
+        }
+    });
+{% endif %}
+}());
+</script>
+</body>
+</html>

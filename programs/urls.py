@@ -37,6 +37,7 @@ from .views import (
     ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,
+    ProgramDigitalSignoutView,
     ProgramDocumentCreateView,
     ProgramDocumentDeleteView,
     ProgramDocumentUpdateView,
@@ -158,6 +159,11 @@ urlpatterns = [
         "<int:pk>/signout/",
         login_required(ProgramSignoutSheetView.as_view()),
         name="program_signout_sheet",
+    ),
+    path(
+        "<int:pk>/digital-signout/",
+        login_required(ProgramDigitalSignoutView.as_view()),
+        name="program_digital_signout",
     ),
     # List pages
     path(

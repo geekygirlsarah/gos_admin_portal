@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Digital Sign-out — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-10 col-xl-8">
+    <h1 class="h4">Digital Sign-out — {{ program.name }}{% if program.year_display %} <small class="text-muted">({{ program.year_display }})</small>{% endif %}</h1>
+
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Station Status</span>
+        {% if is_unlocked %}<span><span class="badge bg-success">Unlocked</span></span>{% else %}<span><span class="badge bg-secondary">Locked</span></span>{% endif %}
+      </div>
+      <div class="card-body">
+        <p class="mb-2">Open the public sign-out page on the tablet. Parents pick their student and sign in a box.</p>
+        <div class="input-group mb-3">
+          <input id="publicUrl" type="text" class="form-control" value="{{ request.scheme }}://{{ request.get_host }}{{ public_url }}" readonly>
+          <button class="btn btn-outline-secondary" type="button" id="copyUrlBtn">Copy</button>
+        </div>
+
+        <div class="d-flex gap-2">
+          <form method="post" action="{% url 'program_digital_signout' program.id %}">
+            {% csrf_token %}
+            {% if is_unlocked %}
+              <button name="action" value="lock" class="btn btn-outline-secondary">Lock Station</button>
+            {% else %}
+              <button name="action" value="unlock" class="btn btn-primary">Unlock Station</button>
+            {% endif %}
+          </form>
+        </div>
+        <p class="form-text mt-3 mb-0 text-muted">
+          Unlocking arms the station for <strong>8 hours</strong> on the tablet, so students can be signed out without a mentor present at the door. Lock it again anytime.
+        </p>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">Who&#x27;s Here Today?</div>
+      <div class="card-body p-0">
+        {% if presence_students %}
+        <ul class="list-group list-group-flush">
+          {% for s in presence_students %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>
+              {{ s.display_name }}
+              {% if s.today_presence.status == 'absent' %}
+                <span class="badge bg-danger">Absent</span>
+              {% else %}
+                <span class="badge bg-success">Present</span>
+              {% endif %}
+            </span>
+            <div class="d-flex gap-2">
+              {% if s.today_presence.status == 'absent' %}
+                <form method="post" action="{% url 'program_digital_signout' program.id %}">
+                  {% csrf_token %}
+                  <button name="action" value="mark_present" class="btn btn-sm btn-outline-success">Mark Present</button>
+                  <input type="hidden" name="student_id" value="{{ s.pk }}">
+                </form>
+              {% else %}
+                <form method="post" action="{% url 'program_digital_signout' program.id %}">
+                  {% csrf_token %}
+                  <button name="action" value="mark_absent" class="btn btn-sm btn-outline-danger">Mark Absent</button>
+                  <input type="hidden" name="student_id" value="{{ s.pk }}">
+                </form>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-3 text-muted">No active students enrolled.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Recent Sign-outs</div>
+      <div class="card-body p-0">
+        {% if recent_signouts %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Student</th>
+                <th>Signed By</th>
+                <th>Signature</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in recent_signouts %}
+              <tr>
+                <td>{{ s.signed_at|date:"M j, Y g:i A" }}</td>
+                <td>{{ s.student.display_name|default:"Unknown" }}</td>
+                <td>{{ s.signed_by_name|default:"" }}</td>
+                <td>{% if s.signature %}<a href="{{ s.signature.url }}" target="_blank" rel="noopener"><img src="{{ s.signature.url }}" alt="Signature of {{ s.signed_by_name|default:'parent' }}" style="max-height: 48px; max-width: 160px; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></a>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-3 text-muted">No sign-outs recorded yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var copyBtn = document.getElementById("copyUrlBtn");
+  var input = document.getElementById("publicUrl");
+  if (copyBtn && input) {
+    copyBtn.addEventListener("click", function () {
+      input.select();
+      try { navigator.clipboard.writeText(input.value); } catch (e) { /* ignore */ }
+    });
+  }
+}());
+</script>
+{% endblock %}

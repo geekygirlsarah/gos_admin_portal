@@ -6,8 +6,11 @@ def add_signout_feature(apps, schema_editor):
     ProgramFeature.objects.get_or_create(
         key="signout-sheet",
         defaults={
-            "name": "Printable Sign-out Sheet",
-            "description": "Enable a printable sign-out sheet for parents/guardians on the Program page.",
+            "name": "Parent sign-outs",
+            "description": (
+                "Enable parent sign-outs: the printable sign-out sheet on the "
+                "Program page and the digital sign-out station on the tablet."
+            ),
             "display_order": 40,
         },
     )
