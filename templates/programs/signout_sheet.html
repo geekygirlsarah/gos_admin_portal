@@ -11,6 +11,9 @@
             .no-print { display: none !important; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .table th, .table td { border-color: #000 !important; border-width: 2px; }
+            .table thead { display: table-header-group; }
+            .table thead th { position: sticky; top: 0; }
+            .table tbody tr { break-inside: avoid; page-break-inside: avoid; }
         }
         .table th, .table td { border-width: 2px; }
         body { background: #fff; }
