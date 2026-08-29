@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import AttendanceEvent, AttendanceSession, KioskDevice, RFIDCard
+from .models import (
+    AttendanceEvent,
+    AttendanceSession,
+    DigitalSignout,
+    DigitalSignoutConfig,
+    KioskDevice,
+    RFIDCard,
+    StudentPresence,
+)
 
 
 @admin.register(KioskDevice)
@@ -69,3 +77,36 @@ class AttendanceSessionAdmin(admin.ModelAdmin):
         "adult__last_name",
     )
     date_hierarchy = "check_in"
+
+
+@admin.register(DigitalSignoutConfig)
+class DigitalSignoutConfigAdmin(admin.ModelAdmin):
+    list_display = ("label", "program", "is_active", "created_at")
+    list_filter = ("program", "is_active")
+    search_fields = ("label", "program__name")
+
+
+@admin.register(DigitalSignout)
+class DigitalSignoutAdmin(admin.ModelAdmin):
+    list_display = ("signed_at", "program", "student", "signed_by_name", "config")
+    list_filter = ("program", "config")
+    search_fields = (
+        "signed_by_name",
+        "student__preferred_first_name",
+        "student__last_name",
+        "config__label",
+    )
+    date_hierarchy = "signed_at"
+    readonly_fields = ("signature", "signed_at", "created_at")
+
+
+@admin.register(StudentPresence)
+class StudentPresenceAdmin(admin.ModelAdmin):
+    list_display = ("date", "program", "student", "status", "marked_by", "updated_at")
+    list_filter = ("program", "status", "date")
+    search_fields = (
+        "student__preferred_first_name",
+        "student__last_name",
+        "program__name",
+    )
+    date_hierarchy = "date"

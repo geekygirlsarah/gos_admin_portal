@@ -51,6 +51,17 @@ from .mixins import (
     logger,
 )
 
+try:
+    from attendance.models import DigitalSignout, DigitalSignoutConfig, StudentPresence
+    from attendance.signout_utils import _clear_unlocked, _is_unlocked, _set_unlocked
+    from attendance.signout_views import _active_students
+except ImportError:
+    DigitalSignout = None
+    DigitalSignoutConfig = None
+    StudentPresence = None
+    _set_unlocked = _clear_unlocked = _is_unlocked = None
+    _active_students = None
+
 
 class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     model = Program
@@ -966,6 +977,121 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
             "students": students,
         }
         return render(request, self.template_name, ctx)
+
+
+class ProgramDigitalSignoutView(LoginRequiredMixin, View):
+    """Manage a program's digital sign-out station.
+
+    Lead Mentors and Mentors who can read the program can arm (unlock) the
+    station from here, copy its public URL, see whether it's unlocked, and
+    review recent recorded sign-outs. Unlocking sets an HttpOnly cookie so the
+    login-exempt tablet page at /signout/<id>/ becomes usable.
+    """
+
+    template_name = "programs/digital_signout.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            program = get_object_or_404(Program, pk=kwargs.get("pk"))
+            role = get_user_role(request.user)
+            if role not in ("LeadMentor", "Mentor") or not can_user_read(
+                request.user, "programs", program
+            ):
+                messages.error(
+                    request, "You do not have permission to access that section."
+                )
+                return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
+
+    def _ensure_config(self, program):
+        config, _ = DigitalSignoutConfig.objects.get_or_create(
+            program=program,
+            defaults={"label": f"Digital Sign-out — {program.name}"},
+        )
+        return config
+
+    def _recent_signouts(self, program):
+        return (
+            DigitalSignout.objects.filter(program=program)
+            .select_related("student", "config")
+            .order_by("-signed_at")[:20]
+        )
+
+    def post(self, request, pk):
+        program = get_object_or_404(Program, pk=pk)
+        config = self._ensure_config(program)
+        action = request.POST.get("action")
+
+        response = redirect(reverse("program_digital_signout", args=[program.pk]))
+        if action == "unlock":
+            _set_unlocked(response, config.pk)
+            messages.success(
+                request,
+                "Sign-out unlocked. It will stay open on the tablet for 8 hours.",
+            )
+        elif action == "lock":
+            _clear_unlocked(response, config.pk)
+            messages.success(request, "Sign-out station locked.")
+        elif action in ("mark_present", "mark_absent"):
+            self._mark_presence(request, program, action)
+        return response
+
+    def _mark_presence(self, request, program, action):
+        """Toggle today's present/absent record for a student (PRG handled by post)."""
+        status = (
+            StudentPresence.ABSENT
+            if action == "mark_absent"
+            else StudentPresence.PRESENT
+        )
+        student_id = request.POST.get("student_id")
+        student = None
+        if student_id:
+            student = next(
+                (s for s in _active_students(program) if str(s.pk) == str(student_id)),
+                None,
+            )
+        if student is None:
+            return
+        StudentPresence.objects.update_or_create(
+            program=program,
+            student=student,
+            date=timezone.localdate(),
+            defaults={"status": status, "marked_by": request.user},
+        )
+        messages.success(
+            request,
+            "{} marked {}".format(
+                student.display_name, "absent" if action == "mark_absent" else "present"
+            ),
+        )
+
+    def get(self, request, pk):
+        program = get_object_or_404(Program, pk=pk)
+        config = self._ensure_config(program)
+        public_url = reverse("digital_signout", args=[config.pk])
+        today = timezone.localdate()
+        today_presence = {
+            p.student_id: p
+            for p in StudentPresence.objects.filter(
+                program=program, date=today
+            ).select_related("student")
+        }
+        presence_students = list(_active_students(program))
+        for student in presence_students:
+            student.today_presence = today_presence.get(student.pk)
+        return render(
+            request,
+            self.template_name,
+            {
+                "program": program,
+                "config": config,
+                "is_unlocked": _is_unlocked(request, config.pk),
+                "public_url": public_url,
+                "recent_signouts": self._recent_signouts(program),
+                "presence_students": presence_students,
+                "today_presence": today_presence,
+            },
+        )
 
 
 class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):

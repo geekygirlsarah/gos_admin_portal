@@ -41,6 +41,7 @@
               {% endif %}
               {% if 'signout-sheet' in program.feature_keys %}
                 <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
+                <a class="btn btn-outline-primary" href="{% url 'program_digital_signout' program.id %}">Digital Sign-out</a>
               {% endif %}
             </div>
           </div>

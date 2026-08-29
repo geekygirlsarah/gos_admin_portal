@@ -31,6 +31,7 @@ EXEMPT_PATH_PREFIXES = (
     "/admin/",
     "/apply/",  # public application wizard
     "/guest/",  # public guest permission forms
+    "/signout/",  # public digital sign-out pages
     "/api/v1/",  # API endpoints use X-API-KEY header auth, not session auth
     "/kiosk/",  # public kiosk attendance sign-in pages
     "/health/",  # health check endpoint for infrastructure monitoring

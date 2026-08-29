@@ -2,6 +2,14 @@ from django.db import models
 from django.utils import timezone
 
 
+def _signout_upload_to(instance, filename):
+    """Signature images land at MEDIA_ROOT/digital_signouts/<config_id>/<filename>."""
+    config_id = (
+        instance.config_id if getattr(instance, "config_id", None) else "unknown"
+    )
+    return f"digital_signouts/{config_id}/{filename}"
+
+
 class KioskConfig(models.Model):
     """Configuration for a public kiosk sign-in page.
 
@@ -210,3 +218,123 @@ class AttendanceSession(models.Model):
         hours = mins // 60
         rem = mins % 60
         return f"{hours}:{rem:02d}"
+
+
+class DigitalSignoutConfig(models.Model):
+    """Configuration for a public digital sign-out page.
+
+    Mirrors :class:`KioskConfig`: an admin-managed row linking a label to a
+    program, which serves a login-exempt page at /signout/<id>/ where parents
+    can digitally sign their student out on a tablet.
+    """
+
+    label = models.CharField(
+        max_length=100,
+        help_text="Human-readable name for this sign-out station (e.g. 'Front Door').",
+    )
+    program = models.ForeignKey(
+        "programs.Program",
+        on_delete=models.PROTECT,
+        related_name="signout_configs",
+        help_text="Program whose students can be signed out at this station.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive sign-out stations return a 404 page.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["label"]
+        verbose_name = "Digital Sign-out Station"
+        verbose_name_plural = "Digital Sign-out Stations"
+
+    def __str__(self):
+        return f"{self.label} ({self.program})"
+
+
+class StudentPresence(models.Model):
+    """Permanent per-day present/absent record for a student in a program.
+
+    Unmarked students default to present; an explicit ``absent`` record is
+    what hides a student from the digital sign-out picker. Toggling a
+    student's status on the same day overwrites the existing row.
+    """
+
+    PRESENT = "present"
+    ABSENT = "absent"
+    STATUS_CHOICES = [
+        (PRESENT, "Present"),
+        (ABSENT, "Absent"),
+    ]
+
+    program = models.ForeignKey(
+        "programs.Program", on_delete=models.PROTECT, related_name="student_presences"
+    )
+    student = models.ForeignKey(
+        "programs.Student", on_delete=models.PROTECT, related_name="presences"
+    )
+    date = models.DateField(default=timezone.localdate)
+    status = models.CharField(max_length=8, choices=STATUS_CHOICES)
+    marked_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="marked_student_presences",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("program", "student", "date")
+        ordering = ["-date", "student"]
+
+    def __str__(self):
+        return f"{self.student} {self.status} @ {self.date}"
+
+
+class DigitalSignout(models.Model):
+    """A single recorded digital sign-out of a student by a parent.
+
+    Stores the student, the parent-entered name, the drawn signature image,
+    and when it happened.
+    """
+
+    config = models.ForeignKey(
+        DigitalSignoutConfig,
+        on_delete=models.PROTECT,
+        related_name="signouts",
+    )
+    program = models.ForeignKey(
+        "programs.Program", on_delete=models.PROTECT, related_name="digital_signouts"
+    )
+    student = models.ForeignKey(
+        "programs.Student",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="digital_signouts",
+    )
+    signed_by_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Name the parent/guardian entered.",
+    )
+    signature = models.FileField(
+        upload_to=_signout_upload_to,
+        blank=True,
+        help_text="PNG image of the drawn signature.",
+    )
+    signed_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-signed_at", "-id"]
+        indexes = [
+            models.Index(fields=["program", "student", "signed_at"]),
+        ]
+
+    def __str__(self):
+        person = self.student or "Unknown student"
+        return f"{person} signed out @ {self.signed_at:%Y-%m-%d %H:%M}"
