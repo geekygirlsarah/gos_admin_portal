@@ -38,12 +38,11 @@ FILE_ENCRYPTION_KEY = os.getenv("FILE_ENCRYPTION_KEY")
 
 # Legacy: SECRET_KEY_FALLBACKS is kept for backwards compatibility with old signed data (e.g., sessions, tokens).
 # Do NOT use for file encryption. File encryption uses FILE_ENCRYPTION_KEY exclusively.
-SECRET_KEY_FALLBACKS = [
-    os.environ.get(
-        "OLD_SECRET_KEY",
-        "django-insecure-1oqwv49tbxn_x5f=mvb^)_r7g#l!@#*3r1sijxyvpv^424%5qd",
-    )
-]
+# Only include an entry when OLD_SECRET_KEY is set; otherwise Django's
+# security.W021 check flags the insecure dev default. OLD_SECRET_KEY should be
+# the SECRET_KEY that was in use before the most recent rotation.
+_old_secret_key = os.environ.get("OLD_SECRET_KEY")
+SECRET_KEY_FALLBACKS = [_old_secret_key] if _old_secret_key else []
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True").lower() in ["1", "true", "yes"]
