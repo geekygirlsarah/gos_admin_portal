@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-08-31
+
+### Added
+- **More filters on the "All Program Entries" attendance page**: Besides the existing program filter, you can now filter sessions by:
+  - **Type** — only students, only mentors, or only visitors.
+  - **Status** — only open sessions, only closed sessions, or both.
+  - **Date range** — a quick pick for Today, Yesterday, Past Week, or Past Month, or a custom From/To date range.
+- **Export the attendance list to a file**: The "All Program Entries" page now has "Export CSV" and "Export Excel" buttons that download the currently filtered/sorted list — handy for further analysis in a spreadsheet.
+
 ## 2026-08-29
 
 ### Added
