@@ -577,6 +577,42 @@ class ParentMergeForm(forms.Form):
         return cleaned
 
 
+class StudentMergeForm(forms.Form):
+    """Merge two student records that represent the same person.
+
+    ``keep`` is the surviving student. ``source`` is the student to fold into
+    ``keep`` and delete. Both are chosen via radio buttons.
+    """
+
+    keep = forms.ModelChoiceField(
+        queryset=Student.objects.none(),
+        widget=forms.RadioSelect,
+    )
+    source = forms.ModelChoiceField(
+        queryset=Student.objects.none(),
+        widget=forms.RadioSelect,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs_students = Student.objects.all().order_by(
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
+            Lower("last_name"),
+        )
+        self.fields["keep"].queryset = qs_students
+        self.fields["source"].queryset = qs_students
+
+    def clean(self):
+        cleaned = super().clean()
+        keep = cleaned.get("keep")
+        source = cleaned.get("source")
+        if keep and source and keep.pk == source.pk:
+            self.add_error("source", "Choose a different student to merge in.")
+        return cleaned
+
+
 class ProgramForm(forms.ModelForm):
     class Meta:
         model = Program

@@ -1,21 +1,49 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    FormView,
+    ListView,
+    UpdateView,
+    View,
+)
 
+from applications.models import Application
+from attendance.models import (
+    AttendanceEvent,
+    AttendanceSession,
+    DigitalSignout,
+    RFIDCard,
+    StudentPresence,
+)
 from audit.mixins import SensitiveDataViewMixin
+from badges.models import StudentBadge
+from outreach.models import OutreachSignup
 
 from ..constants import RELATIONSHIP_CHOICES
-from ..forms import StudentForm
-from ..models import Adult, AdultStudentRelationship, Program, Student
+from ..forms import StudentForm, StudentMergeForm
+from ..models import (
+    Adult,
+    AdultStudentRelationship,
+    BackgroundCheck,
+    Enrollment,
+    FeeAssignment,
+    Payment,
+    Program,
+    SlidingScale,
+    Student,
+    StudentDocument,
+)
 from ..permission_views import (
     LeadMentorRequiredMixin,
-    MentorOrLeadMentorRequiredMixin,
     PassUserToFormMixin,
     get_user_role,
 )
@@ -454,8 +482,6 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
-        from ..utils import convert_student_to_alumni, find_matching_alumni_adult
-
         year = request.GET.get("year")
         try:
             year = int(year) if year else timezone.now().year
@@ -549,3 +575,400 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
             f"Marked {marked_graduated} student(s) as graduated.",
         )
         return redirect("alumni_list")
+
+
+def _transfer_student_relationships(keep, source):
+    """Move all of ``source``'s adult/parent relationships onto ``keep``."""
+    changed = False
+    for rel in list(AdultStudentRelationship.objects.filter(student=source)):
+        existing = AdultStudentRelationship.objects.filter(
+            adult=rel.adult, student=keep
+        ).first()
+        if existing:
+            if not existing.specific_relationship and rel.specific_relationship:
+                existing.specific_relationship = rel.specific_relationship
+                existing.save(update_fields=["specific_relationship"])
+            if (
+                source.primary_contact_relationship_id == rel.id
+                and not keep.primary_contact_relationship_id
+            ):
+                keep.primary_contact_relationship = existing
+                changed = True
+            if (
+                source.secondary_contact_relationship_id == rel.id
+                and not keep.secondary_contact_relationship_id
+            ):
+                keep.secondary_contact_relationship = existing
+                changed = True
+            rel.delete()
+        else:
+            rel.student = keep
+            rel.save(update_fields=["student"])
+            if (
+                source.primary_contact_relationship_id == rel.id
+                and not keep.primary_contact_relationship_id
+            ):
+                keep.primary_contact_relationship = rel
+                changed = True
+            if (
+                source.secondary_contact_relationship_id == rel.id
+                and not keep.secondary_contact_relationship_id
+            ):
+                keep.secondary_contact_relationship = rel
+                changed = True
+    return changed
+
+
+def _transfer_student_related_records(keep, source):
+    """Transfer or merge all related models referencing ``source`` onto ``keep``."""
+    # 1. Enrollments
+    for enr in list(Enrollment.objects.filter(student=source)):
+        existing = Enrollment.objects.filter(student=keep, program=enr.program).first()
+        if existing:
+            updated = False
+            if not existing.team_id and enr.team_id:
+                existing.team = enr.team
+                updated = True
+            if not existing.crew_id and enr.crew_id:
+                existing.crew = enr.crew
+                updated = True
+            if not existing.subteam_id and enr.subteam_id:
+                existing.subteam = enr.subteam
+                updated = True
+            if not existing.active and enr.active:
+                existing.active = True
+                updated = True
+            if not existing.clearance_due and enr.clearance_due:
+                existing.clearance_due = True
+                updated = True
+            if updated:
+                existing.save()
+            enr.delete()
+        else:
+            enr.student = keep
+            enr.save(update_fields=["student"])
+
+    # 2. Fee assignments
+    for fa in list(FeeAssignment.objects.filter(student=source)):
+        existing = FeeAssignment.objects.filter(student=keep, fee=fa.fee).first()
+        if existing:
+            if not existing.notes and fa.notes:
+                existing.notes = fa.notes
+                existing.save(update_fields=["notes"])
+            fa.delete()
+        else:
+            fa.student = keep
+            fa.save(update_fields=["student"])
+
+    # 3. Payments
+    Payment.objects.filter(student=source).update(student=keep)
+
+    # 4. Sliding scale applications
+    SlidingScale.objects.filter(student=source).update(student=keep)
+
+    # 5. Student signed documents
+    for doc in list(StudentDocument.objects.filter(student=source)):
+        existing = StudentDocument.objects.filter(
+            student=keep, program_document=doc.program_document
+        ).first()
+        if existing:
+            if not existing.file and doc.file:
+                existing.file = doc.file
+                existing.save(update_fields=["file"])
+            doc.delete()
+        else:
+            doc.student = keep
+            doc.save(update_fields=["student"])
+
+    # 6. Background checks
+    for bg in list(BackgroundCheck.objects.filter(student=source)):
+        existing = BackgroundCheck.objects.filter(
+            student=keep, check_type=bg.check_type
+        ).first()
+        if existing:
+            updated = False
+            if not existing.cleared and bg.cleared:
+                existing.cleared = True
+                updated = True
+            if not existing.obtained_date and bg.obtained_date:
+                existing.obtained_date = bg.obtained_date
+                updated = True
+            if updated:
+                existing.save()
+            bg.delete()
+        else:
+            bg.student = keep
+            bg.save(update_fields=["student"])
+
+    # 7. RFID cards
+    for card in list(RFIDCard.objects.filter(student=source)):
+        if not RFIDCard.objects.filter(student=keep, uid=card.uid).exists():
+            card.student = keep
+            card.save(update_fields=["student"])
+        else:
+            card.delete()
+
+    # 8. Attendance records (protected FKs)
+    AttendanceSession.objects.filter(student=source).update(student=keep)
+    AttendanceEvent.objects.filter(student=source).update(student=keep)
+
+    # 9. Student Presence (attendance per-day)
+    for presence in list(StudentPresence.objects.filter(student=source)):
+        existing = StudentPresence.objects.filter(
+            student=keep, program=presence.program, date=presence.date
+        ).first()
+        if existing:
+            if (
+                presence.status == StudentPresence.PRESENT
+                and existing.status != StudentPresence.PRESENT
+            ):
+                existing.status = StudentPresence.PRESENT
+                existing.save(update_fields=["status"])
+            presence.delete()
+        else:
+            presence.student = keep
+            presence.save(update_fields=["student"])
+
+    # 10. Digital Signouts
+    DigitalSignout.objects.filter(student=source).update(student=keep)
+
+    # 11. Applications
+    Application.objects.filter(converted_student=source).update(converted_student=keep)
+
+    # 12. Outreach student signups
+    for signup in list(OutreachSignup.objects.filter(student=source)):
+        existing = OutreachSignup.objects.filter(
+            student=keep, shift=signup.shift
+        ).first()
+        if existing:
+            updated = False
+            if (
+                signup.role == OutreachSignup.CHAMPION
+                and existing.role != OutreachSignup.CHAMPION
+            ):
+                existing.role = OutreachSignup.CHAMPION
+                updated = True
+            if signup.checked_in_at and not existing.checked_in_at:
+                existing.checked_in_at = signup.checked_in_at
+                updated = True
+            if signup.checked_out_at and not existing.checked_out_at:
+                existing.checked_out_at = signup.checked_out_at
+                updated = True
+            if updated:
+                existing.save()
+            signup.delete()
+        else:
+            signup.student = keep
+            signup.save(update_fields=["student"])
+
+    # 13. Badges
+    for badge_award in list(StudentBadge.objects.filter(student=source)):
+        if not StudentBadge.objects.filter(
+            student=keep, badge=badge_award.badge
+        ).exists():
+            badge_award.student = keep
+            badge_award.save(update_fields=["student"])
+        else:
+            badge_award.delete()
+
+    # 14. Alumni profile link on Adult
+    for adult in list(Adult.objects.filter(student_record=source)):
+        if not Adult.objects.filter(student_record=keep).exists():
+            adult.student_record = keep
+            adult.save(update_fields=["student_record"])
+        else:
+            adult.student_record = None
+            adult.save(update_fields=["student_record"])
+
+
+def _carry_over_missing_student_fields(keep, source):
+    """Copy fields that only ``source`` has onto ``keep``.
+
+    Returns True if ``keep`` was modified. Choice fields with model defaults
+    ("cell" for phone_type, "PA" for state) look filled even when they were
+    never actually chosen, so they are only treated as missing when the value
+    they describe (phone number / address) is missing too.
+    """
+    import datetime
+
+    keep_had_phone = bool(keep.phone_number and str(keep.phone_number).strip())
+    keep_had_address = bool(
+        (keep.address and str(keep.address).strip())
+        or (keep.city and str(keep.city).strip())
+    )
+    keep_had_dob = bool(
+        keep.date_of_birth and keep.date_of_birth != datetime.date(1900, 1, 1)
+    )
+    source_has_dob = bool(
+        source.date_of_birth and source.date_of_birth != datetime.date(1900, 1, 1)
+    )
+
+    changed = False
+
+    # 1. Photo
+    if not bool(keep.photo) and bool(source.photo):
+        keep.photo = source.photo
+        changed = True
+
+    # 2. Date of birth
+    if not keep_had_dob and source_has_dob:
+        keep.date_of_birth = source.date_of_birth
+        changed = True
+
+    # 3. Defaulted choice fields
+    if (
+        not keep_had_phone
+        and source.phone_number
+        and str(source.phone_number).strip()
+        and source.phone_type
+    ):
+        keep.phone_type = source.phone_type
+        changed = True
+
+    if (
+        not keep_had_address
+        and (
+            (source.address and str(source.address).strip())
+            or (source.city and str(source.city).strip())
+        )
+        and source.state
+    ):
+        keep.state = source.state
+        changed = True
+
+    # 4. Foreign keys
+    if keep.school_id is None and source.school_id is not None:
+        keep.school = source.school
+        changed = True
+
+    if keep.andrew_id_sponsor_id is None and source.andrew_id_sponsor_id is not None:
+        keep.andrew_id_sponsor = source.andrew_id_sponsor
+        changed = True
+
+    # 5. Many-to-many: Race/Ethnicities
+    for re in source.race_ethnicities.all():
+        if not keep.race_ethnicities.filter(pk=re.pk).exists():
+            keep.race_ethnicities.add(re)
+
+    # 6. Generic model fields (scalars, strings, dates, encrypted fields, booleans)
+    special_fields = {
+        "id",
+        "user",
+        "photo",
+        "date_of_birth",
+        "phone_type",
+        "state",
+        "school",
+        "andrew_id_sponsor",
+        "primary_contact_relationship",
+        "secondary_contact_relationship",
+        "created_at",
+        "updated_at",
+    }
+
+    for field in Student._meta.fields:
+        field_name = field.name
+        if field_name in special_fields:
+            continue
+
+        keep_val = getattr(keep, field_name, None)
+        source_val = getattr(source, field_name, None)
+
+        if isinstance(field, models.BooleanField):
+            # Promote True flags (e.g. can_receive_texts, on_discord, first_has_account, graduated)
+            if not keep_val and source_val:
+                setattr(keep, field_name, True)
+                changed = True
+        else:
+            is_keep_empty = keep_val is None or (
+                isinstance(keep_val, str) and not keep_val.strip()
+            )
+            is_source_filled = source_val is not None and (
+                not isinstance(source_val, str) or bool(source_val.strip())
+            )
+            if is_keep_empty and is_source_filled:
+                setattr(keep, field_name, source_val)
+                changed = True
+
+    return changed
+
+
+def _transfer_student_user_account(keep, source):
+    """If ``keep`` has no linked user but ``source`` does, transfer it.
+
+    Returns True if ``keep.user`` was updated.
+    """
+    if keep.user_id or not source.user_id:
+        return False
+    source_user = source.user
+    source.user = None
+    source.save(update_fields=["user"])
+    keep.user = source_user
+    return True
+
+
+class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
+    template_name = "students/merge.html"
+    form_class = StudentMergeForm
+    success_url = reverse_lazy("student_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["students"] = list(
+            Student.objects.all()
+            .select_related(
+                "school",
+                "primary_contact_relationship__adult",
+                "secondary_contact_relationship__adult",
+            )
+            .prefetch_related(
+                "adults",
+                "enrollment_set__program",
+                "adultstudentrelationship_set__adult",
+            )
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                ),
+            )
+            .order_by(Lower("sort_first"), Lower("last_name"))
+        )
+        return context
+
+    def form_valid(self, form):
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
+        keep = form.cleaned_data["keep"]
+        source = form.cleaned_data["source"]
+
+        with transaction.atomic():
+            changed = _transfer_student_relationships(keep, source)
+            _transfer_student_related_records(keep, source)
+            changed = _carry_over_missing_student_fields(keep, source) or changed
+            changed = _transfer_student_user_account(keep, source) or changed
+            if changed:
+                keep.save()
+
+            # Clear unique fields before deleting source
+            source.personal_email = None
+            source.andrew_email = None
+            source.delete()
+
+        log_event(
+            request=self.request,
+            event=AuditEvent.RECORDS_MERGED,
+            resource=keep,
+            notes=(
+                f'Student "{source.display_name}" (pk={source.pk}) merged into '
+                f'"{keep.display_name}" (pk={keep.pk}). All enrollments, records, and relationships '
+                f"were transferred."
+            ),
+        )
+
+        messages.success(
+            self.request,
+            f'Merged "{source.display_name}" into "{keep.display_name}". '
+            f"All enrollments, records, and relationships were transferred.",
+        )
+        return super().form_valid(form)
