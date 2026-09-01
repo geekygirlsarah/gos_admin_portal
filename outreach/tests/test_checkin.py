@@ -98,15 +98,15 @@ class CheckinBase(TestCase):
             )
 
         # Upcoming shift (still in the future) — championed by the champion.
-        later = timezone.now() + timedelta(hours=3)
+        future_day = timezone.now().date() + timedelta(days=1)
         self.upcoming_event = create_outreach_event(
             program=self.program,
             name="Upcoming Event",
             location_name="Loc",
             location_address="Addr",
-            start_date=later.date(),
-            start_time=later.time(),
-            end_time=(later + timedelta(hours=2)).time(),
+            start_date=future_day,
+            start_time=time(14, 0),
+            end_time=time(16, 0),
         )
         self.upcoming_shift = self.upcoming_event.shifts.first()
         OutreachSignup.objects.create(
@@ -141,15 +141,15 @@ class CheckinBase(TestCase):
         )
 
         # Shift that ended too long ago — champion is read-only, mentor is not.
-        old_day = timezone.now() - timedelta(days=2)
+        old_day = timezone.now().date() - timedelta(days=2)
         self.old_event = create_outreach_event(
             program=self.program,
             name="Old Event",
             location_name="Loc",
             location_address="Addr",
-            start_date=old_day.date(),
-            start_time=old_day.time(),
-            end_time=(old_day + timedelta(hours=1)).time(),
+            start_date=old_day,
+            start_time=time(9, 0),
+            end_time=time(10, 0),
         )
         self.old_shift = self.old_event.shifts.first()
         self.old_signup = OutreachSignup.objects.create(

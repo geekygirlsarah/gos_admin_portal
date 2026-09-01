@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Comprehensive data preservation when merging parent records**: When merging duplicate parent entries, all missing profile data (including pronouns, notes, emergency contacts, college/career details, mentor credentials, and photo) and associated records (clearances, agreements, attendance, sliding scale applications, and RFID cards) are now seamlessly transferred from the merged parent into the kept parent record so no valuable information is lost.
 
 ### Fixed
+- **Flaky check-in test due to midnight rollover**: In `outreach/tests/test_checkin.py`, the upcoming and past shifts created dynamically in `setUp` could roll over midnight depending on the execution time of day, causing shifts to be treated as ended and failing `test_champion_can_check_early_setup_before_shift`. Test shift setup now uses fixed dates and times.
 - **Student/Adult/Mentor edit pages no longer crash with an error** ("'Script' object has no attribute 'decode'"): The form pages for editing a student, adult, or mentor pulled the JavaScript file from the form's media in a way that broke with a recent Django change, causing the page to error out instead of loading. The script path is now extracted cleanly so the page renders as before.
 
 ## 2026-08-31
