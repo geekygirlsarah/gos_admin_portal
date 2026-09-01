@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-01
+
+### Fixed
+- **Student/Adult/Mentor edit pages no longer crash with an error** ("'Script' object has no attribute 'decode'"): The form pages for editing a student, adult, or mentor pulled the JavaScript file from the form's media in a way that broke with a recent Django change, causing the page to error out instead of loading. The script path is now extracted cleanly so the page renders as before.
+
 ## 2026-08-31
 
 ### Fixed

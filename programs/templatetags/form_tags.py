@@ -118,7 +118,13 @@ def media_scripts(media):
     Usage: {% for js in form.media|media_scripts %}
     """
     if hasattr(media, "_js"):
-        return media._js
+        paths = []
+        for js in media._js:
+            if hasattr(js, "_path"):
+                paths.append(js._path)
+            else:
+                paths.append(str(js))
+        return paths
     return []
 
 
