@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-08-31
 
+### Fixed
+- **The hours calendar no longer shows the wrong month in the first hours of a new month**: The attendance hours page (both the per-student calendar and the program hours chart) decided which month and "today" to show using UTC time instead of the Portal's local timezone. In the first few hours after midnight UTC, a visitor could see a calendar for a month that hadn't started yet locally (and a "today" highlight on the wrong day). It now uses local time for the month, year, and today's-day highlighting.
+
 ### Added
 - **Correct attendance times right on the check-in page**: If someone forgets to check in (or a wrong time gets recorded), whoever is running the event can tap the pencil next to a student on the Check-in page and set or clear the recorded check-in/check-out times — no Django admin needed. Mentors and Lead Mentors can always fix times; a student champion can too while their normal check-in access is still open (until everyone's stamped or 4 hours after the shift ends). A check-out can't be saved without a check-in, and a check-out won't be accepted before the check-in.
 - **More filters on the "All Program Entries" attendance page**: Besides the existing program filter, you can now filter sessions by:

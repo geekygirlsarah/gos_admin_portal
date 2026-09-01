@@ -1,5 +1,6 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
+from unittest import mock
 
 from django.contrib.auth.models import Group, User
 from django.test import Client, TestCase
@@ -163,6 +164,27 @@ class StudentHoursViewTests(TestCase):
             "December",
         ]
         self.assertIn(month_names[now.month], content)
+
+    def test_calendar_defaults_to_local_month_near_utc_boundary(self):
+        """The calendar must default to the *local* month, not UTC's.
+
+        Regresses a bug where the page used ``timezone.now()`` (UTC) for the
+        default month/year while the calendar is displayed in the local
+        timezone (America/New_York). In the first hours of a new month, UTC is
+        already in the new month while local time is still the previous one,
+        which made the calendar show the wrong month depending on when the
+        test ran. We freeze "now" at such a boundary so the assertion is
+        deterministic regardless of the real clock.
+        """
+        # 2026-09-01 00:30 UTC == 2026-08-31 20:30 America/New_York, so UTC is
+        # September while local is August — exactly the crossing that used to
+        # break the calendar.
+        frozen_utc = timezone.make_aware(datetime(2026, 9, 1, 0, 30), timezone.UTC)
+        with mock.patch("django.utils.timezone.now", return_value=frozen_utc):
+            response = self.client.get(self.url)
+        content = response.content.decode()
+        self.assertIn("August", content)
+        self.assertNotIn("September", content)
 
     def test_calendar_navigation(self):
         now = timezone.localtime()

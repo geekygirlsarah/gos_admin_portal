@@ -1264,7 +1264,7 @@ def student_hours_view(request, pk):
     from datetime import date, datetime
 
     tz = timezone.get_current_timezone()
-    now = timezone.now()
+    now = timezone.localtime()
 
     chart_labels = []
     chart_data = []
@@ -1476,7 +1476,7 @@ def attendance_hours_chart_view(request):
 
     # --- Date range ---
     tz = timezone.get_current_timezone()
-    now = timezone.now()
+    now = timezone.localtime()
 
     date_from_str = request.GET.get("date_from", "")
     date_to_str = request.GET.get("date_to", "")
