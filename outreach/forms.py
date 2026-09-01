@@ -39,6 +39,41 @@ class OutreachShiftForm(forms.ModelForm):
         return cleaned_data
 
 
+class OutreachSetTimesForm(forms.Form):
+    """Correct a signup's check-in/out times after the fact.
+
+    Lets event staff backdate attendance a student forgot to record, without
+    needing Django admin. Both fields are optional datetime-local inputs; a
+    check-out on its own is disallowed (a student can't leave before arriving),
+    and check-out must not be before check-in.
+    """
+
+    checked_in_at = forms.DateTimeField(
+        required=False,
+        widget=forms.DateTimeInput(
+            attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+        ),
+    )
+    checked_out_at = forms.DateTimeField(
+        required=False,
+        widget=forms.DateTimeInput(
+            attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+        ),
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        check_in = cleaned_data.get("checked_in_at")
+        check_out = cleaned_data.get("checked_out_at")
+
+        if check_out and not check_in:
+            self.add_error("checked_out_at", "A check-out requires a check-in time.")
+        if check_in and check_out and check_out < check_in:
+            self.add_error("checked_out_at", "Check-out can't be before check-in.")
+
+        return cleaned_data
+
+
 OutreachShiftFormSet = forms.inlineformset_factory(
     OutreachEvent,
     OutreachShift,

@@ -37,6 +37,11 @@ urlpatterns = [
         name="shift_manage_signups",
     ),
     path(
+        "shifts/<int:shift_pk>/check-in/",
+        views.OutreachShiftCheckInView.as_view(),
+        name="shift_check_in",
+    ),
+    path(
         "student-stats/",
         views.OutreachStudentStatsView.as_view(),
         name="student_stats",

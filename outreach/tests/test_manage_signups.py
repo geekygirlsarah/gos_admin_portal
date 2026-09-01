@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from outreach.models import OutreachEvent, OutreachSignup
 from outreach.tests.factories import create_outreach_event
@@ -56,7 +59,7 @@ class OutreachManageSignupsTest(TestCase):
             name="Test Event",
             location_name="Test Location",
             location_address="123 Test St",
-            start_date="2026-09-01",
+            start_date=timezone.now().date() + timedelta(days=1),
             start_time="10:00:00",
             end_time="12:00:00",
         )

@@ -1,5 +1,9 @@
 """Shared test helpers for the outreach app."""
 
+from datetime import datetime
+
+from django.utils import timezone
+
 from outreach.models import OutreachEvent, OutreachShift
 
 
@@ -21,3 +25,15 @@ def create_outreach_event(*, start_date, start_time, end_time, end_date=None, **
             event=event, date=end_date, start_time=start_time, end_time=end_time
         )
     return event
+
+
+def record_full_attendance(signup, shift):
+    """Stamp a signup as having attended the whole scheduled shift."""
+    signup.checked_in_at = timezone.make_aware(
+        datetime.combine(shift.date, shift.start_time)
+    )
+    signup.checked_out_at = timezone.make_aware(
+        datetime.combine(shift.date, shift.end_time)
+    )
+    signup.save(update_fields=["checked_in_at", "checked_out_at"])
+    return signup

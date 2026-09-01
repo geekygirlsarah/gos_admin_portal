@@ -113,6 +113,18 @@
     </div>
     {% endif %}
 
+    <!-- Description Modal -->
+    <div class="modal fade" id="descriptionModal" tabindex="-1" aria-labelledby="descriptionModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="descriptionModalLabel"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="descriptionModalBody"></div>
+            </div>
+        </div>
+    </div>
     <!-- Manage Signups Modal -->
     <div class="modal fade" id="manageSignupsModal" tabindex="-1" aria-labelledby="manageSignupsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
@@ -205,6 +217,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         });
     });
+
+    // Shared full-description modal (delegated so dynamically rendered cards work).
+    const descriptionModal = new bootstrap.Modal(document.getElementById('descriptionModal'));
+    const descriptionTitle = document.getElementById('descriptionModalLabel');
+    const descriptionBody = document.getElementById('descriptionModalBody');
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function showDescription(title, text) {
+        descriptionTitle.textContent = title;
+        descriptionBody.innerHTML = text.split('\n').map(line => escapeHtml(line)).join('<br>') || '';
+        descriptionModal.show();
+    }
+
+    document.addEventListener('click', function(e) {
+        const el = e.target.closest('.description-toggle');
+        if (el) {
+            showDescription(el.dataset.title, el.dataset.description || '');
+        }
+    });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.description-toggle')) {
+            e.preventDefault();
+            const el = e.target.closest('.description-toggle');
+            showDescription(el.dataset.title, el.dataset.description || '');
+        }
+    });
+
+    // Copy location addresses to the clipboard with built-in fallback.
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.address-copy-btn');
+        if (!btn) return;
+        copyAddress(btn.dataset.copy || '', btn);
+    });
+
+    function copyAddress(text, btn) {
+        function flashDone() {
+            const icon = btn.querySelector('i');
+            if (!icon) return;
+            const original = icon.outerHTML;
+            icon.outerHTML = '<i class="bi bi-check-lg text-success"></i>';
+            const newIcon = btn.querySelector('i');
+            setTimeout(() => {
+                if (newIcon) { newIcon.outerHTML = original; }
+            }, 1500);
+        }
+        function fallbackCopy() {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand('copy'); } catch (err) {}
+            document.body.removeChild(ta);
+            flashDone();
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(flashDone).catch(fallbackCopy);
+        } else {
+            fallbackCopy();
+        }
+    }
 });
 </script>
 {% endblock %}

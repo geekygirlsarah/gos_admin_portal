@@ -56,6 +56,24 @@ class OutreachShiftAdmin(admin.ModelAdmin):
     inlines = [OutreachSignupInline, OutreachMentorSignupInline]
 
 
+@admin.register(OutreachSignup)
+class OutreachSignupAdmin(admin.ModelAdmin):
+    list_display = (
+        "student",
+        "shift",
+        "role",
+        "checked_in_at",
+        "checked_out_at",
+    )
+    list_select_related = ("student", "shift__event")
+    list_filter = ("role", "shift__event")
+    search_fields = (
+        "student__legal_first_name",
+        "student__last_name",
+        "shift__event__name",
+    )
+
+
 @admin.register(OutreachMentorSignup)
 class OutreachMentorSignupAdmin(admin.ModelAdmin):
     list_display = (

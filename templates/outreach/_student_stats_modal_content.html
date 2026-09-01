@@ -11,6 +11,7 @@
                     <th class="text-center">Events Championed</th>
                     <th class="text-center">Completed Hours</th>
                     <th class="text-center">Pending Hours</th>
+                    <th class="text-center">Unconfirmed</th>
                 </tr>
             </thead>
             <tbody>
@@ -28,10 +29,19 @@
                     <td class="text-center text-muted">
                         {{ stat.pending_hours|floatformat:1 }}
                     </td>
+                    <td class="text-center">
+                        {% if stat.unconfirmed_count > 0 %}
+                        <span class="badge bg-warning text-dark rounded-pill" title="Past shifts without recorded attendance">
+                            {{ stat.unconfirmed_count }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted py-4">
+                    <td colspan="5" class="text-center text-muted py-4">
                         No active students found in this program.
                     </td>
                 </tr>
