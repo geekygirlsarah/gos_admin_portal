@@ -13,6 +13,10 @@
       {% if can_add_student %}
         <a class="btn btn-primary" href="{% url 'student_create' %}?next={{ request.path }}">Add Student</a>
       {% endif %}
+      {% user_role user as role %}
+      {% if role == 'LeadMentor' %}
+        <a class="btn btn-outline-secondary" href="{% url 'student_merge' %}">Merge Students</a>
+      {% endif %}
     </div>
   </div>
     <div class="row mb-3">

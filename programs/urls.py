@@ -88,6 +88,7 @@ from .views import (
     StudentEmergencyContactsView,
     StudentImportView,
     StudentListView,
+    StudentMergeView,
     StudentPhotoListView,
     StudentsByGradeView,
     StudentsBySchoolView,
@@ -268,6 +269,11 @@ urlpatterns = [
         "students/convert-to-alumni/",
         StudentBulkConvertToAlumniView.as_view(),
         name="student_bulk_convert_select",
+    ),
+    path(
+        "students/merge/",
+        StudentMergeView.as_view(),
+        name="student_merge",
     ),
     path(
         "students/<int:pk>/",
