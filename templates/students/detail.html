@@ -87,6 +87,10 @@
       <div class="card mb-4">
         <div class="card-header">Health &amp; Medical</div>
         <div class="card-body">
+          <div class="alert alert-warning d-flex align-items-center" role="alert">
+            <i class="bi bi-shield-lock-fill me-2"></i>
+            <div>This information is confidential and should not be shared outside of authorized program mentors and volunteers.</div>
+          </div>
           <div class="row g-3">
             <div class="col-md-6"><div class="fw-semibold">Allergies</div><div>{{ student.allergies|default:'—' }}</div></div>
             <div class="col-md-6"><div class="fw-semibold">Dietary restrictions</div><div>{{ student.dietary_restrictions|default:'—' }}</div></div>

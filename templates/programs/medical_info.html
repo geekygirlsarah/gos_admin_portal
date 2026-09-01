@@ -9,6 +9,10 @@
         <a class="btn btn-outline-secondary" href="{% url 'program_detail' program.pk %}">Back to Program</a>
     </div>
 </div>
+<div class="alert alert-warning d-flex align-items-center mb-3" role="alert">
+    <i class="bi bi-shield-lock-fill me-2"></i>
+    <div>This information is confidential and should not be shared outside of authorized program mentors and volunteers.</div>
+</div>
 <p class="text-muted">
     Allergy, dietary, and medical information for active students in {{ program.name }}.
     Students with no information on file are not listed.
