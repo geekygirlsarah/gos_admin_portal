@@ -103,9 +103,8 @@
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="currentProgramDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ current_program.name }}</a>
                                 <ul class="dropdown-menu" aria-labelledby="currentProgramDropdown">
-                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}">Overview</a></li>
                                     {% if can_read_students %}
-                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}#students">Students</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}">Students</a></li>
                                     {% endif %}
                                     {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' or navbar_role == 'Alumni' or navbar_role == 'Parent' %}
                                         {% if current_program_has_outreach %}
@@ -124,6 +123,10 @@
                                         <li><hr class="dropdown-divider"></li>
                                         {% if can_read_adults %}
                                         <li><a class="dropdown-item" href="{% url 'program_emergency_contacts' current_program.pk %}">Emergency Contacts</a></li>
+                                        {% endif %}
+                                        {% can_read user 'health_medical' as can_read_health %}
+                                        {% if can_read_health %}
+                                        <li><a class="dropdown-item" href="{% url 'program_medical_info' current_program.pk %}">Medical Info</a></li>
                                         {% endif %}
                                         {% if navbar_role == 'LeadMentor' %}
                                         <li><a class="dropdown-item" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a></li>

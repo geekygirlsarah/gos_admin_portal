@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Medical Info{% endblock %}
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h1 class="h3">Medical &amp; Allergy Info{% if program %} for {{ program.name }}{% endif %}</h1>
+    </div>
+    <div class="col-auto d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'program_detail' program.pk %}">Back to Program</a>
+    </div>
+</div>
+<p class="text-muted">
+    Allergy, dietary, and medical information for active students in {{ program.name }}.
+    Students with no information on file are not listed.
+</p>
+
+{% if students %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Allergies</th>
+          <th>Dietary Restrictions</th>
+          <th>Medical Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for student in students %}
+          <tr>
+            <td class="fw-semibold">
+              <a class="text-decoration-none" href="{% url 'student_detail' student.pk %}?next={{ request.path }}">{{ student.display_name }}</a>
+            </td>
+            <td>{{ student.allergies|default:"—" }}</td>
+            <td>{{ student.dietary_restrictions|default:"—" }}</td>
+            <td>{{ student.medical_notes|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-info">No active students in this program have allergy, dietary, or medical information on file.</div>
+{% endif %}
+{% endblock %}
