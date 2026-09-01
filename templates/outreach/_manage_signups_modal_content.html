@@ -9,6 +9,10 @@
         <p class="text-muted small mb-4">
             Add or remove students for this shift. A student can only be assigned to one role (Champion or Helper).
             Maximums: {{ shift.max_champions }} Champions, {{ shift.max_helpers }} Helpers.
+            {% if shift.is_past %}
+            Attendance is recorded at the event via the Check-in page; a signed-up student without
+            attendance counts toward Pending hours until recorded or removed.
+            {% endif %}
         </p>
         
         <div class="mb-4">

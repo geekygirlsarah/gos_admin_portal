@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-01
+
+### Changed
+- **Comprehensive data preservation when merging parent records**: When merging duplicate parent entries, all missing profile data (including pronouns, notes, emergency contacts, college/career details, mentor credentials, and photo) and associated records (clearances, agreements, attendance, sliding scale applications, and RFID cards) are now seamlessly transferred from the merged parent into the kept parent record so no valuable information is lost.
+
+### Fixed
+- **Flaky check-in test due to midnight rollover**: In `outreach/tests/test_checkin.py`, the upcoming and past shifts created dynamically in `setUp` could roll over midnight depending on the execution time of day, causing shifts to be treated as ended and failing `test_champion_can_check_early_setup_before_shift`. Test shift setup now uses fixed dates and times.
+- **Student/Adult/Mentor edit pages no longer crash with an error** ("'Script' object has no attribute 'decode'"): The form pages for editing a student, adult, or mentor pulled the JavaScript file from the form's media in a way that broke with a recent Django change, causing the page to error out instead of loading. The script path is now extracted cleanly so the page renders as before.
+
+## 2026-08-31
+
+### Fixed
+- **The hours calendar no longer shows the wrong month in the first hours of a new month**: The attendance hours page (both the per-student calendar and the program hours chart) decided which month and "today" to show using UTC time instead of the Portal's local timezone. In the first few hours after midnight UTC, a visitor could see a calendar for a month that hadn't started yet locally (and a "today" highlight on the wrong day). It now uses local time for the month, year, and today's-day highlighting.
+
+### Added
+- **See allergy and medical info for a whole program in one place**: A new "Medical Info" page under each program lists active students who have any allergy, dietary, or medical notes on file, next to their info. Students with no info on file are left off the list. Mentors and Lead Mentors can reach it from the program menu in the navbar (it follows the Health & Medical permission setting).
+
+### Changed
+- **Removed the redundant "Overview" item from the program menu**: The current-program dropdown on the navbar no longer shows a separate "Overview" link, since the program's name already links back to the same overview page.
+- **Correct attendance times right on the check-in page**: If someone forgets to check in (or a wrong time gets recorded), whoever is running the event can tap the pencil next to a student on the Check-in page and set or clear the recorded check-in/check-out times — no Django admin needed. Mentors and Lead Mentors can always fix times; a student champion can too while their normal check-in access is still open (until everyone's stamped or 4 hours after the shift ends). A check-out can't be saved without a check-in, and a check-out won't be accepted before the check-in.
+- **More filters on the "All Program Entries" attendance page**: Besides the existing program filter, you can now filter sessions by:
+  - **Type** — only students, only mentors, or only visitors.
+  - **Status** — only open sessions, only closed sessions, or both.
+  - **Date range** — a quick pick for Today, Yesterday, Past Week, or Past Month, or a custom From/To date range.
+- **Export the attendance list to a file**: The "All Program Entries" page now has "Export CSV" and "Export Excel" buttons that download the currently filtered/sorted list — handy for further analysis in a spreadsheet.
+
+## 2026-08-30
+
+### Added
+- **Per-shift check-in/out page**: A phone-first station at `/programs/<id>/outreach/shifts/<shift_pk>/check-in/` lets mentors and a shift's champion record who actually showed up. Each signup has `checked_in_at` and `checked_out_at` timestamps; hours are credited based on the actual window between them, not the full scheduled shift, so a student who shows up late or leaves early is credited only for attended time. Champions can operate the check-in page until every signup is stamped or until 4 hours after the shift ends, whichever comes first; mentors can always revise. Walk-up students can be added on the spot (they're created as Helpers and bypass the normal helper capacity limit). Bulk "Everyone's here" and "Shift's over" buttons stamp all remaining students in one tap. Past shifts render the roster as read-only for champions.
+- **"Unconfirmed" column in the Student Stats modal**: Mentors can now see which students have signed up for past shifts but haven't had their attendance recorded yet, so they know who still needs attention before those hours move from Pending to Completed.
+- **Unconfirmed count surfaced on the student card**: A small hint line appears next to Pending Hours when there are past signups without recorded attendance.
+
+### Changed
+- **Shift cards are now collapsed by default**: Instead of listing every shift's full roster inline, each event card now shows a compact "N shifts available" summary with the date/time for the first three shifts; tapping it expands the full roster. Past events also use this collapsed pattern, so long event lists stay scannable.
+- **Long event descriptions are tappable**: When an event description is longer than 20 words, it's truncated to 20 words and becomes a link that opens the full text in a modal. Short descriptions are rendered in full as before.
+- **Location name is now a Google Maps link**: Tapping the venue name opens Google Maps, same as the existing map icon. A small clipboard button next to the address lets anyone copy the address to their clipboard with a brief "Copied" confirmation.
+- **Students are view-only once a shift ends**: After a shift's scheduled end time, the signup/cancel buttons are hidden for students (including champions) and replaced with a "This shift has ended" note. Mentors and Lead Mentors keep full control of rosters and check-in data after the event.
+- **Hours tracking uses actual attendance instead of scheduled shifts**: Completed hours are now the sum of `attended_hours` across finalized signups (both check-in and check-out recorded on a past shift). Pending hours are the scheduled hours of upcoming shifts plus any past shifts where attendance hasn't been recorded yet. This prevents banking hours for events that were signed up for but not actually attended.
+- **The manage-signups modal shows a note on past shifts**: A short note reminds mentors that attendance is recorded at the event via the Check-in page, and that signed-up students without recorded attendance still count toward Pending hours until their attendance is recorded or they're removed.
+- **The view-level roster is gated per-shift on past events**: Past shifts now show a muted note instead of signup/cancel forms in the event card. The manage-signups button remains visible to mentors and Lead Mentors on past shifts, but is hidden for student champions whose shift has ended.
+
 ## 2026-08-29
 
 ### Added

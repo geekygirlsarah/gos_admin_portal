@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from outreach.models import OutreachShift, OutreachSignup
-from outreach.tests.factories import create_outreach_event
+from outreach.tests.factories import create_outreach_event, record_full_attendance
 from outreach.utils import get_student_outreach_stats
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
@@ -56,6 +56,12 @@ class OutreachStatsTest(TestCase):
             shift=self.event1.shifts.first(),
             role=OutreachSignup.CHAMPION,
         )
+        record_full_attendance(
+            OutreachSignup.objects.get(
+                student=self.student, shift=self.event1.shifts.first()
+            ),
+            self.event1.shifts.first(),
+        )
 
         # 3 hour event, helped (PAST)
         self.event2 = create_outreach_event(
@@ -71,6 +77,12 @@ class OutreachStatsTest(TestCase):
             student=self.student,
             shift=self.event2.shifts.first(),
             role=OutreachSignup.HELPER,
+        )
+        record_full_attendance(
+            OutreachSignup.objects.get(
+                student=self.student, shift=self.event2.shifts.first()
+            ),
+            self.event2.shifts.first(),
         )
 
     def test_event_duration_hours(self):
@@ -150,6 +162,12 @@ class OutreachStatsUpcomingAndPendingHoursTests(TestCase):
             student=self.student,
             shift=self.past_event.shifts.first(),
             role=OutreachSignup.CHAMPION,
+        )
+        record_full_attendance(
+            OutreachSignup.objects.get(
+                student=self.student, shift=self.past_event.shifts.first()
+            ),
+            self.past_event.shifts.first(),
         )
 
         # Upcoming event (2 hours) - helper

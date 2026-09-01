@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q, Value
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -608,37 +608,6 @@ def close_stale_attendance_sessions(request):
 
 
 @login_required
-def attendance_summary_view(request):
-    if not can_user_read(request.user, "attendance"):
-        messages.error(request, "You do not have permission to view attendance.")
-        return redirect("home")
-
-    # Basic summary: total hours per student in current week
-    start, end = _week_bounds()
-    sessions = AttendanceSession.objects.filter(
-        check_in__gte=start, check_in__lt=end
-    ).select_related("student", "program")
-
-    # Aggregate by student/visitor
-    summary = {}
-    for s in sessions:
-        key = s.student.full_name if s.student else (s.visitor_name or "Unknown")
-        summary[key] = summary.get(key, 0) + s.duration_minutes
-
-    sorted_summary = sorted(summary.items(), key=lambda x: x[1], reverse=True)
-
-    return render(
-        request,
-        "attendance/summary.html",
-        {
-            "summary": [(name, mins // 60, mins % 60) for name, mins in sorted_summary],
-            "start": start,
-            "end": end,
-        },
-    )
-
-
-@login_required
 def rfid_management_view(request):
     if not can_user_write(request.user, "attendance"):
         messages.error(request, "You do not have permission to manage RFID cards.")
@@ -808,23 +777,233 @@ def rfid_management_view(request):
     )
 
 
-class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
-    def get(self, request):
-        program_id = request.GET.get("program_id")
-        sort = request.GET.get("sort", "check_in")
-        direction = request.GET.get("dir", "desc")
+def _attendance_date_bounds(params):
+    """Return (start, end) datetime bounds for a date-range filter param dict.
 
-        sessions = AttendanceSession.objects.select_related(
-            "student", "adult", "program"
+    `start` is inclusive, `end` is exclusive. An empty range returns (None, None)
+    meaning no date filtering.
+    """
+    range_key = params.get("range")
+
+    if range_key == "today":
+        start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        return start, start + timedelta(days=1)
+
+    if range_key == "yesterday":
+        now = timezone.localtime()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return today - timedelta(days=1), today
+
+    if range_key == "week":
+        now = timezone.localtime()
+        today = now.date()
+        return (
+            timezone.make_aware(
+                timezone.datetime.combine(
+                    today - timedelta(days=6), timezone.datetime.min.time()
+                )
+            ),
+            timezone.make_aware(
+                timezone.datetime.combine(
+                    today + timedelta(days=1), timezone.datetime.min.time()
+                )
+            ),
         )
 
-        if program_id and program_id.isdigit():
-            sessions = sessions.filter(program_id=program_id)
+    if range_key == "month":
+        now = timezone.localtime()
+        today = now.date()
+        return (
+            timezone.make_aware(
+                timezone.datetime.combine(
+                    today - timedelta(days=29), timezone.datetime.min.time()
+                )
+            ),
+            timezone.make_aware(
+                timezone.datetime.combine(
+                    today + timedelta(days=1), timezone.datetime.min.time()
+                )
+            ),
+        )
+
+    if range_key == "custom":
+        start_date = params.get("start_date")
+        end_date = params.get("end_date")
+        if start_date and end_date:
+            from django.utils.dateparse import parse_date
+
+            start = parse_date(start_date)
+            end = parse_date(end_date)
+            if start and end and end >= start:
+                tz = timezone.get_current_timezone()
+                start_dt = timezone.make_aware(
+                    timezone.datetime.combine(start, timezone.datetime.min.time()), tz
+                )
+                end_dt = timezone.make_aware(
+                    timezone.datetime.combine(
+                        end + timedelta(days=1), timezone.datetime.min.time()
+                    ),
+                    tz,
+                )
+                return start_dt, end_dt
+        return None, None
+
+    return None, None
+
+
+def _filter_attendance_sessions(params):
+    """Build the AttendanceSession queryset filtered by GET params.
+
+    Returns (sessions, range_start, range_end) where range_start/range_end are
+    the inclusive/exclusive datetime bounds used (None when no date filter).
+    """
+    sessions = AttendanceSession.objects.select_related("student", "adult", "program")
+
+    program_id = params.get("program_id")
+    if program_id and program_id.isdigit():
+        sessions = sessions.filter(program_id=program_id)
+
+    person_type = params.get("person_type")
+    if person_type == "student":
+        sessions = sessions.filter(student__isnull=False)
+    elif person_type == "mentor":
+        sessions = sessions.filter(adult__isnull=False)
+    elif person_type == "visitor":
+        sessions = sessions.filter(student__isnull=True, adult__isnull=True)
+
+    status = params.get("status")
+    if status == "open":
+        sessions = sessions.filter(check_out__isnull=True)
+    elif status == "closed":
+        sessions = sessions.filter(check_out__isnull=False)
+
+    range_start, range_end = _attendance_date_bounds(params)
+    if range_start and range_end:
+        sessions = sessions.filter(check_in__gte=range_start, check_in__lt=range_end)
+
+    return sessions, range_start, range_end
+
+
+def _session_person_label(session):
+    if session.student_id:
+        return session.student.full_name
+    if session.adult_id:
+        return session.adult.full_name
+    return session.visitor_name or "Unknown"
+
+
+def _session_person_type(session):
+    if session.student_id:
+        return "Student"
+    if session.adult_id:
+        return "Mentor"
+    return "Visitor"
+
+
+def _export_attendance_csv(sessions):
+    import csv
+
+    from django.http import HttpResponse
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="attendance_entries.csv"'
+    writer = csv.writer(response)
+    writer.writerow(
+        [
+            "Person",
+            "Type",
+            "Program",
+            "Check-in",
+            "Check-out",
+            "Duration (minutes)",
+            "Visitor Team #",
+        ]
+    )
+    for s in sessions.iterator(chunk_size=500):
+        writer.writerow(
+            [
+                _session_person_label(s),
+                _session_person_type(s),
+                s.program.name if s.program else "",
+                (
+                    timezone.localtime(s.check_in).strftime("%Y-%m-%d %H:%M")
+                    if s.check_in
+                    else ""
+                ),
+                (
+                    timezone.localtime(s.check_out).strftime("%Y-%m-%d %H:%M")
+                    if s.check_out
+                    else ""
+                ),
+                s.duration_minutes,
+                s.visitor_team_number or "",
+            ]
+        )
+    return response
+
+
+def _export_attendance_excel(sessions):
+    from io import BytesIO
+
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Attendance Entries"
+    ws.append(
+        [
+            "Person",
+            "Type",
+            "Program",
+            "Check-in",
+            "Check-out",
+            "Duration (minutes)",
+            "Visitor Team #",
+        ]
+    )
+    for s in sessions.iterator(chunk_size=500):
+        ws.append(
+            [
+                _session_person_label(s),
+                _session_person_type(s),
+                s.program.name if s.program else "",
+                (
+                    timezone.localtime(s.check_in).strftime("%Y-%m-%d %H:%M")
+                    if s.check_in
+                    else ""
+                ),
+                (
+                    timezone.localtime(s.check_out).strftime("%Y-%m-%d %H:%M")
+                    if s.check_out
+                    else ""
+                ),
+                s.duration_minutes,
+                s.visitor_team_number or "",
+            ]
+        )
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="attendance_entries.xlsx"'
+    return response
+
+
+class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    def get(self, request):
+        params = request.GET
+        sort = params.get("sort", "check_in")
+        direction = params.get("dir", "desc")
+
+        sessions, range_start, range_end = _filter_attendance_sessions(params)
 
         # Sorting logic
         if sort == "person":
-            from django.db.models.functions import Coalesce
-
             sessions = sessions.annotate(
                 person_sort=Coalesce(
                     "student__last_name", "adult__last_name", "visitor_name"
@@ -838,8 +1017,6 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif sort == "duration":
             order_field = "duration_minutes"
         elif sort == "type":
-            from django.db.models import Case, IntegerField, Value, When
-
             sessions = sessions.annotate(
                 type_order=Case(
                     When(student__isnull=False, then=Value(1)),
@@ -857,6 +1034,13 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         else:
             sessions = sessions.order_by(f"-{order_field}", "-id")
 
+        # Export (CSV or Excel) of the full filtered/sorted queryset.
+        export = params.get("export")
+        if export == "csv":
+            return _export_attendance_csv(sessions)
+        if export == "xlsx":
+            return _export_attendance_excel(sessions)
+
         programs = Program.objects.filter(features__key="attendance").distinct()
 
         return render(
@@ -872,8 +1056,17 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     "preferred_first_name", "last_name"
                 ),
                 "selected_program_id": (
-                    int(program_id) if program_id and program_id.isdigit() else None
+                    int(params.get("program_id"))
+                    if params.get("program_id") and params.get("program_id").isdigit()
+                    else None
                 ),
+                "selected_person_type": params.get("person_type", ""),
+                "selected_status": params.get("status", ""),
+                "selected_range": params.get("range", ""),
+                "start_date": params.get("start_date", ""),
+                "end_date": params.get("end_date", ""),
+                "range_start": range_start,
+                "range_end": range_end,
                 "current_sort": sort,
                 "current_dir": direction,
             },
@@ -1040,7 +1233,7 @@ def student_hours_view(request, pk):
     from datetime import date, datetime
 
     tz = timezone.get_current_timezone()
-    now = timezone.now()
+    now = timezone.localtime()
 
     chart_labels = []
     chart_data = []
@@ -1252,7 +1445,7 @@ def attendance_hours_chart_view(request):
 
     # --- Date range ---
     tz = timezone.get_current_timezone()
-    now = timezone.now()
+    now = timezone.localtime()
 
     date_from_str = request.GET.get("date_from", "")
     date_to_str = request.GET.get("date_to", "")

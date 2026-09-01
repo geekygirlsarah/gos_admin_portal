@@ -4,20 +4,35 @@
         <div class="card-body">
             <h5 class="card-title text-primary">{{ event.name }}</h5>
             <h6 class="card-subtitle mb-2 text-muted">
-                <i class="bi bi-geo-alt"></i> {{ event.location_name }}
-                <a href="https://www.google.com/maps/search/?api=1&query={{ event.location_address|urlencode }}" target="_blank" class="ms-1 text-decoration-none" title="View on Map">
-                    <i class="bi bi-map"></i>
-                </a>
+                <i class="bi bi-geo-alt"></i>
+                <a href="https://www.google.com/maps/search/?api=1&query={{ event.location_address|urlencode }}" target="_blank" class="text-decoration-none" title="View on Map">{{ event.location_name }}</a>
             </h6>
             {% if event.location_address %}
-            <p class="card-text small text-muted mb-2">
-                {{ event.location_address }}
-            </p>
+            <button type="button" class="address-copy-btn card-text small text-muted mb-2 d-inline-flex align-items-center gap-1 p-0 bg-transparent border-0" data-copy="{{ event.location_address }}" title="Copy address to clipboard">
+                <i class="bi bi-copy"></i>
+                <span class="address-text">{{ event.location_address }}</span>
+            </button>
             {% endif %}
+            {% if event.description %}
             <div class="mb-3">
-                <p class="card-text">{{ event.description|truncatewords:20 }}</p>
+                <p class="card-text">
+                    {% if event.description|wordcount > 20 %}
+                    <span class="description-toggle text-primary text-decoration-underline" role="button" tabindex="0" data-title="{{ event.name }}" data-description="{{ event.description }}">{{ event.description|truncatewords:20 }}</span>
+                    {% else %}
+                    {{ event.description }}
+                    {% endif %}
+                </p>
             </div>
+            {% endif %}
 
+            {% if event.ordered_shifts %}
+            <button class="btn btn-outline-secondary btn-sm w-100 text-start mb-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseShifts{{ event.pk }}" aria-expanded="false" aria-controls="collapseShifts{{ event.pk }}" id="shiftAccordionBtn{{ event.pk }}">
+                <span class="d-block fw-semibold">{{ event.ordered_shifts|length }} shift{% if event.ordered_shifts|length != 1 %}s{% endif %} available</span>
+                <span class="d-block small text-muted">
+                    {% for shift in event.ordered_shifts|slice:":3" %}{% if not forloop.first %} &bullet; {% endif %}{{ shift.date|date:"M j" }} {{ shift.start_time|time:"g:i A" }}-{{ shift.end_time|time:"g:i A" }}{% endfor %}{% if event.ordered_shifts|length > 3 %} &hellip; and {{ event.ordered_shifts|length|add:"-3" }} more{% endif %}
+                </span>
+            </button>
+            <div class="collapse" id="collapseShifts{{ event.pk }}">
             {% for shift in event.ordered_shifts %}
             <div class="border rounded p-2 mb-2">
                 <div class="small text-muted mb-2">
@@ -66,67 +81,80 @@
                     {% endif %}
                 </div>
 
-                {% if viewer_is_mentor %}
-                    {% if shift.id in mentor_signup_shift_ids %}
-                        <div class="alert alert-info py-2 small mb-2 text-center">
-                            You are signed up to <strong>support</strong> this shift
-                        </div>
-                        <form action="{% url 'outreach:shift_mentor_cancel' program.id shift.pk %}" method="post">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-danger btn-sm w-100 js-confirm" data-confirm="Are you sure you want to cancel your support signup for this shift?">Cancel Support Signup</button>
-                        </form>
-                    {% else %}
-                        <form action="{% url 'outreach:shift_mentor_signup' program.id shift.pk %}" method="post">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Sign up to Support (Mentor)</button>
-                        </form>
+                {% if shift.is_past %}
+                <div class="small text-muted text-center mb-2"><i class="bi bi-hourglass-split"></i> This shift has ended.</div>
+                {% else %}
+                    {% if viewer_is_mentor %}
+                        {% if shift.id in mentor_signup_shift_ids %}
+                            <div class="alert alert-info py-2 small mb-2 text-center">
+                                You are signed up to <strong>support</strong> this shift
+                            </div>
+                            <form action="{% url 'outreach:shift_mentor_cancel' program.id shift.pk %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger btn-sm w-100 js-confirm" data-confirm="Are you sure you want to cancel your support signup for this shift?">Cancel Support Signup</button>
+                            </form>
+                        {% else %}
+                            <form action="{% url 'outreach:shift_mentor_signup' program.id shift.pk %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Sign up to Support (Mentor)</button>
+                            </form>
+                        {% endif %}
+                    {% endif %}
+
+                    {% if user_role == 'Student' %}
+                        {% if shift.id in student_signup_shift_ids %}
+                            <div class="alert alert-info py-2 small mb-2 text-center">
+                                You are a <strong>{{ student_signup_roles|get_item:shift.id|capfirst }}</strong>
+                            </div>
+                            <form action="{% url 'outreach:shift_cancel' program.id shift.pk %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger btn-sm w-100 js-confirm" data-confirm="Are you sure you want to cancel your signup for this shift?">Cancel Signup</button>
+                            </form>
+                        {% else %}
+                            <div class="d-grid gap-2">
+                                {% if shift.champions.count < shift.max_champions %}
+                                <form action="{% url 'outreach:shift_signup' program.id shift.pk %}" method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="role" value="champion">
+                                    <button type="submit" class="btn btn-success btn-sm w-100">Sign up as Champion</button>
+                                </form>
+                                {% endif %}
+
+                                {% if shift.helpers.count < shift.max_helpers %}
+                                <form action="{% url 'outreach:shift_signup' program.id shift.pk %}" method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="role" value="helper">
+                                    <button type="submit" class="btn btn-outline-success btn-sm w-100">Sign up as Helper</button>
+                                </form>
+                                {% endif %}
+
+                                {% if shift.champions.count >= shift.max_champions and shift.helpers.count >= shift.max_helpers %}
+                                    <button class="btn btn-secondary btn-sm disabled">Shift Full</button>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                     {% endif %}
                 {% endif %}
 
-                {% if user_role == 'Student' %}
-                    {% if shift.id in student_signup_shift_ids %}
-                        <div class="alert alert-info py-2 small mb-2 text-center">
-                            You are a <strong>{{ student_signup_roles|get_item:shift.id|capfirst }}</strong>
-                        </div>
-                        <form action="{% url 'outreach:shift_cancel' program.id shift.pk %}" method="post">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-danger btn-sm w-100 js-confirm" data-confirm="Are you sure you want to cancel your signup for this shift?">Cancel Signup</button>
-                        </form>
-                    {% else %}
-                        <div class="d-grid gap-2">
-                            {% if shift.champions.count < shift.max_champions %}
-                            <form action="{% url 'outreach:shift_signup' program.id shift.pk %}" method="post">
-                                {% csrf_token %}
-                                <input type="hidden" name="role" value="champion">
-                                <button type="submit" class="btn btn-success btn-sm w-100">Sign up as Champion</button>
-                            </form>
-                            {% endif %}
-
-                            {% if shift.helpers.count < shift.max_helpers %}
-                            <form action="{% url 'outreach:shift_signup' program.id shift.pk %}" method="post">
-                                {% csrf_token %}
-                                <input type="hidden" name="role" value="helper">
-                                <button type="submit" class="btn btn-outline-success btn-sm w-100">Sign up as Helper</button>
-                            </form>
-                            {% endif %}
-
-                            {% if shift.champions.count >= shift.max_champions and shift.helpers.count >= shift.max_helpers %}
-                                <button class="btn btn-secondary btn-sm disabled">Shift Full</button>
-                            {% endif %}
-                        </div>
+                <div class="d-flex justify-content-end gap-2 mt-2">
+                    {% if shift.id in can_checkin_shift_ids %}
+                    <a href="{% url 'outreach:shift_check_in' program.id shift.pk %}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-check2-square"></i> Check-in
+                    </a>
                     {% endif %}
-                {% endif %}
-
-                {% if user_role == 'Mentor' or user_role == 'LeadMentor' or student_signup_roles|get_item:shift.id == 'champion' %}
-                <div class="text-end mt-2">
+                    {% if user_role == 'Mentor' or user_role == 'LeadMentor' or not shift.is_past and student_signup_roles|get_item:shift.id == 'champion' %}
                     <button type="button" class="btn btn-outline-primary btn-sm manage-signups-btn"
                             data-url="{% url 'outreach:shift_manage_signups' program.id shift.pk %}">
                         Sign-ups
                     </button>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
             {% endfor %}
+            </div>
+            {% else %}
+            <p class="small text-muted">No shifts scheduled.</p>
+            {% endif %}
         </div>
         <div class="card-footer bg-transparent border-top-0 pb-3">
             <div class="d-flex gap-2 align-items-center justify-content-end">

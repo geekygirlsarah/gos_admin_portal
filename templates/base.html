@@ -103,9 +103,8 @@
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="currentProgramDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ current_program.name }}</a>
                                 <ul class="dropdown-menu" aria-labelledby="currentProgramDropdown">
-                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}">Overview</a></li>
                                     {% if can_read_students %}
-                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}#students">Students</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'program_detail' current_program.pk %}">Students</a></li>
                                     {% endif %}
                                     {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' or navbar_role == 'Alumni' or navbar_role == 'Parent' %}
                                         {% if current_program_has_outreach %}
@@ -124,6 +123,10 @@
                                         <li><hr class="dropdown-divider"></li>
                                         {% if can_read_adults %}
                                         <li><a class="dropdown-item" href="{% url 'program_emergency_contacts' current_program.pk %}">Emergency Contacts</a></li>
+                                        {% endif %}
+                                        {% can_read user 'health_medical' as can_read_health %}
+                                        {% if can_read_health %}
+                                        <li><a class="dropdown-item" href="{% url 'program_medical_info' current_program.pk %}">Medical Info</a></li>
                                         {% endif %}
                                         {% if navbar_role == 'LeadMentor' %}
                                         <li><a class="dropdown-item" href="{% url 'program_dues_owed' current_program.pk %}">Dues Owed</a></li>
@@ -150,7 +153,6 @@
                                 <li><a class="dropdown-item" href="{% url 'program_hours' current_program.pk %}">Program Hours</a></li>
                                 {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'attendance_hours_chart' %}">Hours Chart</a></li>
-                                <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'rfid_management' %}">RFID Management</a></li>
                                 {% if navbar_role == 'LeadMentor' %}
@@ -280,6 +282,13 @@
             <div class="col-md-6 text-center text-md-end">
                 <a href="{% url 'privacy_policy' %}" class="text-decoration-none text-white-50 me-3">Privacy Policy</a>
                 <a href="{% url 'non_discrimination_policy' %}" class="text-decoration-none text-white-50">Non-Discrimination Policy</a>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12 text-center">
+                <a href="https://github.com/geekygirlsarah/gos_admin_portal" class="text-decoration-none text-white-50" target="_blank" rel="noopener">
+                    Made with <span class="text-danger">&#9829;</span> by a woman in STEM
+                </a>
             </div>
         </div>
     </div>

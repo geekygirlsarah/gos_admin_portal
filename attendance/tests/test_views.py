@@ -1,6 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import Group, User
 from django.test import Client, TestCase
-from django.urls import reverse
+from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession, KioskConfig
@@ -264,6 +266,189 @@ class AllAttendanceEntriesTests(TestCase):
         self.assertTrue(new_session.is_open)
 
 
+class AllAttendanceFiltersTests(TestCase):
+    def setUp(self):
+        self.lead_mentor_user = make_lead_mentor_user()
+        self.program = make_program()
+        self.student = make_student(preferred_first_name="Filter", last_name="Student")
+        self.other_student = make_student(preferred_first_name="Other", last_name="Kid")
+        self.mentor_adult = Adult.objects.create(
+            legal_first_name="Coach", last_name="Person", is_mentor=True
+        )
+
+    def _login(self):
+        self.client.login(
+            username=self.lead_mentor_user.username,
+            password="password123",  # nosec B106
+        )
+
+    def _create(self, **kwargs):
+        defaults = {
+            "program": self.program,
+            "check_in": timezone.now(),
+        }
+        defaults.update(kwargs)
+        return AttendanceSession.objects.create(**defaults)
+
+    def _visible_person_types(self, url, extra=""):
+        response = self.client.get(f"{url}{extra}")
+        sessions = list(response.context["sessions"])
+        return {
+            "students": any(s.student_id for s in sessions),
+            "mentors": any(s.adult_id for s in sessions),
+            "visitors": any(s.visitor_name for s in sessions),
+        }
+
+    def test_person_type_filter_students(self):
+        self._login()
+        self._create(student=self.student)
+        self._create(student=self.other_student)
+        self._create(adult=self.mentor_adult)
+        self._create(visitor_name="Jane Visitor")
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?person_type=student")
+        sessions = list(response.context["sessions"])
+        self.assertTrue(sessions)
+        self.assertTrue(all(s.student_id for s in sessions))
+
+    def test_person_type_filter_mentors(self):
+        self._login()
+        self._create(student=self.student)
+        self._create(adult=self.mentor_adult)
+        self._create(visitor_name="Jane Visitor")
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?person_type=mentor")
+        sessions = list(response.context["sessions"])
+        self.assertTrue(sessions)
+        self.assertTrue(all(s.adult_id for s in sessions))
+
+    def test_person_type_filter_visitors(self):
+        self._login()
+        self._create(student=self.student)
+        self._create(visitor_name="Jane Visitor")
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?person_type=visitor")
+        sessions = list(response.context["sessions"])
+        self.assertTrue(sessions)
+        self.assertTrue(all(s.visitor_name for s in sessions))
+
+    def test_status_filter_open(self):
+        self._login()
+        open_s = self._create(student=self.student)
+        closed_s = self._create(
+            student=self.other_student,
+            check_out=timezone.now(),
+        )
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?status=open")
+        sessions = list(response.context["sessions"])
+        self.assertIn(open_s, sessions)
+        self.assertNotIn(closed_s, sessions)
+        self.assertTrue(all(s.is_open for s in sessions))
+
+    def test_status_filter_closed(self):
+        self._login()
+        open_s = self._create(student=self.student)
+        closed_s = self._create(
+            student=self.other_student,
+            check_out=timezone.now(),
+        )
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?status=closed")
+        sessions = list(response.context["sessions"])
+        self.assertNotIn(open_s, sessions)
+        self.assertIn(closed_s, sessions)
+        self.assertTrue(all(not s.is_open for s in sessions))
+
+    def test_range_today(self):
+        self._login()
+        today_s = self._create(student=self.student)
+        yesterday_s = self._create(
+            student=self.other_student,
+            check_in=timezone.now() - timedelta(days=1),
+        )
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?range=today")
+        sessions = list(response.context["sessions"])
+        self.assertIn(today_s, sessions)
+        self.assertNotIn(yesterday_s, sessions)
+
+    def test_range_yesterday(self):
+        self._login()
+        today_s = self._create(student=self.student)
+        yesterday_s = self._create(
+            student=self.other_student,
+            check_in=timezone.now() - timedelta(days=1),
+        )
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?range=yesterday")
+        sessions = list(response.context["sessions"])
+        self.assertIn(yesterday_s, sessions)
+        self.assertNotIn(today_s, sessions)
+
+    def test_range_week_includes_recent(self):
+        self._login()
+        self._create(student=self.student)
+        old_s = self._create(
+            student=self.other_student,
+            check_in=timezone.now() - timedelta(days=10),
+        )
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?range=week")
+        sessions = list(response.context["sessions"])
+        self.assertNotIn(old_s, sessions)
+        self.assertEqual(
+            response.context["range_start"].date(),
+            timezone.localtime().date() - timedelta(days=6),
+        )
+
+    def test_custom_range(self):
+        self._login()
+        in_s = self._create(
+            student=self.student,
+            check_in=timezone.now() - timedelta(days=2),
+        )
+        out_s = self._create(
+            student=self.other_student,
+            check_in=timezone.now() - timedelta(days=10),
+        )
+        url = reverse("all_attendance")
+        start = (timezone.now() - timedelta(days=4)).strftime("%Y-%m-%d")
+        end = timezone.now().strftime("%Y-%m-%d")
+        response = self.client.get(
+            f"{url}?range=custom&start_date={start}&end_date={end}"
+        )
+        sessions = list(response.context["sessions"])
+        self.assertIn(in_s, sessions)
+        self.assertNotIn(out_s, sessions)
+
+    def test_export_csv(self):
+        self._login()
+        self._create(student=self.student)
+        self._create(adult=self.mentor_adult)
+        self._create(visitor_name="Jane Visitor")
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?export=csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        body = response.content.decode()
+        self.assertIn("Person", body)
+        self.assertIn(self.student.full_name, body)
+        self.assertIn("Jane Visitor", body)
+
+    def test_export_excel(self):
+        self._login()
+        self._create(student=self.student)
+        url = reverse("all_attendance")
+        response = self.client.get(f"{url}?export=xlsx")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertGreater(len(response.content), 0)
+
+
 class AttendanceNewViewsTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -342,15 +527,25 @@ class AttendanceNewViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "John Doe")
 
-    def test_attendance_summary_view(self):
-        self.session.check_out = self.session.check_in + timezone.timedelta(hours=2)
-        self.session.recompute_duration()
-        self.session.save()
+    def test_attendance_summary_view_removed(self):
+        with self.assertRaises(NoReverseMatch):
+            reverse("attendance_summary")
 
-        response = self.client.get(reverse("attendance_summary"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "John Doe")
-        self.assertContains(response, "2h 0m")
+        with self.assertRaises(Resolver404):
+            resolve("/attendance/summary/")
+
+        response = self.client.get("/attendance/summary/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+        # Ensure navbar does not link to weekly summary
+        active_resp = self.client.get(reverse("attendance_active"))
+        self.assertNotContains(active_resp, "Weekly Summary")
+        self.assertNotContains(active_resp, "/attendance/summary/")
+
+        # Ensure RFID management page does not link back to attendance summary
+        rfid_resp = self.client.get(reverse("rfid_management"))
+        self.assertNotContains(rfid_resp, "Back to Attendance Summary")
 
     def test_rfid_management_view_get(self):
         from attendance.models import RFIDCard

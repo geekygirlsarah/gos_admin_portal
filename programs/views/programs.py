@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Value
+from django.db.models import Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -284,6 +284,40 @@ class ProgramEmergencyContactsView(
             request,
             self.template_name,
             {"program": program, "rows": rows},
+        )
+
+
+class ProgramMedicalInfoView(LoginRequiredMixin, MentorOrLeadMentorRequiredMixin, View):
+    """Lists active students in a program who have allergy, dietary, or
+    medical information on file."""
+
+    template_name = "programs/medical_info.html"
+
+    def get(self, request, program_id):
+        program = get_object_or_404(Program, pk=program_id)
+        students = (
+            active_students_in_program(program)
+            .filter(
+                Q(allergies__isnull=False)
+                | Q(dietary_restrictions__isnull=False)
+                | Q(medical_notes__isnull=False)
+            )
+            .exclude(
+                Q(allergies__isnull=True) | Q(allergies=""),
+                Q(dietary_restrictions__isnull=True) | Q(dietary_restrictions=""),
+                Q(medical_notes__isnull=True) | Q(medical_notes=""),
+            )
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                ),
+            )
+            .order_by(Lower("sort_first"), Lower("last_name"))
+        )
+        return render(
+            request,
+            self.template_name,
+            {"program": program, "students": students},
         )
 
 

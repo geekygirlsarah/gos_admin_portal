@@ -237,11 +237,11 @@ class AttendanceHoursChartViewTests(TestCase):
         content = response.content.decode()
         expected_start = self.program.start_date.isoformat()
         self.assertIn(f'value="{expected_start}"', content)
-        expected_end = timezone.now().date().isoformat()
+        expected_end = timezone.localtime().date().isoformat()
         self.assertIn(f'value="{expected_end}"', content)
 
     def test_default_dates_program_end_before_today(self):
-        past_end = timezone.now().date() - timedelta(days=10)
+        past_end = timezone.localtime().date() - timedelta(days=10)
         self.program.end_date = past_end
         self.program.save()
         response = self.client.get(self.program_url)

@@ -171,6 +171,16 @@ class OutreachSignup(models.Model):
         OutreachShift, on_delete=models.CASCADE, related_name="signups"
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    checked_in_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this student actually arrived (recorded at the event).",
+    )
+    checked_out_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this student actually left (recorded at the event).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -183,7 +193,36 @@ class OutreachSignup(models.Model):
     def event(self):
         return self.shift.event
 
+    @property
+    def attended_hours(self):
+        """Actual credited hours between check-in and check-out, or ``None``.
+
+        Returns ``None`` when both timestamps aren't recorded yet, so the
+        caller can fall back to the scheduled ``shift.duration_hours``.
+        """
+        if self.checked_in_at and self.checked_out_at:
+            seconds = max(0, (self.checked_out_at - self.checked_in_at).total_seconds())
+            return seconds / 3600.0
+        return None
+
+    @property
+    def is_finalized(self):
+        """True once a past shift's attendance is fully recorded.
+
+        A signup is "finalized" when both check-in and check-out were
+        captured and the shift is over; only finalized signups count toward
+        a student's completed (not pending) hours.
+        """
+        return bool(
+            self.checked_in_at
+            and self.checked_out_at
+            and self.shift
+            and self.shift.is_past
+        )
+
     def clean(self):
+        if self.shift and self.shift.is_past:
+            raise ValidationError("Cannot sign up for a shift that has already ended.")
         if self.role == self.CHAMPION:
             if (
                 self.shift.champions.exclude(id=self.id).count()
