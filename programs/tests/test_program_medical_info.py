@@ -1,10 +1,14 @@
+from cryptography.fernet import Fernet
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from programs.models import Adult, Enrollment, Program, Student
 
+TEST_FILE_KEY = Fernet.generate_key().decode()
 
+
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY)
 class ProgramMedicalInfoTests(TestCase):
     def setUp(self):
         self.lead_mentor = User.objects.create_user(

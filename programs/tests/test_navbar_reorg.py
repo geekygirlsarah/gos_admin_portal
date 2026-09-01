@@ -104,10 +104,17 @@ class CurrentProgramDropdownTests(TestCase):
         response = self.client.get(reverse("program_detail", args=[self.program.pk]))
         self.assertContains(response, 'id="currentProgramDropdown"')
         self.assertContains(response, "Robotics 101")
-        self.assertContains(response, "Overview")
         self.assertContains(response, "Emergency Contacts")
         self.assertContains(response, "Dues Owed")
         self.assertContains(response, "Email Program")
+
+    def test_students_link_in_dropdown_has_no_anchor(self):
+        # The "Students" item points at the program detail page directly,
+        # without the old fragment anchor.
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_detail", args=[self.program.pk]))
+        detail_url = reverse("program_detail", args=[self.program.pk])
+        self.assertContains(response, f'href="{detail_url}">Students</a>')
 
 
 class StudentBadgesLinkNotDuplicatedTests(TestCase):

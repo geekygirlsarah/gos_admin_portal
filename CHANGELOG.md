@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **See allergy and medical info for a whole program in one place**: A new "Medical Info" page under each program lists active students who have any allergy, dietary, or medical notes on file, next to their info. Students with no info on file are left off the list. Mentors and Lead Mentors can reach it from the program menu in the navbar (it follows the Health & Medical permission setting).
+
+### Changed
+- **Removed the redundant "Overview" item from the program menu**: The current-program dropdown on the navbar no longer shows a separate "Overview" link, since the program's name already links back to the same overview page.
 - **Correct attendance times right on the check-in page**: If someone forgets to check in (or a wrong time gets recorded), whoever is running the event can tap the pencil next to a student on the Check-in page and set or clear the recorded check-in/check-out times — no Django admin needed. Mentors and Lead Mentors can always fix times; a student champion can too while their normal check-in access is still open (until everyone's stamped or 4 hours after the shift ends). A check-out can't be saved without a check-in, and a check-out won't be accepted before the check-in.
 - **More filters on the "All Program Entries" attendance page**: Besides the existing program filter, you can now filter sessions by:
   - **Type** — only students, only mentors, or only visitors.
