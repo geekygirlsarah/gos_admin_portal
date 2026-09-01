@@ -153,7 +153,6 @@
                                 <li><a class="dropdown-item" href="{% url 'program_hours' current_program.pk %}">Program Hours</a></li>
                                 {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'attendance_hours_chart' %}">Hours Chart</a></li>
-                                <li><a class="dropdown-item" href="{% url 'attendance_summary' %}">Weekly Summary</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'rfid_management' %}">RFID Management</a></li>
                                 {% if navbar_role == 'LeadMentor' %}

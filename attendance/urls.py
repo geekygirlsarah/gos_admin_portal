@@ -30,7 +30,6 @@ urlpatterns = [
         views.close_stale_attendance_sessions,
         name="close_stale_attendance_sessions",
     ),
-    path("summary/", views.attendance_summary_view, name="attendance_summary"),
     path("all/", views.AllAttendanceView.as_view(), name="all_attendance"),
     path("visitors/", views.VisitorManagementView.as_view(), name="visitor_management"),
 ]

@@ -608,37 +608,6 @@ def close_stale_attendance_sessions(request):
 
 
 @login_required
-def attendance_summary_view(request):
-    if not can_user_read(request.user, "attendance"):
-        messages.error(request, "You do not have permission to view attendance.")
-        return redirect("home")
-
-    # Basic summary: total hours per student in current week
-    start, end = _week_bounds()
-    sessions = AttendanceSession.objects.filter(
-        check_in__gte=start, check_in__lt=end
-    ).select_related("student", "program")
-
-    # Aggregate by student/visitor
-    summary = {}
-    for s in sessions:
-        key = s.student.full_name if s.student else (s.visitor_name or "Unknown")
-        summary[key] = summary.get(key, 0) + s.duration_minutes
-
-    sorted_summary = sorted(summary.items(), key=lambda x: x[1], reverse=True)
-
-    return render(
-        request,
-        "attendance/summary.html",
-        {
-            "summary": [(name, mins // 60, mins % 60) for name, mins in sorted_summary],
-            "start": start,
-            "end": end,
-        },
-    )
-
-
-@login_required
 def rfid_management_view(request):
     if not can_user_write(request.user, "attendance"):
         messages.error(request, "You do not have permission to manage RFID cards.")

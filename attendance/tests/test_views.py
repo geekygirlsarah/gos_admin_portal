@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import Group, User
 from django.test import Client, TestCase
-from django.urls import reverse
+from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession, KioskConfig
@@ -527,15 +527,25 @@ class AttendanceNewViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "John Doe")
 
-    def test_attendance_summary_view(self):
-        self.session.check_out = self.session.check_in + timezone.timedelta(hours=2)
-        self.session.recompute_duration()
-        self.session.save()
+    def test_attendance_summary_view_removed(self):
+        with self.assertRaises(NoReverseMatch):
+            reverse("attendance_summary")
 
-        response = self.client.get(reverse("attendance_summary"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "John Doe")
-        self.assertContains(response, "2h 0m")
+        with self.assertRaises(Resolver404):
+            resolve("/attendance/summary/")
+
+        response = self.client.get("/attendance/summary/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+        # Ensure navbar does not link to weekly summary
+        active_resp = self.client.get(reverse("attendance_active"))
+        self.assertNotContains(active_resp, "Weekly Summary")
+        self.assertNotContains(active_resp, "/attendance/summary/")
+
+        # Ensure RFID management page does not link back to attendance summary
+        rfid_resp = self.client.get(reverse("rfid_management"))
+        self.assertNotContains(rfid_resp, "Back to Attendance Summary")
 
     def test_rfid_management_view_get(self):
         from attendance.models import RFIDCard
