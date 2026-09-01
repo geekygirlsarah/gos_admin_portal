@@ -1,17 +1,28 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
+from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
 from audit.mixins import SensitiveDataViewMixin
+from outreach.models import OutreachMentorSignup
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..forms import AdultForm, ParentMergeForm
-from ..models import Adult, AdultStudentRelationship, Program, Student
+from ..models import (
+    Adult,
+    AdultStudentRelationship,
+    BackgroundCheck,
+    MentorAgreementAcceptance,
+    MentorAgreementSubmission,
+    Program,
+    SlidingScale,
+    Student,
+)
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
@@ -565,43 +576,172 @@ def _transfer_parent_relationships(keep, source):
             rel.save(update_fields=["adult"])
 
 
+def _transfer_parent_related_records(keep, source):
+    """Transfer or merge all related models referencing ``source`` onto ``keep``."""
+    # 1. Background checks
+    for bg in list(BackgroundCheck.objects.filter(adult=source)):
+        existing = BackgroundCheck.objects.filter(
+            adult=keep, check_type=bg.check_type
+        ).first()
+        if existing:
+            updated = False
+            if not existing.cleared and bg.cleared:
+                existing.cleared = True
+                updated = True
+            if not existing.obtained_date and bg.obtained_date:
+                existing.obtained_date = bg.obtained_date
+                updated = True
+            if updated:
+                existing.save()
+            bg.delete()
+        else:
+            bg.adult = keep
+            bg.save(update_fields=["adult"])
+
+    # 2. Mentor agreement acceptances & submissions
+    for acc in list(MentorAgreementAcceptance.objects.filter(adult=source)):
+        if not MentorAgreementAcceptance.objects.filter(
+            adult=keep, agreement=acc.agreement
+        ).exists():
+            acc.adult = keep
+            acc.save(update_fields=["adult"])
+        else:
+            acc.delete()
+
+    for sub in list(MentorAgreementSubmission.objects.filter(adult=source)):
+        if not MentorAgreementSubmission.objects.filter(
+            adult=keep, agreement=sub.agreement
+        ).exists():
+            sub.adult = keep
+            sub.save(update_fields=["adult"])
+        else:
+            sub.delete()
+
+    # 3. Outreach mentor signups
+    for signup in list(OutreachMentorSignup.objects.filter(adult=source)):
+        if not OutreachMentorSignup.objects.filter(
+            adult=keep, shift=signup.shift
+        ).exists():
+            signup.adult = keep
+            signup.save(update_fields=["adult"])
+        else:
+            signup.delete()
+
+    # 4. RFID cards
+    for card in list(RFIDCard.objects.filter(adult=source)):
+        if not RFIDCard.objects.filter(adult=keep, uid=card.uid).exists():
+            card.adult = keep
+            card.save(update_fields=["adult"])
+        else:
+            card.delete()
+
+    # 5. Sliding scale applications
+    SlidingScale.objects.filter(applied_by=source).update(applied_by=keep)
+
+    # 6. Attendance records (protected FKs)
+    AttendanceSession.objects.filter(adult=source).update(adult=keep)
+    AttendanceEvent.objects.filter(adult=source).update(adult=keep)
+
+    # 7. Sponsored Andrew IDs on Adults and Students
+    Adult.objects.filter(andrew_id_sponsor=source).update(andrew_id_sponsor=keep)
+    Student.objects.filter(andrew_id_sponsor=source).update(andrew_id_sponsor=keep)
+
+
 def _carry_over_missing_parent_fields(keep, source):
     """Copy fields that only ``source`` has onto ``keep``.
 
     Returns True if ``keep`` was modified. Choice fields with model defaults
-    ("cell" for phone_type, "PA" for state) look filled even when they were
-    never actually chosen, so they are only treated as missing when the value
-    they describe (phone number / address) is missing too.
+    ("cell" for phone_type, "PA" for state, "mentor" for role) look filled even
+    when they were never actually chosen, so they are only treated as missing
+    when the value they describe is missing too.
     """
-    keep_had_phone = bool(keep.phone_number)
-    keep_had_address = bool(keep.address or keep.city)
+    keep_had_phone = bool(keep.phone_number and str(keep.phone_number).strip())
+    keep_had_address = bool(
+        (keep.address and str(keep.address).strip())
+        or (keep.city and str(keep.city).strip())
+    )
+    keep_had_mentor_role = bool(keep.is_mentor and keep.role and keep.role != "mentor")
 
-    carryover_fields = [
-        "personal_email",
-        "phone_number",
-        "address",
-        "city",
-        "zip_code",
-        "pronouns",
-        "can_receive_texts",
-        "preferred_first_name",
-        "emergency_contact_name",
-        "emergency_contact_phone",
-    ]
     changed = False
-    for field in carryover_fields:
-        keep_val = getattr(keep, field)
-        source_val = getattr(source, field)
-        if not keep_val and source_val:
-            setattr(keep, field, source_val)
-            changed = True
 
-    if not keep_had_phone and source.phone_type:
+    # 1. OneToOne student_record (Alumni profile link)
+    if keep.student_record_id is None and source.student_record_id is not None:
+        rec = source.student_record
+        source.student_record = None
+        source.save(update_fields=["student_record"])
+        keep.student_record = rec
+        changed = True
+
+    # 2. Andrew ID sponsor FK
+    if keep.andrew_id_sponsor_id is None and source.andrew_id_sponsor_id is not None:
+        if source.andrew_id_sponsor_id == source.pk:
+            keep.andrew_id_sponsor = keep
+        else:
+            keep.andrew_id_sponsor = source.andrew_id_sponsor
+        changed = True
+
+    # 3. Photo (ImageField)
+    if not bool(keep.photo) and bool(source.photo):
+        keep.photo = source.photo
+        changed = True
+
+    # 4. Defaulted choice fields
+    if not keep_had_phone and source.phone_type and source.phone_number:
         keep.phone_type = source.phone_type
         changed = True
-    if not keep_had_address and source.address and source.state:
+    if not keep_had_address and (source.address or source.city) and source.state:
         keep.state = source.state
         changed = True
+    if (
+        not keep_had_mentor_role
+        and source.is_mentor
+        and source.role
+        and source.role != "mentor"
+    ):
+        keep.role = source.role
+        changed = True
+
+    # 5. Dynamic field iteration for all other fields on Adult
+    handled_special_fields = {
+        "id",
+        "user",
+        "is_parent",
+        "is_mentor",
+        "is_alumni",
+        "student_record",
+        "andrew_id_sponsor",
+        "photo",
+        "phone_type",
+        "state",
+        "role",
+        "created_at",
+        "updated_at",
+    }
+
+    for field in Adult._meta.fields:
+        field_name = field.name
+        if field_name in handled_special_fields:
+            continue
+
+        keep_val = getattr(keep, field_name)
+        source_val = getattr(source, field_name)
+
+        if isinstance(field, models.BooleanField):
+            # If keep is False and source is True, promote to True
+            if not keep_val and source_val:
+                setattr(keep, field_name, True)
+                changed = True
+        else:
+            # String, Date, Integer, Text, Email, etc.
+            is_keep_empty = keep_val is None or (
+                isinstance(keep_val, str) and not keep_val.strip()
+            )
+            is_source_filled = source_val is not None and (
+                not isinstance(source_val, str) or bool(source_val.strip())
+            )
+            if is_keep_empty and is_source_filled:
+                setattr(keep, field_name, source_val)
+                changed = True
 
     return changed
 
@@ -657,6 +797,7 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
 
         with transaction.atomic():
             _transfer_parent_relationships(keep, source)
+            _transfer_parent_related_records(keep, source)
             changed = _carry_over_missing_parent_fields(keep, source)
             changed = _merge_parent_role_flags(keep, source) or changed
             changed = _transfer_parent_user_account(keep, source) or changed
