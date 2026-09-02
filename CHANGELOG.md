@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Student Merge Feature**: Lead Mentors can now merge duplicate student records from the "Merge Students" page (`student_merge`, accessible via a "Merge Students" button on the All Students page). The merge preserves the surviving student's records and copies over all missing profile, demographic, contact, and medical information, while transferring all parent relationships (and primary/secondary contact assignments), program enrollments (and team/crew/subteam assignments), fee assignments, payments, sliding scale applications, signed documents, background checks, RFID cards, attendance sessions/events, daily presence records, digital signouts, applications, outreach signups, and earned badges.
 
 ### Changed
+- **Sorted students by display name on team/crew/subteam assignment page**: On the Assign teams/crews/subteams page (`/programs/<id>/assignment/`), active and inactive students are now sorted alphabetically by their display/full names (preferred or legal first name, then last name) instead of database ID order.
 - **Comprehensive data preservation when merging parent records**: When merging duplicate parent entries, all missing profile data (including pronouns, notes, emergency contacts, college/career details, mentor credentials, and photo) and associated records (clearances, agreements, attendance, sliding scale applications, and RFID cards) are now seamlessly transferred from the merged parent into the kept parent record so no valuable information is lost.
 
 ### Fixed

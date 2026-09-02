@@ -393,3 +393,47 @@ class AssignmentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         messages_list = list(response.context["messages"])
         self.assertTrue(any("No students selected" in str(m) for m in messages_list))
+
+    def test_assignment_page_students_sorted_by_display_name(self):
+        # Create a fresh program and students in non-alphabetical order
+        program = Program.objects.create(name="Sorting Test Program")
+        s_zach = Student.objects.create(legal_first_name="Zach", last_name="Adams")
+        s_beth = Student.objects.create(
+            legal_first_name="Alice",
+            preferred_first_name="Beth",
+            last_name="Clark",
+        )
+        s_charlie = Student.objects.create(
+            legal_first_name="Charlie", last_name="Brown"
+        )
+        s_aaron = Student.objects.create(legal_first_name="Aaron", last_name="Davis")
+
+        # Inactive students
+        s_zoe = Student.objects.create(legal_first_name="Zoe", last_name="Taylor")
+        s_adam = Student.objects.create(legal_first_name="Adam", last_name="Wilson")
+
+        # Active enrollments created in ID order: Zach, Beth, Charlie, Aaron
+        Enrollment.objects.create(student=s_zach, program=program, active=True)
+        Enrollment.objects.create(student=s_beth, program=program, active=True)
+        Enrollment.objects.create(student=s_charlie, program=program, active=True)
+        Enrollment.objects.create(student=s_aaron, program=program, active=True)
+
+        # Inactive enrollments in ID order: Zoe, Adam
+        Enrollment.objects.create(student=s_zoe, program=program, active=False)
+        Enrollment.objects.create(student=s_adam, program=program, active=False)
+
+        url = reverse("program_assignment", args=[program.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        active_enrollments = list(response.context["active_enrollments"])
+        self.assertEqual(
+            [e.student.display_name for e in active_enrollments],
+            ["Aaron Davis", "Beth Clark", "Charlie Brown", "Zach Adams"],
+        )
+
+        inactive_enrollments = list(response.context["inactive_enrollments"])
+        self.assertEqual(
+            [e.student.display_name for e in inactive_enrollments],
+            ["Adam Wilson", "Zoe Taylor"],
+        )

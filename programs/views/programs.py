@@ -602,8 +602,18 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
 
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
-        enrollments = Enrollment.objects.filter(program=program).select_related(
-            "student", "team", "crew", "subteam"
+        enrollments = (
+            Enrollment.objects.filter(program=program)
+            .select_related("student", "team", "crew", "subteam")
+            .annotate(
+                sort_first=Lower(
+                    Coalesce(
+                        NullIf("student__preferred_first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                sort_last=Lower("student__last_name"),
+            )
         )
         teams = Team.objects.all().order_by("number")
         crews = Crew.objects.filter(program=program).order_by("name")
@@ -611,17 +621,19 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
 
         # Separate inactive students (inactive enrollment or graduated) so they
         # don't get mixed in with the active ones being assigned.
-        active_enrollments = enrollments.filter(active=True, student__graduated=False)
+        active_enrollments = enrollments.filter(
+            active=True, student__graduated=False
+        ).order_by("sort_first", "sort_last")
         inactive_enrollments = enrollments.exclude(
             active=True, student__graduated=False
-        )
+        ).order_by("sort_first", "sort_last")
 
         return render(
             request,
             self.template_name,
             {
                 "program": program,
-                "enrollments": enrollments,
+                "enrollments": enrollments.order_by("sort_first", "sort_last"),
                 "active_enrollments": active_enrollments,
                 "inactive_enrollments": inactive_enrollments,
                 "teams": teams,
