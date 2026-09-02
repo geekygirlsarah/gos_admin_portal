@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-09-01
 
 ### Added
+- **Option to include students with no logged hours on attendance hours chart**: Mentors viewing the Attendance Hours Chart can now check "Include students with no logged hours" to show all actively enrolled students on the graph and table even if they haven't logged any hours yet (displaying with 0 hours).
 - **Student Merge Feature**: Lead Mentors can now merge duplicate student records from the "Merge Students" page (`student_merge`, accessible via a "Merge Students" button on the All Students page). The merge preserves the surviving student's records and copies over all missing profile, demographic, contact, and medical information, while transferring all parent relationships (and primary/secondary contact assignments), program enrollments (and team/crew/subteam assignments), fee assignments, payments, sliding scale applications, signed documents, background checks, RFID cards, attendance sessions/events, daily presence records, digital signouts, applications, outreach signups, and earned badges.
 
 ### Changed

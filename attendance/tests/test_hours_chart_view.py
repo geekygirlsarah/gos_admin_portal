@@ -324,3 +324,129 @@ class AttendanceHoursChartViewTests(TestCase):
         content = response.content.decode()
         self.assertIn("Exceeded Averages", content)
         self.assertIn("hrs/wk:", content)
+
+    def test_include_unlogged_students_in_chart_and_list(self):
+        # student3 is enrolled but has no attendance sessions
+        student3 = make_student(preferred_first_name="Charlie", last_name="Brown")
+        Enrollment.objects.create(student=student3, program=self.program, active=True)
+
+        url = f"{self.program_url}&include_unlogged=1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        # Charlie should be in context student_list with 0 hours
+        student_list = response.context["student_list"]
+        charlie_entry = next(
+            (s for s in student_list if s["name"] == "Charlie Brown"), None
+        )
+        self.assertIsNotNone(charlie_entry)
+        self.assertEqual(charlie_entry["total_hours"], 0.0)
+        self.assertEqual(charlie_entry["session_count"], 0)
+        self.assertIsNone(charlie_entry["last_attended"])
+        self.assertEqual(charlie_entry["avg_per_week"], 0.0)
+
+        # Charlie should be in chart labels with 0 in chart data
+        chart_labels = json.loads(response.context["chart_labels_json"])
+        chart_data = json.loads(response.context["chart_data_json"])
+        self.assertIn("Charlie Brown", chart_labels)
+        charlie_idx = chart_labels.index("Charlie Brown")
+        self.assertEqual(chart_data[charlie_idx], 0.0)
+        self.assertEqual(response.context["student_count"], 3)
+
+        # Charlie should be in the rendered HTML
+        content = response.content.decode()
+        self.assertIn("Charlie Brown", content)
+
+    def test_default_excludes_unlogged_students(self):
+        student3 = make_student(preferred_first_name="Charlie", last_name="Brown")
+        Enrollment.objects.create(student=student3, program=self.program, active=True)
+
+        response = self.client.get(self.program_url)
+        self.assertEqual(response.status_code, 200)
+
+        chart_labels = json.loads(response.context["chart_labels_json"])
+        self.assertNotIn("Charlie Brown", chart_labels)
+        student_list = response.context["student_list"]
+        self.assertFalse(any(s["name"] == "Charlie Brown" for s in student_list))
+        self.assertEqual(response.context["student_count"], 2)
+
+    def test_include_unlogged_empty_program_shows_chart_and_table(self):
+        empty_program = make_program(name="Zero Sessions Program", active=True)
+        student = make_student(preferred_first_name="Dana", last_name="Scully")
+        Enrollment.objects.create(student=student, program=empty_program, active=True)
+
+        url = f"{self.url}?program_id={empty_program.pk}&include_unlogged=1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(response.context["student_count"], 1)
+        student_list = response.context["student_list"]
+        self.assertEqual(student_list[0]["name"], "Dana Scully")
+        self.assertEqual(student_list[0]["total_hours"], 0.0)
+
+        content = response.content.decode()
+        self.assertIn("Dana Scully", content)
+        self.assertNotIn("No attendance data found", content)
+        self.assertIn("studentHoursChart", content)
+
+    def test_include_unlogged_ignores_inactive_and_graduated_students(self):
+        # Inactive enrollment
+        inactive_student = make_student(
+            preferred_first_name="Inactive", last_name="User"
+        )
+        Enrollment.objects.create(
+            student=inactive_student, program=self.program, active=False
+        )
+
+        # Graduated student
+        grad_student = make_student(
+            preferred_first_name="Graduated", last_name="Senior", graduated=True
+        )
+        Enrollment.objects.create(
+            student=grad_student, program=self.program, active=True
+        )
+
+        url = f"{self.program_url}&include_unlogged=1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        chart_labels = json.loads(response.context["chart_labels_json"])
+        self.assertNotIn("Inactive User", chart_labels)
+        self.assertNotIn("Graduated Senior", chart_labels)
+
+    def test_include_unlogged_sort_alpha_and_hours(self):
+        student3 = make_student(preferred_first_name="Aaron", last_name="Adams")
+        Enrollment.objects.create(student=student3, program=self.program, active=True)
+
+        # Sort alpha: Aaron Adams should be first
+        url_alpha = f"{self.program_url}&include_unlogged=1&sort=alpha"
+        response = self.client.get(url_alpha)
+        student_list = response.context["student_list"]
+        chart_labels = json.loads(response.context["chart_labels_json"])
+        self.assertEqual(student_list[0]["name"], "Aaron Adams")
+        self.assertEqual(chart_labels[0], "Aaron Adams")
+
+        # Sort hours: Aaron Adams (0 hrs) should be last
+        url_hours = f"{self.program_url}&include_unlogged=1&sort=hours"
+        response = self.client.get(url_hours)
+        student_list = response.context["student_list"]
+        chart_labels = json.loads(response.context["chart_labels_json"])
+        self.assertEqual(student_list[-1]["name"], "Aaron Adams")
+        self.assertEqual(chart_labels[-1], "Aaron Adams")
+
+    def test_include_unlogged_preserved_in_sort_urls(self):
+        url = f"{self.program_url}&include_unlogged=1"
+        response = self.client.get(url)
+        self.assertIn("include_unlogged=1", response.context["sort_hours_url"])
+        self.assertIn("include_unlogged=1", response.context["sort_alpha_url"])
+
+    def test_include_unlogged_checkbox_in_form(self):
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn('name="include_unlogged"', content)
+        self.assertNotIn('name="include_unlogged" value="1" checked', content)
+
+        url = f"{self.program_url}&include_unlogged=1"
+        response = self.client.get(url)
+        content = response.content.decode()
+        self.assertIn("checked", content)
