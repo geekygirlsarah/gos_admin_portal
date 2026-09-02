@@ -19,7 +19,7 @@ from programs.permission_views import (
     can_user_read,
     can_user_write,
 )
-from programs.utils import active_students, redirect_back
+from programs.utils import active_students, active_students_in_program, redirect_back
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
 
@@ -1497,6 +1497,13 @@ def attendance_hours_chart_view(request):
             pass
 
     # --- Sessions query ---
+    include_unlogged = request.GET.get("include_unlogged") in (
+        "1",
+        "true",
+        "True",
+        "on",
+        "yes",
+    )
     sessions = AttendanceSession.objects.filter(student__isnull=False)
     if selected_program:
         sessions = sessions.filter(program=selected_program)
@@ -1572,6 +1579,31 @@ def attendance_hours_chart_view(request):
             }
         )
 
+    if include_unlogged:
+        logged_student_ids = {stat["student__id"] for stat in student_stats}
+        students_scope = (
+            active_students_in_program(selected_program)
+            if selected_program
+            else active_students()
+        )
+        unlogged_students = students_scope.exclude(id__in=logged_student_ids).order_by(
+            "preferred_first_name", "legal_first_name", "last_name"
+        )
+        for student in unlogged_students:
+            name = student.display_name
+            chart_labels.append(name)
+            chart_data.append(0.0)
+            student_list.append(
+                {
+                    "id": student.id,
+                    "name": name,
+                    "total_hours": 0.0,
+                    "avg_per_week": 0.0,
+                    "session_count": 0,
+                    "last_attended": None,
+                }
+            )
+
     total_hours_all = round(total_hours_all, 1)
     student_count = len(student_list)
     avg_hours_per_week = (
@@ -1593,9 +1625,9 @@ def attendance_hours_chart_view(request):
         student_list.sort(key=lambda s: s["name"].lower())
         paired = sorted(zip(chart_labels, chart_data), key=lambda p: p[0].lower())
     else:
-        student_list.sort(key=lambda s: s["total_hours"], reverse=True)
-        paired = list(
-            sorted(zip(chart_labels, chart_data), key=lambda p: p[1], reverse=True)
+        student_list.sort(key=lambda s: (-s["total_hours"], s["name"].lower()))
+        paired = sorted(
+            zip(chart_labels, chart_data), key=lambda p: (-p[1], p[0].lower())
         )
     chart_labels = [p[0] for p in paired]
     chart_data = [p[1] for p in paired]
@@ -1627,6 +1659,8 @@ def attendance_hours_chart_view(request):
         base_params["date_to"] = date_to_str
     if avg_lines_json_str:
         base_params["avg_lines"] = avg_lines_json_str
+    if include_unlogged:
+        base_params["include_unlogged"] = "1"
     sort_hours_url = f"?{urlencode(base_params)}&sort=hours"
     sort_alpha_url = f"?{urlencode(base_params)}&sort=alpha"
 
@@ -1652,6 +1686,7 @@ def attendance_hours_chart_view(request):
             "sort_hours_url": sort_hours_url,
             "sort_alpha_url": sort_alpha_url,
             "overall_start_date": overall_start_date,
+            "include_unlogged": include_unlogged,
         },
     )
 

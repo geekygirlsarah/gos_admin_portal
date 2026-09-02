@@ -150,10 +150,16 @@ class DashboardStatusTests(TestCase):
         self.assertContains(response, ">Current</span>", count=2)
         self.assertContains(response, ">Upcoming</span>", count=1)
 
-        # Should have a link to details
+        # Should have links to details (both title link and button link)
+        active_url = reverse("program_detail", args=[self.active_program.pk])
+        upcoming_url = reverse("program_detail", args=[self.upcoming_program.pk])
+        self.assertContains(response, active_url, count=2)
+        self.assertContains(response, upcoming_url, count=2)
         self.assertContains(
-            response, reverse("program_detail", args=[self.active_program.pk])
+            response,
+            f'<a href="{active_url}" class="text-primary text-decoration-none">{self.active_program.name}</a>',
         )
         self.assertContains(
-            response, reverse("program_detail", args=[self.upcoming_program.pk])
+            response,
+            f'<a href="{upcoming_url}" class="text-primary text-decoration-none">{self.upcoming_program.name}</a>',
         )
