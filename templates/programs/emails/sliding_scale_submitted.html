@@ -10,7 +10,17 @@
 <ul>
     <li><strong>Household Size:</strong> {{ sliding_scale.family_size|default:"—" }}</li>
     <li><strong>Adjusted Gross Income:</strong> {% if sliding_scale.adjusted_gross_income %}${{ sliding_scale.adjusted_gross_income|floatformat:2 }}{% else %}—{% endif %}</li>
+    <li><strong>Valid Through:</strong> {{ sliding_scale.expiration_date|default:"No expiration" }}</li>
 </ul>
+
+{% if programs %}
+<p>This discount applies to the following programs:</p>
+<ul>
+    {% for program in programs %}
+    <li>{{ program }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
 
 <p>A Lead Mentor will review your application and any uploaded documents. We'll email you once a decision has been made.</p>
 {% endblock %}

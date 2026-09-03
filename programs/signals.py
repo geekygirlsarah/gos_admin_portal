@@ -387,9 +387,20 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
 
 
 def _notify_sliding_scale_submitted(student, sliding_scale):
+    from .models import Enrollment
     from .utils import get_lead_mentor_notification_email, send_templated_notification
 
-    context = {"student": student, "sliding_scale": sliding_scale}
+    programs = list(
+        Enrollment.objects.filter(student=student, active=True).values_list(
+            "program__name", flat=True
+        )
+    )
+
+    context = {
+        "student": student,
+        "sliding_scale": sliding_scale,
+        "programs": programs,
+    }
 
     parents = [
         p
@@ -413,7 +424,14 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
 
 
 def _notify_sliding_scale_processed(student, sliding_scale):
+    from .models import Enrollment
     from .utils import send_templated_notification
+
+    programs = list(
+        Enrollment.objects.filter(student=student, active=True).values_list(
+            "program__name", flat=True
+        )
+    )
 
     parents = [
         p
@@ -425,7 +443,11 @@ def _notify_sliding_scale_processed(student, sliding_scale):
 
     verb = "Approved" if sliding_scale.status == "approved" else "Update"
     subject = f"Sliding Scale Application {verb} for {student}"
-    context = {"student": student, "sliding_scale": sliding_scale}
+    context = {
+        "student": student,
+        "sliding_scale": sliding_scale,
+        "programs": programs,
+    }
     send_templated_notification(
         subject,
         "programs/emails/sliding_scale_processed.html",

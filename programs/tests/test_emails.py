@@ -253,3 +253,42 @@ class AutoEmailNotificationsTest(TestCase):
             program=self.program, name="Another Fee", amount=Decimal("10.00")
         )
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_sliding_scale_submitted_email_includes_expiration_and_programs(self):
+        from datetime import date
+
+        mail.outbox = []
+        exp_date = date(2025, 12, 31)
+        SlidingScale.objects.create(
+            student=self.student,
+            family_size=4,
+            adjusted_gross_income=Decimal("30000.00"),
+            expiration_date=exp_date,
+            status=SlidingScale.STATUS_PENDING,
+        )
+        self.assertEqual(len(mail.outbox), 2)
+        # Find the parent email (not the lead mentor email)
+        parent_emails = [
+            m for m in mail.outbox if "Sliding Scale Application Submitted" in m.subject
+        ]
+        self.assertEqual(len(parent_emails), 1)
+        email = parent_emails[0]
+        self.assertEqual(email.to, [self.parent.personal_email])
+        html_content, _ = email.alternatives[0]
+        self.assertIn("Valid Through:", html_content)
+        self.assertIn("Dec. 31, 2025", html_content)
+        self.assertIn("Test Program", html_content)
+
+    def test_sliding_scale_approved_email_includes_programs(self):
+        mail.outbox = []
+        SlidingScale.objects.create(
+            student=self.student,
+            percent=Decimal("50.00"),
+            status=SlidingScale.STATUS_APPROVED,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, [self.parent.personal_email])
+        html_content, _ = email.alternatives[0]
+        self.assertIn("Programs currently covered:", html_content)
+        self.assertIn("Test Program", html_content)

@@ -16,7 +16,7 @@
       <a class="btn btn-outline-info" href="{% url 'student_hours' student.pk %}">View Hours</a>
       {% endif %}
       {% if can_edit_student %}
-        <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={{ request.path }}">Edit</a>
+        <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={% firstof request.GET.next request.path %}">Edit</a>
       {% endif %}
     </div>
   </div>

@@ -410,6 +410,8 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         if ctx["can_manage_students"]:
             ctx["add_existing_form"] = AddExistingStudentToProgramForm(program=program)
             ctx["quick_create_form"] = QuickCreateStudentForm()
+
+        ctx["program_has_fees"] = program.fees.exists()
         return ctx
 
 
