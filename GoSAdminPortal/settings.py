@@ -367,9 +367,15 @@ HEALTH_SMTP_CHECK_INTERVAL = int(os.getenv("HEALTH_SMTP_CHECK_INTERVAL", "300"))
 # Shorter cooldown after a failure so recovery is detected quickly.
 HEALTH_SMTP_FAILURE_COOLDOWN = int(os.getenv("HEALTH_SMTP_FAILURE_COOLDOWN", "30"))
 
-# True while running `manage.py test`; used to silence audit logs and to
-# disable rate limiting (see APPLY_RATE_LIMIT_ENABLED below).
+# True while running `manage.py test`; used to silence audit logs, speed up
+# password hashing, and disable rate limiting (see APPLY_RATE_LIMIT_ENABLED below).
 TESTING = "test" in sys.argv
+
+# Use fast MD5 hasher during test runs to significantly reduce test execution time.
+if TESTING:
+    PASSWORD_HASHERS = [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
+    ]
 
 # Caching. LocMemCache is fine for single-process development and tests; in
 # production configure a shared backend (e.g. Redis via CACHE_BACKEND /
