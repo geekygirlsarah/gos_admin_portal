@@ -391,8 +391,9 @@ def _notify_sliding_scale_submitted(student, sliding_scale):
     from .utils import get_lead_mentor_notification_email, send_templated_notification
 
     programs = list(
-        Enrollment.objects.filter(student=student, active=True)
-        .values_list("program__name", flat=True)
+        Enrollment.objects.filter(student=student, active=True).values_list(
+            "program__name", flat=True
+        )
     )
 
     context = {
@@ -427,8 +428,9 @@ def _notify_sliding_scale_processed(student, sliding_scale):
     from .utils import send_templated_notification
 
     programs = list(
-        Enrollment.objects.filter(student=student, active=True)
-        .values_list("program__name", flat=True)
+        Enrollment.objects.filter(student=student, active=True).values_list(
+            "program__name", flat=True
+        )
     )
 
     parents = [

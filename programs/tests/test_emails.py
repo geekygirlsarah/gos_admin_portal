@@ -268,7 +268,9 @@ class AutoEmailNotificationsTest(TestCase):
         )
         self.assertEqual(len(mail.outbox), 2)
         # Find the parent email (not the lead mentor email)
-        parent_emails = [m for m in mail.outbox if "Sliding Scale Application Submitted" in m.subject]
+        parent_emails = [
+            m for m in mail.outbox if "Sliding Scale Application Submitted" in m.subject
+        ]
         self.assertEqual(len(parent_emails), 1)
         email = parent_emails[0]
         self.assertEqual(email.to, [self.parent.personal_email])
