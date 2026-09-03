@@ -1449,6 +1449,7 @@ def attendance_hours_chart_view(request):
 
     date_from_str = request.GET.get("date_from", "")
     date_to_str = request.GET.get("date_to", "")
+    days_of_week = request.GET.getlist("days_of_week")
 
     # When a program is selected and the user hasn't supplied explicit dates,
     # default to the program's date window (clamped to today if end is future).
@@ -1515,6 +1516,8 @@ def attendance_hours_chart_view(request):
         sessions = sessions.filter(
             check_in__date__lte=date_to,
         )
+    if days_of_week:
+        sessions = sessions.filter(check_in__week_day__in=days_of_week)
     sessions = sessions.select_related("student")
 
     # --- Compute overall start for weeks_elapsed ---
@@ -1661,8 +1664,10 @@ def attendance_hours_chart_view(request):
         base_params["avg_lines"] = avg_lines_json_str
     if include_unlogged:
         base_params["include_unlogged"] = "1"
-    sort_hours_url = f"?{urlencode(base_params)}&sort=hours"
-    sort_alpha_url = f"?{urlencode(base_params)}&sort=alpha"
+    if days_of_week:
+        base_params["days_of_week"] = days_of_week
+    sort_hours_url = f"?{urlencode(base_params, doseq=True)}&sort=hours"
+    sort_alpha_url = f"?{urlencode(base_params, doseq=True)}&sort=alpha"
 
     return render(
         request,
@@ -1687,6 +1692,7 @@ def attendance_hours_chart_view(request):
             "sort_alpha_url": sort_alpha_url,
             "overall_start_date": overall_start_date,
             "include_unlogged": include_unlogged,
+            "days_of_week": days_of_week,
         },
     )
 

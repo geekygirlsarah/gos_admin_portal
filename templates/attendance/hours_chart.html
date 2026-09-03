@@ -59,11 +59,45 @@
           </button>
         </div>
         <div class="col-12 mt-2">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="include_unlogged" name="include_unlogged" value="1" {% if include_unlogged %}checked{% endif %}>
-            <label class="form-check-label" for="include_unlogged">
-              Include students with no logged hours
-            </label>
+          <div class="d-flex flex-wrap gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="include_unlogged" name="include_unlogged" value="1" {% if include_unlogged %}checked{% endif %}>
+              <label class="form-check-label" for="include_unlogged">
+                Include students with no logged hours
+              </label>
+            </div>
+            
+            <div class="d-flex align-items-center gap-2 border-start ps-3">
+              <span class="text-muted small fw-bold">Filter by Days:</span>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_sun" value="1" {% if '1' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_sun">Sun</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_mon" value="2" {% if '2' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_mon">Mon</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_tue" value="3" {% if '3' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_tue">Tue</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_wed" value="4" {% if '4' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_wed">Wed</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_thu" value="5" {% if '5' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_thu">Thu</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_fri" value="6" {% if '6' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_fri">Fri</label>
+              </div>
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="days_of_week" id="dow_sat" value="7" {% if '7' in days_of_week %}checked{% endif %}>
+                <label class="form-check-label small" for="dow_sat">Sat</label>
+              </div>
+            </div>
           </div>
         </div>
       </form>

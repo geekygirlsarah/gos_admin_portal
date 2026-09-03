@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-02
+
+### Added
+- **Day-of-week filter for attendance hours chart**: The Attendance Hours Chart now includes checkboxes to filter student hours by specific days of the week (e.g., only Tuesdays, or only Monday through Friday).
+- **Participated badge and priority sorting for past outreach events**: On the Outreach Events page, past events that a student participated in are now sorted to the top of the past events list/accordion, and each past event they participated in features a distinct "Participated" badge so students can easily find and review their event history.
+
 ## 2026-09-01
 
 ### Added
