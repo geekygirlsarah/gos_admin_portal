@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-09-03
 
+### Added
+- **No-fees warning on program pages for Lead Mentors**: When a program doesn't have any fees attached yet, Lead Mentors now see a warning banner on the program page reminding them to add fees, since programs cost money for parents. The warning is only visible to Lead Mentors (not students, parents, or mentors).
+
 ### Fixed
 - **Editing a student returns you to where you came from**: After saving changes on the Edit Student page, you're now taken back to the All Students screen or the Program screen you were viewing before, instead of always landing back on the student's profile page. (Redirect URLs continue to be validated so malicious or external links are never followed.)
 

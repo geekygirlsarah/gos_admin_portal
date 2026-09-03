@@ -25,6 +25,11 @@
       {% if program.grade_range_display %}
         <p><span class="fw-semibold">Grade Range:</span> {{ program.grade_range_display }}</p>
       {% endif %}
+      {% if role == 'LeadMentor' and not program_has_fees %}
+        <div class="alert alert-warning mt-3">
+          <strong>No fees have been added to this program yet.</strong> A fee should be added so parents know to pay for it.
+        </div>
+      {% endif %}
       <hr>
         {% if role == 'LeadMentor' or role == 'Mentor' %}
         <div class="mt-4">
