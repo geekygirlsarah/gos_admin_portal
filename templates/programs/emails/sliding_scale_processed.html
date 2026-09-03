@@ -13,6 +13,14 @@
     <li><strong>Valid Through:</strong> {{ sliding_scale.expiration_date|default:"No expiration" }}</li>
 </ul>
 <p>This discount will automatically apply to applicable fees across all of {{ student }}'s programs during that time frame.</p>
+{% if programs %}
+<p>Programs currently covered:</p>
+<ul>
+    {% for program in programs %}
+    <li>{{ program }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
 {% else %}
 <p>We've finished reviewing the sliding scale application for <strong>{{ student }}</strong>, and unfortunately we're not able to approve it at this time.</p>
 {% if sliding_scale.decline_reason %}
