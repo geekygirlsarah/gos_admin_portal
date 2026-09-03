@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-02
+
+### Added
+- **Day-of-week filter for attendance hours chart**: The Attendance Hours Chart now includes checkboxes to filter student hours by specific days of the week (e.g., only Tuesdays, or only Monday through Friday).
+
 ## 2026-09-01
 
 ### Added
