@@ -731,36 +731,11 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
         super().__init__(*args, **kwargs)
 
     def label_from_instance(self, obj):
-        from .models import Fee, Payment
-        from .utils import get_active_sliding_scale
-        from .views import compute_sliding_discount_rounded
+        from .utils import get_student_program_balance
 
         student = obj
         program = self.program
-
-        # Calculation logic mirror from views.py
-        total_fees = Decimal("0")
-        fees = Fee.objects.filter(program=program)
-        for fee in fees:
-            is_assigned = fee.assignments.exists()
-            if not is_assigned or fee.assignments.filter(student=student).exists():
-                total_fees += fee.amount
-
-        sliding = get_active_sliding_scale(student)
-        total_sliding = Decimal("0")
-        if sliding and sliding.percent is not None:
-            total_sliding = compute_sliding_discount_rounded(
-                total_fees, sliding.percent
-            )
-
-        total_payments = sum(
-            Payment.objects.filter(student=student, program=program).values_list(
-                "amount", flat=True
-            ),
-            Decimal("0"),
-        )
-
-        balance = total_fees - total_sliding - total_payments
+        balance = get_student_program_balance(student, program)
         return f"{student.preferred_first_name or student.legal_first_name} {student.last_name} (${balance:,.2f})"
 
 

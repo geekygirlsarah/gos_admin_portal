@@ -2,9 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-03
+
+### Fixed
+- **Historical sliding scales apply properly to past programs and balances**: When viewing past programs or historical balance sheets, sliding scales active during the program's timeframe now correctly discount applicable program fees even if the sliding scale has an expiration date in the past.
+
 ## 2026-09-02
 
 ### Added
+- **Active Sliding Scales & School-Year Grouped Past Scales**: The sliding scale applications page now separates active sliding scales from past/historical ones. Current active discounts are sorted by most recent date, showing effective date ranges and creator/reviewer details. Expired or past sliding scales are grouped by school year under an accordion.
+- **Effective date ranges on sliding scale tables**: Sliding scale tables now display effective dates (e.g., "Jan 1, 2026 – Jun 30, 2026", "From Sep 1, 2026", or "No expiration") to easily distinguish multiple time periods for a student.
+- **Creator attribution for manual sliding scales**: When a mentor or lead manually creates a sliding scale, their account is recorded as the reviewer/creator and shown in the review list.
 - **Day-of-week filter for attendance hours chart**: The Attendance Hours Chart now includes checkboxes to filter student hours by specific days of the week (e.g., only Tuesdays, or only Monday through Friday).
 - **Participated badge and priority sorting for past outreach events**: On the Outreach Events page, past events that a student participated in are now sorted to the top of the past events list/accordion, and each past event they participated in features a distinct "Participated" badge so students can easily find and review their event history.
 

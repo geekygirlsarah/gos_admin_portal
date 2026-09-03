@@ -52,12 +52,12 @@
     </div>
   </div>
 
-  <div class="card shadow-sm">
+  <div class="card shadow-sm mb-4">
     <div class="card-header bg-light">
-      <h5 class="mb-0">Recently Decided</h5>
+      <h5 class="mb-0">Active Sliding Scales</h5>
     </div>
     <div class="card-body p-0">
-      {% if decided_applications %}
+      {% if active_applications %}
         <div class="table-responsive mb-0">
           <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
@@ -65,23 +65,25 @@
                 <th>Student</th>
                 <th>Status</th>
                 <th>Discount</th>
-                <th>Reviewed By</th>
-                <th>Reviewed</th>
+                <th>Effective Dates</th>
+                <th>Added / Reviewed By</th>
+                <th>Date Added / Reviewed</th>
                 <th class="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {% for application in decided_applications %}
+              {% for application in active_applications %}
                 <tr>
                   <td>{{ application.student }}</td>
                   <td>
-                    <span class="badge {% if application.status == 'approved' %}bg-success{% else %}bg-secondary{% endif %}">
+                    <span class="badge {% if application.status == 'approved' %}bg-success{% elif application.status == 'declined' %}bg-danger{% else %}bg-secondary{% endif %}">
                       {{ application.get_status_display }}
                     </span>
                   </td>
                   <td>{% if application.percent is not None %}{{ application.percent }}%{% else %}—{% endif %}</td>
-                  <td>{{ application.reviewed_by|default:"—" }}</td>
-                  <td>{{ application.reviewed_at|date:"M j, Y" }}</td>
+                  <td>{{ application.effective_dates_display }}</td>
+                  <td>{{ application.reviewed_by|default:application.applied_by|default:"—" }}</td>
+                  <td>{{ application.reviewed_at|default:application.created_at|date:"M j, Y" }}</td>
                   <td class="text-end">
                     <a href="{% url 'sliding_scale_edit' application.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
                   </td>
@@ -91,9 +93,68 @@
           </table>
         </div>
       {% else %}
-        <div class="p-4 text-center text-muted">No applications have been decided yet.</div>
+        <div class="p-4 text-center text-muted">No active sliding scales.</div>
       {% endif %}
     </div>
   </div>
+
+  {% if past_applications_by_year %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light">
+        <h5 class="mb-0">Past Sliding Scales</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="accordion accordion-flush" id="pastSlidingScalesAccordion">
+          {% for year_label, year_scales in past_applications_by_year %}
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
+                  <strong>{{ year_label }} School Year</strong><span class="text-muted ms-2">({{ year_scales|length }} record{{ year_scales|length|pluralize }})</span>
+                </button>
+              </h2>
+              <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#pastSlidingScalesAccordion">
+                <div class="accordion-body p-0">
+                  <div class="table-responsive mb-0">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th>Student</th>
+                          <th>Status</th>
+                          <th>Discount</th>
+                          <th>Effective Dates</th>
+                          <th>Added / Reviewed By</th>
+                          <th>Date Added / Reviewed</th>
+                          <th class="text-end">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for application in year_scales %}
+                          <tr>
+                            <td>{{ application.student }}</td>
+                            <td>
+                              <span class="badge {% if application.status == 'approved' %}bg-success{% elif application.status == 'declined' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ application.get_status_display }}
+                              </span>
+                            </td>
+                            <td>{% if application.percent is not None %}{{ application.percent }}%{% else %}—{% endif %}</td>
+                            <td>{{ application.effective_dates_display }}</td>
+                            <td>{{ application.reviewed_by|default:application.applied_by|default:"—" }}</td>
+                            <td>{{ application.reviewed_at|default:application.created_at|date:"M j, Y" }}</td>
+                            <td class="text-end">
+                              <a href="{% url 'sliding_scale_edit' application.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

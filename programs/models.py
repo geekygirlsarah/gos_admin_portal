@@ -1756,6 +1756,17 @@ class SlidingScale(models.Model):
             return False
         return True
 
+    @property
+    def effective_dates_display(self):
+        """Human-readable effective date range."""
+        if self.date and self.expiration_date:
+            return f"{self.date.strftime('%b')} {self.date.day}, {self.date.year} \u2013 {self.expiration_date.strftime('%b')} {self.expiration_date.day}, {self.expiration_date.year}"
+        if self.date:
+            return f"From {self.date.strftime('%b')} {self.date.day}, {self.date.year}"
+        if self.expiration_date:
+            return f"Through {self.expiration_date.strftime('%b')} {self.expiration_date.day}, {self.expiration_date.year}"
+        return "No expiration"
+
 
 def _tax_form_upload_to(instance, filename):
     from programs.utils.files import sanitize_upload_filename

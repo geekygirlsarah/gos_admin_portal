@@ -6,7 +6,7 @@ from decimal import ROUND_HALF_DOWN, Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Value
+from django.db.models import F, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -42,7 +42,12 @@ from ..permission_views import (
     get_user_role,
     user_is_parent,
 )
-from ..utils import get_student_balance_data, get_student_program_balance, redirect_back
+from ..utils import (
+    get_academic_year_ending,
+    get_student_balance_data,
+    get_student_program_balance,
+    redirect_back,
+)
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
@@ -312,6 +317,14 @@ class SlidingScaleCreateView(
         # The sliding scale is no longer tied to a single program — it applies
         # across all of the student's programs — so we simply create the record.
         obj = form.save(commit=False)
+        if (
+            not obj.reviewed_by
+            and getattr(self.request, "user", None)
+            and self.request.user.is_authenticated
+        ):
+            obj.reviewed_by = self.request.user
+            if not obj.reviewed_at:
+                obj.reviewed_at = timezone.now()
         obj.save()
         # Log creation
         user = getattr(self.request, "user", None)
@@ -352,6 +365,14 @@ class SlidingScaleUpdateView(
 
     def form_valid(self, form):
         obj = form.save(commit=False)
+        if (
+            not obj.reviewed_by
+            and getattr(self.request, "user", None)
+            and self.request.user.is_authenticated
+        ):
+            obj.reviewed_by = self.request.user
+            if not obj.reviewed_at:
+                obj.reviewed_at = timezone.now()
         # Capture old values for changed fields before saving
         try:
             before = SlidingScale.objects.get(pk=obj.pk)
@@ -447,11 +468,45 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["decided_applications"] = (
+        today = timezone.localdate()
+
+        decided_qs = (
             SlidingScale.objects.exclude(status=SlidingScale.STATUS_PENDING)
             .select_related("student", "applied_by", "reviewed_by")
-            .order_by("-reviewed_at", "-updated_at")[:25]
+            .order_by(
+                F("date").desc(nulls_last=True),
+                "-created_at",
+            )
         )
+
+        active_applications = []
+        past_applications = []
+
+        for app in decided_qs:
+            if app.status == SlidingScale.STATUS_APPROVED and (
+                app.expiration_date is None or app.expiration_date >= today
+            ):
+                active_applications.append(app)
+            else:
+                past_applications.append(app)
+
+        # Group past applications by school year (July–June), newest first
+        past_grouped = {}
+        for app in past_applications:
+            dt = (
+                app.expiration_date
+                or app.date
+                or (app.created_at.date() if app.created_at else today)
+            )
+            ending = get_academic_year_ending(dt)
+            label = f"{ending - 1}-{ending}"
+            past_grouped.setdefault(label, []).append(app)
+
+        past_by_year = sorted(past_grouped.items(), key=lambda kv: kv[0], reverse=True)
+
+        ctx["active_applications"] = active_applications
+        ctx["past_applications_by_year"] = past_by_year
+        ctx["decided_applications"] = active_applications
         return ctx
 
 
