@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 - **Day-of-week filter for attendance hours chart**: The Attendance Hours Chart now includes checkboxes to filter student hours by specific days of the week (e.g., only Tuesdays, or only Monday through Friday).
 - **Participated badge and priority sorting for past outreach events**: On the Outreach Events page, past events that a student participated in are now sorted to the top of the past events list/accordion, and each past event they participated in features a distinct "Participated" badge so students can easily find and review their event history.
 
+### Changed
+- **CI test suite and workflow speedups**: Accelerated automated test runs in CI by configuring Django to use `MD5PasswordHasher` during testing (substantially speeding up user creation and authentication in tests), running PostgreSQL with in-memory `tmpfs` and non-durable write flags (`fsync=off`, `synchronous_commit=off`, `full_page_writes=off`), removing redundant migration runs in CI, and using `uv` for fast dependency installation.
+
 ## 2026-09-01
 
 ### Added
