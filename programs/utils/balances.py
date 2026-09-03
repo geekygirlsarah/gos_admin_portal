@@ -38,6 +38,21 @@ def program_overlaps_sliding_window(program, sliding):
 
     prog_start = program.start_date
     prog_end = program.end_date
+
+    if prog_start is None or prog_end is None:
+        from ..models import Fee
+
+        fee_dates = [
+            f.effective_date or (f.created_at.date() if f.created_at else None)
+            for f in Fee.objects.filter(program=program)
+        ]
+        valid_fee_dates = [d for d in fee_dates if d is not None]
+        if valid_fee_dates:
+            if prog_start is None:
+                prog_start = min(valid_fee_dates)
+            if prog_end is None:
+                prog_end = max(valid_fee_dates)
+
     slide_start = sliding.date
     slide_end = sliding.expiration_date
 
@@ -53,23 +68,44 @@ def get_active_sliding_scale(student, on_date=None):
 
     The sliding scale is no longer tied to a single program: an approved,
     non-expired record applies across ALL of the student's programs. If
-    ``on_date`` is given, only records that haven't expired as of that date
+    ``on_date`` is given, only records that are active as of that date
     are considered (used to evaluate historical fees/balances correctly).
     """
     from ..models import SlidingScale
 
-    qs = SlidingScale.objects.filter(
-        student=student, status=SlidingScale.STATUS_APPROVED
+    if student is None:
+        return None
+
+    target_date = on_date or date.today()
+    qs = (
+        SlidingScale.objects.filter(
+            student=student, status=SlidingScale.STATUS_APPROVED
+        )
+        .filter(Q(date__isnull=True) | Q(date__lte=target_date))
+        .filter(Q(expiration_date__isnull=True) | Q(expiration_date__gte=target_date))
     )
-    if on_date is not None:
-        qs = qs.filter(
-            Q(expiration_date__isnull=True) | Q(expiration_date__gte=on_date)
-        )
-    else:
-        qs = qs.filter(
-            Q(expiration_date__isnull=True) | Q(expiration_date__gte=date.today())
-        )
     return qs.order_by("-date", "-created_at").first()
+
+
+def get_sliding_scale_for_program(student, program):
+    """Return the SlidingScale record (if any) applicable to a student in a program.
+
+    Checks approved sliding scales for the student and returns the one whose
+    effective window overlaps the program (or its fee dates), ordered by
+    most recent start date.
+    """
+    from ..models import SlidingScale
+
+    if student is None or program is None:
+        return None
+
+    approved = SlidingScale.objects.filter(
+        student=student, status=SlidingScale.STATUS_APPROVED
+    ).order_by("-date", "-created_at")
+    for s in approved:
+        if program_overlaps_sliding_window(program, s):
+            return s
+    return None
 
 
 def get_student_balance_data(student, program, can_view_sliding=True):
@@ -82,8 +118,10 @@ def get_student_balance_data(student, program, can_view_sliding=True):
 
     # Gather entries: fees (program), sliding scale (if exists), and payments
     entries = []
-    sliding = get_active_sliding_scale(student)
-    sliding_overlaps = program_overlaps_sliding_window(program, sliding)
+    sliding = get_sliding_scale_for_program(student, program)
+    sliding_overlaps = (
+        program_overlaps_sliding_window(program, sliding) if sliding else False
+    )
 
     # Fees: positive amounts
     fees = Fee.objects.filter(program=program)

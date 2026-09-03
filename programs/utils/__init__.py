@@ -13,6 +13,7 @@ from .alumni import convert_student_to_alumni, find_matching_alumni_adult
 from .balances import (
     compute_sliding_discount_rounded,
     get_active_sliding_scale,
+    get_sliding_scale_for_program,
     get_student_balance_data,
     get_student_program_balance,
     program_overlaps_sliding_window,
@@ -77,6 +78,7 @@ __all__ = [
     # balances
     "compute_sliding_discount_rounded",
     "get_active_sliding_scale",
+    "get_sliding_scale_for_program",
     "get_student_balance_data",
     "get_student_program_balance",
     "program_overlaps_sliding_window",
