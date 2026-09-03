@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## 2026-09-03
 
 ### Fixed
+- **Editing a student returns you to where you came from**: After saving changes on the Edit Student page, you're now taken back to the All Students screen or the Program screen you were viewing before, instead of always landing back on the student's profile page. (Redirect URLs continue to be validated so malicious or external links are never followed.)
+
+## 2026-09-03
+
+### Fixed
 - **Historical sliding scales apply properly to past programs and balances**: When viewing past programs or historical balance sheets, sliding scales active during the program's timeframe now correctly discount applicable program fees even if the sliding scale has an expiration date in the past.
 
 ## 2026-09-02
