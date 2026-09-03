@@ -111,3 +111,110 @@ class OutreachEventListTest(TestCase):
         resp = self.client.get(url)
 
         self.assertNotContains(resp, 'id="pastEventsAccordion"')
+
+    def test_student_past_events_sorting_and_participated_badge(self):
+        today = timezone.now().date()
+        # Create additional past events
+        past_participated_recent = create_outreach_event(
+            program=self.program,
+            name="Participated Recent",
+            location_name="Loc A",
+            location_address="123 A St",
+            start_date=today - timedelta(days=5),
+            start_time="10:00:00",
+            end_time="12:00:00",
+        )
+        past_participated_older = create_outreach_event(
+            program=self.program,
+            name="Participated Older",
+            location_name="Loc B",
+            location_address="456 B St",
+            start_date=today - timedelta(days=15),
+            start_time="10:00:00",
+            end_time="12:00:00",
+        )
+        past_not_participated_newest = create_outreach_event(
+            program=self.program,
+            name="Not Participated Newest",
+            location_name="Loc C",
+            location_address="789 C St",
+            start_date=today - timedelta(days=2),
+            start_time="10:00:00",
+            end_time="12:00:00",
+        )
+
+        # Student signs up for Participated Recent and Participated Older
+        OutreachSignup.objects.create(
+            shift=past_participated_recent.shifts.first(),
+            student=self.student,
+            role=OutreachSignup.HELPER,
+        )
+        OutreachSignup.objects.create(
+            shift=past_participated_older.shifts.first(),
+            student=self.student,
+            role=OutreachSignup.CHAMPION,
+        )
+
+        self.client.login(username="student", password="password")  # nosec B106
+        url = reverse("outreach:event_list", args=[self.program.id])
+        resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 200)
+
+        # Check order of past events in context: participated ones up front (newest to oldest), then non-participated (newest to oldest)
+        past_names = [e.name for e in resp.context["past_events"]]
+        self.assertEqual(
+            past_names,
+            [
+                "Participated Recent",
+                "Participated Older",
+                "Not Participated Newest",
+                "Past Event",
+            ],
+        )
+
+        # Check that Participated badge is rendered for participated past events
+        self.assertContains(resp, "Participated")
+        content = resp.content.decode("utf-8")
+        # Ensure badge is attached to participated events and not non-participated
+        self.assertIn("Participated Recent", content)
+        self.assertIn("Participated Older", content)
+
+    def test_mentor_past_events_order_and_no_participated_badge(self):
+        today = timezone.now().date()
+        past_recent = create_outreach_event(
+            program=self.program,
+            name="Past Recent",
+            location_name="Loc A",
+            location_address="123 A St",
+            start_date=today - timedelta(days=2),
+            start_time="10:00:00",
+            end_time="12:00:00",
+        )
+        past_older = create_outreach_event(
+            program=self.program,
+            name="Past Older",
+            location_name="Loc B",
+            location_address="456 B St",
+            start_date=today - timedelta(days=10),
+            start_time="10:00:00",
+            end_time="12:00:00",
+        )
+        mentor_user = User.objects.create_user(
+            username="mentor", password="password"
+        )  # nosec B106
+        from programs.models import Adult
+
+        Adult.objects.create(user=mentor_user, is_mentor=True, mentor_active=True)
+
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = reverse("outreach:event_list", args=[self.program.id])
+        resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 200)
+        past_names = [e.name for e in resp.context["past_events"]]
+        self.assertEqual(
+            past_names,
+            ["Past Recent", "Past Event", "Past Older"],
+        )
+        self.assertNotContains(resp, "Participated</span>")

@@ -125,6 +125,15 @@ class OutreachEventListView(
                     for s in student_signups
                     if s.role == OutreachSignup.CHAMPION
                 }
+                context["student_signup_event_ids"] = student_signup_event_ids
+
+                participated_past = [
+                    e for e in past_events if e.id in student_signup_event_ids
+                ]
+                other_past = [
+                    e for e in past_events if e.id not in student_signup_event_ids
+                ]
+                context["past_events"] = participated_past + other_past
 
                 # Add outreach stats, credited based on the specific shift
                 # signed up for (not the whole event's duration).

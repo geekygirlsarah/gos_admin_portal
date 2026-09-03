@@ -2,7 +2,12 @@
 <div class="col-md-6 col-lg-4 mb-4">
     <div class="card h-100 shadow-sm">
         <div class="card-body">
-            <h5 class="card-title text-primary">{{ event.name }}</h5>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <h5 class="card-title text-primary mb-0">{{ event.name }}</h5>
+                {% if user_role == 'Student' and event.id in student_signup_event_ids and event.is_past %}
+                <span class="badge bg-success ms-2">Participated</span>
+                {% endif %}
+            </div>
             <h6 class="card-subtitle mb-2 text-muted">
                 <i class="bi bi-geo-alt"></i>
                 <a href="https://www.google.com/maps/search/?api=1&query={{ event.location_address|urlencode }}" target="_blank" class="text-decoration-none" title="View on Map">{{ event.location_name }}</a>
