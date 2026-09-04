@@ -165,29 +165,47 @@ def ensure_user_in_student_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Student group", exc_info=True)
 
 
+def notify_fee_parents(fee):
+    """Send a 'new fee' notification to the parents of the fee's applicable
+    active students.
+
+    If the fee is assigned to specific students, only those students are
+    notified; otherwise every active student enrolled in the fee's program is.
+    """
+    from .models import Enrollment, FeeAssignment
+
+    program = fee.program
+    if fee.assignments.exists():
+        assignments = FeeAssignment.objects.filter(
+            fee=fee, student__graduated=False
+        ).select_related("student")
+        student_ids = [a.student_id for a in assignments]
+        # Only active enrollments for these students
+        active_ids = set(
+            Enrollment.objects.filter(
+                program=program, active=True, student_id__in=student_ids
+            ).values_list("student_id", flat=True)
+        )
+        candidates = [
+            a.student
+            for a in assignments
+            if a.student_id in active_ids and not a.student.graduated
+        ]
+    else:
+        enrollments = Enrollment.objects.filter(
+            program=program, active=True, student__graduated=False
+        ).select_related("student")
+        candidates = [e.student for e in enrollments]
+
+    for student in candidates:
+        _send_fee_notification(student, program, fee)
+
+
 @receiver(post_save, sender="programs.Fee")
 def notify_parents_on_fee_added(sender, instance, created, **kwargs):
     if not created:
         return
-
-    from .models import Enrollment
-
-    program = instance.program
-    # Find all active students enrolled in this program
-    enrollments = Enrollment.objects.filter(
-        program=program, active=True, student__graduated=False
-    ).select_related("student")
-
-    for enrollment in enrollments:
-        student = enrollment.student
-        # If the fee is assigned to specific students, only notify those
-        if (
-            instance.assignments.exists()
-            and not instance.assignments.filter(student=student).exists()
-        ):
-            continue
-
-        _send_fee_notification(student, program, instance)
+    notify_fee_parents(instance)
 
 
 @receiver(post_save, sender="programs.Enrollment")

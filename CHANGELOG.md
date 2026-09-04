@@ -7,8 +7,12 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **No-fees warning on program pages for Lead Mentors**: When a program doesn't have any fees attached yet, Lead Mentors now see a warning banner on the program page reminding them to add fees, since programs cost money for parents. The warning is only visible to Lead Mentors (not students, parents, or mentors).
 
+### Changed
+- **Fee applicability is now set right on the fee form**: Adding or editing a fee now includes a "which students does this fee apply to?" selector on the same page (a move students between Available and Applying lists), instead of requiring a separate applicability step. This makes setup and editing easier and means parents are only emailed about a new fee for the students it actually applies to. After saving, you're returned to the fee list with a confirmation message.
+
 ### Fixed
 - **Editing a student returns you to where you came from**: After saving changes on the Edit Student page, you're now taken back to the All Students screen or the Program screen you were viewing before, instead of always landing back on the student's profile page. (Redirect URLs continue to be validated so malicious or external links are never followed.)
+- **Form field labels no longer disappear when a submission has an error**: If you submitted a form with a missing or invalid required field (for example, leaving the fee's name or amount blank), the offending field's label and error message could vanish, making it hard to tell what went wrong. Labels and inline error messages now stay visible so you can correct the field.
 
 ## 2026-09-03
 

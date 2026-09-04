@@ -137,14 +137,41 @@ class ProgramFeeCreateView(
         return ctx
 
     def form_valid(self, form):
-        messages.success(self.request, "Fee created.")
-        return super().form_valid(form)
+        # Save the fee and its student assignments without letting the Fee
+        # post_save or FeeAssignment post_save signals email parents before
+        # the assignments are in place (that would email everyone, then each
+        # newly-assigned student again). Afterward, notify exactly the
+        # applicable students' parents once.
+        from .. import signals as _signals
+        from ..models import FeeAssignment
+        from ..signals import notify_fee_parents
+
+        disconnected_added = _signals.post_save.disconnect(
+            _signals.notify_parents_on_fee_added, sender=Fee
+        )
+        disconnected_assignment = _signals.post_save.disconnect(
+            _signals.notify_parents_on_fee_assignment, sender=FeeAssignment
+        )
+        try:
+            response = super().form_valid(form)
+        finally:
+            if disconnected_added:
+                _signals.post_save.connect(
+                    _signals.notify_parents_on_fee_added, sender=Fee
+                )
+            if disconnected_assignment:
+                _signals.post_save.connect(
+                    _signals.notify_parents_on_fee_assignment, sender=FeeAssignment
+                )
+        notify_fee_parents(form.instance)
+        messages.success(
+            self.request,
+            f'Fee "{form.instance.name}" was created. Applicable parents were emailed.',
+        )
+        return response
 
     def get_success_url(self):
-        return reverse(
-            "program_fee_assignments",
-            kwargs={"pk": self.program.pk, "fee_id": self.object.pk},
-        )
+        return reverse("program_fee_select", kwargs={"pk": self.program.pk})
 
 
 class ProgramFeeUpdateView(
@@ -184,10 +211,7 @@ class ProgramFeeUpdateView(
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse(
-            "program_fee_assignments",
-            kwargs={"pk": self.program.pk, "fee_id": self.object.pk},
-        )
+        return reverse("program_fee_select", kwargs={"pk": self.program.pk})
 
 
 class ProgramPaymentCreateView(
