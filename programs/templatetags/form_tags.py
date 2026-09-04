@@ -1,6 +1,6 @@
 from django import template
 from django.forms import widgets
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.safestring import mark_safe
 
 from programs.utils import get_contrast_color
@@ -94,13 +94,11 @@ def render_field(field, **kwargs):
         )
         errors_html = ""
         if field.errors:
-            error_items = format_html(
-                "".join(
-                    format_html('<div class="invalid-feedback d-block">{}</div>', e)
-                    for e in field.errors
-                )
+            errors_html = format_html_join(
+                "",
+                '<div class="invalid-feedback d-block">{0}</div>',
+                ((e,) for e in field.errors),
             )
-            errors_html = error_items
         return format_html(
             '<div class="mb-3">{}{}{}</div>',
             content,

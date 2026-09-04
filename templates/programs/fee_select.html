@@ -37,7 +37,6 @@
                       <td>{{ f.due_date|default:'—' }}</td>
                       <td class="text-end">
                         <a class="btn btn-sm btn-outline-primary" href="{% url 'program_fee_edit' program.id f.id %}">Edit</a>
-                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_fee_assignments' program.id f.id %}">Applicability</a>
                       </td>
                     </tr>
                   {% endfor %}

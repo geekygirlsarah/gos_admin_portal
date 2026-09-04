@@ -839,6 +839,28 @@ class ProgramEmailBalancesForm(forms.Form):
         return cleaned
 
 
+def _save_fee_assignments(fee, students_queryset, selected_students):
+    """Reconcile a fee's student assignments against a selection.
+
+    ``students_queryset`` is the set of selectable students (usually active,
+    program-enrolled students). Assignments are only added/removed for those
+    selectable students; existing assignments to students outside the selection
+    set (e.g. graduated/dropped ones) are preserved. An empty selection means
+    the fee applies to everyone, so all assignments are cleared.
+    """
+    from .models import FeeAssignment
+
+    selectable_ids = list(students_queryset.values_list("id", flat=True))
+    # Delete assignments not in selection
+    FeeAssignment.objects.filter(fee=fee, student_id__in=selectable_ids).exclude(
+        student__in=selected_students
+    ).delete()
+    # Ensure assignments exist for selected
+    for s in selected_students:
+        FeeAssignment.objects.get_or_create(fee=fee, student=s)
+    return fee
+
+
 class FeeAssignmentEditForm(forms.Form):
     students = forms.ModelMultipleChoiceField(
         queryset=Student.objects.none(),
@@ -854,35 +876,25 @@ class FeeAssignmentEditForm(forms.Form):
         # Limit to actively enrolled students in the program, sorted by display
         # name then last name (case-insensitive; uses legal_first_name as
         # fallback). Inactive (graduated/dropped) students are excluded.
-        self.fields["students"].queryset = active_students_in_program(program).order_by(
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
-        )
+        self.fields["students"].queryset = self._students_queryset()
         # Preselect currently assigned students (if any)
         self.fields["students"].initial = fee.assignments.values_list(
             "student_id", flat=True
         )
 
+    def _students_queryset(self):
+        return active_students_in_program(self.program).order_by(
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
+            Lower("last_name"),
+        )
+
     def save(self):
         selected_students = list(self.cleaned_data.get("students", []))
-        # Clearing assignments means fee applies to everyone
-        from .models import FeeAssignment
-
-        # Only manage assignments for students selectable in this form; preserve
-        # existing assignments to inactive (graduated/dropped) students.
-        selectable_ids = list(
-            self.fields["students"].queryset.values_list("id", flat=True)
+        return _save_fee_assignments(
+            self.fee, self.fields["students"].queryset, selected_students
         )
-        # Delete assignments not in selection
-        FeeAssignment.objects.filter(
-            fee=self.fee, student_id__in=selectable_ids
-        ).exclude(student__in=selected_students).delete()
-        # Ensure assignments exist for selected
-        for s in selected_students:
-            FeeAssignment.objects.get_or_create(fee=self.fee, student=s)
-        return self.fee
 
 
 # ProgramApplySelectForm and StudentApplicationForm removed; the public
@@ -890,6 +902,17 @@ class FeeAssignmentEditForm(forms.Form):
 
 
 class FeeForm(forms.ModelForm):
+    students = forms.ModelMultipleChoiceField(
+        queryset=Student.objects.none(),
+        required=False,
+        label="Applies to",
+        help_text="Choose which students this fee applies to. Leave empty to apply to every student in the program.",
+        widget=DualListboxWidget(
+            available_label="Available Students",
+            selected_label="Applying to",
+        ),
+    )
+
     class Meta:
         model = Fee
         fields = ["program", "name", "amount", "effective_date", "due_date"]
@@ -904,6 +927,34 @@ class FeeForm(forms.ModelForm):
         if program is not None:
             self.fields["program"].initial = program
             self.fields["program"].required = True
+        prog = self.instance.program if self.instance and self.instance.pk else program
+        if prog is not None:
+            self.fields["students"].queryset = active_students_in_program(
+                prog
+            ).order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
+                Lower("last_name"),
+            )
+            if self.instance and self.instance.pk:
+                self.fields["students"].initial = self.instance.assignments.values_list(
+                    "student_id", flat=True
+                )
+
+    def _save_m2m(self):
+        selected_students = list(self.cleaned_data.get("students", []))
+        _save_fee_assignments(
+            self.instance, self.fields["students"].queryset, selected_students
+        )
+
+    def save(self, commit=True):
+        fee = super().save(commit=commit)
+        if commit:
+            self._save_m2m()
+        return fee
 
 
 class ProgramDocumentForm(forms.ModelForm):
