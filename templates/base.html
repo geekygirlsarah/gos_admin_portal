@@ -69,6 +69,11 @@
                         <a class="nav-link{% if 'outreach' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'outreach:event_list' p.pk %}">Outreach{% if student_outreach_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
                     </li>
                     {% endfor %}
+                    {% for p in student_orders_programs %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if 'orders' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'orders:order_list' p.pk %}">Order Requests{% if student_orders_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
+                    </li>
+                    {% endfor %}
                     {% endif %}
 
                     {% if user_has_any_badge_program %}
@@ -110,6 +115,9 @@
                                         {% if current_program_has_outreach %}
                                         <li><a class="dropdown-item{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a></li>
                                         {% endif %}
+                                    {% endif %}
+                                    {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' %}
+                                    <li><a class="dropdown-item{% if 'orders' in request.path %} active{% endif %}" href="{% url 'orders:order_list' current_program.pk %}">Order Requests</a></li>
                                     {% endif %}
                                     {% can_write user 'badge_award' as can_award_badges %}
                                     {% can_write user 'badge_manage' as can_manage_badges %}

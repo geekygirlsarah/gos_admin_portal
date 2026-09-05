@@ -50,6 +50,7 @@ urlpatterns = [
     path("attendance/", include("attendance.urls")),
     path("badges/", include("badges.urls")),
     path("programs/<int:program_id>/outreach/", include("outreach.urls")),
+    path("programs/<int:program_id>/orders/", include("orders.urls")),
     # Public guest permission forms (no login required)
     path("guest/", include("guest_forms.urls")),
     path(

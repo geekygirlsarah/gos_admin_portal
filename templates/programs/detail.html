@@ -48,6 +48,9 @@
                 <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
                 <a class="btn btn-outline-primary" href="{% url 'program_digital_signout' program.id %}">Digital Sign-out</a>
               {% endif %}
+              {% if role == 'LeadMentor' or role == 'Mentor' %}
+                <a class="btn btn-outline-primary" href="{% url 'orders:order_list' program.id %}">Order Requests</a>
+              {% endif %}
             </div>
           </div>
           <div class="d-flex flex-wrap align-items-center gap-2">
@@ -70,6 +73,9 @@
               <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
               <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
               <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Carpool Map</a>
+              {% if 'orders' in program.feature_keys %}
+                <a class="btn btn-outline-dark" href="{% url 'orders:order_list' program.id %}">Order Requests</a>
+              {% endif %}
             </div>
         </div>
         {% endif %}

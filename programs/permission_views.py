@@ -116,6 +116,14 @@ def can_user_read(user, section, obj=None):
     if role is None:
         return False
 
+    # Order requests: students and mentors may always read once they reach the
+    # page (the view-level 'orders' program feature toggle controls student
+    # access per program); parents and alumni never see orders. This is not
+    # configurable via RolePermission so the program feature stays the sole
+    # gate for students and mentors keep permanent access.
+    if section == "orders":
+        return role in ("Mentor", "Student")
+
     # Always allow reading own profile and children
     if obj:
         if isinstance(obj, Student):
@@ -295,6 +303,24 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
+    # Order requests: students and mentors may create and edit their own
+    # pending requests; once an item is ordered it can only be changed by a
+    # Lead Mentor. Parents/alumni never write orders. Not configurable via
+    # RolePermission (see can_user_read).
+    if section == "orders":
+        if role in ("Parent", "Alumni"):
+            return False
+        if role in ("Student", "Mentor"):
+            if obj:
+                from orders.models import PurchaseOrder
+
+                if isinstance(obj, PurchaseOrder):
+                    return (
+                        obj.created_by_id == user.pk
+                        and obj.status == PurchaseOrder.STATUS_PENDING
+                    )
+            return True
+
     # Background checks are read-only for every role except Lead Mentors/admins.
     # This must run before the "own profile and children" shortcut below, which
     # would otherwise let parents/mentors/students edit their own clearances.
@@ -399,6 +425,10 @@ def can_user_delete(user, section, obj=None):
 
     # Students can never delete outreach events
     if role == "Student" and section == "outreach":
+        return False
+
+    # Order requests can only be deleted by Lead Mentors
+    if section == "orders":
         return False
 
     # For all other sections/roles, delete tracks write permission
