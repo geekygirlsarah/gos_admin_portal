@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Account link changes are now audited**: Whenever a student or adult's linked login account is set, removed, or switched to a different account, the change is recorded in the audit log (including which user made the change when it happened through the portal).
+- **New `find_disconnected_accounts` command**: Lead Mentors can now run `python manage.py find_disconnected_accounts` to see any login accounts that are no longer linked to a student or adult profile (the aftermath of the bug below), plus students/adults whose profile lost its account. It finds clear-cut matches by email or name and shows them as proposed re-links. Run it with `--fix` to re-link only the unambiguous, previously-empty links — it never overwrites a working link or reassigns an account that already belongs to someone.
 
 ### Changed
 - **Digital sign-out attendance now assumes students are absent until marked present**: Previously, any student without an explicit absent/present mark was treated as "present" on the tablet sign-out station, so a fresh day showed every student as already present with nothing to check in. Now students on the "Who's Here Today?" list are absent by default and only appear on the tablet as sign-out options once a mentor marks them present. Marking present/absent still happens from the program page's "Who's Here Today?" card. (This does not affect the Attendance Hours or Printable Sign-out Sheet features.)
