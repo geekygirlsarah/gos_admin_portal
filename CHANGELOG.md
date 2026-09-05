@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Digital sign-out attendance now assumes students are absent until marked present**: Previously, any student without an explicit absent/present mark was treated as "present" on the tablet sign-out station, so a fresh day showed every student as already present with nothing to check in. Now students on the "Who's Here Today?" list are absent by default and only appear on the tablet as sign-out options once a mentor marks them present. Marking present/absent still happens from the program page's "Who's Here Today?" card. (This does not affect the Attendance Hours or Printable Sign-out Sheet features.)
 
+### Fixed
+- **Editing a sliding scale's effective dates no longer wipes them out**: The Review/Approve page could overwrite an existing sliding scale's effective start date and expiration with blank/today values when a Lead Mentor approved or edited it, so a scale that was supposed to expire (so a family could reapply) silently stayed active with no expiration. The review page now only works on pending applications, keeps the existing dates when the date fields are left blank, and shows the current dates on the form so you can see what you're changing.
+
 ## 2026-09-04
 
 ### Added

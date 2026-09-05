@@ -554,6 +554,128 @@ class SlidingScaleApplicationTests(TestCase):
         self.assertEqual(data_2["total_sliding"], Decimal("50"))
 
 
+@override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
+class SlidingScaleReviewDatePreservationTests(TestCase):
+    """Reproducers for the bug where the Review/Approve page clobbered the
+    effective/expiration dates of a sliding scale.
+
+    Reported: a scale set to start August last year with no expiration was
+    "edited" (through the approve flow) to expire August this year; after
+    saving the start date had changed to January and the expiration was gone,
+    yet the parent still saw the scale as active.
+    """
+
+    def setUp(self):
+        self.program = Program.objects.create(name="Test Program", active=True)
+        self.student = Student.objects.create(
+            legal_first_name="Test",
+            last_name="Student",
+            personal_email="student@example.com",
+        )
+        Group.objects.get_or_create(name="LeadMentor")
+        self.lead_mentor_user = User.objects.create_user(
+            username="lead", password="password", email="lead@example.com"
+        )  # nosec B106
+        self.lead_mentor_user.groups.add(Group.objects.get(name="LeadMentor"))
+        self.parent_adult = Adult.objects.create(
+            legal_first_name="Parent",
+            last_name="User",
+            personal_email="parent@example.com",
+            is_parent=True,
+            email_updates=True,
+        )
+        self.student.primary_contact = self.parent_adult
+        self.student.save()
+        self.parent_adult.students.add(self.student)
+
+    def _decided_application(
+        self, date, expiration_date, status=SlidingScale.STATUS_APPROVED
+    ):
+        return SlidingScale.objects.create(
+            student=self.student,
+            family_size=4,
+            adjusted_gross_income=Decimal("30000.00"),
+            percent=Decimal("50.00"),
+            date=date,
+            expiration_date=expiration_date,
+            status=status,
+        )
+
+    def test_cannot_approve_already_decided_application(self):
+        """The Review/Approve page must not be reachable for a record that has
+        already been decided, so it can never wipe its effective/expiration dates."""
+        application = self._decided_application(datetime.date(2025, 8, 1), None)
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("sliding_scale_review_decide", args=[application.pk])
+        response = self.client.post(
+            url,
+            {"action": "approve", "percent": "50.00", "expiration_date": "2026-08-01"},
+            follow=False,
+        )
+        # get_object raises Http404 which the project's handler404 redirects home
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+        application.refresh_from_db()
+        self.assertEqual(application.date, datetime.date(2025, 8, 1))
+        self.assertIsNone(application.expiration_date)
+        self.assertEqual(application.status, SlidingScale.STATUS_APPROVED)
+
+    def test_approve_preserves_existing_start_and_expiration_when_fields_blank(self):
+        """Approving a pending application that already carries dates must not
+        overwrite them with today's date or drop the expiration."""
+        application = self._decided_application(
+            datetime.date(2025, 8, 1),
+            datetime.date(2026, 8, 1),
+            status=SlidingScale.STATUS_PENDING,
+        )
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("sliding_scale_review_decide", args=[application.pk])
+        response = self.client.post(
+            url,
+            {"action": "approve", "percent": "50.00"},
+            follow=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.status, SlidingScale.STATUS_APPROVED)
+        self.assertEqual(application.date, datetime.date(2025, 8, 1))
+        self.assertEqual(application.expiration_date, datetime.date(2026, 8, 1))
+
+    def test_approve_with_blank_dates_defaults_start_to_today_only_if_unset(self):
+        """A pending application with no dates and blank inputs still starts
+        immediately (today), preserving the existing 'leave blank to start now'
+        behavior."""
+        application = self._decided_application(
+            None, None, status=SlidingScale.STATUS_PENDING
+        )
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("sliding_scale_review_decide", args=[application.pk])
+        response = self.client.post(
+            url,
+            {"action": "approve", "percent": "50.00"},
+            follow=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.status, SlidingScale.STATUS_APPROVED)
+        self.assertEqual(application.date, datetime.date.today())
+
+    def test_review_page_prefills_existing_dates(self):
+        """The review page should show a pending application's existing dates in
+        the approve form so a Lead Mentor can see what will be kept/changed."""
+        application = self._decided_application(
+            datetime.date(2025, 8, 1),
+            datetime.date(2026, 8, 1),
+            status=SlidingScale.STATUS_PENDING,
+        )
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("sliding_scale_review_decide", args=[application.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="date" value="2025-08-01"')
+        self.assertContains(response, 'name="expiration_date" value="2026-08-01"')
+
+
 class SlidingScaleSettingsCalculationTests(TestCase):
     def test_default_settings_calculation(self):
         settings_obj = SlidingScaleSettings.get_solo()

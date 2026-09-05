@@ -540,7 +540,10 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
     template_name = "programs/sliding_scale_review_detail.html"
 
     def get_object(self):
-        return get_object_or_404(SlidingScale, pk=self.kwargs["pk"])
+        return get_object_or_404(
+            SlidingScale.objects.filter(status=SlidingScale.STATUS_PENDING),
+            pk=self.kwargs["pk"],
+        )
 
     def get(self, request, pk):
         application = self.get_object()
@@ -574,8 +577,12 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
             if application.percent < 0 or application.percent > 100:
                 messages.error(request, "Percent must be between 0 and 100.")
                 return redirect("sliding_scale_review_decide", pk=pk)
-            application.date = date_val or datetime.date.today()
-            application.expiration_date = expiration_date
+            application.date = date_val or application.date or datetime.date.today()
+            application.expiration_date = (
+                expiration_date
+                if expiration_date is not None
+                else application.expiration_date
+            )
             application.status = SlidingScale.STATUS_APPROVED
             application.reviewed_by = request.user
             application.reviewed_at = timezone.now()

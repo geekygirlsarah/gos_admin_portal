@@ -91,12 +91,12 @@
             </div>
             <div class="mb-3">
               <label for="date" class="form-label">Effective Date</label>
-              <input type="date" class="form-control" id="date" name="date">
+              <input type="date" class="form-control" id="date" name="date" value="{{ application.date|date:'Y-m-d'|default:'' }}">
               <div class="form-text">Leave blank to start immediately.</div>
             </div>
             <div class="mb-3">
               <label for="expiration_date" class="form-label">Valid Through (Expiration Date)</label>
-              <input type="date" class="form-control" id="expiration_date" name="expiration_date">
+              <input type="date" class="form-control" id="expiration_date" name="expiration_date" value="{{ application.expiration_date|date:'Y-m-d'|default:'' }}">
               <div class="form-text">Leave blank for no expiration.</div>
             </div>
             <button type="submit" class="btn btn-success">Approve Application</button>
