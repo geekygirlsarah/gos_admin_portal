@@ -51,6 +51,9 @@ class DigitalSignoutParentPickerTests(TestCase):
         )
         self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
         Enrollment.objects.create(student=self.student, program=self.program)
+        StudentPresence.objects.create(
+            program=self.program, student=self.student, status=StudentPresence.PRESENT
+        )
         self.parent = make_adult(
             legal_first_name="Jane", last_name="Parent", is_parent=True
         )
@@ -165,7 +168,17 @@ class AttendancePresenceTests(TestCase):
         self.assertContains(response, "Who&#x27;s Here Today")
         self.assertContains(response, "Ada")
 
-    # ── Tablet view: absent hidden, present/unmarked shown ───────────────
+    def test_management_view_unmarked_student_shows_absent(self):
+        # Unmarked (no StudentPresence row) is treated as absent and offers a
+        # "Mark Present" action.
+        client = Client()
+        client.force_login(make_lead_mentor_user())
+        response = client.get(self.mgmt_url)
+        self.assertContains(response, "Ada")
+        self.assertContains(response, ">Absent<")
+        self.assertContains(response, 'value="mark_present"')
+
+    # ── Tablet view: only explicit present shown; absent/unmarked hidden ──
 
     def test_absent_student_hidden_from_picker(self):
         StudentPresence.objects.create(
@@ -174,9 +187,9 @@ class AttendancePresenceTests(TestCase):
         response = self.client.get(self.url)
         self.assertNotContains(response, "Ada")
 
-    def test_unmarked_student_renders_normally(self):
+    def test_unmarked_student_hidden_from_picker(self):
         response = self.client.get(self.url)
-        self.assertContains(response, "Ada")
+        self.assertNotContains(response, "Ada")
 
     def test_present_student_renders_and_signs_out(self):
         StudentPresence.objects.create(
@@ -199,6 +212,18 @@ class AttendancePresenceTests(TestCase):
         StudentPresence.objects.create(
             program=self.program, student=self.student, status=StudentPresence.ABSENT
         )
+        resp = self.client.post(
+            self.url,
+            {
+                "student_id": self.student.pk,
+                "signed_by_name": "Jane Parent",
+                "signature": TINY_PNG_DATA_URL,
+            },
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(DigitalSignout.objects.count(), 0)
+
+    def test_signing_out_unmarked_student_rejected(self):
         resp = self.client.post(
             self.url,
             {
@@ -237,6 +262,9 @@ class DigitalSignoutPageTests(TestCase):
         )
         self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
         Enrollment.objects.create(student=self.student, program=self.program)
+        StudentPresence.objects.create(
+            program=self.program, student=self.student, status=StudentPresence.PRESENT
+        )
         _unlock(self.client, self.config.pk)
 
     def test_page_is_public_no_redirect(self):
@@ -288,6 +316,9 @@ class DigitalSignoutSubmissionTests(TestCase):
         )
         self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
         Enrollment.objects.create(student=self.student, program=self.program)
+        StudentPresence.objects.create(
+            program=self.program, student=self.student, status=StudentPresence.PRESENT
+        )
         self.url = reverse("digital_signout", args=[self.config.pk])
         _unlock(self.client, self.config.pk)
 
@@ -337,6 +368,9 @@ class DigitalSignoutSubmissionTests(TestCase):
         # signing out a *different* student is allowed and creates a second record
         other = make_student(preferred_first_name="Grace", last_name="Hopper")
         Enrollment.objects.create(student=other, program=self.program)
+        StudentPresence.objects.create(
+            program=self.program, student=other, status=StudentPresence.PRESENT
+        )
         response = self.client.post(
             self.url,
             {
@@ -460,6 +494,9 @@ class DigitalSignoutUndoTests(TestCase):
         )
         self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
         Enrollment.objects.create(student=self.student, program=self.program)
+        StudentPresence.objects.create(
+            program=self.program, student=self.student, status=StudentPresence.PRESENT
+        )
         self.url = reverse("digital_signout", args=[self.config.pk])
         _unlock(self.client, self.config.pk)
         self.signout = DigitalSignout.objects.create(
@@ -486,6 +523,9 @@ class DigitalSignoutUndoTests(TestCase):
     def test_unsigned_student_is_not_marked(self):
         other = make_student(preferred_first_name="Grace", last_name="Hopper")
         Enrollment.objects.create(student=other, program=self.program)
+        StudentPresence.objects.create(
+            program=self.program, student=other, status=StudentPresence.PRESENT
+        )
         response = self.client.get(self.url)
         self.assertContains(response, "Grace")
         # Only Ada (signed out) has the card marker — the unsigned Grace does not
