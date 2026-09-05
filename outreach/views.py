@@ -583,6 +583,18 @@ class OutreachShiftCheckInView(LoginRequiredMixin, OutreachProgramMixin, View):
         student_id = request.POST.get("student_id")
         now = timezone.now()
 
+        # Guard against an empty/malformed student_id: Django's ORM raises a
+        # ValueError when filtering an integer PK with '' (503 in prod).
+        if action in ("check_in", "check_out", "walk_up", "set_times") and (
+            not student_id or not str(student_id).isdigit()
+        ):
+            messages.error(request, "Please select a student first.")
+            return redirect(
+                "outreach:shift_check_in",
+                program_id=program_id,
+                shift_pk=shift_pk,
+            )
+
         if action in ("check_in", "check_out"):
             signup = (
                 OutreachSignup.objects.filter(shift=shift, student_id=student_id)

@@ -537,3 +537,27 @@ class AttendedHoursTests(CheckinBase):
             stats["total_outreach_hours"], shift.duration_hours, places=2
         )
         self.assertEqual(stats["unconfirmed_count"], 0)
+
+
+class CheckinBlankStudentIdTests(CheckinBase):
+    """POSTing walk_up / check_in / set_times with an empty student_id must
+    return a graceful redirect (302) rather than a 500 ValueError."""
+
+    def _assert_redirect_not_500(self, action, student_id=""):
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = self._url(self.grace_shift)
+        before = OutreachSignup.objects.filter(shift=self.grace_shift).count()
+        resp = self.client.post(url, {"action": action, "student_id": student_id})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(
+            OutreachSignup.objects.filter(shift=self.grace_shift).count(), before
+        )
+
+    def test_walk_up_blank_student_id(self):
+        self._assert_redirect_not_500("walk_up")
+
+    def test_check_in_blank_student_id(self):
+        self._assert_redirect_not_500("check_in")
+
+    def test_set_times_blank_student_id(self):
+        self._assert_redirect_not_500("set_times")

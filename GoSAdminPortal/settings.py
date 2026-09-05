@@ -162,6 +162,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Exposes the current request to signal handlers (thread-local) so audit
+    # events logged outside views can attribute an actor/IP/session.
+    "audit.middleware.AuditContextMiddleware",
     # Throttle anonymous POSTs to the public application wizard (/apply/).
     # Placed after AuthenticationMiddleware so the 429 page can render the
     # authenticated navbar.

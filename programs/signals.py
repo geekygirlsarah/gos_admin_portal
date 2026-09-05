@@ -165,6 +165,55 @@ def ensure_user_in_student_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Student group", exc_info=True)
 
 
+def _audit_profile_user_link_change(instance):
+    """Emit PROFILE_LINK_CHANGED whenever the user account linked to a Student
+    or Adult profile is set, cleared, or re-pointed.
+
+    Runs on pre_save so it covers every code path that writes ``user``
+    (portal/admin forms, merges, alumni conversion, login provisioning). The
+    active request (if any) is resolved from thread-local context so the audit
+    row carries the actor/IP/session.
+    """
+    if not instance.pk:
+        return
+    try:
+        old_user_id = (
+            type(instance)
+            ._default_manager.filter(pk=instance.pk)
+            .values_list("user_id", flat=True)
+            .first()
+        )
+    except Exception:
+        return
+    if old_user_id == instance.user_id:
+        return
+
+    from audit.context import get_current_request
+    from audit.events import AuditEvent
+    from audit.service import log_event
+
+    try:
+        log_event(
+            request=get_current_request(),
+            event=AuditEvent.PROFILE_LINK_CHANGED,
+            resource=instance,
+            before={"user_id": old_user_id},
+            after={"user_id": instance.user_id},
+        )
+    except Exception:
+        logger.debug("Failed to audit profile user link change", exc_info=True)
+
+
+@receiver(pre_save, sender="programs.Student")
+def audit_student_user_link_change(sender, instance, **kwargs):
+    _audit_profile_user_link_change(instance)
+
+
+@receiver(pre_save, sender="programs.Adult")
+def audit_adult_user_link_change(sender, instance, **kwargs):
+    _audit_profile_user_link_change(instance)
+
+
 def notify_fee_parents(fee):
     """Send a 'new fee' notification to the parents of the fee's applicable
     active students.

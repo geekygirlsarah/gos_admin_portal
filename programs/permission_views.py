@@ -285,18 +285,31 @@ def can_user_write(user, section, obj=None):
         if obj:
             from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
 
+            # A user with the Student group but no linked student profile (e.g.
+            # a wiped/never-restored link) can never be a champion. Guard the
+            # reverse OneToOne accessor — it raises instead of returning None.
+            try:
+                student = user.student_profile
+            except Student.DoesNotExist:
+                student = None
             if isinstance(obj, OutreachEvent):
-                return OutreachSignup.objects.filter(
-                    shift__event=obj,
-                    student=user.student_profile,
-                    role=OutreachSignup.CHAMPION,
-                ).exists()
+                return (
+                    student is not None
+                    and OutreachSignup.objects.filter(
+                        shift__event=obj,
+                        student=student,
+                        role=OutreachSignup.CHAMPION,
+                    ).exists()
+                )
             if isinstance(obj, OutreachShift):
-                return OutreachSignup.objects.filter(
-                    shift=obj,
-                    student=user.student_profile,
-                    role=OutreachSignup.CHAMPION,
-                ).exists()
+                return (
+                    student is not None
+                    and OutreachSignup.objects.filter(
+                        shift=obj,
+                        student=student,
+                        role=OutreachSignup.CHAMPION,
+                    ).exists()
+                )
         return True
     if role == "Mentor" and section == "outreach":
         return True

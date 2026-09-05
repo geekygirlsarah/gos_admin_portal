@@ -72,6 +72,51 @@ class StudentFormTests(TestCase):
         # Actually ModelForm fields have `initial` attribute based on model's default.
         self.assertEqual(form.fields["state"].initial, "PA")
 
+    def test_portal_form_never_exposes_user_field_for_privileged_user(self):
+        from django.contrib.auth.models import Group, User
+
+        from programs.models import Student
+
+        lead = User.objects.create_user(username="leadform", password="x")  # nosec B106
+        g, _ = Group.objects.get_or_create(name="LeadMentor")
+        lead.groups.add(g)
+        student = Student.objects.create(legal_first_name="A", last_name="B")
+        form = StudentForm(
+            data={
+                "legal_first_name": "A",
+                "last_name": "B",
+                "date_of_birth": "2012-01-01",
+            },
+            instance=student,
+            user=lead,
+        )
+        self.assertNotIn("user", form.fields)
+
+    def test_save_preserves_linked_user_when_user_field_not_submitted(self):
+        from django.contrib.auth.models import Group, User
+
+        from programs.models import Student
+
+        lead = User.objects.create_user(username="lead2", password="x")  # nosec B106
+        g, _ = Group.objects.get_or_create(name="LeadMentor")
+        lead.groups.add(g)
+        linked_user = User.objects.create_user(
+            username="linked2", password="x"
+        )  # nosec B106
+        student = Student.objects.create(
+            legal_first_name="Alex", last_name="Morgan", user=linked_user
+        )
+        data = {
+            "legal_first_name": "Alex",
+            "last_name": "Morgan",
+            "date_of_birth": "2012-05-05",
+        }
+        form = StudentForm(data=data, instance=student, user=lead)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        student.refresh_from_db()
+        self.assertEqual(student.user_id, linked_user.pk)
+
 
 class AdultFormAndrewIdSponsorTests(TestCase):
     """Tests for AdultForm.andrew_id_sponsor queryset filtering and ordering.

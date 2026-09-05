@@ -1412,3 +1412,59 @@ class SignalGroupAssignmentTests(TestCase):
         student.save()
         user.refresh_from_db()
         self.assertTrue(user.groups.filter(name="Student").exists())
+
+
+class UnlinkedStudentOutreachPermissionsTests(TestCase):
+    """A Student-group user whose Student.user link is NULL must not crash
+    can_user_write / can_operate_checkin on outreach objects (GitHub prod 500)."""
+
+    def setUp(self):
+        from datetime import time as t
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from outreach.models import OutreachEvent, OutreachShift
+        from programs.models import Program, ProgramFeature
+
+        self.group_student, _ = Group.objects.get_or_create(name="Student")
+        self.user = User.objects.create_user(
+            username="unlinked", password="password"
+        )  # nosec B106
+        self.user.groups.add(self.group_student)
+        # Explicitly ensure no student_profile exists
+        from programs.models import Student
+
+        self.assertFalse(Student.objects.filter(user=self.user).exists())
+
+        self.program = Program.objects.create(name="Test Outreach Program")
+        feature, _ = ProgramFeature.objects.get_or_create(
+            key="outreach", defaults={"name": "Outreach"}
+        )
+        self.program.features.add(feature)
+        future = timezone.now().date() + timedelta(days=1)
+        self.event = OutreachEvent.objects.create(
+            program=self.program,
+            name="Test Event",
+            location_name="Loc",
+            location_address="Addr",
+        )
+        self.shift = OutreachShift.objects.create(
+            event=self.event,
+            date=future,
+            start_time=t(14, 0),
+            end_time=t(16, 0),
+        )
+
+    def test_can_user_write_outreach_shift_does_not_crash(self):
+        from programs.permission_views import can_user_write
+
+        # Should return False, not raise RelatedObjectDoesNotExist
+        self.assertFalse(can_user_write(self.user, "outreach", self.shift))
+        self.assertFalse(can_user_write(self.user, "outreach", self.event))
+
+    def test_can_operate_checkin_does_not_crash(self):
+        from outreach.utils import can_operate_checkin
+
+        # Should return False, not raise RelatedObjectDoesNotExist
+        self.assertFalse(can_operate_checkin(self.user, self.shift))
