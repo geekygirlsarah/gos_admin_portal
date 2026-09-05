@@ -98,12 +98,14 @@ def digital_signout(request, config_id):
     config = _get_config_or_404(config_id)
     program = config.program
     today = timezone.localdate()
-    today_absent_ids = set(
+    # Students default to absent: only those explicitly marked present today
+    # appear on the picker so a parent can sign them out.
+    today_present_ids = set(
         StudentPresence.objects.filter(
-            program=program, date=today, status=StudentPresence.ABSENT
+            program=program, date=today, status=StudentPresence.PRESENT
         ).values_list("student_id", flat=True)
     )
-    students = [s for s in _active_students(program) if s.pk not in today_absent_ids]
+    students = [s for s in _active_students(program) if s.pk in today_present_ids]
     is_unlocked = _is_unlocked(request, config.pk)
 
     if not is_unlocked:

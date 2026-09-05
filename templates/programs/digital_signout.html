@@ -50,23 +50,23 @@
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span>
               {{ s.display_name }}
-              {% if s.today_presence.status == 'absent' %}
-                <span class="badge bg-danger">Absent</span>
-              {% else %}
+              {% if s.today_presence.status == 'present' %}
                 <span class="badge bg-success">Present</span>
+              {% else %}
+                <span class="badge bg-danger">Absent</span>
               {% endif %}
             </span>
             <div class="d-flex gap-2">
-              {% if s.today_presence.status == 'absent' %}
+              {% if s.today_presence.status == 'present' %}
                 <form method="post" action="{% url 'program_digital_signout' program.id %}">
                   {% csrf_token %}
-                  <button name="action" value="mark_present" class="btn btn-sm btn-outline-success">Mark Present</button>
+                  <button name="action" value="mark_absent" class="btn btn-sm btn-outline-danger">Mark Absent</button>
                   <input type="hidden" name="student_id" value="{{ s.pk }}">
                 </form>
               {% else %}
                 <form method="post" action="{% url 'program_digital_signout' program.id %}">
                   {% csrf_token %}
-                  <button name="action" value="mark_absent" class="btn btn-sm btn-outline-danger">Mark Absent</button>
+                  <button name="action" value="mark_present" class="btn btn-sm btn-outline-success">Mark Present</button>
                   <input type="hidden" name="student_id" value="{{ s.pk }}">
                 </form>
               {% endif %}

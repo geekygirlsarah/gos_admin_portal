@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-05
+
+### Changed
+- **Digital sign-out attendance now assumes students are absent until marked present**: Previously, any student without an explicit absent/present mark was treated as "present" on the tablet sign-out station, so a fresh day showed every student as already present with nothing to check in. Now students on the "Who's Here Today?" list are absent by default and only appear on the tablet as sign-out options once a mentor marks them present. Marking present/absent still happens from the program page's "Who's Here Today?" card. (This does not affect the Attendance Hours or Printable Sign-out Sheet features.)
+
 ## 2026-09-04
 
 ### Added

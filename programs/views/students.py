@@ -719,10 +719,10 @@ def _transfer_student_related_records(keep, source):
         ).first()
         if existing:
             if (
-                presence.status == StudentPresence.PRESENT
-                and existing.status != StudentPresence.PRESENT
+                presence.status == StudentPresence.ABSENT
+                and existing.status != StudentPresence.ABSENT
             ):
-                existing.status = StudentPresence.PRESENT
+                existing.status = StudentPresence.ABSENT
                 existing.save(update_fields=["status"])
             presence.delete()
         else:

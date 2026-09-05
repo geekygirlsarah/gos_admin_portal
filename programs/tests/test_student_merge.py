@@ -652,18 +652,18 @@ class StudentMergeTest(TestCase):
         today = timezone.localdate()
         yesterday = today - datetime.timedelta(days=1)
 
-        # Overlapping presence: keep is absent, source is present -> promote to present
+        # Overlapping presence: keep is present, source is absent -> absent wins
         StudentPresence.objects.create(
             program=self.program,
             student=keep,
             date=today,
-            status=StudentPresence.ABSENT,
+            status=StudentPresence.PRESENT,
         )
         StudentPresence.objects.create(
             program=self.program,
             student=source,
             date=today,
-            status=StudentPresence.PRESENT,
+            status=StudentPresence.ABSENT,
         )
 
         # Non-overlapping presence on yesterday
@@ -681,7 +681,7 @@ class StudentMergeTest(TestCase):
 
         self.assertEqual(StudentPresence.objects.filter(student=keep).count(), 2)
         p_today = StudentPresence.objects.get(student=keep, date=today)
-        self.assertEqual(p_today.status, StudentPresence.PRESENT)
+        self.assertEqual(p_today.status, StudentPresence.ABSENT)
         self.assertTrue(
             StudentPresence.objects.filter(student=keep, date=yesterday).exists()
         )

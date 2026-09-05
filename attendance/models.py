@@ -256,8 +256,8 @@ class DigitalSignoutConfig(models.Model):
 class StudentPresence(models.Model):
     """Permanent per-day present/absent record for a student in a program.
 
-    Unmarked students default to present; an explicit ``absent`` record is
-    what hides a student from the digital sign-out picker. Toggling a
+    Unmarked students default to absent; an explicit ``present`` record is
+    what makes a student visible on the digital sign-out picker. Toggling a
     student's status on the same day overwrites the existing row.
     """
 
