@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect
 
 from programs.utils import calculate_grade
 
-from ..models import Application
+from ..models import Application, normalize_step_keys
 from ..services import (
     find_existing_mentor_by_email,
     find_student_by_email,
@@ -192,6 +192,7 @@ def _save_step_data(application: Application, key: str, payload: dict, next_step
     """Persist a step's cleaned data into ``application.data`` and bump
     ``current_step`` if needed.
     """
+    application.normalize_step_data(save=False)
     data = dict(application.data or {})
     data[key] = payload
     application.data = data
@@ -223,7 +224,7 @@ def _sanitize_payload(cleaned_data: dict) -> dict:
 def _student_initial_for(application: Application) -> dict:
     """Build the initial dict for the StudentInfoForm based on prior step
     data, then existing-record lookup, then bare email-only defaults."""
-    saved = (application.data or {}).get("step5-student") or {}
+    saved = normalize_step_keys(application.data).get("step5-student") or {}
     if saved:
         # If we have graduation_year, calculate grade back
         if "graduation_year" in saved and "grade" not in saved:
