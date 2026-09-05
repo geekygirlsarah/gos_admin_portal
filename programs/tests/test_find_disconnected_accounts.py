@@ -175,8 +175,8 @@ class FindDisconnectedAccountsTests(TestCase):
 
         self._run(fix=True)
 
-        assert s1.pk
-        assert s2.pk
+        self.assertIsNotNone(s1.pk)
+        self.assertIsNotNone(s2.pk)
         # Neither ambiguous candidate may be linked to the shared account.
         self.assertIsNone(Student.objects.get(pk=s1.pk).user_id)
         self.assertIsNone(Student.objects.get(pk=s2.pk).user_id)
