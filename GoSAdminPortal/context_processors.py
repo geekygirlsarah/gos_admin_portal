@@ -21,9 +21,12 @@ def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
     """Resolve student_outreach_programs / carpool_map_programs for the nav
     bar. carpool_map_programs feeds the standalone "Carpool Map" dropdown:
     only the Student's/Parent's children's currently-active (not past, not
-    inactive) enrollments, never every program ever joined.
+    inactive) enrollments, never every program ever joined. Also resolves
+    student_orders_programs — the active programs with the 'orders' feature
+    enabled, which drive the student "Order Requests" nav item.
     """
     student_outreach_programs = []
+    student_orders_programs = []
     carpool_map_programs = []
     if role == "Student":
         try:
@@ -37,6 +40,8 @@ def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
                 carpool_map_programs.append(e.program)
                 if e.program.features.filter(key="outreach").exists():
                     student_outreach_programs.append(e.program)
+                if e.program.features.filter(key="orders").exists():
+                    student_orders_programs.append(e.program)
         except (Student.DoesNotExist, AttributeError):
             pass
     elif navbar_is_parent:
@@ -51,7 +56,7 @@ def _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent):
         except (Adult.DoesNotExist, AttributeError):
             pass
 
-    return student_outreach_programs, carpool_map_programs
+    return student_outreach_programs, student_orders_programs, carpool_map_programs
 
 
 def _navbar_badge_data(request, role, navbar_is_parent):
@@ -193,7 +198,7 @@ def navbar_context(request):
     else:
         program_feature_keys = set()
 
-    student_outreach_programs, carpool_map_programs = (
+    student_outreach_programs, student_orders_programs, carpool_map_programs = (
         _navbar_outreach_and_carpool_programs(request, role, navbar_is_parent)
     )
 
@@ -221,8 +226,10 @@ def navbar_context(request):
         "current_program": current_program,
         "current_program_has_badges": "badges" in program_feature_keys,
         "current_program_has_outreach": "outreach" in program_feature_keys,
+        "current_program_has_orders": "orders" in program_feature_keys,
         "navbar_role": role,
         "student_outreach_programs": student_outreach_programs,
+        "student_orders_programs": student_orders_programs,
         "carpool_map_programs": carpool_map_programs,
         "navbar_student_programs": navbar_student_programs,
         "navbar_badge_count": navbar_badge_count,

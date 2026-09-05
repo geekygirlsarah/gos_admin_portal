@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-04
+
+### Added
+- **Order Requests**: Students and mentors can now place requests for parts, tools, and supplies right from the portal (item, quantity, estimated unit price, link, and notes) under the new "Order Requests" pages, instead of using a separate Google Form. Every program controls whether its students can use it via the new "Order Requests" program feature; mentors and Lead Mentors always have access. The pending list is org-wide and grouped by program with an estimated program total. Students/mentors can edit their own pending requests (never delete), Lead Mentors can edit anything, mark items as ordered (moving them to an archive kept for budget purposes), reopen archived items, delete requests, and export the pending or archived list as CSV or Excel. An "Order Requests" button appears on the program detail page and in the navigation for mentors/Lead Mentors.
+
 ## 2026-09-03
 
 ### Added
