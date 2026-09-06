@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .forms import AdultForm, StudentForm
+from .forms import AdminStudentForm, AdultForm
 from .models import (
     AddressGeocode,
     Adult,
@@ -202,7 +202,7 @@ class SchoolDistrictAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    form = StudentForm
+    form = AdminStudentForm
     list_display = (
         "preferred_first_name",
         "legal_first_name",

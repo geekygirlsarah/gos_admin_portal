@@ -28,6 +28,79 @@ def generate_application_id() -> str:
     return "".join(secrets.choice(APP_ID_ALPHABET) for _ in range(APP_ID_LENGTH))
 
 
+# --- Legacy step-key migration ----------------------------------------------
+#
+# The wizard originally stored each step under ``step5`` / ``step6`` /
+# ``step7`` / ``step8`` / ``step6_handoff`` and later renamed those keys to
+# ``step5-student`` / ``step6-experience`` / ``step7-primaryparent`` /
+# ``step8-secondaryparent`` / ``step7_handoff`` (without a data migration).
+# Applications created before the rename therefore hold their data under the
+# legacy keys, and any code that only reads the current names would silently
+# lose that data. These helpers merge the legacy keys into their current names
+# wherever we load, display, or convert an application's data.
+
+
+LEGACY_STEP_KEY_MAP = {
+    "step5": "step5-student",
+    "step6": "step6-experience",
+    "step7": "step7-primaryparent",
+    "step8": "step8-secondaryparent",
+    "step6_handoff": "step7_handoff",
+}
+
+
+def _is_step_value_empty(value) -> bool:
+    """Whether a captured value can be treated as "no real data".
+
+    Matches the heuristic the review edit form uses for "touched" fields:
+    ``None``, empty strings, empty collections and ``False`` all count as empty
+    (so legacy data that only holds default checkbox values never wins a merge).
+    """
+    if value in (None, "", False):
+        return True
+    if isinstance(value, (list, tuple, set, dict)):
+        return not value
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def _step_data_score(step: dict) -> tuple:
+    """A completeness score for one step's data dict.
+
+    Returns ``(filled values, total keys)``. ``filled`` counts values that are
+    not empty, ``total`` breaks ties by favouring the dict that knows about
+    more fields. Used to pick the richer of two dicts for the same step.
+    """
+    step = step or {}
+    filled = sum(1 for v in step.values() if not _is_step_value_empty(v))
+    return filled, len(step)
+
+
+def normalize_step_keys(data) -> dict:
+    """Merge any legacy step keys in ``data`` into their current names.
+
+    When the same step exists under both a legacy and a current key (which
+    happens when the pre-fix edit page re-saved a legacy application under the
+    current names), the more complete dict is kept and the other dropped;
+    ties go to the current key. All non-step keys are left untouched.
+    """
+    normalized = dict(data or {})
+    for legacy_key, current_key in LEGACY_STEP_KEY_MAP.items():
+        legacy_step = normalized.pop(legacy_key, None)
+        if legacy_step is None:
+            continue
+        if not isinstance(legacy_step, dict):
+            legacy_step = {}
+        current_step = normalized.get(current_key)
+        if isinstance(current_step, dict):
+            if _step_data_score(legacy_step) > _step_data_score(current_step):
+                normalized[current_key] = legacy_step
+        else:
+            normalized[current_key] = legacy_step
+    return normalized
+
+
 # --- OTP helpers ------------------------------------------------------------
 
 
@@ -246,6 +319,26 @@ class Application(models.Model):
             f"{max_attempts} attempts."
         )
 
+    # -- Data normalization --------------------------------------------------
+
+    def normalize_step_data(self, save: bool = False) -> dict:
+        """Migrate legacy step keys in ``self.data`` to their current names.
+
+        Applications started before the ``step5`` → ``step5-student`` key
+        rename hold their data under the legacy keys; review / edit / convert
+        code only understands the current names. This method merges the legacy
+        keys (``normalize_step_keys``) into ``self.data`` and, with
+        ``save=True``, persists the result so a stale legacy copy can never
+        reappear next load. Returns the normalized ``data`` dict.
+        """
+        normalized = normalize_step_keys(self.data)
+        if normalized == self.data:
+            return self.data
+        self.data = normalized
+        if save:
+            self.save(update_fields=["data", "updated_at"])
+        return self.data
+
     # -- OTP ----------------------------------------------------------------
 
     def issue_otp(self) -> str:
@@ -315,7 +408,7 @@ class Application(models.Model):
     @property
     def student_name(self) -> str:
         """Friendly name of the student from step 5 data."""
-        data = self.data or {}
+        data = normalize_step_keys(self.data)
         step5 = data.get("step5-student") or {}
         # Support legacy "first_name" key (was the preferred name) and new keys
         first = (
@@ -332,7 +425,7 @@ class Application(models.Model):
     @property
     def primary_parent_name(self) -> str:
         """Friendly name of the primary parent from step 7 data."""
-        data = self.data or {}
+        data = normalize_step_keys(self.data)
         step6 = data.get("step7-primaryparent") or {}
         # Support legacy "first_name" key (was the legal name for parents) and new keys
         first = (step6.get("legal_first_name") or step6.get("first_name") or "").strip()
@@ -344,7 +437,7 @@ class Application(models.Model):
     @property
     def secondary_parent_name(self) -> str:
         """Friendly name of the secondary parent from step 8 data (if not skipped)."""
-        data = self.data or {}
+        data = normalize_step_keys(self.data)
         step7 = data.get("step8-secondaryparent") or {}
         if step7.get("_skipped"):
             return ""

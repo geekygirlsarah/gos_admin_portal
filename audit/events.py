@@ -14,6 +14,10 @@ class AuditEvent(models.TextChoices):
     ACCOUNT_DEACTIVATED = "ACCOUNT_DEACTIVATED", "User account deactivated"
     ROLE_CHANGED = "ROLE_CHANGED", "User role changed"
     PASSWORD_RESET = "PASSWORD_RESET", "Password reset by admin"
+    PROFILE_LINK_CHANGED = (
+        "PROFILE_LINK_CHANGED",
+        "User account linked or unlinked from profile",
+    )
 
     # --- Authentication ---
     USER_LOGIN = "USER_LOGIN", "User logged in"

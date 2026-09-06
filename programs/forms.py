@@ -85,18 +85,18 @@ class StudentForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop("user", None)
+        kwargs.pop("user", None)
+        include_user = kwargs.pop("include_user", False)
         super().__init__(*args, **kwargs)
 
-        # Protect user field from non-Lead Mentors/Admins to avoid accidental disconnection
-        # Only apply protection if user is explicitly provided (e.g. from portal views)
-        if user is not None:
-            is_privileged = (
-                user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-            )
-            if not is_privileged:
-                if "user" in self.fields:
-                    del self.fields["user"]
+        # The 'user' field is a system-managed account link. The portal never
+        # renders it, so leaving the field on the form makes a privileged
+        # editor's save bind the missing value to None and silently NULL-out
+        # the link on every save. Strip it for every portal request; only
+        # callers that explicitly opt in (Django admin via AdminStudentForm)
+        # keep it.
+        if not include_user and "user" in self.fields:
+            del self.fields["user"]
 
         # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
         qs_adults = Adult.objects.filter(is_parent=True).order_by(
@@ -174,6 +174,26 @@ class StudentForm(forms.ModelForm):
             )
         return cleaned
 
+    def _clean_fields(self):
+        # The 'user' field is a system-managed account link with no model
+        # default. Django constructs the instance at validation time
+        # (_post_clean -> construct_instance) and writes cleaned_data['user']
+        # for any bound field, so an unsubmitted select silently NULLs the
+        # link. Drop the value here, before construction, whenever the field
+        # exists but the submitted data omitted it. A deliberately submitted
+        # empty value is still honoured as an explicit unlink.
+        super()._clean_fields()
+        user_field = self.fields.get("user")
+        if (
+            user_field is not None
+            and hasattr(self, "cleaned_data")
+            and "user" in self.cleaned_data
+            and user_field.widget.value_omitted_from_data(
+                self.data, self.files, self.add_prefix("user")
+            )
+        ):
+            self.cleaned_data.pop("user", None)
+
     def save(self, commit=True):
         # Compute graduation_year from grade_selector when provided
         grade_val = (
@@ -210,6 +230,16 @@ class StudentForm(forms.ModelForm):
             instance.adults.set(selected)
         # Return the instance
         return instance
+
+
+class AdminStudentForm(StudentForm):
+    """StudentForm variant used by Django admin so the linked User account
+    stays editable there (the portal intentionally never exposes it)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("user", None)
+        kwargs.setdefault("include_user", True)
+        super().__init__(*args, **kwargs)
 
 
 class AddExistingStudentToProgramForm(forms.Form):

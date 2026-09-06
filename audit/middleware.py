@@ -2,6 +2,25 @@ import pghistory.middleware
 from django.db import connection
 
 
+class AuditContextMiddleware:
+    """Store the active request in thread-local storage so signal handlers
+    (which receive no ``request`` argument) can attribute audit events to the
+    current actor. Wrapped in ``try/finally`` so the context never leaks
+    between requests."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from .context import clear_current_request, set_current_request
+
+        set_current_request(request)
+        try:
+            return self.get_response(request)
+        finally:
+            clear_current_request()
+
+
 class AuditHistoryMiddleware(pghistory.middleware.HistoryMiddleware):
     """
     Extends pghistory's built-in HistoryMiddleware to attach the current

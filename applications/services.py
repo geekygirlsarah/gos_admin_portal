@@ -18,7 +18,7 @@ from audit.events import AuditEvent
 from audit.service import log_event
 from programs.models import Adult, Enrollment, Program, Student
 
-from .models import Application
+from .models import Application, normalize_step_keys
 
 logger = logging.getLogger(__name__)
 
@@ -769,8 +769,12 @@ def _student_from_application(application: Application):
     """
     from programs.models import School, Student
 
+    # Surface legacy step keys (e.g. ``step5`` → ``step5-student``) so legacy
+    # applications convert; callers that care about the persist side-effect
+    # run ``normalize_step_data(save=True)`` first.
+    application.normalize_step_data(save=False)
     data = application.data or {}
-    step5 = (data.get("step5-student") or {}).copy()
+    step5 = (normalize_step_keys(data).get("step5-student") or {}).copy()
     existing_id = step5.pop("_existing_student_id", None)
 
     student = None
@@ -900,6 +904,10 @@ def convert_application_to_student(application: Application, request=None):
 
     if application.converted_student_id:
         return application.converted_student
+
+    # Persist any legacy step-key migration (``step5`` → ``step5-student``,
+    # etc.) so both this conversion and any later reads see merged data.
+    application.normalize_step_data(save=True)
 
     # Mentors don't produce a Student record, so idempotency is tracked by
     # the CONVERTED status plus a lookup of the created mentor Adult.

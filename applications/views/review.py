@@ -38,7 +38,7 @@ from programs.models import Program, RaceEthnicity
 from programs.utils.notifications import get_sender_connection
 
 from ..forms import StaffDocumentUploadForm
-from ..models import Application, ApplicationDocumentSubmission
+from ..models import Application, ApplicationDocumentSubmission, normalize_step_keys
 from ..services import (
     ApplicationConversionError,
     _collect_applicant_recipients,
@@ -428,16 +428,20 @@ class ApplicationDataEditForm(forms.Form):
             field.initial = spec["initial"]
         return field
 
-    def rebuild_data(self, current_data):
+    def rebuild_data(self, current_data, initial=None):
         """Rebuild ``Application.data`` from submitted fields.
 
         Only the fields represented in this form are overwritten; any other
         keys already stored for a step (e.g. ``_existing_student_id``) are
         preserved. Empty sections are only written back if they already
-        existed or the mentor actually entered a value.
+        existed or the mentor actually entered a value. A value that merely
+        reproduces the form's prefilled ``initial`` (e.g. a default-checked
+        checkbox) does *not* count as a real edit, so an untouched section is
+        never created just to hold defaults.
         """
         current_data = dict(current_data or {})
         data = dict(current_data)
+        initial = initial or {}
         for data_key, _title, fields in self.sections:
             existing = current_data.get(data_key)
             step = dict(existing) if isinstance(existing, dict) else {}
@@ -446,13 +450,18 @@ class ApplicationDataEditForm(forms.Form):
                 fname = spec["name"]
                 field_name = self._field_name(data_key, fname)
                 if field_name in self.cleaned_data:
-                    value = self.cleaned_data[field_name]
+                    raw_value = self.cleaned_data[field_name]
                     if spec["kind"] == "multi":
-                        value = list(value.values_list("pk", flat=True))
-                    elif hasattr(value, "isoformat"):
-                        value = value.isoformat()
+                        value = list(raw_value.values_list("pk", flat=True))
+                    elif hasattr(raw_value, "isoformat"):
+                        value = raw_value.isoformat()
+                    else:
+                        value = raw_value
                     step[fname] = value
-                    if value not in (None, "", [], False):
+                    reproduced_default = (
+                        field_name in initial and initial[field_name] == raw_value
+                    )
+                    if value not in (None, "", [], False) and not reproduced_default:
                         touched = True
             if existing or touched:
                 data[data_key] = step
@@ -708,6 +717,10 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
+        # Merge any legacy step keys now so legacy applications (which may
+        # hold both the old and current key for the same step) render each
+        # section once, and the migration is persisted.
+        application.normalize_step_data(save=True)
         # Build per-document status rows for the Signed Documents card.
         documents_status = []
         all_required_uploaded = True
@@ -918,17 +931,22 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
     def _initial(self, application: Application):
         sections = _sections_for(application)
         initial = {"email": application.email}
-        data = application.data or {}
+        data = normalize_step_keys(application.data)
         for data_key, _title, fields in sections:
             step = data.get(data_key) or {}
             for spec in fields:
                 fname = spec["name"]
                 field_name = ApplicationDataEditForm._field_name(data_key, fname)
-                if fname in step:
-                    value = step[fname]
+                step_value = step.get(fname)
+                if step_value is None and fname == "legal_first_name":
+                    # Legacy parent steps stored the legal first name under
+                    # the plain "first_name" key.
+                    step_value = step.get("first_name")
+                if step_value is not None:
+                    value = step_value
                     if spec["kind"] == "date":
                         try:
-                            value = datetime.date.fromisoformat(str(value))
+                            value = datetime.date.fromisoformat(str(step_value))
                         except (TypeError, ValueError):
                             value = None
                     initial[field_name] = value
@@ -958,6 +976,9 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
+        # Persist any legacy step-key migration up front so the form (and any
+        # subsequent save) always operate on the current key names.
+        application.normalize_step_data(save=True)
         form = ApplicationDataEditForm(
             sections=_sections_for(application),
             initial=self._initial(application),
@@ -968,13 +989,16 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         application = get_object_or_404(
             Application, application_id=(app_id or "").upper()
         )
+        application.normalize_step_data(save=True)
         form = ApplicationDataEditForm(
             request.POST, sections=_sections_for(application)
         )
         if not form.is_valid():
             return self._render(request, application, form)
         old_data = application.data
-        application.data = form.rebuild_data(application.data)
+        application.data = form.rebuild_data(
+            application.data, initial=self._initial(application)
+        )
         new_email = (form.cleaned_data.get("email") or "").strip()
         if new_email:
             application.email = new_email
