@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-06
+
+### Fixed
+- **Signing in no longer fails with a server error when two accounts have the same verified email**: If a student or parent's login email was also registered (verified) on an older, unlinked account, trying to sign in could crash the code-entry (OTP) page with a "duplicate key" database error instead of letting them in. When a profile is matched at sign-in, the portal now reuses the existing verified email on the correct account rather than trying to create a second one, so affected users can sign in again (contact a Lead Mentor if this happened to you and you run into a stale login).
+- **Signing in with either of a person's emails works even if they have two user accounts**: A person could end up with a separate user account for their personal email and their Andrew email. Signing in with one while the other was already registered could crash with the same "duplicate key" error. Both emails now land on the single account that's linked to their student/parent profile, no matter which email they use to sign in. (If you still have an older duplicate account, a Lead Mentor can clean it up — run `python manage.py find_disconnected_accounts` to find any.)
+
+### Added
+- **New `merge_user_accounts` command**: Lead Mentors can now run `python manage.py merge_user_accounts --source <pk> --target <pk>` to fold a duplicate login account into the surviving one when one person has two accounts (one for their personal email, one for their Andrew email). It moves any attached email addresses (keeping exactly one primary), groups and permissions, re-points every reference (orders, badges, audit history, etc.), backfills empty name fields, and removes the duplicate account. Read-only by default; add `--execute` to actually apply it.
+
 ## 2026-09-05
 
 ### Added

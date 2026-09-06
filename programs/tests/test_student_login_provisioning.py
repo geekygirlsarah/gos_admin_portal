@@ -58,6 +58,106 @@ class StudentLoginProvisioningTests(TestCase):
         result = _find_or_provision_user_for_email("nobody@example.com")
         self.assertFalse(result)
 
+    def test_dual_user_accounts_reconcile_to_profile_user(self):
+        """Regression: a student who has BOTH a personal and an andrew email, with a
+        separate User account for each (the Jeannine Zhou production bug), must be able
+        to log in with either email without an IntegrityError. Both emails end up on
+        the single User the profile links to."""
+        from allauth.account.models import EmailAddress
+
+        # Set up Student with both emails, like in production.
+        self.student.andrew_email = "alice@andrew.cmu.edu"
+        self.student.personal_email = "alice@example.com"
+        self.student.save(update_fields=["andrew_email", "personal_email"])
+
+        # One User keyed by the andrew email — this is the one linked to the Student.
+        andrew_user = User.objects.create_user(
+            username="alice@andrew.cmu.edu", email="alice@andrew.cmu.edu"
+        )
+        EmailAddress.objects.create(
+            user=andrew_user,
+            email="alice@andrew.cmu.edu",
+            verified=True,
+            primary=True,
+        )
+        self.student.user = andrew_user
+        self.student.save(update_fields=["user"])
+
+        # A second, separate User keyed by the personal email — the source of the bug.
+        personal_user = User.objects.create_user(
+            username="alice@example.com", email="alice@example.com"
+        )
+        EmailAddress.objects.create(
+            user=personal_user,
+            email="alice@example.com",
+            verified=True,
+            primary=True,
+        )
+
+        # Logging in with the personal email must not crash and must use the
+        # profile's (andrew) user, with both emails on it.
+        result = _find_or_provision_user_for_email("alice@example.com")
+        self.assertTrue(result)
+
+        # The personal email's verified EmailAddress now belongs to the andrew user.
+        personal_ea = EmailAddress.objects.get(email="alice@example.com")
+        self.assertEqual(personal_ea.user_id, andrew_user.id)
+        # Both emails live on the single profile-linked user.
+        self.assertTrue(
+            EmailAddress.objects.filter(
+                user=andrew_user, email="alice@example.com"
+            ).exists()
+        )
+        self.assertTrue(
+            EmailAddress.objects.filter(
+                user=andrew_user, email="alice@andrew.cmu.edu"
+            ).exists()
+        )
+        self.assertEqual(
+            EmailAddress.objects.filter(email="alice@example.com").count(), 1
+        )
+        self.assertFalse(
+            EmailAddress.objects.filter(
+                email="alice@example.com", user=personal_user
+            ).exists()
+        )
+
+    def test_verified_email_on_other_user_does_not_crash(self):
+        """Regression: an orphaned verified EmailAddress on ANOTHER user must not
+        raise IntegrityError (unique_verified_email). The existing record should be
+        moved to the correct user."""
+        from allauth.account.models import EmailAddress
+
+        # The correct user is the one linked to the Student.
+        user = User.objects.create_user(
+            username="alice-owner", email="alice@example.com"
+        )
+        self.student.user = user
+        self.student.save(update_fields=["user"])
+
+        # Simulate a stale/orphaned verified EmailAddress pointing at a different user.
+        other_user = User.objects.create_user(
+            username="alice-other", email="someoneelse@example.com"
+        )
+        EmailAddress.objects.create(
+            user=other_user,
+            email="alice@example.com",
+            verified=True,
+            primary=True,
+        )
+
+        result = _find_or_provision_user_for_email("alice@example.com")
+        self.assertTrue(result)
+
+        ea = EmailAddress.objects.get(email="alice@example.com")
+        self.assertEqual(ea.user_id, user.id)
+        self.assertEqual(
+            EmailAddress.objects.filter(email="alice@example.com").count(), 1
+        )
+        self.assertFalse(
+            EmailAddress.objects.filter(email="alice@example.com", user=other_user).exists()
+        )
+
     @override_settings(ACCOUNT_FORMS=ALLAUTH_OVERRIDE["ACCOUNT_FORMS"])
     def test_provisioning_form_clean_email_provisions_student(self):
         """ProvisioningRequestLoginCodeForm.clean_email provisions a User for a student."""

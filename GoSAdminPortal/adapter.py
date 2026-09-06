@@ -164,8 +164,24 @@ def _ensure_email_address(user, email):
     from allauth.account.models import EmailAddress
 
     email_l = email.lower()
-    # If already present, nothing to do
-    if EmailAddress.objects.filter(user=user, email__iexact=email_l).exists():
+    # If an EmailAddress already exists for this email (on any user), make sure it
+    # points at the correct user. Otherwise the partial unique index
+    # "unique_verified_email" (one verified email per email, across users) rejects
+    # a new row when a stale/orphaned verified record belongs to a different user,
+    # which previously crashed login with an IntegrityError.
+    existing = EmailAddress.objects.filter(email__iexact=email_l).first()
+    if existing:
+        if existing.user_id != user.id:
+            existing.user = user
+            # Only one primary per user: the moved email can only be primary if the
+            # receiving user has no primary yet (avoids unique_primary_email conflict).
+            if existing.primary:
+                has_primary = EmailAddress.objects.filter(
+                    user=user, primary=True
+                ).exists()
+                if has_primary:
+                    existing.primary = False
+            existing.save(update_fields=["user", "primary"])
         return
     # Only one primary per user: set primary=True only if none exists yet
     has_primary = EmailAddress.objects.filter(user=user, primary=True).exists()
