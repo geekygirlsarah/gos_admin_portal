@@ -8,44 +8,45 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <style>
         body { background-color: #bad3fe; color: #000; min-height: 100vh; }
-        .kiosk-header { background-color: #bad3fe; padding: 1.5rem 0 0.5rem; }
-        .kiosk-header h1 { font-size: 3rem; color: #000; margin: 0; }
+        .kiosk-header { background-color: #bad3fe; padding: 1rem 0 0.25rem; }
+        .kiosk-header h1 { font-size: 2.2rem; color: #000; margin: 0; }
         .card { background-color: #fff; border: 1px solid #aac4f0; color: #000; }
-        .card-header { background-color: #d6e8ff; border-bottom: 1px solid #aac4f0; color: #000; }
-        .card-header h4 { color: #000; font-size: 1.8rem; }
-        .form-control, .form-select { background-color: #fff; border: 1px solid #7aaee8; color: #000; font-size: 1.8rem; padding: 1rem 1.25rem; }
-        .form-control:focus, .form-select:focus { background-color: #fff; color: #000; border-color: #3a7bd5; box-shadow: 0 0 0 0.25rem rgba(58, 123, 213, 0.25); }
-        .btn-signin { background-color: #3a7bd5; border-color: #3a7bd5; color: #fff; font-size: 1.8rem; padding: 1rem 2.5rem; }
+        .card-header { background-color: #d6e8ff; border-bottom: 1px solid #aac4f0; color: #000; padding: 0.6rem 1rem; }
+        .card-header h4 { color: #000; font-size: 1.35rem; }
+        .card-body { padding: 1rem; }
+        .form-control, .form-select { background-color: #fff; border: 1px solid #7aaee8; color: #000; font-size: 1.35rem; padding: 0.6rem 0.85rem; }
+        .form-control:focus, .form-select:focus { background-color: #fff; color: #000; border-color: #3a7bd5; box-shadow: 0 0 0 0.2rem rgba(58, 123, 213, 0.25); }
+        .btn-signin { background-color: #3a7bd5; border-color: #3a7bd5; color: #fff; font-size: 1.4rem; padding: 0.7rem 2rem; }
         .btn-signin:hover { background-color: #2c62b0; border-color: #2c62b0; color: #fff; }
-        .btn-secondary-lg { font-size: 1.6rem; padding: 1rem 2.5rem; }
-        label { font-size: 1.4rem; color: #222; }
-        .program-badge { background-color: #d6e8ff; border: 1px solid #7aaee8; color: #1a4a8a; padding: 0.5rem 1rem; border-radius: 1.5rem; font-size: 1.2rem; }
+        .btn-secondary-lg { font-size: 1.25rem; padding: 0.6rem 1.5rem; }
+        label, .form-label { font-size: 1.15rem; color: #222; }
+        .program-badge { background-color: #d6e8ff; border: 1px solid #7aaee8; color: #1a4a8a; padding: 0.3rem 0.75rem; border-radius: 1.5rem; font-size: 1.1rem; }
         .text-muted { color: #555 !important; }
         .sig-pad-wrap { border: 2px solid #7aaee8; border-radius: 0.5rem; background: #fff; }
-        .sig-pad { width: 100%; height: 220px; touch-action: none; }
-        .student-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
-        .student-choice { font-size: 1.6rem; text-align: center; padding: 1.25rem 0.5rem; border: 2px solid #7aaee8; border-radius: 0.5rem; cursor: pointer; user-select: none; background: #fff; color: #000; }
+        .sig-pad { width: 100%; height: 180px; touch-action: none; }
+        .student-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 0.5rem; }
+        .student-choice { font-size: 1.15rem; text-align: center; padding: 0.65rem 0.4rem; border: 2px solid #7aaee8; border-radius: 0.5rem; cursor: pointer; user-select: none; background: #fff; color: #000; }
         .student-choice.selected { background-color: #3a7bd5; border-color: #3a7bd5; color: #fff; }
         .student-choice.signed-out { opacity: 0.6; border-style: dashed; }
-        .student-choice.signed-out .signed-badge { display: inline-block; font-size: 1rem; }
+        .student-choice.signed-out .signed-badge { display: inline-block; font-size: 0.85rem; }
         .student-choice .undo-hint { display: none; }
         .student-choice.signed-out.undo-confirm { opacity: 1; border-style: solid; border-color: #d43f3f; background-color: #fff3f3; }
         .student-choice.signed-out.undo-confirm .student-name { display: none; }
         .student-choice.signed-out.undo-confirm .signed-badge { display: none; }
         .student-choice.signed-out.undo-confirm .undo-hint { display: block; }
-        .undo-hint { font-size: 1.1rem; color: #a22; }
-        .notice { background-color: #d4edda; border: 1px solid #b7dfb9; color: #155724; font-size: 1.5rem; }
-        .success-check { color: #28a745; font-size: 5rem; }
-        .success-name { font-size: 3rem; }
-        .success-student { font-size: 2rem; color: #333; }
+        .undo-hint { font-size: 0.95rem; color: #a22; }
+        .notice { background-color: #d4edda; border: 1px solid #b7dfb9; color: #155724; font-size: 1.25rem; }
+        .success-check { color: #28a745; font-size: 4rem; }
+        .success-name { font-size: 2.2rem; }
+        .success-student { font-size: 1.5rem; color: #333; }
     </style>
 </head>
 <body>
-<header class="kiosk-header text-center mb-4">
+<header class="kiosk-header text-center mb-2">
     <div class="container">
         <div class="row justify-content-center mb-2">
             <div class="col-auto">
-                <img src="{% static 'img/gos_logo.png' %}" class="img-fluid" style="max-height: 120px;" alt="Girls of Steel Logo">
+                <img src="{% static 'img/gos_logo.png' %}" class="img-fluid" style="max-height: 80px;" alt="Girls of Steel Logo">
             </div>
         </div>
         <h1>{{ config.label }}</h1>
@@ -53,7 +54,7 @@
     </div>
 </header>
 
-<div class="container" style="max-width: 900px;">
+<div class="container" style="max-width: 640px;">
 {% if not is_unlocked %}
     {# ── Locked / unlock-needed screen ─────────────────────────────────────── #}
     <div class="text-center mt-5">
