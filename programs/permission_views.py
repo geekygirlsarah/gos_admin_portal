@@ -109,6 +109,17 @@ def user_is_alumni(user):
     return _user_adult_flag(user, "is_alumni", "Alumni")
 
 
+def user_is_mentor_or_lead(user):
+    """True if the user is a Lead Mentor (superuser or LeadMentor group) or an
+    active mentor. Convenience helper for ``user_is_mentor(user) or
+    get_user_role(user) == "LeadMentor"`` checks."""
+    if user is None:
+        return False
+    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+        return True
+    return user_is_mentor(user)
+
+
 def can_user_read(user, section, obj=None):
     role = get_user_role(user)
     if role == "LeadMentor":
@@ -494,7 +505,7 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
 
 class MentorOrLeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return get_user_role(self.request.user) in ("LeadMentor", "Mentor")
+        return user_is_mentor_or_lead(self.request.user)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:

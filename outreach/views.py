@@ -33,7 +33,7 @@ from programs.permission_views import (
     can_user_delete,
     can_user_write,
     get_user_role,
-    user_is_mentor,
+    user_is_mentor_or_lead,
 )
 from programs.views.mixins import (
     DynamicReadPermissionMixin,
@@ -153,7 +153,7 @@ class OutreachEventListView(
 
         # Mentor support signups: any mentor (or lead mentor) may volunteer
         # for a shift; there is no capacity limit.
-        context["viewer_is_mentor"] = user_is_mentor(user) or role == "LeadMentor"
+        context["viewer_is_mentor"] = user_is_mentor_or_lead(user)
         context["mentor_signup_shift_ids"] = set()
         try:
             context["mentor_signup_shift_ids"] = set(
@@ -339,8 +339,7 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
         if shift.is_past:
             messages.error(request, "This shift has ended. You can no longer sign up.")
             return redirect("outreach:event_list", program_id=self.program.id)
-        role = get_user_role(request.user)
-        if not (user_is_mentor(request.user) or role == "LeadMentor"):
+        if not user_is_mentor_or_lead(request.user):
             messages.error(
                 request, "Only mentors can sign up to support outreach shifts."
             )
@@ -411,9 +410,7 @@ class OutreachShiftManageSignupsView(
             pk=kwargs.get("shift_pk"),
             event__program=program,
         )
-        if shift.is_past and not (
-            user_is_mentor(request.user) or get_user_role(request.user) == "LeadMentor"
-        ):
+        if shift.is_past and not user_is_mentor_or_lead(request.user):
             messages.error(
                 request, "This shift has ended and can no longer be changed."
             )

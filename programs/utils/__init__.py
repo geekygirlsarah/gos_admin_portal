@@ -8,6 +8,7 @@ split into submodules.
 
 from __future__ import annotations
 
+from .accounts import transfer_user_account
 from .adults import active_adults, active_alumni, active_mentors, active_parents
 from .alumni import convert_student_to_alumni, find_matching_alumni_adult
 from .balances import (
@@ -47,6 +48,8 @@ from .urls import (
 __all__ = [
     # images
     "normalize_image_field",
+    # accounts
+    "transfer_user_account",
     # alumni
     "convert_student_to_alumni",
     "find_matching_alumni_adult",
