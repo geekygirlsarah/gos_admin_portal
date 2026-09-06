@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **New `merge_user_accounts` command**: Lead Mentors can now run `python manage.py merge_user_accounts --source <pk> --target <pk>` to fold a duplicate login account into the surviving one when one person has two accounts (one for their personal email, one for their Andrew email). It moves any attached email addresses (keeping exactly one primary), groups and permissions, re-points every reference (orders, badges, audit history, etc.), backfills empty name fields, and removes the duplicate account. Read-only by default; add `--execute` to actually apply it.
 
+### Changed
+- **The touchscreen sign-out station is now more compact**: The station content is narrower and the student picker buttons are smaller, so on a tablet the page no longer stretches edge-to-edge. This gives some breathing room to scroll without accidentally tapping a neighboring student or part of the signature area.
+
 ## 2026-09-05
 
 ### Added
