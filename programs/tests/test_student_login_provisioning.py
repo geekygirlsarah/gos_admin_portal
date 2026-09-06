@@ -155,7 +155,9 @@ class StudentLoginProvisioningTests(TestCase):
             EmailAddress.objects.filter(email="alice@example.com").count(), 1
         )
         self.assertFalse(
-            EmailAddress.objects.filter(email="alice@example.com", user=other_user).exists()
+            EmailAddress.objects.filter(
+                email="alice@example.com", user=other_user
+            ).exists()
         )
 
     @override_settings(ACCOUNT_FORMS=ALLAUTH_OVERRIDE["ACCOUNT_FORMS"])
