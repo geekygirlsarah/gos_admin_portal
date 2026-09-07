@@ -5,6 +5,18 @@ from orders import views
 app_name = "orders"
 
 urlpatterns = [
+    path("vendors/", views.VendorListView.as_view(), name="vendor_list"),
+    path("vendors/create/", views.VendorCreateView.as_view(), name="vendor_create"),
+    path(
+        "vendors/<int:pk>/edit/",
+        views.VendorUpdateView.as_view(),
+        name="vendor_edit",
+    ),
+    path(
+        "vendors/<int:pk>/delete/",
+        views.VendorDeleteView.as_view(),
+        name="vendor_delete",
+    ),
     path("", views.OrderListView.as_view(), name="order_list"),
     path("archive/", views.OrderArchiveView.as_view(), name="order_archive"),
     path("create/", views.OrderCreateView.as_view(), name="order_create"),

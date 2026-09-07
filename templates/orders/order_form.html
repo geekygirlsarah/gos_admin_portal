@@ -25,8 +25,15 @@
                     <form method="post">
                         {% csrf_token %}
                         {% for field in form %}
-                            {% render_field field %}
+                            {% if field.name != "vendor_name" and field.name != "vendor_url" %}
+                                {% render_field field %}
+                            {% endif %}
                         {% endfor %}
+                        <div class="mb-3 {% if form.vendor_choice.value != not_listed_vendor %}d-none{% endif %}" id="custom-vendor-fields">
+                            <h6 class="text-muted">Custom vendor</h6>
+                            {% render_field form.vendor_name %}
+                            {% render_field form.vendor_url %}
+                        </div>
                         <div class="d-flex justify-content-between mt-4">
                             <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-secondary">Cancel</a>
                             <button type="submit" class="btn btn-primary">
@@ -39,4 +46,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    var vendorChoice = document.getElementById('id_vendor_choice');
+    var customVendorFields = document.getElementById('custom-vendor-fields');
+    if (!vendorChoice || !customVendorFields) {
+        return;
+    }
+    function toggleCustomVendor() {
+        customVendorFields.classList.toggle('d-none', vendorChoice.value !== '{{ not_listed_vendor }}');
+    }
+    vendorChoice.addEventListener('change', toggleCustomVendor);
+    toggleCustomVendor();
+})();
+</script>
 {% endblock %}

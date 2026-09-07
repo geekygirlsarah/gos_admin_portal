@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from badges.models import Badge, StudentBadge
+from orders.models import Vendor
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -42,6 +43,7 @@ class Command(BaseCommand):
         self._seed_sliding_scales(programs, students, today)
         self._seed_payments(enrollments, programs, today)
         self._seed_badges(students, programs)
+        self._seed_vendors()
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded database"))
 
@@ -765,6 +767,60 @@ class Command(BaseCommand):
                                 badge=badges[badge_idx],
                                 defaults={"awarded_by": mentor_user},
                             )
+
+    def _seed_vendors(self):
+        vendor_data = [
+            {
+                "name": "McMaster-Carr",
+                "website": "https://www.mcmaster.com",
+                "notes": "Industrial hardware, fast shipping.",
+            },
+            {
+                "name": "Amazon",
+                "website": "https://www.amazon.com",
+            },
+            {
+                "name": "AndyMark",
+                "website": "https://www.andymark.com",
+                "notes": "FIRST Robotics parts and kits.",
+            },
+            {
+                "name": "VEX Robotics",
+                "website": "https://www.vexrobotics.com",
+                "notes": "VEX parts and motors.",
+            },
+            {
+                "name": "REV Robotics",
+                "website": "https://www.revrobotics.com",
+                "notes": "REV build system and electronics.",
+            },
+            {
+                "name": "Digi-Key",
+                "website": "https://www.digikey.com",
+                "contact_email": "sales@digikey.com",
+                "notes": "Electronic components.",
+            },
+            {
+                "name": "Adafruit",
+                "website": "https://www.adafruit.com",
+                "notes": "Electronics, sensors, and breakout boards.",
+            },
+            {
+                "name": "Home Depot",
+                "website": "https://www.homedepot.com",
+                "notes": "Lumber, fasteners, and tools.",
+            },
+        ]
+        for vendor in vendor_data:
+            Vendor.objects.update_or_create(
+                name=vendor["name"],
+                defaults={
+                    "website": vendor.get("website", ""),
+                    "contact_email": vendor.get("contact_email", ""),
+                    "contact_phone": vendor.get("contact_phone", ""),
+                    "notes": vendor.get("notes", ""),
+                },
+            )
 
 
 def _seed_clearances(adult, paca, patch, fbi, expires):

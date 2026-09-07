@@ -5,6 +5,32 @@ from django.core.validators import MinValueValidator
 from django.db import models
 
 
+class Vendor(models.Model):
+    """A reference-list vendor the team orders from.
+
+    Vendors are org-wide (not tied to a single program) so every program's
+    order form shares the same dropdown. Students/mentors pick a vendor when
+    placing an order, or choose "Not listed" and type their own; see
+    ``PurchaseOrder.vendor_name`` for the snapshot design.
+    """
+
+    name = models.CharField(max_length=255, unique=True, verbose_name="Name")
+    website = models.URLField(max_length=500, blank=True, verbose_name="Website")
+    contact_email = models.EmailField(blank=True, verbose_name="Contact email")
+    contact_phone = models.CharField(
+        max_length=50, blank=True, verbose_name="Contact phone"
+    )
+    notes = models.TextField(blank=True, verbose_name="Notes")
+
+    class Meta:
+        verbose_name = "Vendor"
+        verbose_name_plural = "Vendors"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class PurchaseOrder(models.Model):
     """A request to purchase a part, tool, or supply.
 
@@ -53,6 +79,31 @@ class PurchaseOrder(models.Model):
         blank=True,
         verbose_name="Link to item",
         help_text="A URL to the part, tool, or product page.",
+    )
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        verbose_name="Vendor",
+        help_text="The reference-list vendor for this order (optional).",
+    )
+    vendor_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Vendor name",
+        help_text=(
+            "Snapshot of the vendor name (from the reference list, or the "
+            "'Not listed' name a student typed). Kept so order text survives "
+            "a vendor being renamed or deleted."
+        ),
+    )
+    vendor_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name="Vendor website",
+        help_text="Snapshot of the vendor website (reference list or custom).",
     )
     notes = models.TextField(blank=True, verbose_name="Notes")
     status = models.CharField(

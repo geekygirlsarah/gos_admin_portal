@@ -9,6 +9,9 @@
         <h1>{{ page_title }}</h1>
         <div class="d-flex gap-2">
             {% if is_lead %}
+            <a href="{% url 'orders:vendor_list' program.id %}" class="btn btn-outline-primary">
+                <i class="bi bi-shop me-1"></i>Vendors
+            </a>
             <a href="{% url 'orders:order_archive' program.id %}?export=csv" class="btn btn-outline-secondary">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
             </a>
@@ -50,6 +53,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Item</th>
+                            <th>Vendor</th>
                             <th class="text-end">Qty</th>
                             <th class="text-end">Unit Price</th>
                             <th class="text-end">Total</th>
@@ -67,6 +71,15 @@
                                 <a href="{{ order.url }}" target="_blank" rel="noopener noreferrer">{{ order.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
                                 {% else %}
                                 {{ order.item_name }}
+                                {% endif %}
+                            </td>
+                            <td class="text-nowrap">
+                                {% if order.vendor_url %}
+                                <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                {% elif order.vendor_name %}
+                                {{ order.vendor_name }}
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
                             <td class="text-end">{{ order.quantity|floatformat:"-2" }}</td>

@@ -8,8 +8,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
-from orders.forms import OrderForm
-from orders.models import PurchaseOrder
+from orders.forms import NOT_LISTED_VENDOR, OrderForm, VendorForm
+from orders.models import PurchaseOrder, Vendor
 from programs.models import Program
 from programs.permission_views import (
     LeadMentorRequiredMixin,
@@ -87,6 +87,8 @@ def _export_orders_csv(orders):
             "Unit Price",
             "Total",
             "Link",
+            "Vendor",
+            "Vendor Website",
             "Requested By",
             "Requested On",
             "Notes",
@@ -103,6 +105,8 @@ def _export_orders_csv(orders):
                 order.unit_price if order.unit_price is not None else "",
                 order.total if order.total is not None else "",
                 order.url,
+                order.vendor_name,
+                order.vendor_url,
                 order.requested_by_name,
                 (
                     timezone.localtime(order.created_at).strftime("%Y-%m-%d %H:%M")
@@ -138,6 +142,8 @@ def _export_orders_xlsx(orders):
             "Unit Price",
             "Total",
             "Link",
+            "Vendor",
+            "Vendor Website",
             "Requested By",
             "Requested On",
             "Notes",
@@ -154,6 +160,8 @@ def _export_orders_xlsx(orders):
                 float(order.unit_price) if order.unit_price is not None else "",
                 float(order.total) if order.total is not None else "",
                 order.url,
+                order.vendor_name,
+                order.vendor_url,
                 order.requested_by_name,
                 (
                     timezone.localtime(order.created_at).strftime("%Y-%m-%d %H:%M")
@@ -169,9 +177,9 @@ def _export_orders_xlsx(orders):
                 ),
             ]
         )
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=11):
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=13):
         for cell in row:
-            if cell.column in (2, 6, 9):
+            if cell.column in (2, 6, 11):
                 cell.alignment = cell.alignment.copy(vertical="top")
 
     buffer = BytesIO()
@@ -224,7 +232,7 @@ class OrderListView(
     def get_queryset(self):
         return (
             PurchaseOrder.objects.filter(status=PurchaseOrder.STATUS_PENDING)
-            .select_related("program", "created_by", "ordered_by")
+            .select_related("program", "created_by", "ordered_by", "vendor")
             .order_by("-created_at")
         )
 
@@ -253,7 +261,7 @@ class OrderArchiveView(
     def get_queryset(self):
         return (
             PurchaseOrder.objects.filter(status=PurchaseOrder.STATUS_ORDERED)
-            .select_related("program", "created_by", "ordered_by")
+            .select_related("program", "created_by", "ordered_by", "vendor")
             .order_by("-ordered_at", "-created_at")
         )
 
@@ -273,6 +281,11 @@ class OrderCreateView(
     template_name = "orders/order_form.html"
     section = "orders"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["not_listed_vendor"] = NOT_LISTED_VENDOR
+        return context
+
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         form.instance.program = self.program
@@ -291,7 +304,12 @@ class OrderUpdateView(
     def get_queryset(self):
         # Org-wide queryset; creator-only editing is enforced by
         # ``can_user_write('orders', obj)`` for non-Lead-Mentors.
-        return PurchaseOrder.objects.select_related("program")
+        return PurchaseOrder.objects.select_related("program", "vendor")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["not_listed_vendor"] = NOT_LISTED_VENDOR
+        return context
 
     def form_valid(self, form):
         messages.success(self.request, "Order updated.")
@@ -352,3 +370,84 @@ class OrderMarkPendingView(
         else:
             messages.info(request, "That order is not archived.")
         return redirect("orders:order_archive", program_id=self.program.id)
+
+
+class VendorListView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, ListView
+):
+    """Org-wide vendor reference list (Lead Mentor managed)."""
+
+    model = Vendor
+    template_name = "orders/vendor_list.html"
+    context_object_name = "vendors"
+
+    def get_queryset(self):
+        return Vendor.objects.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Vendors"
+        return context
+
+
+class VendorCreateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, CreateView
+):
+    model = Vendor
+    form_class = VendorForm
+    template_name = "orders/vendor_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Vendor"
+        return context
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            f"Vendor '{form.instance.name}' added. Everyone can now pick it "
+            "when placing orders.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:vendor_list", kwargs={"program_id": self.program.id})
+
+
+class VendorUpdateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, UpdateView
+):
+    model = Vendor
+    form_class = VendorForm
+    template_name = "orders/vendor_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Vendor"
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Vendor '{form.instance.name}' updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:vendor_list", kwargs={"program_id": self.program.id})
+
+
+class VendorDeleteView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, DeleteView
+):
+    model = Vendor
+    template_name = "orders/vendor_confirm_delete.html"
+
+    def form_valid(self, form):
+        name = self.object.name
+        messages.success(
+            self.request,
+            f"Vendor '{name}' deleted. Existing orders keep any vendor name "
+            "they already had.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:vendor_list", kwargs={"program_id": self.program.id})
