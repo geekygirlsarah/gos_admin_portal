@@ -26,6 +26,16 @@ try:
 except ImportError:
     KioskConfig = None
 
+# Granular order permissions surfaced on the Portal Settings page. Each action
+# section uses one column: ``orders-view`` keys off ``can_read`` (seeing the
+# order pages); the others key off ``can_write`` (doing the action).
+ORDERS_SECTIONS = {
+    "orders-view": "view",
+    "orders-request": "request",
+    "orders-manage": "manage",
+    "orders-shipping": "shipping",
+}
+
 
 def get_user_role(user):
     """
@@ -109,6 +119,17 @@ def user_is_alumni(user):
     return _user_adult_flag(user, "is_alumni", "Alumni")
 
 
+def user_is_mentor_or_lead(user):
+    """True if the user is a Lead Mentor (superuser or LeadMentor group) or an
+    active mentor. Convenience helper for ``user_is_mentor(user) or
+    get_user_role(user) == "LeadMentor"`` checks."""
+    if user is None:
+        return False
+    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+        return True
+    return user_is_mentor(user)
+
+
 def can_user_read(user, section, obj=None):
     role = get_user_role(user)
     if role == "LeadMentor":
@@ -116,13 +137,21 @@ def can_user_read(user, section, obj=None):
     if role is None:
         return False
 
-    # Order requests: students and mentors may always read once they reach the
-    # page (the view-level 'orders' program feature toggle controls student
-    # access per program); parents and alumni never see orders. This is not
-    # configurable via RolePermission so the program feature stays the sole
-    # gate for students and mentors keep permanent access.
-    if section == "orders":
-        return role in ("Mentor", "Student")
+    # Order requests: students and mentors read by default; the 'orders-view'
+    # RolePermission row (configured from Portal Settings) lets Lead Mentors
+    # revoke read access per role. Parents and alumni never see orders. The
+    # action sections ('orders-request'/'-manage'/'-shipping') are write-gated;
+    # page access is governed by 'orders-view'. Without the program's 'orders'
+    # feature the views 404 first anyway.
+    if section in ORDERS_SECTIONS:
+        if role not in ("Student", "Mentor"):
+            return False
+        if section == "orders-view":
+            perm = RolePermission.objects.filter(
+                role=role, section="orders-view"
+            ).first()
+            return perm.can_read if perm else True
+        return True
 
     # Always allow reading own profile and children
     if obj:
@@ -316,23 +345,61 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
-    # Order requests: students and mentors may create and edit their own
-    # pending requests; once an item is ordered it can only be changed by a
-    # Lead Mentor. Parents/alumni never write orders. Not configurable via
-    # RolePermission (see can_user_read).
-    if section == "orders":
+    # Order requests: students and mentors may create requests (items) and edit
+    # their own items while they are still unassigned to an order; once an item
+    # is grouped into an order it can only be changed by a Lead Mentor.
+    # Mentors may additionally create and manage their own pending orders
+    # (groupings), and - with the 'orders-shipping' toggle - add shipping to
+    # placed orders; students never manage orders or add shipping. Parents/
+    # alumni never write orders. Each granular RolePermission section (Portal
+    # Settings) acts as a master switch for the corresponding action; the
+    # per-object ownership rules below still gate individual records.
+    if section in ORDERS_SECTIONS:
         if role in ("Parent", "Alumni"):
             return False
-        if role in ("Student", "Mentor"):
-            if obj:
-                from orders.models import PurchaseOrder
+        if role not in ("Student", "Mentor"):
+            return False
+        if role == "Student" and section in (
+            "orders-view",
+            "orders-manage",
+            "orders-shipping",
+        ):
+            # Students only place item requests; they never manage grouped
+            # orders, add shipping, or use the (view-only) section's write
+            # column.
+            return False
+        perm = RolePermission.objects.filter(role=role, section=section).first()
+        if section == "orders-view":
+            # Viewing only; the write column mirrors view permission.
+            return perm.can_write if perm else True
+        if not (perm.can_write if perm else True):
+            return False
+        if obj:
+            from orders.models import Order, OrderItem
 
-                if isinstance(obj, PurchaseOrder):
+            if isinstance(obj, OrderItem):
+                if section == "orders-shipping":
+                    return False
+                if section == "orders-request":
+                    return obj.requested_by_id == user.pk and obj.order_id is None
+                # orders-manage acts on the item's order
+
+                if obj.order_id:
                     return (
-                        obj.created_by_id == user.pk
-                        and obj.status == PurchaseOrder.STATUS_PENDING
+                        obj.order.created_by_id == user.pk
+                        and obj.order.status == Order.STATUS_PENDING
                     )
-            return True
+                return False
+            if isinstance(obj, Order):
+                if section == "orders-request":
+                    return False
+                if section == "orders-shipping":
+                    return True
+                # orders-manage
+                return (
+                    obj.created_by_id == user.pk and obj.status == Order.STATUS_PENDING
+                )
+        return True
 
     # Background checks are read-only for every role except Lead Mentors/admins.
     # This must run before the "own profile and children" shortcut below, which
@@ -441,7 +508,7 @@ def can_user_delete(user, section, obj=None):
         return False
 
     # Order requests can only be deleted by Lead Mentors
-    if section == "orders":
+    if section in ORDERS_SECTIONS:
         return False
 
     # For all other sections/roles, delete tracks write permission
@@ -494,7 +561,7 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
 
 class MentorOrLeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return get_user_role(self.request.user) in ("LeadMentor", "Mentor")
+        return user_is_mentor_or_lead(self.request.user)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -527,8 +594,18 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         # Ensure all combinations exist
         for role_code, role_name in roles:
             for section_code, section_name in sections:
+                # Orders content is scoped to students/mentors by default, so the
+                # auto-created rows must not inherit the model default (all
+                # roles enabled); a Lead Mentor can flip these in the UI later.
+                defaults = {}
+                if section_code in ORDERS_SECTIONS:
+                    orders_ok = role_code in ("Mentor", "Student")
+                    defaults = {
+                        "can_read": orders_ok,
+                        "can_write": orders_ok,
+                    }
                 RolePermission.objects.get_or_create(
-                    role=role_code, section=section_code
+                    role=role_code, section=section_code, defaults=defaults
                 )
 
         permissions = RolePermission.objects.all()
@@ -536,6 +613,9 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         # Group permissions by section for the new table layout
         grouped_permissions = []
         for section_code, section_name in sections:
+            active_column = ORDERS_SECTIONS.get(section_code)
+            uses_read = active_column is None or active_column == "view"
+            uses_write = active_column is None or active_column != "view"
             grouped_permissions.append(
                 {
                     "name": section_name,
@@ -548,6 +628,9 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     "student": permissions.filter(
                         section=section_code, role="Student"
                     ).first(),
+                    "orders_section": section_code in ORDERS_SECTIONS,
+                    "uses_read": uses_read,
+                    "uses_write": uses_write,
                 }
             )
 

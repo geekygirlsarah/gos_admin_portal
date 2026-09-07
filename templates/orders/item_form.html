@@ -1,61 +1,45 @@
 {% extends "base.html" %}
 {% load form_tags %}
 
-{% block title %}{% if object %}Edit{% else %}New{% endif %} Order - Girls of Steel Portal{% endblock %}
+{% block title %}{% if object %}Edit{% else %}New{% endif %} Item Request - Girls of Steel Portal{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'orders:order_list' program.id %}">Order Requests</a></li>
-            <li class="breadcrumb-item active" aria-current="page">{% if object %}Edit Order #{{ object.pk }}{% else %}New Order{% endif %}</li>
+            <li class="breadcrumb-item active" aria-current="page">{% if object %}Edit Request{% else %}New Request{% endif %}</li>
         </ol>
     </nav>
 
     <div class="row justify-content-center">
-        <div class="col-md-9">
+        <div class="col-md-8 col-lg-6">
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">{% if object %}Edit Order #{{ object.pk }}{% else %}Create a New Order{% endif %}</h4>
+                    <h4 class="mb-0">{% if object %}Edit Item Request{% else %}Request an Item{% endif %}</h4>
                 </div>
                 <div class="card-body">
-                    {% if object %}
-                    <div class="alert alert-info py-2">Status: <strong>{{ object.get_status_display }}</strong>. Items are added and removed from the order detail page.</div>
-                    {% else %}
-                    <div class="alert alert-light py-2">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Group the requested items you want placed together, then choose the vendor you'll order from.
-                    </div>
-                    {% endif %}
                     <form method="post">
                         {% csrf_token %}
-                        {% if form.items %}
-                            {{ form.items.errors }}
-                            <div class="mb-3">
-                                <label class="form-label">{{ form.items.label }}</label>
-                                <div class="list-group">
-                                    {% for checkbox in form.items %}
-                                    <label class="list-group-item d-flex align-items-center gap-3">
-                                        {{ checkbox.tag }}
-                                        <span>{{ checkbox.choice_label }}</span>
-                                    </label>
-                                    {% endfor %}
-                                </div>
-                                {% if form.items.help_text %}<div class="form-text">{{ form.items.help_text }}</div>{% endif %}
-                            </div>
-                        {% endif %}
-                        {% render_field form.program %}
+                        {% render_field form.item_name %}
+                        {% render_field form.quantity %}
+                        {% render_field form.unit_price %}
                         {% render_field form.vendor_choice %}
                         <div class="mb-3 {% if form.vendor_choice.value != not_listed_vendor %}d-none{% endif %}" id="custom-vendor-fields">
                             <h6 class="text-muted">Custom vendor</h6>
                             {% render_field form.vendor_name %}
                             {% render_field form.vendor_url %}
                         </div>
+                        {% render_field form.url %}
                         {% render_field form.notes %}
+                        <div class="alert alert-light py-2 small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            A mentor will group your request into an order. You can edit it until it's been grouped.
+                        </div>
                         <div class="d-flex justify-content-between mt-4">
                             <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-secondary">Cancel</a>
                             <button type="submit" class="btn btn-primary">
-                                {% if object %}Save Changes{% else %}Create Order{% endif %}
+                                {% if object %}Save Changes{% else %}Submit Request{% endif %}
                             </button>
                         </div>
                     </form>

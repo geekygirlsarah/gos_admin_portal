@@ -74,34 +74,34 @@
                                         <!-- Mentor -->
                                         <td class="text-center">
                                             <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="read_{{ item.mentor.id }}" id="read_{{ item.mentor.id }}" {% if item.mentor.can_read %}checked{% endif %}>
+                                                <input class="form-check-input" type="checkbox" name="read_{{ item.mentor.id }}" id="read_{{ item.mentor.id }}" {% if item.uses_read and item.mentor.can_read %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %}>
                                             </div>
                                         </td>
                                         <td class="text-center">
                                             <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="write_{{ item.mentor.id }}" id="write_{{ item.mentor.id }}" {% if item.mentor.can_write %}checked{% endif %}>
+                                                <input class="form-check-input" type="checkbox" name="write_{{ item.mentor.id }}" id="write_{{ item.mentor.id }}" {% if item.uses_write and item.mentor.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %}>
                                             </div>
                                         </td>
                                         <!-- Parent -->
                                         <td class="text-center">
                                             <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="read_{{ item.parent.id }}" id="read_{{ item.parent.id }}" {% if item.parent.can_read %}checked{% endif %}>
+                                                <input class="form-check-input" type="checkbox" name="read_{{ item.parent.id }}" id="read_{{ item.parent.id }}" {% if not item.orders_section and item.parent.can_read %}checked{% endif %} {% if item.orders_section %}disabled{% endif %}>
                                             </div>
                                         </td>
                                         <td class="text-center">
                                             <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="write_{{ item.parent.id }}" id="write_{{ item.parent.id }}" {% if item.parent.can_write %}checked{% endif %}>
+                                                <input class="form-check-input" type="checkbox" name="write_{{ item.parent.id }}" id="write_{{ item.parent.id }}" {% if not item.orders_section and item.parent.can_write %}checked{% endif %} {% if item.orders_section %}disabled{% endif %}>
                                             </div>
                                         </td>
                                         <!-- Student -->
                                         <td class="text-center">
                                             <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="read_{{ item.student.id }}" id="read_{{ item.student.id }}" {% if item.student.can_read %}checked{% endif %}>
+                                                <input class="form-check-input" type="checkbox" name="read_{{ item.student.id }}" id="read_{{ item.student.id }}" {% if item.uses_read and item.student.can_read %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %}>
                                             </div>
                                         </td>
                                         <td class="text-center">
                                             <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="write_{{ item.student.id }}" id="write_{{ item.student.id }}" {% if item.student.can_write %}checked{% endif %}>
+                                                <input class="form-check-input" type="checkbox" name="write_{{ item.student.id }}" id="write_{{ item.student.id }}" {% if item.uses_write and item.student.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %}>
                                             </div>
                                         </td>
                                     </tr>

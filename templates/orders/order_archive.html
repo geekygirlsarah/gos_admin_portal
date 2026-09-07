@@ -9,6 +9,9 @@
         <h1>{{ page_title }}</h1>
         <div class="d-flex gap-2">
             {% if is_lead %}
+            <a href="{% url 'orders:vendor_list' program.id %}" class="btn btn-outline-primary">
+                <i class="bi bi-shop me-1"></i>Vendors
+            </a>
             <a href="{% url 'orders:order_archive' program.id %}?export=csv" class="btn btn-outline-secondary">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
             </a>
@@ -17,16 +20,18 @@
             </a>
             {% endif %}
             <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
-                <i class="bi bi-list-check me-1"></i>Pending Orders
+                <i class="bi bi-list-check me-1"></i>Active Orders
             </a>
+            {% if is_staff %}
             <a href="{% url 'orders:order_create' program.id %}" class="btn btn-primary">
-                <i class="bi bi-plus-lg me-1"></i>Place Order
+                <i class="bi bi-cart me-1"></i>Place Order
             </a>
+            {% endif %}
         </div>
     </div>
 
     <p class="text-muted">
-        Items that have been marked as ordered, kept on record for budget and finance purposes.
+        Orders that have been received, kept on record for budget and finance purposes.
     </p>
 
     {% if order_groups %}
@@ -39,7 +44,7 @@
                     {% else %}
                         General Orders
                     {% endif %}
-                    <span class="badge bg-secondary ms-2">{{ group.orders|length }}</span>
+                    <span class="badge bg-secondary ms-2">{{ group.items|length }}</span>
                 </h2>
                 {% if group.total is not None %}
                 <span class="text-muted small">Total spent: <strong>${{ group.total|floatformat:2 }}</strong></span>
@@ -49,32 +54,50 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Item</th>
-                            <th class="text-end">Qty</th>
-                            <th class="text-end">Unit Price</th>
+                            <th>Order</th>
+                            <th>Status</th>
+                            <th>Items</th>
+                            <th>Vendor</th>
                             <th class="text-end">Total</th>
-                            <th>Requested By</th>
+                            <th>Ordered By</th>
                             <th>Ordered On</th>
-                            <th>Notes</th>
+                            <th>Tracking</th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for order in group.orders %}
+                        {% for order in group.items %}
                         <tr>
+                            <td class="text-nowrap">
+                                <a href="{% url 'orders:order_detail' program.id order.pk %}"><strong>Order #{{ order.pk }}</strong></a>
+                            </td>
                             <td>
-                                {% if order.url %}
-                                <a href="{{ order.url }}" target="_blank" rel="noopener noreferrer">{{ order.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                <span class="badge bg-dark">Received</span>
+                            </td>
+                            <td>
+                                {% for it in order.items.all %}
+                                {{ it.item_name }}{% if it.quantity_normalized != "1" %} (x{{ it.quantity_normalized }}){% endif %}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td class="text-nowrap">
+                                {% if order.vendor_url %}
+                                <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                {% elif order.vendor_name %}
+                                {{ order.vendor_name }}
                                 {% else %}
-                                {{ order.item_name }}
+                                <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">{{ order.quantity|floatformat:"-2" }}</td>
-                            <td class="text-end">{% if order.unit_price %}${{ order.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
                             <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-                            <td>{{ order.requested_by_name }}</td>
+                            <td>{{ order.ordered_by_name|default:"—" }}</td>
                             <td>{{ order.ordered_at|date:"M j, Y" }}</td>
-                            <td class="text-muted small">{{ order.notes|truncatechars:60 }}</td>
+                            <td>
+                                {% if order.tracking_number %}
+                                {% if order.shipping_carrier %}{{ order.shipping_carrier }} {% endif %}<strong>{{ order.tracking_number }}</strong>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
                             <td class="text-end text-nowrap">
                                 {% if is_lead %}
                                 <form method="post" action="{% url 'orders:order_mark_pending' program.id order.pk %}" class="d-inline">
@@ -100,7 +123,7 @@
         {% endfor %}
     {% else %}
         <div class="alert alert-light text-center border">
-            <i class="bi bi-archive me-2"></i>Nothing ordered yet. Mark pending requests as ordered and they'll show up here.
+            <i class="bi bi-archive me-2"></i>Nothing received yet. Mark a shipped order as received and it'll show up here.
         </div>
     {% endif %}
 </div>

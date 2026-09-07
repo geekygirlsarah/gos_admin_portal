@@ -1119,6 +1119,41 @@ class PortalPermissionsUpdateTests(TestCase):
         perm.refresh_from_db()
         self.assertFalse(perm.can_read)
 
+    def test_orders_rows_default_off_for_parents_and_alumni(self):
+        self.client.login(username="lead_mentor_user", password=self.password)
+        self.client.get(reverse("portal_settings"))
+
+        sections = ["orders-view", "orders-request", "orders-manage", "orders-shipping"]
+        for section in sections:
+            for role in ("Mentor", "Student"):
+                perm = RolePermission.objects.get(role=role, section=section)
+                self.assertTrue(perm.can_read)
+                self.assertTrue(perm.can_write)
+
+            for role in ("Parent", "Alumni"):
+                perm = RolePermission.objects.get(role=role, section=section)
+                self.assertFalse(perm.can_read)
+                self.assertFalse(perm.can_write)
+
+    def test_orders_parent_toggles_are_disabled_on_settings_page(self):
+        self.client.login(username="lead_mentor_user", password=self.password)
+        response = self.client.get(reverse("portal_settings"))
+        self.assertContains(response, "Orders - See requested orders")
+
+        # Parents/alumni toggles are disabled for every granular orders section.
+        for section in (
+            "orders-view",
+            "orders-request",
+            "orders-manage",
+            "orders-shipping",
+        ):
+            parent = RolePermission.objects.get(role="Parent", section=section)
+            for field in ("read", "write"):
+                self.assertContains(
+                    response,
+                    f'name="{field}_{parent.id}" id="{field}_{parent.id}"  disabled',
+                )
+
 
 class GetUserRoleTests(TestCase):
     def test_superuser_is_lead_mentor(self):

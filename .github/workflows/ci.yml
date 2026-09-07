@@ -124,7 +124,10 @@ jobs:
     - name: Django System Check
       run: |
         python manage.py check
-#    - name: Run Tests with Coverage
+    - name: Migration Check
+      run: python manage.py makemigrations --check --dry-run
+
+      #    - name: Run Tests with Coverage
 #      run: |
 #        coverage run manage.py test --noinput --parallel
 #        coverage combine

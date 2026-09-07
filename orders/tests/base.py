@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group, User
 
-from orders.models import PurchaseOrder
+from orders.models import Order, OrderItem
 from programs.models import (
     Adult,
     Enrollment,
@@ -65,7 +65,7 @@ def make_parent_user(username="parent", password="password123"):  # nosec B107
     return user
 
 
-def make_order(program, item_name="Hex Driver", created_by=None, status=None, **kwargs):
+def make_item(program, item_name="Hex Driver", requested_by=None, order=None, **kwargs):
     data = {
         "program": program,
         "item_name": item_name,
@@ -75,9 +75,19 @@ def make_order(program, item_name="Hex Driver", created_by=None, status=None, **
         "notes": "test note",
     }
     data.update(kwargs)
+    if requested_by is not None:
+        data["requested_by"] = requested_by
+    if order is not None:
+        data["order"] = order
+    return OrderItem.objects.create(**data)
+
+
+def make_order(program, created_by=None, status=None, **kwargs):
+    data = {"program": program}
     if created_by is not None:
         data["created_by"] = created_by
-    order = PurchaseOrder.objects.create(**data)
+    data.update(kwargs)
+    order = Order.objects.create(**data)
     if status:
         order.status = status
         order.save(update_fields=["status"])

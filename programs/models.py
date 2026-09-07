@@ -26,6 +26,32 @@ from .validators import validate_phone_number, validate_zip_code
 logger = logging.getLogger(__name__)
 
 
+def sync_linked_user(profile, login_enabled):
+    """Copy a profile's display name and login-active state onto its linked
+    User account (if any).
+
+    Shared by ``Student.save`` and ``Adult.save``. Returns True if the linked
+    User was updated.
+    """
+    user = profile.user
+    if not user:
+        return False
+    target_first = profile.preferred_first_name or profile.legal_first_name
+    changed = False
+    if user.first_name != target_first:
+        user.first_name = target_first
+        changed = True
+    if user.last_name != profile.last_name:
+        user.last_name = profile.last_name
+        changed = True
+    if user.is_active != login_enabled:
+        user.is_active = login_enabled
+        changed = True
+    if changed:
+        user.save()
+    return changed
+
+
 def get_fernet():
     key = getattr(settings, "FILE_ENCRYPTION_KEY", None)
     if not key:
@@ -270,6 +296,10 @@ class RolePermission(models.Model):
         ("team_assignments", "Programs - Team Assignments"),
         ("badge_award", "Badges - Award"),
         ("badge_manage", "Badges - Create / Manage"),
+        ("orders-view", "Orders - See requested orders"),
+        ("orders-request", "Orders - Place item request"),
+        ("orders-manage", "Orders - Place new orders"),
+        ("orders-shipping", "Orders - Add shipping"),
     ]
     ROLE_CHOICES = [
         ("Mentor", "Mentor"),
@@ -1039,22 +1069,8 @@ class Student(models.Model):
         # before the Student had a PK, then persist the pointers.
         self._resolve_deferred_contacts()
 
-        # Sync Student name to User account if linked
-        if self.user:
-            target_first = self.preferred_first_name or self.legal_first_name
-            changed = False
-            if self.user.first_name != target_first:
-                self.user.first_name = target_first
-                changed = True
-            if self.user.last_name != self.last_name:
-                self.user.last_name = self.last_name
-                changed = True
-            target_active = not self.graduated
-            if self.user.is_active != target_active:
-                self.user.is_active = target_active
-                changed = True
-            if changed:
-                self.user.save()
+        # Sync Student name + login-active state to the linked User account.
+        sync_linked_user(self, login_enabled=not self.graduated)
 
     def eighteenth_birthday(self):
         """Return the date this student turns 18, or None if DOB unknown."""
@@ -1471,24 +1487,13 @@ class Adult(models.Model):
         normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)
 
-        # Sync Adult name to User account if linked
-        if self.user:
-            # Prefer preferred_first_name if set
-            target_first = self.preferred_first_name or self.legal_first_name
-            changed = False
-            if self.user.first_name != target_first:
-                self.user.first_name = target_first
-                changed = True
-            if self.user.last_name != self.last_name:
-                self.user.last_name = self.last_name
-                changed = True
-            # Login is enabled if they have login_enabled OR if they have other active roles (parent/alumni)
-            target_active = self.login_enabled or self.is_parent or self.is_alumni
-            if self.user.is_active != target_active:
-                self.user.is_active = target_active
-                changed = True
-            if changed:
-                self.user.save()
+        # Sync Adult name + login-active state to the linked User account.
+        # Login stays enabled if they have login_enabled OR another active role
+        # (parent/alumni).
+        sync_linked_user(
+            self,
+            login_enabled=self.login_enabled or self.is_parent or self.is_alumni,
+        )
 
     def has_accepted_current_agreement(self):
         """Whether this adult has accepted all current active MentorAgreements."""

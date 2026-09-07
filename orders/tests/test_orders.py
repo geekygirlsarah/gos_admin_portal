@@ -3,8 +3,9 @@ from decimal import Decimal
 from django.test import TestCase
 from django.urls import reverse
 
-from orders.models import PurchaseOrder
+from orders.models import Order, OrderItem, Vendor
 from orders.tests.base import (
+    make_item,
     make_lead_mentor_user,
     make_mentor_user,
     make_order,
@@ -12,6 +13,7 @@ from orders.tests.base import (
     make_program,
     make_student_user,
 )
+from programs.models import RolePermission
 
 
 class OrderAccessTests(TestCase):
@@ -67,19 +69,19 @@ class OrderAccessTests(TestCase):
         self.assertEqual(resp.url, reverse("home"))
 
 
-class OrderCreateEditTests(TestCase):
+class ItemCreateEditTests(TestCase):
     def setUp(self):
         self.program = make_program()
         self.lead = make_lead_mentor_user()
         self.student = make_student_user(program=self.program)
         self.student2 = make_student_user(username="student2", program=self.program)
         self.list_url = reverse("orders:order_list", args=[self.program.id])
-        self.create_url = reverse("orders:order_create", args=[self.program.id])
+        self.create_url = reverse("orders:item_create", args=[self.program.id])
 
     def login(self, user):
         self.client.force_login(user)
 
-    def test_student_creates_order(self):
+    def test_student_creates_item(self):
         self.login(self.student)
         resp = self.client.post(
             self.create_url,
@@ -92,52 +94,368 @@ class OrderCreateEditTests(TestCase):
             },
         )
         self.assertRedirects(resp, self.list_url)
-        order = PurchaseOrder.objects.get(item_name="Zip Ties")
-        self.assertEqual(order.created_by, self.student)
-        self.assertEqual(order.program, self.program)
-        self.assertEqual(order.status, PurchaseOrder.STATUS_PENDING)
+        item = OrderItem.objects.get(item_name="Zip Ties")
+        self.assertEqual(item.requested_by, self.student)
+        self.assertEqual(item.program, self.program)
+        self.assertIsNone(item.order_id)
 
-    def test_student_can_edit_own_pending_order(self):
-        order = make_order(self.program, created_by=self.student)
+    def test_student_can_edit_own_unassigned_item(self):
+        item = make_item(self.program, requested_by=self.student)
         self.login(self.student)
-        edit_url = reverse("orders:order_edit", args=[self.program.id, order.id])
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
         resp = self.client.post(edit_url, {"item_name": "Zip Ties v2", "quantity": "1"})
         self.assertRedirects(resp, self.list_url)
-        order.refresh_from_db()
-        self.assertEqual(order.item_name, "Zip Ties v2")
+        item.refresh_from_db()
+        self.assertEqual(item.item_name, "Zip Ties v2")
 
-    def test_student_cannot_edit_someone_elses_order(self):
-        order = make_order(self.program, created_by=self.student)
+    def test_student_cannot_edit_someone_elses_item(self):
+        item = make_item(self.program, requested_by=self.student)
         self.login(self.student2)
-        edit_url = reverse("orders:order_edit", args=[self.program.id, order.id])
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
         resp = self.client.post(edit_url, {"item_name": "Hijacked", "quantity": "1"})
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse("home"))
-        order.refresh_from_db()
-        self.assertEqual(order.item_name, "Hex Driver")
+        item.refresh_from_db()
+        self.assertEqual(item.item_name, "Hex Driver")
 
-    def test_owner_cannot_edit_an_ordered_item(self):
-        order = make_order(
-            self.program,
-            created_by=self.student,
-            status=PurchaseOrder.STATUS_ORDERED,
-        )
+    def test_owner_cannot_edit_item_once_grouped_into_an_order(self):
+        order = make_order(self.program, created_by=self.lead)
+        item = make_item(self.program, requested_by=self.student, order=order)
         self.login(self.student)
-        edit_url = reverse("orders:order_edit", args=[self.program.id, order.id])
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
         resp = self.client.post(edit_url, {"item_name": "Nope", "quantity": "1"})
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse("home"))
-        order.refresh_from_db()
-        self.assertEqual(order.item_name, "Hex Driver")
+        item.refresh_from_db()
+        self.assertEqual(item.item_name, "Hex Driver")
 
-    def test_lead_mentor_can_edit_any_order(self):
-        order = make_order(self.program, created_by=self.student)
+    def test_lead_can_edit_any_item(self):
+        item = make_item(self.program, requested_by=self.student)
         self.login(self.lead)
-        edit_url = reverse("orders:order_edit", args=[self.program.id, order.id])
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
         resp = self.client.post(edit_url, {"item_name": "Lead edited", "quantity": "3"})
         self.assertRedirects(resp, self.list_url)
+        item.refresh_from_db()
+        self.assertEqual(item.item_name, "Lead edited")
+
+    def test_student_can_attach_vendor_from_list(self):
+        vendor = Vendor.objects.create(name="Vendor A")
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {
+                "item_name": "Zip Ties",
+                "quantity": "10",
+                "vendor_choice": str(vendor.pk),
+            },
+        )
+        self.assertRedirects(resp, self.list_url)
+        item = OrderItem.objects.get(item_name="Zip Ties")
+        self.assertEqual(item.vendor, vendor)
+        self.assertEqual(item.vendor_name, "Vendor A")
+
+    def test_student_can_attach_not_listed_vendor(self):
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {
+                "item_name": "Servo",
+                "quantity": "2",
+                "vendor_choice": "__not_listed__",
+                "vendor_name": "RobotZone",
+                "vendor_url": "https://robotzone.example.com",
+            },
+        )
+        self.assertRedirects(resp, self.list_url)
+        item = OrderItem.objects.get(item_name="Servo")
+        self.assertIsNone(item.vendor_id)
+        self.assertEqual(item.vendor_name, "RobotZone")
+        self.assertEqual(item.vendor_url, "https://robotzone.example.com")
+
+    def test_item_without_vendor_is_blank(self):
+        self.login(self.student)
+        resp = self.client.post(self.create_url, {"item_name": "Bolt", "quantity": "4"})
+        self.assertRedirects(resp, self.list_url)
+        item = OrderItem.objects.get(item_name="Bolt")
+        self.assertIsNone(item.vendor_id)
+        self.assertEqual(item.vendor_name, "")
+
+    def test_editing_item_updates_vendor(self):
+        vendor = Vendor.objects.create(name="Vendor B")
+        item = make_item(self.program, requested_by=self.student)
+        self.login(self.student)
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
+        resp = self.client.post(
+            edit_url,
+            {
+                "item_name": item.item_name,
+                "quantity": "2",
+                "vendor_choice": str(vendor.pk),
+            },
+        )
+        self.assertRedirects(resp, self.list_url)
+        item.refresh_from_db()
+        self.assertEqual(item.vendor, vendor)
+        self.assertEqual(item.vendor_name, "Vendor B")
+
+    def test_clearing_vendor_on_edit_blanks_snapshot(self):
+        vendor = Vendor.objects.create(name="Vendor C")
+        item = make_item(self.program, requested_by=self.student)
+        item.vendor = vendor
+        item.vendor_name = "Vendor C"
+        item.save(update_fields=["vendor", "vendor_name"])
+        self.login(self.student)
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
+        resp = self.client.post(
+            edit_url,
+            {"item_name": item.item_name, "quantity": "2", "vendor_choice": ""},
+        )
+        self.assertRedirects(resp, self.list_url)
+        item.refresh_from_db()
+        self.assertIsNone(item.vendor_id)
+        self.assertEqual(item.vendor_name, "")
+
+    def test_list_shows_pool_item_vendor(self):
+        vendor = Vendor.objects.create(name="Visible Vendor")
+        make_item(self.program, requested_by=self.student, vendor=vendor)
+        self.login(self.student)
+        resp = self.client.get(self.list_url)
+        self.assertContains(resp, "Visible Vendor")
+
+
+class OrderGroupingTests(TestCase):
+    def setUp(self):
+        self.program = make_program()
+        self.lead = make_lead_mentor_user()
+        self.student = make_student_user(program=self.program)
+        self.mentor = make_mentor_user()
+        self.mentor2 = make_mentor_user(username="mentor2")
+        self.vendor = Vendor.objects.create(name="Test Vendor")
+        self.create_url = reverse("orders:order_create", args=[self.program.id])
+        self.list_url = reverse("orders:order_list", args=[self.program.id])
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def _item_data(self, items, **overrides):
+        data = {
+            "program": str(self.program.pk),
+            "items": [str(i.pk) for i in items],
+            "vendor_choice": str(self.vendor.pk),
+            "notes": "",
+            "item_name": "",
+        }
+        data.update(overrides)
+        return data
+
+    def test_student_cannot_create_order(self):
+        self.login(self.student)
+        resp = self.client.get(self.create_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+    def test_mentor_creates_order_with_items(self):
+        item1 = make_item(self.program, requested_by=self.student)
+        item2 = make_item(self.program, item_name="Zip Ties", requested_by=self.student)
+        self.login(self.mentor)
+        resp = self.client.post(self.create_url, self._item_data([item1, item2]))
+        self.assertEqual(resp.status_code, 302)
+        order = Order.objects.get()
+        self.assertEqual(order.created_by, self.mentor)
+        self.assertEqual(order.program, self.program)
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+        item1.refresh_from_db()
+        item2.refresh_from_db()
+        self.assertEqual(item1.order, order)
+        self.assertEqual(item2.order, order)
+
+    def test_create_order_requires_at_least_one_item(self):
+        self.login(self.mentor)
+        resp = self.client.post(
+            self.create_url,
+            {
+                "program": str(self.program.pk),
+                "items": [],
+                "vendor_choice": "",
+                "notes": "",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Order.objects.exists())
+
+    def test_mentor_cannot_edit_someone_elses_order(self):
+        order = make_order(self.program, created_by=self.mentor)
+        self.login(self.mentor2)
+        edit_url = reverse("orders:order_edit", args=[self.program.id, order.id])
+        resp = self.client.post(edit_url, {"vendor_choice": "", "notes": "hacked"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
         order.refresh_from_db()
-        self.assertEqual(order.item_name, "Lead edited")
+        self.assertEqual(order.notes, "")
+
+    def test_lead_can_edit_any_order(self):
+        order = make_order(self.program, created_by=self.mentor)
+        self.login(self.lead)
+        edit_url = reverse("orders:order_edit", args=[self.program.id, order.id])
+        resp = self.client.post(
+            edit_url,
+            {"vendor_choice": str(self.vendor.pk), "notes": "Lead updated"},
+        )
+        self.assertRedirects(
+            resp, reverse("orders:order_detail", args=[self.program.id, order.id])
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.notes, "Lead updated")
+
+    def test_add_items_to_order(self):
+        order = make_order(self.program, created_by=self.mentor)
+        item = make_item(self.program, requested_by=self.student)
+        self.login(self.mentor)
+
+        add_url = reverse("orders:order_add_items", args=[self.program.id, order.id])
+        resp = self.client.post(add_url, {"items": [str(item.pk)]})
+        self.assertEqual(resp.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.order, order)
+
+    def test_student_cannot_add_items_to_order(self):
+        order = make_order(self.program, created_by=self.mentor)
+        item = make_item(self.program, requested_by=self.student)
+        self.login(self.student)
+        add_url = reverse("orders:order_add_items", args=[self.program.id, order.id])
+        resp = self.client.post(add_url, {"items": [str(item.pk)]})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        item.refresh_from_db()
+        self.assertIsNone(item.order_id)
+
+    def test_remove_item_from_order_moves_back_to_pool(self):
+        order = make_order(self.program, created_by=self.mentor)
+        item = make_item(self.program, requested_by=self.student, order=order)
+        self.login(self.mentor)
+        remove_url = reverse(
+            "orders:order_remove_item",
+            args=[self.program.id, order.id, item.id],
+        )
+        resp = self.client.post(remove_url)
+        self.assertEqual(resp.status_code, 302)
+        item.refresh_from_db()
+        self.assertIsNone(item.order_id)
+
+    def test_student_can_view_order_detail(self):
+        order = make_order(
+            self.program, created_by=self.mentor, vendor_name="Test Vendor"
+        )
+        make_item(
+            self.program,
+            item_name="Hex Driver",
+            requested_by=self.student,
+            order=order,
+        )
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Hex Driver")
+        self.assertContains(resp, "Order Requests")
+
+    def test_student_order_read_blocked_via_role_permission(self):
+        """Lead Mentors can revoke student order read access from Portal Settings."""
+        order = make_order(self.program, created_by=self.mentor)
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="orders-view",
+            defaults={"can_read": False, "can_write": False},
+        )
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+    def test_student_request_write_blocked_via_role_permission(self):
+        """Turning off the Student 'orders-request' write toggle blocks placing requests."""
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="orders-request",
+            defaults={"can_write": False},
+        )
+        self.login(self.student)
+        create_url = reverse("orders:item_create", args=[self.program.id])
+        resp = self.client.get(create_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+    def test_student_can_still_view_when_request_disabled(self):
+        """Read and requ-ests write toggles are independent: a view-only student can
+        still open order details, just not place new requests."""
+        order = make_order(self.program, created_by=self.mentor)
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="orders-request",
+            defaults={"can_write": False},
+        )
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_mentor_create_order_blocked_via_role_permission(self):
+        """The Mentor 'orders-manage' write toggle controls the order workflow."""
+        item = make_item(self.program, requested_by=self.student)
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-manage",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        resp = self.client.post(self.create_url, self._item_data([item]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        self.assertFalse(Order.objects.exists())
+
+    def test_mentor_can_view_order_detail(self):
+        order = make_order(self.program, created_by=self.mentor)
+        make_item(self.program, requested_by=self.student, order=order)
+        self.login(self.mentor)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_requests_list_groups_pool_items_by_vendor(self):
+        make_item(
+            self.program,
+            item_name="Hex Driver",
+            requested_by=self.student,
+            vendor_name="McMaster-Carr",
+        )
+        make_item(
+            self.program,
+            item_name="Zip Ties",
+            requested_by=self.student,
+            vendor_name="Amazon",
+        )
+        make_item(
+            self.program,
+            item_name="Aluminum",
+            requested_by=self.student,
+            vendor_name="",
+        )
+        self.login(self.mentor)
+        resp = self.client.get(self.list_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "McMaster-Carr")
+        self.assertContains(resp, "Amazon")
+        self.assertContains(resp, "No vendor specified")
+        self.assertNotContains(resp, "General Orders")
+
+    def test_orders_ready_list_groups_pending_orders_by_vendor(self):
+        make_order(self.program, created_by=self.mentor, vendor_name="McMaster-Carr")
+        make_order(self.program, created_by=self.mentor, vendor_name="Amazon")
+        self.login(self.mentor)
+        resp = self.client.get(self.list_url)
+        self.assertContains(resp, "McMaster-Carr")
+        self.assertContains(resp, "Amazon")
 
 
 class OrderDeleteTests(TestCase):
@@ -156,25 +474,36 @@ class OrderDeleteTests(TestCase):
         delete_url = reverse("orders:order_delete", args=[self.program.id, order.id])
         resp = self.client.get(delete_url)
         self.assertIn(resp.status_code, (302,))
-        self.assertTrue(PurchaseOrder.objects.filter(pk=order.pk).exists())
+        self.assertTrue(Order.objects.filter(pk=order.pk).exists())
 
-    def test_student_cannot_delete(self):
-        order = make_order(self.program, created_by=self.student)
-        self.login(self.student)
+    def test_deleting_order_returns_items_to_pool(self):
+        order = make_order(self.program, created_by=self.lead)
+        item = make_item(self.program, requested_by=self.student, order=order)
+        self.login(self.lead)
         delete_url = reverse("orders:order_delete", args=[self.program.id, order.id])
         resp = self.client.post(delete_url)
         self.assertRedirects(resp, self.list_url)
-        self.assertTrue(PurchaseOrder.objects.filter(pk=order.pk).exists())
+        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
+        item.refresh_from_db()
+        self.assertIsNone(item.order_id)
 
-    def test_lead_mentor_can_delete(self):
-        order = make_order(self.program, created_by=self.student)
+    def test_delete_item_requires_lead(self):
+        item = make_item(self.program, requested_by=self.student)
+        self.login(self.student)
+        delete_url = reverse("orders:item_delete", args=[self.program.id, item.id])
+        resp = self.client.post(delete_url)
+        self.assertRedirects(resp, self.list_url)
+        self.assertTrue(OrderItem.objects.filter(pk=item.pk).exists())
+
+    def test_lead_can_delete_item(self):
+        item = make_item(self.program, requested_by=self.student)
         self.login(self.lead)
-        delete_url = reverse("orders:order_delete", args=[self.program.id, order.id])
+        delete_url = reverse("orders:item_delete", args=[self.program.id, item.id])
         resp = self.client.get(delete_url)
         self.assertEqual(resp.status_code, 200)
         resp = self.client.post(delete_url)
         self.assertRedirects(resp, self.list_url)
-        self.assertFalse(PurchaseOrder.objects.filter(pk=order.pk).exists())
+        self.assertFalse(OrderItem.objects.filter(pk=item.pk).exists())
 
 
 class OrderStatusTests(TestCase):
@@ -182,6 +511,7 @@ class OrderStatusTests(TestCase):
         self.program = make_program()
         self.lead = make_lead_mentor_user()
         self.student = make_student_user(program=self.program)
+        self.mentor = make_mentor_user()
         self.list_url = reverse("orders:order_list", args=[self.program.id])
         self.archive_url = reverse("orders:order_archive", args=[self.program.id])
 
@@ -189,16 +519,16 @@ class OrderStatusTests(TestCase):
         self.client.force_login(user)
 
     def test_lead_marks_ordered_and_reopens(self):
-        order = make_order(self.program, created_by=self.student)
+        order = make_order(self.program, created_by=self.mentor)
         self.login(self.lead)
 
         mark_url = reverse(
             "orders:order_mark_ordered", args=[self.program.id, order.id]
         )
         resp = self.client.post(mark_url)
-        self.assertRedirects(resp, self.list_url)
+        self.assertEqual(resp.status_code, 302)
         order.refresh_from_db()
-        self.assertEqual(order.status, PurchaseOrder.STATUS_ORDERED)
+        self.assertEqual(order.status, Order.STATUS_ORDERED)
         self.assertIsNotNone(order.ordered_at)
         self.assertEqual(order.ordered_by, self.lead)
 
@@ -206,13 +536,13 @@ class OrderStatusTests(TestCase):
             "orders:order_mark_pending", args=[self.program.id, order.id]
         )
         resp = self.client.post(reopen_url)
-        self.assertRedirects(resp, self.archive_url)
+        self.assertEqual(resp.status_code, 302)
         order.refresh_from_db()
-        self.assertEqual(order.status, PurchaseOrder.STATUS_PENDING)
+        self.assertEqual(order.status, Order.STATUS_PENDING)
         self.assertIsNone(order.ordered_at)
 
     def test_student_cannot_mark_ordered(self):
-        order = make_order(self.program, created_by=self.student)
+        order = make_order(self.program, created_by=self.mentor)
         self.login(self.student)
         mark_url = reverse(
             "orders:order_mark_ordered", args=[self.program.id, order.id]
@@ -221,38 +551,298 @@ class OrderStatusTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse("home"))
         order.refresh_from_db()
-        self.assertEqual(order.status, PurchaseOrder.STATUS_PENDING)
+        self.assertEqual(order.status, Order.STATUS_PENDING)
 
-    def test_archive_lists_only_ordered(self):
-        pending = make_order(
-            self.program, item_name="Pending Item", created_by=self.student
-        )
-        ordered = make_order(
+    def test_archive_lists_only_received_orders(self):
+        pending = make_order(self.program, created_by=self.mentor)
+        make_item(
             self.program,
-            item_name="Ordered Item",
-            created_by=self.student,
-            status=PurchaseOrder.STATUS_ORDERED,
+            item_name="Pending Item",
+            requested_by=self.student,
+            order=pending,
         )
+        received = make_order(self.program, created_by=self.mentor)
+        make_item(
+            self.program,
+            item_name="Received Item",
+            requested_by=self.student,
+            order=received,
+        )
+        received.status = Order.STATUS_RECEIVED
+        received.save(update_fields=["status"])
         self.login(self.lead)
         resp = self.client.get(self.archive_url)
-        self.assertContains(resp, "Ordered Item")
+        self.assertContains(resp, "Received Item")
         self.assertNotContains(resp, "Pending Item")
-        pending.refresh_from_db()
-        ordered.refresh_from_db()
-        self.assertEqual(pending.status, PurchaseOrder.STATUS_PENDING)
 
-    def test_list_shows_only_pending(self):
-        make_order(self.program, item_name="Pending Item", created_by=self.student)
-        make_order(
+    def test_list_shows_pool_items_and_active_orders_only(self):
+        make_item(self.program, item_name="Pool Item", requested_by=self.student)
+        pending = make_order(self.program, created_by=self.mentor)
+        make_item(
+            self.program,
+            item_name="Pending Grouped Item",
+            requested_by=self.student,
+            order=pending,
+        )
+        ordered = make_order(self.program, created_by=self.mentor)
+        make_item(
             self.program,
             item_name="Ordered Item",
-            created_by=self.student,
-            status=PurchaseOrder.STATUS_ORDERED,
+            requested_by=self.student,
+            order=ordered,
         )
+        ordered.status = Order.STATUS_ORDERED
+        ordered.save(update_fields=["status"])
+        received = make_order(self.program, created_by=self.mentor)
+        make_item(
+            self.program,
+            item_name="Received Item",
+            requested_by=self.student,
+            order=received,
+        )
+        received.status = Order.STATUS_RECEIVED
+        received.save(update_fields=["status"])
         self.login(self.student)
         resp = self.client.get(self.list_url)
-        self.assertContains(resp, "Pending Item")
-        self.assertNotContains(resp, "Ordered Item")
+        self.assertContains(resp, "Pool Item")
+        self.assertContains(resp, "Pending Grouped Item")
+        self.assertContains(resp, "Ordered Item")
+        self.assertNotContains(resp, "Received Item")
+
+
+class OrderStatusAndShippingTests(TestCase):
+    """Item/order status labels plus shipping/tracking on archived orders."""
+
+    def setUp(self):
+        self.program = make_program()
+        self.lead = make_lead_mentor_user()
+        self.mentor = make_mentor_user()
+        self.mentor2 = make_mentor_user(username="mentor2")
+        self.student = make_student_user(program=self.program)
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def test_item_status_is_derived_from_membership(self):
+        pool_item = make_item(self.program, requested_by=self.student)
+        order = make_order(self.program, created_by=self.mentor)
+        grouped = make_item(
+            self.program, item_name="Grouped", requested_by=self.student, order=order
+        )
+        self.assertEqual(pool_item.status_key, "pending")
+        self.assertEqual(pool_item.get_status_display(), "Pending")
+        self.assertEqual(grouped.status_key, "ready")
+        self.assertEqual(grouped.get_status_display(), "Ready to order")
+
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.assertEqual(grouped.status_key, "ordered")
+        self.assertEqual(grouped.get_status_display(), "Ordered")
+
+        order.status = Order.STATUS_SHIPPED
+        order.save(update_fields=["status"])
+        self.assertEqual(grouped.status_key, "shipped")
+        self.assertEqual(grouped.get_status_display(), "Shipped")
+
+    def test_lead_marks_shipped_and_undoes(self):
+        order = make_order(self.program, created_by=self.mentor)
+        self.login(self.lead)
+
+        ship_url = reverse(
+            "orders:order_mark_shipped", args=[self.program.id, order.id]
+        )
+        self.client.post(ship_url)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.client.post(ship_url)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_SHIPPED)
+
+        mark_url = reverse(
+            "orders:order_mark_ordered", args=[self.program.id, order.id]
+        )
+        self.client.post(mark_url)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_ORDERED)
+
+    def test_student_cannot_mark_shipped(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.student)
+        ship_url = reverse(
+            "orders:order_mark_shipped", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(ship_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_ORDERED)
+
+    def test_lead_updates_shipping_info(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.lead)
+        shipping_url = reverse(
+            "orders:order_update_shipping", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(
+            shipping_url,
+            {
+                "shipping_carrier": "UPS",
+                "tracking_number": "1Z999AA10123456784",
+                "shipped_date": "2026-09-01",
+                "delivery_estimate": "2026-09-08",
+            },
+        )
+        self.assertRedirects(
+            resp,
+            reverse("orders:order_detail", args=[self.program.id, order.id]),
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, "UPS")
+        self.assertEqual(order.tracking_number, "1Z999AA10123456784")
+        self.assertEqual(order.shipped_date.isoformat(), "2026-09-01")
+        self.assertEqual(order.delivery_estimate.isoformat(), "2026-09-08")
+
+    def test_mentor_with_shipping_toggle_can_edit_any_placed_order_shipping(self):
+        """'orders-shipping' is a role-level capability, not owner-scoped: any
+        mentor with the toggle can record tracking on a placed order."""
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.mentor2)
+        shipping_url = reverse(
+            "orders:order_update_shipping", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(
+            resp.url, reverse("orders:order_detail", args=[self.program.id, order.id])
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, "FedEx")
+
+    def test_archive_includes_only_received_orders_with_status(self):
+        received = make_order(self.program, created_by=self.mentor)
+        received.status = Order.STATUS_RECEIVED
+        received.save(update_fields=["status"])
+        shipped = make_order(self.program, created_by=self.mentor)
+        shipped.status = Order.STATUS_SHIPPED
+        shipped.save(update_fields=["status"])
+        self.login(self.lead)
+        resp = self.client.get(reverse("orders:order_archive", args=[self.program.id]))
+        self.assertContains(resp, "Received")
+        self.assertNotContains(resp, "Shipped")
+
+    def test_detail_shows_status_and_mark_shipped_button(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.lead)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertContains(resp, "Mark as Shipped")
+        self.assertContains(resp, "Ordered")
+
+    def test_lead_sees_shipping_edit_form(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.lead)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertContains(
+            resp,
+            reverse("orders:order_update_shipping", args=[self.program.id, order.id]),
+        )
+
+    def test_student_sees_shipping_details_without_edit_form(self):
+        """Students can read shipping/tracking but never see the edit form."""
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_SHIPPED
+        order.shipping_carrier = "UPS"
+        order.tracking_number = "1Z999AA10123456784"
+        order.save(update_fields=["status", "shipping_carrier", "tracking_number"])
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "UPS")
+        self.assertContains(resp, "1Z999AA10123456784")
+        self.assertNotContains(
+            resp,
+            reverse("orders:order_update_shipping", args=[self.program.id, order.id]),
+        )
+
+    def test_mentor_without_shipping_toggle_cannot_edit_shipping(self):
+        """A mentor without the 'orders-shipping' write toggle can read the
+        order but cannot save shipping details."""
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-shipping",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        # Still readable (view permission on).
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(
+            resp,
+            reverse("orders:order_update_shipping", args=[self.program.id, order.id]),
+        )
+        shipping_url = reverse(
+            "orders:order_update_shipping", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, "")
+
+    def test_mentor_with_manage_but_no_shipping_can_manage_items(self):
+        """The 'orders-manage' and 'orders-shipping' toggles are independent:
+        a mentor can still edit order items when only shipping is revoked."""
+        order = make_order(self.program, created_by=self.mentor)
+        item = make_item(self.program, requested_by=self.student)
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-shipping",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        add_url = reverse("orders:order_add_items", args=[self.program.id, order.id])
+        resp = self.client.post(add_url, {"items": [str(item.pk)]})
+        self.assertEqual(resp.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.order, order)
+
+    def test_mentor_without_manage_cannot_place_order(self):
+        """The 'orders-manage' write toggle is independent: revoking it blocks
+        creating new orders but not placing item requests."""
+        make_item(self.program, requested_by=self.student)
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-manage",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        create_url = reverse("orders:order_create", args=[self.program.id])
+        resp = self.client.get(create_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+        create_item_url = reverse("orders:item_create", args=[self.program.id])
+        resp = self.client.get(create_item_url)
+        self.assertEqual(resp.status_code, 200)
 
 
 class OrderExportTests(TestCase):
@@ -260,13 +850,14 @@ class OrderExportTests(TestCase):
         self.program = make_program()
         self.lead = make_lead_mentor_user()
         self.student = make_student_user(program=self.program)
+        self.mentor = make_mentor_user()
         self.list_url = reverse("orders:order_list", args=[self.program.id])
 
     def login(self, user):
         self.client.force_login(user)
 
     def test_lead_can_export_csv(self):
-        make_order(self.program, item_name="Helix Gear", created_by=self.student)
+        make_item(self.program, item_name="Helix Gear", requested_by=self.student)
         self.login(self.lead)
         resp = self.client.get(self.list_url, {"export": "csv"})
         self.assertEqual(resp.status_code, 200)
@@ -274,7 +865,7 @@ class OrderExportTests(TestCase):
         self.assertContains(resp, "Helix Gear")
 
     def test_lead_can_export_xlsx(self):
-        make_order(self.program, item_name="Helix Gear", created_by=self.student)
+        make_item(self.program, item_name="Helix Gear", requested_by=self.student)
         self.login(self.lead)
         resp = self.client.get(self.list_url, {"export": "xlsx"})
         self.assertEqual(resp.status_code, 200)
@@ -288,22 +879,56 @@ class OrderExportTests(TestCase):
         resp = self.client.get(self.list_url, {"export": "csv"})
         self.assertRedirects(resp, self.list_url)
 
+    def test_export_uses_item_vendor_when_unassigned(self):
+        vendor = Vendor.objects.create(name="Pool Vendor")
+        make_item(self.program, requested_by=self.student, vendor=vendor)
+        self.login(self.lead)
+        resp = self.client.get(self.list_url, {"export": "csv"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Pool Vendor")
+
 
 class OrderModelTests(TestCase):
-    def test_total_and_normalized_quantity(self):
+    def test_item_total_and_normalized_quantity(self):
         program = make_program()
         student = make_student_user(program=program)
-        order = make_order(
-            program, created_by=student, quantity="2.00", unit_price="5.50"
+        item = make_item(
+            program, requested_by=student, quantity="2.00", unit_price="5.50"
         )
-        self.assertEqual(order.total, Decimal("11.00"))
-        self.assertEqual(str(order.quantity_normalized), "2")
-        self.assertIn("Hex Driver", str(order))
-        self.assertEqual(order.requested_by_name, "Test Student")
+        self.assertEqual(item.total, Decimal("11.00"))
+        self.assertEqual(str(item.quantity_normalized), "2")
+        self.assertIn("Hex Driver", str(item))
+        self.assertEqual(item.requested_by_name, "Test Student")
 
-    def test_total_none_without_price(self):
+    def test_item_total_none_without_price(self):
         program = make_program()
         student = make_student_user(program=program)
-        order = make_order(program, created_by=student, unit_price=None)
+        item = make_item(program, requested_by=student, unit_price=None)
+        self.assertIsNone(item.total)
+        self.assertEqual(item.requested_by_name, "Test Student")
+
+    def test_order_totals_and_item_count(self):
+        program = make_program()
+        student = make_student_user(program=program)
+        order = make_order(program, created_by=student)
+        make_item(
+            program, requested_by=student, order=order, quantity="2", unit_price="5.50"
+        )
+        make_item(
+            program,
+            item_name="Zip Ties",
+            requested_by=student,
+            order=order,
+            quantity="10",
+            unit_price="0.50",
+        )
+        self.assertEqual(order.item_count, 2)
+        self.assertEqual(order.total, Decimal("16.00"))
+
+    def test_order_total_none_without_priced_items(self):
+        program = make_program()
+        student = make_student_user(program=program)
+        order = make_order(program, created_by=student)
+        make_item(program, requested_by=student, order=order, unit_price=None)
+        self.assertEqual(order.item_count, 1)
         self.assertIsNone(order.total)
-        self.assertEqual(order.requested_by_name, "Test Student")

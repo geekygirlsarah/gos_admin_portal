@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block title %}{{ page_title }} - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'orders:order_list' program.id %}">Order Requests</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Order #{{ order.pk }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Order #{{ order.pk }}</h1>
+        <div class="d-flex gap-2">
+            <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
+                <i class="bi bi-list-check me-1"></i>Back to Orders
+            </a>
+            {% if order.status == "pending" and is_lead %}
+            <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check2-circle me-1"></i>Mark as Ordered
+                </button>
+            </form>
+            {% endif %}
+            {% if order.status == "ordered" and is_lead %}
+            <form method="post" action="{% url 'orders:order_mark_shipped' program.id order.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-truck me-1"></i>Mark as Shipped
+                </button>
+            </form>
+            {% endif %}
+            {% if order.status == "shipped" and is_lead %}
+            <form method="post" action="{% url 'orders:order_mark_received' program.id order.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-dark">
+                    <i class="bi bi-box-seam me-1"></i>Mark as Received
+                </button>
+            </form>
+            {% endif %}
+            {% if order.status == "received" and is_lead %}
+            <form method="post" action="{% url 'orders:order_mark_pending' program.id order.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-warning">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Move back to Pending
+                </button>
+            </form>
+            {% endif %}
+            {% if can_manage_items %}
+            <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+            {% endif %}
+            {% if is_lead %}
+            <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-outline-danger">
+                <i class="bi bi-trash me-1"></i>Delete
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <span class="badge {% if order.status == 'ordered' %}bg-success{% elif order.status == 'shipped' %}bg-primary{% elif order.status == 'received' %}bg-dark{% else %}bg-warning text-dark{% endif %}">{{ order.get_status_display }}</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <h6 class="text-muted mb-1">Program</h6>
+                    <span>{{ order.program.name|default:"General (no program)" }}</span>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-muted mb-1">Vendor</h6>
+                    {% if order.vendor_url %}
+                    <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                    {% else %}
+                    <span>{{ order.vendor_name|default:"—" }}</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-muted mb-1">Total</h6>
+                    <strong class="fs-5">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</strong>
+                    <span class="text-muted small">({{ order.item_count }} item{{ order.item_count|pluralize }})</span>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-muted mb-1">Created by</h6>
+                    <span>{{ order.created_by.get_full_name|default:order.created_by.username }}</span>
+                    <span class="text-muted small">· {{ order.created_at|date:"M j, Y" }}</span>
+                </div>
+                {% if order.ordered_at %}
+                <div class="col-md-4">
+                    <h6 class="text-muted mb-1">Ordered by</h6>
+                    <span>{{ order.ordered_by.get_full_name|default:"—" }}</span>
+                    <span class="text-muted small">· {{ order.ordered_at|date:"M j, Y" }}</span>
+                </div>
+                {% endif %}
+                {% if order.notes %}
+                <div class="col-md-8">
+                    <h6 class="text-muted mb-1">Notes</h6>
+                    <span>{{ order.notes }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if order.status == "ordered" or order.status == "shipped" %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0"><i class="bi bi-truck me-1"></i>Shipping</h2>
+            {% if order.status == 'shipped' %}
+            <span class="badge bg-primary">Shipped</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if can_edit_shipping %}
+            <form method="post" action="{% url 'orders:order_update_shipping' program.id order.pk %}">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-3">{% render_field shipping_form.shipping_carrier %}</div>
+                    <div class="col-md-3">{% render_field shipping_form.tracking_number %}</div>
+                    <div class="col-md-2">{% render_field shipping_form.shipped_date %}</div>
+                    <div class="col-md-2">{% render_field shipping_form.delivery_estimate %}</div>
+                    <div class="col-md-2">
+                        <div class="mb-3">
+                            <label class="form-label invisible">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-check2 me-1"></i>Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            {% else %}
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Carrier</dt>
+                <dd class="col-sm-9">{{ order.shipping_carrier|default:"—" }}</dd>
+                <dt class="col-sm-3">Tracking</dt>
+                <dd class="col-sm-9">{{ order.tracking_number|default:"—" }}</dd>
+                <dt class="col-sm-3">Shipped</dt>
+                <dd class="col-sm-9">{{ order.shipped_date|date:"M j, Y"|default:"—" }}</dd>
+                <dt class="col-sm-3">Est. delivery</dt>
+                <dd class="col-sm-9">{{ order.delivery_estimate|date:"M j, Y"|default:"—" }}</dd>
+            </dl>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">Items ({{ order.item_count }})</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th>Status</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit Price</th>
+                        <th class="text-end">Total</th>
+                        <th>Requested By</th>
+                        <th>Notes</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>
+                            {% if item.url %}
+                            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                            {% else %}
+                            {{ item.item_name }}
+                            {% endif %}
+                            {% if item.vendor_name_display %}
+                            <div class="text-muted small">
+                                <i class="bi bi-shop"></i>
+                                {% if item.vendor_url %}<a href="{{ item.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ item.vendor_name_display }}</a>{% else %}{{ item.vendor_name_display }}{% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.status_key == 'ready' %}
+                            <span class="badge bg-info text-dark">{{ item.get_status_display }}</span>
+                            {% elif item.status_key == 'shipped' %}
+                            <span class="badge bg-primary">{{ item.get_status_display }}</span>
+                            {% elif item.status_key == 'received' %}
+                            <span class="badge bg-dark">{{ item.get_status_display }}</span>
+                            {% elif item.status_key == 'ordered' %}
+                            <span class="badge bg-success">{{ item.get_status_display }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ item.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ item.quantity_normalized }}</td>
+                        <td class="text-end">{% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td class="text-end">{% if item.total != None %}${{ item.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td>{{ item.requested_by_name }}</td>
+                        <td class="text-muted small">{{ item.notes|default:"—" }}</td>
+                        <td class="text-end text-nowrap">
+                            {% if can_manage_items %}
+                            <form method="post" action="{% url 'orders:order_remove_item' program.id order.pk item.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Return to requests list">
+                                    <i class="bi bi-box-arrow-up-left"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% if is_lead %}
+                            <a href="{% url 'orders:item_edit' program.id item.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit item">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox me-2"></i>No items in this order yet. Add some below.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if can_manage_items %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h2 class="h5 mb-0">Add Items from the Requests List</h2>
+        </div>
+        <div class="card-body">
+            {% if available_items %}
+            <form method="post" action="{% url 'orders:order_add_items' program.id order.pk %}">
+                {% csrf_token %}
+                <div class="list-group mb-3">
+                    {% for item in available_items %}
+                    <label class="list-group-item d-flex align-items-center gap-3">
+                        <input class="form-check-input mb-0" type="checkbox" name="items" value="{{ item.pk }}">
+                        <div>
+                            <strong>{{ item.item_name }}</strong>
+                            <span class="text-muted small">
+                                · {{ item.quantity_normalized }} × {% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}
+                                · {{ item.requested_by_name }}
+                                {% if item.program %} · {{ item.program.name }}{% endif %}
+                            </span>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i>Add Selected Items
+                </button>
+            </form>
+            {% else %}
+            <p class="text-muted mb-0"><i class="bi bi-inbox me-2"></i>No unassigned requests left — everything is grouped into orders.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

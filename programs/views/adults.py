@@ -36,6 +36,7 @@ from ..utils import (
     active_parents,
     get_safe_url,
     redirect_back,
+    transfer_user_account,
 )
 from .mixins import (
     BackgroundChecksInlineMixin,
@@ -756,17 +757,6 @@ def _merge_parent_role_flags(keep, source):
     return changed
 
 
-def _transfer_parent_user_account(keep, source):
-    """Move ``source``'s linked user account to ``keep`` if it has none."""
-    if keep.user_id or not source.user_id:
-        return False
-    source_user = source.user
-    source.user = None
-    source.save(update_fields=["user"])
-    keep.user = source_user
-    return True
-
-
 class ParentMergeView(LeadMentorRequiredMixin, FormView):
     """Merge two parent/adult records that represent the same person.
 
@@ -800,7 +790,7 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
             _transfer_parent_related_records(keep, source)
             changed = _carry_over_missing_parent_fields(keep, source)
             changed = _merge_parent_role_flags(keep, source) or changed
-            changed = _transfer_parent_user_account(keep, source) or changed
+            changed = transfer_user_account(keep, source) or changed
             if changed:
                 keep.save()
 

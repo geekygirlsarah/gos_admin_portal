@@ -47,7 +47,7 @@ from ..permission_views import (
     PassUserToFormMixin,
     get_user_role,
 )
-from ..utils import get_safe_url, redirect_back
+from ..utils import get_safe_url, redirect_back, transfer_user_account
 from .mixins import (
     BackgroundChecksInlineMixin,
     DynamicPermissionMixin,
@@ -893,20 +893,6 @@ def _carry_over_missing_student_fields(keep, source):
     return changed
 
 
-def _transfer_student_user_account(keep, source):
-    """If ``keep`` has no linked user but ``source`` does, transfer it.
-
-    Returns True if ``keep.user`` was updated.
-    """
-    if keep.user_id or not source.user_id:
-        return False
-    source_user = source.user
-    source.user = None
-    source.save(update_fields=["user"])
-    keep.user = source_user
-    return True
-
-
 class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
     template_name = "students/merge.html"
     form_class = StudentMergeForm
@@ -946,7 +932,7 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
             changed = _transfer_student_relationships(keep, source)
             _transfer_student_related_records(keep, source)
             changed = _carry_over_missing_student_fields(keep, source) or changed
-            changed = _transfer_student_user_account(keep, source) or changed
+            changed = transfer_user_account(keep, source) or changed
             if changed:
                 keep.save()
 
