@@ -40,9 +40,19 @@ urlpatterns = [
         name="order_mark_ordered",
     ),
     path(
+        "<int:pk>/mark-shipped/",
+        views.OrderMarkShippedView.as_view(),
+        name="order_mark_shipped",
+    ),
+    path(
         "<int:pk>/mark-pending/",
         views.OrderMarkPendingView.as_view(),
         name="order_mark_pending",
+    ),
+    path(
+        "<int:pk>/shipping/",
+        views.OrderShippingUpdateView.as_view(),
+        name="order_update_shipping",
     ),
     path(
         "<int:pk>/add-items/",

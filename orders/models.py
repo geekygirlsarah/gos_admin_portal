@@ -43,9 +43,11 @@ class Order(models.Model):
 
     STATUS_PENDING = "pending"
     STATUS_ORDERED = "ordered"
+    STATUS_SHIPPED = "shipped"
     STATUS_CHOICES = [
-        (STATUS_PENDING, "Pending"),
+        (STATUS_PENDING, "Ready to place order"),
         (STATUS_ORDERED, "Ordered"),
+        (STATUS_SHIPPED, "Shipped"),
     ]
 
     program = models.ForeignKey(
@@ -106,6 +108,29 @@ class Order(models.Model):
         blank=True,
         related_name="orders_marked_ordered",
         verbose_name="Marked ordered by",
+    )
+    shipping_carrier = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Shipping company",
+        help_text="Carrier used to ship this order (e.g. UPS, FedEx, USPS).",
+    )
+    tracking_number = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Tracking number",
+    )
+    shipped_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Shipped on",
+        help_text="Date the order left the vendor.",
+    )
+    delivery_estimate = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Estimated delivery",
+        help_text="Expected delivery date from the carrier.",
     )
 
     class Meta:
@@ -223,6 +248,29 @@ class OrderItem(models.Model):
     def requested_by_name(self):
         """Display name of the person who requested this item."""
         return user_display_name(self.requested_by)
+
+    @property
+    def status_key(self):
+        """Machine-readable status derived from the item's order membership:
+        ``"pending"`` (unassigned pool), ``"ready"`` (in an order ready to be
+        placed), ``"ordered"`` or ``"shipped"`` (from the parent order)."""
+        if self.order_id is None:
+            return "pending"
+        if self.order.status == Order.STATUS_PENDING:
+            return "ready"
+        if self.order.status == Order.STATUS_SHIPPED:
+            return "shipped"
+        return "ordered"
+
+    def get_status_display(self):
+        """Human label for :attr:`status_key` (no real ``status`` field exists,
+        so this name doesn't collide with Django's field-based method)."""
+        return {
+            "pending": "Pending",
+            "ready": "Ready to order",
+            "ordered": "Ordered",
+            "shipped": "Shipped",
+        }[self.status_key]
 
 
 def user_display_name(user):

@@ -144,6 +144,34 @@ class OrderForm(forms.ModelForm):
         return order
 
 
+class ShippingInfoForm(forms.ModelForm):
+    """Shipping/tracking details for a placed order.
+
+    Filled in once an order is marked ordered/shipped so the team can follow
+    packages. Wrapped in its own form so the vendor/program editing surface
+    stays focused.
+    """
+
+    class Meta:
+        model = Order
+        fields = [
+            "shipping_carrier",
+            "tracking_number",
+            "shipped_date",
+            "delivery_estimate",
+        ]
+        widgets = {
+            "shipping_carrier": forms.TextInput(
+                attrs={"placeholder": "e.g. UPS, FedEx, USPS"}
+            ),
+            "tracking_number": forms.TextInput(
+                attrs={"placeholder": "Tracking number"}
+            ),
+            "shipped_date": forms.DateInput(attrs={"type": "date"}),
+            "delivery_estimate": forms.DateInput(attrs={"type": "date"}),
+        }
+
+
 class VendorForm(forms.ModelForm):
     class Meta:
         model = Vendor

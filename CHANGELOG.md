@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-09-07
 
+### Added
+- **Order requests and orders now track status and shipping**: Each requested item shows a status as it moves along — **Pending** while it's a new request in the Requests list, **Ready to order** once it's been grouped into an order waiting to be placed, and **Ordered**/**Shipped** once that order has gone out the door. Orders themselves now have a three-stage status (**Ready to Place** → **Ordered** → **Shipped**), and once an order is placed you can record its shipping details — company, tracking number, shipped-on date, and estimated delivery — right on the order's page. The archive lists every placed order (ordered or shipped) with its status and tracking number at a glance, the detail page shows one badge per line item, and the CSV/Excel exports carry each item's status too.
+
 ### Changed
 - **Orders are now grouped: requests and orders are separate**: Students and mentors request the items they want (a part number, a link, how many, an estimated price), and those requests pile up in an "Requests" list. A mentor or Lead Mentor then groups the requests they're going to place at the same time — with the same vendor — into a single **Order**. Orders track the vendor, a running total, and which items are in them, and any item can be moved in or out until the order is finalized. This replaces the old one-row-per-item "orders" page, so budgeting is now done per line item (exported with which order each item went into, which vendor, and who requested it). Deleting a grouped order returns its items to the Requests list instead of throwing them away. Students and mentors can edit their own requests while they're still ungrouped, but only mentors and Lead Mentors create and manage the grouped orders.
 

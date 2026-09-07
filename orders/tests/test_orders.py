@@ -416,6 +416,142 @@ class OrderStatusTests(TestCase):
         self.assertNotContains(resp, "Ordered Item")
 
 
+class OrderStatusAndShippingTests(TestCase):
+    """Item/order status labels plus shipping/tracking on archived orders."""
+
+    def setUp(self):
+        self.program = make_program()
+        self.lead = make_lead_mentor_user()
+        self.mentor = make_mentor_user()
+        self.mentor2 = make_mentor_user(username="mentor2")
+        self.student = make_student_user(program=self.program)
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def test_item_status_is_derived_from_membership(self):
+        pool_item = make_item(self.program, requested_by=self.student)
+        order = make_order(self.program, created_by=self.mentor)
+        grouped = make_item(
+            self.program, item_name="Grouped", requested_by=self.student, order=order
+        )
+        self.assertEqual(pool_item.status_key, "pending")
+        self.assertEqual(pool_item.get_status_display(), "Pending")
+        self.assertEqual(grouped.status_key, "ready")
+        self.assertEqual(grouped.get_status_display(), "Ready to order")
+
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.assertEqual(grouped.status_key, "ordered")
+        self.assertEqual(grouped.get_status_display(), "Ordered")
+
+        order.status = Order.STATUS_SHIPPED
+        order.save(update_fields=["status"])
+        self.assertEqual(grouped.status_key, "shipped")
+        self.assertEqual(grouped.get_status_display(), "Shipped")
+
+    def test_lead_marks_shipped_and_undoes(self):
+        order = make_order(self.program, created_by=self.mentor)
+        self.login(self.lead)
+
+        ship_url = reverse(
+            "orders:order_mark_shipped", args=[self.program.id, order.id]
+        )
+        self.client.post(ship_url)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.client.post(ship_url)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_SHIPPED)
+
+        mark_url = reverse(
+            "orders:order_mark_ordered", args=[self.program.id, order.id]
+        )
+        self.client.post(mark_url)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_ORDERED)
+
+    def test_student_cannot_mark_shipped(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.student)
+        ship_url = reverse(
+            "orders:order_mark_shipped", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(ship_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_ORDERED)
+
+    def test_lead_updates_shipping_info(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.lead)
+        shipping_url = reverse(
+            "orders:order_update_shipping", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(
+            shipping_url,
+            {
+                "shipping_carrier": "UPS",
+                "tracking_number": "1Z999AA10123456784",
+                "shipped_date": "2026-09-01",
+                "delivery_estimate": "2026-09-08",
+            },
+        )
+        self.assertRedirects(
+            resp,
+            reverse("orders:order_detail", args=[self.program.id, order.id]),
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, "UPS")
+        self.assertEqual(order.tracking_number, "1Z999AA10123456784")
+        self.assertEqual(order.shipped_date.isoformat(), "2026-09-01")
+        self.assertEqual(order.delivery_estimate.isoformat(), "2026-09-08")
+
+    def test_mentor_cannot_edit_someone_elses_shipping(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.mentor2)
+        shipping_url = reverse(
+            "orders:order_update_shipping", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, "")
+
+    def test_archive_includes_shipped_orders_with_status(self):
+        ordered = make_order(self.program, created_by=self.mentor)
+        ordered.status = Order.STATUS_ORDERED
+        ordered.save(update_fields=["status"])
+        shipped = make_order(self.program, created_by=self.mentor)
+        shipped.status = Order.STATUS_SHIPPED
+        shipped.save(update_fields=["status"])
+        self.login(self.lead)
+        resp = self.client.get(reverse("orders:order_archive", args=[self.program.id]))
+        self.assertContains(resp, "Shipped")
+        self.assertContains(resp, "Ordered")
+
+    def test_detail_shows_status_and_mark_shipped_button(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.lead)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertContains(resp, "Mark as Shipped")
+        self.assertContains(resp, "Ordered")
+
+
 class OrderExportTests(TestCase):
     def setUp(self):
         self.program = make_program()

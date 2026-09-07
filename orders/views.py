@@ -16,7 +16,13 @@ from django.views.generic import (
     View,
 )
 
-from orders.forms import NOT_LISTED_VENDOR, OrderForm, OrderItemForm, VendorForm
+from orders.forms import (
+    NOT_LISTED_VENDOR,
+    OrderForm,
+    OrderItemForm,
+    ShippingInfoForm,
+    VendorForm,
+)
 from orders.models import Order, OrderItem, Vendor, user_display_name
 from programs.models import Program
 from programs.permission_views import (
@@ -117,7 +123,7 @@ def _item_export_row(item):
             else ""
         ),
         "notes": item.notes,
-        "status": order.get_status_display() if order else "Pending",
+        "status": item.get_status_display(),
         "ordered_on": (
             timezone.localtime(order.ordered_at).strftime("%Y-%m-%d %H:%M")
             if order and order.ordered_at
@@ -337,7 +343,9 @@ class OrderArchiveView(
 
     def get_queryset(self):
         return (
-            Order.objects.filter(status=Order.STATUS_ORDERED)
+            Order.objects.filter(
+                status__in=[Order.STATUS_ORDERED, Order.STATUS_SHIPPED]
+            )
             .select_related("program", "vendor", "created_by", "ordered_by")
             .prefetch_related("items")
             .order_by("-ordered_at", "-created_at")
@@ -345,7 +353,9 @@ class OrderArchiveView(
 
     def get_export_items(self):
         return (
-            OrderItem.objects.filter(order__status=Order.STATUS_ORDERED)
+            OrderItem.objects.filter(
+                order__status__in=[Order.STATUS_ORDERED, Order.STATUS_SHIPPED]
+            )
             .select_related(
                 "program",
                 "requested_by",
@@ -392,7 +402,7 @@ class OrderDetailView(
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
         context["items"] = self.object.items.select_related(
-            "program", "requested_by"
+            "program", "requested_by", "order"
         ).all()
         context["available_items"] = (
             OrderItem.objects.filter(order__isnull=True)
@@ -403,6 +413,7 @@ class OrderDetailView(
         context["can_manage_items"] = self.object.status == Order.STATUS_PENDING and (
             context["is_lead"] or self.object.created_by_id == self.request.user.id
         )
+        context["shipping_form"] = ShippingInfoForm(instance=self.object)
         context["not_listed_vendor"] = NOT_LISTED_VENDOR
         context["page_title"] = f"Order #{self.object.pk}"
         return context
@@ -518,7 +529,8 @@ class OrderDeleteView(
 class OrderMarkOrderedView(
     LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
 ):
-    """Lead Mentor marks a pending order as placed (moves it to the archive)."""
+    """Lead Mentor marks a pending order as placed (moves it to the archive),
+    or un-marks a shipped order back to ordered."""
 
     def post(self, request, program_id, pk):
         order = get_object_or_404(Order, pk=pk)
@@ -531,19 +543,28 @@ class OrderMarkOrderedView(
                 request,
                 f"Order {order} marked as ordered and moved to the archive.",
             )
-        else:
-            messages.info(request, "That order has already been marked as ordered.")
+            return redirect("orders:order_list", program_id=self.program.id)
+        if order.status == Order.STATUS_SHIPPED:
+            order.status = Order.STATUS_ORDERED
+            order.shipped_date = None
+            order.save(update_fields=["status", "shipped_date"])
+            messages.success(
+                request,
+                f"Order {order} un-marked as shipped and is back on the archive.",
+            )
+            return redirect("orders:order_archive", program_id=self.program.id)
+        messages.info(request, "That order has already been marked as ordered.")
         return redirect("orders:order_list", program_id=self.program.id)
 
 
 class OrderMarkPendingView(
     LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
 ):
-    """Reopens an archived order (undoes 'mark ordered')."""
+    """Reopens an archived order (undoes 'mark ordered'/'mark shipped')."""
 
     def post(self, request, program_id, pk):
         order = get_object_or_404(Order, pk=pk)
-        if order.status == Order.STATUS_ORDERED:
+        if order.status in (Order.STATUS_ORDERED, Order.STATUS_SHIPPED):
             order.status = Order.STATUS_PENDING
             order.ordered_at = None
             order.ordered_by = None
@@ -555,6 +576,53 @@ class OrderMarkPendingView(
         else:
             messages.info(request, "That order is not archived.")
         return redirect("orders:order_archive", program_id=self.program.id)
+
+
+class OrderMarkShippedView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Lead Mentor marks an ordered order as shipped (stays on the archive)."""
+
+    def post(self, request, program_id, pk):
+        order = get_object_or_404(Order, pk=pk)
+        if order.status == Order.STATUS_ORDERED:
+            order.status = Order.STATUS_SHIPPED
+            order.save(update_fields=["status"])
+            messages.success(
+                request,
+                f"Order {order} marked as shipped. Add tracking details when you have them.",
+            )
+        else:
+            messages.info(request, "Only ordered orders can be marked as shipped.")
+        return redirect("orders:order_archive", program_id=self.program.id)
+
+
+class OrderShippingUpdateView(
+    LoginRequiredMixin,
+    OrderProgramMixin,
+    DynamicWritePermissionMixin,
+    View,
+):
+    """Saves shipping/tracking details for a placed order from the detail page."""
+
+    section = "orders"
+
+    def get_object(self):
+        return get_object_or_404(Order, pk=self.kwargs.get("pk"))
+
+    def post(self, request, program_id, pk):
+        order = self.get_object()
+        form = ShippingInfoForm(request.POST, instance=order)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Shipping details updated.")
+        else:
+            messages.error(request, "Please check the shipping details.")
+        return redirect(
+            "orders:order_detail",
+            program_id=self.program.id,
+            pk=order.pk,
+        )
 
 
 class OrderAddItemsView(

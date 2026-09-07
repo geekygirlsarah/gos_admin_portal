@@ -55,11 +55,13 @@
                     <thead class="table-light">
                         <tr>
                             <th>Order</th>
+                            <th>Status</th>
                             <th>Items</th>
                             <th>Vendor</th>
                             <th class="text-end">Total</th>
                             <th>Ordered By</th>
                             <th>Ordered On</th>
+                            <th>Tracking</th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -68,6 +70,13 @@
                         <tr>
                             <td class="text-nowrap">
                                 <a href="{% url 'orders:order_detail' program.id order.pk %}"><strong>Order #{{ order.pk }}</strong></a>
+                            </td>
+                            <td>
+                                {% if order.status == 'shipped' %}
+                                <span class="badge bg-primary">Shipped</span>
+                                {% else %}
+                                <span class="badge bg-success">Ordered</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% for it in order.items.all %}
@@ -86,8 +95,23 @@
                             <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
                             <td>{{ order.ordered_by_name|default:"—" }}</td>
                             <td>{{ order.ordered_at|date:"M j, Y" }}</td>
+                            <td>
+                                {% if order.tracking_number %}
+                                {% if order.shipping_carrier %}{{ order.shipping_carrier }} {% endif %}<strong>{{ order.tracking_number }}</strong>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
                             <td class="text-end text-nowrap">
                                 {% if is_lead %}
+                                {% if order.status == 'ordered' %}
+                                <form method="post" action="{% url 'orders:order_mark_shipped' program.id order.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" title="Mark as shipped">
+                                        <i class="bi bi-truck"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
                                 <form method="post" action="{% url 'orders:order_mark_pending' program.id order.pk %}" class="d-inline">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-outline-warning" title="Move back to pending">
