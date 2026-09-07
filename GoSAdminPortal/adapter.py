@@ -58,11 +58,11 @@ def _find_or_provision_user_for_email(email):
 
     adult_allowed = False
     if adult:
-        # For role allowance, we still need to know which email field matched.
+        # For role allowance, we still need to know whether the personal email
+        # field matched (mentors are handled by address domain below).
         is_personal = (
             adult.personal_email and adult.personal_email.lower() == email_lower
         )
-        is_andrew = adult.andrew_email and adult.andrew_email.lower() == email_lower
         if adult.is_mentor:
             # Mentors (and Lead Mentors by extension) must use Andrew email.
             # We allow any email ending in @andrew.cmu.edu if it matched this adult.
@@ -160,28 +160,31 @@ def _provision_user(email, first_name, last_name):
 
 
 def _ensure_email_address(user, email):
-    """Ensure an allauth EmailAddress record exists for this user+email."""
+    """Ensure an allauth EmailAddress record exists for this user+email.
+
+    At most one EmailAddress row can exist per (user, email) and at most one
+    verified row per email overall, so if a row already exists for this email on
+    a *different* user, move it to point at the correct user. Otherwise the
+    partial unique index "unique_verified_email" (one verified email per email,
+    across users) rejects a new row when a stale/orphaned verified record
+    belongs to a different user, which previously crashed login with an
+    IntegrityError.
+    """
     from allauth.account.models import EmailAddress
 
     email_l = email.lower()
-    # If an EmailAddress already exists for this email (on any user), make sure it
-    # points at the correct user. Otherwise the partial unique index
-    # "unique_verified_email" (one verified email per email, across users) rejects
-    # a new row when a stale/orphaned verified record belongs to a different user,
-    # which previously crashed login with an IntegrityError.
     existing = EmailAddress.objects.filter(email__iexact=email_l).first()
     if existing:
-        if existing.user_id != user.id:
-            existing.user = user
-            # Only one primary per user: the moved email can only be primary if the
-            # receiving user has no primary yet (avoids unique_primary_email conflict).
-            if existing.primary:
-                has_primary = EmailAddress.objects.filter(
-                    user=user, primary=True
-                ).exists()
-                if has_primary:
-                    existing.primary = False
-            existing.save(update_fields=["user", "primary"])
+        if existing.user_id == user.id:
+            return
+        existing.user = user
+        # Only one primary per user: the moved email can only be primary if the
+        # receiving user has no primary yet (avoids unique_primary_email conflict).
+        if existing.primary:
+            has_primary = EmailAddress.objects.filter(user=user, primary=True).exists()
+            if has_primary:
+                existing.primary = False
+        existing.save(update_fields=["user", "primary"])
         return
     # Only one primary per user: set primary=True only if none exists yet
     has_primary = EmailAddress.objects.filter(user=user, primary=True).exists()
@@ -199,13 +202,6 @@ class AccountAdapter(DefaultAccountAdapter):
         No new accounts should be allowed.
         """
         return False
-
-    def is_email_allowed(self, email):
-        """
-        Allow login for any email registered to a User, Adult, or Student
-        in the system. Auto-provisions a User account if needed.
-        """
-        return _find_or_provision_user_for_email(email)
 
     def generate_login_code(self) -> str:
         """

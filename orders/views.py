@@ -15,7 +15,7 @@ from programs.permission_views import (
     LeadMentorRequiredMixin,
     can_user_delete,
     get_user_role,
-    user_is_mentor,
+    user_is_mentor_or_lead,
 )
 from programs.views.mixins import (
     DynamicReadPermissionMixin,
@@ -34,8 +34,7 @@ class OrderProgramMixin:
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
-        role = get_user_role(request.user)
-        is_mentor = user_is_mentor(request.user) or role == "LeadMentor"
+        is_mentor = user_is_mentor_or_lead(request.user)
         if not self.program.features.filter(key="orders").exists() and not is_mentor:
             raise Http404("Order requests are not enabled for this program.")
         return super().dispatch(request, *args, **kwargs)

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - **New `merge_user_accounts` command**: Lead Mentors can now run `python manage.py merge_user_accounts --source <pk> --target <pk>` to fold a duplicate login account into the surviving one when one person has two accounts (one for their personal email, one for their Andrew email). It moves any attached email addresses (keeping exactly one primary), groups and permissions, re-points every reference (orders, badges, audit history, etc.), backfills empty name fields, and removes the duplicate account. Read-only by default; add `--execute` to actually apply it.
 
 ### Changed
+- **Login screen cleanup**: The email sign-in page and the "login code" step now share a single page design, so the instructions and help text never drift out of date. (The mentor hint on the code step now correctly reads *@andrew.cmu.edu* again.) No user-visible change beyond that.
+- **Internal account-maintenance cleanup**: Repeated login/account-linking code was consolidated — the "are you a mentor or lead mentor?" check, transferring a sign-in account between merged records, and keeping a student/parent's name and active status in sync on their login account now all live in a single shared helper instead of several copies.
 - **The touchscreen sign-out station is now more compact**: The station content is narrower and the student picker buttons are smaller, so on a tablet the page no longer stretches edge-to-edge. This gives some breathing room to scroll without accidentally tapping a neighboring student or part of the signature area.
 
 ## 2026-09-05
