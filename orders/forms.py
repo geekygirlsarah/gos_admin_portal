@@ -167,7 +167,7 @@ class OrderForm(forms.ModelForm):
             self.fields["items"].queryset = (
                 OrderItem.objects.filter(order__isnull=True)
                 .select_related("program", "vendor", "requested_by")
-                .order_by("program__name", "-requested_at")
+                .order_by("vendor_name", "vendor__name", "-requested_at")
             )
 
     def clean(self):

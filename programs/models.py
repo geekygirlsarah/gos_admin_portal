@@ -296,6 +296,10 @@ class RolePermission(models.Model):
         ("team_assignments", "Programs - Team Assignments"),
         ("badge_award", "Badges - Award"),
         ("badge_manage", "Badges - Create / Manage"),
+        ("orders-view", "Orders - See requested orders"),
+        ("orders-request", "Orders - Place item request"),
+        ("orders-manage", "Orders - Place new orders"),
+        ("orders-shipping", "Orders - Add shipping"),
     ]
     ROLE_CHOICES = [
         ("Mentor", "Mentor"),

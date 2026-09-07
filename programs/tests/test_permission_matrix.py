@@ -87,6 +87,14 @@ class PermissionMatrixTests(TestCase):
             "sliding_scale",
             "fees",
         }
+        # Parents/alumni never see or touch order requests, regardless of the
+        # RolePermission row a Lead Mentor might flip in Portal Settings.
+        cls.orders_denied = {
+            "orders-view",
+            "orders-request",
+            "orders-manage",
+            "orders-shipping",
+        }
 
     def _set_permission(self, role, section, can_read=True, can_write=False):
         RolePermission.objects.update_or_create(
@@ -198,6 +206,12 @@ class PermissionMatrixTests(TestCase):
                         can_user_read(self.parent_user, section),
                         f"Parent should NOT read {section} (mentor-only)",
                     )
+                # Orders: parents never read, even when a Lead flips the toggle on
+                elif section in self.orders_denied:
+                    self.assertFalse(
+                        can_user_read(self.parent_user, section),
+                        f"Parent should NOT read {section} (orders restricted)",
+                    )
                 else:
                     self.assertTrue(
                         can_user_read(self.parent_user, section),
@@ -234,6 +248,10 @@ class PermissionMatrixTests(TestCase):
                     # Mentor-only sections
                     self.assertFalse(
                         can_write, f"Parent cannot write {section} (mentor-only)"
+                    )
+                elif section in self.orders_denied:
+                    self.assertFalse(
+                        can_write, f"Parent cannot write {section} (orders restricted)"
                     )
                 else:
                     self.assertTrue(
@@ -333,6 +351,12 @@ class PermissionMatrixTests(TestCase):
                         can_user_read(self.alumni_user, section),
                         f"Alumni should NOT read {section} (mentor-only)",
                     )
+                # Orders: alumni never read, even when a Lead flips the toggle on
+                elif section in self.orders_denied:
+                    self.assertFalse(
+                        can_user_read(self.alumni_user, section),
+                        f"Alumni should NOT read {section} (orders restricted)",
+                    )
                 else:
                     # Default read is True for alumni
                     self.assertTrue(
@@ -355,6 +379,10 @@ class PermissionMatrixTests(TestCase):
                 elif section in self.mentor_only_sections:
                     self.assertFalse(
                         can_write, f"Alumni cannot write {section} (mentor-only)"
+                    )
+                elif section in self.orders_denied:
+                    self.assertFalse(
+                        can_write, f"Alumni cannot write {section} (orders restricted)"
                     )
                 else:
                     self.assertTrue(can_write, f"Alumni should write {section}")

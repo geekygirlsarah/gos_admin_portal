@@ -28,6 +28,7 @@ from programs.models import Program
 from programs.permission_views import (
     LeadMentorRequiredMixin,
     can_user_delete,
+    can_user_write,
     get_user_role,
     user_is_mentor_or_lead,
 )
@@ -101,6 +102,40 @@ def _group_by_program(records):
         totals = [record.total for record in group["items"] if record.total is not None]
         if totals:
             group["total"] = sum(totals, Decimal("0"))
+    return groups
+
+
+def _record_vendor_name(record):
+    """Display vendor for grouping: the vendor snapshot first, then the
+    linked Vendor's name, then an empty string for untagged records."""
+    if isinstance(record, OrderItem):
+        return record.vendor_name_display
+    return record.vendor_name or (record.vendor.name if record.vendor_id else "")
+
+
+def _group_by_vendor(records):
+    """Group a queryset of orders or items by vendor, so mentors can batch a
+    vendor's requests into a single order.
+
+    Returns a list of ``{"vendor": str, "items": [...], "total": Decimal|None}``
+    where ``vendor`` is ``""`` for records with no vendor. Groups are sorted
+    alphabetically with untagged records last.
+    """
+    groups = []
+    index = {}
+    for record in records:
+        key = _record_vendor_name(record)
+        group = index.get(key)
+        if group is None:
+            group = {"vendor": key, "items": [], "total": None}
+            index[key] = group
+            groups.append(group)
+        group["items"].append(record)
+    for group in groups:
+        totals = [record.total for record in group["items"] if record.total is not None]
+        if totals:
+            group["total"] = sum(totals, Decimal("0"))
+    groups.sort(key=lambda g: (g["vendor"] == "", g["vendor"].lower()))
     return groups
 
 
@@ -284,7 +319,7 @@ class OrderListView(
     model = OrderItem
     template_name = "orders/order_list.html"
     context_object_name = "items"
-    section = "orders"
+    section = "orders-view"
 
     def get_export_items(self):
         return (
@@ -316,14 +351,21 @@ class OrderListView(
             .prefetch_related("items")
             .order_by("-created_at")
         )
-        item_groups = _group_by_program(pool_items)
-        order_groups = _group_by_program(pending_orders)
+        item_groups = _group_by_vendor(pool_items)
+        order_groups = _group_by_vendor(pending_orders)
         context["item_groups"] = item_groups
         context["order_groups"] = order_groups
         context["item_groups_total"] = _groups_total(item_groups)
         context["order_groups_total"] = _groups_total(order_groups)
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
+        context["can_request_item"] = can_user_write(
+            self.request.user, "orders-request"
+        )
+        context["can_place_order"] = user_is_mentor_or_lead(
+            self.request.user
+        ) and can_user_write(self.request.user, "orders-manage")
+        context["can_manage_items"] = can_user_write(self.request.user, "orders-manage")
         context["page_title"] = "Order Requests"
         return context
 
@@ -340,7 +382,7 @@ class OrderArchiveView(
     model = Order
     template_name = "orders/order_archive.html"
     context_object_name = "orders"
-    section = "orders"
+    section = "orders-view"
 
     def get_queryset(self):
         return (
@@ -383,17 +425,22 @@ class OrderArchiveView(
 
 class OrderDetailView(
     LoginRequiredMixin,
-    OrderStaffRequiredMixin,
     OrderProgramMixin,
-    DynamicWritePermissionMixin,
+    DynamicReadPermissionMixin,
     DetailView,
 ):
-    """A single grouped order with its items (mentors/Lead Mentors only)."""
+    """A single grouped order with its items and status.
+
+    Readable by anyone with read access to the orders section (students can
+    follow the status of items they requested); mutating actions are gated on
+    the granular order permissions per object (managing items, editing
+    shipping).
+    """
 
     model = Order
     template_name = "orders/order_detail.html"
     context_object_name = "order"
-    section = "orders"
+    section = "orders-view"
 
     def get_queryset(self):
         return Order.objects.select_related(
@@ -409,11 +456,14 @@ class OrderDetailView(
         context["available_items"] = (
             OrderItem.objects.filter(order__isnull=True)
             .select_related("program", "vendor", "requested_by")
-            .order_by("program__name", "-requested_at")
+            .order_by("vendor_name", "vendor__name", "-requested_at")
         )
         context["is_lead"] = role == "LeadMentor"
-        context["can_manage_items"] = self.object.status == Order.STATUS_PENDING and (
-            context["is_lead"] or self.object.created_by_id == self.request.user.id
+        context["can_manage_items"] = can_user_write(
+            self.request.user, "orders-manage", self.object
+        )
+        context["can_edit_shipping"] = can_user_write(
+            self.request.user, "orders-shipping", self.object
         )
         context["shipping_form"] = ShippingInfoForm(instance=self.object)
         context["not_listed_vendor"] = NOT_LISTED_VENDOR
@@ -433,7 +483,7 @@ class OrderCreateView(
     model = Order
     form_class = OrderForm
     template_name = "orders/order_form.html"
-    section = "orders"
+    section = "orders-manage"
 
     def get_initial(self):
         initial = super().get_initial()
@@ -473,11 +523,11 @@ class OrderUpdateView(
     model = Order
     form_class = OrderForm
     template_name = "orders/order_form.html"
-    section = "orders"
+    section = "orders-manage"
 
     def get_queryset(self):
         # Org-wide queryset; creator-only editing is enforced by
-        # ``can_user_write('orders', obj)`` for non-Lead-Mentors.
+        # ``can_user_write('orders-manage', obj)`` for non-Lead-Mentors.
         return Order.objects.select_related("program", "vendor")
 
     def get_context_data(self, **kwargs):
@@ -506,7 +556,7 @@ class OrderDeleteView(
         return Order.objects.all()
 
     def dispatch(self, request, *args, **kwargs):
-        if not can_user_delete(request.user, "orders", self.get_object()):
+        if not can_user_delete(request.user, "orders-manage", self.get_object()):
             messages.error(request, "You do not have permission to delete that order.")
             return redirect("orders:order_list", program_id=kwargs.get("program_id"))
         return super().dispatch(request, *args, **kwargs)
@@ -607,7 +657,7 @@ class OrderShippingUpdateView(
 ):
     """Saves shipping/tracking details for a placed order from the detail page."""
 
-    section = "orders"
+    section = "orders-shipping"
 
     def get_object(self):
         return get_object_or_404(Order, pk=self.kwargs.get("pk"))
@@ -636,7 +686,7 @@ class OrderAddItemsView(
 ):
     """Assigns selected unassigned requests to a pending order."""
 
-    section = "orders"
+    section = "orders-manage"
 
     def get_object(self):
         return get_object_or_404(Order, pk=self.kwargs.get("pk"))
@@ -669,7 +719,7 @@ class OrderRemoveItemView(
 ):
     """Moves a single item back from a pending order to the request pool."""
 
-    section = "orders"
+    section = "orders-manage"
 
     def get_object(self):
         return get_object_or_404(Order, pk=self.kwargs.get("pk"))
@@ -701,7 +751,7 @@ class ItemCreateView(
     model = OrderItem
     form_class = OrderItemForm
     template_name = "orders/item_form.html"
-    section = "orders"
+    section = "orders-request"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -724,11 +774,11 @@ class ItemUpdateView(
     model = OrderItem
     form_class = OrderItemForm
     template_name = "orders/item_form.html"
-    section = "orders"
+    section = "orders-request"
 
     def get_queryset(self):
         # Org-wide queryset; creator/unassigned editing is enforced by
-        # ``can_user_write('orders', obj)`` for non-Lead-Mentors.
+        # ``can_user_write('orders-request', obj)`` for non-Lead-Mentors.
         return OrderItem.objects.select_related("program", "vendor")
 
     def get_context_data(self, **kwargs):
@@ -749,7 +799,7 @@ class ItemDeleteView(LoginRequiredMixin, OrderProgramMixin, DeleteView):
         return OrderItem.objects.select_related("program")
 
     def dispatch(self, request, *args, **kwargs):
-        if not can_user_delete(request.user, "orders", self.get_object()):
+        if not can_user_delete(request.user, "orders-request", self.get_object()):
             messages.error(
                 request, "You do not have permission to delete that request."
             )

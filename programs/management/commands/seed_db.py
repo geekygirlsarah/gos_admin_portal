@@ -92,6 +92,15 @@ class Command(BaseCommand):
                 "display_order": 40,
             },
             {
+                "key": "orders",
+                "name": "Order Requests",
+                "description": (
+                    "Enable students to request parts/tools/supplies through the "
+                    "order request system. Mentors can always access it."
+                ),
+                "display_order": 70,
+            },
+            {
                 "key": "badges",
                 "name": "Badges",
                 "description": "Enable student badges for this program.",
@@ -168,6 +177,7 @@ class Command(BaseCommand):
                     "cmu-andrew",
                     "tshirt-size",
                     "badges",
+                    "orders",
                 ],
             },
             {

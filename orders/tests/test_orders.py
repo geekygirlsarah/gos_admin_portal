@@ -13,6 +13,7 @@ from orders.tests.base import (
     make_program,
     make_student_user,
 )
+from programs.models import RolePermission
 
 
 class OrderAccessTests(TestCase):
@@ -341,13 +342,77 @@ class OrderGroupingTests(TestCase):
         item.refresh_from_db()
         self.assertIsNone(item.order_id)
 
-    def test_student_cannot_access_order_detail(self):
+    def test_student_can_view_order_detail(self):
+        order = make_order(
+            self.program, created_by=self.mentor, vendor_name="Test Vendor"
+        )
+        make_item(
+            self.program,
+            item_name="Hex Driver",
+            requested_by=self.student,
+            order=order,
+        )
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Hex Driver")
+        self.assertContains(resp, "Order Requests")
+
+    def test_student_order_read_blocked_via_role_permission(self):
+        """Lead Mentors can revoke student order read access from Portal Settings."""
         order = make_order(self.program, created_by=self.mentor)
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="orders-view",
+            defaults={"can_read": False, "can_write": False},
+        )
         self.login(self.student)
         detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
         resp = self.client.get(detail_url)
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse("home"))
+
+    def test_student_request_write_blocked_via_role_permission(self):
+        """Turning off the Student 'orders-request' write toggle blocks placing requests."""
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="orders-request",
+            defaults={"can_write": False},
+        )
+        self.login(self.student)
+        create_url = reverse("orders:item_create", args=[self.program.id])
+        resp = self.client.get(create_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+    def test_student_can_still_view_when_request_disabled(self):
+        """Read and requ-ests write toggles are independent: a view-only student can
+        still open order details, just not place new requests."""
+        order = make_order(self.program, created_by=self.mentor)
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="orders-request",
+            defaults={"can_write": False},
+        )
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_mentor_create_order_blocked_via_role_permission(self):
+        """The Mentor 'orders-manage' write toggle controls the order workflow."""
+        item = make_item(self.program, requested_by=self.student)
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-manage",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        resp = self.client.post(self.create_url, self._item_data([item]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        self.assertFalse(Order.objects.exists())
 
     def test_mentor_can_view_order_detail(self):
         order = make_order(self.program, created_by=self.mentor)
@@ -356,6 +421,41 @@ class OrderGroupingTests(TestCase):
         detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
         resp = self.client.get(detail_url)
         self.assertEqual(resp.status_code, 200)
+
+    def test_requests_list_groups_pool_items_by_vendor(self):
+        make_item(
+            self.program,
+            item_name="Hex Driver",
+            requested_by=self.student,
+            vendor_name="McMaster-Carr",
+        )
+        make_item(
+            self.program,
+            item_name="Zip Ties",
+            requested_by=self.student,
+            vendor_name="Amazon",
+        )
+        make_item(
+            self.program,
+            item_name="Aluminum",
+            requested_by=self.student,
+            vendor_name="",
+        )
+        self.login(self.mentor)
+        resp = self.client.get(self.list_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "McMaster-Carr")
+        self.assertContains(resp, "Amazon")
+        self.assertContains(resp, "No vendor specified")
+        self.assertNotContains(resp, "General Orders")
+
+    def test_orders_ready_list_groups_pending_orders_by_vendor(self):
+        make_order(self.program, created_by=self.mentor, vendor_name="McMaster-Carr")
+        make_order(self.program, created_by=self.mentor, vendor_name="Amazon")
+        self.login(self.mentor)
+        resp = self.client.get(self.list_url)
+        self.assertContains(resp, "McMaster-Carr")
+        self.assertContains(resp, "Amazon")
 
 
 class OrderDeleteTests(TestCase):
@@ -599,7 +699,9 @@ class OrderStatusAndShippingTests(TestCase):
         self.assertEqual(order.shipped_date.isoformat(), "2026-09-01")
         self.assertEqual(order.delivery_estimate.isoformat(), "2026-09-08")
 
-    def test_mentor_cannot_edit_someone_elses_shipping(self):
+    def test_mentor_with_shipping_toggle_can_edit_any_placed_order_shipping(self):
+        """'orders-shipping' is a role-level capability, not owner-scoped: any
+        mentor with the toggle can record tracking on a placed order."""
         order = make_order(self.program, created_by=self.mentor)
         order.status = Order.STATUS_ORDERED
         order.save(update_fields=["status"])
@@ -609,9 +711,11 @@ class OrderStatusAndShippingTests(TestCase):
         )
         resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.url, reverse("home"))
+        self.assertEqual(
+            resp.url, reverse("orders:order_detail", args=[self.program.id, order.id])
+        )
         order.refresh_from_db()
-        self.assertEqual(order.shipping_carrier, "")
+        self.assertEqual(order.shipping_carrier, "FedEx")
 
     def test_archive_includes_shipped_orders_with_status(self):
         ordered = make_order(self.program, created_by=self.mentor)
@@ -634,6 +738,101 @@ class OrderStatusAndShippingTests(TestCase):
         resp = self.client.get(detail_url)
         self.assertContains(resp, "Mark as Shipped")
         self.assertContains(resp, "Ordered")
+
+    def test_lead_sees_shipping_edit_form(self):
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        self.login(self.lead)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertContains(
+            resp,
+            reverse("orders:order_update_shipping", args=[self.program.id, order.id]),
+        )
+
+    def test_student_sees_shipping_details_without_edit_form(self):
+        """Students can read shipping/tracking but never see the edit form."""
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_SHIPPED
+        order.shipping_carrier = "UPS"
+        order.tracking_number = "1Z999AA10123456784"
+        order.save(update_fields=["status", "shipping_carrier", "tracking_number"])
+        self.login(self.student)
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "UPS")
+        self.assertContains(resp, "1Z999AA10123456784")
+        self.assertNotContains(
+            resp,
+            reverse("orders:order_update_shipping", args=[self.program.id, order.id]),
+        )
+
+    def test_mentor_without_shipping_toggle_cannot_edit_shipping(self):
+        """A mentor without the 'orders-shipping' write toggle can read the
+        order but cannot save shipping details."""
+        order = make_order(self.program, created_by=self.mentor)
+        order.status = Order.STATUS_ORDERED
+        order.save(update_fields=["status"])
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-shipping",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        # Still readable (view permission on).
+        detail_url = reverse("orders:order_detail", args=[self.program.id, order.id])
+        resp = self.client.get(detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(
+            resp,
+            reverse("orders:order_update_shipping", args=[self.program.id, order.id]),
+        )
+        shipping_url = reverse(
+            "orders:order_update_shipping", args=[self.program.id, order.id]
+        )
+        resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, "")
+
+    def test_mentor_with_manage_but_no_shipping_can_manage_items(self):
+        """The 'orders-manage' and 'orders-shipping' toggles are independent:
+        a mentor can still edit order items when only shipping is revoked."""
+        order = make_order(self.program, created_by=self.mentor)
+        item = make_item(self.program, requested_by=self.student)
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-shipping",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        add_url = reverse("orders:order_add_items", args=[self.program.id, order.id])
+        resp = self.client.post(add_url, {"items": [str(item.pk)]})
+        self.assertEqual(resp.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.order, order)
+
+    def test_mentor_without_manage_cannot_place_order(self):
+        """The 'orders-manage' write toggle is independent: revoking it blocks
+        creating new orders but not placing item requests."""
+        make_item(self.program, requested_by=self.student)
+        RolePermission.objects.update_or_create(
+            role="Mentor",
+            section="orders-manage",
+            defaults={"can_write": False},
+        )
+        self.login(self.mentor)
+        create_url = reverse("orders:order_create", args=[self.program.id])
+        resp = self.client.get(create_url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+        create_item_url = reverse("orders:item_create", args=[self.program.id])
+        resp = self.client.get(create_item_url)
+        self.assertEqual(resp.status_code, 200)
 
 
 class OrderExportTests(TestCase):

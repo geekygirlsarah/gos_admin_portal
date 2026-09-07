@@ -101,6 +101,7 @@
             {% endif %}
         </div>
         <div class="card-body">
+            {% if can_edit_shipping %}
             <form method="post" action="{% url 'orders:order_update_shipping' program.id order.pk %}">
                 {% csrf_token %}
                 <div class="row g-3 align-items-end">
@@ -115,6 +116,18 @@
                     </div>
                 </div>
             </form>
+            {% else %}
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Carrier</dt>
+                <dd class="col-sm-9">{{ order.shipping_carrier|default:"—" }}</dd>
+                <dt class="col-sm-3">Tracking</dt>
+                <dd class="col-sm-9">{{ order.tracking_number|default:"—" }}</dd>
+                <dt class="col-sm-3">Shipped</dt>
+                <dd class="col-sm-9">{{ order.shipped_date|date:"M j, Y"|default:"—" }}</dd>
+                <dt class="col-sm-3">Est. delivery</dt>
+                <dd class="col-sm-9">{{ order.delivery_estimate|date:"M j, Y"|default:"—" }}</dd>
+            </dl>
+            {% endif %}
         </div>
     </div>
     {% endif %}
