@@ -21,9 +21,17 @@
                 <div class="card-body">
                     <form method="post">
                         {% csrf_token %}
-                        {% for field in form %}
-                            {% render_field field %}
-                        {% endfor %}
+                        {% render_field form.item_name %}
+                        {% render_field form.quantity %}
+                        {% render_field form.unit_price %}
+                        {% render_field form.vendor_choice %}
+                        <div class="mb-3 {% if form.vendor_choice.value != not_listed_vendor %}d-none{% endif %}" id="custom-vendor-fields">
+                            <h6 class="text-muted">Custom vendor</h6>
+                            {% render_field form.vendor_name %}
+                            {% render_field form.vendor_url %}
+                        </div>
+                        {% render_field form.url %}
+                        {% render_field form.notes %}
                         <div class="alert alert-light py-2 small">
                             <i class="bi bi-info-circle me-1"></i>
                             A mentor will group your request into an order. You can edit it until it's been grouped.
@@ -40,4 +48,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    var vendorChoice = document.getElementById('id_vendor_choice');
+    var customVendorFields = document.getElementById('custom-vendor-fields');
+    if (!vendorChoice || !customVendorFields) {
+        return;
+    }
+    function toggleCustomVendor() {
+        customVendorFields.classList.toggle('d-none', vendorChoice.value !== '{{ not_listed_vendor }}');
+    }
+    vendorChoice.addEventListener('change', toggleCustomVendor);
+    toggleCustomVendor();
+})();
+</script>
 {% endblock %}

@@ -61,6 +61,7 @@
                 <thead class="table-light">
                     <tr>
                         <th>Item</th>
+                        <th>Vendor</th>
                         <th>Status</th>
                         <th class="text-end">Qty</th>
                         <th class="text-end">Unit Price</th>
@@ -79,6 +80,15 @@
                             <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
                             {% else %}
                             {{ item.item_name }}
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap small">
+                            {% if item.vendor_url %}
+                            <a href="{{ item.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ item.vendor_name_display|default:"—" }} <i class="bi bi-box-arrow-up-right"></i></a>
+                            {% elif item.vendor_name_display %}
+                            {{ item.vendor_name_display }}
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
                             {% endif %}
                         </td>
                         <td><span class="badge bg-secondary">{{ item.get_status_display }}</span></td>

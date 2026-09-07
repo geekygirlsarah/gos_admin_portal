@@ -210,6 +210,31 @@ class OrderItem(models.Model):
         verbose_name="Link to item",
         help_text="A URL to the part, tool, or product page.",
     )
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        verbose_name="Vendor",
+        help_text="The reference-list vendor this item is requested from (optional).",
+    )
+    vendor_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Vendor name",
+        help_text=(
+            "Snapshot of the requested vendor's name (from the reference list, "
+            "or the 'Not listed' name a requester typed). Kept so the request's "
+            "text survives a vendor being renamed or deleted."
+        ),
+    )
+    vendor_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name="Vendor website",
+        help_text="Snapshot of the requested vendor's website (reference list or custom).",
+    )
     notes = models.TextField(blank=True, verbose_name="Notes")
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -248,6 +273,17 @@ class OrderItem(models.Model):
     def requested_by_name(self):
         """Display name of the person who requested this item."""
         return user_display_name(self.requested_by)
+
+    @property
+    def vendor_name_display(self):
+        """Requested vendor name: the snapshot if set, else the reference-list
+        vendor's name (covers items created directly, bypassing the form's
+        snapshot write)."""
+        if self.vendor_name:
+            return self.vendor_name
+        if self.vendor_id:
+            return self.vendor.name
+        return ""
 
     @property
     def status_key(self):

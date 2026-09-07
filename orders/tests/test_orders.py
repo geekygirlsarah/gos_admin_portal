@@ -137,6 +137,90 @@ class ItemCreateEditTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.item_name, "Lead edited")
 
+    def test_student_can_attach_vendor_from_list(self):
+        vendor = Vendor.objects.create(name="Vendor A")
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {
+                "item_name": "Zip Ties",
+                "quantity": "10",
+                "vendor_choice": str(vendor.pk),
+            },
+        )
+        self.assertRedirects(resp, self.list_url)
+        item = OrderItem.objects.get(item_name="Zip Ties")
+        self.assertEqual(item.vendor, vendor)
+        self.assertEqual(item.vendor_name, "Vendor A")
+
+    def test_student_can_attach_not_listed_vendor(self):
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {
+                "item_name": "Servo",
+                "quantity": "2",
+                "vendor_choice": "__not_listed__",
+                "vendor_name": "RobotZone",
+                "vendor_url": "https://robotzone.example.com",
+            },
+        )
+        self.assertRedirects(resp, self.list_url)
+        item = OrderItem.objects.get(item_name="Servo")
+        self.assertIsNone(item.vendor_id)
+        self.assertEqual(item.vendor_name, "RobotZone")
+        self.assertEqual(item.vendor_url, "https://robotzone.example.com")
+
+    def test_item_without_vendor_is_blank(self):
+        self.login(self.student)
+        resp = self.client.post(self.create_url, {"item_name": "Bolt", "quantity": "4"})
+        self.assertRedirects(resp, self.list_url)
+        item = OrderItem.objects.get(item_name="Bolt")
+        self.assertIsNone(item.vendor_id)
+        self.assertEqual(item.vendor_name, "")
+
+    def test_editing_item_updates_vendor(self):
+        vendor = Vendor.objects.create(name="Vendor B")
+        item = make_item(self.program, requested_by=self.student)
+        self.login(self.student)
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
+        resp = self.client.post(
+            edit_url,
+            {
+                "item_name": item.item_name,
+                "quantity": "2",
+                "vendor_choice": str(vendor.pk),
+            },
+        )
+        self.assertRedirects(resp, self.list_url)
+        item.refresh_from_db()
+        self.assertEqual(item.vendor, vendor)
+        self.assertEqual(item.vendor_name, "Vendor B")
+
+    def test_clearing_vendor_on_edit_blanks_snapshot(self):
+        vendor = Vendor.objects.create(name="Vendor C")
+        item = make_item(self.program, requested_by=self.student)
+        item.vendor = vendor
+        item.vendor_name = "Vendor C"
+        item.save(update_fields=["vendor", "vendor_name"])
+        self.login(self.student)
+        edit_url = reverse("orders:item_edit", args=[self.program.id, item.id])
+        resp = self.client.post(
+            edit_url,
+            {"item_name": item.item_name, "quantity": "2", "vendor_choice": ""},
+        )
+        self.assertRedirects(resp, self.list_url)
+        item.refresh_from_db()
+        self.assertIsNone(item.vendor_id)
+        self.assertEqual(item.vendor_name, "")
+
+    def test_list_shows_pool_item_vendor(self):
+        vendor = Vendor.objects.create(name="Visible Vendor")
+        make_item(self.program, requested_by=self.student, vendor=vendor)
+        self.login(self.student)
+        resp = self.client.get(self.list_url)
+        self.assertContains(resp, "Visible Vendor")
+
 
 class OrderGroupingTests(TestCase):
     def setUp(self):
@@ -585,6 +669,14 @@ class OrderExportTests(TestCase):
         self.login(self.student)
         resp = self.client.get(self.list_url, {"export": "csv"})
         self.assertRedirects(resp, self.list_url)
+
+    def test_export_uses_item_vendor_when_unassigned(self):
+        vendor = Vendor.objects.create(name="Pool Vendor")
+        make_item(self.program, requested_by=self.student, vendor=vendor)
+        self.login(self.lead)
+        resp = self.client.get(self.list_url, {"export": "csv"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Pool Vendor")
 
 
 class OrderModelTests(TestCase):

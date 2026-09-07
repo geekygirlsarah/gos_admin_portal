@@ -9,7 +9,30 @@ NOT_LISTED_VENDOR = "__not_listed__"
 
 
 class OrderItemForm(forms.ModelForm):
-    """Form students/mentors use to place a requested item."""
+    """Form students/mentors use to place a requested item.
+
+    The request can optionally tag a vendor (from the reference list or a
+    free-text "Not listed" entry), mirroring the order form's vendor picker.
+    """
+
+    vendor_choice = forms.ChoiceField(
+        required=False,
+        label="Vendor",
+        help_text="Which vendor would you like this item from? Optional tip for the mentor grouping orders.",
+    )
+    vendor_name = forms.CharField(
+        required=False,
+        max_length=255,
+        label="Vendor name",
+        widget=forms.TextInput(attrs={"placeholder": "e.g. McMaster-Carr"}),
+        help_text="Only needed if you picked 'Not listed'.",
+    )
+    vendor_url = forms.URLField(
+        required=False,
+        max_length=500,
+        label="Vendor website",
+        widget=forms.URLInput(attrs={"placeholder": "https://…"}),
+    )
 
     class Meta:
         model = OrderItem
@@ -31,6 +54,42 @@ class OrderItemForm(forms.ModelForm):
             "unit_price": "Unit price ($)",
             "url": "Link to item",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]
+        choices.append((NOT_LISTED_VENDOR, "Not listed — I'll specify below"))
+        self.fields["vendor_choice"].choices = [("", "No preference")] + choices
+
+        instance = getattr(self, "instance", None)
+        if instance and instance.pk:
+            if instance.vendor_id:
+                self.fields["vendor_choice"].initial = str(instance.vendor_id)
+            elif instance.vendor_name:
+                self.fields["vendor_choice"].initial = NOT_LISTED_VENDOR
+            self.fields["vendor_name"].initial = instance.vendor_name
+            self.fields["vendor_url"].initial = instance.vendor_url
+
+    def save(self, commit=True):
+        item = super().save(commit=False)
+        choice = self.cleaned_data.get("vendor_choice")
+        if choice and choice != NOT_LISTED_VENDOR:
+            vendor = Vendor.objects.filter(pk=choice).first()
+            item.vendor = vendor
+            item.vendor_name = vendor.name if vendor else ""
+            item.vendor_url = vendor.website if vendor else ""
+        elif choice == NOT_LISTED_VENDOR:
+            item.vendor = None
+            item.vendor_name = self.cleaned_data.get("vendor_name", "")
+            item.vendor_url = self.cleaned_data.get("vendor_url", "")
+        else:
+            item.vendor = None
+            item.vendor_name = ""
+            item.vendor_url = ""
+        if commit:
+            item.save()
+        return item
 
 
 class OrderForm(forms.ModelForm):
@@ -107,7 +166,7 @@ class OrderForm(forms.ModelForm):
         else:
             self.fields["items"].queryset = (
                 OrderItem.objects.filter(order__isnull=True)
-                .select_related("program", "requested_by")
+                .select_related("program", "vendor", "requested_by")
                 .order_by("program__name", "-requested_at")
             )
 

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-09-07
 
 ### Added
+- **Request an Item now lets you pick a vendor**: When a student or mentor puts in an item request, they can tag it with the vendor they'd like it from (chosen from the shared vendor list, or "Not listed" to type one). The request list, order pages, and exports all show that vendor, so the mentor grouping orders can see at a glance where a part is meant to come from. The vendor name/website are saved with the request, so it survives even if the vendor is later renamed or removed from the list.
 - **Order requests and orders now track status and shipping**: Each requested item shows a status as it moves along — **Pending** while it's a new request in the Requests list, **Ready to order** once it's been grouped into an order waiting to be placed, and **Ordered**/**Shipped** once that order has gone out the door. Orders themselves now have a three-stage status (**Ready to Place** → **Ordered** → **Shipped**), and once an order is placed you can record its shipping details — company, tracking number, shipped-on date, and estimated delivery — right on the order's page. The archive lists every placed order (ordered or shipped) with its status and tracking number at a glance, the detail page shows one badge per line item, and the CSV/Excel exports carry each item's status too.
 
 ### Changed

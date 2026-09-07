@@ -146,6 +146,12 @@
                             {% else %}
                             {{ item.item_name }}
                             {% endif %}
+                            {% if item.vendor_name_display %}
+                            <div class="text-muted small">
+                                <i class="bi bi-shop"></i>
+                                {% if item.vendor_url %}<a href="{{ item.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ item.vendor_name_display }}</a>{% else %}{{ item.vendor_name_display }}{% endif %}
+                            </div>
+                            {% endif %}
                         </td>
                         <td>
                             {% if item.status_key == 'ready' %}

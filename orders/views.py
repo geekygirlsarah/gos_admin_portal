@@ -114,8 +114,8 @@ def _item_export_row(item):
         "total": item.total if item.total is not None else "",
         "url": item.url,
         "order": f"#{order.pk}" if order else "",
-        "vendor": order.vendor_name if order else "",
-        "vendor_url": order.vendor_url if order else "",
+        "vendor": order.vendor_name if order else item.vendor_name_display,
+        "vendor_url": order.vendor_url if order else item.vendor_url,
         "requested_by": item.requested_by_name,
         "requested_on": (
             timezone.localtime(item.requested_at).strftime("%Y-%m-%d %H:%M")
@@ -293,6 +293,7 @@ class OrderListView(
             )
             .select_related(
                 "program",
+                "vendor",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
@@ -306,7 +307,7 @@ class OrderListView(
         role = context["user_role"]
         pool_items = (
             OrderItem.objects.filter(order__isnull=True)
-            .select_related("program", "requested_by")
+            .select_related("program", "vendor", "requested_by")
             .order_by("-requested_at")
         )
         pending_orders = (
@@ -358,6 +359,7 @@ class OrderArchiveView(
             )
             .select_related(
                 "program",
+                "vendor",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
@@ -402,11 +404,11 @@ class OrderDetailView(
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
         context["items"] = self.object.items.select_related(
-            "program", "requested_by", "order"
+            "program", "vendor", "requested_by", "order"
         ).all()
         context["available_items"] = (
             OrderItem.objects.filter(order__isnull=True)
-            .select_related("program", "requested_by")
+            .select_related("program", "vendor", "requested_by")
             .order_by("program__name", "-requested_at")
         )
         context["is_lead"] = role == "LeadMentor"
@@ -701,6 +703,11 @@ class ItemCreateView(
     template_name = "orders/item_form.html"
     section = "orders"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["not_listed_vendor"] = NOT_LISTED_VENDOR
+        return context
+
     def form_valid(self, form):
         form.instance.requested_by = self.request.user
         form.instance.program = self.program
@@ -722,7 +729,12 @@ class ItemUpdateView(
     def get_queryset(self):
         # Org-wide queryset; creator/unassigned editing is enforced by
         # ``can_user_write('orders', obj)`` for non-Lead-Mentors.
-        return OrderItem.objects.select_related("program")
+        return OrderItem.objects.select_related("program", "vendor")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["not_listed_vendor"] = NOT_LISTED_VENDOR
+        return context
 
     def form_valid(self, form):
         messages.success(self.request, "Request updated.")

@@ -51,13 +51,14 @@ class OrderItemAdmin(admin.ModelAdmin):
         "item_name",
         "order",
         "program",
+        "vendor",
         "quantity",
         "unit_price",
         "total",
         "requested_by",
         "requested_at",
     )
-    list_select_related = ("order", "program", "requested_by")
-    list_filter = ("order__status", "program")
-    search_fields = ("item_name", "notes", "url")
+    list_select_related = ("order", "program", "vendor", "requested_by")
+    list_filter = ("order__status", "program", "vendor")
+    search_fields = ("item_name", "vendor_name", "notes", "url")
     readonly_fields = ("requested_by", "requested_at")
