@@ -324,7 +324,7 @@ class OrderListView(
     def get_export_items(self):
         return (
             OrderItem.objects.filter(
-                Q(order__isnull=True) | Q(order__status=Order.STATUS_PENDING)
+                Q(order__isnull=True) | ~Q(order__status=Order.STATUS_RECEIVED)
             )
             .select_related(
                 "program",
@@ -345,14 +345,14 @@ class OrderListView(
             .select_related("program", "vendor", "requested_by")
             .order_by("-requested_at")
         )
-        pending_orders = (
-            Order.objects.filter(status=Order.STATUS_PENDING)
+        active_orders = (
+            Order.objects.exclude(status=Order.STATUS_RECEIVED)
             .select_related("program", "vendor", "created_by")
             .prefetch_related("items")
             .order_by("-created_at")
         )
         item_groups = _group_by_vendor(pool_items)
-        order_groups = _group_by_vendor(pending_orders)
+        order_groups = _group_by_vendor(active_orders)
         context["item_groups"] = item_groups
         context["order_groups"] = order_groups
         context["item_groups_total"] = _groups_total(item_groups)
@@ -386,9 +386,7 @@ class OrderArchiveView(
 
     def get_queryset(self):
         return (
-            Order.objects.filter(
-                status__in=[Order.STATUS_ORDERED, Order.STATUS_SHIPPED]
-            )
+            Order.objects.filter(status=Order.STATUS_RECEIVED)
             .select_related("program", "vendor", "created_by", "ordered_by")
             .prefetch_related("items")
             .order_by("-ordered_at", "-created_at")
@@ -396,9 +394,7 @@ class OrderArchiveView(
 
     def get_export_items(self):
         return (
-            OrderItem.objects.filter(
-                order__status__in=[Order.STATUS_ORDERED, Order.STATUS_SHIPPED]
-            )
+            OrderItem.objects.filter(order__status=Order.STATUS_RECEIVED)
             .select_related(
                 "program",
                 "vendor",
@@ -581,8 +577,9 @@ class OrderDeleteView(
 class OrderMarkOrderedView(
     LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
 ):
-    """Lead Mentor marks a pending order as placed (moves it to the archive),
-    or un-marks a shipped order back to ordered."""
+    """Lead Mentor marks a pending order as placed, or un-marks a shipped order
+    back to ordered. Either way the order stays on the active list (it is only
+    archived once received)."""
 
     def post(self, request, program_id, pk):
         order = get_object_or_404(Order, pk=pk)
@@ -593,7 +590,7 @@ class OrderMarkOrderedView(
             order.save(update_fields=["status", "ordered_at", "ordered_by"])
             messages.success(
                 request,
-                f"Order {order} marked as ordered and moved to the archive.",
+                f"Order {order} marked as ordered.",
             )
             return redirect("orders:order_list", program_id=self.program.id)
         if order.status == Order.STATUS_SHIPPED:
@@ -602,9 +599,9 @@ class OrderMarkOrderedView(
             order.save(update_fields=["status", "shipped_date"])
             messages.success(
                 request,
-                f"Order {order} un-marked as shipped and is back on the archive.",
+                f"Order {order} un-marked as shipped.",
             )
-            return redirect("orders:order_archive", program_id=self.program.id)
+            return redirect("orders:order_list", program_id=self.program.id)
         messages.info(request, "That order has already been marked as ordered.")
         return redirect("orders:order_list", program_id=self.program.id)
 
@@ -612,11 +609,15 @@ class OrderMarkOrderedView(
 class OrderMarkPendingView(
     LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
 ):
-    """Reopens an archived order (undoes 'mark ordered'/'mark shipped')."""
+    """Reopens an order (undoes 'mark ordered'/'mark shipped'/'mark received')."""
 
     def post(self, request, program_id, pk):
         order = get_object_or_404(Order, pk=pk)
-        if order.status in (Order.STATUS_ORDERED, Order.STATUS_SHIPPED):
+        if order.status in (
+            Order.STATUS_ORDERED,
+            Order.STATUS_SHIPPED,
+            Order.STATUS_RECEIVED,
+        ):
             order.status = Order.STATUS_PENDING
             order.ordered_at = None
             order.ordered_by = None
@@ -625,15 +626,19 @@ class OrderMarkPendingView(
                 request,
                 f"Order {order} moved back to the pending list.",
             )
+            return redirect("orders:order_archive", program_id=self.program.id)
+        if order.status == Order.STATUS_PENDING:
+            messages.info(request, "That order is already pending.")
         else:
             messages.info(request, "That order is not archived.")
-        return redirect("orders:order_archive", program_id=self.program.id)
+        return redirect("orders:order_list", program_id=self.program.id)
 
 
 class OrderMarkShippedView(
     LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
 ):
-    """Lead Mentor marks an ordered order as shipped (stays on the archive)."""
+    """Lead Mentor marks an ordered order as shipped. The order stays on the
+    active list until it's received."""
 
     def post(self, request, program_id, pk):
         order = get_object_or_404(Order, pk=pk)
@@ -646,6 +651,29 @@ class OrderMarkShippedView(
             )
         else:
             messages.info(request, "Only ordered orders can be marked as shipped.")
+        return redirect("orders:order_list", program_id=self.program.id)
+
+
+class OrderMarkReceivedView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Lead Mentor marks a shipped order as received, moving it to the archive.
+
+    Orders are only archived once they've been received; placed/shipped orders
+    stay on the active list so shipping/tracking details can still be edited.
+    """
+
+    def post(self, request, program_id, pk):
+        order = get_object_or_404(Order, pk=pk)
+        if order.status == Order.STATUS_SHIPPED:
+            order.status = Order.STATUS_RECEIVED
+            order.save(update_fields=["status"])
+            messages.success(
+                request,
+                f"Order {order} marked as received and moved to the archive.",
+            )
+        else:
+            messages.info(request, "Only shipped orders can be marked as received.")
         return redirect("orders:order_archive", program_id=self.program.id)
 
 
@@ -664,6 +692,15 @@ class OrderShippingUpdateView(
 
     def post(self, request, program_id, pk):
         order = self.get_object()
+        if order.status not in (Order.STATUS_ORDERED, Order.STATUS_SHIPPED):
+            messages.error(
+                request, "Shipping details can only be edited on active orders."
+            )
+            return redirect(
+                "orders:order_detail",
+                program_id=self.program.id,
+                pk=order.pk,
+            )
         form = ShippingInfoForm(request.POST, instance=order)
         if form.is_valid():
             form.save()

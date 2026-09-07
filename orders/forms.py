@@ -219,6 +219,12 @@ class ShippingInfoForm(forms.ModelForm):
             "shipped_date",
             "delivery_estimate",
         ]
+        labels = {
+            "shipping_carrier": "Carrier",
+            "tracking_number": "Tracking",
+            "shipped_date": "Shipped",
+            "delivery_estimate": "Est. delivery",
+        }
         widgets = {
             "shipping_carrier": forms.TextInput(
                 attrs={"placeholder": "e.g. UPS, FedEx, USPS"}

@@ -553,7 +553,7 @@ class OrderStatusTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.STATUS_PENDING)
 
-    def test_archive_lists_only_ordered_orders(self):
+    def test_archive_lists_only_received_orders(self):
         pending = make_order(self.program, created_by=self.mentor)
         make_item(
             self.program,
@@ -561,21 +561,21 @@ class OrderStatusTests(TestCase):
             requested_by=self.student,
             order=pending,
         )
-        ordered = make_order(self.program, created_by=self.mentor)
+        received = make_order(self.program, created_by=self.mentor)
         make_item(
             self.program,
-            item_name="Ordered Item",
+            item_name="Received Item",
             requested_by=self.student,
-            order=ordered,
+            order=received,
         )
-        ordered.status = Order.STATUS_ORDERED
-        ordered.save(update_fields=["status"])
+        received.status = Order.STATUS_RECEIVED
+        received.save(update_fields=["status"])
         self.login(self.lead)
         resp = self.client.get(self.archive_url)
-        self.assertContains(resp, "Ordered Item")
+        self.assertContains(resp, "Received Item")
         self.assertNotContains(resp, "Pending Item")
 
-    def test_list_shows_pool_items_and_pending_orders_only(self):
+    def test_list_shows_pool_items_and_active_orders_only(self):
         make_item(self.program, item_name="Pool Item", requested_by=self.student)
         pending = make_order(self.program, created_by=self.mentor)
         make_item(
@@ -593,11 +593,21 @@ class OrderStatusTests(TestCase):
         )
         ordered.status = Order.STATUS_ORDERED
         ordered.save(update_fields=["status"])
+        received = make_order(self.program, created_by=self.mentor)
+        make_item(
+            self.program,
+            item_name="Received Item",
+            requested_by=self.student,
+            order=received,
+        )
+        received.status = Order.STATUS_RECEIVED
+        received.save(update_fields=["status"])
         self.login(self.student)
         resp = self.client.get(self.list_url)
         self.assertContains(resp, "Pool Item")
         self.assertContains(resp, "Pending Grouped Item")
-        self.assertNotContains(resp, "Ordered Item")
+        self.assertContains(resp, "Ordered Item")
+        self.assertNotContains(resp, "Received Item")
 
 
 class OrderStatusAndShippingTests(TestCase):
@@ -717,17 +727,17 @@ class OrderStatusAndShippingTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.shipping_carrier, "FedEx")
 
-    def test_archive_includes_shipped_orders_with_status(self):
-        ordered = make_order(self.program, created_by=self.mentor)
-        ordered.status = Order.STATUS_ORDERED
-        ordered.save(update_fields=["status"])
+    def test_archive_includes_only_received_orders_with_status(self):
+        received = make_order(self.program, created_by=self.mentor)
+        received.status = Order.STATUS_RECEIVED
+        received.save(update_fields=["status"])
         shipped = make_order(self.program, created_by=self.mentor)
         shipped.status = Order.STATUS_SHIPPED
         shipped.save(update_fields=["status"])
         self.login(self.lead)
         resp = self.client.get(reverse("orders:order_archive", args=[self.program.id]))
-        self.assertContains(resp, "Shipped")
-        self.assertContains(resp, "Ordered")
+        self.assertContains(resp, "Received")
+        self.assertNotContains(resp, "Shipped")
 
     def test_detail_shows_status_and_mark_shipped_button(self):
         order = make_order(self.program, created_by=self.mentor)

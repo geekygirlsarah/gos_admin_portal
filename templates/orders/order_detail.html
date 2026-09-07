@@ -34,6 +34,22 @@
                 </button>
             </form>
             {% endif %}
+            {% if order.status == "shipped" and is_lead %}
+            <form method="post" action="{% url 'orders:order_mark_received' program.id order.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-dark">
+                    <i class="bi bi-box-seam me-1"></i>Mark as Received
+                </button>
+            </form>
+            {% endif %}
+            {% if order.status == "received" and is_lead %}
+            <form method="post" action="{% url 'orders:order_mark_pending' program.id order.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-warning">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Move back to Pending
+                </button>
+            </form>
+            {% endif %}
             {% if can_manage_items %}
             <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-outline-secondary">
                 <i class="bi bi-pencil me-1"></i>Edit
@@ -49,7 +65,7 @@
 
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
-            <span class="badge {% if order.status == 'ordered' %}bg-success{% elif order.status == 'shipped' %}bg-primary{% else %}bg-warning text-dark{% endif %}">{{ order.get_status_display }}</span>
+            <span class="badge {% if order.status == 'ordered' %}bg-success{% elif order.status == 'shipped' %}bg-primary{% elif order.status == 'received' %}bg-dark{% else %}bg-warning text-dark{% endif %}">{{ order.get_status_display }}</span>
         </div>
         <div class="card-body">
             <div class="row g-3">
@@ -104,15 +120,18 @@
             {% if can_edit_shipping %}
             <form method="post" action="{% url 'orders:order_update_shipping' program.id order.pk %}">
                 {% csrf_token %}
-                <div class="row g-3 align-items-end">
+                <div class="row g-3">
                     <div class="col-md-3">{% render_field shipping_form.shipping_carrier %}</div>
                     <div class="col-md-3">{% render_field shipping_form.tracking_number %}</div>
                     <div class="col-md-2">{% render_field shipping_form.shipped_date %}</div>
                     <div class="col-md-2">{% render_field shipping_form.delivery_estimate %}</div>
                     <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-check2 me-1"></i>Save
-                        </button>
+                        <div class="mb-3">
+                            <label class="form-label invisible">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-check2 me-1"></i>Save
+                            </button>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -171,6 +190,8 @@
                             <span class="badge bg-info text-dark">{{ item.get_status_display }}</span>
                             {% elif item.status_key == 'shipped' %}
                             <span class="badge bg-primary">{{ item.get_status_display }}</span>
+                            {% elif item.status_key == 'received' %}
+                            <span class="badge bg-dark">{{ item.get_status_display }}</span>
                             {% elif item.status_key == 'ordered' %}
                             <span class="badge bg-success">{{ item.get_status_display }}</span>
                             {% else %}

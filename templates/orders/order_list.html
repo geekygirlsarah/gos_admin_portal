@@ -128,7 +128,7 @@
 
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h5 mb-0">Orders Ready to Place</h2>
+            <h2 class="h5 mb-0">Active Orders</h2>
             {% if order_groups_total is not None %}
             <span class="text-muted small">Est. total: <strong>${{ order_groups_total|floatformat:2 }}</strong></span>
             {% endif %}
@@ -179,12 +179,28 @@
                         <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
                         <td class="text-end text-nowrap">
                             {% if is_lead %}
+                            {% if order.status == "pending" %}
                             <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}" class="d-inline">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as ordered">
                                     <i class="bi bi-check2-circle"></i> Ordered
                                 </button>
                             </form>
+                            {% elif order.status == "ordered" %}
+                            <form method="post" action="{% url 'orders:order_mark_shipped' program.id order.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Mark as shipped">
+                                    <i class="bi bi-truck"></i> Shipped
+                                </button>
+                            </form>
+                            {% elif order.status == "shipped" %}
+                            <form method="post" action="{% url 'orders:order_mark_received' program.id order.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-dark" title="Mark as received">
+                                    <i class="bi bi-box-seam"></i> Received
+                                </button>
+                            </form>
+                            {% endif %}
                             {% endif %}
                             {% if order.created_by_id == request.user.id or is_lead %}
                             <a href="{% url 'orders:order_detail' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="View">
@@ -210,7 +226,7 @@
         {% endfor %}
         {% else %}
         <div class="alert alert-light text-center border m-3">
-            <i class="bi bi-cart me-2"></i>No pending orders yet. Group some requests with "Place Order" above.
+            <i class="bi bi-cart me-2"></i>No active orders yet. Group some requests with "Place Order" above.
         </div>
         {% endif %}
     </div>

@@ -44,10 +44,12 @@ class Order(models.Model):
     STATUS_PENDING = "pending"
     STATUS_ORDERED = "ordered"
     STATUS_SHIPPED = "shipped"
+    STATUS_RECEIVED = "received"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Ready to place order"),
         (STATUS_ORDERED, "Ordered"),
         (STATUS_SHIPPED, "Shipped"),
+        (STATUS_RECEIVED, "Received"),
     ]
 
     program = models.ForeignKey(
@@ -289,13 +291,16 @@ class OrderItem(models.Model):
     def status_key(self):
         """Machine-readable status derived from the item's order membership:
         ``"pending"`` (unassigned pool), ``"ready"`` (in an order ready to be
-        placed), ``"ordered"`` or ``"shipped"`` (from the parent order)."""
+        placed), ``"ordered"``, ``"shipped"`` or ``"received"`` (from the
+        parent order)."""
         if self.order_id is None:
             return "pending"
         if self.order.status == Order.STATUS_PENDING:
             return "ready"
         if self.order.status == Order.STATUS_SHIPPED:
             return "shipped"
+        if self.order.status == Order.STATUS_RECEIVED:
+            return "received"
         return "ordered"
 
     def get_status_display(self):
@@ -306,6 +311,7 @@ class OrderItem(models.Model):
             "ready": "Ready to order",
             "ordered": "Ordered",
             "shipped": "Shipped",
+            "received": "Received",
         }[self.status_key]
 
 

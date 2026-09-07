@@ -20,7 +20,7 @@
             </a>
             {% endif %}
             <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
-                <i class="bi bi-list-check me-1"></i>Pending Orders
+                <i class="bi bi-list-check me-1"></i>Active Orders
             </a>
             {% if is_staff %}
             <a href="{% url 'orders:order_create' program.id %}" class="btn btn-primary">
@@ -31,7 +31,7 @@
     </div>
 
     <p class="text-muted">
-        Orders that have been placed with a vendor, kept on record for budget and finance purposes.
+        Orders that have been received, kept on record for budget and finance purposes.
     </p>
 
     {% if order_groups %}
@@ -72,11 +72,7 @@
                                 <a href="{% url 'orders:order_detail' program.id order.pk %}"><strong>Order #{{ order.pk }}</strong></a>
                             </td>
                             <td>
-                                {% if order.status == 'shipped' %}
-                                <span class="badge bg-primary">Shipped</span>
-                                {% else %}
-                                <span class="badge bg-success">Ordered</span>
-                                {% endif %}
+                                <span class="badge bg-dark">Received</span>
                             </td>
                             <td>
                                 {% for it in order.items.all %}
@@ -104,14 +100,6 @@
                             </td>
                             <td class="text-end text-nowrap">
                                 {% if is_lead %}
-                                {% if order.status == 'ordered' %}
-                                <form method="post" action="{% url 'orders:order_mark_shipped' program.id order.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-primary" title="Mark as shipped">
-                                        <i class="bi bi-truck"></i>
-                                    </button>
-                                </form>
-                                {% endif %}
                                 <form method="post" action="{% url 'orders:order_mark_pending' program.id order.pk %}" class="d-inline">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-sm btn-outline-warning" title="Move back to pending">
@@ -135,7 +123,7 @@
         {% endfor %}
     {% else %}
         <div class="alert alert-light text-center border">
-            <i class="bi bi-archive me-2"></i>Nothing ordered yet. Mark a pending order as ordered and it'll show up here.
+            <i class="bi bi-archive me-2"></i>Nothing received yet. Mark a shipped order as received and it'll show up here.
         </div>
     {% endif %}
 </div>
