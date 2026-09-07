@@ -194,7 +194,7 @@ def record_tap(
     event_type: str = "AUTO",
     occurred_at=None,
     source="kiosk",
-    notes=""
+    notes="",
 ) -> AttendanceEvent:
     """Create an AttendanceEvent and open/close a session as needed.
     If event_type == 'AUTO', we decide based on any open session.
