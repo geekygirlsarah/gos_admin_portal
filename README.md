@@ -1,26 +1,29 @@
-# GoS Admin Portal
+# Girls of Steel Admin Portal
 
-A Django-based administrative portal for managing programs, students, parents, and mentors for GoS.
+A Django-based administrative portal for managing administrative tasks for Girls of Steel (GoS).
 
 ## Portal Goals
-1. Reduce the administrative burden for GoS by providing a centralized platform for everything.
-2. Increase transparency and accountability for parents and students of the programs.
+
+All tasks related to the portal are to try to aim for these three goals:
+1. Reduce the administrative burden for GoS by providing an automated, centralized platform for everything.
+2. Increase transparency and accountability for parents, students, and mentors of the programs.
 3. Increase the data reliability of our participant data.
 
 ## Prerequisites
 - Python 3.12+ (Django 6.1 requires Python 3.12 or newer)
-- pip
+- pip or uv
 - (Optional) virtualenv or venv
 
 ## Getting Started (Local Development)
 
 1. Clone the repo
-   git clone https://github.com/your-org/GoSAdminPortal.git
+   git clone https://github.com/geekygirlsarah/GoSAdminPortal.git
    cd GoSAdminPortal
 
 2. Create and activate a virtual environment (recommended)
    python -m venv .venv
-   .venv\\Scripts\\activate
+   (For Windows) .venv\\Scripts\\activate
+   (For Mac/Linxu) .venv/bin/activate
 
 3. Install dependencies
    pip install -r requirements.txt
@@ -28,17 +31,19 @@ A Django-based administrative portal for managing programs, students, parents, a
 4. Apply database migrations
    python manage.py migrate
 
-5. Create a superuser (to access the admin and log in during local dev)
+5. Add environment variables to .env or to the local PATH file (see below)
+
+6. For the first run, create a superuser (to access the admin and log in during local dev)
    python manage.py createsuperuser
 
-6. Seed the database with some sample data to play with (optional)
+7. Seed the database with some sample data to play with (optional)
    python manage.py seed_db
 
-7. Run the development server
+8. Run the development server
    python manage.py runserver
 
-8. Open the app
-   Visit http://127.0.0.1:8000/ or http://localhost:8000 to view the portal. Log in using your superuser credentials.
+9. Open the app
+   Visit http://127.0.0.1:8000/ or http://localhost:8000 to view the portal. Log in using your superuser email address.
 
 ## Project Structure
 The repository is organized into several Django apps:
@@ -50,6 +55,7 @@ The repository is organized into several Django apps:
 - `audit/`: Audit logging for sensitive data access and authentication events.
 - `GoSAdminPortal/`: Project configuration, middleware, and authentication adapters.
 - `templates/`: Centralized Bootstrap 5 templates, organized by app and user role.
+- `orders/`: Order management and invoicing.
 
 ## Key Technologies
 - **Django 6.1**: Web framework with global login enforcement and modern `__call__`-based middleware.
@@ -71,7 +77,7 @@ Typical settings for email, debug, and allowed hosts can be configured directly 
 - `EMAIL_HOST_USER` — SMTP username for sending OTP login emails (required for allauth email OTP)
 - `EMAIL_HOST_PASSWORD` — SMTP password for the above account
 
-Outgoing email is configured through Django 6.1's `MAILERS` setting (the legacy `EMAIL_*` settings are gone). The default mailer is built from the `EMAIL_HOST*` variables above; message senders such as OTP login emails reuse the default mailer in tests via Django's automated `MAILERS` override. When `EMAIL_SENDER_ACCOUNTS_JSON` is set, each sender account gets its own mailer alias for the bulk-email pages.
+Outgoing email is configured through Django 6.1's `MAILERS` setting. The default mailer is built from the `EMAIL_HOST*` variables above; message senders such as OTP login emails reuse the default mailer in tests via Django's automated `MAILERS` override. When `EMAIL_SENDER_ACCOUNTS_JSON` is set, each sender account gets its own mailer alias for the bulk-email pages.
 
 **Recommended in production:**
 - `DATABASE_URL` — PostgreSQL connection string (defaults to SQLite if not set)
@@ -115,7 +121,13 @@ To run specific integration flows:
 We follow a TDD approach. New features or bug fixes should include both unit tests and, where appropriate, "Story" integration tests that cover full lifecycles.
 
 ## Continuous Integration (CI)
-Before deploying, all changes should pass the automated CI suite. You can run these checks locally using the provided scripts:
+Before deploying, all changes should pass the automated CI suite. 
+
+You should run the pre-commit checks:
+`pre-commit install`
+`pre-commit run --all-files`
+
+You can run the full CI suite these checks locally using the provided scripts:
 - **Windows (PowerShell)**: `.\run_ci.ps1`
 - **Windows (Batch)**: `run_ci.bat`
 - **Linux/macOS**: `./run_ci.sh`
