@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from badges.models import Badge, StudentBadge
-from orders.models import Vendor
+from orders.models import Order, OrderItem, Vendor
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -44,6 +44,7 @@ class Command(BaseCommand):
         self._seed_payments(enrollments, programs, today)
         self._seed_badges(students, programs)
         self._seed_vendors()
+        _seed_orders(programs)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded database"))
 
@@ -821,6 +822,59 @@ class Command(BaseCommand):
                     "notes": vendor.get("notes", ""),
                 },
             )
+
+
+def _seed_orders(programs):
+    """Seed a few item requests and one grouped order as demo data.
+
+    Skipped entirely if order data already exists so re-running seed_db
+    never duplicates or regroups requests.
+    """
+    if Order.objects.exists() or OrderItem.objects.exists():
+        return
+    User = get_user_model()
+    mentor_user = User.objects.filter(is_staff=True).first() or (User.objects.first())
+    if not mentor_user:
+        return
+    program = next(
+        (p for p in programs if p.has_feature("orders")),
+        programs[0] if programs else None,
+    )
+    if not program:
+        return
+
+    item_data = [
+        ("2mm hex driver", "3", "6.50", "https://www.andymark.com"),
+        ("Zip ties (100 ct)", "2", "5.00", "https://www.mcmaster.com"),
+        ("Spark MAX motor controller", "1", "99.00", "https://www.revrobotics.com"),
+        ("5V regulator", "2", "3.25", "https://www.digikey.com"),
+        ("VEX claw mechanism", "1", "32.00", "https://www.vexrobotics.com"),
+    ]
+    items = []
+    for name, qty, price, url in item_data:
+        item, _ = OrderItem.objects.get_or_create(
+            item_name=name,
+            requested_by=mentor_user,
+            order=None,
+            defaults={
+                "program": program,
+                "quantity": qty,
+                "unit_price": price,
+                "url": url,
+            },
+        )
+        items.append(item)
+
+    vendor = Vendor.objects.first()
+    order = Order.objects.create(
+        program=program,
+        vendor=vendor,
+        vendor_name=vendor.name if vendor else "",
+        vendor_url=vendor.website if vendor else "",
+        created_by=mentor_user,
+        notes="Demo order — group more items from the Requests list as needed.",
+    )
+    OrderItem.objects.filter(pk__in=[i.pk for i in items[:3]]).update(order=order)
 
 
 def _seed_clearances(adult, paca, patch, fbi, expires):

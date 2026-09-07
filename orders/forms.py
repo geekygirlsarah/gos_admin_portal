@@ -1,36 +1,18 @@
 from django import forms
 
-from orders.models import PurchaseOrder, Vendor
+from orders.models import Order, OrderItem, Vendor
+from programs.models import Program
 
 # Sentinel value for the "Not listed" option in the order form's vendor
 # dropdown. Chosen with a value unlikely to collide with a Vendor primary key.
 NOT_LISTED_VENDOR = "__not_listed__"
 
 
-class OrderForm(forms.ModelForm):
-    vendor_choice = forms.ChoiceField(
-        required=False,
-        label="Vendor",
-        help_text=(
-            "Pick a vendor from our list, or choose 'Not listed' and type " "your own."
-        ),
-    )
-    vendor_name = forms.CharField(
-        required=False,
-        max_length=255,
-        label="Vendor name",
-        widget=forms.TextInput(attrs={"placeholder": "e.g. McMaster-Carr"}),
-        help_text="Required when you pick 'Not listed'.",
-    )
-    vendor_url = forms.URLField(
-        required=False,
-        max_length=500,
-        label="Vendor website",
-        widget=forms.URLInput(attrs={"placeholder": "https://…"}),
-    )
+class OrderItemForm(forms.ModelForm):
+    """Form students/mentors use to place a requested item."""
 
     class Meta:
-        model = PurchaseOrder
+        model = OrderItem
         fields = ["item_name", "quantity", "unit_price", "url", "notes"]
         widgets = {
             "item_name": forms.TextInput(attrs={"placeholder": "e.g. 2mm hex driver"}),
@@ -50,30 +32,89 @@ class OrderForm(forms.ModelForm):
             "url": "Link to item",
         }
 
+
+class OrderForm(forms.ModelForm):
+    """Form mentors/Lead Mentors use to create a grouped order.
+
+    The group picks the vendor and selects the requested items to include. Item
+    membership is chosen at creation only; later additions/removals happen from
+    the order detail page so editing never silently unassigns items.
+    """
+
+    program = forms.ModelChoiceField(
+        queryset=Program.objects.none(),
+        required=False,
+        label="Program",
+        empty_label="General (no program)",
+    )
+    vendor_choice = forms.ChoiceField(
+        required=True,
+        label="Vendor",
+        help_text=(
+            "Pick a vendor from our list, or choose 'Not listed' to specify your own."
+        ),
+    )
+    vendor_name = forms.CharField(
+        required=False,
+        max_length=255,
+        label="Vendor name",
+        widget=forms.TextInput(attrs={"placeholder": "e.g. McMaster-Carr"}),
+        help_text="Only needed if you want to type a vendor that isn't in the list.",
+    )
+    vendor_url = forms.URLField(
+        required=False,
+        max_length=500,
+        label="Vendor website",
+        widget=forms.URLInput(attrs={"placeholder": "https://…"}),
+    )
+    items = forms.ModelMultipleChoiceField(
+        queryset=OrderItem.objects.none(),
+        required=False,
+        label="Items to include",
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Group the requested items you want placed together. Only unassigned requests are listed.",
+    )
+
+    class Meta:
+        model = Order
+        fields = ["program", "notes"]
+        widgets = {
+            "notes": forms.Textarea(
+                attrs={"rows": 3, "placeholder": "Anything the vendor should know."}
+            ),
+        }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.fields["program"].queryset = Program.objects.order_by("name")
+        self.fields["program"].initial = self.initial.get("program")
+
         choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]
         choices.append((NOT_LISTED_VENDOR, "Not listed — I'll specify below"))
-        self.fields["vendor_choice"].choices = [
-            ("", "Select a vendor (optional)")
-        ] + choices
+        self.fields["vendor_choice"].choices = [("", "Select a vendor")] + choices
 
         instance = getattr(self, "instance", None)
         if instance and instance.pk:
+            # Item membership is managed from the order detail page.
+            self.fields.pop("items")
             if instance.vendor_id:
                 self.fields["vendor_choice"].initial = str(instance.vendor_id)
             elif instance.vendor_name:
                 self.fields["vendor_choice"].initial = NOT_LISTED_VENDOR
             self.fields["vendor_name"].initial = instance.vendor_name
             self.fields["vendor_url"].initial = instance.vendor_url
+        else:
+            self.fields["items"].queryset = (
+                OrderItem.objects.filter(order__isnull=True)
+                .select_related("program", "requested_by")
+                .order_by("program__name", "-requested_at")
+            )
 
     def clean(self):
         cleaned = super().clean()
-        choice = cleaned.get("vendor_choice")
-        if choice == NOT_LISTED_VENDOR and not cleaned.get("vendor_name"):
-            self.add_error(
-                "vendor_name", "Enter a vendor name when choosing 'Not listed'."
-            )
+        if not self.instance.pk and not cleaned.get("items"):
+            self.add_error("items", "Select at least one item for the order.")
         return cleaned
 
     def save(self, commit=True):
@@ -89,14 +130,17 @@ class OrderForm(forms.ModelForm):
             order.vendor_name = self.cleaned_data.get("vendor_name", "")
             order.vendor_url = self.cleaned_data.get("vendor_url", "")
         else:
-            # Blank selection: reset any previously chosen vendor so an edit
-            # that intentionally deselects it clears the snapshot too.
+            # Only reachable with data that bypasses the form's required
+            # validation; reset the snapshot defensively.
             order.vendor = None
             order.vendor_name = ""
             order.vendor_url = ""
         if commit:
             order.save()
-            self.save_m2m()
+            if self.fields.get("items"):
+                item_pks = self.cleaned_data.get("items", [])
+                if item_pks:
+                    OrderItem.objects.filter(pk__in=item_pks).update(order=order)
         return order
 
 

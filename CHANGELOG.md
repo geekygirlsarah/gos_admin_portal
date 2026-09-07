@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-07
+
+### Changed
+- **Orders are now grouped: requests and orders are separate**: Students and mentors request the items they want (a part number, a link, how many, an estimated price), and those requests pile up in an "Requests" list. A mentor or Lead Mentor then groups the requests they're going to place at the same time — with the same vendor — into a single **Order**. Orders track the vendor, a running total, and which items are in them, and any item can be moved in or out until the order is finalized. This replaces the old one-row-per-item "orders" page, so budgeting is now done per line item (exported with which order each item went into, which vendor, and who requested it). Deleting a grouped order returns its items to the Requests list instead of throwing them away. Students and mentors can edit their own requests while they're still ungrouped, but only mentors and Lead Mentors create and manage the grouped orders.
+
 ## 2026-09-06
 
 ### Fixed

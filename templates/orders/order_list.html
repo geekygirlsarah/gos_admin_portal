@@ -22,103 +22,181 @@
             <a href="{% url 'orders:order_archive' program.id %}" class="btn btn-outline-dark">
                 <i class="bi bi-archive me-1"></i>Archive
             </a>
-            <a href="{% url 'orders:order_create' program.id %}" class="btn btn-primary">
-                <i class="bi bi-plus-lg me-1"></i>Place Order
+            <a href="{% url 'orders:item_create' program.id %}" class="btn btn-outline-success">
+                <i class="bi bi-plus-lg me-1"></i>Request an Item
             </a>
+            {% if is_staff %}
+            <a href="{% url 'orders:order_create' program.id %}" class="btn btn-primary">
+                <i class="bi bi-cart me-1"></i>Place Order
+            </a>
+            {% endif %}
         </div>
     </div>
 
     <p class="text-muted">
-        Pending requests for parts, tools, and supplies from all programs. Edit your own requests; Lead Mentors review, mark items as ordered, and export the list to place the order.
+        Students and mentors request the parts and supplies they need; mentors group those requests
+        into orders placed with a vendor. You can edit your own requests until they're grouped into an order.
     </p>
 
-    {% if order_groups %}
-        {% for group in order_groups %}
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0">
-                    {% if group.program %}
-                        {{ group.program.name }}
-                    {% else %}
-                        General Orders
-                    {% endif %}
-                    <span class="badge bg-secondary ms-2">{{ group.orders|length }}</span>
-                </h2>
-                {% if group.total is not None %}
-                <span class="text-muted small">Est. total: <strong>${{ group.total|floatformat:2 }}</strong></span>
-                {% endif %}
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Item</th>
-                            <th>Vendor</th>
-                            <th class="text-end">Qty</th>
-                            <th class="text-end">Unit Price</th>
-                            <th class="text-end">Total</th>
-                            <th>Requested By</th>
-                            <th>Date</th>
-                            <th>Notes</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for order in group.orders %}
-                        <tr>
-                            <td>
-                                {% if order.url %}
-                                <a href="{{ order.url }}" target="_blank" rel="noopener noreferrer">{{ order.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
-                                {% else %}
-                                {{ order.item_name }}
-                                {% endif %}
-                            </td>
-                            <td class="text-nowrap">
-                                {% if order.vendor_url %}
-                                <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
-                                {% elif order.vendor_name %}
-                                {{ order.vendor_name }}
-                                {% else %}
-                                <span class="text-muted">&mdash;</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">{{ order.quantity|floatformat:"-2" }}</td>
-                            <td class="text-end">{% if order.unit_price %}${{ order.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-                            <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-                            <td>{{ order.requested_by_name }}</td>
-                            <td>{{ order.created_at|date:"M j, Y" }}</td>
-                            <td class="text-muted small">{{ order.notes|truncatechars:60 }}</td>
-                            <td class="text-end text-nowrap">
-                                {% if is_lead %}
-                                <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as ordered">
-                                        <i class="bi bi-check2-circle"></i> Ordered
-                                    </button>
-                                </form>
-                                {% endif %}
-                                {% if order.created_by_id == request.user.id or is_lead %}
-                                <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                {% endif %}
-                                {% if is_lead %}
-                                <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">Requests</h2>
+            {% if item_groups_total is not None %}
+            <span class="text-muted small">Est. total: <strong>${{ item_groups_total|floatformat:2 }}</strong></span>
+            {% endif %}
+        </div>
+        {% if item_groups %}
+        {% for group in item_groups %}
+        <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+            <strong>
+                {% if group.program %}{{ group.program.name }}{% else %}General Orders{% endif %}
+                <span class="badge bg-secondary ms-2">{{ group.items|length }}</span>
+            </strong>
+            {% if group.total is not None %}
+            <span class="text-muted small">Est. total: <strong>${{ group.total|floatformat:2 }}</strong></span>
+            {% endif %}
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit Price</th>
+                        <th class="text-end">Total</th>
+                        <th>Requested By</th>
+                        <th>Date</th>
+                        <th>Notes</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in group.items %}
+                    <tr>
+                        <td>
+                            {% if item.url %}
+                            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                            {% else %}
+                            {{ item.item_name }}
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ item.quantity_normalized }}</td>
+                        <td class="text-end">{% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td class="text-end">{% if item.total != None %}${{ item.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td>{{ item.requested_by_name }}</td>
+                        <td>{{ item.requested_at|date:"M j, Y" }}</td>
+                        <td class="text-muted small">{{ item.notes|truncatechars:60 }}</td>
+                        <td class="text-end text-nowrap">
+                            {% if item.requested_by_id == request.user.id or is_lead %}
+                            <a href="{% url 'orders:item_edit' program.id item.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% endif %}
+                            {% if is_lead %}
+                            <a href="{% url 'orders:item_delete' program.id item.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         {% endfor %}
-    {% else %}
-        <div class="alert alert-light text-center border">
-            <i class="bi bi-inbox me-2"></i>No pending order requests. Place one with the button above, or a student/mentor can add one from their program.
+        {% else %}
+        <div class="alert alert-light text-center border m-3">
+            <i class="bi bi-inbox me-2"></i>No pending item requests. Place one with "Request an Item" above.
         </div>
-    {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">Pending Orders</h2>
+            {% if order_groups_total is not None %}
+            <span class="text-muted small">Est. total: <strong>${{ order_groups_total|floatformat:2 }}</strong></span>
+            {% endif %}
+        </div>
+        {% if order_groups %}
+        {% for group in order_groups %}
+        <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+            <strong>
+                {% if group.program %}{{ group.program.name }}{% else %}General Orders{% endif %}
+                <span class="badge bg-secondary ms-2">{{ group.items|length }}</span>
+            </strong>
+            {% if group.total is not None %}
+            <span class="text-muted small">Est. total: <strong>${{ group.total|floatformat:2 }}</strong></span>
+            {% endif %}
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Order</th>
+                        <th>Items</th>
+                        <th>Vendor</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in group.items %}
+                    <tr>
+                        <td class="text-nowrap">
+                            <a href="{% url 'orders:order_detail' program.id order.pk %}"><strong>Order #{{ order.pk }}</strong></a>
+                        </td>
+                        <td>
+                            {% for it in order.items.all %}
+                            {{ it.item_name }}{% if it.quantity_normalized != "1" %} (x{{ it.quantity_normalized }}){% endif %}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </td>
+                        <td class="text-nowrap">
+                            {% if order.vendor_url %}
+                            <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                            {% elif order.vendor_name %}
+                            {{ order.vendor_name }}
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td class="text-end text-nowrap">
+                            {% if is_lead %}
+                            <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as ordered">
+                                    <i class="bi bi-check2-circle"></i> Ordered
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% if order.created_by_id == request.user.id or is_lead %}
+                            <a href="{% url 'orders:order_detail' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="View">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% endif %}
+                            {% if is_staff and order.created_by_id == request.user.id or is_lead %}
+                            <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% endif %}
+                            {% if is_lead %}
+                            <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-light text-center border m-3">
+            <i class="bi bi-cart me-2"></i>No pending orders yet. Group some requests with "Place Order" above.
+        </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

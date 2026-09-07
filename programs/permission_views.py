@@ -327,21 +327,27 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
-    # Order requests: students and mentors may create and edit their own
-    # pending requests; once an item is ordered it can only be changed by a
-    # Lead Mentor. Parents/alumni never write orders. Not configurable via
-    # RolePermission (see can_user_read).
+    # Order requests: students and mentors may create requests (items) and edit
+    # their own items while they are still unassigned to an order; once an item
+    # is grouped into an order it can only be changed by a Lead Mentor.
+    # Mentors may additionally create and manage their own pending orders
+    # (groupings); students never manage orders. Parents/alumni never write
+    # orders. Not configurable via RolePermission (see can_user_read).
     if section == "orders":
         if role in ("Parent", "Alumni"):
             return False
         if role in ("Student", "Mentor"):
             if obj:
-                from orders.models import PurchaseOrder
+                from orders.models import Order, OrderItem
 
-                if isinstance(obj, PurchaseOrder):
+                if isinstance(obj, OrderItem):
+                    return obj.requested_by_id == user.pk and obj.order_id is None
+                if isinstance(obj, Order):
+                    if role == "Student":
+                        return False
                     return (
                         obj.created_by_id == user.pk
-                        and obj.status == PurchaseOrder.STATUS_PENDING
+                        and obj.status == Order.STATUS_PENDING
                     )
             return True
 
