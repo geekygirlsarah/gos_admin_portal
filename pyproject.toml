@@ -1,0 +1,52 @@
+[tool.black]
+line-length = 88
+target-version = ['py312','py313', 'py314']
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | venv2
+  | __pycache__
+  | \.pytest_cache
+  | htmlcov
+  | dist
+  | build
+  | \.eggs
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = ["venv", "venv2", ".venv"]
+known_django = ["django"]
+
+
+
+[tool.pytest.ini_options]
+testpaths = ["programs/tests", "applications/tests", "attendance/tests", "orders/tests", "audit/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--parallel=auto -v"
+
+[tool.coverage.run]
+source = ["programs", "applications", "attendance", "orders", "audit", "api", "GoSAdminPortal"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "manage.py",
+    "*/asgi.py",
+    "*/wsgi.py",
+]
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
