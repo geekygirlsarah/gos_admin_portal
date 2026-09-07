@@ -1,0 +1,27 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        exclude: ^(venv|venv2|\.venv)/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 7.0.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--skip", "venv", "--skip", "venv2", "--skip", ".venv"]
+        exclude: ^(venv|venv2|\.venv)/
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        args: ["--select=E9,F63,F7,F82", "--show-source", "--statistics"]
+        exclude: ^(venv|venv2|\.venv)/
+
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.9.2
+    hooks:
+      - id: bandit
+        args: ["-x", "./venv,./.venv,./venv2"]
+        exclude: ^(venv|venv2|\.venv)/

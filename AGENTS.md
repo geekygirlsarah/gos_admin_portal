@@ -103,6 +103,8 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - **Mentor Adult Access**: Mentors can only view Adults with `is_parent=True` who have a student in an active program. This is enforced in both the queryset and `can_user_read`.
 - **Mentor Program Visibility**: Mentors see current and upcoming programs (never past/inactive ones). Enforced in `ProgramListView.get_queryset` (`active=True`, not ended) and in `can_user_read(user, "programs", obj)` via `obj.status in ("Active", "Upcoming")`; the mentor dashboard's program cards use the same rule. Mentors can also send program emails (`ProgramEmailView`) for programs they can read — the view requires the Mentor/LeadMentor role plus `can_user_read` on the program, so parents/students are always denied; program-wide messaging without a fixed program stays Lead Mentor-only. The home program list shows mentors all `active=True` programs: past ones render as plain text (the template gates each link with `{% can_read user 'programs' program %}`), and inactive programs stay hidden from their queryset.
 - **One Lead Mentor group**: There is only `"LeadMentor"` (no space). A single membership grants access to all Lead Mentor features including application review.
+- **Role permissions**: Always pass obj to can_user_read/can_user_write.
+- **Reuse existing helper/utility functions**: Use functions like `active_students_in_program()` and `user_is_mentor_or_lead()`, not inline filters.
 
 ## Testing Strategy and Contribution
 
@@ -128,6 +130,29 @@ Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
 - Update `AGENTS.md` with any significant changes to the project architecture.
 - While you should update the Django admin site to reflect changes in the project architecture, usually a page needs to be edited in the main app as well.
 - Ask before making significant changes to architecture, and write tests to ensure they will work after.
+
+## Reliability Requirements
+
+### Pre-merge Checks (CI must pass)
+- All tests pass (`python manage.py test --parallel`)
+- Type check: `mypy --strict` (configured via `pyproject.toml`)
+- Security scan: `bandit -r .`
+- Migration check: `python manage.py makemigrations --check --dry-run`
+- No `console.log`/`debug`/`print` statements in production code
+
+### Database Safety
+- **Never** generate raw SQL or run raw SQL in production without a rollback plan
+- All data migrations must have `reverse_code` or explicit `--no-reverse` justification
+- Run `python manage.py find_disconnected_accounts` before/after user-facing changes
+- Seed commands (`seed_db`, `seed_mentor_agreement`) must be idempotent
+- Document how to rollback a bad migration or what steps to take if something goes wrong
+
+### Test Coverage Targets
+- New views: ≥1 integration test covering permission matrix
+- New models: ≥1 test for each custom save/clean/property
+- Signal receivers: test both create and update paths
+- Management commands: test `--dry-run` and actual execution
+- Migration tests: use `django-test-migrations` for critical schema changes
 
 ## Agent-Specific Tips (Junie, Copilot, OpenCode, etc.)
 
