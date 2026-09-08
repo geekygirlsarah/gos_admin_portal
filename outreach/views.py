@@ -92,6 +92,8 @@ class OutreachEventListView(
 
         context["upcoming_events"] = upcoming_events
         context["past_events"] = past_events
+        context["upcoming_count"] = len(upcoming_events)
+        context["past_count"] = len(past_events)
 
         if role == "Student":
             try:

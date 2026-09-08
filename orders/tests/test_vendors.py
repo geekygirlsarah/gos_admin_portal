@@ -19,17 +19,8 @@ from orders.tests.base import (
     make_order,
     make_program,
     make_student_user,
+    make_vendor,
 )
-
-
-def make_vendor(name="McMaster-Carr", **kwargs):
-    data = {
-        "name": name,
-        "website": f"https://{name.lower().replace(' ', '').replace('.', '')}.com",
-        "notes": "Fast shipping",
-    }
-    data.update(kwargs)
-    return Vendor.objects.create(**data)
 
 
 class VendorModelTests(TestCase):

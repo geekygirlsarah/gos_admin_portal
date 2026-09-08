@@ -9,224 +9,505 @@
       <a class="link-secondary" href="/programs/">← Back to Programs</a>
     </div>
   </div>
+
   <div class="row">
-    <div class="col-lg-10 col-xl-8">
-      <div class="d-flex align-items-center justify-content-between">
-        <h1 class="h3 m-0">{{ program.name }}{% if program.year_display %} <small class="text-muted">({{ program.year_display }})</small>{% endif %}</h1>
-        {% if role == 'LeadMentor' %}
-          <a class="btn btn-sm btn-outline-primary" href="{% url 'program_edit' program.id %}">Edit Settings</a>
-        {% endif %}
+    <div class="col-lg-11 col-xl-10">
+      <!-- Header with Title, Status & Primary Actions -->
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <div class="d-flex align-items-center gap-2">
+            <h1 class="h3 mb-0">{{ program.name }}{% if program.year_display %} <span class="text-muted fw-normal">({{ program.year_display }})</span>{% endif %}</h1>
+            <span class="badge {% if program.active %}bg-success{% else %}bg-secondary{% endif %}">
+              {{ program.active|yesno:"Active,Inactive" }}
+            </span>
+          </div>
+          <div class="d-flex flex-wrap gap-3 text-muted small mt-2">
+            {% if program.grade_range_display %}
+              <span><i class="bi bi-mortarboard me-1"></i>Grade Range: {{ program.grade_range_display }}</span>
+            {% endif %}
+            {% if program.cost %}
+              <span><i class="bi bi-tag me-1"></i>Cost: {{ program.cost }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          {% if role == 'LeadMentor' %}
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'program_edit' program.id %}">
+              <i class="bi bi-gear me-1"></i>Edit Settings
+            </a>
+          {% endif %}
+        </div>
       </div>
 
-      <p class="mt-3"><span class="fw-semibold">Program Active:</span> <span class="badge {% if program.active %}bg-success{% else %}bg-secondary{% endif %}">{{ program.active|yesno:"Yes,No" }}</span></p>
-      {% if program.cost %}
-        <p><span class="fw-semibold">Cost:</span> {{ program.cost }}</p>
-      {% endif %}
-      {% if program.grade_range_display %}
-        <p><span class="fw-semibold">Grade Range:</span> {{ program.grade_range_display }}</p>
-      {% endif %}
       {% if role == 'LeadMentor' and not program_has_fees %}
-        <div class="alert alert-warning mt-3">
+        <div class="alert alert-warning mb-4">
+          <i class="bi bi-exclamation-triangle me-1"></i>
           <strong>No fees have been added to this program yet.</strong> A fee should be added so parents know to pay for it.
         </div>
       {% endif %}
-      <hr>
-        {% if role == 'LeadMentor' or role == 'Mentor' %}
-        <div class="mt-4">
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <span class="small fw-semibold text-muted text-uppercase" style="min-width: 8rem;">Manage Program</span>
-            <div class="d-flex flex-wrap gap-2">
-              {% if role == 'LeadMentor' and perms.applications.review_application %}
-                <a class="btn btn-primary" href="{% url 'application_review_list' %}?program={{ program.id }}">Review Applications</a>
-              {% endif %}
-              <a class="btn btn-outline-dark" href="{% url 'program_email' program.id %}">Send Email</a>
-              {% can_write user 'team_assignments' program as can_assign_teams %}
-              {% if can_assign_teams %}
-                <a class="btn btn-outline-primary" href="{% url 'program_assignment' program.id %}">Assign Teams/Crews</a>
-              {% endif %}
-              {% if 'signout-sheet' in program.feature_keys %}
-                <a class="btn btn-outline-primary" target="_blank" href="{% url 'program_signout_sheet' program.id %}">Print Sign-out Sheet</a>
-                <a class="btn btn-outline-primary" href="{% url 'program_digital_signout' program.id %}">Digital Sign-out</a>
-              {% endif %}
-              {% if role == 'LeadMentor' or role == 'Mentor' %}
-                <a class="btn btn-outline-primary" href="{% url 'orders:order_list' program.id %}">Order Requests</a>
-              {% endif %}
-            </div>
-          </div>
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="small fw-semibold text-muted text-uppercase" style="min-width: 8rem;">Views</span>
-            <div class="d-flex flex-wrap gap-2">
-              <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
-              {% if can_view_documents %}
-                <a class="btn btn-outline-dark" href="{% url 'program_student_documents' program.id %}">Signed Documents</a>
-              {% endif %}
-              <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Map View</a>
-              <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
-              <a class="btn btn-outline-dark" href="{% url 'program_student_export' program.id %}">Export Students</a>
-            </div>
-          </div>
-        </div>
-        {% elif role == 'Student' %}
-        <div class="mt-4 d-flex flex-wrap align-items-center gap-2">
-            <span class="small fw-semibold text-muted text-uppercase" style="min-width: 8rem;">Views</span>
-            <div class="d-flex flex-wrap gap-2">
-              <a class="btn btn-outline-dark" href="{% url 'program_student_photos' program.id %}">Photo View</a>
-              <a class="btn btn-outline-dark" href="{% url 'program_schools' program.id %}">Schools View</a>
-              <a class="btn btn-outline-dark" href="{% url 'program_student_map' program.id %}">Carpool Map</a>
-              {% if 'orders' in program.feature_keys %}
-                <a class="btn btn-outline-dark" href="{% url 'orders:order_list' program.id %}">Order Requests</a>
-              {% endif %}
-            </div>
-        </div>
-        {% endif %}
-        <div><br/></div>
 
-      <h2 class="h5">Students in this Program</h2>
-      {% if active_enrollments %}
-        <ul class="list-group mb-4">
-          {% for e in active_enrollments %}
-            {% with s=e.student %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <div>
-                {% if s.photo %}
+      <!-- Unified Action Toolbar -->
+      {% if role == 'LeadMentor' or role == 'Mentor' %}
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 pb-2 border-bottom">
+          <div class="d-flex flex-wrap gap-2">
+            {% if role == 'LeadMentor' and perms.applications.review_application %}
+              <a class="btn btn-primary" href="{% url 'application_review_list' %}?program={{ program.id }}">
+                <i class="bi bi-clipboard-check me-1"></i>Review Applications
+              </a>
+            {% endif %}
+
+            <!-- Manage Roster Dropdown -->
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="rosterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-people me-1"></i>Manage Roster
+              </button>
+              <ul class="dropdown-menu" aria-labelledby="rosterDropdown">
+                {% can_write user 'team_assignments' program as can_assign_teams %}
+                {% if can_assign_teams %}
+                  <li>
+                    <a class="dropdown-item" href="{% url 'program_assignment' program.id %}">
+                      <i class="bi bi-diagram-3 me-2"></i>Assign Teams/Crews
+                    </a>
+                  </li>
+                {% endif %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'program_email' program.id %}">
+                    <i class="bi bi-envelope me-2"></i>Send Email
+                  </a>
+                </li>
+                {% if 'signout-sheet' in program.feature_keys %}
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <a class="dropdown-item" target="_blank" href="{% url 'program_signout_sheet' program.id %}">
+                      <i class="bi bi-printer me-2"></i>Print Sign-out Sheet
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item" href="{% url 'program_digital_signout' program.id %}">
+                      <i class="bi bi-pen me-2"></i>Digital Sign-out
+                    </a>
+                  </li>
+                {% endif %}
+                {% if 'orders' in program.feature_keys or role == 'LeadMentor' or role == 'Mentor' %}
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <a class="dropdown-item" href="{% url 'orders:order_list' program.id %}">
+                      <i class="bi bi-cart me-2"></i>Order Requests
+                    </a>
+                  </li>
+                {% endif %}
+              </ul>
+            </div>
+
+            <!-- Views Dropdown -->
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="viewsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-grid me-1"></i>Views
+              </button>
+              <ul class="dropdown-menu" aria-labelledby="viewsDropdown">
+                <li>
+                  <a class="dropdown-item" href="{% url 'program_student_photos' program.id %}">
+                    <i class="bi bi-person-badge me-2"></i>Photo View
+                  </a>
+                </li>
+                {% if can_view_documents %}
+                  <li>
+                    <a class="dropdown-item" href="{% url 'program_student_documents' program.id %}">
+                      <i class="bi bi-file-earmark-check me-2"></i>Signed Documents
+                    </a>
+                  </li>
+                {% endif %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'program_student_map' program.id %}">
+                    <i class="bi bi-geo-alt me-2"></i>Map View
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'program_schools' program.id %}">
+                    <i class="bi bi-building me-2"></i>Schools View
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'program_student_export' program.id %}">
+                    <i class="bi bi-download me-2"></i>Export Students
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Finances Dropdown -->
+            {% if can_manage_fees or can_add_payment or role == 'LeadMentor' %}
+              <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="financesDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                  <i class="bi bi-cash-stack me-1"></i>Finances
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="financesDropdown">
+                  {% if can_manage_fees %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'program_fee_select' program.id %}">
+                        <i class="bi bi-tags me-2"></i>Manage Fees (Add/Edit)
+                      </a>
+                    </li>
+                  {% endif %}
+                  {% if can_add_payment %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'program_payment_create' program.id %}">
+                        <i class="bi bi-credit-card me-2"></i>Record a Payment
+                      </a>
+                    </li>
+                  {% endif %}
+                  {% if role == 'LeadMentor' %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'program_dues_owed' program.id %}">
+                        <i class="bi bi-receipt me-2"></i>All Dues Owed
+                      </a>
+                    </li>
+                  {% endif %}
+                </ul>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% elif role == 'Student' %}
+        <div class="d-flex flex-wrap gap-2 mb-4 pb-2 border-bottom">
+          <a class="btn btn-outline-secondary" href="{% url 'program_student_photos' program.id %}">
+            <i class="bi bi-person-badge me-1"></i>Photo View
+          </a>
+          <a class="btn btn-outline-secondary" href="{% url 'program_schools' program.id %}">
+            <i class="bi bi-building me-1"></i>Schools View
+          </a>
+          <a class="btn btn-outline-secondary" href="{% url 'program_student_map' program.id %}">
+            <i class="bi bi-geo-alt me-1"></i>Carpool Map
+          </a>
+          {% if 'orders' in program.feature_keys %}
+            <a class="btn btn-outline-secondary" href="{% url 'orders:order_list' program.id %}">
+              <i class="bi bi-cart me-1"></i>Order Requests
+            </a>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <!-- Summary KPI Metric Cards -->
+      {% if role != 'Student' %}
+        <div class="row g-3 mb-4">
+          <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+              <div class="card-body d-flex align-items-center py-3">
+                <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3 text-primary align-self-start mt-1">
+                  <i class="bi bi-people fs-4"></i>
+                </div>
+                <div class="w-100">
+                  <div class="text-muted small fw-semibold">Active Students</div>
+                  <h4 class="mb-0 fw-bold">{{ active_enrollments_count }} student{{ active_enrollments_count|pluralize }}</h4>
+                  <div class="text-muted small">
+                    {{ active_teams_count }} team{{ active_teams_count|pluralize }} &middot; {{ active_subteams_count }} subteam{{ active_subteams_count|pluralize }} &middot; {{ active_crews_count }} project{{ active_crews_count|pluralize }}
+                  </div>
+                  {% if has_group_breakdowns %}
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                      {% for g in team_breakdown %}
+                        <span class="badge rounded-pill" style="background-color: {{ g.color }}; color: {{ g.color|contrast_color }};" title="{{ g.full_name }}">{{ g.short_name }}: {{ g.count }}</span>
+                      {% endfor %}
+                      {% for g in subteam_breakdown %}
+                        <span class="badge rounded-pill" style="background-color: {{ g.color }}; color: {{ g.color|contrast_color }};" title="{{ g.name }}">{{ g.name }}: {{ g.count }}</span>
+                      {% endfor %}
+                      {% for g in crew_breakdown %}
+                        <span class="badge rounded-pill" style="background-color: {{ g.color }}; color: {{ g.color|contrast_color }};" title="{{ g.name }}">{{ g.name }}: {{ g.count }}</span>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {% if role == 'LeadMentor' and 'background-checks' in program.feature_keys %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                  <div class="rounded-circle {% if bg_checks_needed_count %}bg-warning text-dark{% else %}bg-success text-success{% endif %} bg-opacity-10 p-3 me-3">
+                    <i class="bi bi-shield-check fs-4"></i>
+                  </div>
+                  <div>
+                    <div class="text-muted small fw-semibold">Clearances / Safety</div>
+                    <h4 class="mb-0 fw-bold">{% if bg_checks_needed_count %}{{ bg_checks_needed_count }} Needed{% else %}All Cleared{% endif %}</h4>
+                    <div class="text-muted small">
+                      {% if bg_checks_needed_count %}Background checks required{% else %}No pending background checks{% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if dynamic_card == 'orders' %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                  <div class="rounded-circle bg-warning text-dark bg-opacity-10 p-3 me-3">
+                    <i class="bi bi-cart3 fs-4"></i>
+                  </div>
+                  <div>
+                    <div class="text-muted small fw-semibold">Pending Order Requests</div>
+                    <h4 class="mb-0 fw-bold">{{ pending_orders_count }} Item{{ pending_orders_count|pluralize }} Pending</h4>
+                    <div class="text-muted small">
+                      {% if pending_orders_total %}Est. ${{ pending_orders_total|floatformat:2 }} · {% endif %}
+                      <a href="{% url 'orders:order_list' program.id %}" class="text-decoration-none">Review orders →</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% elif dynamic_card == 'teams' %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                  <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3 text-info">
+                    <i class="bi bi-diagram-3 fs-4"></i>
+                  </div>
+                  <div>
+                    <div class="text-muted small fw-semibold">Roster Assignments</div>
+                    <h4 class="mb-0 fw-bold">{{ assigned_students_count }} / {{ active_enrollments_count }} Assigned</h4>
+                    <div class="text-muted small">
+                      {% if unassigned_students_count == 0 %}
+                        All students assigned
+                      {% else %}
+                        {{ unassigned_students_count }} unassigned student{{ unassigned_students_count|pluralize }}
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% elif dynamic_card == 'attendance' %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                  <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3 text-success">
+                    <i class="bi bi-calendar-check fs-4"></i>
+                  </div>
+                  <div>
+                    <div class="text-muted small fw-semibold">Today's Attendance</div>
+                    <h4 class="mb-0 fw-bold">{{ today_present_count }} Present Today</h4>
+                    <div class="text-muted small">
+                      {% if 'signout-sheet' in program.feature_keys %}Digital sign-out active{% else %}Attendance tracking active{% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% elif dynamic_card == 'status' %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                  <div class="rounded-circle bg-secondary bg-opacity-10 p-3 me-3 text-secondary">
+                    <i class="bi bi-calendar-event fs-4"></i>
+                  </div>
+                  <div>
+                    <div class="text-muted small fw-semibold">Program Status</div>
+                    <h4 class="mb-0 fw-bold">{% if program.active %}Active{% else %}Archived{% endif %}</h4>
+                    <div class="text-muted small">
+                      {% if program.year_display %}{{ program.year_display }}{% else %}Current Season{% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if dynamic_card and dynamic_card != 'status' %}
+            {% if role != 'LeadMentor' or 'background-checks' not in program.feature_keys %}
+              {% if program.active or program.status in 'Active,Upcoming' %}
+                <div class="col-sm-6 col-lg-4">
+                  <div class="card shadow-sm h-100 border-0 bg-light">
+                    <div class="card-body d-flex align-items-center py-3">
+                      <div class="rounded-circle bg-secondary bg-opacity-10 p-3 me-3 text-secondary">
+                        <i class="bi bi-calendar-event fs-4"></i>
+                      </div>
+                      <div>
+                        <div class="text-muted small fw-semibold">Program Status</div>
+                        <h4 class="mb-0 fw-bold">{% if program.active %}Active{% else %}Archived{% endif %}</h4>
+                        <div class="text-muted small">
+                          {% if program.year_display %}{{ program.year_display }}{% else %}Current Season{% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <!-- Health & Medical Alert Callout -->
+      {% if can_view_medical and medical_alerts_count %}
+        <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+          <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
+            <div>
+              <strong>Health &amp; Dietary Notes on File</strong> for {{ medical_alerts_count }} enrolled student{{ medical_alerts_count|pluralize }}.
+            </div>
+          </div>
+          <a class="btn btn-sm btn-outline-dark" href="{% url 'program_medical_info' program.id %}">
+            <i class="bi bi-file-medical me-1"></i>View Medical Info
+          </a>
+        </div>
+      {% endif %}
+
+      <!-- Active Students Roster Section -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+          <div class="d-flex align-items-center gap-2">
+            <h2 class="h5 mb-0 fw-bold"><i class="bi bi-people me-2 text-primary"></i>Students in this Program</h2>
+            <span class="badge bg-secondary rounded-pill">{{ active_enrollments_count }}</span>
+          </div>
+          {% if can_manage_students %}
+            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#addStudentCollapse" aria-expanded="false" aria-controls="addStudentCollapse">
+              <i class="bi bi-person-plus me-1"></i>Add Student
+            </button>
+          {% endif %}
+        </div>
+
+        {% if can_manage_students %}
+          <div class="collapse border-bottom bg-light" id="addStudentCollapse">
+            <div class="card-body py-3">
+              <h6 class="fw-bold mb-2">Add Existing Student to Program</h6>
+              <form method="post" action="{% url 'program_student_add' program.id %}">
+                {% csrf_token %}
+                <div class="d-flex flex-wrap gap-2 align-items-end">
+                  <div class="flex-grow-1 mb-0">{{ add_existing_form.as_p }}</div>
+                  <button class="btn btn-primary mb-3 flex-shrink-0" type="submit">
+                    <i class="bi bi-plus-lg me-1"></i>Add to Program
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if active_enrollments %}
+          <ul class="list-group list-group-flush mb-0">
+            {% for e in active_enrollments %}
+              {% with s=e.student %}
+              <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                  {% if s.photo %}
+                    {% if role == 'Student' %}
+                      <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle"/>
+                    {% else %}
+                      <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
+                        <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle"/>
+                      </a>
+                    {% endif %}
+                  {% endif %}
                   {% if role == 'Student' %}
-                    <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 me-2"/>
+                    <span class="fw-semibold">{{ s.display_name }}</span>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
                   {% else %}
+                    <a class="text-decoration-none fw-semibold" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.display_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
+                  {% endif %}
+                  {% if e.team %}
+                    <span class="badge rounded-pill team-badge ms-1" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
+                  {% endif %}
+                  {% if e.crew %}
+                    <span class="badge rounded-pill crew-badge ms-1" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
+                  {% endif %}
+                  {% if e.subteam %}
+                    <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
+                  {% endif %}
+                  {% if role != 'Student' and 'background-checks' in program.feature_keys %}
+                    {% needs_bg s as missing_bg %}
+                    {% if missing_bg %}
+                      <span class="badge bg-warning text-dark ms-1">BG Check Needed</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+                {% if role != 'Student' %}
+                <div class="d-flex gap-1 align-items-center">
+                  {% if can_view_payments %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}" title="View Balance">Balance</a>
+                  {% endif %}
+                  {% if 'attendance' in program.feature_keys and can_view_attendance %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.id %}" title="View Attendance">Attendance</a>
+                  {% endif %}
+                  {% if can_manage_students %}
+                    <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0 d-inline">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.display_name }} from {{ program.name }}?" title="Remove from Program">Remove</button>
+                    </form>
+                  {% endif %}
+                </div>
+                {% endif %}
+              </li>
+              {% endwith %}
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="alert alert-light text-center border py-4 m-3">
+            <i class="bi bi-people fs-3 d-block mb-2 text-muted"></i>
+            <h6 class="mb-1 fw-semibold">No active students currently enrolled</h6>
+            <p class="text-muted small mb-0">Enrolled students will appear here once added or accepted through applications.</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Inactive Students Section -->
+      {% if role != 'Student' and inactive_enrollments %}
+        <div class="card shadow-sm mb-4 border-0 bg-light">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+            <h3 class="h6 mb-0 text-muted fw-bold">Students No Longer Active</h3>
+            <span class="badge bg-secondary">{{ inactive_enrollments_count }}</span>
+          </div>
+          <ul class="list-group list-group-flush mb-0">
+            {% for e in inactive_enrollments %}
+              {% with s=e.student %}
+              <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center py-2 px-3">
+                <div class="d-flex align-items-center flex-wrap gap-2 text-muted">
+                  {% if s.photo %}
                     <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
-                      <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 me-2"/>
+                      <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle opacity-75"/>
                     </a>
                   {% endif %}
-                {% endif %}
-                {% if role == 'Student' %}
-                  <span>{{ s.display_name }}</span>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
-                {% else %}
-                  <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.display_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
-                {% endif %}
-                {% if e.team %}
-                  <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
-                {% endif %}
-                {% if e.crew %}
-                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
-                {% endif %}
-                {% if e.subteam %}
-                  <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
-                {% endif %}
-                {% if role != 'Student' and 'background-checks' in program.feature_keys %}
-                {% needs_bg s as missing_bg %}
-                  {% if missing_bg %}
-                      <span class="badge bg-warning text-dark ms-2">BG Check Needed</span>
+                  <a class="text-decoration-none text-muted fw-semibold" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.display_name }}</a>{% if s.grade_display %} <small>({{ s.grade_display }})</small>{% endif %}
+                  {% if e.team %}
+                    <span class="badge rounded-pill team-badge ms-1" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
                   {% endif %}
-                {% endif %}
-              </div>
-              {% if role != 'Student' %}
-              <div class="d-flex gap-2 align-items-center">
-                {% if can_view_payments %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
-                {% endif %}
-                {% if 'attendance' in program.feature_keys and can_view_attendance %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.id %}">Attendance</a>
-                {% endif %}
-                {% if can_manage_students %}
-                  <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0">
-                    {% csrf_token %}
-                    <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.display_name }} from {{ program.name }}?">Remove</button>
-                  </form>
-                {% endif %}
-              </div>
-              {% endif %}
-            </li>
-            {% endwith %}
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="alert alert-info">No active students currently enrolled.</div>
-      {% endif %}
-
-      {% if role != 'Student' and inactive_enrollments %}
-        <h3 class="h6">Students No Longer Active</h3>
-        <ul class="list-group mb-4">
-          {% for e in inactive_enrollments %}
-            {% with s=e.student %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <div>
-                {% if s.photo %}
-                  <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
-                    <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 me-2"/>
-                  </a>
-                {% endif %}
-                <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.display_name }}</a>{% if s.grade_display %} <small class="text-muted">({{ s.grade_display }})</small>{% endif %}
-                {% if e.team %}
-                  <span class="badge rounded-pill ms-2 team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}{% if e.team.name %} {{ e.team.name }}{% endif %}</span>
-                {% endif %}
-                {% if e.crew %}
-                  <span class="badge rounded-pill ms-2 crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
-                {% endif %}
-                {% if e.subteam %}
-                  <span class="badge rounded-pill ms-2 subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
-                {% endif %}
-                {% needs_bg s as missing_bg %}
-                  {% if missing_bg %}
-                      <span class="badge bg-warning text-dark ms-2">BG Check Needed</span>
+                  {% if e.crew %}
+                    <span class="badge rounded-pill crew-badge ms-1" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
                   {% endif %}
-                <span class="badge bg-secondary ms-2">Inactive</span>
-              </div>
-              <div class="d-flex gap-2">
-                {% if can_view_payments %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
-                {% endif %}
-                {% if 'attendance' in program.feature_keys and can_view_attendance %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.id %}">Attendance</a>
-                {% endif %}
-                {% if can_manage_students %}
-                  <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0">
-                    {% csrf_token %}
-                    <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.display_name }} from {{ program.name }}?">Remove</button>
-                  </form>
-                {% endif %}
-              </div>
-            </li>
-            {% endwith %}
-          {% endfor %}
-        </ul>
-      {% endif %}
-
-      {% if can_manage_students %}
-        <div class="card">
-          <div class="card-header">Add Existing Student</div>
-          <div class="card-body">
-            <form method="post" action="{% url 'program_student_add' program.id %}">
-              {% csrf_token %}
-              <div class="d-flex gap-2 align-items-end">
-                <div class="flex-grow-1 mb-0">{{ add_existing_form.as_p }}</div>
-                <button class="btn btn-primary mb-3 flex-shrink-0" type="submit">Add to Program</button>
-              </div>
-            </form>
-          </div>
+                  {% if e.subteam %}
+                    <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
+                  {% endif %}
+                  {% needs_bg s as missing_bg %}
+                  {% if missing_bg %}
+                    <span class="badge bg-warning text-dark ms-1">BG Check Needed</span>
+                  {% endif %}
+                  <span class="badge bg-secondary ms-1">Inactive</span>
+                </div>
+                <div class="d-flex gap-1">
+                  {% if can_view_payments %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_balance' program.id s.id %}">Balance</a>
+                  {% endif %}
+                  {% if 'attendance' in program.feature_keys and can_view_attendance %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.id %}">Attendance</a>
+                  {% endif %}
+                  {% if can_manage_students %}
+                    <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0 d-inline">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.display_name }} from {{ program.name }}?">Remove</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </li>
+              {% endwith %}
+            {% endfor %}
+          </ul>
         </div>
-      {% endif %}
-
-      {% if can_manage_fees or can_add_payment %}
-      <div class="mt-4">
-        <div class="card">
-          <div class="card-header">Fees and Payments</div>
-          <div class="card-body d-flex flex-wrap gap-2">
-            {% if can_manage_fees %}
-              <a class="btn btn-outline-dark" href="{% url 'program_fee_select' program.id %}">Manage Fees (Add/Edit)</a>
-            {% endif %}
-            {% if can_add_payment %}
-              <a class="btn btn-outline-secondary" href="{% url 'program_payment_create' program.id %}">Record a Payment</a>
-            {% endif %}
-            {% if role == 'LeadMentor' %}
-              <a class="btn btn-outline-dark" href="{% url 'program_dues_owed' program.id %}">All Dues Owed</a>
-            {% endif %}
-          </div>
-        </div>
-      </div>
       {% endif %}
 
     </div>
   </div>
-  {% endblock %}
+{% endblock %}
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce }}">
@@ -235,7 +516,6 @@ document.addEventListener('DOMContentLoaded', function() {
         var color = badge.getAttribute('data-color');
         if (color) {
             badge.style.backgroundColor = color;
-            // Calculate brightness for contrast
             var r = parseInt(color.substr(1, 2), 16);
             var g = parseInt(color.substr(3, 2), 16);
             var b = parseInt(color.substr(5, 2), 16);

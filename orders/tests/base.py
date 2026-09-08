@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group, User
 
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, ShippingCarrier, Vendor
 from programs.models import (
     Adult,
     Enrollment,
@@ -92,3 +92,19 @@ def make_order(program, created_by=None, status=None, **kwargs):
         order.status = status
         order.save(update_fields=["status"])
     return order
+
+
+def make_carrier(name="UPS", tracking_url_template="", **kwargs):
+    data = {"name": name, "tracking_url_template": tracking_url_template}
+    data.update(kwargs)
+    return ShippingCarrier.objects.create(**data)
+
+
+def make_vendor(name="McMaster-Carr", **kwargs):
+    data = {
+        "name": name,
+        "website": f"https://{name.lower().replace(' ', '').replace('.', '')}.com",
+        "notes": "Fast shipping",
+    }
+    data.update(kwargs)
+    return Vendor.objects.create(**data)

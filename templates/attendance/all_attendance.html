@@ -4,23 +4,73 @@
 
 {% block content %}
 <div class="container-fluid my-4">
-  <div class="row mb-3 align-items-center">
-    <div class="col">
-      <h1 class="h3">All Program Entries</h1>
-      <p class="text-muted">Master list of all attendance sessions.</p>
+  {# ── Page Header ── #}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 fw-bold mb-1">All Program Entries</h1>
+      <p class="text-muted mb-0">Master operational log of student, mentor, and visitor attendance sessions.</p>
     </div>
-    <div class="col-auto">
-      <div class="d-flex gap-2 align-items-center">
-        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addEntryModal">Add Entry</button>
-        <a href="{% url 'visitor_management' %}" class="btn btn-sm btn-outline-primary">Manage Visitors</a>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <a href="{% url 'visitor_management' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-people me-1"></i>Manage Visitors
+      </a>
+      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEntryModal">
+        <i class="bi bi-plus-lg me-1"></i>Add Entry
+      </button>
+    </div>
+  </div>
+
+  {# ── Summary KPI Tiles ── #}
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-4">
+      <div class="card shadow-sm h-100 border-0 bg-light">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="text-muted small fw-semibold text-uppercase">Total Sessions</span>
+            <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary">
+              <i class="bi bi-journal-check fs-5"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold mt-2">{{ total_sessions_count|default:"0" }}</h3>
+          <div class="text-muted small">Sessions matching current filters</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="card shadow-sm h-100 border-0 bg-light">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="text-muted small fw-semibold text-uppercase">Total Logged Hours</span>
+            <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success">
+              <i class="bi bi-clock-history fs-5"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold mt-2">{{ total_hours|default:"0.0" }} hrs</h3>
+          <div class="text-muted small">Accumulated attendance time</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+      <div class="card shadow-sm h-100 border-0 bg-light">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="text-muted small fw-semibold text-uppercase">Open Sessions</span>
+            <div class="rounded-circle {% if open_sessions_count > 0 %}bg-warning bg-opacity-10 text-warning{% else %}bg-secondary bg-opacity-10 text-secondary{% endif %} p-2">
+              <i class="bi bi-door-open fs-5"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold mt-2 {% if open_sessions_count > 0 %}text-warning{% endif %}">{{ open_sessions_count|default:"0" }}</h3>
+          <div class="text-muted small">{% if open_sessions_count > 0 %}Currently signed in / unclosed{% else %}All sessions closed{% endif %}</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-body py-3">
+  {# ── Filter Toolbar ── #}
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-3">
       <form method="get" class="row g-2 align-items-end">
-        <div class="col-auto">
+        <div class="col-md-3 col-sm-6">
           <label class="form-label small fw-bold mb-1">Program</label>
           <select name="program_id" class="form-select form-select-sm">
             <option value="">All Programs</option>
@@ -29,8 +79,8 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-auto">
-          <label class="form-label small fw-bold mb-1">Type</label>
+        <div class="col-md-2 col-sm-6">
+          <label class="form-label small fw-bold mb-1">Person Type</label>
           <select name="person_type" class="form-select form-select-sm">
             <option value="">All Types</option>
             <option value="student" {% if selected_person_type == 'student' %}selected{% endif %}>Students</option>
@@ -38,7 +88,7 @@
             <option value="visitor" {% if selected_person_type == 'visitor' %}selected{% endif %}>Visitors</option>
           </select>
         </div>
-        <div class="col-auto">
+        <div class="col-md-2 col-sm-4">
           <label class="form-label small fw-bold mb-1">Status</label>
           <select name="status" class="form-select form-select-sm">
             <option value="">Open &amp; Closed</option>
@@ -46,8 +96,8 @@
             <option value="closed" {% if selected_status == 'closed' %}selected{% endif %}>Closed only</option>
           </select>
         </div>
-        <div class="col-auto">
-          <label class="form-label small fw-bold mb-1">Date</label>
+        <div class="col-md-2 col-sm-4">
+          <label class="form-label small fw-bold mb-1">Date Preset</label>
           <select name="range" class="form-select form-select-sm">
             <option value="">All Dates</option>
             <option value="today" {% if selected_range == 'today' %}selected{% endif %}>Today</option>
@@ -57,50 +107,69 @@
             <option value="custom" {% if selected_range == 'custom' %}selected{% endif %}>Custom</option>
           </select>
         </div>
-        <div class="col-auto">
-          <label class="form-label small fw-bold mb-1">From</label>
-          <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}" />
+        <div class="col-md-3 col-sm-4">
+          <div class="row g-1">
+            <div class="col-6">
+              <label class="form-label small fw-bold mb-1">From</label>
+              <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}" />
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-bold mb-1">To</label>
+              <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}" />
+            </div>
+          </div>
         </div>
-        <div class="col-auto">
-          <label class="form-label small fw-bold mb-1">To</label>
-          <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}" />
-        </div>
-        <div class="col-auto">
-          <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-          {% if selected_program_id or selected_person_type or selected_status or selected_range %}
-          <a href="{% url 'all_attendance' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
-          {% endif %}
+        <div class="col-12 d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+          <div class="text-muted small">
+            {% if range_start and range_end %}
+              <i class="bi bi-calendar3 me-1"></i>Showing entries from <strong>{{ range_start|date:'M j, Y' }}</strong> to <strong>{{ range_end|date:'M j, Y' }}</strong>.
+            {% else %}
+              <i class="bi bi-calendar3 me-1"></i>Showing all recorded attendance sessions.
+            {% endif %}
+          </div>
+          <div class="d-flex gap-2">
+            {% if selected_program_id or selected_person_type or selected_status or selected_range or start_date or end_date %}
+            <a href="{% url 'all_attendance' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+            {% endif %}
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-funnel me-1"></i>Apply Filters
+            </button>
+            <div class="dropdown">
+              <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-download me-1"></i>Export
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li>
+                  <a class="dropdown-item" href="{{ request.get_full_path }}{% if '?' in request.get_full_path %}&{% else %}?{% endif %}export=csv" id="exportCsvBtn">
+                    <i class="bi bi-filetype-csv me-2 text-primary"></i>Export as CSV
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ request.get_full_path }}{% if '?' in request.get_full_path %}&{% else %}?{% endif %}export=xlsx" id="exportXlsxBtn">
+                    <i class="bi bi-file-earmark-excel me-2 text-success"></i>Export as Excel
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </form>
     </div>
   </div>
 
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <div class="text-muted small">
-      {% if range_start and range_end %}
-        Showing sessions from {{ range_start|date:'M j, Y' }} to {{ range_end|date:'M j, Y' }}.
-      {% else %}
-        Showing all sessions.
-      {% endif %}
-    </div>
-    <div class="btn-group btn-group-sm">
-      <a href="{{ request.get_full_path }}{% if '?' in request.get_full_path %}&{% else %}?{% endif %}export=csv" class="btn btn-outline-secondary" id="exportCsvBtn">Export CSV</a>
-      <a href="{{ request.get_full_path }}{% if '?' in request.get_full_path %}&{% else %}?{% endif %}export=xlsx" class="btn btn-outline-secondary" id="exportXlsxBtn">Export Excel</a>
-    </div>
-  </div>
-
-  <div class="card">
+  {# ── Attendance Table ── #}
+  <div class="card shadow-sm border-0">
     <div class="table-responsive">
-      <table class="table table-hover table-striped mb-0">
+      <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th><a href="{% sort_url 'person' %}" class="text-dark text-decoration-none">Person{% sort_icon 'person' %}</a></th>
-            <th><a href="{% sort_url 'type' %}" class="text-dark text-decoration-none">Type{% sort_icon 'type' %}</a></th>
-            <th><a href="{% sort_url 'program' %}" class="text-dark text-decoration-none">Program{% sort_icon 'program' %}</a></th>
-            <th><a href="{% sort_url 'check_in' %}" class="text-dark text-decoration-none">Check-in{% sort_icon 'check_in' %}</a></th>
-            <th><a href="{% sort_url 'check_out' %}" class="text-dark text-decoration-none">Check-out{% sort_icon 'check_out' %}</a></th>
-            <th><a href="{% sort_url 'duration' %}" class="text-dark text-decoration-none">Duration{% sort_icon 'duration' %}</a></th>
-            <th class="text-end">Actions</th>
+            <th><a href="{% sort_url 'person' %}" class="text-dark text-decoration-none fw-semibold">Person{% sort_icon 'person' %}</a></th>
+            <th><a href="{% sort_url 'type' %}" class="text-dark text-decoration-none fw-semibold">Type{% sort_icon 'type' %}</a></th>
+            <th><a href="{% sort_url 'program' %}" class="text-dark text-decoration-none fw-semibold">Program{% sort_icon 'program' %}</a></th>
+            <th><a href="{% sort_url 'check_in' %}" class="text-dark text-decoration-none fw-semibold">Check-in{% sort_icon 'check_in' %}</a></th>
+            <th><a href="{% sort_url 'check_out' %}" class="text-dark text-decoration-none fw-semibold">Check-out{% sort_icon 'check_out' %}</a></th>
+            <th><a href="{% sort_url 'duration' %}" class="text-dark text-decoration-none fw-semibold">Duration{% sort_icon 'duration' %}</a></th>
+            <th class="text-end fw-semibold">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -108,55 +177,74 @@
           <tr>
             <td>
               {% if s.student %}
-                <a href="{% url 'student_attendance' s.student.id %}">{{ s.student.full_name }}</a>
+                <a href="{% url 'student_attendance' s.student.id %}" class="fw-semibold text-decoration-none">{{ s.student.full_name }}</a>
               {% elif s.adult %}
-                {{ s.adult.full_name }}
+                <span class="fw-semibold">{{ s.adult.full_name }}</span>
               {% else %}
-                {{ s.visitor_name|default:"Unknown" }}
+                <span class="fw-semibold">{{ s.visitor_name|default:"Unknown Visitor" }}</span>
+                {% if s.visitor_team_number %}
+                  <span class="badge bg-light text-dark border ms-1">Team {{ s.visitor_team_number }}</span>
+                {% endif %}
               {% endif %}
             </td>
             <td>
               {% if s.student %}
-                <span class="badge bg-primary">Student</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill">Student</span>
               {% elif s.adult %}
-                <span class="badge bg-info text-dark">Mentor</span>
+                <span class="badge bg-info bg-opacity-10 text-dark border border-info border-opacity-25 rounded-pill">Mentor</span>
               {% else %}
-                <span class="badge bg-secondary">Visitor</span>
+                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill">Visitor</span>
               {% endif %}
             </td>
-            <td>{{ s.program }}</td>
-            <td>{{ s.check_in|date:'Y-m-d g:i A' }}</td>
+            <td>
+              <span class="text-muted">{{ s.program }}</span>
+            </td>
+            <td>
+              <span class="small">{{ s.check_in|date:'M j, Y' }}</span>
+              <span class="text-muted small d-block">{{ s.check_in|date:'g:i A' }}</span>
+            </td>
             <td>
               {% if s.check_out %}
-                {{ s.check_out|date:'Y-m-d g:i A' }}
+                <span class="small">{{ s.check_out|date:'M j, Y' }}</span>
+                <span class="text-muted small d-block">{{ s.check_out|date:'g:i A' }}</span>
               {% else %}
-                <span class="badge bg-warning text-dark">Open</span>
+                <span class="badge bg-warning text-dark rounded-pill">Open</span>
               {% endif %}
             </td>
-            <td>{{ s.duration_hm }}</td>
+            <td>
+              {% if s.duration_hm %}
+                <span class="badge bg-light text-dark border"><i class="bi bi-clock me-1 text-primary"></i>{{ s.duration_hm }}</span>
+              {% else %}
+                <span class="text-muted small">In Progress</span>
+              {% endif %}
+            </td>
             <td class="text-end text-nowrap">
-              <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">Edit</button>
+              <button class="btn btn-sm btn-outline-secondary me-1" type="button" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">
+                <i class="bi bi-pencil me-1"></i>Edit
+              </button>
               <form method="post" class="d-inline js-confirm" data-confirm="Delete this attendance entry? This cannot be undone.">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="delete" />
                 <input type="hidden" name="session_id" value="{{ s.id }}" />
-                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                <button class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash"></i>
+                </button>
               </form>
             </td>
           </tr>
           <tr class="collapse" id="edit{{ s.id }}">
-            <td colspan="7" class="bg-light p-0">
-              <div class="p-3 border-bottom">
+            <td colspan="7" class="bg-light p-0 border-top-0">
+              <div class="p-3 border-bottom shadow-inner">
                 <form method="post" class="row g-3 align-items-end">
                   {% csrf_token %}
                   <input type="hidden" name="action" value="update" />
                   <input type="hidden" name="session_id" value="{{ s.id }}" />
                   <div class="col-md-3">
-                    <label class="form-label small fw-bold">Check-in</label>
+                    <label class="form-label small fw-bold">Check-in Time</label>
                     <input type="datetime-local" class="form-control form-control-sm" name="check_in" value="{{ s.check_in|date:'Y-m-d\TH:i' }}" required />
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label small fw-bold">Check-out</label>
+                    <label class="form-label small fw-bold">Check-out Time</label>
                     <input type="datetime-local" class="form-control form-control-sm" name="check_out" value="{% if s.check_out %}{{ s.check_out|date:'Y-m-d\TH:i' }}{% endif %}" />
                   </div>
                   <div class="col-md-3">
@@ -177,8 +265,9 @@
                     <input type="number" class="form-control form-control-sm" name="visitor_team_number" value="{{ s.visitor_team_number|default:'' }}" />
                   </div>
                   {% endif %}
-                  <div class="col-md-1">
-                    <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+                  <div class="col-md-auto ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit{{ s.id }}">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Save Changes</button>
                   </div>
                 </form>
               </div>
@@ -186,7 +275,10 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="text-center py-5 text-muted">No attendance entries found.</td>
+            <td colspan="7" class="text-center py-5 text-muted">
+              <i class="bi bi-clipboard-x fs-1 d-block mb-2 text-secondary opacity-50"></i>
+              No attendance entries found matching the selected filters.
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -195,19 +287,20 @@
   </div>
   {% if sessions.count >= 500 %}
   <div class="mt-3 text-center text-muted small">
-    Showing the latest 500 entries. Use program filters to narrow your search.
+    <i class="bi bi-info-circle me-1"></i>Showing the latest 500 entries. Use program and date filters to narrow your search.
   </div>
   {% endif %}
 </div>
 
+{# ── Add Entry Modal ── #}
 <div class="modal fade" id="addEntryModal" tabindex="-1" aria-labelledby="addEntryModalLabel" aria-hidden="true">
   <div class="modal-dialog">
-    <div class="modal-content">
+    <div class="modal-content border-0 shadow">
       <form method="post">
         {% csrf_token %}
         <input type="hidden" name="action" value="add" />
         <div class="modal-header">
-          <h5 class="modal-title" id="addEntryModalLabel">Add Attendance Entry</h5>
+          <h5 class="modal-title fw-bold" id="addEntryModalLabel">Add Attendance Entry</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -265,13 +358,16 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-success">Add Entry</button>
+          <button type="submit" class="btn btn-primary">Add Entry</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
 <script nonce="{{ csp_nonce }}">
 function toggleAddPersonFields() {
   var type = document.getElementById('addPersonType').value;
@@ -285,8 +381,10 @@ function toggleAddPersonFields() {
   document.getElementById('addVisitorName').required = type === 'visitor';
   document.getElementById('addPersonLabel').textContent = type === 'student' ? 'Student' : type === 'mentor' ? 'Mentor' : '';
   var programSelect = document.querySelector('select[name="program_id"]');
-  programSelect.disabled = type === 'mentor';
-  programSelect.required = type !== 'mentor';
+  if (programSelect) {
+    programSelect.disabled = type === 'mentor';
+    programSelect.required = type !== 'mentor';
+  }
 }
 document.getElementById('addPersonType').addEventListener('change', toggleAddPersonFields);
 </script>

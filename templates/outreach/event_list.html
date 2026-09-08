@@ -9,40 +9,114 @@
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Outreach Events</h1>
-        <div class="d-flex gap-2">
+<div class="container-fluid my-4">
+    {# ── Page Header ── #}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">Outreach Events</h1>
+            <p class="text-muted mb-0">Community events, robotics workshops, and student volunteer shifts.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
             {% if user_role == 'LeadMentor' or user_role == 'Mentor' %}
             <button class="btn btn-outline-secondary" id="studentStatsBtn" data-url="{% url 'outreach:student_stats' program.id %}">
-                <i class="bi bi-bar-chart-line me-1"></i> Student Stats
+                <i class="bi bi-bar-chart-line me-1"></i>Student Stats
             </button>
             {% endif %}
             {% if can_add %}
-            <a href="{% url 'outreach:event_create' program.id %}" class="btn btn-primary">Add Event</a>
+            <a href="{% url 'outreach:event_create' program.id %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>Add Event
+            </a>
             {% endif %}
         </div>
     </div>
 
+    {# ── Student & Mentor Summary KPI Tiles ── #}
     {% if user_role == 'Student' %}
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="card border-primary shadow-sm">
-                <div class="card-body d-flex align-items-center justify-content-around py-3 text-center">
-                    <div>
-                        <div class="h4 mb-0 fw-bold text-primary">{{ championed_count }}</div>
-                        <div class="small text-muted text-uppercase fw-semibold">Events Championed</div>
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small fw-semibold text-uppercase">Events Championed</span>
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary">
+                            <i class="bi bi-trophy fs-5"></i>
+                        </div>
                     </div>
-                    <div class="vr mx-3"></div>
-                    <div>
-                        <div class="h4 mb-0 fw-bold text-primary">{{ total_outreach_hours|floatformat:1 }}</div>
-                        <div class="small text-muted text-uppercase fw-semibold">Completed Hours</div>
+                    <h3 class="h4 mb-0 fw-bold mt-2">{{ championed_count|default:"0" }}</h3>
+                    <div class="text-muted small">Lead coordinator roles completed</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small fw-semibold text-uppercase">Completed Hours</span>
+                        <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success">
+                            <i class="bi bi-check2-circle fs-5"></i>
+                        </div>
                     </div>
-                    <div class="vr mx-3"></div>
-                    <div>
-                        <div class="h4 mb-0 fw-bold text-secondary">{{ pending_outreach_hours|floatformat:1 }}</div>
-                        <div class="small text-muted text-uppercase fw-semibold">Pending Hours</div>
+                    <h3 class="h4 mb-0 fw-bold mt-2">{{ total_outreach_hours|floatformat:1|default:"0.0" }} hrs</h3>
+                    <div class="text-muted small">Finalized verified outreach hours</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small fw-semibold text-uppercase">Pending Hours</span>
+                        <div class="rounded-circle bg-info bg-opacity-10 text-info p-2">
+                            <i class="bi bi-hourglass-split fs-5"></i>
+                        </div>
                     </div>
+                    <h3 class="h4 mb-0 fw-bold mt-2">{{ pending_outreach_hours|floatformat:1|default:"0.0" }} hrs</h3>
+                    <div class="text-muted small">Upcoming signups awaiting completion</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif user_role == 'Mentor' or user_role == 'LeadMentor' %}
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small fw-semibold text-uppercase">Upcoming Events</span>
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary">
+                            <i class="bi bi-calendar-event fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="h4 mb-0 fw-bold mt-2">{{ upcoming_count|default:"0" }}</h3>
+                    <div class="text-muted small">Scheduled upcoming outreach events</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small fw-semibold text-uppercase">Past Events</span>
+                        <div class="rounded-circle bg-secondary bg-opacity-10 text-secondary p-2">
+                            <i class="bi bi-clock-history fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="h4 mb-0 fw-bold mt-2">{{ past_count|default:"0" }}</h3>
+                    <div class="text-muted small">Completed historical outreach events</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small fw-semibold text-uppercase">Program</span>
+                        <div class="rounded-circle bg-info bg-opacity-10 text-info p-2">
+                            <i class="bi bi-megaphone fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 class="h5 mb-0 fw-bold mt-2 text-truncate">{{ program.name }}</h3>
+                    <div class="text-muted small">Outreach engagement workspace</div>
                 </div>
             </div>
         </div>
@@ -51,21 +125,29 @@
 
     {% if messages %}
         {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
                 {{ message }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         {% endfor %}
     {% endif %}
 
+    {# ── Events Sections ── #}
     {% if user_role == 'Student' and my_events %}
-        <h3>My Events</h3>
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <h2 class="h5 fw-bold mb-0 text-dark"><i class="bi bi-star-fill text-warning me-2"></i>My Events</h2>
+            <span class="badge bg-primary rounded-pill">{{ my_events|length }}</span>
+        </div>
         <div class="row mb-4">
             {% for event in my_events %}
                 {% include "outreach/_event_card.html" %}
             {% endfor %}
         </div>
-        <h3>Other Events</h3>
+
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <h2 class="h5 fw-bold mb-0 text-dark">Other Upcoming Events</h2>
+            <span class="badge bg-secondary rounded-pill">{{ other_events|length }}</span>
+        </div>
     {% endif %}
 
     <div class="row">
@@ -73,35 +155,52 @@
             {% for event in other_events %}
                 {% include "outreach/_event_card.html" %}
             {% empty %}
+                {% if not my_events %}
                 <div class="col-12">
-                    <div class="alert alert-light text-center border">
-                        No other upcoming outreach events scheduled.
+                    <div class="card border-0 shadow-sm text-center py-5">
+                        <div class="card-body">
+                            <i class="bi bi-calendar-x fs-1 text-muted opacity-50 mb-2 d-block"></i>
+                            <h5 class="text-muted">No other upcoming outreach events scheduled.</h5>
+                            <p class="text-muted small mb-0">Check back later for new community outreach opportunities.</p>
+                        </div>
                     </div>
                 </div>
+                {% endif %}
             {% endfor %}
         {% else %}
             {% for event in upcoming_events %}
                 {% include "outreach/_event_card.html" %}
             {% empty %}
                 <div class="col-12">
-                    <div class="alert alert-light text-center border">
-                        No upcoming outreach events scheduled.
+                    <div class="card border-0 shadow-sm text-center py-5">
+                        <div class="card-body">
+                            <i class="bi bi-calendar-x fs-1 text-muted opacity-50 mb-2 d-block"></i>
+                            <h5 class="text-muted">No upcoming outreach events scheduled.</h5>
+                            {% if can_add %}
+                            <div class="mt-3">
+                                <a href="{% url 'outreach:event_create' program.id %}" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-plus-lg me-1"></i>Create First Event
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             {% endfor %}
         {% endif %}
     </div>
 
+    {# ── Past Events Accordion ── #}
     {% if past_events %}
-    <div class="accordion mt-5 mb-4" id="pastEventsAccordion">
-        <div class="accordion-item">
+    <div class="accordion mt-5 mb-4 shadow-sm border-0" id="pastEventsAccordion">
+        <div class="accordion-item border-0">
             <h2 class="accordion-header" id="headingPast">
-                <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePast" aria-expanded="false" aria-controls="collapsePast">
-                    <span class="text-muted"><i class="bi bi-clock-history me-2"></i> Past Events ({{ past_events|length }})</span>
+                <button class="accordion-button collapsed py-3 bg-light fw-semibold text-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePast" aria-expanded="false" aria-controls="collapsePast">
+                    <i class="bi bi-clock-history me-2 text-secondary"></i>Past Events ({{ past_events|length }})
                 </button>
             </h2>
             <div id="collapsePast" class="accordion-collapse collapse" aria-labelledby="headingPast" data-bs-parent="#pastEventsAccordion">
-                <div class="accordion-body bg-light">
+                <div class="accordion-body bg-light pt-4">
                     <div class="row">
                         {% for event in past_events %}
                             {% include "outreach/_event_card.html" %}
@@ -116,19 +215,20 @@
     <!-- Description Modal -->
     <div class="modal fade" id="descriptionModal" tabindex="-1" aria-labelledby="descriptionModalLabel" aria-hidden="true">
         <div class="modal-dialog">
-            <div class="modal-content">
+            <div class="modal-content border-0 shadow">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="descriptionModalLabel"></h5>
+                    <h5 class="modal-title fw-bold" id="descriptionModalLabel"></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="descriptionModalBody"></div>
             </div>
         </div>
     </div>
+
     <!-- Manage Signups Modal -->
     <div class="modal fade" id="manageSignupsModal" tabindex="-1" aria-labelledby="manageSignupsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
-            <div class="modal-content" id="manageSignupsModalContent">
+            <div class="modal-content border-0 shadow" id="manageSignupsModalContent">
                 <div class="modal-body text-center py-5">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
@@ -137,10 +237,11 @@
             </div>
         </div>
     </div>
+
     <!-- Student Stats Modal -->
     <div class="modal fade" id="studentStatsModal" tabindex="-1" aria-labelledby="studentStatsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
-            <div class="modal-content" id="studentStatsModalContent">
+            <div class="modal-content border-0 shadow" id="studentStatsModalContent">
                 <div class="modal-body text-center py-5">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>

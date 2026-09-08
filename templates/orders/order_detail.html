@@ -12,11 +12,11 @@
         </ol>
     </nav>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Order #{{ order.pk }}</h1>
-        <div class="d-flex gap-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="h2 mb-0">Order #{{ order.pk }}</h1>
+        <div class="d-flex flex-wrap gap-2">
             <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
-                <i class="bi bi-list-check me-1"></i>Back to Orders
+                <i class="bi bi-arrow-left me-1"></i>Back to Orders
             </a>
             {% if order.status == "pending" and is_lead %}
             <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}" class="d-inline">
@@ -63,44 +63,102 @@
         </div>
     </div>
 
+    <!-- Lifecycle Progress Stepper -->
+    <div class="card shadow-sm mb-4 border-0 bg-light">
+        <div class="card-body py-4 px-3 px-md-5">
+            <div class="position-relative mb-2">
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar {% if order.status == 'received' %}bg-dark{% elif order.status == 'shipped' %}bg-primary{% elif order.status == 'ordered' %}bg-success{% else %}bg-warning{% endif %}" role="progressbar" style="width: {% if order.status == 'pending' %}0%{% elif order.status == 'ordered' %}33.33%{% elif order.status == 'shipped' %}66.66%{% elif order.status == 'received' %}100%{% endif %};"></div>
+                </div>
+                <!-- Step 1: Ready to Order -->
+                <div class="position-absolute top-50 start-0 translate-middle">
+                    <div class="rounded-circle {% if order.status == 'pending' %}bg-warning text-dark ring ring-warning{% else %}bg-success text-white{% endif %} d-flex align-items-center justify-content-center shadow-sm" style="width: 2.25rem; height: 2.25rem;">
+                        <i class="bi {% if order.status == 'pending' %}bi-cart{% else %}bi-check-lg fw-bold{% endif %}"></i>
+                    </div>
+                </div>
+                <!-- Step 2: Ordered -->
+                <div class="position-absolute top-50 translate-middle" style="left: 33.33%;">
+                    <div class="rounded-circle {% if order.status == 'ordered' %}bg-success text-white ring ring-success{% elif order.status == 'shipped' or order.status == 'received' %}bg-success text-white{% else %}bg-secondary bg-opacity-25 text-muted{% endif %} d-flex align-items-center justify-content-center shadow-sm" style="width: 2.25rem; height: 2.25rem;">
+                        <i class="bi {% if order.status == 'shipped' or order.status == 'received' %}bi-check-lg fw-bold{% else %}bi-check2-circle{% endif %}"></i>
+                    </div>
+                </div>
+                <!-- Step 3: Shipped -->
+                <div class="position-absolute top-50 translate-middle" style="left: 66.66%;">
+                    <div class="rounded-circle {% if order.status == 'shipped' %}bg-primary text-white ring ring-primary{% elif order.status == 'received' %}bg-success text-white{% else %}bg-secondary bg-opacity-25 text-muted{% endif %} d-flex align-items-center justify-content-center shadow-sm" style="width: 2.25rem; height: 2.25rem;">
+                        <i class="bi {% if order.status == 'received' %}bi-check-lg fw-bold{% else %}bi-truck{% endif %}"></i>
+                    </div>
+                </div>
+                <!-- Step 4: Received -->
+                <div class="position-absolute top-50 start-100 translate-middle">
+                    <div class="rounded-circle {% if order.status == 'received' %}bg-dark text-white ring ring-dark{% else %}bg-secondary bg-opacity-25 text-muted{% endif %} d-flex align-items-center justify-content-center shadow-sm" style="width: 2.25rem; height: 2.25rem;">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex justify-content-between text-center pt-3">
+                <div style="width: 25%;">
+                    <span class="small fw-bold {% if order.status == 'pending' %}text-warning-emphasis{% else %}text-muted{% endif %}">1. Ready to Order</span>
+                </div>
+                <div style="width: 25%;">
+                    <span class="small fw-bold {% if order.status == 'ordered' %}text-success{% else %}text-muted{% endif %}">2. Ordered</span>
+                </div>
+                <div style="width: 25%;">
+                    <span class="small fw-bold {% if order.status == 'shipped' %}text-primary{% else %}text-muted{% endif %}">3. Shipped</span>
+                </div>
+                <div style="width: 25%;">
+                    <span class="small fw-bold {% if order.status == 'received' %}text-dark{% else %}text-muted{% endif %}">4. Received</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Overview Details -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white">
-            <span class="badge {% if order.status == 'ordered' %}bg-success{% elif order.status == 'shipped' %}bg-primary{% elif order.status == 'received' %}bg-dark{% else %}bg-warning text-dark{% endif %}">{{ order.get_status_display }}</span>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h2 class="h5 mb-0 fw-bold"><i class="bi bi-info-circle me-2 text-primary"></i>Order Overview</h2>
+            <span class="badge {% if order.status == 'ordered' %}bg-success{% elif order.status == 'shipped' %}bg-primary{% elif order.status == 'received' %}bg-dark{% else %}bg-warning text-dark{% endif %} fs-6">{{ order.get_status_display }}</span>
         </div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-4">
-                    <h6 class="text-muted mb-1">Program</h6>
-                    <span>{{ order.program.name|default:"General (no program)" }}</span>
+                    <h6 class="text-muted small text-uppercase mb-1">Program</h6>
+                    <span class="fw-semibold">{{ order.program.name|default:"General (no program)" }}</span>
                 </div>
                 <div class="col-md-4">
-                    <h6 class="text-muted mb-1">Vendor</h6>
+                    <h6 class="text-muted small text-uppercase mb-1">Vendor</h6>
                     {% if order.vendor_url %}
-                    <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                    <a href="{{ order.vendor_url }}" target="_blank" rel="noopener noreferrer" class="fw-semibold">{{ order.vendor_name|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
                     {% else %}
-                    <span>{{ order.vendor_name|default:"—" }}</span>
+                    <span class="fw-semibold">{{ order.vendor_name|default:"—" }}</span>
                     {% endif %}
                 </div>
                 <div class="col-md-4">
-                    <h6 class="text-muted mb-1">Total</h6>
-                    <strong class="fs-5">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</strong>
+                    <h6 class="text-muted small text-uppercase mb-1">Total</h6>
+                    <strong class="fs-5 text-primary">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</strong>
                     <span class="text-muted small">({{ order.item_count }} item{{ order.item_count|pluralize }})</span>
+                    {% if order.shipping_cost or order.tax %}
+                    <div class="text-muted small">
+                        {% if order.shipping_cost %}+ ${{ order.shipping_cost|floatformat:2 }} shipping{% endif %}
+                        {% if order.shipping_cost and order.tax %},{% endif %}
+                        {% if order.tax %}+ ${{ order.tax|floatformat:2 }} tax{% endif %}
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="col-md-4">
-                    <h6 class="text-muted mb-1">Created by</h6>
+                    <h6 class="text-muted small text-uppercase mb-1">Created by</h6>
                     <span>{{ order.created_by.get_full_name|default:order.created_by.username }}</span>
-                    <span class="text-muted small">· {{ order.created_at|date:"M j, Y" }}</span>
+                    <span class="text-muted small d-block">{{ order.created_at|date:"M j, Y" }}</span>
                 </div>
                 {% if order.ordered_at %}
                 <div class="col-md-4">
-                    <h6 class="text-muted mb-1">Ordered by</h6>
+                    <h6 class="text-muted small text-uppercase mb-1">Ordered by</h6>
                     <span>{{ order.ordered_by.get_full_name|default:"—" }}</span>
-                    <span class="text-muted small">· {{ order.ordered_at|date:"M j, Y" }}</span>
+                    <span class="text-muted small d-block">{{ order.ordered_at|date:"M j, Y" }}</span>
                 </div>
                 {% endif %}
                 {% if order.notes %}
                 <div class="col-md-8">
-                    <h6 class="text-muted mb-1">Notes</h6>
+                    <h6 class="text-muted small text-uppercase mb-1">Notes</h6>
                     <span>{{ order.notes }}</span>
                 </div>
                 {% endif %}
@@ -108,10 +166,10 @@
         </div>
     </div>
 
-    {% if order.status == "ordered" or order.status == "shipped" %}
+    {% if order.status == "ordered" or order.status == "shipped" or order.shipping_carrier or order.tracking_number %}
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h5 mb-0"><i class="bi bi-truck me-1"></i>Shipping</h2>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h2 class="h5 mb-0 fw-bold"><i class="bi bi-truck me-2 text-primary"></i>Shipping &amp; Tracking</h2>
             {% if order.status == 'shipped' %}
             <span class="badge bg-primary">Shipped</span>
             {% endif %}
@@ -127,7 +185,7 @@
                     <div class="col-md-2">{% render_field shipping_form.delivery_estimate %}</div>
                     <div class="col-md-2">
                         <div class="mb-3">
-                            <label class="form-label invisible">&nbsp;</label>
+                            <label class="form-label invisible d-none d-md-block">&nbsp;</label>
                             <button type="submit" class="btn btn-primary w-100">
                                 <i class="bi bi-check2 me-1"></i>Save
                             </button>
@@ -137,13 +195,19 @@
             </form>
             {% else %}
             <dl class="row mb-0">
-                <dt class="col-sm-3">Carrier</dt>
-                <dd class="col-sm-9">{{ order.shipping_carrier|default:"—" }}</dd>
-                <dt class="col-sm-3">Tracking</dt>
-                <dd class="col-sm-9">{{ order.tracking_number|default:"—" }}</dd>
-                <dt class="col-sm-3">Shipped</dt>
+                <dt class="col-sm-3 text-muted">Carrier</dt>
+                <dd class="col-sm-9 fw-semibold">{{ order.shipping_carrier|default:"—" }}</dd>
+                <dt class="col-sm-3 text-muted">Tracking</dt>
+                <dd class="col-sm-9">
+                    {% if order.tracking_url %}
+                    <a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer" class="fw-semibold">{{ order.tracking_number|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                    {% else %}
+                    <span class="fw-semibold">{{ order.tracking_number|default:"—" }}</span>
+                    {% endif %}
+                </dd>
+                <dt class="col-sm-3 text-muted">Shipped</dt>
                 <dd class="col-sm-9">{{ order.shipped_date|date:"M j, Y"|default:"—" }}</dd>
-                <dt class="col-sm-3">Est. delivery</dt>
+                <dt class="col-sm-3 text-muted">Est. delivery</dt>
                 <dd class="col-sm-9">{{ order.delivery_estimate|date:"M j, Y"|default:"—" }}</dd>
             </dl>
             {% endif %}
@@ -151,43 +215,55 @@
     </div>
     {% endif %}
 
+    <!-- Items in Order -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h5 mb-0">Items ({{ order.item_count }})</h2>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h2 class="h5 mb-0 fw-bold"><i class="bi bi-box-seam me-2 text-primary"></i>Items in this Order ({{ order.item_count }})</h2>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+                <thead class="table-light text-muted small text-uppercase">
                     <tr>
-                        <th>Item</th>
-                        <th>Status</th>
-                        <th class="text-end">Qty</th>
-                        <th class="text-end">Unit Price</th>
-                        <th class="text-end">Total</th>
-                        <th>Requested By</th>
-                        <th>Notes</th>
-                        <th class="text-end">Actions</th>
+                        <th style="min-width: 250px;">Item</th>
+                        <th style="width: 100px;">Status</th>
+                        <th class="text-end" style="width: 80px;">Qty</th>
+                        <th class="text-end" style="width: 110px;">Unit Price</th>
+                        <th class="text-end" style="width: 110px;">Total</th>
+                        <th style="min-width: 140px;">Requested By</th>
+                        <th style="min-width: 150px;">Notes</th>
+                        <th class="text-end" style="width: 100px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in items %}
                     <tr>
                         <td>
-                            {% if item.url %}
-                            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
-                            {% else %}
-                            {{ item.item_name }}
-                            {% endif %}
+                            <div>
+                                {% if item.url %}
+                                <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="fw-semibold">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                {% else %}
+                                <span class="fw-semibold">{{ item.item_name }}</span>
+                                {% endif %}
+                                {% if item.team %}
+                                <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
+                                {% endif %}
+                                {% if item.crew %}
+                                <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
+                                {% endif %}
+                                {% if item.subteam %}
+                                <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
+                                {% endif %}
+                            </div>
                             {% if item.vendor_name_display %}
                             <div class="text-muted small">
-                                <i class="bi bi-shop"></i>
+                                <i class="bi bi-shop me-1"></i>
                                 {% if item.vendor_url %}<a href="{{ item.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ item.vendor_name_display }}</a>{% else %}{{ item.vendor_name_display }}{% endif %}
                             </div>
                             {% endif %}
                         </td>
                         <td>
                             {% if item.status_key == 'ready' %}
-                            <span class="badge bg-info text-dark">{{ item.get_status_display }}</span>
+                            <span class="badge bg-warning text-dark">{{ item.get_status_display }}</span>
                             {% elif item.status_key == 'shipped' %}
                             <span class="badge bg-primary">{{ item.get_status_display }}</span>
                             {% elif item.status_key == 'received' %}
@@ -200,7 +276,7 @@
                         </td>
                         <td class="text-end">{{ item.quantity_normalized }}</td>
                         <td class="text-end">{% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-                        <td class="text-end">{% if item.total != None %}${{ item.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td class="text-end">{% if item.total != None %}<strong>${{ item.total|floatformat:2 }}</strong>{% else %}&mdash;{% endif %}</td>
                         <td>{{ item.requested_by_name }}</td>
                         <td class="text-muted small">{{ item.notes|default:"—" }}</td>
                         <td class="text-end text-nowrap">
@@ -231,36 +307,58 @@
         </div>
     </div>
 
+    <!-- Collapsible Add Items Form -->
     {% if can_manage_items %}
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white">
-            <h2 class="h5 mb-0">Add Items from the Requests List</h2>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h2 class="h5 mb-0 fw-bold">
+                <i class="bi bi-plus-circle me-2 text-primary"></i>Add Items from Requests Pool
+            </h2>
+            {% if available_items %}
+            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#addItemsCollapse" aria-expanded="false" aria-controls="addItemsCollapse">
+                <i class="bi bi-plus-lg me-1"></i>Add Items ({{ available_items|length }})
+            </button>
+            {% endif %}
         </div>
         <div class="card-body">
             {% if available_items %}
-            <form method="post" action="{% url 'orders:order_add_items' program.id order.pk %}">
-                {% csrf_token %}
-                <div class="list-group mb-3">
-                    {% for item in available_items %}
-                    <label class="list-group-item d-flex align-items-center gap-3">
-                        <input class="form-check-input mb-0" type="checkbox" name="items" value="{{ item.pk }}">
-                        <div>
-                            <strong>{{ item.item_name }}</strong>
-                            <span class="text-muted small">
-                                · {{ item.quantity_normalized }} × {% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}
-                                · {{ item.requested_by_name }}
-                                {% if item.program %} · {{ item.program.name }}{% endif %}
-                            </span>
-                        </div>
-                    </label>
-                    {% endfor %}
-                </div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-plus-circle me-1"></i>Add Selected Items
-                </button>
-            </form>
+            <div class="collapse" id="addItemsCollapse">
+                <form method="post" action="{% url 'orders:order_add_items' program.id order.pk %}">
+                    {% csrf_token %}
+                    <div class="list-group mb-3">
+                        {% for item in available_items %}
+                        <label class="list-group-item d-flex align-items-center gap-3">
+                            <input class="form-check-input mb-0" type="checkbox" name="items" value="{{ item.pk }}">
+                            <div>
+                                <strong>{{ item.item_name }}</strong>
+                                {% if item.team %}
+                                <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
+                                {% endif %}
+                                {% if item.crew %}
+                                <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
+                                {% endif %}
+                                {% if item.subteam %}
+                                <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
+                                {% endif %}
+                                <span class="text-muted small">
+                                    · {{ item.quantity_normalized }} × {% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}
+                                    · {{ item.requested_by_name }}
+                                    {% if item.program %} · {{ item.program.name }}{% endif %}
+                                </span>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i>Add Selected Items
+                    </button>
+                </form>
+            </div>
+            <div class="small text-muted" id="addItemsHint">
+                <i class="bi bi-info-circle me-1"></i>{{ available_items|length }} unassigned item request{{ available_items|length|pluralize }} available in the pool. Click "Add Items" above to expand and select.
+            </div>
             {% else %}
-            <p class="text-muted mb-0"><i class="bi bi-inbox me-2"></i>No unassigned requests left — everything is grouped into orders.</p>
+            <p class="text-muted mb-0"><i class="bi bi-inbox me-2"></i>No unassigned requests left &mdash; everything has been grouped into orders.</p>
             {% endif %}
         </div>
     </div>

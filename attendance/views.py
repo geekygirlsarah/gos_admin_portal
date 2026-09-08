@@ -519,6 +519,12 @@ def who_is_here_view(request):
     today_sessions = active_sessions.filter(check_in__gte=today_start)
     stale_sessions = active_sessions.filter(check_in__lt=today_start)
 
+    today_student_count = today_sessions.filter(student__isnull=False).count()
+    today_mentor_count = today_sessions.filter(adult__isnull=False).count()
+    today_visitor_count = today_sessions.filter(
+        student__isnull=True, adult__isnull=True
+    ).count()
+
     programs = Program.objects.filter(features__key="attendance").distinct()
 
     return render(
@@ -531,6 +537,11 @@ def who_is_here_view(request):
             "selected_program_id": (
                 int(program_id) if program_id and program_id.isdigit() else None
             ),
+            "today_signed_in_count": today_sessions.count(),
+            "stale_sessions_count": stale_sessions.count(),
+            "today_student_count": today_student_count,
+            "today_mentor_count": today_mentor_count,
+            "today_visitor_count": today_visitor_count,
         },
     )
 
@@ -1041,6 +1052,18 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         if export == "xlsx":
             return _export_attendance_excel(sessions)
 
+        total_sessions_count = sessions.count()
+        open_sessions_count = sessions.filter(check_out__isnull=True).count()
+        from django.db.models import Sum
+
+        total_minutes = (
+            sessions.filter(duration_minutes__isnull=False).aggregate(
+                total=Sum("duration_minutes")
+            )["total"]
+            or 0
+        )
+        total_hours = round(total_minutes / 60.0, 1)
+
         programs = Program.objects.filter(features__key="attendance").distinct()
 
         return render(
@@ -1069,6 +1092,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "range_end": range_end,
                 "current_sort": sort,
                 "current_dir": direction,
+                "total_sessions_count": total_sessions_count,
+                "open_sessions_count": open_sessions_count,
+                "total_hours": total_hours,
             },
         )
 

@@ -52,6 +52,10 @@
                             {% render_field form.vendor_url %}
                         </div>
                         {% render_field form.notes %}
+                        <div class="row g-3">
+                            <div class="col-md-6">{% render_field form.shipping_cost %}</div>
+                            <div class="col-md-6">{% render_field form.tax %}</div>
+                        </div>
                         <div class="d-flex justify-content-between mt-4">
                             <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-secondary">Cancel</a>
                             <button type="submit" class="btn btn-primary">

@@ -20,10 +20,17 @@ from orders.forms import (
     NOT_LISTED_VENDOR,
     OrderForm,
     OrderItemForm,
+    ShippingCarrierForm,
     ShippingInfoForm,
     VendorForm,
 )
-from orders.models import Order, OrderItem, Vendor, user_display_name
+from orders.models import (
+    Order,
+    OrderItem,
+    ShippingCarrier,
+    Vendor,
+    user_display_name,
+)
 from programs.models import Program
 from programs.permission_views import (
     LeadMentorRequiredMixin,
@@ -158,6 +165,9 @@ def _item_export_row(item):
             else ""
         ),
         "notes": item.notes,
+        "team": str(item.team) if item.team_id else "",
+        "crew": item.crew.name if item.crew_id else "",
+        "subteam": item.subteam.name if item.subteam_id else "",
         "status": item.get_status_display(),
         "ordered_on": (
             timezone.localtime(order.ordered_at).strftime("%Y-%m-%d %H:%M")
@@ -189,6 +199,9 @@ def _export_items_csv(items):
             "Requested By",
             "Requested On",
             "Notes",
+            "Team",
+            "Crew",
+            "Subteam",
             "Status",
             "Ordered On",
         ]
@@ -209,6 +222,9 @@ def _export_items_csv(items):
                 row["requested_by"],
                 row["requested_on"],
                 row["notes"],
+                row["team"],
+                row["crew"],
+                row["subteam"],
                 row["status"],
                 row["ordered_on"],
             ]
@@ -239,6 +255,9 @@ def _export_items_xlsx(items):
             "Requested By",
             "Requested On",
             "Notes",
+            "Team",
+            "Crew",
+            "Subteam",
             "Status",
             "Ordered On",
         ]
@@ -259,11 +278,14 @@ def _export_items_xlsx(items):
                 row["requested_by"],
                 row["requested_on"],
                 row["notes"],
+                row["team"],
+                row["crew"],
+                row["subteam"],
                 row["status"],
                 row["ordered_on"],
             ]
         )
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=14):
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=17):
         for cell in row:
             if cell.column in (2, 6, 12):
                 cell.alignment = cell.alignment.copy(vertical="top")
@@ -329,6 +351,9 @@ class OrderListView(
             .select_related(
                 "program",
                 "vendor",
+                "team",
+                "crew",
+                "subteam",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
@@ -340,23 +365,42 @@ class OrderListView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
-        pool_items = (
+        pool_items = list(
             OrderItem.objects.filter(order__isnull=True)
-            .select_related("program", "vendor", "requested_by")
+            .select_related(
+                "program", "vendor", "team", "crew", "subteam", "requested_by"
+            )
             .order_by("-requested_at")
         )
-        active_orders = (
+        active_orders = list(
             Order.objects.exclude(status=Order.STATUS_RECEIVED)
-            .select_related("program", "vendor", "created_by")
-            .prefetch_related("items")
+            .select_related("program", "vendor", "shipping_carrier", "created_by")
+            .prefetch_related("items__team", "items__crew", "items__subteam")
             .order_by("-created_at")
         )
         item_groups = _group_by_vendor(pool_items)
         order_groups = _group_by_vendor(active_orders)
+        item_groups_total = _groups_total(item_groups)
+        order_groups_total = _groups_total(order_groups)
+
+        pool_items_count = len(pool_items)
+        in_progress_orders = [
+            o
+            for o in active_orders
+            if o.status in (Order.STATUS_PENDING, Order.STATUS_ORDERED)
+        ]
+        in_progress_orders_count = len(in_progress_orders)
+        shipped_orders = [o for o in active_orders if o.status == Order.STATUS_SHIPPED]
+        shipped_orders_count = len(shipped_orders)
+
+        context["pool_items_count"] = pool_items_count
+        context["in_progress_orders_count"] = in_progress_orders_count
+        context["shipped_orders_count"] = shipped_orders_count
+        context["active_tab"] = "active"
         context["item_groups"] = item_groups
         context["order_groups"] = order_groups
-        context["item_groups_total"] = _groups_total(item_groups)
-        context["order_groups_total"] = _groups_total(order_groups)
+        context["item_groups_total"] = item_groups_total
+        context["order_groups_total"] = order_groups_total
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
         context["can_request_item"] = can_user_write(
@@ -387,8 +431,10 @@ class OrderArchiveView(
     def get_queryset(self):
         return (
             Order.objects.filter(status=Order.STATUS_RECEIVED)
-            .select_related("program", "vendor", "created_by", "ordered_by")
-            .prefetch_related("items")
+            .select_related(
+                "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
+            )
+            .prefetch_related("items__team", "items__crew", "items__subteam")
             .order_by("-ordered_at", "-created_at")
         )
 
@@ -398,6 +444,9 @@ class OrderArchiveView(
             .select_related(
                 "program",
                 "vendor",
+                "team",
+                "crew",
+                "subteam",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
@@ -409,12 +458,22 @@ class OrderArchiveView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
-        orders = context["orders"]
+        orders = list(context["orders"])
         for order in orders:
             order.ordered_by_name = user_display_name(order.ordered_by)
-        context["order_groups"] = _group_by_program(orders)
+        order_groups = _group_by_program(orders)
+        context["order_groups"] = order_groups
+        context["archive_total"] = _groups_total(order_groups)
+        context["archive_orders_count"] = len(orders)
+        context["active_tab"] = "archive"
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
+        context["can_request_item"] = can_user_write(
+            self.request.user, "orders-request"
+        )
+        context["can_place_order"] = user_is_mentor_or_lead(
+            self.request.user
+        ) and can_user_write(self.request.user, "orders-manage")
         context["page_title"] = "Order Archive"
         return context
 
@@ -440,18 +499,20 @@ class OrderDetailView(
 
     def get_queryset(self):
         return Order.objects.select_related(
-            "program", "vendor", "created_by", "ordered_by"
+            "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
         context["items"] = self.object.items.select_related(
-            "program", "vendor", "requested_by", "order"
+            "program", "vendor", "team", "crew", "subteam", "requested_by", "order"
         ).all()
         context["available_items"] = (
             OrderItem.objects.filter(order__isnull=True)
-            .select_related("program", "vendor", "requested_by")
+            .select_related(
+                "program", "vendor", "team", "crew", "subteam", "requested_by"
+            )
             .order_by("vendor_name", "vendor__name", "-requested_at")
         )
         context["is_lead"] = role == "LeadMentor"
@@ -790,6 +851,11 @@ class ItemCreateView(
     template_name = "orders/item_form.html"
     section = "orders-request"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["not_listed_vendor"] = NOT_LISTED_VENDOR
@@ -812,6 +878,11 @@ class ItemUpdateView(
     form_class = OrderItemForm
     template_name = "orders/item_form.html"
     section = "orders-request"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.object.program or self.program
+        return kwargs
 
     def get_queryset(self):
         # Org-wide queryset; creator/unassigned editing is enforced by
@@ -923,3 +994,86 @@ class VendorDeleteView(
 
     def get_success_url(self):
         return reverse("orders:vendor_list", kwargs={"program_id": self.program.id})
+
+
+class ShippingCarrierListView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, ListView
+):
+    """Org-wide shipping companies reference list (Lead Mentor managed)."""
+
+    model = ShippingCarrier
+    template_name = "orders/carrier_list.html"
+    context_object_name = "carriers"
+
+    def get_queryset(self):
+        return ShippingCarrier.objects.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Shipping companies"
+        return context
+
+
+class ShippingCarrierCreateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, CreateView
+):
+    model = ShippingCarrier
+    form_class = ShippingCarrierForm
+    template_name = "orders/carrier_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Shipping Company"
+        return context
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            f"Shipping company '{form.instance.name}' added. Mentors can now "
+            "pick it when recording tracking info.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:carrier_list", kwargs={"program_id": self.program.id})
+
+
+class ShippingCarrierUpdateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, UpdateView
+):
+    model = ShippingCarrier
+    form_class = ShippingCarrierForm
+    template_name = "orders/carrier_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Shipping Company"
+        return context
+
+    def form_valid(self, form):
+        messages.success(
+            self.request, f"Shipping company '{form.instance.name}' updated."
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:carrier_list", kwargs={"program_id": self.program.id})
+
+
+class ShippingCarrierDeleteView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, DeleteView
+):
+    model = ShippingCarrier
+    template_name = "orders/carrier_confirm_delete.html"
+
+    def form_valid(self, form):
+        name = self.object.name
+        messages.success(
+            self.request,
+            f"Shipping company '{name}' deleted. Orders that used it keep their "
+            "tracking info but lose the clickable link.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:carrier_list", kwargs={"program_id": self.program.id})

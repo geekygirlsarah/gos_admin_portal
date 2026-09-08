@@ -17,6 +17,26 @@ urlpatterns = [
         views.VendorDeleteView.as_view(),
         name="vendor_delete",
     ),
+    path(
+        "carriers/",
+        views.ShippingCarrierListView.as_view(),
+        name="carrier_list",
+    ),
+    path(
+        "carriers/create/",
+        views.ShippingCarrierCreateView.as_view(),
+        name="carrier_create",
+    ),
+    path(
+        "carriers/<int:pk>/edit/",
+        views.ShippingCarrierUpdateView.as_view(),
+        name="carrier_edit",
+    ),
+    path(
+        "carriers/<int:pk>/delete/",
+        views.ShippingCarrierDeleteView.as_view(),
+        name="carrier_delete",
+    ),
     path("", views.OrderListView.as_view(), name="order_list"),
     path("archive/", views.OrderArchiveView.as_view(), name="order_archive"),
     path("items/create/", views.ItemCreateView.as_view(), name="item_create"),

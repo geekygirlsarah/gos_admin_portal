@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'orders:order_list' program.id %}">Order Requests</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Shipping Companies</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ page_title }}</h1>
+        <a href="{% url 'orders:carrier_create' program.id %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Shipping Company
+        </a>
+    </div>
+
+    <div class="d-flex gap-2 mb-3">
+        <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-list-check me-1"></i>Active Requests &amp; Orders
+        </a>
+        <a href="{% url 'orders:order_archive' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-archive me-1"></i>Order Archive
+        </a>
+        <a href="{% url 'orders:vendor_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-shop me-1"></i>Vendors
+        </a>
+    </div>
+
+    <p class="text-muted">
+        Shipping companies we use to track packages. Each carries a tracking URL
+        template with <code>{number}</code> where the tracking number goes, so
+        the tracking number on an order becomes a clickable link.
+    </p>
+
+    {% if carriers %}
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Tracking URL template</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for carrier in carriers %}
+                        <tr>
+                            <td>{{ carrier.name }}</td>
+                            <td class="text-muted small">{{ carrier.tracking_url_template|default:"&mdash;" }}</td>
+                            <td class="text-end text-nowrap">
+                                <a href="{% url 'orders:carrier_edit' program.id carrier.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'orders:carrier_delete' program.id carrier.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-light text-center border">
+            <i class="bi bi-truck me-2"></i>No shipping companies yet. Add the carriers you use so room captains can pick from a list and track packages.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
