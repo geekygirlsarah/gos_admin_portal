@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
@@ -366,9 +368,170 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             active=True, student__graduated=False
         ).order_by("sort_first", "sort_last")
 
+        active_enrollments_list = list(ctx["active_enrollments"])
+        inactive_enrollments_list = list(ctx["inactive_enrollments"])
+        ctx["active_enrollments_count"] = len(active_enrollments_list)
+        ctx["inactive_enrollments_count"] = len(inactive_enrollments_list)
+        ctx["active_teams_count"] = len(
+            {e.team_id for e in active_enrollments_list if e.team_id}
+        )
+        ctx["active_subteams_count"] = len(
+            {e.subteam_id for e in active_enrollments_list if e.subteam_id}
+        )
+        ctx["active_crews_count"] = len(
+            {e.crew_id for e in active_enrollments_list if e.crew_id}
+        )
+
+        # Detailed group breakdowns with student counts
+        team_counts = {}
+        for e in active_enrollments_list:
+            if e.team:
+                team_counts[e.team] = team_counts.get(e.team, 0) + 1
+        ctx["team_breakdown"] = [
+            {
+                "id": t.id,
+                "name": str(t),
+                "short_name": f"{t.team_type} {t.number}",
+                "full_name": f"{t.team_type} {t.number}{(' ' + t.name) if t.name else ''}",
+                "color": t.color,
+                "count": count,
+            }
+            for t, count in sorted(
+                team_counts.items(), key=lambda x: (x[0].team_type, x[0].number)
+            )
+        ]
+
+        subteam_counts = {}
+        for e in active_enrollments_list:
+            if e.subteam:
+                subteam_counts[e.subteam] = subteam_counts.get(e.subteam, 0) + 1
+        ctx["subteam_breakdown"] = [
+            {
+                "id": st.id,
+                "name": st.name,
+                "color": st.color,
+                "count": count,
+            }
+            for st, count in sorted(
+                subteam_counts.items(), key=lambda x: x[0].name.lower()
+            )
+        ]
+
+        crew_counts = {}
+        for e in active_enrollments_list:
+            if e.crew:
+                crew_counts[e.crew] = crew_counts.get(e.crew, 0) + 1
+        ctx["crew_breakdown"] = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "color": c.color,
+                "count": count,
+            }
+            for c, count in sorted(crew_counts.items(), key=lambda x: x[0].name.lower())
+        ]
+        ctx["has_group_breakdowns"] = bool(
+            ctx["team_breakdown"] or ctx["subteam_breakdown"] or ctx["crew_breakdown"]
+        )
+
+        if "background-checks" in program.feature_keys:
+            ctx["bg_checks_needed_count"] = sum(
+                1 for e in active_enrollments_list if e.student.needs_background_check()
+            )
+        else:
+            ctx["bg_checks_needed_count"] = 0
+
+        # Health & Medical Alert Count
+        ctx["can_view_medical"] = can_user_read(self.request.user, "health_medical")
+        if ctx["can_view_medical"]:
+            ctx["medical_alerts_count"] = sum(
+                1
+                for e in active_enrollments_list
+                if bool(
+                    e.student.allergies
+                    or e.student.dietary_restrictions
+                    or e.student.medical_notes
+                )
+            )
+        else:
+            ctx["medical_alerts_count"] = 0
+
+        # Pending Order Requests
+        if "orders" in program.feature_keys:
+            try:
+                from orders.models import OrderItem
+
+                pending_items = list(
+                    OrderItem.objects.filter(program=program, order__isnull=True)
+                )
+                ctx["pending_orders_count"] = len(pending_items)
+                ctx["pending_orders_total"] = sum(
+                    (item.total or Decimal("0")) for item in pending_items
+                )
+            except Exception:
+                ctx["pending_orders_count"] = 0
+                ctx["pending_orders_total"] = Decimal("0")
+        else:
+            ctx["pending_orders_count"] = 0
+            ctx["pending_orders_total"] = Decimal("0")
+
+        # Team / Crew / Subteam Assignments
+        assigned_count = sum(
+            1
+            for e in active_enrollments_list
+            if (e.team_id or e.crew_id or e.subteam_id)
+        )
+        ctx["assigned_students_count"] = assigned_count
+        ctx["unassigned_students_count"] = (
+            ctx["active_enrollments_count"] - assigned_count
+        )
+        ctx["has_teams_or_subteams"] = bool(
+            ctx["active_teams_count"] > 0
+            or program.crews.exists()
+            or program.subteams.exists()
+            or Team.objects.exists()
+        )
+
+        # Attendance / Sign-out Status
+        if (
+            "signout-sheet" in program.feature_keys
+            or "attendance" in program.feature_keys
+        ):
+            try:
+                from attendance.models import StudentPresence
+
+                today = timezone.localdate()
+                ctx["today_present_count"] = StudentPresence.objects.filter(
+                    program=program, date=today, status=StudentPresence.PRESENT
+                ).count()
+                ctx["has_attendance"] = True
+            except Exception:
+                ctx["today_present_count"] = 0
+                ctx["has_attendance"] = False
+        else:
+            ctx["today_present_count"] = 0
+            ctx["has_attendance"] = False
+
+        # Context-aware metric card selection priority:
+        # 1. Pending Orders
+        # 2. Teams / Subteams
+        # 3. Today's Attendance
+        # 4. Program Status
+        # 5. Fewer cards (None)
+        if ctx["pending_orders_count"] > 0:
+            ctx["dynamic_card"] = "orders"
+        elif ctx["has_teams_or_subteams"] and ctx["active_enrollments_count"] > 0:
+            ctx["dynamic_card"] = "teams"
+        elif ctx["has_attendance"]:
+            ctx["dynamic_card"] = "attendance"
+        elif program.active or getattr(program, "status", "") in ("Active", "Upcoming"):
+            ctx["dynamic_card"] = "status"
+        else:
+            ctx["dynamic_card"] = None
+
         # Backwards compatibility (old templates may rely on a single list)
-        ctx["active_students"] = [e.student for e in ctx["active_enrollments"]]
-        ctx["inactive_students"] = [e.student for e in ctx["inactive_enrollments"]]
+        ctx["active_students"] = [e.student for e in active_enrollments_list]
+        ctx["inactive_students"] = [e.student for e in inactive_enrollments_list]
         ctx["enrolled_students"] = ctx["active_students"] + ctx["inactive_students"]
 
         ctx["teams"] = Team.objects.all()

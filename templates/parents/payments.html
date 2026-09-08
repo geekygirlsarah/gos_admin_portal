@@ -2,104 +2,133 @@
 {% block title %}Payments{% endblock %}
 
 {% block content %}
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Payments</h1>
+  <!-- Header with Title and How to Pay -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Payments &amp; Balances</h1>
+      <p class="text-muted small mb-0">Overview of program dues, payment history, and sliding scale discounts for your enrolled students.</p>
+    </div>
     {% include 'parents/_how_to_pay_modal.html' %}
   </div>
 
-    <p class="text-muted">Here is the current balance for all students in all programs. Click &quot;View Balance&quot; to see a balance sheet and receipts for every program.</p>
-    <p class="text-muted">Information about the Sliding Scale is below, after the total owed.</p>
-
   {% if student_rows %}
-    {% for student_row in student_rows %}
-      <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>{{ student_row.student.display_name }}</strong>
-          <span class="fw-semibold">Student Total Owed: ${{ student_row.student_total_owed|floatformat:2 }}</span>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive mb-0">
-            <table class="table table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>Program</th>
-                  <th class="text-end">Current Balance</th>
-                  <th class="text-end">Amount Owed</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in student_row.program_rows %}
-                  <tr>
-                    <td>{{ row.program.name }}</td>
-                    <td class="text-end">
-                      {% if row.balance < 0 %}
-                        <span class="text-success">Credit: ${{ row.balance|floatformat:2|slice:"1:" }}</span>
-                      {% elif row.balance == 0 %}
-                        <span class="text-success">Paid in full</span>
-                      {% else %}
-                        ${{ row.balance|floatformat:2 }}
-                      {% endif %}
-                    </td>
-                    <td class="text-end">${{ row.amount_owed|floatformat:2 }}</td>
-                    <td class="text-end">
-                      <a class="btn btn-sm btn-outline-secondary" href="{{ row.balance_url }}">
-                        View Balance
-                      </a>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+    <!-- Grand Total Summary Banner -->
+    <div class="card shadow-sm border-0 bg-light mb-4">
+      <div class="card-body d-flex flex-wrap justify-content-between align-items-center py-3 gap-3">
+        <div class="d-flex align-items-center">
+          <div class="rounded-circle {% if grand_total <= 0 %}bg-success text-success{% else %}bg-danger text-danger{% endif %} bg-opacity-10 p-3 me-3">
+            <i class="bi {% if grand_total <= 0 %}bi-check-circle-fill{% else %}bi-exclamation-circle-fill{% endif %} fs-4"></i>
           </div>
+          <div>
+            <div class="text-muted small fw-semibold">Family Balance Summary</div>
+            <h4 class="mb-0 fw-bold">
+              {% if grand_total <= 0 %}
+                <span class="text-success">Paid in Full ($0.00)</span>
+              {% else %}
+                <span class="text-danger">Total Due: ${{ grand_total|floatformat:2 }}</span>
+              {% endif %}
+            </h4>
+          </div>
+        </div>
+        <div>
+          <span class="badge bg-secondary rounded-pill px-3 py-2">
+            {{ student_rows|length }} Student{{ student_rows|length|pluralize }} Enrolled
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Student Cards -->
+    {% for student_row in student_rows %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+          <div class="d-flex align-items-center gap-2">
+            <h2 class="h5 mb-0 fw-bold">
+              <i class="bi bi-person me-1 text-primary"></i>{{ student_row.student.display_name }}
+            </h2>
+          </div>
+          <div>
+            {% if student_row.student_total_owed <= 0 %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                <i class="bi bi-check-circle me-1"></i>Paid in Full
+              </span>
+            {% else %}
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                Total Due: ${{ student_row.student_total_owed|floatformat:2 }}
+              </span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Integrated Sliding Scale Status -->
+        {% if student_row.sliding_scale %}
+          <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <span class="badge bg-info text-dark me-2"><i class="bi bi-tag me-1"></i>Sliding Scale</span>
+              <span class="small text-muted">On the sliding scale ({{ student_row.sliding_scale.percent }}% discount){% if student_row.sliding_scale.expiration_date %}, valid through {{ student_row.sliding_scale.expiration_date }}{% else %}, no expiration{% endif %}.</span>
+            </div>
+          </div>
+        {% elif student_row.sliding_scale_pending %}
+          <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <span class="badge bg-warning text-dark me-2"><i class="bi bi-clock me-1"></i>Sliding Scale Pending Review</span>
+              <span class="small text-muted">Application pending review by a Lead Mentor.</span>
+            </div>
+            <form method="post" action="{{ student_row.sliding_scale_withdraw_url }}" class="d-inline m-0">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">Withdraw Application</button>
+            </form>
+          </div>
+        {% elif student_row.sliding_scale_apply_url %}
+          <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="small text-muted">Need tuition assistance? You can apply for a sliding-scale discount.</span>
+            <a href="{{ student_row.sliding_scale_apply_url }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-file-earmark-plus me-1"></i>Apply for Sliding Scale
+            </a>
+          </div>
+        {% endif %}
+
+        <!-- Program Balances Table -->
+        <div class="table-responsive mb-0">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-muted small text-uppercase">
+              <tr>
+                <th>Program</th>
+                <th class="text-end" style="width: 180px;">Status / Balance</th>
+                <th class="text-end" style="width: 140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in student_row.program_rows %}
+                <tr>
+                  <td class="fw-semibold">{{ row.program.name }}</td>
+                  <td class="text-end">
+                    {% if row.balance < 0 %}
+                      <span class="text-success fw-semibold"><i class="bi bi-plus-circle me-1"></i>Credit: ${{ row.balance|floatformat:2|slice:"1:" }}</span>
+                    {% elif row.balance == 0 %}
+                      <span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>Paid in Full</span>
+                    {% else %}
+                      <strong class="text-danger">${{ row.amount_owed|floatformat:2 }}</strong> <span class="text-muted small">due</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ row.balance_url }}">
+                      <i class="bi bi-receipt me-1"></i>View Balance
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     {% endfor %}
 
-    <div class="d-flex justify-content-end mt-3 mb-4">
-      <h2 class="h5 mb-0">Total Owed: ${{ grand_total|floatformat:2 }}</h2>
-    </div>
-
-    {% for student_row in student_rows %}
-      {% if student_row.sliding_scale_apply_url %}
-        {% if forloop.first %}
-          <div class="card mb-3">
-            <div class="card-header">
-              <strong>Sliding Scale</strong>
-            </div>
-            <ul class="list-group list-group-flush">
-        {% endif %}
-              <li class="list-group-item">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                  <div>
-                    <strong>{{ student_row.student.display_name }}:</strong>
-                    {% if student_row.sliding_scale %}
-                      On the sliding scale ({{ student_row.sliding_scale.percent }}% discount){% if student_row.sliding_scale.expiration_date %}, valid through {{ student_row.sliding_scale.expiration_date }}{% else %}, no expiration{% endif %}.
-                    {% elif student_row.sliding_scale_pending %}
-                      <span class="text-muted">Application pending review by a Lead Mentor.</span>
-                    {% else %}
-                      <span class="text-muted">Not currently on the sliding scale.</span>
-                    {% endif %}
-                  </div>
-                  <div class="d-flex gap-2">
-                    {% if not student_row.sliding_scale and not student_row.sliding_scale_pending %}
-                      <a href="{{ student_row.sliding_scale_apply_url }}" class="btn btn-sm btn-outline-primary">Apply for Sliding Scale</a>
-                    {% elif student_row.sliding_scale_pending %}
-                      <form method="post" action="{{ student_row.sliding_scale_withdraw_url }}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Withdraw Application</button>
-                      </form>
-                    {% endif %}
-                  </div>
-                </div>
-              </li>
-        {% if forloop.last %}
-            </ul>
-          </div>
-        {% endif %}
-      {% endif %}
-    {% endfor %}
   {% else %}
-    <div class="alert alert-info">No payment records were found for your students.</div>
+    <div class="alert alert-light text-center border py-4 m-3">
+      <i class="bi bi-credit-card fs-3 d-block mb-2 text-muted"></i>
+      <h6 class="mb-1 fw-semibold">No payment records found</h6>
+      <p class="text-muted small mb-0">No payment records were found for your students.</p>
+    </div>
   {% endif %}
 {% endblock %}
