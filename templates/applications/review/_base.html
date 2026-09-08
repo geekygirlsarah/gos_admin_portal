@@ -5,11 +5,13 @@
     <div class="col">
       <h1 class="h3 mb-0">{% block review_heading %}Applications{% endblock %}</h1>
     </div>
+    {% block review_header_actions %}
     <div class="col-auto">
       <a class="btn btn-outline-secondary btn-sm" href="{% url 'application_review_list' %}">
         ← All applications
       </a>
     </div>
+    {% endblock %}
   </div>
   {% block review_body %}{% endblock %}
 {% endblock %}

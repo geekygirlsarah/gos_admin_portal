@@ -176,3 +176,48 @@ def get_grade(step5_data, application=None):
         except (ValueError, TypeError):
             pass
     return "—"
+
+
+STEP_TITLES = {
+    "step1": "Welcome & Demographics",
+    "step2": "Applicant Type",
+    "step3": "Email Verification",
+    "step4": "Program Selection",
+    "step5-student": "Student Information",
+    "step6-experience": "Robotics & Experience",
+    "step7-primaryparent": "Primary Parent / Guardian",
+    "step8-secondaryparent": "Secondary Parent / Guardian",
+    "mentor_info": "Mentor Information",
+    "mentor_clearance": "Clearance & Background Check Info",
+    "mentor_clearance_interest": "Clearance Interest",
+    "mentor_clearance_detail": "Clearance Details",
+    "step10_documents": "Uploaded Documents",
+}
+
+
+@register.filter(name="humanize_step_title")
+def humanize_step_title(step_key):
+    """Map wizard step keys to clean human-readable section titles."""
+    if not step_key:
+        return ""
+    key = str(step_key).strip()
+    if key in STEP_TITLES:
+        return STEP_TITLES[key]
+    clean = key.replace("-", " ").replace("_", " ").strip()
+    return clean[:1].upper() + clean[1:] if clean else ""
+
+
+@register.filter(name="status_badge_class")
+def status_badge_class(status):
+    """Return Bootstrap badge classes for application status."""
+    mapping = {
+        "draft": "bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25",
+        "email_verified": "bg-info bg-opacity-10 text-info border border-info border-opacity-25",
+        "awaiting_parent": "bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-25",
+        "submitted": "bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25",
+        "approved": "bg-info bg-opacity-10 text-info border border-info border-opacity-25",
+        "approved_signed": "bg-success bg-opacity-10 text-success border border-success border-opacity-25",
+        "converted": "bg-success text-white",
+        "declined": "bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25",
+    }
+    return mapping.get(str(status).lower(), "bg-secondary")

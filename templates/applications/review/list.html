@@ -1,23 +1,119 @@
 {% extends 'applications/review/_base.html' %}
 {% load sorting_tags %}
+{% load application_extras %}
 {% block review_title %}Applications{% endblock %}
-{% block review_heading %}Applications{% endblock %}
+
+{% block review_heading %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Applications</h1>
+      <div class="text-muted small">Intake queue and conversion pipeline</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-primary" href="{% url 'application_review_messaging' %}">
+        <i class="bi bi-envelope me-1"></i>Message Applicants
+      </a>
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          Manage ▾
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+          <li>
+            <a class="dropdown-item" href="{% url 'application_review_messaging' %}">
+              <i class="bi bi-envelope me-2"></i>Message Applicants
+            </a>
+          </li>
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <button class="dropdown-item text-danger" type="button" data-bs-toggle="modal" data-bs-target="#cleanupStaleModal">
+              <i class="bi bi-trash3 me-2"></i>Clean Up Stale Applications (&gt; 30 days)...
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block review_header_actions %}{% endblock %}
+
 {% block review_body %}
-  <div class="row g-2 align-items-end mb-3">
-    <div class="col">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-sm-4 col-md-3">
-          <label class="form-label" for="status-filter">Status</label>
-          <select class="form-select" name="status" id="status-filter">
+  <!-- KPI Pipeline Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-warning rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Pending Review</span>
+            <div class="rounded-circle bg-warning bg-opacity-10 p-2 text-warning d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-hourglass-split"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ kpi_pending_review }}</h3>
+          <div class="text-muted small">Submitted &amp; awaiting review</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-info rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Awaiting Signatures</span>
+            <div class="rounded-circle bg-info bg-opacity-10 p-2 text-info d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-file-earmark-text"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ kpi_awaiting_signatures }}</h3>
+          <div class="text-muted small">Approved, waiting on forms</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-primary rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Ready to Convert</span>
+            <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-person-check-fill"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ kpi_ready_to_convert }}</h3>
+          <div class="text-muted small">Docs uploaded &amp; ready</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-success rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Converted</span>
+            <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-check-circle-fill"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ kpi_converted }}</h3>
+          <div class="text-muted small">Enrolled this season</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Card -->
+  <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light">
+    <div class="card-body p-3">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-sm-6 col-md-4 col-lg-3">
+          <label class="form-label small fw-semibold text-muted mb-1" for="status-filter">Status</label>
+          <select class="form-select form-select-sm" name="status" id="status-filter">
             <option value="">All statuses</option>
             {% for value, label in status_choices %}
               <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-sm-4 col-md-3">
-          <label class="form-label" for="program-filter">Applicant Program</label>
-          <select class="form-select" name="program" id="program-filter">
+        <div class="col-sm-6 col-md-4 col-lg-3">
+          <label class="form-label small fw-semibold text-muted mb-1" for="program-filter">Applicant Program</label>
+          <select class="form-select form-select-sm" name="program" id="program-filter">
             <option value="">All programs</option>
             {% for prog in programs %}
               <option value="{{ prog.id }}" {% if prog.id|stringformat:"s" == filter_program_id %}selected{% endif %}>
@@ -26,29 +122,22 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-sm-auto">
-          <div class="form-check pt-4">
+        <div class="col-sm-6 col-md-auto">
+          <div class="form-check pt-sm-4">
             <input class="form-check-input" type="checkbox" name="open" value="1" id="open-only" {% if open_only %}checked{% endif %}>
-            <label class="form-check-label" for="open-only">
-              Open applications only
+            <label class="form-check-label small" for="open-only">
+              Open programs only
             </label>
           </div>
         </div>
-        <div class="col-auto">
-          <button class="btn btn-primary" type="submit">Filter</button>
-          <a class="btn btn-outline-secondary" href="{% url 'application_review_list' %}">Reset</a>
+        <div class="col-sm-6 col-md-auto ms-auto d-flex gap-2">
+          <button class="btn btn-sm btn-primary px-3" type="submit">
+            <i class="bi bi-funnel me-1"></i>Filter
+          </button>
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'application_review_list' %}">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+          </a>
         </div>
-      </form>
-    </div>
-    <div class="col-auto ms-auto">
-      <a class="btn btn-outline-primary" href="{% url 'application_review_messaging' %}">
-        Message Applicants
-      </a>
-      <form method="post" action="{% url 'application_cleanup_stale' %}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete all applications older than 30 days?');">
-        {% csrf_token %}
-        <button class="btn btn-outline-danger" type="submit">
-          Delete all apps > 30 days
-        </button>
       </form>
     </div>
   </div>
@@ -56,55 +145,107 @@
   {% if grouped_applications %}
     {% for group in grouped_applications %}
       {% if group.apps %}
-        <h2 class="h5 mt-4 mb-2 {% if group.is_invalid %}text-danger{% else %}text-primary{% endif %}">
-          {{ group.title }}
-          {% if group.is_invalid %}
-            <span class="badge bg-danger ms-2">Invalid</span>
-          {% endif %}
-        </h2>
-        <div class="table-responsive">
-          <table class="table table-sm align-middle mb-4 {% if group.is_invalid %}table-hover opacity-75{% endif %}">
-            <thead>
-              <tr>
-                <th><a href="{% sort_url 'id' %}" class="text-decoration-none text-dark">Application ID{% sort_icon 'id' %}</a></th>
-                <th><a href="{% sort_url 'type' %}" class="text-decoration-none text-dark">Type{% sort_icon 'type' %}</a></th>
-                <th>Student/Mentor Name</th>
-                <th><a href="{% sort_url 'program' %}" class="text-decoration-none text-dark">Program{% sort_icon 'program' %}</a></th>
-                <th><a href="{% sort_url 'status' %}" class="text-decoration-none text-dark">Status{% sort_icon 'status' %}</a></th>
-                <th><a href="{% sort_url 'started' %}" class="text-decoration-none text-dark">Started{% sort_icon 'started' %}</a></th>
-                <th><a href="{% sort_url 'submitted' %}" class="text-decoration-none text-dark">Submitted{% sort_icon 'submitted' %}</a></th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for app in group.apps %}
+        <div class="d-flex align-items-center justify-content-between mb-2 mt-4">
+          <h2 class="h6 mb-0 fw-bold {% if group.is_invalid %}text-danger{% else %}text-dark{% endif %} text-uppercase tracking-wide">
+            {{ group.title }}
+            {% if group.is_invalid %}
+              <span class="badge bg-danger ms-2">Closed / Ended</span>
+            {% else %}
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 ms-2 rounded-pill">{{ group.apps|length }}</span>
+            {% endif %}
+          </h2>
+        </div>
+        <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 {% if group.is_invalid %}opacity-75{% endif %}">
+              <thead class="table-light">
                 <tr>
-                  <td><code>{{ app.application_id }}</code></td>
-                  <td>{{ app.get_applicant_type_display|default:"—" }}</td>
-                  <td>{{ app.applicant_name|default:"—" }}</td>
-                  <td>{{ app.program|default:"—" }}</td>
-                  <td>
-                    <span class="badge {% if group.is_invalid %}bg-danger{% else %}bg-secondary{% endif %}">
-                      {{ app.status_label }}
-                      {% if group.is_invalid %} (Closed/Ended){% endif %}
-                    </span>
-                  </td>
-                  <td>{{ app.created_at|date:"Y-m-d" }}</td>
-                  <td>{{ app.submitted_at|date:"Y-m-d"|default:"—" }}</td>
-                  <td class="text-end">
-                    <a class="btn btn-sm btn-outline-primary"
-                       href="{% url 'application_review_detail' app.application_id %}">
-                      Review
-                    </a>
-                  </td>
+                  <th class="ps-3"><a href="{% sort_url 'id' %}" class="text-decoration-none text-dark">Application ID{% sort_icon 'id' %}</a></th>
+                  <th><a href="{% sort_url 'type' %}" class="text-decoration-none text-dark">Type{% sort_icon 'type' %}</a></th>
+                  <th>Student/Mentor Name</th>
+                  <th><a href="{% sort_url 'program' %}" class="text-decoration-none text-dark">Program{% sort_icon 'program' %}</a></th>
+                  <th><a href="{% sort_url 'status' %}" class="text-decoration-none text-dark">Status{% sort_icon 'status' %}</a></th>
+                  <th><a href="{% sort_url 'started' %}" class="text-decoration-none text-dark">Started{% sort_icon 'started' %}</a></th>
+                  <th><a href="{% sort_url 'submitted' %}" class="text-decoration-none text-dark">Submitted{% sort_icon 'submitted' %}</a></th>
+                  <th class="text-end pe-3">Actions</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {% for app in group.apps %}
+                  <tr>
+                    <td class="ps-3"><code>{{ app.application_id }}</code></td>
+                    <td>
+                      {% if app.applicant_type == 'mentor' %}
+                        <span class="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 rounded-pill"><i class="bi bi-person-badge me-1"></i>Mentor</span>
+                      {% elif app.applicant_type == 'student' %}
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill"><i class="bi bi-mortarboard me-1"></i>Student</span>
+                      {% else %}
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill"><i class="bi bi-person me-1"></i>{{ app.get_applicant_type_display|default:"—" }}</span>
+                      {% endif %}
+                    </td>
+                    <td class="fw-semibold text-dark">{{ app.applicant_name|default:"—" }}</td>
+                    <td>{{ app.program|default:"—" }}</td>
+                    <td>
+                      <span class="badge {{ app.status|status_badge_class }} rounded-pill px-2 py-1">
+                        {{ app.status_label }}
+                        {% if group.is_invalid %} (Closed/Ended){% endif %}
+                      </span>
+                    </td>
+                    <td class="text-muted small">{{ app.created_at|date:"Y-m-d" }}</td>
+                    <td class="text-muted small">{{ app.submitted_at|date:"Y-m-d"|default:"—" }}</td>
+                    <td class="text-end pe-3">
+                      <a class="btn btn-sm btn-outline-primary"
+                         href="{% url 'application_review_detail' app.application_id %}">
+                        Review
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       {% endif %}
     {% endfor %}
   {% else %}
-    <p class="text-muted mt-3">No applications match your filters.</p>
+    <div class="card border-0 shadow-sm rounded-3 text-center py-5">
+      <div class="card-body">
+        <div class="rounded-circle bg-light d-inline-flex p-3 text-muted mb-3">
+          <i class="bi bi-inbox fs-2"></i>
+        </div>
+        <h3 class="h5 fw-bold text-dark mb-1">No applications match your filters</h3>
+        <p class="text-muted small mb-3">Try adjusting your status or program filters, or reset to view all applications.</p>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'application_review_list' %}">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Filters
+        </a>
+      </div>
+    </div>
   {% endif %}
+
+  <!-- Modal for Stale Cleanup -->
+  <div class="modal fade" id="cleanupStaleModal" tabindex="-1" aria-labelledby="cleanupStaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow">
+        <form method="post" action="{% url 'application_cleanup_stale' %}">
+          {% csrf_token %}
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title h6 mb-0" id="cleanupStaleModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i>Clean Up Stale Applications</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-4">
+            <p class="mb-2 fw-semibold">Are you sure you want to delete all applications older than 30 days?</p>
+            <p class="text-muted small mb-0">
+              This will permanently remove unsubmitted and draft applications that have been inactive for more than 30 days. This action cannot be undone.
+            </p>
+          </div>
+          <div class="modal-footer bg-light border-0">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-sm btn-danger">
+              <i class="bi bi-trash3 me-1"></i>Clean Up Stale Applications
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 {% endblock %}
