@@ -1,83 +1,227 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load permission_tags %}
 {% load sorting_tags %}
 {% block title %}Mentors{% endblock %}
 {% block nav_mentors_active %} active{% endblock %}
+
 {% block content %}
-  <div class="row mb-3">
-    <div class="col"><h1 class="h3">Mentors{% if program %} for {{ program.name }}{% endif %}</h1></div>
-    <div class="col-auto d-flex gap-2 justify-content-end">
+  {% user_role user as role %}
+  {% can_write user 'adult_info' as can_add_adult %}
+
+  <!-- Page Header & Action Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Mentors{% if program %} for {{ program.name }}{% endif %}</h1>
+      <div class="text-muted small">Mentor roster and clearance compliance tracking</div>
+    </div>
+    <div>
       {% if perms.programs.add_adult %}
-        <a class="btn btn-sm btn-success" href="{% url 'mentor_create' %}?next={{ request.path }}">Add Mentor</a>
+        <a class="btn btn-primary" href="{% url 'mentor_create' %}?next={{ request.path }}">
+          <i class="bi bi-person-plus me-1"></i>Add Mentor
+        </a>
       {% endif %}
     </div>
   </div>
-    <div class="row mb-3">
-        {% if program %}
-            <p class="text-muted">These are mentors associated with <a href="{% url 'program_detail' program.id %}">{{ program.name }}</a>.</p>
-        {% else %}
-            <p class="text-muted">These are all the mentors in the system.</p>
-        {% endif %}
-    </div>
-  {% if active_mentors or inactive_mentors %}
-    <div class="table-responsive">
-      <table class="table table-hover align-middle">
-        <thead>
-          <tr>
-            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
-            <th><a href="{% sort_url 'role' %}" class="text-decoration-none text-dark">Role{% sort_icon 'role' %}</a></th>
-            <th><a href="{% sort_url 'mentor_active' %}" class="text-decoration-none text-dark">Active{% sort_icon 'mentor_active' %}</a></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for m in active_mentors %}
-            <tr>
-              <td>
-                {% if m.photo %}
-                  <img src="{{ m.photo.url }}" alt="{{ m.full_name }}" class="avatar avatar-32 me-2"/>
-                {% endif %}
-                {% if perms.programs.change_adult %}
-                  <a href="{% url 'mentor_edit' m.id %}?next={{ request.path }}">{{ m.full_name }}</a>
-                {% else %}
-                  {{ m.full_name }}
-                {% endif %}
-                {% if m.needs_background_check %}
-                  <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
-                {% endif %}
-              </td>
-              <td>{{ m.get_role_display }}</td>
-              <td><span class="badge bg-success">Yes</span></td>
-            </tr>
-          {% endfor %}
 
-          {% if inactive_mentors %}
-            <tr class="table-light">
-              <th colspan="3" class="text-muted small py-1">Inactive Mentors</th>
+  <!-- Directory Navigation Pills -->
+  {% if not program and role != 'Parent' and role != 'Student' %}
+    <ul class="nav nav-pills gap-2 mb-4">
+      <li class="nav-item">
+        <a class="nav-link rounded-pill px-3 py-1 text-secondary bg-light" href="{% url 'adult_list' %}">
+          <i class="bi bi-people-fill me-1"></i>All Adults
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link rounded-pill px-3 py-1 text-secondary bg-light" href="{% url 'parent_list' %}">
+          <i class="bi bi-person-heart me-1"></i>Parents / Guardians
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link active rounded-pill px-3 py-1" href="{% url 'mentor_list' %}">
+          <i class="bi bi-person-badge me-1"></i>Mentors
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link rounded-pill px-3 py-1 text-secondary bg-light" href="{% url 'alumni_list' %}">
+          <i class="bi bi-mortarboard me-1"></i>Alumni
+        </a>
+      </li>
+    </ul>
+  {% endif %}
+
+  <!-- Summary KPI Metric Cards -->
+  {% if not program and role != 'Parent' and role != 'Student' %}
+    <div class="row g-3 mb-4">
+      <div class="col-sm-6 col-lg-4">
+        <div class="card shadow-sm h-100 border-0 border-top border-3 border-success rounded-3 bg-light">
+          <div class="card-body p-3">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <span class="text-muted small fw-semibold text-uppercase">Active Mentors</span>
+              <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                <i class="bi bi-person-check-fill"></i>
+              </div>
+            </div>
+            <h3 class="h4 mb-0 fw-bold text-dark">{{ active_mentors_count }}</h3>
+            <div class="text-muted small">Currently active mentors</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="card shadow-sm h-100 border-0 border-top border-3 border-secondary rounded-3 bg-light">
+          <div class="card-body p-3">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <span class="text-muted small fw-semibold text-uppercase">Inactive Mentors</span>
+              <div class="rounded-circle bg-secondary bg-opacity-10 p-2 text-secondary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                <i class="bi bi-person-dash"></i>
+              </div>
+            </div>
+            <h3 class="h4 mb-0 fw-bold text-dark">{{ inactive_mentors_count }}</h3>
+            <div class="text-muted small">Past / on-leave mentors</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-4">
+        <div class="card shadow-sm h-100 border-0 border-top border-3 border-warning rounded-3 bg-light">
+          <div class="card-body p-3">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <span class="text-muted small fw-semibold text-uppercase">Clearances Needed</span>
+              <div class="rounded-circle bg-warning bg-opacity-10 p-2 text-warning d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                <i class="bi bi-shield-exclamation"></i>
+              </div>
+            </div>
+            <h3 class="h4 mb-0 fw-bold text-dark">{{ bg_checks_needed_count }}</h3>
+            <div class="text-muted small">Missing or expired PA clearances</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Mentors Table Card -->
+  {% if active_mentors or inactive_mentors %}
+    <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3"><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
+              <th><a href="{% sort_url 'role' %}" class="text-decoration-none text-dark">Role{% sort_icon 'role' %}</a></th>
+              <th><a href="{% sort_url 'mentor_active' %}" class="text-decoration-none text-dark">Active{% sort_icon 'mentor_active' %}</a></th>
+              <th class="text-end pe-3">Actions</th>
             </tr>
-            {% for m in inactive_mentors %}
-              <tr class="text-muted">
-                <td>
-                  {% if m.photo %}
-                    <img src="{{ m.photo.url }}" alt="{{ m.full_name }}" class="avatar avatar-32 me-2" style="opacity: 0.6;"/>
-                  {% endif %}
-                  {% if perms.programs.change_adult %}
-                    <a href="{% url 'mentor_edit' m.id %}?next={{ request.path }}" class="text-muted">{{ m.full_name }}</a>
-                  {% else %}
-                    {{ m.full_name }}
-                  {% endif %}
-                  {% if m.needs_background_check %}
-                    <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
-                  {% endif %}
+          </thead>
+          <tbody>
+            {% for m in active_mentors %}
+              <tr>
+                <td class="ps-3">
+                  <div class="d-flex align-items-center gap-2">
+                    {% if m.photo %}
+                      <img src="{{ m.photo.url }}" alt="{{ m.display_name }}" class="avatar avatar-32 rounded-circle" style="width: 32px; height: 32px; object-fit: cover;"/>
+                    {% else %}
+                      <div class="rounded-circle bg-light border text-muted d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 13px;">
+                        <i class="bi bi-person"></i>
+                      </div>
+                    {% endif %}
+                    <div>
+                      <a class="text-decoration-none fw-semibold text-dark" href="{% url 'adult_detail' m.id %}?next={{ request.path }}">
+                        {{ m.display_name }}
+                      </a>
+                      {% if m.needs_background_check %}
+                        <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
+                      {% endif %}
+                    </div>
+                  </div>
                 </td>
-                <td>{{ m.get_role_display }}</td>
-                <td><span class="badge bg-secondary">No</span></td>
+                <td>
+                  <span class="badge bg-light text-dark border">{{ m.get_role_display|default:"Mentor" }}</span>
+                </td>
+                <td>
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1">
+                    Active
+                  </span>
+                </td>
+                <td class="text-end pe-3">
+                  <div class="d-inline-flex gap-1">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'adult_detail' m.id %}?next={{ request.path }}">
+                      View Profile
+                    </a>
+                    {% if perms.programs.change_adult %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{% url 'mentor_edit' m.id %}?next={{ request.path }}">
+                        Edit
+                      </a>
+                    {% endif %}
+                  </div>
+                </td>
               </tr>
             {% endfor %}
-          {% endif %}
-        </tbody>
-      </table>
+
+            {% if inactive_mentors %}
+              <tr class="table-light">
+                <th colspan="4" class="text-muted small py-2 ps-3 fw-bold text-uppercase tracking-wide">Inactive Mentors</th>
+              </tr>
+              {% for m in inactive_mentors %}
+                <tr class="text-muted">
+                  <td class="ps-3">
+                    <div class="d-flex align-items-center gap-2">
+                      {% if m.photo %}
+                        <img src="{{ m.photo.url }}" alt="{{ m.display_name }}" class="avatar avatar-32 rounded-circle opacity-50" style="width: 32px; height: 32px; object-fit: cover;"/>
+                      {% else %}
+                        <div class="rounded-circle bg-light border text-muted d-flex align-items-center justify-content-center opacity-75" style="width: 32px; height: 32px; font-size: 13px;">
+                          <i class="bi bi-person"></i>
+                        </div>
+                      {% endif %}
+                      <div>
+                        <a class="text-decoration-none text-muted" href="{% url 'adult_detail' m.id %}?next={{ request.path }}">
+                          {{ m.display_name }}
+                        </a>
+                        {% if m.needs_background_check %}
+                          <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge bg-light text-muted border">{{ m.get_role_display|default:"Mentor" }}</span>
+                  </td>
+                  <td>
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-2 py-1">
+                      Inactive
+                    </span>
+                  </td>
+                  <td class="text-end pe-3">
+                    <div class="d-inline-flex gap-1">
+                      <a class="btn btn-sm btn-outline-secondary" href="{% url 'adult_detail' m.id %}?next={{ request.path }}">
+                        View
+                      </a>
+                      {% if perms.programs.change_adult %}
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'mentor_edit' m.id %}?next={{ request.path }}">
+                          Edit
+                        </a>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
     </div>
   {% else %}
-    <div class="alert alert-info">No mentors found.</div>
+    <div class="card border-0 shadow-sm rounded-3 text-center py-5">
+      <div class="card-body">
+        <div class="rounded-circle bg-light d-inline-flex p-3 text-muted mb-3">
+          <i class="bi bi-person-badge fs-2"></i>
+        </div>
+        <h3 class="h5 fw-bold text-dark mb-1">No mentors found</h3>
+        <p class="text-muted small mb-3">There are currently no mentors matching this view.</p>
+        {% if perms.programs.add_adult %}
+          <a class="btn btn-sm btn-primary" href="{% url 'mentor_create' %}?next={{ request.path }}">
+            <i class="bi bi-person-plus me-1"></i>Add Mentor
+          </a>
+        {% endif %}
+      </div>
+    </div>
   {% endif %}
 {% endblock %}

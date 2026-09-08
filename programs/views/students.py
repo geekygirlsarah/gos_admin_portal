@@ -106,6 +106,14 @@ class StudentListView(
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
+
+        students = list(ctx.get("students") or ctx.get("object_list") or [])
+        ctx["total_students_count"] = len(students)
+        ctx["active_students_count"] = sum(1 for s in students if not s.graduated)
+        ctx["graduated_count"] = sum(1 for s in students if s.graduated)
+        ctx["unique_schools_count"] = len(
+            set(s.school_id for s in students if s.school_id)
+        )
         return ctx
 
 
@@ -305,6 +313,9 @@ class StudentDetailView(
                 "race_ethnicities",
                 "signed_documents__program_document",
                 "enrollment_set__program",
+                "enrollment_set__team",
+                "enrollment_set__crew",
+                "enrollment_set__subteam",
             )
         )
 
@@ -325,6 +336,7 @@ class StudentDetailView(
             if k
         )
         ctx["program_feature_keys"] = keys
+        ctx["enrollments"] = student.enrollment_set.all()
         return ctx
 
 

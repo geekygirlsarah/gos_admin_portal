@@ -105,6 +105,12 @@ class AdultsListView(
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
+
+        adults = list(ctx.get("adults") or ctx.get("object_list") or [])
+        ctx["total_adults_count"] = len(adults)
+        ctx["parents_count"] = sum(1 for a in adults if a.is_parent)
+        ctx["mentors_count"] = sum(1 for a in adults if a.is_mentor)
+        ctx["alumni_count"] = sum(1 for a in adults if a.is_alumni)
         return ctx
 
 
@@ -157,6 +163,9 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
+        parents = list(ctx.get("parents") or ctx.get("object_list") or [])
+        ctx["total_parents_count"] = len(parents)
+        ctx["email_updates_count"] = sum(1 for p in parents if p.email_updates)
         return ctx
 
 
@@ -203,9 +212,14 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         # Split the already-evaluated (and prefetched) list in Python.
         # Calling .filter() here would re-execute the whole list query and
         # its prefetches once per section.
-        mentors = list(ctx["mentors"])
+        mentors = list(ctx.get("mentors") or ctx.get("object_list") or [])
         ctx["active_mentors"] = [m for m in mentors if m.mentor_active]
         ctx["inactive_mentors"] = [m for m in mentors if not m.mentor_active]
+        ctx["active_mentors_count"] = len(ctx["active_mentors"])
+        ctx["inactive_mentors_count"] = len(ctx["inactive_mentors"])
+        ctx["bg_checks_needed_count"] = sum(
+            1 for m in mentors if m.needs_background_check()
+        )
         return ctx
 
 
@@ -241,6 +255,9 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
+        alumni = list(ctx.get("alumni") or ctx.get("object_list") or [])
+        ctx["total_alumni_count"] = len(alumni)
+        ctx["ok_to_contact_count"] = sum(1 for a in alumni if a.ok_to_contact)
         return ctx
 
 
@@ -251,6 +268,17 @@ class AdultDetailView(
     template_name = "adults/detail.html"
     context_object_name = "adult"
     section = "adult_info"
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                "students",
+                "adultstudentrelationship_set",
+                "background_checks",
+            )
+        )
 
     def get_object(self, queryset=None):
         # Cache the fetched record: DynamicPermissionMixin's test_func calls
