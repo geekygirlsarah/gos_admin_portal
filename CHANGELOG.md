@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## 2026-09-08
 
 ### Changed
+- **Modernized and streamlined Portal Dashboard across all roles (Phase 2 UI Refresh)**:
+  - **Multi-Role View Switcher & CSP Security Fix**: Users with multiple roles (e.g. Lead Mentor + Parent, Mentor + Parent) now have an interactive role pill filter bar at the top of the dashboard, allowing them to switch smoothly between role-specific views or view all sections at once. Script execution is compliant with the portal's Content Security Policy (CSP) nonce requirement.
+  - **Student Dashboard Enhancements**: Active student program cards now display assigned Team, Crew, and Subteam pills with contrast color badges, quick action links for Order Requests and Carpool Maps, and clean attendance and outreach metric indicators without nested box-in-box cards.
+  - **Lead Mentor Command Center**: Added a high-signal overview for Lead Mentors featuring operational KPI cards (Active Programs, Active Students, Application Review Queue, and Order Requests) along with a quick actions shortcut bar.
+  - **Parent Financial Overview**: Added a family total balance due summary with a direct "Pay Dues" action button for parents with active dues owed across their children.
+  - **High-Density Metric Layout & Clean Card Hierarchy**: Streamlined Student and Parent dashboards by modernizing program stat blocks, highlighting upcoming outreach events with clear attendance/availability badges, and polishing badge showcase strips and alumni profile history.
 - **Context-aware metric cards, group breakdown, and health alert callout on Program Detail**:
   - **Active Students Card Group Breakdown**: The Active Students summary card now displays the student count alongside a multi-dimensional group count subtitle (`A teams · B subteams · C projects`), accompanied by colored badge pills showing the student member counts across all assigned teams, subteams, and projects (crews).
   - **Health & Dietary Alert Callout**: Displayed as an actionable warning callout banner above the student roster for Lead Mentors and Mentors when students have medical, allergy, or dietary restrictions on file, with a quick link to the Medical Info page.

@@ -1,14 +1,36 @@
 {% extends 'base.html' %}
-{% load permission_tags %}
+{% load permission_tags form_tags %}
 
 {% block title %}Dashboard - {{ block.super }}{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Welcome, {{ user.first_name|default:user.username }}!</h1>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h1 class="h2 mb-1 fw-bold">Welcome, {{ user.first_name|default:user.username }}!</h1>
+        <div class="d-flex flex-wrap gap-2 align-items-center mt-1">
+            {% for r in user_roles %}
+                <span class="badge {{ r.badge_class }} rounded-pill px-2 py-1"><i class="bi {{ r.icon }} me-1"></i>{{ r.name }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% if has_multiple_roles %}
+        <!-- Multi-role view filter tabs -->
+        <ul class="nav nav-pills bg-light p-1 rounded-pill border shadow-sm" id="dashboardRoleFilter">
+            <li class="nav-item">
+                <button class="nav-link active rounded-pill px-3 py-1 text-dark fw-semibold" data-role-filter="all" type="button">All Views</button>
+            </li>
+            {% for r in user_roles %}
+            <li class="nav-item">
+                <button class="nav-link rounded-pill px-3 py-1 text-dark fw-semibold" data-role-filter="{{ r.id }}" type="button">{{ r.name }}</button>
+            </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
 
 {# ── No profile linked ─────────────────────────────────────────────────────── #}
-{% if not student and not adult %}
-    <div class="alert alert-warning">
+{% if not student and not adult and not is_lead_mentor %}
+    <div class="alert alert-warning shadow-sm">
         We couldn't find a profile linked to your account. Please contact a lead mentor.
     </div>
 {% endif %}
@@ -48,12 +70,73 @@
 </section>
 {% endif %}
 
+{# ── Lead Mentor Command Center ────────────────────────────────────────────── #}
+{% if is_lead_mentor %}
+<section class="mb-5 dashboard-role-section role-lead-mentor">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 mb-0 fw-bold"><i class="bi bi-shield-check text-primary me-2"></i>Lead Mentor Overview</h2>
+    </div>
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-semibold">Active Programs</div>
+                    <h3 class="mb-0 fw-bold text-primary">{{ lead_stats.active_programs_count }}</h3>
+                    <a href="{% url 'program_list' %}" class="small text-decoration-none mt-2 d-inline-block">Manage Programs &raquo;</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-semibold">Active Students</div>
+                    <h3 class="mb-0 fw-bold text-success">{{ lead_stats.active_students_count }}</h3>
+                    <a href="{% url 'student_list' %}" class="small text-decoration-none mt-2 d-inline-block">Student Directory &raquo;</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-semibold">Review Applications</div>
+                    <h3 class="mb-0 fw-bold {% if lead_stats.pending_applications_count > 0 %}text-warning{% else %}text-muted{% endif %}">{{ lead_stats.pending_applications_count }}</h3>
+                    <a href="{% url 'application_review_list' %}" class="small text-decoration-none mt-2 d-inline-block">Review Queue &raquo;</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-semibold">Order Requests</div>
+                    <h3 class="mb-0 fw-bold {% if lead_stats.pending_orders_count > 0 %}text-warning{% else %}text-muted{% endif %}">{{ lead_stats.pending_orders_count }}</h3>
+                    {% if lead_stats.orders_program_pk %}
+                        <a href="{% url 'orders:order_list' lead_stats.orders_program_pk %}" class="small text-decoration-none mt-2 d-inline-block">Order Management &raquo;</a>
+                    {% else %}
+                        <span class="small text-muted mt-2 d-inline-block">No active programs</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm border-0 bg-light">
+        <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
+            <span class="small fw-bold text-muted me-2"><i class="bi bi-lightning-charge me-1"></i>Quick Actions:</span>
+            <a href="{% url 'application_review_list' %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-check me-1"></i>Review Applications</a>
+            <a href="{% url 'program_list' %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-calendar3 me-1"></i>Programs</a>
+            <a href="{% url 'all_attendance' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clock-history me-1"></i>All Attendance</a>
+            <a href="{% url 'portal_settings' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-gear me-1"></i>Portal Settings</a>
+        </div>
+    </div>
+</section>
+{% endif %}
+
 {% comment %}
 ══════════════════════════════════════════════════════════════════════════════
 STUDENT DASHBOARD
 ══════════════════════════════════════════════════════════════════════════════
 {% endcomment %}
 {% if student %}
+<div class="dashboard-role-section role-student">
 {% if has_badges %}
 <section class="mb-3">
     <div class="card border-info shadow-sm">
@@ -65,22 +148,54 @@ STUDENT DASHBOARD
 </section>
 {% endif %}
 <section class="mb-5">
-    <h2 class="h4 mb-3">My Programs</h2>
+    <h2 class="h4 mb-3 fw-bold">My Programs</h2>
 
     {% if active_enrollments or other_enrollments %}
         {# 1. Active Programs #}
         {% for enrollment in active_enrollments %}
-        <div class="card mb-4 shadow-sm border-primary">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <a href="{% url 'program_detail' enrollment.program.pk %}" class="text-white text-decoration-none"><strong>{{ enrollment.program.name }}</strong></a>
-                <div class="d-flex gap-2 align-items-center">
-                    <a class="btn btn-sm btn-light" href="{% url 'program_student_map' enrollment.program.pk %}">Carpool Map</a>
-                    <span class="badge bg-success border border-light">Active</span>
-                </div>
-            </div>
+        <div class="card mb-4 shadow-sm border-0 border-top border-4 border-primary">
             <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                    <div>
+                        <h3 class="h5 mb-1 fw-bold">
+                            <a href="{% url 'program_detail' enrollment.program.pk %}" class="text-decoration-none text-dark">{{ enrollment.program.name }}</a>
+                        </h3>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <span class="badge bg-success border border-light">Active</span>
+                            {% if enrollment.team %}
+                                <span class="badge rounded-pill team-badge" data-color="{{ enrollment.team.color }}" style="background-color: {{ enrollment.team.color|default:'#0d6efd' }}; color: {{ enrollment.team.color|contrast_color }};">
+                                    <i class="bi bi-people-fill me-1"></i>{{ enrollment.team.team_type }} {{ enrollment.team.number }}{% if enrollment.team.name %} · {{ enrollment.team.name }}{% endif %}
+                                </span>
+                            {% endif %}
+                            {% if enrollment.crew %}
+                                <span class="badge rounded-pill crew-badge" data-color="{{ enrollment.crew.color }}" style="background-color: {{ enrollment.crew.color|default:'#6c757d' }}; color: {{ enrollment.crew.color|contrast_color }};">
+                                    <i class="bi bi-kanban me-1"></i>{{ enrollment.crew.name }}
+                                </span>
+                            {% endif %}
+                            {% if enrollment.subteam %}
+                                <span class="badge rounded-pill subteam-badge" data-color="{{ enrollment.subteam.color }}" style="background-color: {{ enrollment.subteam.color|default:'#198754' }}; color: {{ enrollment.subteam.color|contrast_color }};">
+                                    <i class="bi bi-gear-wide-connected me-1"></i>{{ enrollment.subteam.name }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% if enrollment.has_orders %}
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'orders:order_list' enrollment.program.pk %}">
+                                <i class="bi bi-cart3 me-1"></i>Order Requests
+                            </a>
+                        {% endif %}
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_map' enrollment.program.pk %}">
+                            <i class="bi bi-geo-alt me-1"></i>Carpool Map
+                        </a>
+                        <a class="btn btn-sm btn-primary" href="{% url 'program_detail' enrollment.program.pk %}">
+                            View Program &raquo;
+                        </a>
+                    </div>
+                </div>
+
                 {% if enrollment.program.start_date or enrollment.program.end_date %}
-                <p class="mb-2">
+                <p class="mb-3">
                     <strong>Dates:</strong>
                     {% if enrollment.program.start_date %}{{ enrollment.program.start_date|date:"N j, Y" }}{% endif %}
                     {% if enrollment.program.start_date and enrollment.program.end_date %} – {% endif %}
@@ -88,39 +203,44 @@ STUDENT DASHBOARD
                 </p>
                 {% endif %}
 
-                <div class="row g-3 mt-1">
+                <div class="row g-3">
                     {# Attendance hours #}
                     <div class="col-md-6">
-                        <div class="card border-secondary h-100">
-                            <div class="card-body">
-                                <h6 class="card-title text-muted">Attendance &amp; Outreach Hours</h6>
+                        <div class="p-3 bg-light rounded-3 border h-100">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold small text-muted text-uppercase"><i class="bi bi-clock-history me-1 text-primary"></i>Attendance &amp; Outreach Hours</span>
                                 {% if enrollment.has_attendance or enrollment.has_outreach %}
-                                    <p class="mb-1"><strong>{{ enrollment.attendance_stats.week_hours|default:"0.0" }}</strong> hours logged this week</p>
-                                    <p class="mb-0 text-muted small"><strong>{{ enrollment.attendance_stats.total_hours|default:"0.0" }}</strong> hours logged since program started</p>
-                                {% endif %}
-                                {% if not enrollment.has_attendance %}
-                                    <p class="text-muted mb-0 small">No attendance hours are tracked.</p>
-                                {% endif %}
-                                {% if not enrollment.has_outreach %}
-                                    <p class="text-muted mb-0 small">No outreach hours are tracked.</p>
+                                    <span class="badge bg-primary rounded-pill">{{ enrollment.attendance_stats.week_hours|default:"0.0" }}h this week</span>
                                 {% endif %}
                             </div>
+                            {% if enrollment.has_attendance or enrollment.has_outreach %}
+                                <p class="mb-1"><strong>{{ enrollment.attendance_stats.week_hours|default:"0.0" }}</strong> hours logged this week</p>
+                                <p class="mb-0 text-muted small"><strong>{{ enrollment.attendance_stats.total_hours|default:"0.0" }}</strong> hours logged since program started</p>
+                            {% endif %}
+                            {% if not enrollment.has_attendance %}
+                                <p class="text-muted mb-0 small">No attendance hours are tracked.</p>
+                            {% endif %}
+                            {% if not enrollment.has_outreach %}
+                                <p class="text-muted mb-0 small">No outreach hours are tracked.</p>
+                            {% endif %}
                         </div>
                     </div>
 
                     {# Outreach stats #}
                     <div class="col-md-6">
-                        <div class="card border-secondary h-100">
-                            <div class="card-body">
-                                <h6 class="card-title text-muted">Outreach</h6>
+                        <div class="p-3 bg-light rounded-3 border h-100">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold small text-muted text-uppercase"><i class="bi bi-megaphone me-1 text-success"></i>Outreach</span>
                                 {% if enrollment.has_outreach %}
-                                    <p class="mb-1"><strong>{{ enrollment.outreach_stats.championed_count|default:"0" }}</strong> events championed</p>
-                                    <p class="mb-2 text-muted small"><strong>{{ enrollment.outreach_stats.total_outreach_hours|floatformat:1|default:"0.0" }}</strong> hours completed</p>
                                     <a href="{% url 'outreach:event_list' enrollment.program.id %}" class="btn btn-sm btn-outline-primary">View Outreach Events</a>
-                                {% else %}
-                                    <p class="text-muted mb-0 small">Not available for this program.</p>
                                 {% endif %}
                             </div>
+                            {% if enrollment.has_outreach %}
+                                <p class="mb-1"><strong>{{ enrollment.outreach_stats.championed_count|default:"0" }}</strong> events championed</p>
+                                <p class="mb-0 text-muted small"><strong>{{ enrollment.outreach_stats.total_outreach_hours|floatformat:1|default:"0.0" }}</strong> hours completed</p>
+                            {% else %}
+                                <p class="text-muted mb-0 small">Not available for this program.</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -172,6 +292,7 @@ STUDENT DASHBOARD
         <div class="alert alert-info">You are not currently enrolled in any programs.</div>
     {% endif %}
 </section>
+</div>
 {% endif %}
 
 {% comment %}
@@ -180,12 +301,21 @@ PARENT DASHBOARD
 ══════════════════════════════════════════════════════════════════════════════
 {% endcomment %}
 {% if adult and is_parent %}
+<div class="dashboard-role-section role-parent">
 <section class="mb-5">
-    <h2 class="h4 mb-3">My Students</h2>
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <h2 class="h4 mb-0 fw-bold">My Students</h2>
+        {% if family_total_owed > 0 %}
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">Total Due: <strong class="text-danger">${{ family_total_owed|floatformat:2 }}</strong></span>
+                <a href="{% url 'parent_payments' %}" class="btn btn-sm btn-primary"><i class="bi bi-credit-card me-1"></i>Pay Dues</a>
+            </div>
+        {% endif %}
+    </div>
 
     {% if parent_data %}
         {% for entry in parent_data %}
-        <div class="card mb-4">
+        <div class="card mb-4 shadow-sm">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <div>
                     <strong>{{ entry.student }}</strong>
@@ -195,10 +325,6 @@ PARENT DASHBOARD
                 </div>
                 <div class="d-flex gap-2">
                     <a href="{% url 'student_detail' entry.student.pk %}" class="btn btn-sm btn-light">View Profile</a>
-                    {% can_write user 'student_info' entry.student as can_edit_student %}
-{#                    {% if can_edit_student %}#}
-{#                    <a href="{% url 'student_edit' entry.student.pk %}" class="btn btn-sm btn-outline-light">Edit Profile</a>#}
-{#                    {% endif %}#}
                 </div>
             </div>
             <div class="card-body">
@@ -213,13 +339,30 @@ PARENT DASHBOARD
                 {% if entry.active_rows %}
                     {% for row in entry.active_rows %}
                     <div class="mb-4">
-                        <h6 class="d-flex justify-content-between align-items-center">
-                            <span>{{ row.enrollment.program.name }}</span>
-                            <span class="d-flex gap-2 align-items-center">
-                                <a class="btn btn-sm btn-outline-primary" href="{% url 'program_student_map' row.enrollment.program.pk %}">Carpool Map</a>
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <div>
+                                <h6 class="mb-0 fw-bold d-inline me-2">{{ row.enrollment.program.name }}</h6>
+                                {% if row.enrollment.team %}
+                                    <span class="badge rounded-pill team-badge" data-color="{{ row.enrollment.team.color }}" style="background-color: {{ row.enrollment.team.color|default:'#0d6efd' }}; color: {{ row.enrollment.team.color|contrast_color }};">
+                                        {{ row.enrollment.team.team_type }} {{ row.enrollment.team.number }}
+                                    </span>
+                                {% endif %}
+                                {% if row.enrollment.crew %}
+                                    <span class="badge rounded-pill crew-badge ms-1" data-color="{{ row.enrollment.crew.color }}" style="background-color: {{ row.enrollment.crew.color|default:'#6c757d' }}; color: {{ row.enrollment.crew.color|contrast_color }};">
+                                        {{ row.enrollment.crew.name }}
+                                    </span>
+                                {% endif %}
+                                {% if row.enrollment.subteam %}
+                                    <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ row.enrollment.subteam.color }}" style="background-color: {{ row.enrollment.subteam.color|default:'#198754' }}; color: {{ row.enrollment.subteam.color|contrast_color }};">
+                                        {{ row.enrollment.subteam.name }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <a class="btn btn-sm btn-outline-primary" href="{% url 'program_student_map' row.enrollment.program.pk %}"><i class="bi bi-geo-alt me-1"></i>Carpool Map</a>
                                 <span class="badge bg-success">Active</span>
-                            </span>
-                        </h6>
+                            </div>
+                        </div>
 
                         {% if row.enrollment.program.start_date or row.enrollment.program.end_date %}
                         <p class="text-muted small mb-2">
@@ -243,54 +386,55 @@ PARENT DASHBOARD
                         <div class="row g-3">
                             {# Attendance hours #}
                             <div class="col-md-6">
-                                <div class="card border-secondary h-100">
-                                    <div class="card-body py-2">
-                                        <h6 class="card-title text-muted small mb-1">Attendance &amp; Outreach Hours</h6>
+                                <div class="p-3 bg-light rounded-3 border h-100">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <span class="fw-bold small text-muted text-uppercase"><i class="bi bi-clock-history me-1 text-primary"></i>Attendance &amp; Outreach Hours</span>
                                         {% if row.enrollment.has_attendance or row.enrollment.has_outreach %}
-                                            <p class="mb-1 small"><strong>{{ row.enrollment.attendance_stats.week_hours|default:"0.0" }}</strong> hours logged this week</p>
-                                            <p class="mb-0 text-muted small"><strong>{{ row.enrollment.attendance_stats.total_hours|default:"0.0" }}</strong> hours logged since program started</p>
-                                        {% endif %}
-                                        {% if not row.enrollment.has_attendance %}
-                                            <p class="text-muted mb-0 small">No attendance hours are tracked.</p>
-                                        {% endif %}
-                                        {% if not row.enrollment.has_outreach %}
-                                            <p class="text-muted mb-0 small">No outreach hours are tracked.</p>
+                                            <span class="badge bg-primary rounded-pill">{{ row.enrollment.attendance_stats.week_hours|default:"0.0" }}h this week</span>
                                         {% endif %}
                                     </div>
+                                    {% if row.enrollment.has_attendance or row.enrollment.has_outreach %}
+                                        <p class="mb-1 small"><strong>{{ row.enrollment.attendance_stats.week_hours|default:"0.0" }}</strong> hours logged this week</p>
+                                        <p class="mb-0 text-muted small"><strong>{{ row.enrollment.attendance_stats.total_hours|default:"0.0" }}</strong> hours logged since program started</p>
+                                    {% endif %}
+                                    {% if not row.enrollment.has_attendance %}
+                                        <p class="text-muted mb-0 small">No attendance hours are tracked.</p>
+                                    {% endif %}
+                                    {% if not row.enrollment.has_outreach %}
+                                        <p class="text-muted mb-0 small">No outreach hours are tracked.</p>
+                                    {% endif %}
                                 </div>
                             </div>
 
                             {# Outreach events #}
                             <div class="col-md-6">
-                                <div class="card border-secondary h-100">
-                                    <div class="card-body py-2">
-                                        <h6 class="card-title text-muted small mb-1">Outreach Events</h6>
+                                <div class="p-3 bg-light rounded-3 border h-100">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <span class="fw-bold small text-muted text-uppercase"><i class="bi bi-megaphone me-1 text-success"></i>Outreach Events</span>
                                         {% if row.enrollment.has_outreach %}
-                                            {% if row.enrollment.outreach_highlights %}
-                                                <ul class="list-unstyled mb-0">
-                                                    {% for event in row.enrollment.outreach_highlights %}
-                                                        <li class="mb-1">
-                                                            <div class="d-flex justify-content-between align-items-center">
-                                                                <small class="fw-bold">{{ event.name }} ({{ event.start_date|date:"M j" }})</small>
-                                                                {% if event.user_signup %}
-                                                                    <span class="badge bg-success rounded-pill small">Going</span>
-                                                                {% else %}
-                                                                    <span class="badge bg-light text-muted rounded-pill small border">Available</span>
-                                                                {% endif %}
-                                                            </div>
-                                                        </li>
-                                                    {% endfor %}
-                                                </ul>
-                                                <div class="mt-1 pt-1 border-top">
-                                                    <a href="{% url 'outreach:event_list' row.enrollment.program.id %}" class="small text-decoration-none">View all events &raquo;</a>
-                                                </div>
-                                            {% else %}
-                                                <p class="text-muted small mb-0">No upcoming outreach events.</p>
-                                            {% endif %}
-                                        {% else %}
-                                            <p class="text-muted mb-0 small">N/A</p>
+                                            <a href="{% url 'outreach:event_list' row.enrollment.program.id %}" class="small text-decoration-none">View all &raquo;</a>
                                         {% endif %}
                                     </div>
+                                    {% if row.enrollment.has_outreach %}
+                                        {% if row.enrollment.outreach_highlights %}
+                                            <ul class="list-unstyled mb-0 small">
+                                                {% for event in row.enrollment.outreach_highlights %}
+                                                    <li class="mb-1 d-flex justify-content-between align-items-center">
+                                                        <span>{{ event.name }} <span class="text-muted">({{ event.start_date|date:"M j" }})</span></span>
+                                                        {% if event.user_signup %}
+                                                            <span class="badge bg-success rounded-pill">Going</span>
+                                                        {% else %}
+                                                            <span class="badge bg-light text-muted rounded-pill border">Available</span>
+                                                        {% endif %}
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p class="text-muted small mb-0">No upcoming outreach events.</p>
+                                        {% endif %}
+                                    {% else %}
+                                        <p class="text-muted mb-0 small">N/A</p>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -346,16 +490,18 @@ PARENT DASHBOARD
         <div class="alert alert-info">No students are linked to your account.</div>
     {% endif %}
 </section>
+</div>
 {% endif %}
 
 {% comment %}
 ══════════════════════════════════════════════════════════════════════════════
 MENTOR DASHBOARD
-══════════════════════════════════════════════════════════════════════════════
+══════��═══════════════════════════════════════════════════════════════════════
 {% endcomment %}
-{% if adult and is_mentor %}
+{% if adult and is_mentor or is_lead_mentor %}
+<div class="dashboard-role-section role-mentor">
 <section class="mb-5">
-    <h2 class="h4 mb-3">Current &amp; Upcoming Programs</h2>
+    <h2 class="h4 mb-3 fw-bold">Current &amp; Upcoming Programs</h2>
     {% if mentor_active_programs %}
         <div class="row row-cols-1 row-cols-md-2 g-4">
             {% for prog in mentor_active_programs %}
@@ -379,7 +525,7 @@ MENTOR DASHBOARD
                             {% endif %}
                             <p class="card-text">{{ prog.description|truncatewords:20 }}</p>
                         </div>
-                        <div class="card-footer bg-transparent border-top-0">
+                        <div class="card-footer bg-transparent border-top-0 d-flex flex-wrap gap-2">
                             <a href="{% url 'program_detail' prog.pk %}" class="btn btn-sm btn-outline-primary">View Roster & Details</a>
                         </div>
                     </div>
@@ -395,8 +541,9 @@ MENTOR DASHBOARD
     {% endif %}
 </section>
 
+{% if adult and is_mentor %}
 <section class="mb-5">
-    <h2 class="h4 mb-3">My Outreach Signups</h2>
+    <h2 class="h4 mb-3 fw-bold">My Outreach Signups</h2>
     {% if mentor_outreach_signups %}
         <div class="card shadow-sm">
             <ul class="list-group list-group-flush">
@@ -428,6 +575,8 @@ MENTOR DASHBOARD
     {% endif %}
 </section>
 {% endif %}
+</div>
+{% endif %}
 
 {% comment %}
 ══════════════════════════════════════════════════════════════════════════════
@@ -435,9 +584,10 @@ ALUMNI DASHBOARD
 ══════════════════════════════════════════════════════════════════════════════
 {% endcomment %}
 {% if adult and is_alumni %}
+<div class="dashboard-role-section role-alumni">
 <section class="mb-5">
-    <div class="card border-success">
-        <div class="card-header bg-success text-white">Alumni Profile</div>
+    <div class="card border-success shadow-sm">
+        <div class="card-header bg-success text-white fw-bold">Alumni Profile</div>
         <div class="card-body">
             <p>Welcome back! Keep your post-graduation information up to date here.</p>
             <dl class="row mb-3">
@@ -452,7 +602,7 @@ ALUMNI DASHBOARD
 
             {% if enrollments %}
                 <hr>
-                <h5>My Program History</h5>
+                <h5 class="fw-bold">My Program History</h5>
                 <div class="table-responsive">
                     <table class="table table-sm">
                         <thead>
@@ -477,6 +627,38 @@ ALUMNI DASHBOARD
         </div>
     </div>
 </section>
+</div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_scripts %}
+{% if has_multiple_roles %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function() {
+    const filterButtons = document.querySelectorAll("#dashboardRoleFilter button");
+    if (!filterButtons.length) return;
+    filterButtons.forEach(function(btn) {
+        btn.addEventListener("click", function(e) {
+            e.preventDefault();
+            filterButtons.forEach(function(b) {
+                b.classList.remove("active", "bg-primary", "text-white");
+                b.classList.add("text-dark");
+            });
+            this.classList.add("active", "bg-primary", "text-white");
+            this.classList.remove("text-dark");
+            const targetRole = this.getAttribute("data-role-filter");
+            const sections = document.querySelectorAll(".dashboard-role-section");
+            sections.forEach(function(sec) {
+                if (targetRole === "all" || sec.classList.contains("role-" + targetRole)) {
+                    sec.style.display = "";
+                } else {
+                    sec.style.display = "none";
+                }
+            });
+        });
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

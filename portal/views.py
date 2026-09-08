@@ -38,15 +38,113 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         context["pending_applications"] = applications_for_user(user)
 
-        # ── Student profile ──────────────────────────────────────────────────
+        # ── Role detection & multi-role list ──────────────────────────────────
+        is_lead_mentor = (
+            user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+        )
+        context["is_lead_mentor"] = is_lead_mentor
+
         student = getattr(user, "student_profile", None)
+        adult = getattr(user, "adult_profile", None)
+
+        user_roles = []
+        if is_lead_mentor:
+            user_roles.append(
+                {
+                    "id": "lead-mentor",
+                    "name": "Lead Mentor",
+                    "badge_class": "bg-primary text-white",
+                    "icon": "bi-shield-check",
+                }
+            )
+        if adult and getattr(adult, "is_mentor", False):
+            user_roles.append(
+                {
+                    "id": "mentor",
+                    "name": "Mentor",
+                    "badge_class": "bg-info text-dark",
+                    "icon": "bi-person-badge",
+                }
+            )
+        elif is_lead_mentor and not (adult and getattr(adult, "is_mentor", False)):
+            user_roles.append(
+                {
+                    "id": "mentor",
+                    "name": "Mentor",
+                    "badge_class": "bg-info text-dark",
+                    "icon": "bi-person-badge",
+                }
+            )
+        if adult and getattr(adult, "is_parent", False):
+            user_roles.append(
+                {
+                    "id": "parent",
+                    "name": "Parent",
+                    "badge_class": "bg-success text-white",
+                    "icon": "bi-people",
+                }
+            )
+        if student:
+            user_roles.append(
+                {
+                    "id": "student",
+                    "name": "Student",
+                    "badge_class": "bg-secondary text-white",
+                    "icon": "bi-mortarboard",
+                }
+            )
+        if adult and getattr(adult, "is_alumni", False):
+            user_roles.append(
+                {
+                    "id": "alumni",
+                    "name": "Alumni",
+                    "badge_class": "bg-dark text-white",
+                    "icon": "bi-award",
+                }
+            )
+
+        context["user_roles"] = user_roles
+        context["has_multiple_roles"] = len(user_roles) > 1
+
+        # ── Lead Mentor Command Center Stats ─────────────────────────────────
+        if is_lead_mentor:
+            from applications.models import Application
+            from orders.models import OrderItem
+            from programs.models import Program, SlidingScale
+            from programs.utils import active_students
+
+            active_programs_count = Program.objects.filter(active=True).count()
+            active_students_count = active_students().count()
+            pending_apps_count = Application.objects.filter(
+                status=Application.Status.SUBMITTED
+            ).count()
+            pending_orders_count = OrderItem.objects.filter(order__isnull=True).count()
+            pending_sliding_count = SlidingScale.objects.filter(
+                status=SlidingScale.STATUS_PENDING
+            ).count()
+
+            orders_program = (
+                Program.objects.filter(active=True, features__key="orders").first()
+                or Program.objects.filter(active=True).first()
+            )
+
+            context["lead_stats"] = {
+                "active_programs_count": active_programs_count,
+                "active_students_count": active_students_count,
+                "pending_applications_count": pending_apps_count,
+                "pending_orders_count": pending_orders_count,
+                "pending_sliding_count": pending_sliding_count,
+                "orders_program_pk": (orders_program.pk if orders_program else None),
+            }
+
+        # ── Student profile ──────────────────────────────────────────────────
         context["student"] = student
         if student:
             from programs.models import Enrollment
 
             enrollments = (
                 Enrollment.objects.filter(student=student)
-                .select_related("program")
+                .select_related("program", "team", "crew", "subteam")
                 .order_by("-program__start_date")
             )
             # Separate active from non-active programs for a cleaner dashboard
@@ -58,6 +156,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 if e.program.status == "Active" and e.active:
                     e.has_attendance = e.program.has_feature("attendance")
                     e.has_outreach = e.program.has_feature("outreach")
+                    e.has_orders = e.program.has_feature("orders")
                     if e.has_attendance:
                         e.attendance_stats = get_student_attendance_stats(
                             student, e.program
@@ -137,7 +236,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 for s in linked_students:
                     enrollments = (
                         Enrollment.objects.filter(student=s)
-                        .select_related("program")
+                        .select_related("program", "team", "crew", "subteam")
                         .order_by("-program__start_date")
                     )
                     active_rows = []
@@ -156,6 +255,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         # Add attendance/outreach info
                         e.has_attendance = e.program.has_feature("attendance")
                         e.has_outreach = e.program.has_feature("outreach")
+                        e.has_orders = e.program.has_feature("orders")
                         if e.has_attendance:
                             e.attendance_stats = get_student_attendance_stats(
                                 s, e.program
@@ -233,8 +333,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         }
                     )
                 context["parent_data"] = parent_data
+                family_total_owed = sum(
+                    max(Decimal("0"), row["balance"])
+                    for entry in parent_data
+                    for row in entry["active_rows"]
+                )
+                context["family_total_owed"] = family_total_owed
 
-            if adult.is_mentor:
+            if adult.is_mentor or is_lead_mentor:
                 from programs.models import Program
 
                 # Get all programs that are currently Active or Upcoming so
@@ -245,17 +351,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ]
                 context["mentor_active_programs"] = mentor_active_programs
 
-                # Upcoming outreach shifts this mentor volunteered to support.
-                from outreach.models import OutreachMentorSignup
+                if adult and adult.is_mentor:
+                    # Upcoming outreach shifts this mentor volunteered to support.
+                    from outreach.models import OutreachMentorSignup
 
-                mentor_signups = (
-                    OutreachMentorSignup.objects.filter(adult=adult)
-                    .select_related("shift", "shift__event", "shift__event__program")
-                    .order_by("shift__date", "shift__start_time")
-                )
-                context["mentor_outreach_signups"] = [
-                    s for s in mentor_signups if not s.shift.is_past
-                ]
+                    mentor_signups = (
+                        OutreachMentorSignup.objects.filter(adult=adult)
+                        .select_related(
+                            "shift", "shift__event", "shift__event__program"
+                        )
+                        .order_by("shift__date", "shift__start_time")
+                    )
+                    context["mentor_outreach_signups"] = [
+                        s for s in mentor_signups if not s.shift.is_past
+                    ]
 
             if adult.is_alumni:
                 from programs.models import Enrollment
@@ -265,6 +374,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     context["enrollments"] = Enrollment.objects.filter(
                         student=adult.student_record
                     ).select_related("program", "team")
+
+        elif is_lead_mentor:
+            from programs.models import Program
+
+            all_active = Program.objects.filter(active=True).order_by("name")
+            mentor_active_programs = [
+                p for p in all_active if p.status in ("Active", "Upcoming")
+            ]
+            context["mentor_active_programs"] = mentor_active_programs
 
         return context
 
