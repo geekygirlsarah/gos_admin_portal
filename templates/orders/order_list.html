@@ -5,47 +5,129 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>{{ page_title }}</h1>
+    <!-- Header with Title and Primary Actions -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 mb-0">{{ page_title }}</h1>
         <div class="d-flex gap-2">
-            {% if is_lead %}
-            <a href="{% url 'orders:vendor_list' program.id %}" class="btn btn-outline-primary">
-                <i class="bi bi-shop me-1"></i>Vendors
-            </a>
-            <a href="{% url 'orders:carrier_list' program.id %}" class="btn btn-outline-primary">
-                <i class="bi bi-truck me-1"></i>Shipping Companies
-            </a>
-            <a href="{% url 'orders:order_list' program.id %}?export=csv" class="btn btn-outline-secondary">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
-            </a>
-            <a href="{% url 'orders:order_list' program.id %}?export=xlsx" class="btn btn-outline-secondary">
-                <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
-            </a>
-            {% endif %}
-            <a href="{% url 'orders:order_archive' program.id %}" class="btn btn-outline-dark">
-                <i class="bi bi-archive me-1"></i>Archive
-            </a>
             {% if can_request_item %}
-            <a href="{% url 'orders:item_create' program.id %}" class="btn btn-outline-success">
+            <a href="{% url 'orders:item_create' program.id %}" class="btn btn-primary">
                 <i class="bi bi-plus-lg me-1"></i>Request an Item
             </a>
             {% endif %}
             {% if can_place_order %}
-            <a href="{% url 'orders:order_create' program.id %}" class="btn btn-primary">
-                <i class="bi bi-cart me-1"></i>Place Order
+            <a href="{% url 'orders:order_create' program.id %}" class="btn btn-success">
+                <i class="bi bi-cart-plus me-1"></i>Place Order
             </a>
             {% endif %}
         </div>
     </div>
 
-    <p class="text-muted">
-        Students and mentors request the parts and supplies they need; mentors group those requests
-        into orders placed with a vendor. You can edit your own requests until they're grouped into an order.
-    </p>
+    <!-- Navigation Pills and Management Dropdowns -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 pb-2 border-bottom">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link active" href="{% url 'orders:order_list' program.id %}">
+                    <i class="bi bi-list-check me-1"></i>Active Requests &amp; Orders
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'orders:order_archive' program.id %}">
+                    <i class="bi bi-archive me-1"></i>Order Archive
+                </a>
+            </li>
+        </ul>
+        {% if is_lead %}
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:order_list' program.id %}?export=csv">
+                            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export as CSV
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:order_list' program.id %}?export=xlsx">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Export as Excel
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="manageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-gear me-1"></i>Manage
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="manageDropdown">
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:vendor_list' program.id %}">
+                            <i class="bi bi-shop me-2"></i>Vendors Directory
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:carrier_list' program.id %}">
+                            <i class="bi bi-truck me-2"></i>Shipping Companies
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 
+    <!-- Summary KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                    <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3 text-primary">
+                        <i class="bi bi-inbox fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold">Pending Requests</div>
+                        <h4 class="mb-0 fw-bold">{{ pool_items_count }} item{{ pool_items_count|pluralize }}</h4>
+                        <div class="text-muted small">
+                            {% if item_groups_total is not None %}Est. ${{ item_groups_total|floatformat:2 }}{% else %}No priced items{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                    <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3 text-success">
+                        <i class="bi bi-cart-check fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold">Orders in Progress</div>
+                        <h4 class="mb-0 fw-bold">{{ in_progress_orders_count }} order{{ in_progress_orders_count|pluralize }}</h4>
+                        <div class="text-muted small">Ready to place &amp; ordered</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body d-flex align-items-center py-3">
+                    <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3 text-info">
+                        <i class="bi bi-truck fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold">In Transit</div>
+                        <h4 class="mb-0 fw-bold">{{ shipped_orders_count }} shipped</h4>
+                        <div class="text-muted small">Awaiting delivery</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Requests Pool Section -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h5 mb-0">Requests</h2>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h2 class="h5 mb-0 fw-bold"><i class="bi bi-inbox me-2 text-primary"></i>Requests Pool</h2>
             {% if item_groups_total is not None %}
             <span class="text-muted small">Est. total: <strong>${{ item_groups_total|floatformat:2 }}</strong></span>
             {% endif %}
@@ -54,7 +136,7 @@
         {% for group in item_groups %}
         <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
             <strong>
-                <i class="bi bi-shop me-1"></i>
+                <i class="bi bi-shop me-1 text-muted"></i>
                 {% if group.vendor %}{{ group.vendor }}{% else %}No vendor specified{% endif %}
                 <span class="badge bg-secondary ms-2">{{ group.items|length }}</span>
             </strong>
@@ -64,63 +146,72 @@
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+                <thead class="table-light text-muted small text-uppercase">
                     <tr>
-                        <th>Item</th>
-                        <th>Vendor</th>
-                        <th>Status</th>
-                        <th class="text-end">Qty</th>
-                        <th class="text-end">Unit Price</th>
-                        <th class="text-end">Total</th>
-                        <th>Requested By</th>
-                        <th>Date</th>
-                        <th>Notes</th>
-                        <th class="text-end">Actions</th>
+                        <th style="min-width: 250px;">Item</th>
+                        <th class="text-end" style="width: 80px;">Qty</th>
+                        <th class="text-end" style="width: 130px;">Est. Total</th>
+                        <th style="min-width: 150px;">Requested By</th>
+                        <th class="text-end" style="width: 100px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in group.items %}
                     <tr>
                         <td>
-                            {% if item.url %}
-                            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
-                            {% else %}
-                            {{ item.item_name }}
+                            <div class="fw-semibold">
+                                {% if item.url %}
+                                <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                {% else %}
+                                {{ item.item_name }}
+                                {% endif %}
+                                {% if item.team %}
+                                <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
+                                {% endif %}
+                                {% if item.crew %}
+                                <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
+                                {% endif %}
+                                {% if item.subteam %}
+                                <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
+                                {% endif %}
+                            </div>
+                            {% if item.vendor_name_display and not group.vendor %}
+                            <div class="text-muted small">
+                                <i class="bi bi-shop me-1"></i>
+                                {% if item.vendor_url %}<a href="{{ item.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ item.vendor_name_display }}</a>{% else %}{{ item.vendor_name_display }}{% endif %}
+                            </div>
                             {% endif %}
-                            {% if item.team %}
-                            <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
-                            {% endif %}
-                            {% if item.crew %}
-                            <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
-                            {% endif %}
-                            {% if item.subteam %}
-                            <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
+                            {% if item.notes %}
+                            <div class="text-muted small mt-1">
+                                <i class="bi bi-chat-left-text me-1"></i>{{ item.notes }}
+                            </div>
                             {% endif %}
                         </td>
-                        <td class="text-nowrap small">
-                            {% if item.vendor_url %}
-                            <a href="{{ item.vendor_url }}" target="_blank" rel="noopener noreferrer">{{ item.vendor_name_display|default:"—" }} <i class="bi bi-box-arrow-up-right"></i></a>
-                            {% elif item.vendor_name_display %}
-                            {{ item.vendor_name_display }}
+                        <td class="text-end">{{ item.quantity_normalized }}</td>
+                        <td class="text-end">
+                            {% if item.total != None %}
+                            <strong>${{ item.total|floatformat:2 }}</strong>
+                            {% if item.unit_price and item.quantity_normalized != "1" %}
+                            <div class="text-muted small">(${{ item.unit_price|floatformat:2 }} ea)</div>
+                            {% endif %}
+                            {% elif item.unit_price %}
+                            ${{ item.unit_price|floatformat:2 }} ea
                             {% else %}
                             <span class="text-muted">&mdash;</span>
                             {% endif %}
                         </td>
-                        <td><span class="badge bg-secondary">{{ item.get_status_display }}</span></td>
-                        <td class="text-end">{{ item.quantity_normalized }}</td>
-                        <td class="text-end">{% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-                        <td class="text-end">{% if item.total != None %}${{ item.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-                        <td>{{ item.requested_by_name }}</td>
-                        <td>{{ item.requested_at|date:"M j, Y" }}</td>
-                        <td class="text-muted small">{{ item.notes|truncatechars:60 }}</td>
+                        <td>
+                            <div>{{ item.requested_by_name }}</div>
+                            <div class="text-muted small">{{ item.requested_at|date:"M j, Y" }}</div>
+                        </td>
                         <td class="text-end text-nowrap">
                             {% if item.requested_by_id == request.user.id or is_lead %}
-                            <a href="{% url 'orders:item_edit' program.id item.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                            <a href="{% url 'orders:item_edit' program.id item.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit request">
                                 <i class="bi bi-pencil"></i>
                             </a>
                             {% endif %}
                             {% if is_lead %}
-                            <a href="{% url 'orders:item_delete' program.id item.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                            <a href="{% url 'orders:item_delete' program.id item.pk %}" class="btn btn-sm btn-outline-danger" title="Delete request">
                                 <i class="bi bi-trash"></i>
                             </a>
                             {% endif %}
@@ -132,15 +223,18 @@
         </div>
         {% endfor %}
         {% else %}
-        <div class="alert alert-light text-center border m-3">
-            <i class="bi bi-inbox me-2"></i>No pending item requests. Place one with "Request an Item" above.
+        <div class="alert alert-light text-center border py-4 m-3">
+            <i class="bi bi-inbox fs-3 d-block mb-2 text-muted"></i>
+            <h6 class="mb-1 fw-semibold">No pending item requests</h6>
+            <p class="text-muted small mb-0">When students or mentors request parts and supplies, they will appear here grouped by vendor.</p>
         </div>
         {% endif %}
     </div>
 
+    <!-- Active Orders Section -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h5 mb-0">Active Orders</h2>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h2 class="h5 mb-0 fw-bold"><i class="bi bi-cart me-2 text-success"></i>Active Orders</h2>
             {% if order_groups_total is not None %}
             <span class="text-muted small">Est. total: <strong>${{ order_groups_total|floatformat:2 }}</strong></span>
             {% endif %}
@@ -149,7 +243,7 @@
         {% for group in order_groups %}
         <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
             <strong>
-                <i class="bi bi-shop me-1"></i>
+                <i class="bi bi-shop me-1 text-muted"></i>
                 {% if group.vendor %}{{ group.vendor }}{% else %}No vendor specified{% endif %}
                 <span class="badge bg-secondary ms-2">{{ group.items|length }}</span>
             </strong>
@@ -159,25 +253,51 @@
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+                <thead class="table-light text-muted small text-uppercase">
                     <tr>
-                        <th>Order</th>
+                        <th style="min-width: 140px;">Order</th>
                         <th>Items</th>
-                        <th>Vendor</th>
-                        <th class="text-end">Total</th>
-                        <th class="text-end">Actions</th>
+                        <th style="min-width: 160px;">Vendor</th>
+                        <th class="text-end" style="width: 120px;">Total</th>
+                        <th class="text-end" style="width: 160px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for order in group.items %}
                     <tr>
                         <td class="text-nowrap">
-                            <a href="{% url 'orders:order_detail' program.id order.pk %}"><strong>Order #{{ order.pk }}</strong></a>
+                            <div>
+                                <a href="{% url 'orders:order_detail' program.id order.pk %}" class="fw-bold text-decoration-none">Order #{{ order.pk }}</a>
+                            </div>
+                            <div class="mt-1">
+                                {% if order.status == "ordered" %}
+                                <span class="badge bg-success">Ordered</span>
+                                {% elif order.status == "shipped" %}
+                                <span class="badge bg-primary">Shipped</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Ready</span>
+                                {% endif %}
+                            </div>
                         </td>
                         <td>
-                            {% for it in order.items.all %}
-                            {{ it.item_name }}{% if it.quantity_normalized != "1" %} (x{{ it.quantity_normalized }}){% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
+                            <div>
+                                {% for it in order.items.all %}
+                                <span class="text-dark">{{ it.item_name }}</span>{% if it.quantity_normalized != "1" %} <span class="text-muted small">(x{{ it.quantity_normalized }})</span>{% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                <span class="text-muted small">No items grouped yet</span>
+                                {% endfor %}
+                            </div>
+                            {% if order.tracking_number and order.status == "shipped" %}
+                            <div class="text-muted small mt-1">
+                                <i class="bi bi-truck text-primary me-1"></i>
+                                {% if order.shipping_carrier %}{{ order.shipping_carrier }}: {% endif %}
+                                {% if order.tracking_url %}
+                                <a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer">{{ order.tracking_number }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                {% else %}
+                                {{ order.tracking_number }}
+                                {% endif %}
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="text-nowrap">
                             {% if order.vendor_url %}
@@ -188,7 +308,18 @@
                             <span class="text-muted">&mdash;</span>
                             {% endif %}
                         </td>
-                        <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                        <td class="text-end">
+                            {% if order.total != None %}
+                            <strong>${{ order.total|floatformat:2 }}</strong>
+                            {% if order.shipping_cost or order.tax %}
+                            <div class="text-muted small" title="Includes shipping/tax">
+                                incl. extra
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
                         <td class="text-end text-nowrap">
                             {% if is_lead %}
                             {% if order.status == "pending" %}
@@ -215,17 +346,17 @@
                             {% endif %}
                             {% endif %}
                             {% if order.created_by_id == request.user.id or is_lead %}
-                            <a href="{% url 'orders:order_detail' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="View">
+                            <a href="{% url 'orders:order_detail' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="View order">
                                 <i class="bi bi-eye"></i>
                             </a>
                             {% endif %}
                             {% if can_manage_items and order.created_by_id == request.user.id or is_lead %}
-                            <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                            <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit order">
                                 <i class="bi bi-pencil"></i>
                             </a>
                             {% endif %}
                             {% if is_lead %}
-                            <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                            <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-sm btn-outline-danger" title="Delete order">
                                 <i class="bi bi-trash"></i>
                             </a>
                             {% endif %}
@@ -237,8 +368,10 @@
         </div>
         {% endfor %}
         {% else %}
-        <div class="alert alert-light text-center border m-3">
-            <i class="bi bi-cart me-2"></i>No active orders yet. Group some requests with "Place Order" above.
+        <div class="alert alert-light text-center border py-4 m-3">
+            <i class="bi bi-cart fs-3 d-block mb-2 text-muted"></i>
+            <h6 class="mb-1 fw-semibold">No active orders</h6>
+            <p class="text-muted small mb-0">Group pending item requests into a vendor order using <strong>Place Order</strong> above.</p>
         </div>
         {% endif %}
     </div>

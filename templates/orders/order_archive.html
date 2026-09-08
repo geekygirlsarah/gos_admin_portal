@@ -5,43 +5,83 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>{{ page_title }}</h1>
+    <!-- Header with Title and Primary Actions -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h2 mb-0">{{ page_title }}</h1>
         <div class="d-flex gap-2">
-            {% if is_lead %}
-            <a href="{% url 'orders:vendor_list' program.id %}" class="btn btn-outline-primary">
-                <i class="bi bi-shop me-1"></i>Vendors
-            </a>
-            <a href="{% url 'orders:carrier_list' program.id %}" class="btn btn-outline-primary">
-                <i class="bi bi-truck me-1"></i>Shipping Companies
-            </a>
-            <a href="{% url 'orders:order_archive' program.id %}?export=csv" class="btn btn-outline-secondary">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
-            </a>
-            <a href="{% url 'orders:order_archive' program.id %}?export=xlsx" class="btn btn-outline-secondary">
-                <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+            {% if can_request_item %}
+            <a href="{% url 'orders:item_create' program.id %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>Request an Item
             </a>
             {% endif %}
-            <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
-                <i class="bi bi-list-check me-1"></i>Active Orders
-            </a>
-            {% if is_staff %}
-            <a href="{% url 'orders:order_create' program.id %}" class="btn btn-primary">
-                <i class="bi bi-cart me-1"></i>Place Order
+            {% if can_place_order %}
+            <a href="{% url 'orders:order_create' program.id %}" class="btn btn-success">
+                <i class="bi bi-cart-plus me-1"></i>Place Order
             </a>
             {% endif %}
         </div>
     </div>
 
-    <p class="text-muted">
-        Orders that have been received, kept on record for budget and finance purposes.
-    </p>
+    <!-- Navigation Pills and Management Dropdowns -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 pb-2 border-bottom">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'orders:order_list' program.id %}">
+                    <i class="bi bi-list-check me-1"></i>Active Requests &amp; Orders
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link active" href="{% url 'orders:order_archive' program.id %}">
+                    <i class="bi bi-archive me-1"></i>Order Archive
+                </a>
+            </li>
+        </ul>
+        {% if is_lead %}
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:order_archive' program.id %}?export=csv">
+                            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export as CSV
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:order_archive' program.id %}?export=xlsx">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Export as Excel
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="manageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-gear me-1"></i>Manage
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="manageDropdown">
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:vendor_list' program.id %}">
+                            <i class="bi bi-shop me-2"></i>Vendors Directory
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'orders:carrier_list' program.id %}">
+                            <i class="bi bi-truck me-2"></i>Shipping Companies
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 
     {% if order_groups %}
         {% for group in order_groups %}
         <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h2 class="h5 mb-0 fw-bold">
+                    <i class="bi bi-box-seam me-2 text-secondary"></i>
                     {% if group.program %}
                         {{ group.program.name }}
                     {% else %}
@@ -55,31 +95,33 @@
             </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                    <thead class="table-light text-muted small text-uppercase">
                         <tr>
-                            <th>Order</th>
-                            <th>Status</th>
+                            <th style="min-width: 130px;">Order</th>
+                            <th style="width: 100px;">Status</th>
                             <th>Items</th>
-                            <th>Vendor</th>
-                            <th class="text-end">Total</th>
-                            <th>Ordered By</th>
-                            <th>Ordered On</th>
-                            <th>Tracking</th>
-                            <th class="text-end">Actions</th>
+                            <th style="min-width: 160px;">Vendor</th>
+                            <th class="text-end" style="width: 120px;">Total</th>
+                            <th style="min-width: 140px;">Ordered By</th>
+                            <th style="min-width: 120px;">Ordered On</th>
+                            <th style="min-width: 150px;">Tracking</th>
+                            <th class="text-end" style="width: 120px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for order in group.items %}
                         <tr>
                             <td class="text-nowrap">
-                                <a href="{% url 'orders:order_detail' program.id order.pk %}"><strong>Order #{{ order.pk }}</strong></a>
+                                <a href="{% url 'orders:order_detail' program.id order.pk %}" class="fw-bold text-decoration-none">Order #{{ order.pk }}</a>
                             </td>
                             <td>
                                 <span class="badge bg-dark">Received</span>
                             </td>
                             <td>
                                 {% for it in order.items.all %}
-                                {{ it.item_name }}{% if it.quantity_normalized != "1" %} (x{{ it.quantity_normalized }}){% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                                <span class="text-dark">{{ it.item_name }}</span>{% if it.quantity_normalized != "1" %} <span class="text-muted small">(x{{ it.quantity_normalized }})</span>{% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                <span class="text-muted small">No items grouped</span>
                                 {% endfor %}
                             </td>
                             <td class="text-nowrap">
@@ -91,17 +133,19 @@
                                 <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                            <td class="text-end">{% if order.total != None %}<strong>${{ order.total|floatformat:2 }}</strong>{% else %}&mdash;{% endif %}</td>
                             <td>{{ order.ordered_by_name|default:"—" }}</td>
                             <td>{{ order.ordered_at|date:"M j, Y" }}</td>
                             <td>
                                 {% if order.tracking_number %}
-                                {% if order.shipping_carrier %}{{ order.shipping_carrier }} {% endif %}
-                                {% if order.tracking_url %}
-                                <a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer"><strong>{{ order.tracking_number }}</strong> <i class="bi bi-box-arrow-up-right small"></i></a>
-                                {% else %}
-                                <strong>{{ order.tracking_number }}</strong>
-                                {% endif %}
+                                <div>
+                                    {% if order.shipping_carrier %}<span class="text-muted small">{{ order.shipping_carrier }}:</span><br>{% endif %}
+                                    {% if order.tracking_url %}
+                                    <a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer" class="fw-semibold">{{ order.tracking_number }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                                    {% else %}
+                                    <span class="fw-semibold">{{ order.tracking_number }}</span>
+                                    {% endif %}
+                                </div>
                                 {% else %}
                                 <span class="text-muted">&mdash;</span>
                                 {% endif %}
@@ -114,10 +158,10 @@
                                         <i class="bi bi-arrow-counterclockwise"></i>
                                     </button>
                                 </form>
-                                <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                <a href="{% url 'orders:order_edit' program.id order.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit order">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <a href="{% url 'orders:order_delete' program.id order.pk %}" class="btn btn-sm btn-outline-danger" title="Delete order">
                                     <i class="bi bi-trash"></i>
                                 </a>
                                 {% endif %}
@@ -130,8 +174,10 @@
         </div>
         {% endfor %}
     {% else %}
-        <div class="alert alert-light text-center border">
-            <i class="bi bi-archive me-2"></i>Nothing received yet. Mark a shipped order as received and it'll show up here.
+        <div class="alert alert-light text-center border py-4">
+            <i class="bi bi-archive fs-3 d-block mb-2 text-muted"></i>
+            <h6 class="mb-1 fw-semibold">No archived orders</h6>
+            <p class="text-muted small mb-0">Orders that have been received will be saved here for budget and finance records.</p>
         </div>
     {% endif %}
 </div>

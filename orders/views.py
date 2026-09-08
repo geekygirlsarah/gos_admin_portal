@@ -365,14 +365,14 @@ class OrderListView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
-        pool_items = (
+        pool_items = list(
             OrderItem.objects.filter(order__isnull=True)
             .select_related(
                 "program", "vendor", "team", "crew", "subteam", "requested_by"
             )
             .order_by("-requested_at")
         )
-        active_orders = (
+        active_orders = list(
             Order.objects.exclude(status=Order.STATUS_RECEIVED)
             .select_related("program", "vendor", "shipping_carrier", "created_by")
             .prefetch_related("items__team", "items__crew", "items__subteam")
@@ -380,10 +380,27 @@ class OrderListView(
         )
         item_groups = _group_by_vendor(pool_items)
         order_groups = _group_by_vendor(active_orders)
+        item_groups_total = _groups_total(item_groups)
+        order_groups_total = _groups_total(order_groups)
+
+        pool_items_count = len(pool_items)
+        in_progress_orders = [
+            o
+            for o in active_orders
+            if o.status in (Order.STATUS_PENDING, Order.STATUS_ORDERED)
+        ]
+        in_progress_orders_count = len(in_progress_orders)
+        shipped_orders = [o for o in active_orders if o.status == Order.STATUS_SHIPPED]
+        shipped_orders_count = len(shipped_orders)
+
+        context["pool_items_count"] = pool_items_count
+        context["in_progress_orders_count"] = in_progress_orders_count
+        context["shipped_orders_count"] = shipped_orders_count
+        context["active_tab"] = "active"
         context["item_groups"] = item_groups
         context["order_groups"] = order_groups
-        context["item_groups_total"] = _groups_total(item_groups)
-        context["order_groups_total"] = _groups_total(order_groups)
+        context["item_groups_total"] = item_groups_total
+        context["order_groups_total"] = order_groups_total
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
         context["can_request_item"] = can_user_write(
@@ -441,12 +458,22 @@ class OrderArchiveView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
-        orders = context["orders"]
+        orders = list(context["orders"])
         for order in orders:
             order.ordered_by_name = user_display_name(order.ordered_by)
-        context["order_groups"] = _group_by_program(orders)
+        order_groups = _group_by_program(orders)
+        context["order_groups"] = order_groups
+        context["archive_total"] = _groups_total(order_groups)
+        context["archive_orders_count"] = len(orders)
+        context["active_tab"] = "archive"
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
+        context["can_request_item"] = can_user_write(
+            self.request.user, "orders-request"
+        )
+        context["can_place_order"] = user_is_mentor_or_lead(
+            self.request.user
+        ) and can_user_write(self.request.user, "orders-manage")
         context["page_title"] = "Order Archive"
         return context
 

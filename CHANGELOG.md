@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-09-08
 
 ### Changed
+- **Streamlined and modernized Order Requests and Order Management pages**: Simplified the layout and reduced visual clutter across the Order Requests, Order Detail, and Order Archive views. Top actions are now consolidated into dedicated navigation pills and dropdowns for Export (CSV/Excel) and Management (Vendors/Shipping Companies). Added summary KPI tiles at the top of the requests page, streamlined the requests table down to 5 high-signal columns, introduced a visual 4-stage lifecycle progress stepper on order detail pages, and made adding pool items into orders collapsible.
 - **Order items now use student Team, Crew, and Subteam labels**: Replaced the separate item tags with direct selections for existing student teams, crews/projects, and subteams. When requesting an item, students and mentors can specify which team, crew, or subteam needs the item, and these labels appear as colored badges on the order list, order detail, and order archive pages, as well as in CSV and Excel exports.
 
 ## 2026-09-07
