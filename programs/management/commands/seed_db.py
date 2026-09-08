@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from badges.models import Badge, StudentBadge
-from orders.models import Order, OrderItem, Vendor
+from orders.models import ItemTag, Order, OrderItem, ShippingCarrier, Vendor
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -44,6 +44,8 @@ class Command(BaseCommand):
         self._seed_payments(enrollments, programs, today)
         self._seed_badges(students, programs)
         self._seed_vendors()
+        self._seed_shipping_carriers()
+        self._seed_item_tags()
         _seed_orders(programs)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded database"))
@@ -833,6 +835,41 @@ class Command(BaseCommand):
                 },
             )
 
+    def _seed_shipping_carriers(self):
+        carriers = [
+            {
+                "name": "UPS",
+                "tracking_url_template": "https://www.ups.com/track?track=yes&trackNums={number}",
+            },
+            {
+                "name": "FedEx",
+                "tracking_url_template": "https://www.fedex.com/fedextrack/?trknbr={number}",
+            },
+            {
+                "name": "USPS",
+                "tracking_url_template": "https://tools.usps.com/go/TrackConfirmAction?tLabels={number}",
+            },
+        ]
+        for carrier in carriers:
+            ShippingCarrier.objects.update_or_create(
+                name=carrier["name"],
+                defaults={"tracking_url_template": carrier["tracking_url_template"]},
+            )
+
+    def _seed_item_tags(self):
+        tags = [
+            {"name": "Drivetrain", "color": "#dc3545"},
+            {"name": "Marketing", "color": "#0d6efd"},
+            {"name": "Electrical", "color": "#198754"},
+            {"name": "Programming", "color": "#6f42c1"},
+            {"name": "General", "color": "#6c757d"},
+        ]
+        for tag in tags:
+            ItemTag.objects.update_or_create(
+                name=tag["name"],
+                defaults={"color": tag["color"]},
+            )
+
 
 def _seed_orders(programs):
     """Seed a few item requests and one grouped order as demo data.
@@ -861,7 +898,7 @@ def _seed_orders(programs):
         ("VEX claw mechanism", "1", "32.00", "https://www.vexrobotics.com"),
     ]
     items = []
-    for name, qty, price, url in item_data:
+    for i, (name, qty, price, url) in enumerate(item_data):
         item, _ = OrderItem.objects.get_or_create(
             item_name=name,
             requested_by=mentor_user,
@@ -871,6 +908,7 @@ def _seed_orders(programs):
                 "quantity": qty,
                 "unit_price": price,
                 "url": url,
+                "tag": ItemTag.objects.order_by("?").first(),
             },
         )
         items.append(item)
@@ -883,6 +921,10 @@ def _seed_orders(programs):
         vendor_url=vendor.website if vendor else "",
         created_by=mentor_user,
         notes="Demo order — group more items from the Requests list as needed.",
+        shipping_carrier=ShippingCarrier.objects.first(),
+        shipping_cost=Decimal("12.99"),
+        tax=Decimal("6.34"),
+        tracking_number="1Z999AA10123456784",
     )
     OrderItem.objects.filter(pk__in=[i.pk for i in items[:3]]).update(order=order)
 

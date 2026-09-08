@@ -18,12 +18,21 @@ from django.views.generic import (
 
 from orders.forms import (
     NOT_LISTED_VENDOR,
+    ItemTagForm,
     OrderForm,
     OrderItemForm,
+    ShippingCarrierForm,
     ShippingInfoForm,
     VendorForm,
 )
-from orders.models import Order, OrderItem, Vendor, user_display_name
+from orders.models import (
+    ItemTag,
+    Order,
+    OrderItem,
+    ShippingCarrier,
+    Vendor,
+    user_display_name,
+)
 from programs.models import Program
 from programs.permission_views import (
     LeadMentorRequiredMixin,
@@ -158,6 +167,7 @@ def _item_export_row(item):
             else ""
         ),
         "notes": item.notes,
+        "tag": item.tag.name if item.tag_id else "",
         "status": item.get_status_display(),
         "ordered_on": (
             timezone.localtime(order.ordered_at).strftime("%Y-%m-%d %H:%M")
@@ -189,6 +199,7 @@ def _export_items_csv(items):
             "Requested By",
             "Requested On",
             "Notes",
+            "Tag",
             "Status",
             "Ordered On",
         ]
@@ -209,6 +220,7 @@ def _export_items_csv(items):
                 row["requested_by"],
                 row["requested_on"],
                 row["notes"],
+                row["tag"],
                 row["status"],
                 row["ordered_on"],
             ]
@@ -239,6 +251,7 @@ def _export_items_xlsx(items):
             "Requested By",
             "Requested On",
             "Notes",
+            "Tag",
             "Status",
             "Ordered On",
         ]
@@ -259,11 +272,12 @@ def _export_items_xlsx(items):
                 row["requested_by"],
                 row["requested_on"],
                 row["notes"],
+                row["tag"],
                 row["status"],
                 row["ordered_on"],
             ]
         )
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=14):
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=15):
         for cell in row:
             if cell.column in (2, 6, 12):
                 cell.alignment = cell.alignment.copy(vertical="top")
@@ -329,6 +343,7 @@ class OrderListView(
             .select_related(
                 "program",
                 "vendor",
+                "tag",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
@@ -342,13 +357,13 @@ class OrderListView(
         role = context["user_role"]
         pool_items = (
             OrderItem.objects.filter(order__isnull=True)
-            .select_related("program", "vendor", "requested_by")
+            .select_related("program", "vendor", "tag", "requested_by")
             .order_by("-requested_at")
         )
         active_orders = (
             Order.objects.exclude(status=Order.STATUS_RECEIVED)
-            .select_related("program", "vendor", "created_by")
-            .prefetch_related("items")
+            .select_related("program", "vendor", "shipping_carrier", "created_by")
+            .prefetch_related("items__tag")
             .order_by("-created_at")
         )
         item_groups = _group_by_vendor(pool_items)
@@ -387,8 +402,10 @@ class OrderArchiveView(
     def get_queryset(self):
         return (
             Order.objects.filter(status=Order.STATUS_RECEIVED)
-            .select_related("program", "vendor", "created_by", "ordered_by")
-            .prefetch_related("items")
+            .select_related(
+                "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
+            )
+            .prefetch_related("items__tag")
             .order_by("-ordered_at", "-created_at")
         )
 
@@ -398,6 +415,7 @@ class OrderArchiveView(
             .select_related(
                 "program",
                 "vendor",
+                "tag",
                 "requested_by",
                 "order__vendor",
                 "order__created_by",
@@ -440,18 +458,18 @@ class OrderDetailView(
 
     def get_queryset(self):
         return Order.objects.select_related(
-            "program", "vendor", "created_by", "ordered_by"
+            "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
         context["items"] = self.object.items.select_related(
-            "program", "vendor", "requested_by", "order"
+            "program", "vendor", "tag", "requested_by", "order"
         ).all()
         context["available_items"] = (
             OrderItem.objects.filter(order__isnull=True)
-            .select_related("program", "vendor", "requested_by")
+            .select_related("program", "vendor", "tag", "requested_by")
             .order_by("vendor_name", "vendor__name", "-requested_at")
         )
         context["is_lead"] = role == "LeadMentor"
@@ -923,3 +941,167 @@ class VendorDeleteView(
 
     def get_success_url(self):
         return reverse("orders:vendor_list", kwargs={"program_id": self.program.id})
+
+
+class ShippingCarrierListView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, ListView
+):
+    """Org-wide shipping companies reference list (Lead Mentor managed)."""
+
+    model = ShippingCarrier
+    template_name = "orders/carrier_list.html"
+    context_object_name = "carriers"
+
+    def get_queryset(self):
+        return ShippingCarrier.objects.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Shipping companies"
+        return context
+
+
+class ShippingCarrierCreateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, CreateView
+):
+    model = ShippingCarrier
+    form_class = ShippingCarrierForm
+    template_name = "orders/carrier_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Shipping Company"
+        return context
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            f"Shipping company '{form.instance.name}' added. Mentors can now "
+            "pick it when recording tracking info.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:carrier_list", kwargs={"program_id": self.program.id})
+
+
+class ShippingCarrierUpdateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, UpdateView
+):
+    model = ShippingCarrier
+    form_class = ShippingCarrierForm
+    template_name = "orders/carrier_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Shipping Company"
+        return context
+
+    def form_valid(self, form):
+        messages.success(
+            self.request, f"Shipping company '{form.instance.name}' updated."
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:carrier_list", kwargs={"program_id": self.program.id})
+
+
+class ShippingCarrierDeleteView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, DeleteView
+):
+    model = ShippingCarrier
+    template_name = "orders/carrier_confirm_delete.html"
+
+    def form_valid(self, form):
+        name = self.object.name
+        messages.success(
+            self.request,
+            f"Shipping company '{name}' deleted. Orders that used it keep their "
+            "tracking info but lose the clickable link.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:carrier_list", kwargs={"program_id": self.program.id})
+
+
+class ItemTagListView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, ListView
+):
+    """Org-wide item tags reference list (Lead Mentor managed)."""
+
+    model = ItemTag
+    template_name = "orders/tag_list.html"
+    context_object_name = "tags"
+
+    def get_queryset(self):
+        return ItemTag.objects.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Item tags"
+        return context
+
+
+class ItemTagCreateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, CreateView
+):
+    model = ItemTag
+    form_class = ItemTagForm
+    template_name = "orders/tag_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Item Tag"
+        return context
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            f"Tag '{form.instance.name}' added. Students and mentors can now "
+            "apply it to item requests.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:tag_list", kwargs={"program_id": self.program.id})
+
+
+class ItemTagUpdateView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, UpdateView
+):
+    model = ItemTag
+    form_class = ItemTagForm
+    template_name = "orders/tag_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Item Tag"
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Tag '{form.instance.name}' updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:tag_list", kwargs={"program_id": self.program.id})
+
+
+class ItemTagDeleteView(
+    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, DeleteView
+):
+    model = ItemTag
+    template_name = "orders/tag_confirm_delete.html"
+
+    def form_valid(self, form):
+        name = self.object.name
+        messages.success(
+            self.request,
+            f"Tag '{name}' deleted. Items that had it keep their requests but "
+            "no longer show the tag.",
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("orders:tag_list", kwargs={"program_id": self.program.id})

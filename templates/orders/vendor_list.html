@@ -19,6 +19,12 @@
         <a href="{% url 'orders:order_archive' program.id %}" class="btn btn-outline-dark">
             <i class="bi bi-archive me-1"></i>Order Archive
         </a>
+        <a href="{% url 'orders:carrier_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-truck me-1"></i>Shipping Companies
+        </a>
+        <a href="{% url 'orders:tag_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-tags me-1"></i>Item Tags
+        </a>
     </div>
 
     <p class="text-muted">

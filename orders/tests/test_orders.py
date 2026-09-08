@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from orders.models import Order, OrderItem, Vendor
 from orders.tests.base import (
+    make_carrier,
     make_item,
     make_lead_mentor_user,
     make_mentor_user,
@@ -686,6 +687,10 @@ class OrderStatusAndShippingTests(TestCase):
         order = make_order(self.program, created_by=self.mentor)
         order.status = Order.STATUS_ORDERED
         order.save(update_fields=["status"])
+        carrier = make_carrier(
+            "UPS",
+            tracking_url_template="https://www.ups.com/track?track=yes&trackNums={number}",
+        )
         self.login(self.lead)
         shipping_url = reverse(
             "orders:order_update_shipping", args=[self.program.id, order.id]
@@ -693,7 +698,7 @@ class OrderStatusAndShippingTests(TestCase):
         resp = self.client.post(
             shipping_url,
             {
-                "shipping_carrier": "UPS",
+                "shipping_carrier": str(carrier.pk),
                 "tracking_number": "1Z999AA10123456784",
                 "shipped_date": "2026-09-01",
                 "delivery_estimate": "2026-09-08",
@@ -704,7 +709,7 @@ class OrderStatusAndShippingTests(TestCase):
             reverse("orders:order_detail", args=[self.program.id, order.id]),
         )
         order.refresh_from_db()
-        self.assertEqual(order.shipping_carrier, "UPS")
+        self.assertEqual(order.shipping_carrier, carrier)
         self.assertEqual(order.tracking_number, "1Z999AA10123456784")
         self.assertEqual(order.shipped_date.isoformat(), "2026-09-01")
         self.assertEqual(order.delivery_estimate.isoformat(), "2026-09-08")
@@ -715,17 +720,18 @@ class OrderStatusAndShippingTests(TestCase):
         order = make_order(self.program, created_by=self.mentor)
         order.status = Order.STATUS_ORDERED
         order.save(update_fields=["status"])
+        carrier = make_carrier("FedEx")
         self.login(self.mentor2)
         shipping_url = reverse(
             "orders:order_update_shipping", args=[self.program.id, order.id]
         )
-        resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
+        resp = self.client.post(shipping_url, {"shipping_carrier": str(carrier.pk)})
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(
             resp.url, reverse("orders:order_detail", args=[self.program.id, order.id])
         )
         order.refresh_from_db()
-        self.assertEqual(order.shipping_carrier, "FedEx")
+        self.assertEqual(order.shipping_carrier, carrier)
 
     def test_archive_includes_only_received_orders_with_status(self):
         received = make_order(self.program, created_by=self.mentor)
@@ -765,7 +771,8 @@ class OrderStatusAndShippingTests(TestCase):
         """Students can read shipping/tracking but never see the edit form."""
         order = make_order(self.program, created_by=self.mentor)
         order.status = Order.STATUS_SHIPPED
-        order.shipping_carrier = "UPS"
+        carrier = make_carrier("UPS")
+        order.shipping_carrier = carrier
         order.tracking_number = "1Z999AA10123456784"
         order.save(update_fields=["status", "shipping_carrier", "tracking_number"])
         self.login(self.student)
@@ -785,6 +792,7 @@ class OrderStatusAndShippingTests(TestCase):
         order = make_order(self.program, created_by=self.mentor)
         order.status = Order.STATUS_ORDERED
         order.save(update_fields=["status"])
+        carrier = make_carrier("FedEx")
         RolePermission.objects.update_or_create(
             role="Mentor",
             section="orders-shipping",
@@ -802,11 +810,11 @@ class OrderStatusAndShippingTests(TestCase):
         shipping_url = reverse(
             "orders:order_update_shipping", args=[self.program.id, order.id]
         )
-        resp = self.client.post(shipping_url, {"shipping_carrier": "FedEx"})
+        resp = self.client.post(shipping_url, {"shipping_carrier": str(carrier.pk)})
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse("home"))
         order.refresh_from_db()
-        self.assertEqual(order.shipping_carrier, "")
+        self.assertEqual(order.shipping_carrier, None)
 
     def test_mentor_with_manage_but_no_shipping_can_manage_items(self):
         """The 'orders-manage' and 'orders-shipping' toggles are independent:
@@ -931,4 +939,33 @@ class OrderModelTests(TestCase):
         order = make_order(program, created_by=student)
         make_item(program, requested_by=student, order=order, unit_price=None)
         self.assertEqual(order.item_count, 1)
+        self.assertIsNone(order.total)
+
+    def test_order_total_includes_shipping_and_tax(self):
+        program = make_program()
+        student = make_student_user(program=program)
+        order = make_order(
+            program, created_by=student, shipping_cost="12.99", tax="6.34"
+        )
+        make_item(
+            program, requested_by=student, order=order, quantity="1", unit_price="50.00"
+        )
+        self.assertEqual(order.total, Decimal("69.33"))
+
+    def test_order_total_is_just_extras_without_priced_items(self):
+        """An 'authentic total' still reflects posted tax/shipping even when no
+        item has a price."""
+        program = make_program()
+        student = make_student_user(program=program)
+        order = make_order(
+            program, created_by=student, shipping_cost="10.00", tax="0.80"
+        )
+        make_item(program, requested_by=student, order=order, unit_price=None)
+        self.assertEqual(order.total, Decimal("10.80"))
+
+    def test_order_total_none_without_priced_items_and_extras(self):
+        program = make_program()
+        student = make_student_user(program=program)
+        order = make_order(program, created_by=student)
+        make_item(program, requested_by=student, order=order, unit_price=None)
         self.assertIsNone(order.total)

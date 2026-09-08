@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block title %}{{ page_title }} - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'orders:tag_list' program.id %}">Item tags</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{% if object %}Edit{% else %}New{% endif %} Item Tag</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">{{ page_title }}</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {% for field in form %}
+                            {% render_field field %}
+                        {% endfor %}
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'orders:tag_list' program.id %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">
+                                {% if object %}Save Changes{% else %}Add Item Tag{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

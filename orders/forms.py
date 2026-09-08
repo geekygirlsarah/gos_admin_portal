@@ -1,6 +1,6 @@
 from django import forms
 
-from orders.models import Order, OrderItem, Vendor
+from orders.models import ItemTag, Order, OrderItem, ShippingCarrier, Vendor
 from programs.models import Program
 
 # Sentinel value for the "Not listed" option in the order form's vendor
@@ -33,10 +33,21 @@ class OrderItemForm(forms.ModelForm):
         label="Vendor website",
         widget=forms.URLInput(attrs={"placeholder": "https://…"}),
     )
+    tag = forms.ModelChoiceField(
+        queryset=ItemTag.objects.none(),
+        required=False,
+        label="Tag",
+        widget=forms.Select,
+        empty_label="No tag",
+        help_text=(
+            "Optional label for what this purchase is for (team, project, crew, "
+            "subteam…). Just helps organize requests."
+        ),
+    )
 
     class Meta:
         model = OrderItem
-        fields = ["item_name", "quantity", "unit_price", "url", "notes"]
+        fields = ["item_name", "quantity", "unit_price", "url", "tag", "notes"]
         widgets = {
             "item_name": forms.TextInput(attrs={"placeholder": "e.g. 2mm hex driver"}),
             "quantity": forms.NumberInput(attrs={"min": "0.01", "step": "0.01"}),
@@ -57,6 +68,8 @@ class OrderItemForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.fields["tag"].queryset = ItemTag.objects.order_by("name")
 
         choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]
         choices.append((NOT_LISTED_VENDOR, "Not listed — I'll specify below"))
@@ -136,11 +149,13 @@ class OrderForm(forms.ModelForm):
 
     class Meta:
         model = Order
-        fields = ["program", "notes"]
+        fields = ["program", "notes", "shipping_cost", "tax"]
         widgets = {
             "notes": forms.Textarea(
                 attrs={"rows": 3, "placeholder": "Anything the vendor should know."}
             ),
+            "shipping_cost": forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
+            "tax": forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -211,6 +226,15 @@ class ShippingInfoForm(forms.ModelForm):
     stays focused.
     """
 
+    shipping_carrier = forms.ModelChoiceField(
+        queryset=ShippingCarrier.objects.none(),
+        required=False,
+        label="Carrier",
+        empty_label="No carrier",
+        widget=forms.Select,
+        help_text="Pick from the shipping companies list.",
+    )
+
     class Meta:
         model = Order
         fields = [
@@ -220,21 +244,23 @@ class ShippingInfoForm(forms.ModelForm):
             "delivery_estimate",
         ]
         labels = {
-            "shipping_carrier": "Carrier",
             "tracking_number": "Tracking",
             "shipped_date": "Shipped",
             "delivery_estimate": "Est. delivery",
         }
         widgets = {
-            "shipping_carrier": forms.TextInput(
-                attrs={"placeholder": "e.g. UPS, FedEx, USPS"}
-            ),
             "tracking_number": forms.TextInput(
                 attrs={"placeholder": "Tracking number"}
             ),
             "shipped_date": forms.DateInput(attrs={"type": "date"}),
             "delivery_estimate": forms.DateInput(attrs={"type": "date"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["shipping_carrier"].queryset = ShippingCarrier.objects.order_by(
+            "name"
+        )
 
 
 class VendorForm(forms.ModelForm):
@@ -259,4 +285,54 @@ class VendorForm(forms.ModelForm):
         help_texts = {
             "name": "Visible in the order form dropdown.",
             "website": "Where to place the order (shown on orders and exports).",
+        }
+
+
+class ShippingCarrierForm(forms.ModelForm):
+    class Meta:
+        model = ShippingCarrier
+        fields = ["name", "tracking_url_template"]
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "e.g. UPS"}),
+            "tracking_url_template": forms.TextInput(
+                attrs={
+                    "placeholder": "https://www.ups.com/track?track=yes&trackNums={number}"
+                }
+            ),
+        }
+        labels = {
+            "name": "Shipping company",
+        }
+        help_texts = {
+            "name": "Visible in the shipping form dropdown on orders.",
+            "tracking_url_template": (
+                "Use {number} where the tracking number goes, so the tracking "
+                "number on an order becomes a clickable link."
+            ),
+        }
+
+    def clean_tracking_url_template(self):
+        template = self.cleaned_data["tracking_url_template"]
+        if template and "{number}" not in template:
+            raise forms.ValidationError(
+                "Include {number} in the URL where the tracking number should go."
+            )
+        return template
+
+
+class ItemTagForm(forms.ModelForm):
+    class Meta:
+        model = ItemTag
+        fields = ["name", "color"]
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "e.g. Drivetrain"}),
+            "color": forms.TextInput(attrs={"type": "color", "value": "#0000ff"}),
+        }
+        labels = {
+            "name": "Tag name",
+            "color": "Color",
+        }
+        help_texts = {
+            "name": "Short label for the item (team, project, crew, subteam…).",
+            "color": "Hex color of the tag's pill, shown next to tagged items.",
         }

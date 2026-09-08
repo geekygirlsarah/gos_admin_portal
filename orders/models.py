@@ -31,6 +31,73 @@ class Vendor(models.Model):
         return self.name
 
 
+class ShippingCarrier(models.Model):
+    """An org-wide shipping company carriers the team tracks packages with.
+
+    Carriers are a Lead-Mentor-managed reference list (like ``Vendor``). Each
+    carries a ``tracking_url_template`` containing a ``{number}`` placeholder,
+    so the tracking number on an order can link straight to the shipment's
+    page (e.g. UPS: ``https://www.ups.com/track?track=yes&trackNums={number}``).
+    """
+
+    name = models.CharField(max_length=255, unique=True, verbose_name="Name")
+    tracking_url_template = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="Tracking URL template",
+        help_text=(
+            "URL to look up a package, with {number} where the tracking number "
+            "goes. e.g. https://www.ups.com/track?track=yes&trackNums={number}."
+        ),
+    )
+
+    class Meta:
+        verbose_name = "Shipping company"
+        verbose_name_plural = "Shipping companies"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def format_tracking_url(self, tracking_number):
+        """The tracking URL for ``tracking_number``, or ``None`` when no
+        template is configured."""
+        if not self.tracking_url_template:
+            return None
+        return self.tracking_url_template.replace("{number}", tracking_number or "")
+
+
+class ItemTag(models.Model):
+    """An org-wide label for order items (e.g. a team, project, crew, or
+    subteam an item is being purchased for).
+
+    Tags are a Lead-Mentor-managed reference list (like ``Vendor``). Items can
+    be tagged freely and still grouped into the same order regardless of tag;
+    the tag is what later search/filter/budget pages group around.
+    """
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Name",
+        help_text="e.g. 'Drivetrain', 'Marketing', 'FRC Team 5987'.",
+    )
+    color = models.CharField(
+        max_length=7,
+        default="#0000ff",
+        verbose_name="Color",
+        help_text="Hex color code (e.g. #0000ff) used for the tag's pill.",
+    )
+
+    class Meta:
+        verbose_name = "Item tag"
+        verbose_name_plural = "Item tags"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Order(models.Model):
     """A grouped purchase order: a list of ``OrderItem`` requests placed
     together with a single vendor.
@@ -38,7 +105,8 @@ class Order(models.Model):
     Students and mentors place individual ``OrderItem`` requests, which sit in
     the unassigned pool until a mentor/Lead Mentor groups them into an
     ``Order``. The order carries the vendor (from the reference list or a
-    free-text "Not listed" entry) and the overall pending/ordered status.
+    free-text "Not listed" entry), the overall pending/ordered status, and the
+    posted tax/shipping costs so ``total`` reflects the authentic amount.
     """
 
     STATUS_PENDING = "pending"
@@ -111,11 +179,32 @@ class Order(models.Model):
         related_name="orders_marked_ordered",
         verbose_name="Marked ordered by",
     )
-    shipping_carrier = models.CharField(
-        max_length=100,
+    shipping_carrier = models.ForeignKey(
+        ShippingCarrier,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
+        related_name="orders",
         verbose_name="Shipping company",
-        help_text="Carrier used to ship this order (e.g. UPS, FedEx, USPS).",
+        help_text="Carrier used to ship this order (from the shipping companies list).",
+    )
+    shipping_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        verbose_name="Shipping cost",
+        help_text="Amount charged for shipping, added to the order total.",
+    )
+    tax = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        verbose_name="Tax",
+        help_text="Sales tax charged, added to the order total.",
     )
     tracking_number = models.CharField(
         max_length=200,
@@ -150,12 +239,29 @@ class Order(models.Model):
 
     @property
     def total(self):
-        """Estimated total across priced items, or ``None`` when no item has a
-        price."""
+        """Authentic total: priced items plus posted tax and shipping costs.
+
+        Returns ``None`` when nothing has a price and no tax/shipping costs
+        are posted (so "estimated total" can stay blank on pending orders).
+        Coerces strings so the property is safe on freshly constructed
+        instances too."""
         totals = [item.total for item in self.items.all() if item.total is not None]
-        if not totals:
+        extras = Decimal("0")
+        if self.shipping_cost:
+            extras += Decimal(str(self.shipping_cost))
+        if self.tax:
+            extras += Decimal(str(self.tax))
+        if not totals and not extras:
             return None
-        return sum(totals, Decimal("0"))
+        return sum(totals, Decimal("0")) + extras
+
+    @property
+    def tracking_url(self):
+        """Tracking URL derived from the carrier's template, or ``None`` when
+        there's no template or no tracking number."""
+        if not self.tracking_number or not self.shipping_carrier_id:
+            return None
+        return self.shipping_carrier.format_tracking_url(self.tracking_number)
 
 
 class OrderItem(models.Model):
@@ -236,6 +342,18 @@ class OrderItem(models.Model):
         blank=True,
         verbose_name="Vendor website",
         help_text="Snapshot of the requested vendor's website (reference list or custom).",
+    )
+    tag = models.ForeignKey(
+        ItemTag,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        verbose_name="Tag",
+        help_text=(
+            "Optional label the purchase is for (e.g. a team, project, crew, or "
+            "subteam). Only used for organization and later filtering."
+        ),
     )
     notes = models.TextField(blank=True, verbose_name="Notes")
     requested_by = models.ForeignKey(

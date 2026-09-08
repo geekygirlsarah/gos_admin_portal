@@ -85,6 +85,13 @@
                     <h6 class="text-muted mb-1">Total</h6>
                     <strong class="fs-5">{% if order.total != None %}${{ order.total|floatformat:2 }}{% else %}&mdash;{% endif %}</strong>
                     <span class="text-muted small">({{ order.item_count }} item{{ order.item_count|pluralize }})</span>
+                    {% if order.shipping_cost or order.tax %}
+                    <div class="text-muted small">
+                        {% if order.shipping_cost %}+ ${{ order.shipping_cost|floatformat:2 }} shipping{% endif %}
+                        {% if order.shipping_cost and order.tax %},{% endif %}
+                        {% if order.tax %}+ ${{ order.tax|floatformat:2 }} tax{% endif %}
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="col-md-4">
                     <h6 class="text-muted mb-1">Created by</h6>
@@ -140,7 +147,13 @@
                 <dt class="col-sm-3">Carrier</dt>
                 <dd class="col-sm-9">{{ order.shipping_carrier|default:"—" }}</dd>
                 <dt class="col-sm-3">Tracking</dt>
-                <dd class="col-sm-9">{{ order.tracking_number|default:"—" }}</dd>
+                <dd class="col-sm-9">
+                    {% if order.tracking_url %}
+                    <a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer">{{ order.tracking_number|default:"—" }} <i class="bi bi-box-arrow-up-right small"></i></a>
+                    {% else %}
+                    {{ order.tracking_number|default:"—" }}
+                    {% endif %}
+                </dd>
                 <dt class="col-sm-3">Shipped</dt>
                 <dd class="col-sm-9">{{ order.shipped_date|date:"M j, Y"|default:"—" }}</dd>
                 <dt class="col-sm-3">Est. delivery</dt>
@@ -177,6 +190,9 @@
                             <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.item_name }} <i class="bi bi-box-arrow-up-right small"></i></a>
                             {% else %}
                             {{ item.item_name }}
+                            {% endif %}
+                            {% if item.tag %}
+                            <span class="badge rounded-pill tag-badge ms-1" data-color="{{ item.tag.color }}" style="background-color: {{ item.tag.color }}; color: {{ item.tag.color|contrast_color }};">{{ item.tag.name }}</span>
                             {% endif %}
                             {% if item.vendor_name_display %}
                             <div class="text-muted small">
@@ -246,6 +262,9 @@
                         <input class="form-check-input mb-0" type="checkbox" name="items" value="{{ item.pk }}">
                         <div>
                             <strong>{{ item.item_name }}</strong>
+                            {% if item.tag %}
+                            <span class="badge rounded-pill tag-badge ms-1" data-color="{{ item.tag.color }}" style="background-color: {{ item.tag.color }}; color: {{ item.tag.color|contrast_color }};">{{ item.tag.name }}</span>
+                            {% endif %}
                             <span class="text-muted small">
                                 · {{ item.quantity_normalized }} × {% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}
                                 · {{ item.requested_by_name }}

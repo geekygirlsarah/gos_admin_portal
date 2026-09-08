@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block title %}{{ page_title }} - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ page_title }}</h1>
+        <a href="{% url 'orders:tag_create' program.id %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Item Tag
+        </a>
+    </div>
+
+    <div class="d-flex gap-2 mb-3">
+        <a href="{% url 'orders:order_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-list-check me-1"></i>Pending Orders
+        </a>
+        <a href="{% url 'orders:order_archive' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-archive me-1"></i>Order Archive
+        </a>
+        <a href="{% url 'orders:vendor_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-shop me-1"></i>Vendors
+        </a>
+        <a href="{% url 'orders:carrier_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-truck me-1"></i>Shipping Companies
+        </a>
+    </div>
+
+    <p class="text-muted">
+        Optional labels for item requests (e.g. "Drivetrain", "Marketing", or a
+        specific team/project). Applying a tag is purely organizational — items can
+        be grouped into an order no matter what they're tagged with.
+    </p>
+
+    {% if tags %}
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Preview</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tag in tags %}
+                        <tr>
+                            <td>{{ tag.name }}</td>
+                            <td>
+                                <span class="badge rounded-pill tag-badge" data-color="{{ tag.color }}" style="background-color: {{ tag.color }}; color: {{ tag.color|contrast_color }};">{{ tag.name }}</span>
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a href="{% url 'orders:tag_edit' program.id tag.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'orders:tag_delete' program.id tag.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-light text-center border">
+            <i class="bi bi-tags me-2"></i>No tags yet. Add a few so students and mentors can label what each item request is for.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
