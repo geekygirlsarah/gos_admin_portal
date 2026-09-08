@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-08
+
+### Changed
+- **Order items now use student Team, Crew, and Subteam labels**: Replaced the separate item tags with direct selections for existing student teams, crews/projects, and subteams. When requesting an item, students and mentors can specify which team, crew, or subteam needs the item, and these labels appear as colored badges on the order list, order detail, and order archive pages, as well as in CSV and Excel exports.
+
 ## 2026-09-07
 
 ### Added

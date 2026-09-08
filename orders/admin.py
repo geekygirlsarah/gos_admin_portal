@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from orders.models import ItemTag, Order, OrderItem, ShippingCarrier, Vendor
+from orders.models import Order, OrderItem, ShippingCarrier, Vendor
 
 
 class OrderItemInline(admin.TabularInline):
@@ -9,7 +9,9 @@ class OrderItemInline(admin.TabularInline):
     fields = (
         "item_name",
         "program",
-        "tag",
+        "team",
+        "crew",
+        "subteam",
         "quantity",
         "unit_price",
         "url",
@@ -29,12 +31,6 @@ class VendorAdmin(admin.ModelAdmin):
 @admin.register(ShippingCarrier)
 class ShippingCarrierAdmin(admin.ModelAdmin):
     list_display = ("name", "tracking_url_template")
-    search_fields = ("name",)
-
-
-@admin.register(ItemTag)
-class ItemTagAdmin(admin.ModelAdmin):
-    list_display = ("name", "color")
     search_fields = ("name",)
 
 
@@ -72,14 +68,24 @@ class OrderItemAdmin(admin.ModelAdmin):
         "order",
         "program",
         "vendor",
-        "tag",
+        "team",
+        "crew",
+        "subteam",
         "quantity",
         "unit_price",
         "total",
         "requested_by",
         "requested_at",
     )
-    list_select_related = ("order", "program", "vendor", "tag", "requested_by")
-    list_filter = ("order__status", "program", "vendor", "tag")
+    list_select_related = (
+        "order",
+        "program",
+        "vendor",
+        "team",
+        "crew",
+        "subteam",
+        "requested_by",
+    )
+    list_filter = ("order__status", "program", "vendor", "team", "crew", "subteam")
     search_fields = ("item_name", "vendor_name", "notes", "url")
     readonly_fields = ("requested_by", "requested_at")

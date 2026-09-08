@@ -37,26 +37,6 @@ urlpatterns = [
         views.ShippingCarrierDeleteView.as_view(),
         name="carrier_delete",
     ),
-    path(
-        "tags/",
-        views.ItemTagListView.as_view(),
-        name="tag_list",
-    ),
-    path(
-        "tags/create/",
-        views.ItemTagCreateView.as_view(),
-        name="tag_create",
-    ),
-    path(
-        "tags/<int:pk>/edit/",
-        views.ItemTagUpdateView.as_view(),
-        name="tag_edit",
-    ),
-    path(
-        "tags/<int:pk>/delete/",
-        views.ItemTagDeleteView.as_view(),
-        name="tag_delete",
-    ),
     path("", views.OrderListView.as_view(), name="order_list"),
     path("archive/", views.OrderArchiveView.as_view(), name="order_archive"),
     path("items/create/", views.ItemCreateView.as_view(), name="item_create"),

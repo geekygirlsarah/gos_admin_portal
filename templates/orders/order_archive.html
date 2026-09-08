@@ -15,9 +15,6 @@
             <a href="{% url 'orders:carrier_list' program.id %}" class="btn btn-outline-primary">
                 <i class="bi bi-truck me-1"></i>Shipping Companies
             </a>
-            <a href="{% url 'orders:tag_list' program.id %}" class="btn btn-outline-primary">
-                <i class="bi bi-tags me-1"></i>Item Tags
-            </a>
             <a href="{% url 'orders:order_archive' program.id %}?export=csv" class="btn btn-outline-secondary">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
             </a>
@@ -82,7 +79,7 @@
                             </td>
                             <td>
                                 {% for it in order.items.all %}
-                                {{ it.item_name }}{% if it.quantity_normalized != "1" %} (x{{ it.quantity_normalized }}){% endif %}{% if it.tag %} <span class="badge rounded-pill tag-badge" data-color="{{ it.tag.color }}" style="background-color: {{ it.tag.color }}; color: {{ it.tag.color|contrast_color }};">{{ it.tag.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                                {{ it.item_name }}{% if it.quantity_normalized != "1" %} (x{{ it.quantity_normalized }}){% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
                                 {% endfor %}
                             </td>
                             <td class="text-nowrap">

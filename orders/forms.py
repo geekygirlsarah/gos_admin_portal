@@ -1,7 +1,7 @@
 from django import forms
 
-from orders.models import ItemTag, Order, OrderItem, ShippingCarrier, Vendor
-from programs.models import Program
+from orders.models import Order, OrderItem, ShippingCarrier, Vendor
+from programs.models import Crew, Program, SubTeam, Team
 
 # Sentinel value for the "Not listed" option in the order form's vendor
 # dropdown. Chosen with a value unlikely to collide with a Vendor primary key.
@@ -33,21 +33,43 @@ class OrderItemForm(forms.ModelForm):
         label="Vendor website",
         widget=forms.URLInput(attrs={"placeholder": "https://…"}),
     )
-    tag = forms.ModelChoiceField(
-        queryset=ItemTag.objects.none(),
+    team = forms.ModelChoiceField(
+        queryset=Team.objects.none(),
         required=False,
-        label="Tag",
+        label="Team",
         widget=forms.Select,
-        empty_label="No tag",
-        help_text=(
-            "Optional label for what this purchase is for (team, project, crew, "
-            "subteam…). Just helps organize requests."
-        ),
+        empty_label="No team",
+        help_text="Optional team this item is for.",
+    )
+    crew = forms.ModelChoiceField(
+        queryset=Crew.objects.none(),
+        required=False,
+        label="Crew",
+        widget=forms.Select,
+        empty_label="No crew",
+        help_text="Optional crew/project this item is for.",
+    )
+    subteam = forms.ModelChoiceField(
+        queryset=SubTeam.objects.none(),
+        required=False,
+        label="Subteam",
+        widget=forms.Select,
+        empty_label="No subteam",
+        help_text="Optional subteam this item is for.",
     )
 
     class Meta:
         model = OrderItem
-        fields = ["item_name", "quantity", "unit_price", "url", "tag", "notes"]
+        fields = [
+            "item_name",
+            "quantity",
+            "unit_price",
+            "url",
+            "team",
+            "crew",
+            "subteam",
+            "notes",
+        ]
         widgets = {
             "item_name": forms.TextInput(attrs={"placeholder": "e.g. 2mm hex driver"}),
             "quantity": forms.NumberInput(attrs={"min": "0.01", "step": "0.01"}),
@@ -66,10 +88,25 @@ class OrderItemForm(forms.ModelForm):
             "url": "Link to item",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, program=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["tag"].queryset = ItemTag.objects.order_by("name")
+        if program is None:
+            instance = getattr(self, "instance", None)
+            if instance and getattr(instance, "program_id", None):
+                program = instance.program
+
+        self.fields["team"].queryset = Team.objects.order_by("team_type", "number")
+        if program:
+            self.fields["crew"].queryset = Crew.objects.filter(
+                program=program
+            ).order_by("name")
+            self.fields["subteam"].queryset = SubTeam.objects.filter(
+                program=program
+            ).order_by("name")
+        else:
+            self.fields["crew"].queryset = Crew.objects.order_by("name")
+            self.fields["subteam"].queryset = SubTeam.objects.order_by("name")
 
         choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]
         choices.append((NOT_LISTED_VENDOR, "Not listed — I'll specify below"))
@@ -318,21 +355,3 @@ class ShippingCarrierForm(forms.ModelForm):
                 "Include {number} in the URL where the tracking number should go."
             )
         return template
-
-
-class ItemTagForm(forms.ModelForm):
-    class Meta:
-        model = ItemTag
-        fields = ["name", "color"]
-        widgets = {
-            "name": forms.TextInput(attrs={"placeholder": "e.g. Drivetrain"}),
-            "color": forms.TextInput(attrs={"type": "color", "value": "#0000ff"}),
-        }
-        labels = {
-            "name": "Tag name",
-            "color": "Color",
-        }
-        help_texts = {
-            "name": "Short label for the item (team, project, crew, subteam…).",
-            "color": "Hex color of the tag's pill, shown next to tagged items.",
-        }

@@ -191,8 +191,14 @@
                             {% else %}
                             {{ item.item_name }}
                             {% endif %}
-                            {% if item.tag %}
-                            <span class="badge rounded-pill tag-badge ms-1" data-color="{{ item.tag.color }}" style="background-color: {{ item.tag.color }}; color: {{ item.tag.color|contrast_color }};">{{ item.tag.name }}</span>
+                            {% if item.team %}
+                            <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
+                            {% endif %}
+                            {% if item.crew %}
+                            <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
+                            {% endif %}
+                            {% if item.subteam %}
+                            <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
                             {% endif %}
                             {% if item.vendor_name_display %}
                             <div class="text-muted small">
@@ -262,8 +268,14 @@
                         <input class="form-check-input mb-0" type="checkbox" name="items" value="{{ item.pk }}">
                         <div>
                             <strong>{{ item.item_name }}</strong>
-                            {% if item.tag %}
-                            <span class="badge rounded-pill tag-badge ms-1" data-color="{{ item.tag.color }}" style="background-color: {{ item.tag.color }}; color: {{ item.tag.color|contrast_color }};">{{ item.tag.name }}</span>
+                            {% if item.team %}
+                            <span class="badge rounded-pill team-badge ms-1" data-color="{{ item.team.color }}" style="background-color: {{ item.team.color }}; color: {{ item.team.color|contrast_color }};">{{ item.team.team_type }} {{ item.team.number }}{% if item.team.name %} {{ item.team.name }}{% endif %}</span>
+                            {% endif %}
+                            {% if item.crew %}
+                            <span class="badge rounded-pill crew-badge ms-1" data-color="{{ item.crew.color }}" style="background-color: {{ item.crew.color }}; color: {{ item.crew.color|contrast_color }};">{{ item.crew.name }}</span>
+                            {% endif %}
+                            {% if item.subteam %}
+                            <span class="badge rounded-pill subteam-badge ms-1" data-color="{{ item.subteam.color }}" style="background-color: {{ item.subteam.color }}; color: {{ item.subteam.color|contrast_color }};">{{ item.subteam.name }}</span>
                             {% endif %}
                             <span class="text-muted small">
                                 · {{ item.quantity_normalized }} × {% if item.unit_price %}${{ item.unit_price|floatformat:2 }}{% else %}&mdash;{% endif %}

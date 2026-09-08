@@ -67,37 +67,6 @@ class ShippingCarrier(models.Model):
         return self.tracking_url_template.replace("{number}", tracking_number or "")
 
 
-class ItemTag(models.Model):
-    """An org-wide label for order items (e.g. a team, project, crew, or
-    subteam an item is being purchased for).
-
-    Tags are a Lead-Mentor-managed reference list (like ``Vendor``). Items can
-    be tagged freely and still grouped into the same order regardless of tag;
-    the tag is what later search/filter/budget pages group around.
-    """
-
-    name = models.CharField(
-        max_length=100,
-        unique=True,
-        verbose_name="Name",
-        help_text="e.g. 'Drivetrain', 'Marketing', 'FRC Team 5987'.",
-    )
-    color = models.CharField(
-        max_length=7,
-        default="#0000ff",
-        verbose_name="Color",
-        help_text="Hex color code (e.g. #0000ff) used for the tag's pill.",
-    )
-
-    class Meta:
-        verbose_name = "Item tag"
-        verbose_name_plural = "Item tags"
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
 class Order(models.Model):
     """A grouped purchase order: a list of ``OrderItem`` requests placed
     together with a single vendor.
@@ -343,17 +312,32 @@ class OrderItem(models.Model):
         verbose_name="Vendor website",
         help_text="Snapshot of the requested vendor's website (reference list or custom).",
     )
-    tag = models.ForeignKey(
-        ItemTag,
+    team = models.ForeignKey(
+        "programs.Team",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="order_items",
-        verbose_name="Tag",
-        help_text=(
-            "Optional label the purchase is for (e.g. a team, project, crew, or "
-            "subteam). Only used for organization and later filtering."
-        ),
+        verbose_name="Team",
+        help_text="Optional team this item is requested for.",
+    )
+    crew = models.ForeignKey(
+        "programs.Crew",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        verbose_name="Crew",
+        help_text="Optional crew/project this item is requested for.",
+    )
+    subteam = models.ForeignKey(
+        "programs.SubTeam",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        verbose_name="Subteam",
+        help_text="Optional subteam this item is requested for.",
     )
     notes = models.TextField(blank=True, verbose_name="Notes")
     requested_by = models.ForeignKey(

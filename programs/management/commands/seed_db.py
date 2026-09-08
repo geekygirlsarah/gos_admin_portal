@@ -5,12 +5,13 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from badges.models import Badge, StudentBadge
-from orders.models import ItemTag, Order, OrderItem, ShippingCarrier, Vendor
+from orders.models import Order, OrderItem, ShippingCarrier, Vendor
 from programs.models import (
     Adult,
     AdultStudentRelationship,
     BackgroundCheck,
     BackgroundCheckType,
+    Crew,
     Enrollment,
     Fee,
     Payment,
@@ -20,6 +21,8 @@ from programs.models import (
     SchoolDistrict,
     SlidingScale,
     Student,
+    SubTeam,
+    Team,
 )
 
 
@@ -45,7 +48,6 @@ class Command(BaseCommand):
         self._seed_badges(students, programs)
         self._seed_vendors()
         self._seed_shipping_carriers()
-        self._seed_item_tags()
         _seed_orders(programs)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded database"))
@@ -856,20 +858,6 @@ class Command(BaseCommand):
                 defaults={"tracking_url_template": carrier["tracking_url_template"]},
             )
 
-    def _seed_item_tags(self):
-        tags = [
-            {"name": "Drivetrain", "color": "#dc3545"},
-            {"name": "Marketing", "color": "#0d6efd"},
-            {"name": "Electrical", "color": "#198754"},
-            {"name": "Programming", "color": "#6f42c1"},
-            {"name": "General", "color": "#6c757d"},
-        ]
-        for tag in tags:
-            ItemTag.objects.update_or_create(
-                name=tag["name"],
-                defaults={"color": tag["color"]},
-            )
-
 
 def _seed_orders(programs):
     """Seed a few item requests and one grouped order as demo data.
@@ -908,7 +896,11 @@ def _seed_orders(programs):
                 "quantity": qty,
                 "unit_price": price,
                 "url": url,
-                "tag": ItemTag.objects.order_by("?").first(),
+                "team": Team.objects.order_by("?").first(),
+                "crew": Crew.objects.filter(program=program).order_by("?").first(),
+                "subteam": SubTeam.objects.filter(program=program)
+                .order_by("?")
+                .first(),
             },
         )
         items.append(item)
