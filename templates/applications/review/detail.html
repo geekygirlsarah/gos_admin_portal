@@ -1,77 +1,309 @@
 {% extends 'applications/review/_base.html' %}
 {% load application_extras %}
 {% block review_title %}Application {{ application.application_id }}{% endblock %}
-{% block review_heading %}Application <code>{{ application.application_id }}</code>{% endblock %}
+
+{% block review_heading %}
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <div>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <h1 class="h3 mb-0 fw-bold">{{ application.applicant_name|default:"Application" }}</h1>
+        <code>{{ application.application_id }}</code>
+        <span class="badge {{ application.status|status_badge_class }} rounded-pill px-2 py-1">
+          {{ application.status_label }}
+        </span>
+      </div>
+      <div class="text-muted small mt-1">
+        {% if application.applicant_type == 'mentor' %}
+          <span class="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 rounded-pill me-1"><i class="bi bi-person-badge me-1"></i>Mentor Application</span>
+        {% elif application.applicant_type == 'student' %}
+          <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill me-1"><i class="bi bi-mortarboard me-1"></i>Student Application</span>
+        {% else %}
+          <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill me-1"><i class="bi bi-person me-1"></i>{{ application.get_applicant_type_display }}</span>
+        {% endif %}
+        {% if application.program %}<span class="text-secondary fw-semibold">{{ application.program.name }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
 {% block review_body %}
-  <div class="row g-3 mb-3">
-    <div class="col-md-8">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <span>Overview</span>
-          <span class="badge bg-secondary">{{ application.status_label }}</span>
-        </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-4">Applicant type</dt>
-            <dd class="col-sm-8">{{ application.get_applicant_type_display|default:"—" }}</dd>
-            <dt class="col-sm-4">Email</dt>
-            <dd class="col-sm-8">{{ application.email|default:"—" }}</dd>
-            <dt class="col-sm-4">Email verified</dt>
-            <dd class="col-sm-8">{{ application.email_verified_at|date:"Y-m-d H:i"|default:"—" }}</dd>
-            <dt class="col-sm-4">Program</dt>
-            <dd class="col-sm-8">{{ application.program|default:"—" }}</dd>
-            <dt class="col-sm-4">Current step</dt>
-            <dd class="col-sm-8">{{ application.current_step }}</dd>
-            <dt class="col-sm-4">Created</dt>
-            <dd class="col-sm-8">{{ application.created_at|date:"Y-m-d H:i" }}</dd>
-            <dt class="col-sm-4">Submitted</dt>
-            <dd class="col-sm-8">{{ application.submitted_at|date:"Y-m-d H:i"|default:"—" }}</dd>
-            <dt class="col-sm-4">Reviewed</dt>
-            <dd class="col-sm-8">
-              {% if application.reviewed_at %}
-                {{ application.reviewed_at|date:"Y-m-d H:i" }}
-                {% if application.reviewed_by %} by {{ application.reviewed_by }}{% endif %}
-              {% else %}—{% endif %}
-            </dd>
-            {% if application.decline_reason %}
-              <dt class="col-sm-4">Decline reason</dt>
-              <dd class="col-sm-8"><pre class="mb-0">{{ application.decline_reason }}</pre></dd>
-            {% endif %}
-          </dl>
+  <!-- Lifecycle Progress Stepper or Declined Banner -->
+  {% if application.status == 'declined' %}
+    <div class="alert alert-warning border-0 shadow-sm rounded-3 d-flex align-items-start mb-4 bg-warning bg-opacity-10 text-dark">
+      <i class="bi bi-x-circle-fill text-danger fs-3 me-3 mt-1"></i>
+      <div>
+        <h4 class="h6 mb-1 fw-bold text-danger">Application Declined</h4>
+        <p class="mb-0 text-muted small">
+          This application was declined{% if application.reviewed_at %} on {{ application.reviewed_at|date:"M j, Y" }}{% endif %}{% if application.reviewed_by %} by {{ application.reviewed_by }}{% endif %}.
+        </p>
+        {% if application.decline_reason %}
+          <div class="mt-2 bg-white p-2 rounded border small">
+            <strong>Reason:</strong> {{ application.decline_reason }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light">
+      <div class="card-body p-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <!-- Step 1: Submitted -->
+          <div class="d-flex align-items-center gap-2">
+            <span class="rounded-circle {% if application.submitted_at or application.status == 'submitted' or application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}bg-success text-white{% else %}bg-secondary bg-opacity-25 text-secondary{% endif %} d-flex align-items-center justify-content-center fw-bold" style="width: 28px; height: 28px; font-size: 0.85rem;">
+              {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}✓{% else %}1{% endif %}
+            </span>
+            <span class="fw-semibold small {% if application.submitted_at or application.status == 'submitted' or application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}text-dark{% else %}text-muted{% endif %}">1. Submitted</span>
+          </div>
+          <i class="bi bi-chevron-right text-muted d-none d-md-block"></i>
+
+          <!-- Step 2: Approved -->
+          <div class="d-flex align-items-center gap-2">
+            <span class="rounded-circle {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}bg-success text-white{% else %}bg-secondary bg-opacity-25 text-secondary{% endif %} d-flex align-items-center justify-content-center fw-bold" style="width: 28px; height: 28px; font-size: 0.85rem;">
+              {% if application.status == 'approved_signed' or application.status == 'converted' %}✓{% else %}2{% endif %}
+            </span>
+            <span class="fw-semibold small {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' %}text-dark{% else %}text-muted{% endif %}">2. Approved</span>
+          </div>
+          <i class="bi bi-chevron-right text-muted d-none d-md-block"></i>
+
+          <!-- Step 3: Signed Docs / Clearances -->
+          <div class="d-flex align-items-center gap-2">
+            <span class="rounded-circle {% if application.status == 'approved_signed' or application.status == 'converted' %}bg-success text-white{% else %}bg-secondary bg-opacity-25 text-secondary{% endif %} d-flex align-items-center justify-content-center fw-bold" style="width: 28px; height: 28px; font-size: 0.85rem;">
+              {% if application.status == 'converted' %}✓{% else %}3{% endif %}
+            </span>
+            <span class="fw-semibold small {% if application.status == 'approved_signed' or application.status == 'converted' %}text-dark{% else %}text-muted{% endif %}">
+              {% if application.applicant_type == 'mentor' %}3. Clearances / Docs{% else %}3. Signed Docs{% endif %}
+            </span>
+          </div>
+          <i class="bi bi-chevron-right text-muted d-none d-md-block"></i>
+
+          <!-- Step 4: Converted -->
+          <div class="d-flex align-items-center gap-2">
+            <span class="rounded-circle {% if application.status == 'converted' %}bg-success text-white{% else %}bg-secondary bg-opacity-25 text-secondary{% endif %} d-flex align-items-center justify-content-center fw-bold" style="width: 28px; height: 28px; font-size: 0.85rem;">
+              {% if application.status == 'converted' %}✓{% else %}4{% endif %}
+            </span>
+            <span class="fw-semibold small {% if application.status == 'converted' %}text-dark{% else %}text-muted{% endif %}">
+              {% if application.applicant_type == 'mentor' %}4. Converted to Mentor{% else %}4. Converted{% endif %}
+            </span>
+          </div>
         </div>
       </div>
     </div>
-    <div class="col-md-4">
-      <div class="card mb-3">
-        <div class="card-header">Actions</div>
-        <div class="card-body d-grid gap-2">
-          <form method="post" action="{% url 'application_review_approve' application.application_id %}">
-            {% csrf_token %}
-            <button class="btn btn-success w-100" type="submit"
-                    {% if application.status == 'approved' or application.status == 'approved_signed' or application.status == 'converted' or application.status == 'declined' %}disabled{% endif %}>
-              Approve
-            </button>
-          </form>
-          {% if application.status == 'converted' %}
-            <button class="btn btn-primary w-100" type="button" disabled>
-              {% if application.applicant_type == 'mentor' %}
-                ✓ Converted to Mentor
-              {% else %}
-                ✓ Converted to Student
-              {% endif %}
-            </button>
-            {% if application.converted_student %}
-              <a class="btn btn-outline-primary"
-                 href="{% url 'student_edit' application.converted_student.id %}">
-                View student record
-              </a>
+  {% endif %}
+
+  <div class="row g-4 mb-4">
+    <!-- Main Left Column -->
+    <div class="col-lg-8">
+      <!-- Overview Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light">
+        <div class="card-header bg-transparent border-0 pt-3 pb-2 d-flex justify-content-between align-items-center">
+          <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide"><i class="bi bi-info-circle me-2 text-primary"></i>Overview</h3>
+          <span class="badge {{ application.status|status_badge_class }} rounded-pill">{{ application.status_label }}</span>
+        </div>
+        <div class="card-body pt-0">
+          <div class="row g-3">
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Applicant Type</div>
+              <div class="fw-semibold text-dark">{{ application.get_applicant_type_display|default:"—" }}</div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Email Address</div>
+              <div class="fw-semibold">
+                {% if application.email %}
+                  <a href="mailto:{{ application.email }}" class="text-decoration-none">{{ application.email }}</a>
+                {% else %}—{% endif %}
+              </div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Email Verified</div>
+              <div class="fw-semibold text-dark">{{ application.email_verified_at|date:"Y-m-d H:i"|default:"—" }}</div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Program</div>
+              <div class="fw-semibold text-dark">{{ application.program|default:"—" }}</div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Current Step</div>
+              <div class="fw-semibold text-dark">{{ application.current_step }}</div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Created</div>
+              <div class="fw-semibold text-dark">{{ application.created_at|date:"Y-m-d H:i" }}</div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Submitted</div>
+              <div class="fw-semibold text-dark">{{ application.submitted_at|date:"Y-m-d H:i"|default:"—" }}</div>
+            </div>
+            <div class="col-sm-6 col-md-4">
+              <div class="text-muted small">Reviewed</div>
+              <div class="fw-semibold text-dark">
+                {% if application.reviewed_at %}
+                  {{ application.reviewed_at|date:"Y-m-d H:i" }}
+                  {% if application.reviewed_by %}<span class="text-muted small d-block">by {{ application.reviewed_by }}</span>{% endif %}
+                {% else %}—{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signed Documents Section -->
+      {% if any_documents %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-light py-3 border-0 d-flex justify-content-between align-items-center">
+            <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide"><i class="bi bi-file-earmark-text me-2 text-primary"></i>Signed Documents</h3>
+            {% if all_required_uploaded %}
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>All required uploaded</span>
+            {% else %}
+              <span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-25 rounded-pill"><i class="bi bi-hourglass-split me-1"></i>Awaiting required uploads</span>
             {% endif %}
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th scope="col" class="ps-3">Document</th>
+                    <th scope="col">Requirement</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Uploaded</th>
+                    <th scope="col" class="text-end pe-3">Files</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in documents_status %}
+                    <tr>
+                      <td class="ps-3">
+                        <div class="fw-semibold text-dark">{{ row.document.name }}</div>
+                        {% if row.document.description %}
+                          <div class="small text-muted">{{ row.document.description }}</div>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if row.document.is_required %}
+                          <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill">Required</span>
+                        {% else %}
+                          <span class="badge bg-light text-muted border rounded-pill">Optional</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if row.submission %}
+                          <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill"><i class="bi bi-check-circle me-1"></i>Uploaded</span>
+                        {% else %}
+                          <span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-25 rounded-pill"><i class="bi bi-clock me-1"></i>Not uploaded</span>
+                        {% endif %}
+                      </td>
+                      <td class="text-muted small">
+                        {% if row.submission %}
+                          {{ row.submission.uploaded_at|date:"Y-m-d H:i" }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="text-end pe-3">
+                        {% if row.document.file %}
+                          <a class="btn btn-sm btn-outline-secondary" href="{{ row.document.file.url }}" target="_blank" rel="noopener">
+                            <i class="bi bi-download me-1"></i>Blank
+                          </a>
+                        {% endif %}
+                        {% if row.submission and row.submission.file %}
+                          <a class="btn btn-sm btn-outline-primary" href="{{ row.submission.file.url }}" target="_blank" rel="noopener">
+                            <i class="bi bi-file-earmark-check me-1"></i>Signed
+                          </a>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer bg-light border-0 py-3">
+            <form method="post"
+                  enctype="multipart/form-data"
+                  action="{% url 'application_review_upload_document' application.application_id %}"
+                  class="row g-2 align-items-end">
+              {% csrf_token %}
+              <div class="col-md-5">
+                <label class="form-label small fw-semibold text-muted mb-1" for="staff_doc_select">Upload signed document on behalf of applicant</label>
+                {{ upload_form.document }}
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small fw-semibold text-muted mb-1" for="staff_doc_file">Scanned file</label>
+                {{ upload_form.file }}
+              </div>
+              <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                  <i class="bi bi-upload me-1"></i>Upload
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Captured Data Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-light py-3 border-0">
+          <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide"><i class="bi bi-card-checklist me-2 text-primary"></i>Captured Data</h3>
+        </div>
+        <div class="card-body">
+          {% if data %}
+            {% for step_key, step_data in data.items %}
+              <div class="{% if not forloop.first %}mt-4 pt-3 border-top{% endif %}">
+                <h4 class="h6 fw-bold text-primary mb-3"><i class="bi bi-chevron-right text-muted me-1"></i>{{ step_key|humanize_step_title }}</h4>
+                {% if step_data.items %}
+                  <dl class="row mb-0 g-2">
+                    {% for field, value in step_data|order_step_fields %}
+                      {% if not field|slice:":1" == "_" %}
+                        {% if step_key == 'step5-student' and field == 'grade' %}
+                        {% elif step_key == 'step5-student' and field == 'graduation_year' %}
+                        {% else %}
+                          <dt class="col-sm-4 text-muted small fw-normal">{{ field|humanize_field }}</dt>
+                          <dd class="col-sm-8 fw-semibold text-dark">{{ value|format_application_value:field }}</dd>
+                        {% endif %}
+                      {% endif %}
+                    {% endfor %}
+                    {% if step_key == 'step5-student' %}
+                        <dt class="col-sm-4 text-muted small fw-normal">Grade</dt>
+                        <dd class="col-sm-8 fw-semibold text-dark">{{ step_data|get_grade:application }}</dd>
+                        <dt class="col-sm-4 text-muted small fw-normal">Graduation year</dt>
+                        <dd class="col-sm-8 fw-semibold text-dark">{{ step_data.graduation_year|default:"—" }}</dd>
+                    {% endif %}
+                  </dl>
+                {% else %}
+                  <p class="text-muted small mb-0">{{ step_data }}</p>
+                {% endif %}
+              </div>
+            {% endfor %}
           {% else %}
+            <p class="text-muted mb-0">No data captured yet.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Sidebar Column -->
+    <div class="col-lg-4">
+      <!-- Actions Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-3">
+        <div class="card-header bg-light py-3 border-0">
+          <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide"><i class="bi bi-lightning-charge me-2 text-warning"></i>Actions</h3>
+        </div>
+        <div class="card-body d-grid gap-2">
+          {% if application.status != 'converted' and application.status != 'declined' %}
+            <form method="post" action="{% url 'application_review_approve' application.application_id %}">
+              {% csrf_token %}
+              <button class="btn btn-success w-100" type="submit"
+                      {% if application.status == 'approved' or application.status == 'approved_signed' %}disabled{% endif %}>
+                <i class="bi bi-check-circle me-1"></i>Approve Application
+              </button>
+            </form>
             <form method="post" action="{% url 'application_review_convert' application.application_id %}">
               {% csrf_token %}
               <button class="btn btn-primary w-100" type="submit"
                       {% if not can_convert %}disabled
                       title="Approve the application first, and make sure any required signed documents have been uploaded."{% endif %}>
+                <i class="bi bi-person-check me-1"></i>
                 {% if application.applicant_type == 'mentor' %}
                   Convert to Mentor
                 {% else %}
@@ -79,36 +311,59 @@
                 {% endif %}
               </button>
             </form>
-          {% endif %}
-          {% if application.status == 'declined' %}
-            <button class="btn btn-warning w-100" type="button" disabled>Already Declined</button>
-          {% else %}
-            <a class="btn btn-warning"
+            {% if not can_convert and application.status == 'approved' %}
+              <div class="text-muted small text-center">Awaiting required signed documents</div>
+            {% endif %}
+            <a class="btn btn-outline-warning"
                href="{% url 'application_review_decline' application.application_id %}">
-              Decline…
+              <i class="bi bi-x-circle me-1"></i>Decline…
             </a>
+          {% elif application.status == 'converted' %}
+            <button class="btn btn-outline-success w-100" type="button" disabled>
+              {% if application.applicant_type == 'mentor' %}
+                <i class="bi bi-check-all me-1"></i>✓ Converted to Mentor
+              {% else %}
+                <i class="bi bi-check-all me-1"></i>✓ Converted to Student
+              {% endif %}
+            </button>
+            {% if application.converted_student %}
+              <a class="btn btn-outline-primary"
+                 href="{% url 'student_edit' application.converted_student.id %}">
+                <i class="bi bi-person-lines-fill me-1"></i>View student record
+              </a>
+            {% endif %}
+          {% elif application.status == 'declined' %}
+            <button class="btn btn-outline-danger w-100" type="button" disabled>
+              <i class="bi bi-x-circle me-1"></i>Already Declined
+            </button>
           {% endif %}
-          <a class="btn btn-outline-primary"
-             href="{% url 'application_review_edit' application.application_id %}">
-            Edit captured data
-          </a>
-          <a class="btn btn-outline-danger"
-             href="{% url 'application_review_delete' application.application_id %}">
-            Delete…
-          </a>
+
+          <div class="border-top pt-2 mt-2 d-grid gap-2">
+            <a class="btn btn-sm btn-outline-secondary"
+               href="{% url 'application_review_edit' application.application_id %}">
+              <i class="bi bi-pencil-square me-1"></i>Edit captured data
+            </a>
+            <a class="btn btn-sm btn-outline-danger"
+               href="{% url 'application_review_delete' application.application_id %}">
+              <i class="bi bi-trash3 me-1"></i>Delete application…
+            </a>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">Communications</div>
-        <div class="card-body">
+      <!-- Communications Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-3 bg-light">
+        <div class="card-header bg-transparent border-0 pt-3 pb-2">
+          <h3 class="h6 mb-0 fw-bold text-dark text-uppercase tracking-wide"><i class="bi bi-envelope me-2 text-secondary"></i>Communications</h3>
+        </div>
+        <div class="card-body pt-0">
           <p class="small text-muted mb-3">Resend system emails if the applicant missed them.</p>
           <div class="d-grid gap-2">
             <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
               {% csrf_token %}
               <input type="hidden" name="type" value="otp">
-              <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
-                Resend OTP / Verification
+              <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="submit">
+                <i class="bi bi-shield-check me-2"></i>Resend OTP / Verification
               </button>
             </form>
 
@@ -116,8 +371,8 @@
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="type" value="handoff">
-                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
-                  Resend Parent Handoff
+                <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="submit">
+                  <i class="bi bi-arrow-right-circle me-2"></i>Resend Parent Handoff
                 </button>
               </form>
             {% endif %}
@@ -126,8 +381,8 @@
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="type" value="submitted">
-                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
-                  Resend Submission Confirmation
+                <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="submit">
+                  <i class="bi bi-send-check me-2"></i>Resend Submission Confirmation
                 </button>
               </form>
             {% endif %}
@@ -136,8 +391,8 @@
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="type" value="approved">
-                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
-                  Resend Approval Email
+                <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="submit">
+                  <i class="bi bi-patch-check me-2"></i>Resend Approval Email
                 </button>
               </form>
             {% endif %}
@@ -146,8 +401,8 @@
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="type" value="converted">
-                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
-                  Resend Conversion Email
+                <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="submit">
+                  <i class="bi bi-check2-circle me-2"></i>Resend Conversion Email
                 </button>
               </form>
             {% endif %}
@@ -156,137 +411,14 @@
               <form method="post" action="{% url 'application_review_resend_email' application.application_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="type" value="declined">
-                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">
-                  Resend Decline Email
+                <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="submit">
+                  <i class="bi bi-x-circle me-2"></i>Resend Decline Email
                 </button>
               </form>
             {% endif %}
           </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  {% if any_documents %}
-    <div class="card mb-3">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Signed Documents</span>
-        {% if all_required_uploaded %}
-          <span class="badge bg-success">All required uploaded</span>
-        {% else %}
-          <span class="badge bg-warning text-dark">Awaiting required uploads</span>
-        {% endif %}
-      </div>
-      <div class="card-body p-0">
-        <table class="table mb-0 align-middle">
-          <thead>
-            <tr>
-              <th scope="col">Document</th>
-              <th scope="col">Required</th>
-              <th scope="col">Status</th>
-              <th scope="col">Uploaded</th>
-              <th scope="col">Files</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in documents_status %}
-              <tr>
-                <td>
-                  <div class="fw-semibold">{{ row.document.name }}</div>
-                  {% if row.document.description %}
-                    <div class="small text-muted">{{ row.document.description }}</div>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if row.document.is_required %}
-                    <span class="badge bg-secondary">Required</span>
-                  {% else %}
-                    <span class="badge bg-light text-dark border">Optional</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if row.submission %}
-                    <span class="badge bg-success">Uploaded</span>
-                  {% else %}
-                    <span class="badge bg-warning text-dark">Not uploaded</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if row.submission %}
-                    {{ row.submission.uploaded_at|date:"Y-m-d H:i" }}
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-                <td>
-                  {% if row.document.file %}
-                    <a class="btn btn-sm btn-outline-secondary" href="{{ row.document.file.url }}" target="_blank" rel="noopener">Blank</a>
-                  {% endif %}
-                  {% if row.submission and row.submission.file %}
-                    <a class="btn btn-sm btn-outline-primary" href="{{ row.submission.file.url }}" target="_blank" rel="noopener">Signed</a>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div class="card-footer">
-        <form method="post"
-              enctype="multipart/form-data"
-              action="{% url 'application_review_upload_document' application.application_id %}"
-              class="row g-2 align-items-end">
-          {% csrf_token %}
-          <div class="col-auto">
-            <label class="form-label small mb-1" for="staff_doc_select">Upload signed document on behalf of applicant</label>
-            {{ upload_form.document }}
-          </div>
-          <div class="col">
-            <label class="form-label small mb-1" for="staff_doc_file">Scanned file</label>
-            {{ upload_form.file }}
-          </div>
-          <div class="col-auto">
-            <button type="submit" class="btn btn-sm btn-outline-success">
-              Upload
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  {% endif %}
-
-  <div class="card mb-3">
-    <div class="card-header">Captured data</div>
-    <div class="card-body">
-      {% if data %}
-        {% for step_key, step_data in data.items %}
-          <h2 class="h6 text-uppercase text-muted mt-3">{{ step_key }}</h2>
-          {% if step_data.items %}
-            <dl class="row mb-0">
-              {% for field, value in step_data|order_step_fields %}
-                {% if not field|slice:":1" == "_" %}
-                  {% if step_key == 'step5-student' and field == 'grade' %}
-                  {% elif step_key == 'step5-student' and field == 'graduation_year' %}
-                  {% else %}
-                    <dt class="col-sm-4">{{ field|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ value|format_application_value:field }}</dd>
-                  {% endif %}
-                {% endif %}
-              {% endfor %}
-              {% if step_key == 'step5-student' %}
-                  <dt class="col-sm-4">Grade</dt>
-                  <dd class="col-sm-8">{{ step_data|get_grade:application }}</dd>
-                  <dt class="col-sm-4">Graduation year</dt>
-                  <dd class="col-sm-8">{{ step_data.graduation_year|default:"—" }}</dd>
-              {% endif %}
-            </dl>
-          {% else %}
-            <p class="text-muted small">{{ step_data }}</p>
-          {% endif %}
-        {% endfor %}
-      {% else %}
-        <p class="text-muted mb-0">No data captured yet.</p>
-      {% endif %}
     </div>
   </div>
 {% endblock %}

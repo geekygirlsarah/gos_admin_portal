@@ -285,7 +285,10 @@ class ProgramEmergencyContactsView(
         return render(
             request,
             self.template_name,
-            {"program": program, "rows": rows},
+            {
+                "program": program,
+                "rows": rows,
+            },
         )
 
 
@@ -316,10 +319,33 @@ class ProgramMedicalInfoView(LoginRequiredMixin, MentorOrLeadMentorRequiredMixin
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
         )
+        students_list = list(students)
+        total_with_info = len(students_list)
+        allergies_count = sum(
+            1 for s in students_list if bool(s.allergies and s.allergies.strip())
+        )
+        dietary_count = sum(
+            1
+            for s in students_list
+            if bool(s.dietary_restrictions and s.dietary_restrictions.strip())
+        )
+        medical_notes_count = sum(
+            1
+            for s in students_list
+            if bool(s.medical_notes and s.medical_notes.strip())
+        )
+
         return render(
             request,
             self.template_name,
-            {"program": program, "students": students},
+            {
+                "program": program,
+                "students": students_list,
+                "total_with_info": total_with_info,
+                "allergies_count": allergies_count,
+                "dietary_count": dietary_count,
+                "medical_notes_count": medical_notes_count,
+            },
         )
 
 
@@ -613,20 +639,34 @@ class ProgramStudentDocumentsView(
 
         # Build a matrix of student -> {doc_id: signed_doc}
         student_docs = []
+        total_students = 0
+        complete_students = 0
+        required_doc_ids = {d.id for d in docs if d.is_required}
+
         for e in enrollments:
             student = e.student
             submissions = {
                 sd.program_document_id: sd for sd in student.signed_documents.all()
             }
+            is_active = e.active and not student.graduated
+            if is_active:
+                total_students += 1
+                if required_doc_ids and required_doc_ids.issubset(submissions.keys()):
+                    complete_students += 1
+                elif not required_doc_ids:
+                    complete_students += 1
             student_docs.append(
                 {
                     "student": student,
                     "submissions": submissions,
-                    "active": e.active and not student.graduated,
+                    "active": is_active,
                 }
             )
 
         ctx["student_docs"] = student_docs
+        ctx["total_students"] = total_students
+        ctx["complete_students"] = complete_students
+        ctx["required_docs_count"] = len(required_doc_ids)
         ctx["role"] = get_user_role(self.request.user)
         return ctx
 
@@ -793,6 +833,15 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             active=True, student__graduated=False
         ).order_by("sort_first", "sort_last")
 
+        active_enrollments_list = list(active_enrollments)
+        active_students_count = len(active_enrollments_list)
+        assigned_team_count = sum(1 for e in active_enrollments_list if e.team_id)
+        unassigned_team_count = active_students_count - assigned_team_count
+        assigned_crew_count = sum(1 for e in active_enrollments_list if e.crew_id)
+        unassigned_crew_count = active_students_count - assigned_crew_count
+        assigned_subteam_count = sum(1 for e in active_enrollments_list if e.subteam_id)
+        unassigned_subteam_count = active_students_count - assigned_subteam_count
+
         return render(
             request,
             self.template_name,
@@ -804,6 +853,13 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                 "teams": teams,
                 "crews": crews,
                 "subteams": subteams,
+                "active_students_count": active_students_count,
+                "assigned_team_count": assigned_team_count,
+                "unassigned_team_count": unassigned_team_count,
+                "assigned_crew_count": assigned_crew_count,
+                "unassigned_crew_count": unassigned_crew_count,
+                "assigned_subteam_count": assigned_subteam_count,
+                "unassigned_subteam_count": unassigned_subteam_count,
             },
         )
 
@@ -1325,19 +1381,23 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
             )
             .order_by("school__name", Lower("sort_first"), Lower("last_name"))
         )
+        students_list = list(students)
         grouped = {}
-        for s in students:
+        for s in students_list:
             label = s.school.name if s.school_id else "No School"
             grouped.setdefault(label, []).append(s)
         grouped_items = sorted(
             grouped.items(), key=lambda kv: (kv[0] == "No School", kv[0] or "")
         )
+        schools_count = len([k for k in grouped.keys() if k != "No School"])
         return render(
             request,
             self.template_name,
             {
                 "program": program,
                 "grouped": grouped_items,
+                "total_students": len(students_list),
+                "schools_count": schools_count,
             },
         )
 

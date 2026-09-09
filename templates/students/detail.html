@@ -3,300 +3,569 @@
 {% load permission_tags %}
 {% block title %}Student: {{ student.display_name }}{% endblock %}
 {% block nav_students_active %} active{% endblock %}
+
 {% block content %}
+  {% user_role user as role %}
   {% can_write user 'student_info' student as can_edit_student %}
-  <div class="row mb-3">
-    <div class="col">
-      <a class="link-secondary" href="{% firstof request.GET.next '/' %}">← Back</a>
+  {% can_read user 'attendance' student as can_view_attendance %}
+  {% can_read user 'identity' student as can_read_identity %}
+  {% can_read user 'contact_address' student as can_read_contact %}
+  {% can_read user 'health_medical' student as can_read_medical %}
+  {% can_read user 'school' student as can_read_school %}
+  {% can_read user 'cmu_andrew' student as can_read_cmu %}
+  {% can_read user 'background_checks' student as can_read_bg %}
+  {% can_read user 'student_documents' student as can_read_docs %}
+  {% can_read user 'discord' student as can_read_discord %}
+  {% can_read user 'first_website' student as can_read_first %}
+  {% can_read user 'parents_emergency' student as can_read_parents %}
+  {% can_read user 'other_details' student as can_read_other %}
+
+  <!-- Top Action & Navigation Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <a class="btn btn-sm btn-outline-secondary" href="{% firstof request.GET.next '/programs/students/' %}">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
     </div>
-    <div class="col-auto d-flex gap-2">
-      {% can_read user 'attendance' student as can_view_attendance %}
+    <div class="d-flex align-items-center gap-2">
       {% if can_view_attendance %}
-      <a class="btn btn-outline-secondary" href="{% url 'student_attendance' student.pk %}">Attendance</a>
-      <a class="btn btn-outline-info" href="{% url 'student_hours' student.pk %}">View Hours</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' student.pk %}">
+          <i class="bi bi-calendar-check me-1"></i>Attendance
+        </a>
+        <a class="btn btn-sm btn-outline-info text-dark" href="{% url 'student_hours' student.pk %}">
+          <i class="bi bi-clock-history me-1"></i>View Hours
+        </a>
       {% endif %}
       {% if can_edit_student %}
-        <a class="btn btn-outline-primary" href="{% url 'student_edit' student.pk %}?next={% firstof request.GET.next request.path %}">Edit</a>
+        <a class="btn btn-sm btn-primary" href="{% url 'student_edit' student.pk %}?next={% firstof request.GET.next request.path %}">
+          <i class="bi bi-pencil me-1"></i>Edit Profile
+        </a>
       {% endif %}
     </div>
   </div>
 
-  <div class="row">
-    <div class="col-lg-9 col-xl-8">
-      <h1 class="h3 mb-4">{{ student.display_name }}</h1>
-
-      {% can_read user 'identity' student as can_read_identity %}
-      {% if can_read_identity %}
-      <div class="card mb-4">
-        <div class="card-header">Identity</div>
-        <div class="card-body">
-          <div class="row g-3 align-items-center">
-            <div class="col-md-3 text-center">
-              {% if student.photo %}
-                <img src="{{ student.photo.url }}" alt="{{ student }}" class="img-thumbnail" style="max-width: 160px;">
-              {% else %}
-                <div class="text-muted">No photo</div>
+  <!-- Profile Hero Banner Card -->
+  <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light overflow-hidden">
+    <div class="card-body p-4">
+      <div class="row align-items-center g-3">
+        <div class="col-auto">
+          {% if student.photo %}
+            <img src="{{ student.photo.url }}" alt="{{ student.display_name }}" class="rounded-circle shadow-sm border border-2 border-white" style="width: 80px; height: 80px; object-fit: cover;">
+          {% else %}
+            <div class="rounded-circle bg-white shadow-sm border d-flex align-items-center justify-content-center text-muted" style="width: 80px; height: 80px; font-size: 32px;">
+              <i class="bi bi-person"></i>
+            </div>
+          {% endif %}
+        </div>
+        <div class="col">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <h1 class="h3 mb-0 fw-bold text-dark">{{ student.display_name }}</h1>
+            <span class="badge {% if student.graduated %}bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25{% else %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% endif %} rounded-pill px-2 py-1">
+              {{ student.graduated|yesno:"Graduated,Active Student" }}
+            </span>
+            {% if student.pronouns %}
+              <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill">{{ student.pronouns }}</span>
+            {% endif %}
+          </div>
+          <div class="text-muted small d-flex flex-wrap align-items-center gap-3">
+            {% if student.preferred_first_name and student.preferred_first_name != student.legal_first_name %}
+              <span><i class="bi bi-person me-1"></i>Legal: {{ student.legal_first_name }} {{ student.last_name }}</span>
+            {% endif %}
+            {% if student.school %}
+              <span><i class="bi bi-building me-1"></i>{{ student.school }}</span>
+            {% endif %}
+            {% if student.graduation_year %}
+              <span><i class="bi bi-mortarboard me-1"></i>Class of {{ student.graduation_year }}</span>
+            {% endif %}
+            {% if student.tshirt_size %}
+              <span><i class="bi bi-tag me-1"></i>Size: {{ student.tshirt_size }}</span>
+            {% endif %}
+          </div>
+          <!-- Quick Contact Shortcuts -->
+          {% if can_read_contact %}
+            <div class="mt-2 d-flex flex-wrap align-items-center gap-2 small">
+              {% if student.personal_email %}
+                <a href="mailto:{{ student.personal_email }}" class="btn btn-sm btn-light border bg-white text-dark py-0 px-2 rounded-pill">
+                  <i class="bi bi-envelope me-1 text-primary"></i>{{ student.personal_email }}
+                </a>
+              {% endif %}
+              {% if student.phone_number %}
+                <a href="tel:{{ student.phone_number }}" class="btn btn-sm btn-light border bg-white text-dark py-0 px-2 rounded-pill">
+                  <i class="bi bi-telephone me-1 text-success"></i>{{ student.phone_number }}
+                  {% if student.can_receive_texts %}<span class="badge bg-info text-dark ms-1" style="font-size: 10px;">SMS</span>{% endif %}
+                </a>
+              {% endif %}
+              {% if student.andrew_email and 'cmu-andrew' in program_feature_keys %}
+                <a href="mailto:{{ student.andrew_email }}" class="btn btn-sm btn-light border bg-white text-dark py-0 px-2 rounded-pill">
+                  <i class="bi bi-envelope-at me-1 text-danger"></i>{{ student.andrew_email }}
+                </a>
               {% endif %}
             </div>
-            <div class="col-md-9">
-              <div class="row g-2">
-                <div class="col-md-4"><div class="fw-semibold">Legal first name</div><div>{{ student.legal_first_name }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Preferred first name</div><div>{{ student.preferred_first_name|default:'—' }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Last name</div><div>{{ student.last_name }}</div></div>
-                <div class="col-md-4"><div class="fw-semibold">Pronouns</div><div>{{ student.pronouns|default:'—' }}</div></div>
-                <div class="col-md-2"><div class="fw-semibold">Age</div><div>{{ student.age|default:'—' }}</div></div>
-                <div class="col-md-2"><div class="fw-semibold">Date of birth</div>
-                  <div>
-                    {% user_role user as role %}
-                    {% can_write user 'identity' student as can_edit_identity %}
-                    {% if can_edit_identity or role == 'LeadMentor' %}
-                      {{ student.date_of_birth|date:'M j, Y'|default:'—' }}
-                    {% else %}
-                      <span class="text-muted small">Restricted</span>
-                    {% endif %}
-                  </div>
-                </div>
-                <div class="col-md-4"><div class="fw-semibold">Graduated</div><div><span class="badge {% if student.graduated %}bg-success{% else %}bg-secondary{% endif %}">{{ student.graduated|yesno:"Yes,No" }}</span></div></div>
-              </div>
-            </div>
-          </div>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
+    </div>
+  </div>
 
-      {% can_read user 'contact_address' student as can_read_contact %}
-      {% if can_read_contact %}
-      <div class="card mb-4">
-        <div class="card-header">Contact & Address</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">Email</div><div>{{ student.personal_email|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Phone</div><div>{{ student.phone_number|default:'—' }} ({{ student.get_phone_type_display|default:'cell' }}){% if student.can_receive_texts %} <span class="badge bg-info text-dark">Texts OK</span>{% endif %}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Address</div><div>{{ student.address|default:'—' }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">City</div><div>{{ student.city|default:'—' }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">State</div><div>{{ student.state|default:'—' }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">Zip</div><div>{{ student.zip_code|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Directory consent</div><div>{{ student.directory_consent|yesno:"Yes,No" }}</div></div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
+  <div class="row g-4">
+    <!-- Left Main Column -->
+    <div class="col-lg-8">
 
-      {% can_read user 'health_medical' student as can_read_medical %}
-      {% if can_read_medical %}
-      <div class="card mb-4">
-        <div class="card-header">Health &amp; Medical</div>
-        <div class="card-body">
-          <div class="alert alert-warning d-flex align-items-center" role="alert">
-            <i class="bi bi-shield-lock-fill me-2"></i>
-            <div>This information is confidential and should not be shared outside of authorized program mentors and volunteers.</div>
-          </div>
-          <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">Allergies</div><div>{{ student.allergies|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Dietary restrictions</div><div>{{ student.dietary_restrictions|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Other medical notes</div><div>{{ student.medical_notes|default:'—' }}</div></div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'school' student as can_read_school %}
-      {% if can_read_school %}
-      <div class="card mb-4">
-        <div class="card-header">School</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">School</div><div>{{ student.school|default:'—' }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">Graduation Year</div><div>{{ student.graduation_year|default:'—' }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">T‑shirt size</div><div>{{ student.tshirt_size|default:'—' }}</div></div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'cmu_andrew' student as can_read_cmu %}
-      {% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
-      <div class="card mb-4">
-        <div class="card-header">CMU Andrew ID</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-4"><div class="fw-semibold">Andrew ID</div><div>{{ student.andrew_id|default:'—' }}</div></div>
-            <div class="col-md-6"><div class="fw-semibold">Andrew email</div><div>{{ student.andrew_email|default:'—' }}</div></div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'background_checks' student as can_read_bg %}
-      {% if can_read_bg and 'background-checks' in program_feature_keys %}
-      <div class="card mb-4">
-        <div class="card-header">Background Checks</div>
-        <div class="card-body">
-            {% requires_bg student as requires_bg %}
-            {% needs_bg student as missing_bg %}
-            <div>
-                {% if requires_bg %}
-                    {% if user.pk == student.user.pk %}<strong>You</strong> need PA background clearances (17 or older on Sept 1 of the current academic year).{% else %}This student <strong>requires</strong> PA background clearances (17 or older on Sept 1 of the current academic year).{% endif %}
-                {% else %}
-                    {% if user.pk == student.user.pk %}Not needed for your age.{% else %}Not needed for this student's age.{% endif %}
-                {% endif %}
-            </div>
-            {% if requires_bg %}
-                {% if missing_bg %}
-                    <div class="alert alert-warning mt-2 mb-2">One or more clearances is missing or expired.</div>
-                {% endif %}
-                <div class="row g-3 mb-2">
-                    {% for item in student|background_check_status %}
-                    <div class="col-md-4">
-                        <div class="fw-semibold">{{ item.display }}</div>
-                        <div>
-                            {% if item.on_file %}
-                                <span class="badge {% if item.is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ item.is_valid|yesno:"Valid,Not Valid" }}</span>
-                                {% if item.expiration_date %} &middot; expires {{ item.expiration_date|date:'M j, Y' }}{% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary">Missing</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'student_documents' student as can_read_docs %}
-      {% if can_read_docs %}
-      <div class="card mb-4">
-        <div class="card-header">Signed Documents</div>
-        <div class="card-body">
-            <div class="row g-3 mb-2">
-                {% for doc in student.signed_documents.all %}
-                <div class="col-md-6">
-                    <div class="fw-semibold">{{ doc.program_document.name }}</div>
-                    <div class="small text-muted">Uploaded {{ doc.uploaded_at|date:'M j, Y' }}</div>
-                    <div>
-                        <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
-                            View File
-                        </a>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="col-12 text-muted">No signed documents on file.</div>
-                {% endfor %}
-            </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'discord' student as can_read_discord %}
-      {% if can_read_discord and 'discord' in program_feature_keys %}
-      <div class="card mb-4">
-        <div class="card-header">Discord</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-3"><div class="fw-semibold">On Discord</div><div>{{ student.on_discord|yesno:"Yes,No" }}</div></div>
-            <div class="col-md-9"><div class="fw-semibold">Discord handle</div><div>{{ student.discord_handle|default:'—' }}</div></div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'first_website' student as can_read_first %}
-      {% if can_read_first %}
-      <div class="card mb-4">
-        <div class="card-header">FIRST Website</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-3"><div class="fw-semibold">Has FIRST account</div><div>{{ student.first_has_account|yesno:"Yes,No" }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">Attached to parent account</div><div>{{ student.first_attached_to_parent_account|yesno:"Yes,No" }}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">Signed FIRST C&amp;R</div><div>{{ student.first_signed_cr|yesno:"Yes,No" }}</div></div>
-            <div class="col-md-12"><div class="fw-semibold">Registered team(s)</div><div>{{ student.first_registered_teams|default:'—' }}</div></div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      {% can_read user 'parents_emergency' student as can_read_parents %}
+      <!-- Parents & Emergency Contacts -->
       {% if can_read_parents %}
-      <div class="card mb-4">
-        <div class="card-header">Parents / Emergency Contacts</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">Primary contact</div>
-              <div>
-                {% if student.primary_contact %}
-                  {% can_read user 'adult_info' student.primary_contact as can_view_primary %}
-                  {% if can_view_primary %}
-                    <a href="{% url 'adult_detail' student.primary_contact.pk %}">{{ student.primary_contact }}</a>
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-people-fill text-primary"></i>
+            <h2 class="h6 mb-0 fw-bold">Parents &amp; Emergency Contacts</h2>
+          </div>
+          <div class="card-body p-4">
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <div class="p-3 bg-light rounded-3 h-100 border">
+                  <div class="text-muted small fw-semibold text-uppercase mb-1">Primary Contact</div>
+                  {% if student.primary_contact %}
+                    <div class="fw-bold fs-6">
+                      {% can_read user 'adult_info' student.primary_contact as can_view_primary %}
+                      {% if can_view_primary %}
+                        <a href="{% url 'adult_detail' student.primary_contact.pk %}" class="text-decoration-none">
+                          {{ student.primary_contact }}
+                        </a>
+                      {% else %}
+                        {{ student.primary_contact }}
+                      {% endif %}
+                      {% if not student.primary_contact.login_enabled %}
+                        <span class="badge bg-secondary ms-1">Inactive</span>
+                      {% endif %}
+                    </div>
+                    {% if student.primary_contact.phone_number %}
+                      <div class="small mt-1">
+                        <a href="tel:{{ student.primary_contact.phone_number }}" class="text-decoration-none text-dark">
+                          <i class="bi bi-telephone text-success me-1"></i>{{ student.primary_contact.phone_number }}
+                        </a>
+                      </div>
+                    {% endif %}
+                    {% if student.primary_contact.personal_email %}
+                      <div class="small">
+                        <a href="mailto:{{ student.primary_contact.personal_email }}" class="text-decoration-none text-muted">
+                          <i class="bi bi-envelope text-primary me-1"></i>{{ student.primary_contact.personal_email }}
+                        </a>
+                      </div>
+                    {% endif %}
                   {% else %}
-                    {{ student.primary_contact }}
+                    <div class="text-muted small">— None designated</div>
                   {% endif %}
-                  {% if not student.primary_contact.login_enabled %}
-                    <span class="badge bg-secondary">Inactive</span>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="p-3 bg-light rounded-3 h-100 border">
+                  <div class="text-muted small fw-semibold text-uppercase mb-1">Secondary Contact</div>
+                  {% if student.secondary_contact %}
+                    <div class="fw-bold fs-6">
+                      {% can_read user 'adult_info' student.secondary_contact as can_view_secondary %}
+                      {% if can_view_secondary %}
+                        <a href="{% url 'adult_detail' student.secondary_contact.pk %}" class="text-decoration-none">
+                          {{ student.secondary_contact }}
+                        </a>
+                      {% else %}
+                        {{ student.secondary_contact }}
+                      {% endif %}
+                      {% if not student.secondary_contact.login_enabled %}
+                        <span class="badge bg-secondary ms-1">Inactive</span>
+                      {% endif %}
+                    </div>
+                    {% if student.secondary_contact.phone_number %}
+                      <div class="small mt-1">
+                        <a href="tel:{{ student.secondary_contact.phone_number }}" class="text-decoration-none text-dark">
+                          <i class="bi bi-telephone text-success me-1"></i>{{ student.secondary_contact.phone_number }}
+                        </a>
+                      </div>
+                    {% endif %}
+                    {% if student.secondary_contact.personal_email %}
+                      <div class="small">
+                        <a href="mailto:{{ student.secondary_contact.personal_email }}" class="text-decoration-none text-muted">
+                          <i class="bi bi-envelope text-primary me-1"></i>{{ student.secondary_contact.personal_email }}
+                        </a>
+                      </div>
+                    {% endif %}
+                  {% else %}
+                    <div class="text-muted small">— None designated</div>
                   {% endif %}
-                {% else %}
-                  —
-                {% endif %}
+                </div>
               </div>
             </div>
-            <div class="col-md-6"><div class="fw-semibold">Secondary contact</div>
-              <div>
-                {% if student.secondary_contact %}
-                  {% can_read user 'adult_info' student.secondary_contact as can_view_secondary %}
-                  {% if can_view_secondary %}
-                    <a href="{% url 'adult_detail' student.secondary_contact.pk %}">{{ student.secondary_contact }}</a>
-                  {% else %}
-                    {{ student.secondary_contact }}
-                  {% endif %}
-                  {% if not student.secondary_contact.login_enabled %}
-                    <span class="badge bg-secondary">Inactive</span>
-                  {% endif %}
-                {% else %}
-                  —
-                {% endif %}
-              </div>
-            </div>
-            <div class="col-12"><div class="fw-semibold">Parents/guardians</div>
+
+            <div>
+              <div class="text-muted small fw-semibold text-uppercase mb-2">All Linked Parents / Guardians</div>
               {% with parents=student.all_parents %}
                 {% if parents %}
-                  <ul class="mb-0">
+                  <div class="list-group list-group-flush rounded-3 border">
                     {% for p in parents %}
-                      <li>
-                        {% can_read user 'adult_info' p as can_view_adult %}
-                        {% if can_view_adult %}
-                          <a href="{% url 'adult_detail' p.pk %}">{{ p }}</a>
-                        {% else %}
-                          {{ p }}
-                        {% endif %}
-                        {% if p.attached_rel %}<span class="badge bg-secondary rounded-pill">{{ p.attached_rel|title }}</span>{% endif %}
-                        {% if not p.login_enabled %}
-                          <span class="badge bg-secondary">Inactive</span>
-                        {% endif %}
-                      </li>
+                      <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                        <div>
+                          {% can_read user 'adult_info' p as can_view_adult %}
+                          {% if can_view_adult %}
+                            <a href="{% url 'adult_detail' p.pk %}" class="fw-semibold text-decoration-none">{{ p }}</a>
+                          {% else %}
+                            <span class="fw-semibold">{{ p }}</span>
+                          {% endif %}
+                          {% if p.attached_rel %}
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill ms-2">{{ p.attached_rel|title }}</span>
+                          {% endif %}
+                          {% if not p.login_enabled %}
+                            <span class="badge bg-secondary ms-1">Inactive</span>
+                          {% endif %}
+                        </div>
+                        <div class="small d-flex gap-2">
+                          {% if p.phone_number %}
+                            <a href="tel:{{ p.phone_number }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                              <i class="bi bi-telephone"></i>
+                            </a>
+                          {% endif %}
+                          {% if p.personal_email %}
+                            <a href="mailto:{{ p.personal_email }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                              <i class="bi bi-envelope"></i>
+                            </a>
+                          {% endif %}
+                        </div>
+                      </div>
                     {% endfor %}
-                  </ul>
+                  </div>
                 {% else %}
-                  <div class="text-muted">—</div>
+                  <div class="text-muted small">No linked parent records found.</div>
                 {% endif %}
               {% endwith %}
             </div>
           </div>
         </div>
-      </div>
       {% endif %}
 
-      {% can_read user 'other_details' student as can_read_other %}
-      {% if can_read_other %}
-      <div class="card mb-4">
-        <div class="card-header">Other Details</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6"><div class="fw-semibold">Race / Ethnicity</div><div>{% with races=student.race_ethnicities.all %}{% if races %}{% for r in races %}{% if not forloop.first %}, {% endif %}{{ r.name }}{% endfor %}{% else %}—{% endif %}{% endwith %}</div></div>
-            <div class="col-md-3"><div class="fw-semibold">Seen once</div><div>{{ student.seen_once|yesno:"Yes,No" }}</div></div>
+      <!-- Contact & Address -->
+      {% if can_read_contact %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-geo-alt-fill text-danger"></i>
+            <h2 class="h6 mb-0 fw-bold">Contact &amp; Address</h2>
+          </div>
+          <div class="card-body p-4">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="text-muted small fw-semibold text-uppercase">Email Address</div>
+                <div>
+                  {% if student.personal_email %}
+                    <a href="mailto:{{ student.personal_email }}" class="text-decoration-none">{{ student.personal_email }}</a>
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-muted small fw-semibold text-uppercase">Phone Number</div>
+                <div>
+                  {% if student.phone_number %}
+                    <a href="tel:{{ student.phone_number }}" class="text-decoration-none">{{ student.phone_number }}</a>
+                    <span class="text-muted small">({{ student.get_phone_type_display|default:'cell' }})</span>
+                    {% if student.can_receive_texts %}
+                      <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill ms-1">Texts OK</span>
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-muted small fw-semibold text-uppercase">Home Address</div>
+                <div>{{ student.address|default:'—' }}</div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-muted small fw-semibold text-uppercase">City, State, Zip</div>
+                <div>
+                  {% if student.city or student.state or student.zip_code %}
+                    {{ student.city|default:'' }}{% if student.city and student.state %}, {% endif %}{{ student.state|default:'' }} {{ student.zip_code|default:'' }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-muted small fw-semibold text-uppercase">Directory Consent</div>
+                <div>
+                  <span class="badge {% if student.directory_consent %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% else %}bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25{% endif %} rounded-pill">
+                    {{ student.directory_consent|yesno:"Consented,Not Consented" }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      {% endif %}
+
+      <!-- Program Enrollments & Teams -->
+      {% if enrollments %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-trophy-fill text-warning"></i>
+            <h2 class="h6 mb-0 fw-bold">Program Enrollments &amp; Teams</h2>
+          </div>
+          <div class="card-body p-4">
+            <div class="list-group list-group-flush rounded-3 border">
+              {% for enr in enrollments %}
+                <div class="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2 p-3">
+                  <div>
+                    <a href="{% url 'program_detail' enr.program.pk %}" class="fw-bold text-decoration-none text-dark">
+                      {{ enr.program.name }}
+                    </a>
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                      {% if enr.team %}
+                        <span class="badge rounded-pill" style="background-color: {{ enr.team.color }}; color: {{ enr.team.color|contrast_color }};">
+                          {{ enr.team.team_type }} {{ enr.team.number }}{% if enr.team.name %} {{ enr.team.name }}{% endif %}
+                        </span>
+                      {% endif %}
+                      {% if enr.crew %}
+                        <span class="badge rounded-pill" style="background-color: {{ enr.crew.color }}; color: {{ enr.crew.color|contrast_color }};">
+                          {{ enr.crew.name }}
+                        </span>
+                      {% endif %}
+                      {% if enr.subteam %}
+                        <span class="badge rounded-pill" style="background-color: {{ enr.subteam.color }}; color: {{ enr.subteam.color|contrast_color }};">
+                          {{ enr.subteam.name }}
+                        </span>
+                      {% endif %}
+                    </div>
+                  </div>
+                  <div>
+                    <span class="badge {% if enr.active %}bg-success bg-opacity-10 text-success border border-success border-opacity-25{% else %}bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25{% endif %} rounded-pill">
+                      {{ enr.active|yesno:"Active,Inactive" }}
+                    </span>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Academic & School Information -->
+      {% if can_read_school %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-mortarboard-fill text-info"></i>
+            <h2 class="h6 mb-0 fw-bold">School &amp; Academics</h2>
+          </div>
+          <div class="card-body p-4">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="text-muted small fw-semibold text-uppercase">School Name</div>
+                <div class="fw-semibold">{{ student.school|default:'—' }}</div>
+              </div>
+              <div class="col-md-3">
+                <div class="text-muted small fw-semibold text-uppercase">Graduation Year</div>
+                <div>{{ student.graduation_year|default:'—' }}</div>
+              </div>
+              <div class="col-md-3">
+                <div class="text-muted small fw-semibold text-uppercase">T-Shirt Size</div>
+                <div>{{ student.tshirt_size|default:'—' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Signed Documents -->
+      {% if can_read_docs %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-check-fill text-success"></i>
+            <h2 class="h6 mb-0 fw-bold">Signed Documents</h2>
+          </div>
+          <div class="card-body p-4">
+            <div class="row g-3">
+              {% for doc in student.signed_documents.all %}
+                <div class="col-md-6">
+                  <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                    <div>
+                      <div class="fw-semibold text-dark">{{ doc.program_document.name }}</div>
+                      <div class="small text-muted">Uploaded {{ doc.uploaded_at|date:'M j, Y' }}</div>
+                    </div>
+                    <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                      <i class="bi bi-download me-1"></i>View File
+                    </a>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="col-12 text-muted small">No signed documents on file.</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- External Accounts & Integrations -->
+      {% if can_read_first or can_read_discord or can_read_cmu %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-link-45deg text-secondary fs-5"></i>
+            <h2 class="h6 mb-0 fw-bold">External Accounts &amp; Integrations</h2>
+          </div>
+          <div class="card-body p-4">
+            <div class="row g-4">
+              {% if can_read_first %}
+                <div class="col-md-6">
+                  <div class="text-muted small fw-semibold text-uppercase mb-2">FIRST Website</div>
+                  <ul class="list-unstyled mb-0 small">
+                    <li class="mb-1"><span class="fw-semibold">Account on FIRST:</span> {{ student.first_has_account|yesno:"Yes,No" }}</li>
+                    <li class="mb-1"><span class="fw-semibold">Attached to parent:</span> {{ student.first_attached_to_parent_account|yesno:"Yes,No" }}</li>
+                    <li class="mb-1"><span class="fw-semibold">Signed Consent &amp; Release:</span> {{ student.first_signed_cr|yesno:"Yes,No" }}</li>
+                    <li><span class="fw-semibold">Registered teams:</span> {{ student.first_registered_teams|default:'—' }}</li>
+                  </ul>
+                </div>
+              {% endif %}
+
+              {% if can_read_discord and 'discord' in program_feature_keys %}
+                <div class="col-md-6">
+                  <div class="text-muted small fw-semibold text-uppercase mb-2">Discord</div>
+                  <div class="small mb-1"><span class="fw-semibold">On Discord:</span> {{ student.on_discord|yesno:"Yes,No" }}</div>
+                  <div class="small"><span class="fw-semibold">Discord Handle:</span> <code>{{ student.discord_handle|default:'—' }}</code></div>
+                </div>
+              {% endif %}
+
+              {% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
+                <div class="col-md-6">
+                  <div class="text-muted small fw-semibold text-uppercase mb-2">CMU Andrew Account</div>
+                  <div class="small mb-1"><span class="fw-semibold">Andrew ID:</span> <code>{{ student.andrew_id|default:'—' }}</code></div>
+                  <div class="small"><span class="fw-semibold">Andrew Email:</span> {{ student.andrew_email|default:'—' }}</div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+    </div>
+
+    <!-- Right Sidebar Column -->
+    <div class="col-lg-4">
+
+      <!-- Health & Medical Confidential Alert Card -->
+      {% if can_read_medical %}
+        <div class="card shadow-sm border-0 border-top border-3 border-warning rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-heart-pulse-fill text-danger"></i>
+            <h2 class="h6 mb-0 fw-bold">Health &amp; Medical</h2>
+          </div>
+          <div class="card-body p-3">
+            <div class="alert alert-warning border-0 rounded-3 p-2 small mb-3 bg-warning bg-opacity-10 text-dark">
+              <i class="bi bi-shield-lock-fill text-warning me-1"></i>
+              <strong>Confidential:</strong> Visible to authorized staff only.
+            </div>
+            <div class="mb-3">
+              <div class="text-muted small fw-semibold text-uppercase">Allergies</div>
+              <div class="small {% if student.allergies %}fw-semibold text-danger{% endif %}">{{ student.allergies|default:'— None recorded' }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted small fw-semibold text-uppercase">Dietary Restrictions</div>
+              <div class="small">{{ student.dietary_restrictions|default:'— None recorded' }}</div>
+            </div>
+            <div>
+              <div class="text-muted small fw-semibold text-uppercase">Other Medical Notes</div>
+              <div class="small">{{ student.medical_notes|default:'— None recorded' }}</div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Background Clearances (Safety Compliance) -->
+      {% if can_read_bg and 'background-checks' in program_feature_keys %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-shield-check text-primary"></i>
+            <h2 class="h6 mb-0 fw-bold">Background Clearances</h2>
+          </div>
+          <div class="card-body p-3">
+            {% requires_bg student as requires_bg %}
+            {% needs_bg student as missing_bg %}
+            <div class="small mb-2">
+              {% if requires_bg %}
+                {% if user.pk == student.user.pk %}
+                  <span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>You need PA background clearances</span> (17 or older on Sept 1 of the current academic year).
+                {% else %}
+                  <span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>This student requires PA background clearances</span> (17 or older on Sept 1 of the current academic year).
+                {% endif %}
+              {% else %}
+                <span class="text-muted"><i class="bi bi-check-circle me-1 text-success"></i>{% if user.pk == student.user.pk %}Not needed for your age.{% else %}Not needed for this student's age.{% endif %}</span>
+              {% endif %}
+            </div>
+            {% if requires_bg %}
+              {% if missing_bg %}
+                <div class="alert alert-warning p-2 small mb-3 border-0 bg-warning bg-opacity-10 text-dark">
+                  <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>One or more clearances is missing or expired.
+                </div>
+              {% endif %}
+              <div class="list-group list-group-flush rounded border small">
+                {% for item in student|background_check_status %}
+                  <div class="list-group-item d-flex justify-content-between align-items-center p-2">
+                    <span class="fw-semibold">{{ item.display }}</span>
+                    <div>
+                      {% if item.on_file %}
+                        <span class="badge {% if item.is_valid %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
+                          {{ item.is_valid|yesno:"Valid,Not Valid" }}
+                        </span>
+                        {% if item.expiration_date %}
+                          <span class="text-muted d-block text-end" style="font-size: 10px;">Exp: {{ item.expiration_date|date:'M j, Y' }}</span>
+                        {% endif %}
+                      {% else %}
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill">Missing</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Identity & Demographics Details -->
+      {% if can_read_identity or can_read_other %}
+        <div class="card shadow-sm border-0 rounded-3 mb-4">
+          <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
+            <i class="bi bi-card-text text-secondary"></i>
+            <h2 class="h6 mb-0 fw-bold">Identity &amp; Demographics</h2>
+          </div>
+          <div class="card-body p-3">
+            {% if can_read_identity %}
+              <div class="mb-2">
+                <div class="text-muted small fw-semibold text-uppercase">Age / Date of Birth</div>
+                <div class="small">
+                  {{ student.age|default:'—' }} years old
+                  {% user_role user as role %}
+                  {% can_write user 'identity' student as can_edit_identity %}
+                  {% if can_edit_identity or role == 'LeadMentor' %}
+                    <span class="text-muted">({{ student.date_of_birth|date:'M j, Y'|default:'—' }})</span>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+            {% if can_read_other %}
+              <div class="mb-2">
+                <div class="text-muted small fw-semibold text-uppercase">Race / Ethnicity</div>
+                <div class="small">
+                  {% with races=student.race_ethnicities.all %}
+                    {% if races %}
+                      {% for r in races %}{% if not forloop.first %}, {% endif %}{{ r.name }}{% endfor %}
+                    {% else %}
+                      —
+                    {% endif %}
+                  {% endwith %}
+                </div>
+              </div>
+              <div>
+                <div class="text-muted small fw-semibold text-uppercase">Seen Once</div>
+                <div class="small">{{ student.seen_once|yesno:"Yes,No" }}</div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
       {% endif %}
 
     </div>

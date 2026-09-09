@@ -177,7 +177,7 @@
                     <button id="unlockBtn" type="button" class="btn btn-signin">
                         Unlock Kiosk
                     </button>
-                    <button type="button" class="btn btn-link text-decoration-none" onclick="location.reload()">
+                    <button id="kioskStartOverBtn" type="button" class="btn btn-link text-decoration-none">
                         Start Over
                     </button>
                 </div>
@@ -464,9 +464,15 @@
         var unlockBtn = document.getElementById("unlockBtn");
         var unlockCode = document.getElementById("unlockCode");
         var unlockEmail = document.getElementById("unlockEmail");
+        var startOverBtn = document.getElementById("kioskStartOverBtn");
 
         if (requestCodeBtn) requestCodeBtn.addEventListener("click", doRequestCode);
         if (unlockBtn) unlockBtn.addEventListener("click", doUnlock);
+        if (startOverBtn) {
+            startOverBtn.addEventListener("click", function () {
+                window.location.reload();
+            });
+        }
         if (unlockCode) {
             unlockCode.addEventListener("keydown", function (e) {
                 if (e.key === "Enter") { doUnlock(); }

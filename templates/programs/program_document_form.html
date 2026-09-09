@@ -1,68 +1,80 @@
 {% extends 'base.html' %}
 {% block title %}{% if is_create %}Add Document{% else %}Edit Document{% endif %} — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
+
 {% block content %}
+<div class="container mt-4" style="max-width: 780px;">
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+      <a class="link-secondary text-decoration-none small fw-semibold" href="{% url 'program_detail' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i> Back to {{ program.name }}
+      </a>
     </div>
   </div>
-  <div class="row">
-    <div class="col-lg-8 col-xl-6">
-      <h1 class="h4">{% if is_create %}Add Document{% else %}Edit Document{% endif %}</h1>
-      <p class="text-muted small">
-        Documents added here will be shown to approved applicants on the final
-        step of the application wizard. Each applicant downloads the blank
-        form, signs it, and uploads the signed copy back.
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-header bg-white py-3 border-bottom">
+      <h1 class="h4 mb-1 fw-bold text-dark">{% if is_create %}Add Program Document{% else %}Edit Program Document{% endif %}</h1>
+      <p class="text-muted small mb-0">
+        Blank forms uploaded here are shown to approved applicants on the final step of the application wizard.
       </p>
+    </div>
+    <div class="card-body p-4">
       <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         {{ form.program }}
         <div class="mb-3">
-          <label class="form-label" for="id_name">Name</label>
+          <label class="form-label fw-semibold small" for="id_name">Document Title <span class="text-danger">*</span></label>
           {{ form.name }}
-          {% if form.name.help_text %}<div class="form-text">{{ form.name.help_text }}</div>{% endif %}
-          {% for e in form.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          {% if form.name.help_text %}<div class="form-text small">{{ form.name.help_text }}</div>{% endif %}
+          {% for e in form.name.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
         </div>
         <div class="mb-3">
-          <label class="form-label" for="id_description">Description</label>
+          <label class="form-label fw-semibold small" for="id_description">Description / Instructions</label>
           {{ form.description }}
-          {% if form.description.help_text %}<div class="form-text">{{ form.description.help_text }}</div>{% endif %}
-          {% for e in form.description.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          {% if form.description.help_text %}<div class="form-text small">{{ form.description.help_text }}</div>{% endif %}
+          {% for e in form.description.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
         </div>
         <div class="mb-3">
-          <label class="form-label" for="id_file">File</label>
+          <label class="form-label fw-semibold small" for="id_file">PDF or Document File <span class="text-danger">*</span></label>
           {{ form.file }}
-          {% if form.file.help_text %}<div class="form-text">{{ form.file.help_text }}</div>{% endif %}
-          {% for e in form.file.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          {% if form.file.help_text %}<div class="form-text small">{{ form.file.help_text }}</div>{% endif %}
+          {% for e in form.file.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
         </div>
-        <div class="mb-3 form-check">
-          {{ form.is_required }}
-          <label class="form-check-label" for="id_is_required">Required</label>
-          {% if form.is_required.help_text %}<div class="form-text">{{ form.is_required.help_text }}</div>{% endif %}
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold small" for="id_display_order">Display Order</label>
+            {{ form.display_order }}
+            <div class="form-text small">Lower numbers appear first.</div>
+            {% for e in form.display_order.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6 d-flex align-items-center pt-3">
+            <div class="form-check form-switch">
+              {{ form.is_required }}
+              <label class="form-check-label fw-semibold small ms-2" for="id_is_required">Required to Sign</label>
+              {% if form.is_required.help_text %}<div class="form-text small">{{ form.is_required.help_text }}</div>{% endif %}
+            </div>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label" for="id_display_order">Display order</label>
-          {{ form.display_order }}
-          <div class="form-text">Lower numbers appear first.</div>
-          {% for e in form.display_order.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-        </div>
-        <div class="mb-3 form-check">
+        <div class="form-check form-switch mb-4">
           {{ form.is_active }}
-          <label class="form-check-label" for="id_is_active">Active</label>
-          {% if form.is_active.help_text %}<div class="form-text">{{ form.is_active.help_text }}</div>{% endif %}
+          <label class="form-check-label fw-semibold small ms-2" for="id_is_active">Active (Visible to Applicants)</label>
+          {% if form.is_active.help_text %}<div class="form-text small">{{ form.is_active.help_text }}</div>{% endif %}
         </div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Save</button>
-          <a class="btn btn-outline-secondary" href="{% url 'program_detail' program.id %}">Cancel</a>
+        <div class="d-flex gap-2 justify-content-end pt-3 border-top">
+          <a class="btn btn-outline-secondary px-4 fw-semibold" href="{% url 'program_detail' program.id %}">Cancel</a>
           {% if not is_create %}
-            <a class="btn btn-outline-danger ms-auto"
+            <a class="btn btn-outline-danger me-auto fw-semibold"
                href="{% url 'program_document_delete' program.id object.id %}">
-              Delete
+              Delete Document
             </a>
           {% endif %}
+          <button class="btn btn-primary px-4 fw-semibold" type="submit">
+            <i class="bi bi-check2 me-1"></i> Save Document
+          </button>
         </div>
       </form>
     </div>
   </div>
+</div>
 {% endblock %}

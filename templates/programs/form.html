@@ -1,103 +1,181 @@
 {% extends 'base.html' %}
 {% load form_tags %}
-{% block title %}{% if form.instance.pk %}Edit Program{% else %}Create Program{% endif %}{% endblock %}
+{% block title %}{% if form.instance.pk %}Edit Program Settings — {{ form.instance.name }}{% else %}Create a New Program{% endif %}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
+
 {% block content %}
+<div class="container mt-4">
     <div class="row mb-3">
-      <div class="col">
-        <a class="link-secondary" href="/programs/">← Back to Programs</a>
-      </div>
+        <div class="col">
+            <a class="link-secondary text-decoration-none small fw-semibold" href="{% if form.instance.pk %}{% url 'program_detail' form.instance.pk %}{% else %}{% url 'program_list' %}{% endif %}">
+                <i class="bi bi-arrow-left me-1"></i> Back to {% if form.instance.pk %}{{ form.instance.name }}{% else %}Programs{% endif %}
+            </a>
+        </div>
     </div>
-    <div class="row">
-      <div class="col-lg-8">
-        <h1 class="h3 mb-3">{% if form.instance.pk %}Edit Program Settings{% else %}Create a New Program{% endif %}</h1>
-        <form method="post" class="needs-validation" novalidate>
-          {% csrf_token %}
-          <div class="mb-3">
-            <label for="id_name" class="form-label">Name</label>
-            {{ form.name|add_class:"form-control" }}
-          </div>
-          <div class="mb-3">
-            <label for="id_description" class="form-label">Description</label>
-            {{ form.description|add_class:"form-control" }}
-          </div>
-          <div class="row">
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="id_start_date" class="form-label">Start date</label>
-                {{ form.start_date|add_class:"form-control" }}
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="id_end_date" class="form-label">End date</label>
-                {{ form.end_date|add_class:"form-control" }}
-              </div>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="id_applications_open" class="form-label">Applications open</label>
-                {{ form.applications_open|add_class:"form-control" }}
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="id_applications_close" class="form-label">Applications close</label>
-                {{ form.applications_close|add_class:"form-control" }}
-              </div>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="id_grade_range_start" class="form-label">Min Grade</label>
-                {{ form.grade_range_start|add_class:"form-select" }}
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="id_grade_range_end" class="form-label">Max Grade</label>
-                {{ form.grade_range_end|add_class:"form-select" }}
-              </div>
-            </div>
-          </div>
-          <div class="mb-3">
-            <label for="id_cost" class="form-label">Cost</label>
-            {{ form.cost|add_class:"form-control" }}
-            <div class="form-text">Enter program cost (e.g., $300 or $200-500).</div>
-          </div>
-          <div class="form-check mb-4">
-            {{ form.active|add_class:"form-check-input" }}
-            <label for="id_active" class="form-check-label">Active</label>
-          </div>
 
-          <div class="card mb-4">
-            <div class="card-header">Features</div>
-            <div class="card-body">
-              {% if form.features %}
-                <div class="form-text mb-2">Enable optional capabilities for this program. You can change these later.</div>
-                <div class="row">
-                  <div class="col">
-                    {{ form.features }}
-                  </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 fw-bold text-dark">{% if form.instance.pk %}Edit Program Settings{% else %}Create a New Program{% endif %}</h1>
+            <p class="text-muted small mb-0">{% if form.instance.pk %}Update season schedule, application deadlines, eligibility criteria, and enabled features.{% else %}Configure a new robotics program, set dates, eligibility, and enable optional modules.{% endif %}</p>
+        </div>
+        {% if form.instance.pk %}
+        <a href="{% url 'program_detail' form.instance.pk %}" class="btn btn-outline-primary">
+            <i class="bi bi-people me-1"></i> View Program Hub
+        </a>
+        {% endif %}
+    </div>
+
+    <form method="post" class="needs-validation" novalidate>
+        {% csrf_token %}
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <!-- 1. General Information -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-info-circle text-primary me-2"></i>General Information</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <label for="id_name" class="form-label fw-semibold small">Program Name <span class="text-danger">*</span></label>
+                            {{ form.name|add_class:"form-control" }}
+                            {% for e in form.name.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_description" class="form-label fw-semibold small">Description</label>
+                            {{ form.description|add_class:"form-control" }}
+                            <div class="form-text small">Detailed overview of the program, curriculum, and expectations.</div>
+                            {% for e in form.description.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="form-check form-switch p-0 pt-2 d-flex align-items-center gap-2">
+                            <div class="form-check form-switch m-0">
+                                {{ form.active|add_class:"form-check-input" }}
+                                <label for="id_active" class="form-check-label fw-semibold small ms-2">Program Active &amp; Operational</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              {% else %}
-                <div class="text-muted">No feature options are available.</div>
-              {% endif %}
+
+                <!-- 2. Schedule & Timeline -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar-event text-primary me-2"></i>Schedule &amp; Application Timeline</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="id_start_date" class="form-label fw-semibold small">Program Start Date</label>
+                                {{ form.start_date|add_class:"form-control" }}
+                                {% for e in form.start_date.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_end_date" class="form-label fw-semibold small">Program End Date</label>
+                                {{ form.end_date|add_class:"form-control" }}
+                                {% for e in form.end_date.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="id_applications_open" class="form-label fw-semibold small">Applications Open Date</label>
+                                {{ form.applications_open|add_class:"form-control" }}
+                                <div class="form-text small">Date when public applications open.</div>
+                                {% for e in form.applications_open.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_applications_close" class="form-label fw-semibold small">Applications Close Date</label>
+                                {{ form.applications_close|add_class:"form-control" }}
+                                <div class="form-text small">Deadline for student applications.</div>
+                                {% for e in form.applications_close.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Eligibility & Fees -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-mortarboard text-primary me-2"></i>Eligibility &amp; Program Fees</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="id_grade_range_start" class="form-label fw-semibold small">Minimum Grade Level</label>
+                                {{ form.grade_range_start|add_class:"form-select" }}
+                                {% for e in form.grade_range_start.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_grade_range_end" class="form-label fw-semibold small">Maximum Grade Level</label>
+                                {{ form.grade_range_end|add_class:"form-select" }}
+                                {% for e in form.grade_range_end.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div>
+                            <label for="id_cost" class="form-label fw-semibold small">Program Cost / Dues Description</label>
+                            {{ form.cost|add_class:"form-control" }}
+                            <div class="form-text small">Displayed to applicants on the application wizard (e.g. <code>$350</code> or <code>$200 - $500</code>).</div>
+                            {% for e in form.cost.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Feature Modules -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-toggles text-primary me-2"></i>Feature Modules &amp; Capabilities</h5>
+                        <p class="text-muted small mb-0">Enable optional tools and workflows for students and mentors in this program.</p>
+                    </div>
+                    <div class="card-body p-4">
+                        {% if form.features %}
+                        <div class="row g-3">
+                            {% for feature_choice in form.features %}
+                            <div class="col-md-6">
+                                <div class="p-3 border rounded-3 bg-light bg-opacity-50 h-100 d-flex align-items-center">
+                                    <div class="form-check form-switch m-0">
+                                        {{ feature_choice.tag }}
+                                        <label class="form-check-label fw-semibold small ms-2 text-dark" for="{{ feature_choice.id_for_label }}">
+                                            {{ feature_choice.choice_label }}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">No optional features available.</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 5. Documents to Sign -->
+                {% if form.instance.pk %}
+                    {% include "programs/_disclosure_documents.html" %}
+                {% endif %}
+
+                <!-- Action Bar -->
+                <div class="d-flex gap-2 justify-content-end mt-4 mb-5">
+                    <a class="btn btn-outline-secondary px-4 fw-semibold" href="{% if form.instance.pk %}{% url 'program_detail' form.instance.pk %}{% else %}{% url 'program_list' %}{% endif %}">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary px-5 fw-semibold">
+                        <i class="bi bi-check2 me-1"></i> Save Program Settings
+                    </button>
+                </div>
             </div>
-          </div>
 
-          {% if form.instance.pk %}
-              {% include "programs/_disclosure_documents.html" %}
-          {% endif %}
-
-          <div class="d-flex gap-2 mt-4">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <a class="btn btn-secondary" href="{% if form.instance.pk %}{% url 'program_detail' form.instance.pk %}{% else %}/programs/{% endif %}">Cancel</a>
-          </div>
-        </form>
-      </div>
-    </div>
+            <!-- Sidebar Info / Tips -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-lightbulb text-warning me-1"></i> Configuration Tips</h6>
+                        <ul class="text-muted small mb-0 ps-3 d-flex flex-column gap-2">
+                            <li><strong>Application Window:</strong> If left blank, applications will open and close matching the program start and end dates.</li>
+                            <li><strong>Grade Range:</strong> Grade levels restrict eligibility in the public application form.</li>
+                            <li><strong>Feature Modules:</strong> Enabling <em>Order Requests</em>, <em>Attendance</em>, or <em>Outreach</em> displays corresponding tabs on student and mentor dashboards.</li>
+                            <li><strong>Disclosure Documents:</strong> Upload PDF permission forms and agreements that accepted students must sign before starting.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
 {% endblock %}

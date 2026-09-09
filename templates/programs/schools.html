@@ -1,55 +1,145 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Schools — {{ program.name }}{% endblock %}
+{% block title %}Schools: {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
+
 {% block content %}
-<div class="row mb-3">
-  <div class="col">
-    <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+  <!-- Page Header & Action Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Schools Breakdown</h1>
+      <div class="text-muted small">
+        Active students enrolled in {{ program.name }}{% if program.year_display %} ({{ program.year_display }}){% endif %} grouped by attending school
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button id="printBreakdownBtn" class="btn btn-outline-secondary d-print-none" type="button">
+        <i class="bi bi-printer me-1"></i>Print Breakdown
+      </button>
+      <a class="btn btn-outline-primary d-print-none" href="{% url 'program_detail' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Program
+      </a>
+    </div>
   </div>
-</div>
 
-<div class="row">
-  <div class="col-lg-10 col-xl-8">
-    <h1 class="h4">Schools — {{ program.name }}{% if program.year_display %} <small class="text-muted">({{ program.year_display }})</small>{% endif %}</h1>
-
-    {% if grouped %}
-      {% for label, items in grouped %}
-        <h2 class="h5 mt-4">{{ label }} <span class="badge bg-secondary">{{ items|length }}</span></h2>
-        {% if items %}
-          <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle" style="table-layout: fixed;">
-              <colgroup>
-                <col style="width: 70%;">
-                <col style="width: 30%;">
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Graduation Year</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for s in items %}
-                  <tr>
-                    <td>
-                      <a class="text-decoration-none" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
-                        {{ s.display_name }}
-                      </a>
-                    </td>
-                    <td>{{ s.graduation_year|default:"" }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+  {% if grouped %}
+    <!-- Summary KPI Metrics -->
+    <div class="row g-3 mb-4 d-print-none">
+      <div class="col-12 col-md-6">
+        <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+          <div class="card-body p-3">
+            <div class="text-muted small fw-semibold text-uppercase tracking-wide">Total Active Students</div>
+            <h3 class="h4 mb-0 fw-bold text-dark mt-1">{{ total_students }}</h3>
+            <div class="text-muted small">Enrolled in {{ program.name }}</div>
           </div>
-        {% else %}
-          <div class="text-muted">No students listed.</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+          <div class="card-body p-3">
+            <div class="text-muted small fw-semibold text-uppercase tracking-wide">Schools Represented</div>
+            <h3 class="h4 mb-0 fw-bold text-primary mt-1">{{ schools_count }}</h3>
+            <div class="text-muted small">Distinct educational institutions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grouped School Cards -->
+    <div class="row g-4 mb-4">
+      {% for label, items in grouped %}
+        {% if items %}
+          <div class="col-12">
+            <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+              <div class="card-header bg-white border-bottom py-3 px-3 d-flex justify-content-between align-items-center">
+                <h2 class="h6 mb-0 fw-bold text-dark">
+                  <i class="bi bi-building text-primary me-2"></i>{{ label }}
+                </h2>
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill">
+                  {{ items|length }} student{{ items|length|pluralize }}
+                </span>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th class="ps-3" style="width: 60%;">Student Name</th>
+                      <th style="width: 25%;">Graduation Year</th>
+                      <th class="pe-3 text-end" style="width: 15%;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for s in items %}
+                      <tr>
+                        <td class="ps-3">
+                          <a class="text-decoration-none fw-semibold text-dark" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+                            {{ s.display_name }}
+                          </a>
+                        </td>
+                        <td>
+                          {% if s.graduation_year %}
+                            <span class="badge bg-light text-dark border">Class of {{ s.graduation_year }}</span>
+                          {% else %}
+                            <span class="text-muted small">—</span>
+                          {% endif %}
+                        </td>
+                        <td class="pe-3 text-end">
+                          <a class="btn btn-sm btn-outline-primary" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+                            View Profile
+                          </a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         {% endif %}
       {% endfor %}
-    {% else %}
-      <div class="alert alert-info">No students enrolled in this program.</div>
-    {% endif %}
-  </div>
-</div>
+    </div>
+  {% else %}
+    <div class="card border-0 shadow-sm rounded-3 text-center py-5">
+      <div class="card-body">
+        <div class="rounded-circle bg-light d-inline-flex p-3 text-muted mb-3">
+          <i class="bi bi-building-x fs-2"></i>
+        </div>
+        <h3 class="h5 fw-bold text-dark mb-1">No Students Enrolled</h3>
+        <p class="text-muted small mb-0">No active students are currently enrolled in {{ program.name }}.</p>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+  <style>
+    @media print {
+      .d-print-none, nav, footer, .navbar, .btn {
+        display: none !important;
+      }
+      body {
+        background-color: #fff !important;
+      }
+      .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+      }
+      .table {
+        font-size: 10pt;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function() {
+      const btn = document.getElementById('printBreakdownBtn');
+      if (btn) {
+        btn.addEventListener('click', function() {
+          window.print();
+        });
+      }
+    });
+  </script>
 {% endblock %}

@@ -1,178 +1,330 @@
 {% extends 'base.html' %}
 {% load form_tags %}
 {% block title %}Team/Crew Assignment: {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
 
 {% block content %}
-<div class="row mb-3">
-    <div class="col">
-        <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+  <!-- Page Header & Action Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Team/Crew Assignment</h1>
+      <div class="text-muted small">
+        Assign active students in {{ program.name }} to competition teams, project crews, and functional subteams
+      </div>
     </div>
-</div>
+    <div>
+      <a class="btn btn-outline-primary" href="{% url 'program_detail' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Program
+      </a>
+    </div>
+  </div>
 
-<div class="row">
-    <div class="col-12">
-        <h1 class="h3 mb-4">Team/Crew Assignment for {{ program.name }}</h1>
+  <!-- Assignment Status KPI Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small fw-semibold text-uppercase tracking-wide">Team Assignments</span>
+            <i class="bi bi-people text-primary fs-5"></i>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark mt-1">{{ assigned_team_count }} / {{ active_students_count }} Assigned</h3>
+          <div class="text-muted small mt-1">
+            {% if unassigned_team_count > 0 %}
+              <span class="text-warning-emphasis fw-semibold">{{ unassigned_team_count }} student{{ unassigned_team_count|pluralize }} unassigned</span>
+            {% else %}
+              <span class="text-success"><i class="bi bi-check-circle me-1"></i>All students placed</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small fw-semibold text-uppercase tracking-wide">Crew / Project</span>
+            <i class="bi bi-diagram-3 text-info fs-5"></i>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark mt-1">{{ assigned_crew_count }} / {{ active_students_count }} Assigned</h3>
+          <div class="text-muted small mt-1">
+            {% if unassigned_crew_count > 0 %}
+              <span class="text-warning-emphasis fw-semibold">{{ unassigned_crew_count }} student{{ unassigned_crew_count|pluralize }} unassigned</span>
+            {% else %}
+              <span class="text-success"><i class="bi bi-check-circle me-1"></i>All students placed</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small fw-semibold text-uppercase tracking-wide">Subteam Assignments</span>
+            <i class="bi bi-gear text-secondary fs-5"></i>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark mt-1">{{ assigned_subteam_count }} / {{ active_students_count }} Assigned</h3>
+          <div class="text-muted small mt-1">
+            {% if unassigned_subteam_count > 0 %}
+              <span class="text-warning-emphasis fw-semibold">{{ unassigned_subteam_count }} student{{ unassigned_subteam_count|pluralize }} unassigned</span>
+            {% else %}
+              <span class="text-success"><i class="bi bi-check-circle me-1"></i>All students placed</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="card mb-4">
-            <div class="card-header bg-light">
-                <h2 class="h5 mb-0">Bulk Assignment</h2>
+  <!-- Bulk Assignment Master Card -->
+  <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+    <div class="card-header bg-white border-bottom py-3 px-3">
+      <h2 class="h6 mb-0 fw-bold text-dark">
+        <i class="bi bi-pencil-square text-primary me-2"></i>Bulk Group Placement
+      </h2>
+    </div>
+    <div class="card-body p-3 p-md-4">
+      <form method="post" id="assignment-form">
+        {% csrf_token %}
+        <div class="row g-3 align-items-end mb-4">
+          <div class="col-lg-5">
+            <label class="form-label small fw-bold text-muted text-uppercase tracking-wide mb-2">1. Select Assignment Type</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="assignment_type" id="type-team" value="team" checked>
+              <label class="btn btn-outline-primary" for="type-team">
+                <i class="bi bi-people me-1"></i>Team
+              </label>
+
+              <input type="radio" class="btn-check" name="assignment_type" id="type-crew" value="crew">
+              <label class="btn btn-outline-primary" for="type-crew">
+                <i class="bi bi-diagram-3 me-1"></i>Crew / Project
+              </label>
+
+              <input type="radio" class="btn-check" name="assignment_type" id="type-subteam" value="subteam">
+              <label class="btn btn-outline-primary" for="type-subteam">
+                <i class="bi bi-gear me-1"></i>SubTeam
+              </label>
             </div>
-            <div class="card-body">
-                <form method="post" id="assignment-form">
-                    {% csrf_token %}
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">1. Select Assignment Type</label>
-                            <div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="assignment_type" id="type-team" value="team" checked>
-                                    <label class="form-check-label" for="type-team">Team</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="assignment_type" id="type-crew" value="crew">
-                                    <label class="form-check-label" for="type-crew">Crew/Project</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="assignment_type" id="type-subteam" value="subteam">
-                                    <label class="form-check-label" for="type-subteam">SubTeam</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold" for="target_id">2. Select <span id="target-label">Team</span></label>
-                            <select name="target_id" id="target_id" class="form-select">
-                                <option value="">-- Select --</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">Save Assignments</button>
-                        </div>
-                    </div>
-
-                    <h3 class="h6 mb-3 fw-bold">3. Select Students</h3>
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width: 40px;">
-                                        <input class="form-check-input" type="checkbox" id="select-all">
-                                    </th>
-                                    <th>Student Name</th>
-                                    <th>Current Team</th>
-                                    <th>Current Crew</th>
-                                    <th>Current SubTeam</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for e in active_enrollments %}
-                                <tr>
-                                    <td>
-                                        <input class="form-check-input student-checkbox" type="checkbox" name="student_ids" value="{{ e.student.id }}">
-                                    </td>
-                                    <td>
-                                        {{ e.student.display_name }}
-                                    </td>
-                                    <td>
-                                        {% if e.team %}
-                                            <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}</span>
-                                        {% else %}
-                                            <span class="text-muted small">None</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if e.crew %}
-                                            <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
-                                        {% else %}
-                                            <span class="text-muted small">None</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if e.subteam %}
-                                            <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
-                                        {% else %}
-                                            <span class="text-muted small">None</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </form>
-            </div>
+          </div>
+          <div class="col-md-7 col-lg-4">
+            <label class="form-label small fw-bold text-muted text-uppercase tracking-wide mb-2" for="target_id">
+              2. Select Target <span id="target-label" class="text-primary">Team</span>
+            </label>
+            <select name="target_id" id="target_id" class="form-select border-primary-subtle">
+              <option value="">-- Select --</option>
+            </select>
+          </div>
+          <div class="col-md-5 col-lg-3">
+            <button type="submit" class="btn btn-primary w-100 shadow-sm fw-semibold" id="save-button">
+              <i class="bi bi-check2-circle me-1"></i>Save Assignments
+              <span class="badge bg-white text-primary rounded-pill ms-1" id="selected-count-badge">0 selected</span>
+            </button>
+          </div>
         </div>
 
-        {% if inactive_enrollments %}
-        <div class="card mb-4">
-            <div class="card-header bg-light">
-                <h2 class="h5 mb-0">Students No Longer Active</h2>
+        <!-- Student Selection & Filter Toolbar -->
+        <div class="border rounded-3 p-3 bg-light mb-3">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+              <h3 class="h6 mb-0 fw-bold text-dark">3. Select Students to Assign</h3>
+              <div class="text-muted small">Check students below or use quick filters to select specific groups</div>
             </div>
-            <div class="card-body">
-                <p class="text-muted small">These students are no longer active in this program and cannot be assigned to a team/crew. You can clear their tags to tidy up.</p>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Student Name</th>
-                                <th>Current Team</th>
-                                <th>Current Crew</th>
-                                <th>Current SubTeam</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for e in inactive_enrollments %}
-                            <tr class="table-secondary">
-                                <td>
-                                    {{ e.student.display_name }}
-                                    <span class="badge bg-secondary ms-2">Inactive</span>
-                                </td>
-                                <td>
-                                    {% if e.team %}
-                                        <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">{{ e.team.team_type }} {{ e.team.number }}</span>
-                                    {% else %}
-                                        <span class="text-muted small">None</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if e.crew %}
-                                        <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">{{ e.crew.name }}</span>
-                                    {% else %}
-                                        <span class="text-muted small">None</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if e.subteam %}
-                                        <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">{{ e.subteam.name }}</span>
-                                    {% else %}
-                                        <span class="text-muted small">None</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if e.team or e.crew or e.subteam %}
-                                    <form method="post" class="d-inline" onsubmit="return confirm('Remove all tags from {{ e.student.display_name }}?');">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="clear_enrollment_id" value="{{ e.pk }}">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Clear all tags">Clear Tags</button>
-                                    </form>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-select-visible">
+                <i class="bi bi-check-all me-1"></i>Select Visible
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all">
+                <i class="bi bi-x-circle me-1"></i>Clear Selection
+              </button>
             </div>
+          </div>
+
+          <!-- Filter Toolbar -->
+          <div class="row g-2 align-items-center mb-3">
+            <div class="col-12 col-md-5 col-lg-4">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="student-search-input" class="form-control border-start-0" placeholder="Filter students by name...">
+              </div>
+            </div>
+            <div class="col-12 col-md-7 col-lg-8">
+              <div class="d-flex flex-wrap gap-1" id="filter-pills">
+                <button type="button" class="btn btn-sm btn-primary filter-pill active" data-filter="all">
+                  All ({{ active_enrollments|length }})
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary filter-pill" data-filter="needs-team">
+                  Needs Team ({{ unassigned_team_count }})
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary filter-pill" data-filter="needs-crew">
+                  Needs Crew ({{ unassigned_crew_count }})
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary filter-pill" data-filter="needs-subteam">
+                  Needs Subteam ({{ unassigned_subteam_count }})
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Student Table -->
+          <div class="table-responsive bg-white rounded border">
+            <table class="table table-hover align-middle mb-0" id="student-assignment-table">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 44px;" class="ps-3">
+                    <input class="form-check-input" type="checkbox" id="select-all" aria-label="Select all students">
+                  </th>
+                  <th>Student Name</th>
+                  <th>Current Team</th>
+                  <th>Current Crew</th>
+                  <th class="pe-3">Current SubTeam</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for e in active_enrollments %}
+                  <tr class="student-row"
+                      data-name="{{ e.student.display_name|lower }}"
+                      data-has-team="{% if e.team %}1{% else %}0{% endif %}"
+                      data-has-crew="{% if e.crew %}1{% else %}0{% endif %}"
+                      data-has-subteam="{% if e.subteam %}1{% else %}0{% endif %}">
+                    <td class="ps-3">
+                      <input class="form-check-input student-checkbox" type="checkbox" name="student_ids" value="{{ e.student.id }}" aria-label="Select {{ e.student.display_name }}">
+                    </td>
+                    <td>
+                      <a class="text-decoration-none fw-semibold text-dark" href="{% url 'student_detail' e.student.pk %}?next={{ request.path }}">
+                        {{ e.student.display_name }}
+                      </a>
+                    </td>
+                    <td>
+                      {% if e.team %}
+                        <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">
+                          {{ e.team.team_type }} {{ e.team.number }}
+                        </span>
+                      {% else %}
+                        <span class="badge bg-light text-muted border border-dashed">Unassigned</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if e.crew %}
+                        <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">
+                          {{ e.crew.name }}
+                        </span>
+                      {% else %}
+                        <span class="badge bg-light text-muted border border-dashed">Unassigned</span>
+                      {% endif %}
+                    </td>
+                    <td class="pe-3">
+                      {% if e.subteam %}
+                        <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">
+                          {{ e.subteam.name }}
+                        </span>
+                      {% else %}
+                        <span class="badge bg-light text-muted border border-dashed">Unassigned</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center py-4 text-muted">
+                      No active students found in this program.
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
-        {% endif %}
+      </form>
     </div>
-</div>
+  </div>
+
+  <!-- Inactive Students Accordion / Card -->
+  {% if inactive_enrollments %}
+    <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+      <div class="card-header bg-white border-bottom py-3 px-3 d-flex justify-content-between align-items-center">
+        <div>
+          <h2 class="h6 mb-0 fw-bold text-dark">
+            <i class="bi bi-archive text-muted me-2"></i>Students No Longer Active ({{ inactive_enrollments|length }})
+          </h2>
+          <div class="text-muted small">These students are graduated or inactive in this program. Tags can be cleared to keep records clean.</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#inactiveStudentsCollapse" aria-expanded="false" aria-controls="inactiveStudentsCollapse">
+          Toggle List
+        </button>
+      </div>
+      <div class="collapse" id="inactiveStudentsCollapse">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Student Name</th>
+                <th>Assigned Team</th>
+                <th>Assigned Crew</th>
+                <th>Assigned SubTeam</th>
+                <th class="pe-3 text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in inactive_enrollments %}
+                <tr class="table-light">
+                  <td class="ps-3">
+                    <span class="fw-semibold text-muted">{{ e.student.display_name }}</span>
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 ms-2 rounded-pill">Inactive</span>
+                  </td>
+                  <td>
+                    {% if e.team %}
+                      <span class="badge rounded-pill team-badge" data-color="{{ e.team.color }}" style="background-color: {{ e.team.color }}; color: {{ e.team.color|contrast_color }};">
+                        {{ e.team.team_type }} {{ e.team.number }}
+                      </span>
+                    {% else %}
+                      <span class="text-muted small">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if e.crew %}
+                      <span class="badge rounded-pill crew-badge" data-color="{{ e.crew.color }}" style="background-color: {{ e.crew.color }}; color: {{ e.crew.color|contrast_color }};">
+                        {{ e.crew.name }}
+                      </span>
+                    {% else %}
+                      <span class="text-muted small">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if e.subteam %}
+                      <span class="badge rounded-pill subteam-badge" data-color="{{ e.subteam.color }}" style="background-color: {{ e.subteam.color }}; color: {{ e.subteam.color|contrast_color }};">
+                        {{ e.subteam.name }}
+                      </span>
+                    {% else %}
+                      <span class="text-muted small">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="pe-3 text-end">
+                    {% if e.team or e.crew or e.subteam %}
+                      <form method="post" class="d-inline js-confirm" data-confirm="Remove all tags from {{ e.student.display_name }}?">
+                        {% csrf_token %}
+                        <input type="hidden" name="clear_enrollment_id" value="{{ e.pk }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Clear all tags">
+                          <i class="bi bi-trash3 me-1"></i>Clear Tags
+                        </button>
+                      </form>
+                    {% else %}
+                      <span class="text-muted small">No tags</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
-    // Data for Teams and Crews
+    // Data for Teams, Crews, and Subteams
     const teams = [
         {% for team in teams %}
         { id: "{{ team.id }}", name: "{% if team.name %}{{ team.name }} ({{ team.number }}){% else %}{{ team.team_type }} {{ team.number }}{% endif %}" },
@@ -189,32 +341,33 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endfor %}
     ];
 
-    // Handle toggling between Team and Crew selection
     const typeTeam = document.getElementById('type-team');
     const typeCrew = document.getElementById('type-crew');
     const typeSubTeam = document.getElementById('type-subteam');
     const targetSelect = document.getElementById('target_id');
     const targetLabel = document.getElementById('target-label');
+    const selectedCountBadge = document.getElementById('selected-count-badge');
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    const selectAll = document.getElementById('select-all');
+    const searchInput = document.getElementById('student-search-input');
+    const filterPills = document.querySelectorAll('.filter-pill');
+    const rows = document.querySelectorAll('.student-row');
 
     function updateDropdown() {
         const isTeam = typeTeam.checked;
         const isCrew = typeCrew.checked;
         const isSubTeam = typeSubTeam.checked;
         
-        targetLabel.textContent = isTeam ? 'Team' : (isCrew ? 'Crew/Project' : 'SubTeam');
-        
-        // Clear current options
+        targetLabel.textContent = isTeam ? 'Team' : (isCrew ? 'Crew / Project' : 'SubTeam');
         targetSelect.innerHTML = '';
         
-        // Add default unassign option
         const defaultOpt = document.createElement('option');
         defaultOpt.value = '';
         defaultOpt.textContent = isTeam ? '-- No Team (Unassign) --' : (isCrew ? '-- No Crew/Project (Unassign) --' : '-- No SubTeam (Unassign) --');
         targetSelect.appendChild(defaultOpt);
         
-        // Add relevant options
         const items = isTeam ? teams : (isCrew ? crews : subteams);
-        items.forEach(item => {
+        items.forEach(function(item) {
             const opt = document.createElement('option');
             opt.value = item.id;
             opt.textContent = item.name;
@@ -225,33 +378,115 @@ document.addEventListener('DOMContentLoaded', function() {
     typeTeam.addEventListener('change', updateDropdown);
     typeCrew.addEventListener('change', updateDropdown);
     typeSubTeam.addEventListener('change', updateDropdown);
-
-    // Initial population
     updateDropdown();
 
-    // Select all functionality
-    const selectAll = document.getElementById('select-all');
-    const checkboxes = document.querySelectorAll('.student-checkbox');
+    // Selected count badge
+    function updateSelectedCount() {
+        let count = 0;
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) count++;
+        });
+        if (selectedCountBadge) {
+            selectedCountBadge.textContent = count + ' selected';
+        }
+    }
 
-    selectAll.addEventListener('change', function() {
-        checkboxes.forEach(cb => {
-            cb.checked = selectAll.checked;
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+
+    // Select all / Deselect
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            rows.forEach(function(row) {
+                if (row.style.display !== 'none') {
+                    const cb = row.querySelector('.student-checkbox');
+                    if (cb) cb.checked = selectAll.checked;
+                }
+            });
+            updateSelectedCount();
+        });
+    }
+
+    // Select visible & Clear
+    const btnSelectVisible = document.getElementById('btn-select-visible');
+    const btnDeselectAll = document.getElementById('btn-deselect-all');
+
+    if (btnSelectVisible) {
+        btnSelectVisible.addEventListener('click', function() {
+            rows.forEach(function(row) {
+                if (row.style.display !== 'none') {
+                    const cb = row.querySelector('.student-checkbox');
+                    if (cb) cb.checked = true;
+                }
+            });
+            if (selectAll) selectAll.checked = true;
+            updateSelectedCount();
+        });
+    }
+
+    if (btnDeselectAll) {
+        btnDeselectAll.addEventListener('click', function() {
+            checkboxes.forEach(function(cb) {
+                cb.checked = false;
+            });
+            if (selectAll) selectAll.checked = false;
+            updateSelectedCount();
+        });
+    }
+
+    // Client-side filtering & Search
+    let currentFilter = 'all';
+
+    function applyFilters() {
+        const query = (searchInput ? searchInput.value.toLowerCase().trim() : '');
+        rows.forEach(function(row) {
+            const name = row.getAttribute('data-name') || '';
+            const hasTeam = row.getAttribute('data-has-team') === '1';
+            const hasCrew = row.getAttribute('data-has-crew') === '1';
+            const hasSubteam = row.getAttribute('data-has-subteam') === '1';
+
+            const matchesQuery = (!query || name.includes(query));
+            let matchesCategory = true;
+            if (currentFilter === 'needs-team') matchesCategory = !hasTeam;
+            else if (currentFilter === 'needs-crew') matchesCategory = !hasCrew;
+            else if (currentFilter === 'needs-subteam') matchesCategory = !hasSubteam;
+
+            row.style.display = (matchesQuery && matchesCategory) ? '' : 'none';
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilters);
+    }
+
+    filterPills.forEach(function(pill) {
+        pill.addEventListener('click', function() {
+            filterPills.forEach(function(p) {
+                p.classList.remove('btn-primary', 'active');
+                p.classList.add('btn-outline-secondary');
+            });
+            pill.classList.remove('btn-outline-secondary');
+            pill.classList.add('btn-primary', 'active');
+            currentFilter = pill.getAttribute('data-filter') || 'all';
+            applyFilters();
         });
     });
 
     // Badge colors
     document.querySelectorAll('.team-badge, .crew-badge, .subteam-badge').forEach(function(badge) {
-        var color = badge.getAttribute('data-color');
-        if (color) {
+        const color = badge.getAttribute('data-color');
+        if (color && color.startsWith('#') && color.length === 7) {
             badge.style.backgroundColor = color;
-            // Calculate brightness for contrast
-            var r = parseInt(color.substr(1, 2), 16);
-            var g = parseInt(color.substr(3, 2), 16);
-            var b = parseInt(color.substr(5, 2), 16);
-            var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            const r = parseInt(color.substr(1, 2), 16);
+            const g = parseInt(color.substr(3, 2), 16);
+            const b = parseInt(color.substr(5, 2), 16);
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
             badge.style.color = brightness > 128 ? 'black' : 'white';
         }
     });
+
+    updateSelectedCount();
 });
 </script>
 {% endblock %}

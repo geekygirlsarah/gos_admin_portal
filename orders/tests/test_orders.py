@@ -84,6 +84,11 @@ class ItemCreateEditTests(TestCase):
 
     def test_student_creates_item(self):
         self.login(self.student)
+        resp_get = self.client.get(self.create_url)
+        self.assertEqual(resp_get.status_code, 200)
+        self.assertIn("csp_nonce", resp_get.context)
+        self.assertContains(resp_get, f'nonce="{resp_get.context["csp_nonce"]}"')
+
         resp = self.client.post(
             self.create_url,
             {
@@ -259,6 +264,11 @@ class OrderGroupingTests(TestCase):
         item1 = make_item(self.program, requested_by=self.student)
         item2 = make_item(self.program, item_name="Zip Ties", requested_by=self.student)
         self.login(self.mentor)
+        resp_get = self.client.get(self.create_url)
+        self.assertEqual(resp_get.status_code, 200)
+        self.assertIn("csp_nonce", resp_get.context)
+        self.assertContains(resp_get, f'nonce="{resp_get.context["csp_nonce"]}"')
+
         resp = self.client.post(self.create_url, self._item_data([item1, item2]))
         self.assertEqual(resp.status_code, 302)
         order = Order.objects.get()

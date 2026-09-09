@@ -1084,7 +1084,7 @@ class PortalPermissionsUpdateTests(TestCase):
         perm.save()
         response = self.client.post(
             self.url,
-            {f"read_{perm.id}": "on"},
+            {f"perm_{perm.id}": "read"},
         )
         self.assertEqual(response.status_code, 302)
         perm.refresh_from_db()
@@ -1093,15 +1093,38 @@ class PortalPermissionsUpdateTests(TestCase):
 
         response = self.client.post(
             self.url,
-            {
-                f"read_{perm.id}": "on",
-                f"write_{perm.id}": "on",
-            },
+            {f"perm_{perm.id}": "write"},
         )
         self.assertEqual(response.status_code, 302)
         perm.refresh_from_db()
         self.assertTrue(perm.can_read)
         self.assertTrue(perm.can_write)
+
+        response = self.client.post(
+            self.url,
+            {f"perm_{perm.id}": "none"},
+        )
+        self.assertEqual(response.status_code, 302)
+        perm.refresh_from_db()
+        self.assertFalse(perm.can_read)
+        self.assertFalse(perm.can_write)
+
+    def test_lead_mentor_can_update_permissions_legacy_fallback(self):
+        self.client.login(username="lead_mentor_user", password=self.password)
+        perm, _ = RolePermission.objects.get_or_create(
+            role="Mentor", section="attendance"
+        )
+        perm.can_read = False
+        perm.can_write = False
+        perm.save()
+        response = self.client.post(
+            self.url,
+            {f"read_{perm.id}": "on"},
+        )
+        self.assertEqual(response.status_code, 302)
+        perm.refresh_from_db()
+        self.assertTrue(perm.can_read)
+        self.assertFalse(perm.can_write)
 
     def test_non_lead_mentor_cannot_update_permissions(self):
         self.client.login(username="mentor_user_perm", password=self.password)
@@ -1112,7 +1135,7 @@ class PortalPermissionsUpdateTests(TestCase):
         perm.save()
         response = self.client.post(
             self.url,
-            {f"read_{perm.id}": "on"},
+            {f"perm_{perm.id}": "read"},
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("home"))
@@ -1148,11 +1171,10 @@ class PortalPermissionsUpdateTests(TestCase):
             "orders-shipping",
         ):
             parent = RolePermission.objects.get(role="Parent", section=section)
-            for field in ("read", "write"):
-                self.assertContains(
-                    response,
-                    f'name="{field}_{parent.id}" id="{field}_{parent.id}"  disabled',
-                )
+            self.assertContains(
+                response,
+                f'name="perm_{parent.id}" id="perm_{parent.id}_none" value="none" checked disabled',
+            )
 
 
 class GetUserRoleTests(TestCase):

@@ -167,7 +167,7 @@
   {% for js in form.media|media_scripts %}
     <script src="{% static js %}" nonce="{{ csp_nonce }}"></script>
   {% endfor %}
-  <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet" integrity="sha384-Y87xRkYcSpzXkX0m0O6Cq5C9S6Vp9Z8X7p3V7p3V7p3V7p3V7p3V7p3V7p3V7p3" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
   <style>
     .cropper-modal .modal-body { max-height: 70vh; }
     .cropper-preview.rounded-circle { width: 180px; height: 180px; overflow: hidden; border-radius: 50%; background: #f8f9fa; }
@@ -177,7 +177,7 @@
 
 
 {% block extra_scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-vIPrwVp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10Wp10" crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" nonce="{{ csp_nonce }}"></script>
   <script nonce="{{ csp_nonce }}">
     (function(){
       var selector = 'input[type="file"][name="photo"]';

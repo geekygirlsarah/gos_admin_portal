@@ -108,3 +108,9 @@ class Phase3AttendanceUITests(TestCase):
         self.assertContains(resp, reverse("close_stale_attendance_sessions"))
         self.assertContains(resp, 'name="hours"')
         self.assertContains(resp, "Close All Stale")
+
+        # CSP check
+        self.assertIn("csp_nonce", resp.context)
+        self.assertContains(resp, f'nonce="{resp.context["csp_nonce"]}"')
+        self.assertContains(resp, 'id="whoIsHereProgramSelect"')
+        self.assertNotContains(resp, "onchange=")

@@ -638,7 +638,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         team_types = TEAM_TYPES
         crews = Crew.objects.select_related("program").all()
         subteams = SubTeam.objects.select_related("program").all()
-        programs = Program.objects.all().order_by("name")
+        programs = (
+            Program.objects.prefetch_related("crews", "subteams")
+            .all()
+            .order_by("-active", "name")
+        )
         attendance_programs = [p for p in programs if p.has_feature("attendance")]
 
         kiosk_configs = None
@@ -701,11 +705,23 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     def post(self, request):
         permissions = RolePermission.objects.all()
         for perm in permissions:
-            read_key = f"read_{perm.id}"
-            write_key = f"write_{perm.id}"
-
-            perm.can_read = read_key in request.POST
-            perm.can_write = write_key in request.POST
+            perm_key = f"perm_{perm.id}"
+            if perm_key in request.POST:
+                val = request.POST.get(perm_key)
+                if val == "write":
+                    perm.can_read = True
+                    perm.can_write = True
+                elif val == "read":
+                    perm.can_read = True
+                    perm.can_write = False
+                else:  # "none"
+                    perm.can_read = False
+                    perm.can_write = False
+            else:
+                read_key = f"read_{perm.id}"
+                write_key = f"write_{perm.id}"
+                perm.can_read = read_key in request.POST
+                perm.can_write = write_key in request.POST
             perm.save()
         messages.success(request, "Permissions updated successfully.")
         return redirect("/programs/settings/?tab=permissions")

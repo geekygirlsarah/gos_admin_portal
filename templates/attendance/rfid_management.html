@@ -59,7 +59,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="action" value="deactivate">
                             <input type="hidden" name="card_id" value="{{ result.rfid.id }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to deactivate this card?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to deactivate this card?">
                                 Deactivate
                             </button>
                         </form>
@@ -135,7 +135,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="action" value="deactivate">
                             <input type="hidden" name="card_id" value="{{ card.id }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to deactivate this card?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to deactivate this card?">
                                 Deactivate
                             </button>
                         </form>

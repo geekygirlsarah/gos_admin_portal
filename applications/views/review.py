@@ -688,6 +688,22 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
         if status or applicant_type or program_id or open_only:
             grouped = [g for g in grouped if g["apps"]]
 
+        # KPI summary metrics across applications (or filtered program)
+        kpi_base = Application.objects.all()
+        if program_id.isdigit():
+            kpi_base = kpi_base.filter(program_id=int(program_id))
+
+        kpi_pending_review = kpi_base.filter(
+            status=Application.Status.SUBMITTED
+        ).count()
+        kpi_awaiting_signatures = kpi_base.filter(
+            status=Application.Status.APPROVED
+        ).count()
+        kpi_ready_to_convert = kpi_base.filter(
+            status=Application.Status.APPROVED_SIGNED
+        ).count()
+        kpi_converted = kpi_base.filter(status=Application.Status.CONVERTED).count()
+
         from programs.models import Program
 
         return render(
@@ -704,6 +720,10 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
                 "open_only": open_only,
                 "current_sort": sort,
                 "current_dir": direction,
+                "kpi_pending_review": kpi_pending_review,
+                "kpi_awaiting_signatures": kpi_awaiting_signatures,
+                "kpi_ready_to_convert": kpi_ready_to_convert,
+                "kpi_converted": kpi_converted,
             },
         )
 

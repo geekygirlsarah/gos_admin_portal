@@ -105,7 +105,7 @@
                             <input type="hidden" name="action" value="clear">
                             <input type="hidden" name="person_type" value="{{ result.type }}">
                             <input type="hidden" name="person_id" value="{{ result.person.pk }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove Andrew ID for {{ result.person }}?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Remove Andrew ID for {{ result.person }}?">
                                 Clear
                             </button>
                         </form>
@@ -170,7 +170,7 @@
                             <input type="hidden" name="action" value="clear">
                             <input type="hidden" name="person_type" value="{{ entry.type }}">
                             <input type="hidden" name="person_id" value="{{ entry.person.pk }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove Andrew ID for {{ entry.person }}?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Remove Andrew ID for {{ entry.person }}?">
                                 Clear
                             </button>
                         </form>

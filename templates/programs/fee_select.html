@@ -1,53 +1,71 @@
 {% extends 'base.html' %}
-{% block title %}Manage Fees (Add/Edit) — {{ program.name }}{% endblock %}
+{% block title %}Manage Fees — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
+
 {% block content %}
+<div class="container mt-4">
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+      <a class="link-secondary text-decoration-none small fw-semibold" href="{% url 'program_detail' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i> Back to {{ program.name }}
+      </a>
     </div>
   </div>
-  <div class="row">
-    <div class="col-lg-10 col-xl-8">
-      <h1 class="h4">Manage Fees (Add/Edit)</h1>
-      <div class="mb-3">
-        <a class="btn btn-success" href="{% url 'program_fee_create' program.id %}">Add Fee</a>
-      </div>
-      <div class="card mb-4">
-        <div class="card-header">Existing Fees</div>
-        <div class="card-body">
-          {% if fees %}
-            <div class="table-responsive">
-              <table class="table table-sm align-middle">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Amount</th>
-                    <th>Effective Date</th>
-                    <th>Due Date</th>
-                    <th class="text-end">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for f in fees %}
-                    <tr>
-                      <td>{{ f.name }}</td>
-                      <td>${{ f.amount }}</td>
-                      <td>{{ f.effective_date|default:'—' }}</td>
-                      <td>{{ f.due_date|default:'—' }}</td>
-                      <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="{% url 'program_fee_edit' program.id f.id %}">Edit</a>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% else %}
-            <div class="alert alert-info m-0">No fees have been added for this program yet.</div>
-          {% endif %}
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1 fw-bold text-dark">Manage Program Fees</h1>
+      <p class="text-muted small mb-0">Configure tuition and fee schedules and set student applicability for {{ program.name }}.</p>
+    </div>
+    <a class="btn btn-success fw-semibold px-3" href="{% url 'program_fee_create' program.id %}">
+      <i class="bi bi-plus-lg me-1"></i> Add Fee
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+      <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-receipt text-primary me-2"></i>Existing Fees</h5>
+      <span class="badge bg-light text-muted border">{{ fees|length }} fee{{ fees|length|pluralize }}</span>
+    </div>
+    <div class="card-body p-0">
+      {% if fees %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Fee Name</th>
+                <th>Amount</th>
+                <th>Effective Date</th>
+                <th>Due Date</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in fees %}
+                <tr>
+                  <td class="fw-semibold text-dark">{{ f.name }}</td>
+                  <td><span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fs-6">${{ f.amount }}</span></td>
+                  <td>{{ f.effective_date|date:"M j, Y"|default:"—" }}</td>
+                  <td>{{ f.due_date|date:"M j, Y"|default:"—" }}</td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary fw-semibold" href="{% url 'program_fee_edit' program.id f.id %}">
+                      <i class="bi bi-pencil me-1"></i> Edit Fee
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-      </div>
+      {% else %}
+        <div class="p-4 text-center text-muted">
+          <p class="mb-2">No fees have been configured for this program yet.</p>
+          <a class="btn btn-sm btn-primary fw-semibold" href="{% url 'program_fee_create' program.id %}">
+            <i class="bi bi-plus-lg me-1"></i> Add First Fee
+          </a>
+        </div>
+      {% endif %}
     </div>
   </div>
+</div>
 {% endblock %}

@@ -27,7 +27,7 @@
     <form method="get" class="row g-2 align-items-end">
       <div class="col-auto">
         <label for="program_id" class="form-label">Program</label>
-        <select class="form-select form-select-sm" id="program_id" name="program_id" onchange="this.form.submit()">
+        <select class="form-select form-select-sm" id="program_id" name="program_id">
           <option value="">All programs</option>
           {% for p in enrolled_programs %}
           <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
@@ -132,6 +132,13 @@
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
+  var programSelect = document.getElementById('program_id');
+  if (programSelect) {
+    programSelect.addEventListener('change', function() {
+      this.form.submit();
+    });
+  }
+
   var labels = {{ chart_labels_json|safe }};
   var data = {{ chart_data_json|safe }};
 
