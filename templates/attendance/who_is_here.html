@@ -12,7 +12,7 @@
         </div>
         <div>
             <form method="get" class="d-flex gap-2 align-items-center">
-                <select name="program_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select id="whoIsHereProgramSelect" name="program_id" class="form-select form-select-sm">
                     <option value="">All Programs</option>
                     {% for p in programs %}
                     <option value="{{ p.id }}" {% if p.id == selected_program_id %}selected{% endif %}>{{ p.name_with_dates }}</option>
@@ -258,4 +258,17 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        const select = document.getElementById('whoIsHereProgramSelect');
+        if (select) {
+            select.addEventListener('change', function() {
+                this.form.submit();
+            });
+        }
+    });
+</script>
 {% endblock %}

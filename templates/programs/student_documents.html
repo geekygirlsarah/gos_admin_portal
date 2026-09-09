@@ -2,77 +2,172 @@
 {% load form_tags %}
 
 {% block title %}Student Documents: {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
 
 {% block content %}
-  <div class="row mb-3">
-    <div class="col">
-      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+  <!-- Page Header & Action Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Student Documents</h1>
+      <div class="text-muted small">
+        Signed safety forms, waivers, and program agreements for {{ program.name }}
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button id="printMatrixBtn" class="btn btn-outline-secondary d-print-none" type="button">
+        <i class="bi bi-printer me-1"></i>Print Matrix
+      </button>
+      <a class="btn btn-outline-primary d-print-none" href="{% url 'program_detail' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Program
+      </a>
     </div>
   </div>
 
-  <div class="d-flex align-items-center justify-content-between mb-4">
-    <h1 class="h3 m-0">Student Documents: {{ program.name }}</h1>
-  </div>
-
-  <div class="card">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th style="min-width: 200px;">Student</th>
-              {% for doc in program_documents %}
-                <th class="text-center">{{ doc.name }}</th>
-              {% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in student_docs %}
-              <tr {% if not row.active %}class="table-light text-muted"{% endif %}>
-                <td>
-                  <a href="{% url 'student_detail' row.student.pk %}" class="text-decoration-none {% if not row.active %}text-muted{% endif %}">
-                    {{ row.student.last_name }}, {{ row.student.preferred_first_name|default:row.student.legal_first_name }}
-                  </a>
-                  {% if not row.active %}
-                    <span class="badge bg-secondary ms-1">Inactive</span>
-                  {% endif %}
-                </td>
-                {% for doc in program_documents %}
-                  <td class="text-center">
-                    {% with submission=row.submissions|get_item:doc.id %}
-                      {% if submission %}
-                        <a href="{{ submission.file.url }}" target="_blank" title="Uploaded {{ submission.uploaded_at|date:'Y-m-d' }}">
-                          <i class="bi bi-file-earmark-check-fill text-success fs-4"></i>
-                        </a>
-                      {% else %}
-                        {% if doc.is_required %}
-                          <i class="bi bi-file-earmark-x text-danger fs-4" title="Required - Missing"></i>
-                        {% else %}
-                          <i class="bi bi-dash text-muted" title="Not submitted"></i>
-                        {% endif %}
-                      {% endif %}
-                    {% endwith %}
-                  </td>
-                {% endfor %}
-              </tr>
-            {% empty %}
-              <tr>
-                <td colspan="{{ program_documents.count|add:1 }}" class="text-center py-4 text-muted">
-                  No students enrolled in this program.
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <!-- Summary KPI Metrics -->
+  <div class="row g-3 mb-4 d-print-none">
+    <div class="col-12 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+        <div class="card-body p-3">
+          <div class="text-muted small fw-semibold text-uppercase tracking-wide">Enrolled Students</div>
+          <h3 class="h4 mb-0 fw-bold text-dark mt-1">{{ total_students }}</h3>
+          <div class="text-muted small">Active in program</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+        <div class="card-body p-3">
+          <div class="text-muted small fw-semibold text-uppercase tracking-wide">Required Documents</div>
+          <h3 class="h4 mb-0 fw-bold text-primary mt-1">{{ required_docs_count }}</h3>
+          <div class="text-muted small">Forms per student</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 h-100 bg-light">
+        <div class="card-body p-3">
+          <div class="text-muted small fw-semibold text-uppercase tracking-wide">Complete Submissions</div>
+          <h3 class="h4 mb-0 fw-bold {% if complete_students == total_students and total_students > 0 %}text-success{% else %}text-secondary{% endif %} mt-1">
+            {{ complete_students }} / {{ total_students }}
+          </h3>
+          <div class="text-muted small">All required forms uploaded</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="mt-4 text-muted small">
-    <p>
-      <i class="bi bi-file-earmark-check-fill text-success"></i> = Document submitted and available.<br>
-      <i class="bi bi-file-earmark-x text-danger"></i> = Required document missing.<br>
-      <i class="bi bi-dash"></i> = Optional document not submitted.
-    </p>
+  <!-- Document Matrix Card -->
+  <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+    <div class="card-header bg-white border-bottom py-3 px-3 d-flex justify-content-between align-items-center">
+      <h2 class="h6 mb-0 fw-bold text-dark">
+        <i class="bi bi-file-earmark-check text-primary me-2"></i>Signed Document Submissions Matrix
+      </h2>
+      <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill">
+        {{ program_documents|length }} Form{{ program_documents|length|pluralize }}
+      </span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3" style="min-width: 200px;">Student Name</th>
+            {% for doc in program_documents %}
+              <th class="text-center">
+                {{ doc.name }}
+                {% if doc.is_required %}
+                  <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill ms-1 small">Required</span>
+                {% else %}
+                  <span class="badge bg-light text-muted border rounded-pill ms-1 small">Optional</span>
+                {% endif %}
+              </th>
+            {% empty %}
+              <th class="text-center text-muted">No Program Documents Configured</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in student_docs %}
+            <tr {% if not row.active %}class="table-light text-muted"{% endif %}>
+              <td class="ps-3">
+                <a href="{% url 'student_detail' row.student.pk %}" class="text-decoration-none fw-semibold {% if not row.active %}text-muted{% else %}text-dark{% endif %}">
+                  {{ row.student.display_name }}
+                </a>
+                {% if not row.active %}
+                  <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 ms-1 rounded-pill">Inactive</span>
+                {% endif %}
+              </td>
+              {% for doc in program_documents %}
+                <td class="text-center">
+                  {% with submission=row.submissions|get_item:doc.id %}
+                    {% if submission and submission.file %}
+                      <a href="{{ submission.file.url }}" target="_blank" class="text-decoration-none" title="Uploaded {{ submission.uploaded_at|date:'Y-m-d' }}">
+                        <i class="bi bi-file-earmark-check-fill text-success fs-4"></i>
+                      </a>
+                    {% else %}
+                      {% if doc.is_required %}
+                        <i class="bi bi-file-earmark-x text-danger fs-4" title="Required — Missing"></i>
+                      {% else %}
+                        <i class="bi bi-dash text-muted" title="Not submitted"></i>
+                      {% endif %}
+                    {% endif %}
+                  {% endwith %}
+                </td>
+              {% empty %}
+                <td class="text-center text-muted">—</td>
+              {% endfor %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="{{ program_documents.count|add:1 }}" class="text-center py-4 text-muted">
+                No students enrolled in this program.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+
+  <!-- Legend -->
+  <div class="card border-0 bg-light rounded-3 p-3 text-muted small d-print-none">
+    <div class="fw-bold mb-1 text-dark">Document Status Key:</div>
+    <div class="d-flex flex-wrap gap-3">
+      <div><i class="bi bi-file-earmark-check-fill text-success me-1"></i> Document submitted and available to view/download</div>
+      <div><i class="bi bi-file-earmark-x text-danger me-1"></i> Required document missing</div>
+      <div><i class="bi bi-dash text-muted me-1"></i> Optional document not submitted</div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_head %}
+  <style>
+    @media print {
+      .d-print-none, nav, footer, .navbar, .btn {
+        display: none !important;
+      }
+      body {
+        background-color: #fff !important;
+      }
+      .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+      }
+      .table {
+        font-size: 10pt;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function() {
+      const btn = document.getElementById('printMatrixBtn');
+      if (btn) {
+        btn.addEventListener('click', function() {
+          window.print();
+        });
+      }
+    });
+  </script>
 {% endblock %}
