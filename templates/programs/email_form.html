@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Messaging{% endblock %}
+{% block title %}Program Messaging{% endblock %}
 {% block extra_head %}
   {% load static %}
   <!-- Quill rich-text editor (self-hosted); provide CDN fallback via JS if unavailable -->
@@ -10,104 +10,255 @@
 {% block content %}
 <div class="row mb-3">
   <div class="col">
-    {% if program %}
-      <a class="link-secondary" href="{% url 'program_detail' program.id %}">← Back to {{ program.name }}</a>
+    {% if is_program_scoped and program %}
+      <a class="link-secondary text-decoration-none" href="{% url 'program_detail' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to {{ program.name }}
+      </a>
     {% else %}
-      <a class="link-secondary" href="{% url 'program_list' %}">← Back to Programs</a>
+      <a class="link-secondary text-decoration-none" href="{% url 'program_list' %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Programs
+      </a>
     {% endif %}
   </div>
 </div>
+
 <div class="row">
   <div class="col-lg-10 col-xl-9">
-    <h1 class="h4 mb-3">Email Messaging{% if program %} — {{ program.name }}{% endif %}</h1>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h1 class="h4 mb-0 fw-bold text-dark"><i class="bi bi-envelope-paper text-primary me-2"></i>Program Messaging</h1>
+        <p class="text-muted small mb-0">Broadcast announcements and updates to enrolled students, parents/guardians, and mentors with optional subgroup targeting.</p>
+      </div>
+    </div>
 
-      {% if form.non_field_errors %}
-          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+    {% for field in form %}
+      {% if field.errors %}
+        <div class="text-danger small">{{ field.label }}: {{ field.errors|join:", " }}</div>
       {% endif %}
-      {% for field in form %}
-          {% if field.errors %}
-              <div class="text-danger small">{{ field.label }}: {{ field.errors|join:", " }}</div>
-          {% endif %}
-      {% endfor %}
-
-{#    <div class="alert alert-info d-flex align-items-start" role="alert">#}
-{#      <div>#}
-{#        <div class="fw-semibold">Heads up</div>#}
-{#        <small>Mentors are not linked to programs in the current data model; selecting Mentors will email all active mentors.</small>#}
-{#      </div>#}
-{#    </div>#}
+    {% endfor %}
 
     <form method="post" class="needs-validation js-email-send-confirm" novalidate>
       {% csrf_token %}
 
-      <!-- Audience -->
-      <div class="card mb-3">
-        <div class="card-header">Audience</div>
-        <div class="card-body">
-          {% if not program %}
-            <div class="mb-3">
-              {{ form.program.label_tag }}
-              {{ form.program }}
-              {% if form.program.help_text %}<div class="form-text">{{ form.program.help_text }}</div>{% endif %}
+      <!-- Audience Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-people text-primary me-2"></i>Target Audience</h5>
+        </div>
+        <div class="card-body p-4">
+          <!-- Audience Mode Selector: Broadcast vs Test -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold text-dark mb-2">Audience Type <span class="text-danger">*</span></label>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="card border rounded-3 p-3 h-100 js-audience-mode-card {% if not form.test_email.value %}border-primary bg-white{% else %}bg-light-subtle{% endif %}" id="modeCardBroadcast" style="cursor: pointer;">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="audience_mode" id="mode_broadcast" value="broadcast" {% if not form.test_email.value %}checked{% endif %}>
+                    <label class="form-check-label fw-bold text-dark d-block" for="mode_broadcast">
+                      <i class="bi bi-broadcast text-primary me-1"></i> Broadcast to Program
+                      <span class="text-muted fw-normal small d-block mt-1">Send to enrolled students, parents, and/or mentors using program and subgroup filters.</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card border rounded-3 p-3 h-100 js-audience-mode-card {% if form.test_email.value %}border-primary bg-white{% else %}bg-light-subtle{% endif %}" id="modeCardTest" style="cursor: pointer;">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="audience_mode" id="mode_test" value="test" {% if form.test_email.value %}checked{% endif %}>
+                    <label class="form-check-label fw-bold text-dark d-block" for="mode_test">
+                      <i class="bi bi-envelope-at text-info me-1"></i> Send Test / Preview Email
+                      <span class="text-muted fw-normal small d-block mt-1">Send a single sample email to a specific address to check formatting and layout.</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
-          {% else %}
-            {{ form.program }}
-          {% endif %}
-
-          <div class="mb-3">
-            <label class="form-label">Recipient groups</label>
-
-              {{ form.recipient_groups }}
-
-            <div class="form-text">Parents/guardians will only be emailed if they are opted in to receive email updates.</div>
-              <div class="form-text">Mentors are not linked to programs in the current data model; selecting Mentors will email all active mentors.</div>
           </div>
-            <div class="col-md-6">
-                {{ form.test_email.label_tag }}
-                {{ form.test_email }}
-                <div class="form-text">Optional: If set, the message will be sent only to this address for testing.</div>
+
+          <!-- Test Email Section (Shown when audience_mode == 'test') -->
+          <div id="testEmailSection" class="{% if not form.test_email.value %}d-none{% endif %}">
+            <div class="border border-info-subtle rounded-3 p-3 bg-info-subtle bg-opacity-25">
+              <label for="id_test_email" class="form-label fw-bold text-dark mb-1"><i class="bi bi-envelope-check text-info me-1"></i>Test Email Address <span class="text-danger">*</span></label>
+              <input type="email" name="test_email" id="id_test_email" class="form-control" value="{{ form.test_email.value|default:'' }}" placeholder="your-email@example.com">
+              <div class="form-text small mt-1">The message will <strong>only</strong> be sent to this test address so you can preview layout, styling, and tables before broadcasting to the whole team.</div>
             </div>
+          </div>
+
+          <!-- Broadcast Filters Section (Shown when audience_mode == 'broadcast') -->
+          <div id="broadcastFiltersSection" class="{% if form.test_email.value %}d-none{% endif %}">
+            <!-- Program Selection -->
+            <div class="mb-4">
+              <label for="id_program" class="form-label fw-semibold text-dark">Program <span class="text-danger">*</span></label>
+              <select name="program" id="id_program" class="form-select">
+                {% for choice in form.program.field.choices %}
+                  {% if choice.0 %}
+                    <option value="{{ choice.0 }}" {% if form.program.value|stringformat:"s" == choice.0|stringformat:"s" or form.program.initial.id|stringformat:"s" == choice.0|stringformat:"s" or program.id|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>{{ choice.1 }}</option>
+                  {% else %}
+                    <option value="" {% if not form.program.value and not form.program.initial and not program %}selected{% endif %}>--- Select a Program ---</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              {% if form.program.help_text %}
+                <div class="form-text small">{{ form.program.help_text }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Recipient Groups -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold text-dark mb-2">Recipient Groups <span class="text-danger">*</span></label>
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <div class="card border rounded-3 p-3 h-100 bg-light-subtle">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="recipient_groups" value="students" id="grp_students" {% if 'students' in form.recipient_groups.value %}checked{% endif %}>
+                      <label class="form-check-label fw-bold text-dark d-block" for="grp_students">
+                        <i class="bi bi-mortarboard text-primary me-1"></i> Students
+                        <span class="text-muted fw-normal small d-block mt-1">Enrolled students in the program (or selected subgroups).</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="card border rounded-3 p-3 h-100 bg-light-subtle">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="recipient_groups" value="parents" id="grp_parents" {% if 'parents' in form.recipient_groups.value %}checked{% endif %}>
+                      <label class="form-check-label fw-bold text-dark d-block" for="grp_parents">
+                        <i class="bi bi-people-fill text-success me-1"></i> Parents / Guardians
+                        <span class="text-muted fw-normal small d-block mt-1">Parents of enrolled students (or selected subgroups) who opted in to email updates.</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="card border rounded-3 p-3 h-100 bg-light-subtle">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="recipient_groups" value="mentors" id="grp_mentors" {% if 'mentors' in form.recipient_groups.value %}checked{% endif %}>
+                      <label class="form-check-label fw-bold text-dark d-block" for="grp_mentors">
+                        <i class="bi bi-tools text-warning me-1"></i> Mentors
+                        <span class="text-muted fw-normal small d-block mt-1">All active team mentors and coaches across the organization.</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Subgroup Filtering Section -->
+            <div class="border rounded-3 p-3 bg-light">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-funnel text-primary me-1"></i> Filter by Subgroups (Optional)</h6>
+                <span class="badge bg-secondary-subtle text-secondary border">Optional</span>
+              </div>
+              <p class="text-muted small mb-3">Leave checkboxes unselected to message all enrolled students and parents in the program, or select specific teams, crews, and subteams to narrow recipients (students and their parents) to those subgroups.</p>
+
+              <div class="row g-3">
+                <!-- Teams Filter -->
+                <div class="col-md-4">
+                  <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-diagram-2 me-1"></i>Teams</label>
+                  <div class="bg-white border rounded-3 p-2 overflow-auto" style="max-height: 180px;">
+                    {% for team in teams %}
+                      <div class="form-check mb-1">
+                        <input class="form-check-input js-subgroup-input" type="checkbox" name="teams" value="{{ team.id }}" id="team_{{ team.id }}" {% if team.id|stringformat:"s" in form.teams.value or team in form.teams.value %}checked{% endif %}>
+                        <label class="form-check-label small" for="team_{{ team.id }}">
+                          <span class="badge" style="background-color: {{ team.color }};">{{ team.team_type }} {{ team.number }}</span>
+                          {% if team.name %}<span class="text-dark">{{ team.name }}</span>{% endif %}
+                        </label>
+                      </div>
+                    {% empty %}
+                      <div class="text-muted small p-1">No teams configured</div>
+                    {% endfor %}
+                  </div>
+                </div>
+
+                <!-- Crews / Projects Filter -->
+                <div class="col-md-4">
+                  <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-diagram-3 me-1"></i>Crews / Projects</label>
+                  <div class="bg-white border rounded-3 p-2 overflow-auto" style="max-height: 180px;" id="crewsContainer">
+                    {% for crew in crews %}
+                      <div class="form-check mb-1 js-crew-item" data-program="{{ crew.program_id }}">
+                        <input class="form-check-input js-subgroup-input" type="checkbox" name="crews" value="{{ crew.id }}" id="crew_{{ crew.id }}" {% if crew.id|stringformat:"s" in form.crews.value or crew in form.crews.value %}checked{% endif %}>
+                        <label class="form-check-label small" for="crew_{{ crew.id }}">
+                          <span class="badge" style="background-color: {{ crew.color }};">{{ crew.name }}</span>
+                        </label>
+                      </div>
+                    {% empty %}
+                      <div class="text-muted small p-1">No crews configured</div>
+                    {% endfor %}
+                    <div class="text-muted small p-1 d-none" id="noCrewsMsg">No crews for selected program</div>
+                  </div>
+                </div>
+
+                <!-- SubTeams Filter -->
+                <div class="col-md-4">
+                  <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-boxes me-1"></i>SubTeams</label>
+                  <div class="bg-white border rounded-3 p-2 overflow-auto" style="max-height: 180px;" id="subteamsContainer">
+                    {% for subteam in subteams %}
+                      <div class="form-check mb-1 js-subteam-item" data-program="{{ subteam.program_id }}">
+                        <input class="form-check-input js-subgroup-input" type="checkbox" name="subteams" value="{{ subteam.id }}" id="subteam_{{ subteam.id }}" {% if subteam.id|stringformat:"s" in form.subteams.value or subteam in form.subteams.value %}checked{% endif %}>
+                        <label class="form-check-label small" for="subteam_{{ subteam.id }}">
+                          <span class="badge" style="background-color: {{ subteam.color }};">{{ subteam.name }}</span>
+                        </label>
+                      </div>
+                    {% empty %}
+                      <div class="text-muted small p-1">No subteams configured</div>
+                    {% endfor %}
+                    <div class="text-muted small p-1 d-none" id="noSubteamsMsg">No subteams for selected program</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Sender -->
-      <div class="card mb-3">
-        <div class="card-header">Sender</div>
-        <div class="card-body">
+      <!-- Sender Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-send text-primary me-2"></i>Sender Address</h5>
+        </div>
+        <div class="card-body p-4">
           <div class="mb-0">
-            {{ form.from_account.label_tag }}
+            <label for="id_from_account" class="form-label fw-semibold text-dark">{{ form.from_account.label }}</label>
             {{ form.from_account }}
-            <div class="form-text">Choose the sender address.</div>
+            <div class="form-text small">Choose which configured sender account will be shown in the email's From header.</div>
           </div>
         </div>
       </div>
 
-      <!-- Content -->
-      <div class="card mb-3">
-        <div class="card-header">Content</div>
-        <div class="card-body">
+      <!-- Message Content Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-chat-left-text text-primary me-2"></i>Message Content</h5>
+        </div>
+        <div class="card-body p-4">
           <div class="mb-3">
-            {{ form.subject.label_tag }}
-            {{ form.subject }}
+            <label for="id_subject" class="form-label fw-semibold text-dark">Subject Line <span class="text-danger">*</span></label>
+            <input type="text" name="subject" id="id_subject" class="form-control" value="{{ form.subject.value|default:'' }}" placeholder="e.g. Weekly Update & Build Schedule" required>
           </div>
 
           <div class="mb-0">
-            <label class="form-label">Message body</label>
-            <div id="editor" class="form-control"></div>
+            <label class="form-label fw-semibold text-dark">Message Body <span class="text-danger">*</span></label>
+            <div id="editor" class="form-control rounded-3" style="min-height: 250px;"></div>
             <input type="hidden" name="body" id="id_body" value="{{ form.body.value|default:'' }}">
-            <div class="form-text">Rich text is supported. The email will be sent in HTML format with a plain-text fallback.</div>
+            <div class="form-text small mt-2">Rich text and formatted tables are supported. Broadcasts are sent in HTML format with a clean plain-text fallback.</div>
           </div>
         </div>
       </div>
 
-      <!-- Testing & Send -->
-      <div class="card mb-4">
-        <div class="card-header">Testing &amp; Send</div>
-        <div class="card-body">
-          <div class="row g-3 align-items-end">
-            <div class="col-md-6 text-md-end mt-3 mt-md-0">
-              <button type="submit" class="btn btn-primary">Send Email</button>
-            </div>
+      <!-- Dispatch & Send Card -->
+      <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-body p-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+          <div>
+            <div class="fw-bold text-dark mb-1" id="dispatchSummaryTitle">{% if form.test_email.value %}Ready to Send Test Email{% else %}Ready to Send Broadcast{% endif %}</div>
+            <div class="text-muted small" id="dispatchSummarySubtitle">{% if form.test_email.value %}A single sample email will be sent exclusively to the test address for verification.{% else %}Your message will be sent to the selected audience upon confirmation.{% endif %}</div>
+          </div>
+          <div>
+            <button type="submit" class="btn btn-primary px-4 py-2" id="sendEmailSubmitBtn">
+              <i class="{% if form.test_email.value %}bi bi-envelope-check{% else %}bi bi-send-fill{% endif %} me-1" id="sendEmailSubmitIcon"></i> <span id="sendEmailSubmitBtnText">{% if form.test_email.value %}Send Test Email{% else %}Send Broadcast Email{% endif %}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -117,10 +268,155 @@
   </div>
 </div>
 {% endblock %}
+
 {% block extra_scripts %}
-    {% load static %}
-    <script src="{% static 'vendor/quill/2.0.3/quill.js' %}"></script>
-    <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}"></script>
-    <script src="{% static 'js/email_form.js' %}"></script>
-    <script src="{% static 'js/email_send_confirm.js' %}"></script>
+  {% load static %}
+  <script src="{% static 'vendor/quill/2.0.3/quill.js' %}" nonce="{{ csp_nonce }}"></script>
+  <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}" nonce="{{ csp_nonce }}"></script>
+  <script src="{% static 'js/email_form.js' %}" nonce="{{ csp_nonce }}"></script>
+  <script src="{% static 'js/email_send_confirm.js' %}" nonce="{{ csp_nonce }}"></script>
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      function updateAudienceMode() {
+        var isTestMode = document.getElementById('mode_test') && document.getElementById('mode_test').checked;
+        var broadcastSec = document.getElementById('broadcastFiltersSection');
+        var testSec = document.getElementById('testEmailSection');
+        var progSelect = document.getElementById('id_program');
+        var testEmailInput = document.getElementById('id_test_email');
+        var titleEl = document.getElementById('dispatchSummaryTitle');
+        var subtitleEl = document.getElementById('dispatchSummarySubtitle');
+        var btnTextEl = document.getElementById('sendEmailSubmitBtnText');
+        var btnIconEl = document.getElementById('sendEmailSubmitIcon');
+        var cardBroadcast = document.getElementById('modeCardBroadcast');
+        var cardTest = document.getElementById('modeCardTest');
+
+        if (isTestMode) {
+          if (broadcastSec) broadcastSec.classList.add('d-none');
+          if (testSec) testSec.classList.remove('d-none');
+          if (progSelect) progSelect.required = false;
+          if (testEmailInput) testEmailInput.required = true;
+          if (titleEl) titleEl.textContent = 'Ready to Send Test Email';
+          if (subtitleEl) subtitleEl.textContent = 'A single sample email will be sent exclusively to the test address for verification.';
+          if (btnTextEl) btnTextEl.textContent = 'Send Test Email';
+          if (btnIconEl) btnIconEl.className = 'bi bi-envelope-check me-1';
+          if (cardBroadcast) {
+            cardBroadcast.classList.remove('border-primary', 'bg-white');
+            cardBroadcast.classList.add('bg-light-subtle');
+          }
+          if (cardTest) {
+            cardTest.classList.add('border-primary', 'bg-white');
+            cardTest.classList.remove('bg-light-subtle');
+          }
+        } else {
+          if (broadcastSec) broadcastSec.classList.remove('d-none');
+          if (testSec) testSec.classList.add('d-none');
+          if (progSelect) progSelect.required = true;
+          if (testEmailInput) {
+            testEmailInput.required = false;
+            testEmailInput.value = '';
+          }
+          if (titleEl) titleEl.textContent = 'Ready to Send Broadcast';
+          if (subtitleEl) subtitleEl.textContent = 'Your message will be sent to the selected audience upon confirmation.';
+          if (btnTextEl) btnTextEl.textContent = 'Send Broadcast Email';
+          if (btnIconEl) btnIconEl.className = 'bi bi-send-fill me-1';
+          if (cardBroadcast) {
+            cardBroadcast.classList.add('border-primary', 'bg-white');
+            cardBroadcast.classList.remove('bg-light-subtle');
+          }
+          if (cardTest) {
+            cardTest.classList.remove('border-primary', 'bg-white');
+            cardTest.classList.add('bg-light-subtle');
+          }
+        }
+      }
+
+      function updateSubgroupVisibility() {
+        var progSelect = document.getElementById('id_program');
+        if (!progSelect) return;
+        var selectedProgId = String(progSelect.value || '');
+
+        var crewItems = document.querySelectorAll('.js-crew-item');
+        var visibleCrews = 0;
+        crewItems.forEach(function (item) {
+          var prog = String(item.dataset.program || '');
+          if (!selectedProgId || prog === selectedProgId) {
+            item.classList.remove('d-none');
+            visibleCrews++;
+          } else {
+            item.classList.add('d-none');
+            var input = item.querySelector('input');
+            if (input) input.checked = false;
+          }
+        });
+        var noCrewsMsg = document.getElementById('noCrewsMsg');
+        if (noCrewsMsg) {
+          if (visibleCrews === 0 && selectedProgId) {
+            noCrewsMsg.classList.remove('d-none');
+          } else {
+            noCrewsMsg.classList.add('d-none');
+          }
+        }
+
+        var subteamItems = document.querySelectorAll('.js-subteam-item');
+        var visibleSubteams = 0;
+        subteamItems.forEach(function (item) {
+          var prog = String(item.dataset.program || '');
+          if (!selectedProgId || prog === selectedProgId) {
+            item.classList.remove('d-none');
+            visibleSubteams++;
+          } else {
+            item.classList.add('d-none');
+            var input = item.querySelector('input');
+            if (input) input.checked = false;
+          }
+        });
+        var noSubteamsMsg = document.getElementById('noSubteamsMsg');
+        if (noSubteamsMsg) {
+          if (visibleSubteams === 0 && selectedProgId) {
+            noSubteamsMsg.classList.remove('d-none');
+          } else {
+            noSubteamsMsg.classList.add('d-none');
+          }
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var progSelect = document.getElementById('id_program');
+        if (progSelect) {
+          progSelect.addEventListener('change', updateSubgroupVisibility);
+        }
+        var modeRadios = document.querySelectorAll('input[name="audience_mode"]');
+        modeRadios.forEach(function (radio) {
+          radio.addEventListener('change', updateAudienceMode);
+        });
+        var modeCardBroadcast = document.getElementById('modeCardBroadcast');
+        if (modeCardBroadcast) {
+          modeCardBroadcast.addEventListener('click', function (e) {
+            if (e.target.tagName !== 'INPUT') {
+              var r = document.getElementById('mode_broadcast');
+              if (r) {
+                r.checked = true;
+                updateAudienceMode();
+              }
+            }
+          });
+        }
+        var modeCardTest = document.getElementById('modeCardTest');
+        if (modeCardTest) {
+          modeCardTest.addEventListener('click', function (e) {
+            if (e.target.tagName !== 'INPUT') {
+              var r = document.getElementById('mode_test');
+              if (r) {
+                r.checked = true;
+                updateAudienceMode();
+              }
+            }
+          });
+        }
+
+        updateAudienceMode();
+        updateSubgroupVisibility();
+      });
+    })();
+  </script>
 {% endblock %}

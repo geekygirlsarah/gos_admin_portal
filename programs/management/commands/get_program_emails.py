@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from programs.models import Adult, Program, Student
+from programs.models import Adult, Enrollment, Program, Student
 
 
 class Command(BaseCommand):
@@ -35,6 +35,27 @@ class Command(BaseCommand):
             action="store_true",
             help="Include all active mentors (not scoped to the program).",
         )
+        parser.add_argument(
+            "--team-id",
+            type=int,
+            action="append",
+            dest="team_ids",
+            help="Optionally filter to students on specific team IDs (can be repeated).",
+        )
+        parser.add_argument(
+            "--crew-id",
+            type=int,
+            action="append",
+            dest="crew_ids",
+            help="Optionally filter to students on specific crew IDs (can be repeated).",
+        )
+        parser.add_argument(
+            "--subteam-id",
+            type=int,
+            action="append",
+            dest="subteam_ids",
+            help="Optionally filter to students on specific subteam IDs (can be repeated).",
+        )
 
     def handle(self, *args, **options):
         program_id = options["program_id"]
@@ -57,14 +78,24 @@ class Command(BaseCommand):
             )
             return
 
+        enrollments = Enrollment.objects.filter(
+            program=prog,
+            active=True,
+            student__graduated=False,
+        )
+        if options.get("team_ids"):
+            enrollments = enrollments.filter(team_id__in=options["team_ids"])
+        if options.get("crew_ids"):
+            enrollments = enrollments.filter(crew_id__in=options["crew_ids"])
+        if options.get("subteam_ids"):
+            enrollments = enrollments.filter(subteam_id__in=options["subteam_ids"])
+
+        filtered_student_ids = enrollments.values_list("student_id", flat=True)
+
         recipients = set()
 
         if "students" in groups:
-            for s in Student.objects.filter(
-                enrollment__program=prog,
-                enrollment__active=True,
-                graduated=False,
-            ).distinct():
+            for s in Student.objects.filter(id__in=filtered_student_ids).distinct():
                 if s.personal_email:
                     recipients.add(s.personal_email)
                 elif s.andrew_email:
@@ -72,8 +103,7 @@ class Command(BaseCommand):
 
         if "parents" in groups:
             for parent in Adult.objects.filter(
-                students__enrollment__program=prog,
-                students__enrollment__active=True,
+                students__id__in=filtered_student_ids,
                 email_updates=True,
                 login_enabled=True,
             ).distinct():
