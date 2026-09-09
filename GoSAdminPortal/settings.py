@@ -18,6 +18,11 @@ from pathlib import Path
 import dj_database_url
 from django.contrib.messages import constants as message_constants
 from django.utils.csp import CSP
+from dotenv import load_dotenv
+
+# Load .env file if present.  Render injects env vars directly, so this is
+# a no-op there; locally it populates os.environ from the .env file.
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
