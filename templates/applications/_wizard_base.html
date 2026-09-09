@@ -12,7 +12,7 @@
             {% widthratio current_step total_steps 100 as progress_pct %}
             <nav aria-label="Application progress" class="mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small text-muted">
+                    <span class="small fw-semibold text-uppercase text-muted">
                         Step {{ current_step }} of {{ total_steps }}
                     </span>
                     {% if application and application.application_id %}
@@ -22,14 +22,13 @@
                         </span>
                     {% endif %}
                 </div>
-                <div class="progress" style="height: 1.0rem;">
-                    <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
-                         role="progressbar"
-                         aria-label="Application progress"
-                         aria-valuenow="{{ current_step }}"
-                         aria-valuemin="0"
-                         aria-valuemax="{{ total_steps }}"
-                         style="width: {{ progress_pct }}%;">{{ progress_pct }}%</div>
+                <div class="progress" role="progressbar"
+                     aria-label="Application progress"
+                     aria-valuenow="{{ current_step }}"
+                     aria-valuemin="0"
+                     aria-valuemax="{{ total_steps }}"
+                     style="height: .65rem;">
+                    <div class="progress-bar bg-primary rounded-pill" style="width: {{ progress_pct }}%;"></div>
                 </div>
             </nav>
         {% endif %}
@@ -53,4 +52,65 @@
         </p>
     </div>
 </div>
+
+{% if application and application.application_id %}
+<script nonce="{{ csp_nonce }}">
+    {# Keep a per-step draft in sessionStorage so clicking "Back" (a plain #}
+    {# link that doesn't submit the form) never loses typed data. Drafts are #}
+    {# only restored into fields that are still empty, and are keyed by #}
+    {# application ID, so one applicant's draft can't leak into another's. #}
+    document.addEventListener("DOMContentLoaded", function () {
+        const appId = "{{ application.application_id|escapejs }}";
+        if (!appId) return;
+        document.querySelectorAll("form[data-wizard-autosave]").forEach(function (form) {
+            const stepKey = form.getAttribute("data-wizard-autosave");
+            if (!stepKey) return;
+            const draftKey = "wizardDraft_" + appId + "_" + stepKey;
+
+            function currentValues() {
+                const values = {};
+                const fd = new FormData(form);
+                for (const [name, value] of fd.entries()) {
+                    if (name === "csrfmiddlewaretoken") continue;
+                    values[name] = value;
+                }
+                return values;
+            }
+
+            function saveDraft() {
+                try {
+                    sessionStorage.setItem(draftKey, JSON.stringify(currentValues()));
+                } catch (e) {
+                    // Storage unavailable (private mode / quota) – keep browsing.
+                }
+            }
+
+            function restoreDraft() {
+                let draft = null;
+                try {
+                    draft = JSON.parse(sessionStorage.getItem(draftKey) || "null");
+                } catch (e) {
+                    draft = null;
+                }
+                if (!draft) return;
+                form.querySelectorAll("input, select, textarea").forEach(function (el) {
+                    if (!el.name || !(el.name in draft)) return;
+                    if (el.type === "checkbox" || el.type === "radio") {
+                        if (!el.checked && String(draft[el.name]) === el.value) {
+                            el.checked = true;
+                        }
+                    } else if (el.value === "") {
+                        el.value = draft[el.name];
+                    }
+                });
+            }
+
+            restoreDraft();
+            form.addEventListener("input", saveDraft);
+            form.addEventListener("change", saveDraft);
+            window.addEventListener("beforeunload", saveDraft);
+        });
+    });
+</script>
+{% endif %}
 {% endblock %}

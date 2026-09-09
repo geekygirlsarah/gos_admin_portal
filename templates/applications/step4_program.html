@@ -14,18 +14,20 @@
             <div class="form-text mb-3">{{ form.program.help_text }}</div>
         {% endif %}
 
-        <div class="form-text mb-3">
-            Girls of Steel Robotics believes strongly that every kid in our community should be able to learn about
-            robotics if it interests them. After applying, email
-            <a href="mailto:slidingscale@girlsofsteelrobotics.org">slidingscale@girlsofsteelrobotics.org</a> to learn
-            more about our sliding scale program, which can bring costs as low as $0.
+        <div class="alert alert-info d-flex gap-2 align-items-start" role="note">
+            <i class="bi bi-info-circle mt-1"></i>
+            <div>
+                Every kid in our community should be able to join if interested.
+                Our <a href="mailto:slidingscale@girlsofsteelrobotics.org">sliding scale
+                program</a> can bring costs as low as $0.
+            </div>
         </div>
         {% if future_programs %}
             <div class="list-group mb-3 accordion" id="programsAccordion">
                 {% for choice, prog in program_choices %}
                     <label class="list-group-item">
                         <div class="d-flex gap-2 align-items-center mb-1">
-                            <span class="fw-semibold ms-2">{{ choice.tag }} {{ choice.choice_label }}</span>
+                            <span class="fw-semibold ms-2">{{ choice.tag }}</span>
                             {% if prog.grade_range_display %}
                                 <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
                             {% endif %}
@@ -33,6 +35,11 @@
                         {% if prog.start_date %}
                             <div class="small text-muted">
                                 Runs {{ prog.start_date|date:"F j, Y" }}{% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}
+                            </div>
+                        {% endif %}
+                        {% if prog.applications_close %}
+                            <div class="small text-muted">
+                                <i class="bi bi-clock me-1"></i>Applications close on {{ prog.applications_close|date:"F j, Y" }}
                             </div>
                         {% endif %}
                         {% if prog.cost %}

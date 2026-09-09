@@ -874,8 +874,11 @@ def _student_from_application(application: Application):
     _fill("prior_robotics_experience", step6.get("prior_robotics_experience"))
     _fill("referral_source", step6.get("referral_source"))
 
-    # School: free-text -> lookup-or-create.
+    # School: free-text -> lookup-or-create. If the applicant said their
+    # school isn't listed, leave the field blank so Lead Mentors can follow up.
     school_name = (step5.get("school_name") or "").strip()
+    if step5.get("_school_not_listed"):
+        school_name = ""
     if school_name and not student.school_id:
         school, _ = School.objects.get_or_create(name=school_name)
         student.school = school

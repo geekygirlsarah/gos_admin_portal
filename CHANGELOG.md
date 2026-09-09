@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-09
+
+### Changed
+- **Streamlined the public application wizard (`/apply/`) to reduce confusion and wordiness**:
+  - **Clearer field labels (`applications/forms.py`)**: Updated student and adult form labels to explicitly identify whose information is being collected (e.g. "Student's legal first name", "Adult's email address", "Student's personal email", "Adult's street address"). Added a clarification to the student email field that it's the student's own address, not a parent's, and that under-13 students don't need one. This directly addresses mistakes like a parent's name landing in a student field or a parent's email being used for the student.
+  - **Anti-confusion callouts (`step5_student_info.html`, `step7_primary_parent.html`, `step8_secondary_parent.html`)**: Added friendly info banners making it clear that the student step is for the student only (adult contacts come later), and that the adult steps are for the adult contact's own details rather than the student's.
+  - **Visual section headers on form steps**: Grouped the student form into labeled sections (Student name & identity, Student address, Student contact, School & grade, Demographics, Health & medical) and the adult forms into relationship/contact & address sections, using the same icon + uppercase-label styling as the rest of the portal.
+  - **Modernized Review &amp; Submit step (`step9_confirm.html`)**: Converted each review section into a card with a header and an "Edit" button that jumps back to the relevant step, matching the portal's card-based layout, so applicants can correct mistakes before submitting.
+  - **Condensed the Welcome page (`step1_welcome.html`)**: Replaced the wordy "Who can apply?" bullet list with three clean hoverable cards (Students, Parents/Guardians, Mentors/Volunteers), matching the portal's KPI-card aesthetic.
+  - **Trimmed program selection copy (`step4_program.html`)**: Condensed the long sliding-scale paragraph into a compact info note.
+  - **Refined progress bar (`_wizard_base.html`)**: Cleaner, thinner rounded progress bar with clearer "Step X of Y" labeling (removed the striped animation).
+
+### Added
+- **Follow-up refinements to the public application wizard (`/apply/`)**:
+  - **Start / Resume action cards (`step1_welcome.html`)**: Replaced the stacked "Start" and "Resume" forms with two side-by-side cards — a prominent "Start a new application" card and a compact "Resume an application" card — so it's obvious how to both begin a fresh application and jump back into an in-progress one.
+  - **"My school isn't listed" option on the school step (`forms.py`, `steps_student.py`, `services.py`, `step9_confirm.html`)**: The school field is now a searchable dropdown of schools already on file with a final "My school isn't listed" choice; parents who pick it can still submit (no school is created), and the Review step shows "My school isn't listed — we'll confirm the details with you." instead of a blank school.
+  - **Application deadlines on the program lists (`step1_welcome.html`, `step4_program.html`)**: Each open program now shows "Applications close on [date]" right under its run dates (hidden when no close date is on file), so families can see at a glance when they need to apply.
+
+### Changed
+- **Follow-up refinements to the public application wizard (`/apply/`)**:
+  - **Welcome message is now static (`step1_welcome.html`, `applications/models.py`, `applications/views/welcome.py`)**: Removed the admin-editable `SiteSettings` custom welcome message (and its admin screen and migration `0015_delete_sitesettings`) in favor of polished, hard-coded welcome content, eliminating one more place to maintain configurable copy.
+  - **Grade label references July 1 (`forms.py`)**: The school &amp; grade step now asks for "Grade going into the program as of **July 1, <year>**", matching how grade eligibility is calculated for the season.
+  - **Draft autosave on form steps (`_wizard_base.html`, step form templates)**: Wizard step forms (student info, experience, primary and secondary parent) now record entered values to the browser's session storage and restore them into empty fields, so parents who click **Back** mid-step no longer lose what they typed.
+  - **Tidied up the Welcome step (`step1_welcome.html`)**: Unified all cards on the page (Start/Resume and the "Who can apply?" trio now share the same white, colored-accent style), tightened the intro copy and section spacing, and cleaned up the program rows so run dates and application deadlines sit on a tidy meta line.
+
 ## 2026-09-08
 
 ### Added

@@ -5,52 +5,138 @@
 
 {% block wizard_body %}
     <div class="mb-4">
-        {{ settings_obj.welcome_message|linebreaks }}
-    </div>
-
-    <div class="mb-4">
-        <h2 class="h5">Who can apply?</h2>
-        <p class="mb-2">
-            This application lets you join Girls of Steel Robotics.
-            Depending on your situation, you can apply as:
+        <p class="lead mb-1">Welcome to the Girls of Steel application system!</p>
+        <p class="mb-0">
+            Use this wizard to apply for one of our upcoming programs or start the
+            process of becoming a mentor. If you already started an application,
+            you can resume it at any time with your application ID.
         </p>
-        <ul class="mb-0">
-            <li>
-                <strong>Students</strong> — Apply for yourself to join one of
-                our upcoming programs for girls in grades K–12.
-            </li>
-            <li>
-                <strong>Parents / Guardians</strong> — Apply on behalf of one
-                of your children.
-            </li>
-            <li>
-                <strong>Mentors / Volunteers</strong> — Apply to volunteer with
-                our teams and support our mission. (Jump straight to the application below.)
-            </li>
-        </ul>
     </div>
 
-    <h2 class="h5">Programs students can apply for</h2>
+    <div class="row g-3 mb-5">
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm border-0 border-top border-3 border-primary rounded-3">
+                <div class="card-body d-flex flex-column p-4">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary" style="width: 34px; height: 34px;">
+                            <i class="bi bi-file-earmark-plus-fill"></i>
+                        </div>
+                        <h2 class="h5 mb-0 fw-bold">Start a new application</h2>
+                    </div>
+                    <p class="text-muted small mb-3">
+                        Begin a brand-new application for a student,
+                        parent/guardian, or mentor.
+                    </p>
+                    <form method="post" action="{% url 'apply_start' %}" class="mt-auto" novalidate>
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary w-100">
+                            Start a new application
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm border-0 border-top border-3 border-secondary rounded-3">
+                <div class="card-body d-flex flex-column p-4">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div class="rounded-circle bg-secondary bg-opacity-10 p-2 text-secondary" style="width: 34px; height: 34px;">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </div>
+                        <h2 class="h5 mb-0 fw-bold">Resume an application</h2>
+                    </div>
+                    <p class="text-muted small mb-3">
+                        Pick up where you left off. Enter the 8-character
+                        application ID you were given.
+                    </p>
+                    <form method="post" action="{% url 'apply_resume' %}" class="mt-auto" novalidate>
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_application_id" class="form-label">
+                                {{ resume_form.application_id.label }}
+                            </label>
+                            {% if resume_form.application_id.help_text %}
+                                <div id="application_id_help" class="form-text mb-1">
+                                    {{ resume_form.application_id.help_text }}
+                                </div>
+                            {% endif %}
+                            {{ resume_form.application_id }}
+                            {% if resume_form.application_id.errors %}
+                                <div class="invalid-feedback d-block" role="alert">
+                                    {{ resume_form.application_id.errors|join:" " }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary w-100">Resume</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-5">
+        <h2 class="h5 mb-3">Who can apply?</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 border-top border-3 border-primary rounded-3">
+                    <div class="card-body p-3">
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary mb-2" style="width: 32px; height: 32px;">
+                            <i class="bi bi-mortarboard-fill"></i>
+                        </div>
+                        <div class="fw-bold">Students</div>
+                        <div class="text-muted small">Apply for yourself to join one of our upcoming programs for grades K–12.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 border-top border-3 border-success rounded-3">
+                    <div class="card-body p-3">
+                        <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success mb-2" style="width: 32px; height: 32px;">
+                            <i class="bi bi-person-heart"></i>
+                        </div>
+                        <div class="fw-bold">Parents / Guardians</div>
+                        <div class="text-muted small">Apply on behalf of one of your children.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0 border-top border-3 border-info rounded-3">
+                    <div class="card-body p-3">
+                        <div class="rounded-circle bg-info bg-opacity-10 p-2 text-info mb-2" style="width: 32px; height: 32px;">
+                            <i class="bi bi-people-fill"></i>
+                        </div>
+                        <div class="fw-bold">Mentors / Volunteers</div>
+                        <div class="text-muted small">Apply to volunteer with our teams and support our mission.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h5 mb-3">Programs students can apply for</h2>
     {% if future_programs %}
         <p class="form-text mb-3">
             Here are the programs that we are currently accepting applications for. If you don't see the program you're
-            expecting, it may have closed or not be open yet. Select "More details" on any
-            program to learn more.
+            expecting, it may have closed or not be open yet.
         </p>
         <div class="list-group accordion" id="welcomeProgramsAccordion">
             {% for prog in future_programs %}
                 <div class="list-group-item">
-                    <div class="d-flex gap-2 align-items-center mb-1">
-                        <span class="fw-semibold ms-1">{{ prog.name }}</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="fw-semibold">{{ prog.name }}</span>
                         {% if prog.grade_range_display %}
                             <span class="badge bg-info text-dark ms-auto">{{ prog.grade_range_display }}</span>
                         {% endif %}
                     </div>
-                    {% if prog.start_date %}
-                        <div class="small text-muted">
-                            Runs {{ prog.start_date|date:"F j, Y" }}{% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}
-                        </div>
-                    {% endif %}
+                    <div class="small text-muted mt-1">
+                        {% if prog.start_date %}
+                            <span><i class="bi bi-calendar-event me-1"></i>Runs {{ prog.start_date|date:"F j, Y" }}{% if prog.end_date %} – {{ prog.end_date|date:"F j, Y" }}{% endif %}</span>
+                        {% endif %}
+                        {% if prog.applications_close %}
+                            {% if prog.start_date %}<span class="mx-2">·</span>{% endif %}
+                            <span><i class="bi bi-clock me-1"></i>Applications close on {{ prog.applications_close|date:"F j, Y" }}</span>
+                        {% endif %}
+                    </div>
                     <div class="mt-2">
                         <button
                                 class="btn btn-sm btn-outline-secondary"
@@ -90,39 +176,5 @@
             <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
         </div>
     {% endif %}
-
-    <hr class="my-4" aria-hidden="true">
-
-    <form method="post" action="{% url 'apply_start' %}" novalidate>
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary btn-lg w-100">
-            Start a new application
-        </button>
-    </form>
-
-    <h2 class="h5">Resume an application</h2>
-
-    <form method="post" action="{% url 'apply_resume' %}" novalidate>
-        {% csrf_token %}
-        <div class="mb-3">
-            <label for="id_application_id" class="form-label">
-                {{ resume_form.application_id.label }}
-            </label>
-            {% if resume_form.application_id.help_text %}
-                <div id="application_id_help" class="form-text mb-1">
-                    {{ resume_form.application_id.help_text }}
-                </div>
-            {% endif %}
-            {{ resume_form.application_id }}
-            {% if resume_form.application_id.errors %}
-                <div class="invalid-feedback d-block" role="alert">
-                    {{ resume_form.application_id.errors|join:" " }}
-                </div>
-            {% endif %}
-        </div>
-        <button type="submit" class="btn btn-outline-primary">Resume</button>
-    </form>
-
-    <hr class="my-4" aria-hidden="true">
 
 {% endblock %}

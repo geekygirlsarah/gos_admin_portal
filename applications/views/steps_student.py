@@ -18,6 +18,7 @@ from programs.utils import (
 )
 
 from ..forms import (
+    NOT_LISTED_SCHOOL,
     ApplicantTypeForm,
     ChooseExistingStudentForm,
     ConfirmSubmitForm,
@@ -531,6 +532,11 @@ class Step5StudentInfoView(View):
                 )
 
         payload = _sanitize_payload(form.cleaned_data)
+        # Turn the "My school isn't listed" option into a flag so we don't
+        # persist the sentinel value as a school name.
+        if payload.get("school_name") == NOT_LISTED_SCHOOL:
+            payload["_school_not_listed"] = True
+            payload["school_name"] = ""
         # Convert grade to graduation_year if not already present
         if "grade" in payload:
             ref_date = application.program.start_date if application.program else None
@@ -1291,6 +1297,9 @@ class Step9ConfirmView(View):
                 "step8_data": data.get("step8-secondaryparent") or {},
                 "step8_skipped": bool(
                     (data.get("step8-secondaryparent") or {}).get("_skipped")
+                ),
+                "step5_school_not_listed": bool(
+                    (data.get("step5-student") or {}).get("_school_not_listed")
                 ),
                 "current_step": 9,
                 "total_steps": TOTAL_STEPS,

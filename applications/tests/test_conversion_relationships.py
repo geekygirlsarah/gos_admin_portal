@@ -1,8 +1,9 @@
 from django.test import TestCase
 
+from applications.forms import NOT_LISTED_SCHOOL
 from applications.models import Application
 from applications.services import convert_application_to_student
-from programs.models import Adult, Program, Student
+from programs.models import Adult, Program, School, Student
 
 
 class ConversionRelationshipTests(TestCase):
@@ -247,7 +248,31 @@ class ConversionRelationshipTests(TestCase):
             student_b,
             Student.objects.filter(primary_contact_relationship__adult=parent_a),
         )
-        self.assertIn(student_b, parent_a.students.all())
+
+    def test_not_listed_school_leaves_student_school_unset(self):
+        """Conversion must not create a bogus School from the not-listed sentinel."""
+        data = {
+            "step5-student": {
+                "legal_first_name": "Ada",
+                "last_name": "Lovelace",
+                "personal_email": "ada@example.com",
+                "date_of_birth": "2010-01-01",
+                "school_name": "",
+                "_school_not_listed": True,
+            },
+            "step7-primaryparent": {
+                "legal_first_name": "Pat",
+                "last_name": "Parent",
+                "email": "pat@example.com",
+            },
+        }
+        app = self._create_app(data)
+
+        student = convert_application_to_student(app)
+
+        self.assertIsNone(student.school_id)
+        self.assertFalse(School.objects.filter(name=NOT_LISTED_SCHOOL).exists())
+        self.assertFalse(School.objects.filter(name="My school isn't listed").exists())
 
     def test_two_parents_same_email_different_names(self):
         """

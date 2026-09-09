@@ -9,7 +9,7 @@
     There are no wrong answers, and no prior experience is required!
 </p>
 
-<form method="post" novalidate>
+<form method="post" novalidate data-wizard-autosave="step6-experience">
     {% csrf_token %}
     {% if form.non_field_errors %}
         <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>

@@ -126,3 +126,6 @@ class Step2LabelReproductionTest(TestCase):
             content,
         )
         self.assertEqual(len(program_labels), 1)
+        # The name must appear exactly once next to the radio (the widget's own
+        # label) — never duplicated by an extra choice_label span below it.
+        self.assertEqual(content.count("Test Program"), 1)

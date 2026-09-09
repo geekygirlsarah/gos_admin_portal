@@ -1,4 +1,4 @@
-"""Tests for the Application and SiteSettings models."""
+"""Tests for the Application model."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from applications.models import (
     APP_ID_LENGTH,
     Application,
     OtpVerifyResult,
-    SiteSettings,
     generate_application_id,
     generate_otp_code,
 )
@@ -91,27 +90,6 @@ class OtpTests(TestCase):
             app.verify_otp("000000")
         # After cap, even the correct code is rejected.
         self.assertIs(app.verify_otp(code), OtpVerifyResult.TOO_MANY_ATTEMPTS)
-
-
-class SiteSettingsTests(TestCase):
-    def test_load_creates_singleton_with_default_message(self):
-        obj = SiteSettings.load()
-        self.assertEqual(obj.pk, 1)
-        self.assertIn("Welcome", obj.welcome_message)
-
-    def test_load_returns_existing_singleton(self):
-        a = SiteSettings.load()
-        a.welcome_message = "Hello!"
-        a.save()
-        b = SiteSettings.load()
-        self.assertEqual(b.pk, 1)
-        self.assertEqual(b.welcome_message, "Hello!")
-
-    def test_save_forces_pk_one(self):
-        s = SiteSettings(welcome_message="x")
-        s.pk = 99
-        s.save()
-        self.assertEqual(s.pk, 1)
 
 
 class ApplicationIndexTests(TestCase):

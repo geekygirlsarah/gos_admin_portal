@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from django import forms
 from django.utils import timezone
-from django.utils.formats import date_format
 
 from programs.constants import (
     APP_ID_ALPHABET,
@@ -16,10 +17,14 @@ from programs.constants import (
     TSHIRT_SIZE_CHOICES,
 )
 from programs.models import Program, ProgramDocument, RaceEthnicity, School, Student
+from programs.utils import get_academic_year_ending
 from programs.validators import validate_phone_number, validate_zip_code
 
 from .models import Application
 from .services import normalize_email
+
+# Sentinel value used when an applicant can't find their school in the list.
+NOT_LISTED_SCHOOL = "__not_listed__"
 
 
 class ResumeApplicationForm(forms.Form):
@@ -187,29 +192,29 @@ class StudentInfoForm(forms.Form):
     """Step 5: blank or prefilled student information."""
 
     legal_first_name = forms.CharField(
-        label="Legal first name",
+        label="Student's legal first name",
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     preferred_first_name = forms.CharField(
-        label="Preferred first name (if different)",
+        label="Student's preferred first name (if different)",
         max_length=150,
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     last_name = forms.CharField(
-        label="Last name",
+        label="Student's last name",
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     pronouns = forms.CharField(
-        label="Pronouns",
+        label="Student's pronouns",
         max_length=50,
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     date_of_birth = forms.DateField(
-        label="Date of birth",
+        label="Student's date of birth",
         required=True,
         widget=forms.DateInput(attrs={**_text_attrs, "type": "date"}),
     )
@@ -234,7 +239,7 @@ class StudentInfoForm(forms.Form):
         return dob
 
     address = forms.CharField(
-        label="Address",
+        label="Student's street address",
         max_length=255,
         widget=forms.TextInput(attrs=_text_attrs),
     )
@@ -256,8 +261,12 @@ class StudentInfoForm(forms.Form):
         validators=[validate_zip_code],
     )
     personal_email = forms.EmailField(
-        label="Student's personal email",
+        label="Student's personal email (optional)",
         required=False,
+        help_text=(
+            "This is the student's own email address, not a parent's. "
+            "Students under 13 do not need to provide one."
+        ),
         widget=forms.EmailInput(attrs=_text_attrs),
     )
     phone_number = forms.CharField(
@@ -281,13 +290,13 @@ class StudentInfoForm(forms.Form):
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     directory_consent = forms.BooleanField(
-        label="OK to share name, address, and phone for student directory and carpool map",
+        label="OK to share the student's name, address, and phone for the student directory and carpool map",
         required=False,
         initial=True,
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
     school_name = forms.ChoiceField(
-        label="School",
+        label="Student's school",
         required=True,
         widget=forms.Select(attrs=_select_attrs),
     )
@@ -328,13 +337,20 @@ class StudentInfoForm(forms.Form):
         if not tshirt_enabled:
             self.fields.pop("tshirt_size", None)
         if program_start_date:
-            formatted_date = date_format(program_start_date, use_l10n=True)
+            # Grades are keyed to the school year, which rolls over on July 1.
+            # Reference the July 1 that defines the school year the student is
+            # going into (e.g. a January-start program in the 2026-27 school
+            # year shows "as of July 1, 2026"), so rising grades are marked
+            # correctly for full-year programs.
+            july_1 = date(get_academic_year_ending(program_start_date) - 1, 7, 1)
             self.fields["grade"].label = (
-                f"Grade going into the program as of {formatted_date}"
+                f"Grade going into the program as of July 1, {july_1.year}"
             )
-        self.fields["school_name"].choices = [("", "---")] + [
-            (s.name, s.name) for s in School.objects.all().order_by("name")
-        ]
+        self.fields["school_name"].choices = (
+            [("", "---")]
+            + [(s.name, s.name) for s in School.objects.all().order_by("name")]
+            + [(NOT_LISTED_SCHOOL, "My school isn't listed")]
+        )
         self.fields["race_ethnicities"].queryset = RaceEthnicity.objects.all().order_by(
             "name"
         )
@@ -433,23 +449,23 @@ class ParentInfoForm(forms.Form):
     """Step 6 (primary) and Step 7 (secondary) parent/guardian info."""
 
     legal_first_name = forms.CharField(
-        label="Legal first name",
+        label="Adult's legal first name",
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     preferred_first_name = forms.CharField(
-        label="Preferred first name (if different)",
+        label="Adult's preferred first name (if different)",
         max_length=150,
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     last_name = forms.CharField(
-        label="Last name",
+        label="Adult's last name",
         max_length=150,
         widget=forms.TextInput(attrs=_text_attrs),
     )
     pronouns = forms.CharField(
-        label="Pronouns",
+        label="Adult's pronouns",
         max_length=50,
         required=False,
         widget=forms.TextInput(attrs=_text_attrs),
@@ -468,11 +484,12 @@ class ParentInfoForm(forms.Form):
         widget=forms.TextInput(attrs=_text_attrs),
     )
     email = forms.EmailField(
-        label="Email address",
+        label="Adult's email address",
+        help_text="This is the primary adult contact's own email, not the student's.",
         widget=forms.EmailInput(attrs=_text_attrs),
     )
     address = forms.CharField(
-        label="Address",
+        label="Adult's street address",
         max_length=255,
         widget=forms.TextInput(attrs=_text_attrs),
     )
@@ -494,7 +511,7 @@ class ParentInfoForm(forms.Form):
         validators=[validate_zip_code],
     )
     phone_number = forms.CharField(
-        label="Phone number",
+        label="Adult's phone number",
         max_length=30,
         validators=[validate_phone_number],
         widget=forms.TextInput(attrs=_text_attrs),

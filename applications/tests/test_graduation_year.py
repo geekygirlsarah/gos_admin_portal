@@ -1,9 +1,11 @@
 """Tests for graduation year validation."""
 
+from datetime import date
+
 from django.test import TestCase
 from django.utils import timezone
 
-from applications.forms import StudentInfoForm
+from applications.forms import NOT_LISTED_SCHOOL, StudentInfoForm
 
 
 class GraduationYearValidationReproductionTest(TestCase):
@@ -32,3 +34,28 @@ class GraduationYearValidationReproductionTest(TestCase):
             }
             form = StudentInfoForm(data=data)
             self.assertNotIn("graduation_year", form.errors)
+
+
+class StudentInfoFormLabelTests(TestCase):
+    def test_grade_label_references_july_1_of_school_year(self):
+        # A program starting in the middle of the 2026-27 school year should
+        # reference the July 1, 2026 rollover date, not the program start date.
+        form = StudentInfoForm(program_start_date=date(2027, 1, 15))
+        self.assertEqual(
+            form.fields["grade"].label,
+            "Grade going into the program as of July 1, 2026",
+        )
+
+    def test_grade_label_july_1_for_fall_start(self):
+        # A program starting after July 1 belongs to the school year that is
+        # beginning that summer (July 1 of the same calendar year).
+        form = StudentInfoForm(program_start_date=date(2026, 9, 1))
+        self.assertEqual(
+            form.fields["grade"].label,
+            "Grade going into the program as of July 1, 2026",
+        )
+
+    def test_school_name_offers_not_listed_option(self):
+        form = StudentInfoForm()
+        choice_values = [value for value, _ in form.fields["school_name"].choices]
+        self.assertEqual(choice_values[-1], NOT_LISTED_SCHOOL)
