@@ -1,64 +1,63 @@
-      {% if can_manage_documents or program_documents %}
-      <div class="mt-4">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Documents to Sign</span>
-            {% if can_manage_documents %}
-              <a class="btn btn-sm btn-outline-primary"
-                 href="{% url 'program_document_create' program.id %}">
-                Add Document
-              </a>
-            {% endif %}
-          </div>
-          <div class="card-body">
-            <p class="text-muted small mb-3">
-              Blank forms approved applicants must download, sign, and
-              re-upload as part of the application process.
-            </p>
-            {% if program_documents %}
-              <ul class="list-group">
+{% if can_manage_documents or program_documents %}
+<div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-text text-primary me-2"></i>Documents to Sign</h5>
+            <p class="text-muted small mb-0">Blank consent forms and agreements approved applicants must sign and upload.</p>
+        </div>
+        {% if can_manage_documents %}
+            <a class="btn btn-sm btn-outline-primary fw-semibold"
+               href="{% url 'program_document_create' form.instance.pk %}">
+                <i class="bi bi-plus-lg me-1"></i> Add Document
+            </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if program_documents %}
+            <div class="list-group list-group-flush">
                 {% for doc in program_documents %}
-                  <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div>
-                      <a href="{{ doc.file.url }}" target="_blank" rel="noopener">
-                        {{ doc.name }}
-                      </a>
-                      {% if doc.is_required %}
-                        <span class="badge bg-secondary ms-1">Required</span>
-                      {% else %}
-                        <span class="badge bg-light text-dark border ms-1">Optional</span>
-                      {% endif %}
-                      {% if not doc.is_active %}
-                        <span class="badge bg-warning text-dark ms-1">Inactive</span>
-                      {% endif %}
-                      {% if doc.description %}
-                        <div class="text-muted small">{{ doc.description }}</div>
-                      {% endif %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center p-3 flex-wrap gap-2">
+                        <div>
+                            <div class="d-flex align-items-center gap-2">
+                                <a href="{{ doc.file.url }}" target="_blank" rel="noopener" class="fw-bold text-decoration-none">
+                                    <i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ doc.name }}
+                                </a>
+                                {% if doc.is_required %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">Required</span>
+                                {% else %}
+                                    <span class="badge bg-light text-muted border">Optional</span>
+                                {% endif %}
+                                {% if not doc.is_active %}
+                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Inactive</span>
+                                {% endif %}
+                            </div>
+                            {% if doc.description %}
+                                <div class="text-muted small mt-1">{{ doc.description }}</div>
+                            {% endif %}
+                        </div>
+                        {% if can_manage_documents %}
+                            <div class="d-flex gap-1">
+                                <a class="btn btn-sm btn-outline-secondary"
+                                   href="{% url 'program_document_edit' form.instance.pk doc.id %}">
+                                    Edit
+                                </a>
+                                <a class="btn btn-sm btn-outline-danger"
+                                   href="{% url 'program_document_delete' form.instance.pk doc.id %}">
+                                    Delete
+                                </a>
+                            </div>
+                        {% endif %}
                     </div>
-                    {% if can_manage_documents %}
-                      <div class="d-flex gap-2">
-                        <a class="btn btn-sm btn-outline-secondary"
-                           href="{% url 'program_document_edit' program.id doc.id %}">
-                          Edit
-                        </a>
-                        <a class="btn btn-sm btn-outline-danger"
-                           href="{% url 'program_document_delete' program.id doc.id %}">
-                          Delete
-                        </a>
-                      </div>
-                    {% endif %}
-                  </li>
                 {% endfor %}
-              </ul>
-            {% else %}
-              <div class="text-muted small">
+            </div>
+        {% else %}
+            <div class="p-4 text-center text-muted small">
                 No documents attached yet.
                 {% if can_manage_documents %}
-                  Click <em>Add Document</em> to upload one.
+                    Click <strong>Add Document</strong> above to upload blank forms.
                 {% endif %}
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

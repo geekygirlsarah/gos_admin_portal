@@ -5,178 +5,242 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Portal Settings</h1>
-        <a href="{% url 'program_list' %}" class="btn btn-outline-secondary">Back to Programs</a>
+        <div>
+            <h1 class="h3 mb-1 fw-bold text-dark">Portal Settings</h1>
+            <p class="text-muted small mb-0">Configure system-wide permissions, team rosters, kiosk stations, and financial policies.</p>
+        </div>
+        <a href="{% url 'program_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Programs
+        </a>
     </div>
 
-    <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'permissions' %}active{% endif %}" id="permissions-tab" data-bs-toggle="tab" data-bs-target="#permissions" type="button" role="tab" aria-controls="permissions" aria-selected="{% if active_tab == 'permissions' %}true{% else %}false{% endif %}">Permissions</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'teams' %}active{% endif %}" id="teams-tab" data-bs-toggle="tab" data-bs-target="#teams" type="button" role="tab" aria-controls="teams" aria-selected="{% if active_tab == 'teams' %}true{% else %}false{% endif %}">Teams</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'crews' %}active{% endif %}" id="crews-tab" data-bs-toggle="tab" data-bs-target="#crews" type="button" role="tab" aria-controls="crews" aria-selected="{% if active_tab == 'crews' %}true{% else %}false{% endif %}">Crews/Projects</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'subteams' %}active{% endif %}" id="subteams-tab" data-bs-toggle="tab" data-bs-target="#subteams" type="button" role="tab" aria-controls="subteams" aria-selected="{% if active_tab == 'subteams' %}true{% else %}false{% endif %}">SubTeams</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="tab" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">Imports</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="tab" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">Kiosk Sign-In</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'sliding_scale_settings' %}active{% endif %}" id="sliding_scale_settings-tab" data-bs-toggle="tab" data-bs-target="#sliding_scale_settings" type="button" role="tab" aria-controls="sliding_scale_settings" aria-selected="{% if active_tab == 'sliding_scale_settings' %}true{% else %}false{% endif %}">
-                Sliding Scale
-                {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'agreements' %}active{% endif %}" id="agreements-tab" data-bs-toggle="tab" data-bs-target="#agreements" type="button" role="tab" aria-controls="agreements" aria-selected="{% if active_tab == 'agreements' %}true{% else %}false{% endif %}">Agreements</button>
-        </li>
-    </ul>
+    <!-- Categorized Settings Navigation Tabs -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light">
+        <div class="card-body p-2">
+            <ul class="nav nav-pills nav-fill gap-1" id="settingsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'permissions' %}active{% endif %}" id="permissions-tab" data-bs-toggle="pill" data-bs-target="#permissions" type="button" role="tab" aria-controls="permissions" aria-selected="{% if active_tab == 'permissions' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-shield-lock me-1"></i> Permissions
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'agreements' %}active{% endif %}" id="agreements-tab" data-bs-toggle="pill" data-bs-target="#agreements" type="button" role="tab" aria-controls="agreements" aria-selected="{% if active_tab == 'agreements' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-file-earmark-check me-1"></i> Agreements
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'teams' %}active{% endif %}" id="teams-tab" data-bs-toggle="pill" data-bs-target="#teams" type="button" role="tab" aria-controls="teams" aria-selected="{% if active_tab == 'teams' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-people me-1"></i> Teams
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'crews' %}active{% endif %}" id="crews-tab" data-bs-toggle="pill" data-bs-target="#crews" type="button" role="tab" aria-controls="crews" aria-selected="{% if active_tab == 'crews' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-diagram-3 me-1"></i> Crews
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'subteams' %}active{% endif %}" id="subteams-tab" data-bs-toggle="pill" data-bs-target="#subteams" type="button" role="tab" aria-controls="subteams" aria-selected="{% if active_tab == 'subteams' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-grid me-1"></i> SubTeams
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'sliding_scale_settings' %}active{% endif %}" id="sliding_scale_settings-tab" data-bs-toggle="pill" data-bs-target="#sliding_scale_settings" type="button" role="tab" aria-controls="sliding_scale_settings" aria-selected="{% if active_tab == 'sliding_scale_settings' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-percent me-1"></i> Sliding Scale
+                        {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'imports' %}active{% endif %}" id="imports-tab" data-bs-toggle="pill" data-bs-target="#imports" type="button" role="tab" aria-controls="imports" aria-selected="{% if active_tab == 'imports' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-cloud-upload me-1"></i> Imports
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
 
     <div class="tab-content" id="settingsTabsContent">
         <!-- Permissions Tab -->
         <div class="tab-pane fade {% if active_tab == 'permissions' %}show active{% endif %}" id="permissions" role="tabpanel" aria-labelledby="permissions-tab">
-            <div class="card shadow-sm">
-                <div class="card-body">
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-shield-lock text-primary me-2"></i>Role Permissions Matrix</h5>
+                        <p class="text-muted small mb-0">Set granular 3-tier access levels (No Access, Read Only, Read &amp; Write) for each role across system sections.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 small">
+                        <span class="badge bg-secondary-subtle text-secondary border">None: No Access</span>
+                        <span class="badge bg-primary-subtle text-primary border">Read: View Only</span>
+                        <span class="badge bg-success-subtle text-success border">R / W: Full Management</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
                     <form method="post" action="{% url 'portal_permissions_update' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update_permissions">
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle">
+                            <table class="table table-hover align-middle mb-0">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>Section</th>
-                                        <th class="text-center">Lead Mentor R/W Access</th>
-                                        <th class="text-center">Mentor Read Access</th>
-                                        <th class="text-center">Mentor Write Access</th>
-                                        <th class="text-center">Parent Read Access</th>
-                                        <th class="text-center">Parent Write Access</th>
-                                        <th class="text-center">Student Read Access</th>
-                                        <th class="text-center">Student Write Access</th>
+                                        <th style="width: 31%; min-width: 180px;">System Section</th>
+                                        <th class="text-center" style="width: 15%; min-width: 130px;">
+                                            <span class="badge bg-dark">Lead Mentor</span>
+                                            <div class="text-muted small">Access Level</div>
+                                        </th>
+                                        <th class="text-center" style="width: 18%; min-width: 170px;">
+                                            <span class="badge bg-primary">Mentor</span>
+                                            <div class="text-muted small">Access Level</div>
+                                        </th>
+                                        <th class="text-center" style="width: 18%; min-width: 170px;">
+                                            <span class="badge bg-success">Parent</span>
+                                            <div class="text-muted small">Access Level</div>
+                                        </th>
+                                        <th class="text-center" style="width: 18%; min-width: 170px;">
+                                            <span class="badge bg-info text-dark">Student</span>
+                                            <div class="text-muted small">Access Level</div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for item in grouped_permissions %}
                                     <tr>
-                                        <td><strong>{{ item.name }}</strong></td>
-                                        <!-- Lead Mentor (can see all) -->
+                                        <td class="fw-semibold text-dark">{{ item.name }}</td>
+                                        <!-- Lead Mentor (always full access) -->
                                         <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" checked disabled>
-                                            </div>
+                                            <span class="badge bg-dark py-2 px-3 w-100" title="Lead Mentors always have full administrative access">
+                                                <i class="bi bi-shield-check me-1"></i> Full Access
+                                            </span>
                                         </td>
-                                        <!-- Mentor -->
+                                        <!-- Mentor (3-state pill) -->
                                         <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="read_{{ item.mentor.id }}" id="read_{{ item.mentor.id }}" {% if item.uses_read and item.mentor.can_read %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %}>
+                                            {% if item.mentor %}
+                                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="{{ item.name }} Mentor Access">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_none" value="none" {% if not item.mentor.can_read and not item.mentor.can_write %}checked{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-secondary py-1 px-2 small" for="perm_{{ item.mentor.id }}_none" title="No Access">None</label>
+
+                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_read" value="read" {% if item.uses_read and item.mentor.can_read and not item.mentor.can_write %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-primary py-1 px-2 small" for="perm_{{ item.mentor.id }}_read" title="Read Only">Read</label>
+
+                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_write" value="write" {% if item.uses_write and item.mentor.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-success py-1 px-2 small" for="perm_{{ item.mentor.id }}_write" title="Read &amp; Write">R / W</label>
                                             </div>
+                                            {% endif %}
                                         </td>
+                                        <!-- Parent (3-state pill) -->
                                         <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="write_{{ item.mentor.id }}" id="write_{{ item.mentor.id }}" {% if item.uses_write and item.mentor.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %}>
+                                            {% if item.parent %}
+                                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="{{ item.name }} Parent Access">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_none" value="none" {% if not item.parent.can_read and not item.parent.can_write or item.orders_section %}checked{% endif %} {% if item.orders_section %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-secondary py-1 px-2 small" for="perm_{{ item.parent.id }}_none" title="No Access">None</label>
+
+                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_read" value="read" {% if not item.orders_section and item.parent.can_read and not item.parent.can_write %}checked{% endif %} {% if not item.uses_read or item.orders_section %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-primary py-1 px-2 small" for="perm_{{ item.parent.id }}_read" title="Read Only">Read</label>
+
+                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_write" value="write" {% if not item.orders_section and item.parent.can_write %}checked{% endif %} {% if not item.uses_write or item.orders_section %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-success py-1 px-2 small" for="perm_{{ item.parent.id }}_write" title="Read &amp; Write">R / W</label>
                                             </div>
+                                            {% endif %}
                                         </td>
-                                        <!-- Parent -->
+                                        <!-- Student (3-state pill) -->
                                         <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="read_{{ item.parent.id }}" id="read_{{ item.parent.id }}" {% if not item.orders_section and item.parent.can_read %}checked{% endif %} {% if item.orders_section %}disabled{% endif %}>
+                                            {% if item.student %}
+                                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="{{ item.name }} Student Access">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_none" value="none" {% if not item.student.can_read and not item.student.can_write %}checked{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-secondary py-1 px-2 small" for="perm_{{ item.student.id }}_none" title="No Access">None</label>
+
+                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_read" value="read" {% if item.uses_read and item.student.can_read and not item.student.can_write %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-primary py-1 px-2 small" for="perm_{{ item.student.id }}_read" title="Read Only">Read</label>
+
+                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_write" value="write" {% if item.uses_write and item.student.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %} autocomplete="off">
+                                                <label class="btn btn-outline-success py-1 px-2 small" for="perm_{{ item.student.id }}_write" title="Read &amp; Write">R / W</label>
                                             </div>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="write_{{ item.parent.id }}" id="write_{{ item.parent.id }}" {% if not item.orders_section and item.parent.can_write %}checked{% endif %} {% if item.orders_section %}disabled{% endif %}>
-                                            </div>
-                                        </td>
-                                        <!-- Student -->
-                                        <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="read_{{ item.student.id }}" id="read_{{ item.student.id }}" {% if item.uses_read and item.student.can_read %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %}>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="form-check form-switch d-inline-block">
-                                                <input class="form-check-input" type="checkbox" name="write_{{ item.student.id }}" id="write_{{ item.student.id }}" {% if item.uses_write and item.student.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %}>
-                                            </div>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-primary">Save Permissions</button>
+                        <div class="p-3 bg-light border-top d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                <i class="bi bi-check2 me-1"></i> Save Permissions
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
-            <div class="mt-4 alert alert-info">
-                <h5>Guide</h5>
-                <ul>
-                    <li><strong>Lead Mentors</strong> always have full access (superuser or LeadMentor group).</li>
-                    <li><strong>Read Access:</strong> Allows viewing the section and its details.</li>
-                    <li><strong>Write Access:</strong> Allows creating, editing, and deleting items in the section.</li>
-                    <li>Note: Parents and Students are always restricted to only seeing/editing their own data, even if "Write Access" is enabled globally for them.</li>
-                </ul>
+
+            <div class="card border-0 bg-light rounded-3">
+                <div class="card-body p-3">
+                    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-info-circle text-primary me-1"></i> Permission Rules &amp; Security Guardrails</h6>
+                    <ul class="text-muted small mb-0 ps-3">
+                        <li><strong>Lead Mentors</strong> always retain full administrative access across all sections.</li>
+                        <li><strong>None (No Access):</strong> The user role cannot view or interact with this section.</li>
+                        <li><strong>Read (View Only):</strong> Allows viewing records, logs, and associated details within the section.</li>
+                        <li><strong>R / W (Read &amp; Write):</strong> Allows creating, updating, and removing records within the section.</li>
+                        <li><strong>Data Privacy:</strong> Parents and Students are strictly restricted to their own linked records even if global write permissions are enabled.</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
         <!-- Teams Tab -->
         <div class="tab-pane fade {% if active_tab == 'teams' %}show active{% endif %}" id="teams" role="tabpanel" aria-labelledby="teams-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Add New Team</h5>
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-plus-circle text-success me-2"></i>Add New Team</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-3">
                     <form method="post" class="row g-3" action="{% url 'portal_team' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_team">
-                        <div class="col-md-2">
-                            <label for="team_type" class="form-label">Team Type</label>
+                        <div class="col-md-3">
+                            <label for="team_type" class="form-label fw-semibold small">Team Type</label>
                             <select name="team_type" id="team_type" class="form-select" required>
                                 {% for code, name in team_types %}
                                 <option value="{{ code }}">{{ name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label for="number" class="form-label">Team Number</label>
-                            <input type="number" name="number" id="number" class="form-control" required>
+                        <div class="col-md-3">
+                            <label for="number" class="form-label fw-semibold small">Team Number</label>
+                            <input type="number" name="number" id="number" class="form-control" placeholder="e.g. 3504" required>
                         </div>
                         <div class="col-md-4">
-                            <label for="name" class="form-label">Team Name</label>
+                            <label for="name" class="form-label fw-semibold small">Team Name</label>
                             <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Girls of Steel">
                         </div>
                         <div class="col-md-2">
-                            <label for="color" class="form-label">Color</label>
-                            <input type="color" name="color" id="color" class="form-control form-control-color w-100" value="#0000ff" title="Choose team color">
+                            <label for="color" class="form-label fw-semibold small">Color</label>
+                            <input type="color" name="color" id="color" class="form-control form-control-color w-100" value="#0d6efd" title="Choose team color">
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-success w-100">Add Team</button>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success px-4 fw-semibold">
+                                <i class="bi bi-plus-lg me-1"></i> Add Team
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Existing Teams</h5>
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-people text-primary me-2"></i>Existing Teams</h5>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Type</th>
-                                    <th>Number</th>
-                                    <th>Name</th>
-                                    <th>Color</th>
-                                    <th class="text-end">Actions</th>
+                                    <th style="width: 20%;">Type</th>
+                                    <th style="width: 20%;">Number</th>
+                                    <th style="width: 30%;">Name</th>
+                                    <th style="width: 15%;">Color</th>
+                                    <th class="text-end" style="width: 15%;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -197,14 +261,16 @@
                                             <input type="number" name="number" value="{{ team.number }}" class="form-control form-control-sm">
                                         </td>
                                         <td>
-                                            <input type="text" name="name" value="{{ team.name|default:'' }}" class="form-control form-control-sm" placeholder="Name">
+                                            <input type="text" name="name" value="{{ team.name|default:'' }}" class="form-control form-control-sm" placeholder="Team Name">
                                         </td>
                                         <td>
-                                            <input type="color" name="color" value="{{ team.color }}" class="form-control form-control-color form-control-sm">
+                                            <input type="color" name="color" value="{{ team.color }}" class="form-control form-control-color form-control-sm w-100">
                                         </td>
                                         <td class="text-end">
-                                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-team-{{ team.id }}">Delete</button>
+                                            <div class="d-flex gap-1 justify-content-end">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to delete this team?" data-submit-id="delete-team-{{ team.id }}">Delete</button>
+                                            </div>
                                         </td>
                                     </form>
                                     <form id="delete-team-{{ team.id }}" method="post" style="display:none;" action="{% url 'portal_team' %}">
@@ -215,7 +281,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="4" class="text-center py-4 text-muted">No teams added yet.</td>
+                                    <td colspan="5" class="text-center py-4 text-muted">No teams added yet. Add one above.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -227,328 +293,460 @@
 
         <!-- Crews Tab -->
         <div class="tab-pane fade {% if active_tab == 'crews' %}show active{% endif %}" id="crews" role="tabpanel" aria-labelledby="crews-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Add New Crew/Project</h5>
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-plus-circle text-success me-2"></i>Add New Crew / Project</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-3">
                     <form method="post" class="row g-3" action="{% url 'portal_crew' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_crew">
-                        <div class="col-md-4">
-                            <label for="program_id" class="form-label">Program</label>
+                        <div class="col-md-5">
+                            <label for="program_id" class="form-label fw-semibold small">Program</label>
                             <select name="program_id" id="program_id" class="form-select" required>
                                 {% for prog in programs %}
                                 <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year_display }})</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label for="crew_name" class="form-label">Crew Name</label>
+                        <div class="col-md-5">
+                            <label for="crew_name" class="form-label fw-semibold small">Crew Name</label>
                             <input type="text" name="name" id="crew_name" class="form-control" required placeholder="e.g. Chassis, Programming">
                         </div>
                         <div class="col-md-2">
-                            <label for="crew_color" class="form-label">Color</label>
-                            <input type="color" name="color" id="crew_color" class="form-control form-control-color w-100" value="#0000ff">
+                            <label for="crew_color" class="form-label fw-semibold small">Color</label>
+                            <input type="color" name="color" id="crew_color" class="form-control form-control-color w-100" value="#0d6efd">
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-success w-100">Add Crew</button>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success px-4 fw-semibold">
+                                <i class="bi bi-plus-lg me-1"></i> Add Crew
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Existing Crews/Projects</h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Program</th>
-                                    <th>Crew Name</th>
-                                    <th>Color</th>
-                                    <th class="text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for crew in crews %}
-                                <tr>
-                                    <td colspan="4">
-                                        <form method="post" class="d-flex gap-2 align-items-center m-0" action="{% url 'portal_crew' %}">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+            <!-- Program-Grouped Crews Cards -->
+            <div class="d-flex flex-column gap-4">
+                {% for prog in programs %}
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-diagram-3 text-primary fs-5"></i>
+                            <div>
+                                <h6 class="mb-0 fw-bold text-dark">{{ prog.name }}</h6>
+                                <span class="text-muted small">{% if prog.year_display %}{{ prog.year_display }} &bull; {% endif %}{% if prog.active %}<span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>{% else %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>{% endif %}</span>
+                            </div>
+                        </div>
+                        <span class="badge bg-light text-dark border fw-semibold">
+                            {{ prog.crews.count }} Crew{{ prog.crews.count|pluralize }}
+                        </span>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if prog.crews.all %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 55%;">Crew Name</th>
+                                        <th style="width: 25%;">Color</th>
+                                        <th class="text-end" style="width: 20%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for crew in prog.crews.all %}
+                                    <tr>
+                                        <form method="post" class="d-inline" action="{% url 'portal_crew' %}">
+                                            {% csrf_token %}
                                             <input type="hidden" name="action" value="update_crew">
                                             <input type="hidden" name="crew_id" value="{{ crew.id }}">
-                                            <div style="flex: 1;">{{ crew.program.name }} ({{ crew.program.year_display }})</div>
-                                            <div style="flex: 2;">
+                                            <td>
                                                 <input type="text" name="name" value="{{ crew.name }}" class="form-control form-control-sm" placeholder="Crew Name" required>
-                                            </div>
-                                            <div style="width: 50px;">
-                                                <input type="color" name="color" value="{{ crew.color }}" class="form-control form-control-color form-control-sm" title="Crew Color">
-                                            </div>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-crew-{{ crew.id }}">Delete</button>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <input type="color" name="color" value="{{ crew.color }}" class="form-control form-control-color form-control-sm" title="Crew Color" style="width: 45px;">
+                                                    <span class="badge border" style="background-color: {{ crew.color }}; color: {% if crew.color == '#ffffff' or crew.color == '#ffff00' %}#000{% else %}#fff{% endif %};">Preview</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="d-flex gap-1 justify-content-end">
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to delete this crew?" data-submit-id="delete-crew-{{ crew.id }}">Delete</button>
+                                                </div>
+                                            </td>
                                         </form>
                                         <form id="delete-crew-{{ crew.id }}" method="post" style="display:none;" action="{% url 'portal_crew' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="delete_crew">
                                             <input type="hidden" name="crew_id" value="{{ crew.id }}">
                                         </form>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <th colspan="4" class="text-center py-4 text-muted">No crews added yet.</th>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="p-3 text-center text-muted small">
+                            No crews configured for {{ prog.name }} yet.
+                        </div>
+                        {% endif %}
+                    </div>
+                    <!-- Quick Add Form for this Program -->
+                    <div class="card-footer bg-light p-3 border-top">
+                        <form method="post" class="row g-2 align-items-center" action="{% url 'portal_crew' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_crew">
+                            <input type="hidden" name="program_id" value="{{ prog.id }}">
+                            <div class="col-md-7 col-sm-6">
+                                <input type="text" name="name" class="form-control form-control-sm" placeholder="New crew name for {{ prog.name }}..." required>
+                            </div>
+                            <div class="col-md-3 col-sm-3">
+                                <input type="color" name="color" class="form-control form-control-color form-control-sm w-100" value="#0d6efd" title="Choose crew color">
+                            </div>
+                            <div class="col-md-2 col-sm-3 text-end">
+                                <button type="submit" class="btn btn-sm btn-success w-100">
+                                    <i class="bi bi-plus-lg me-1"></i> Add
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
+                {% empty %}
+                <div class="card border-0 bg-light p-4 text-center text-muted">
+                    No programs created yet. Create a program first to add crews.
+                </div>
+                {% endfor %}
             </div>
         </div>
 
         <!-- SubTeams Tab -->
         <div class="tab-pane fade {% if active_tab == 'subteams' %}show active{% endif %}" id="subteams" role="tabpanel" aria-labelledby="subteams-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Add New SubTeam</h5>
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-plus-circle text-success me-2"></i>Add New SubTeam</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-3">
                     <form method="post" class="row g-3" action="{% url 'portal_subteam' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_subteam">
-                        <div class="col-md-4">
-                            <label for="program_id_subteam" class="form-label">Program</label>
+                        <div class="col-md-5">
+                            <label for="program_id_subteam" class="form-label fw-semibold small">Program</label>
                             <select name="program_id" id="program_id_subteam" class="form-select" required>
                                 {% for prog in programs %}
                                 <option value="{{ prog.id }}">{{ prog.name }} ({{ prog.year_display }})</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label for="subteam_name" class="form-label">SubTeam Name</label>
-                            <input type="text" name="name" id="subteam_name" class="form-control" required placeholder="e.g. Design, Build">
+                        <div class="col-md-5">
+                            <label for="subteam_name" class="form-label fw-semibold small">SubTeam Name</label>
+                            <input type="text" name="name" id="subteam_name" class="form-control" required placeholder="e.g. Mechanical, Electrical, Software, Business">
                         </div>
                         <div class="col-md-2">
-                            <label for="subteam_color" class="form-label">Color</label>
-                            <input type="color" name="color" id="subteam_color" class="form-control form-control-color w-100" value="#0000ff">
+                            <label for="subteam_color" class="form-label fw-semibold small">Color</label>
+                            <input type="color" name="color" id="subteam_color" class="form-control form-control-color w-100" value="#198754">
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-success w-100">Add SubTeam</button>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success px-4 fw-semibold">
+                                <i class="bi bi-plus-lg me-1"></i> Add SubTeam
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Existing SubTeams</h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Program</th>
-                                    <th>SubTeam Name</th>
-                                    <th>Color</th>
-                                    <th class="text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for subteam in subteams %}
-                                <tr>
-                                    <td colspan="4">
-                                        <form method="post" class="d-flex gap-2 align-items-center m-0" action="{% url 'portal_subteam' %}">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+            <!-- Program-Grouped SubTeams Cards -->
+            <div class="d-flex flex-column gap-4">
+                {% for prog in programs %}
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-grid text-primary fs-5"></i>
+                            <div>
+                                <h6 class="mb-0 fw-bold text-dark">{{ prog.name }}</h6>
+                                <span class="text-muted small">{% if prog.year_display %}{{ prog.year_display }} &bull; {% endif %}{% if prog.active %}<span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>{% else %}<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>{% endif %}</span>
+                            </div>
+                        </div>
+                        <span class="badge bg-light text-dark border fw-semibold">
+                            {{ prog.subteams.count }} SubTeam{{ prog.subteams.count|pluralize }}
+                        </span>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if prog.subteams.all %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 55%;">SubTeam Name</th>
+                                        <th style="width: 25%;">Color</th>
+                                        <th class="text-end" style="width: 20%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for subteam in prog.subteams.all %}
+                                    <tr>
+                                        <form method="post" class="d-inline" action="{% url 'portal_subteam' %}">
+                                            {% csrf_token %}
                                             <input type="hidden" name="action" value="update_subteam">
                                             <input type="hidden" name="subteam_id" value="{{ subteam.id }}">
-                                            <div style="flex: 1;">{{ subteam.program.name }} ({{ subteam.program.year_display }})</div>
-                                            <div style="flex: 2;">
+                                            <td>
                                                 <input type="text" name="name" value="{{ subteam.name }}" class="form-control form-control-sm" placeholder="SubTeam Name" required>
-                                            </div>
-                                            <div style="width: 50px;">
-                                                <input type="color" name="color" value="{{ subteam.color }}" class="form-control form-control-color form-control-sm" title="SubTeam Color">
-                                            </div>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure?" data-submit-id="delete-subteam-{{ subteam.id }}">Delete</button>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <input type="color" name="color" value="{{ subteam.color }}" class="form-control form-control-color form-control-sm" title="SubTeam Color" style="width: 45px;">
+                                                    <span class="badge border" style="background-color: {{ subteam.color }}; color: {% if subteam.color == '#ffffff' or subteam.color == '#ffff00' %}#000{% else %}#fff{% endif %};">Preview</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="d-flex gap-1 justify-content-end">
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to delete this subteam?" data-submit-id="delete-subteam-{{ subteam.id }}">Delete</button>
+                                                </div>
+                                            </td>
                                         </form>
                                         <form id="delete-subteam-{{ subteam.id }}" method="post" style="display:none;" action="{% url 'portal_subteam' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="delete_subteam">
                                             <input type="hidden" name="subteam_id" value="{{ subteam.id }}">
                                         </form>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <th colspan="4" class="text-center py-4 text-muted">No subteams added yet.</th>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="p-3 text-center text-muted small">
+                            No subteams configured for {{ prog.name }} yet.
+                        </div>
+                        {% endif %}
+                    </div>
+                    <!-- Quick Add Form for this Program -->
+                    <div class="card-footer bg-light p-3 border-top">
+                        <form method="post" class="row g-2 align-items-center" action="{% url 'portal_subteam' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_subteam">
+                            <input type="hidden" name="program_id" value="{{ prog.id }}">
+                            <div class="col-md-7 col-sm-6">
+                                <input type="text" name="name" class="form-control form-control-sm" placeholder="New subteam name for {{ prog.name }}..." required>
+                            </div>
+                            <div class="col-md-3 col-sm-3">
+                                <input type="color" name="color" class="form-control form-control-color form-control-sm w-100" value="#198754" title="Choose subteam color">
+                            </div>
+                            <div class="col-md-2 col-sm-3 text-end">
+                                <button type="submit" class="btn btn-sm btn-success w-100">
+                                    <i class="bi bi-plus-lg me-1"></i> Add
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
+                {% empty %}
+                <div class="card border-0 bg-light p-4 text-center text-muted">
+                    No programs created yet. Create a program first to add subteams.
+                </div>
+                {% endfor %}
             </div>
         </div>
 
         <!-- Imports Tab -->
         <div class="tab-pane fade {% if active_tab == 'imports' %}show active{% endif %}" id="imports" role="tabpanel" aria-labelledby="imports-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <p class="text-muted">Upload CSV or XLSX files to import records. Use the sample templates to format your data.</p>
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-cloud-upload text-primary me-2"></i>Data Import Center</h5>
+                    <p class="text-muted small mb-0">Upload CSV or Excel spreadsheets to batch-import records into the database.</p>
+                </div>
+                <div class="card-body p-4">
                     <div class="row g-4">
                         {% if perms.programs.add_student %}
-                        <div class="col-12 col-lg-6">
-                          <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Students</h5>
-                              <p class="card-text">Import students with optional school and graduation year.</p>
+                        <div class="col-12 col-md-6 col-lg-4">
+                          <div class="card border rounded-3 h-100 shadow-none bg-light bg-opacity-25">
+                            <div class="card-body d-flex flex-column p-3">
+                              <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-primary bg-opacity-10 text-primary p-2 rounded-2 me-2"><i class="bi bi-mortarboard-fill fs-6"></i></span>
+                                <h6 class="card-title fw-bold text-dark mb-0">Students</h6>
+                              </div>
+                              <p class="card-text text-muted small mb-3">Import student profiles with school and graduation year.</p>
                               <form id="student-import-form" action="{% url 'student_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
                                 {% csrf_token %}
-                                <div class="d-flex gap-2">
-                                  <input type="file" name="file" id="student-import-file" class="form-control" accept=".csv,.xlsx" />
-                                  <button type="submit" class="btn btn-primary">Import</button>
+                                <div class="mb-2">
+                                  <input type="file" name="file" id="student-import-file" class="form-control form-control-sm" accept=".csv,.xlsx" required />
                                 </div>
-                                <div class="form-check mt-2">
+                                <div class="form-check mb-3">
                                   <input class="form-check-input" type="checkbox" value="1" id="student-overwrite" name="overwrite" />
-                                  <label class="form-check-label" for="student-overwrite">Overwrite existing data</label>
+                                  <label class="form-check-label small text-muted" for="student-overwrite">Overwrite existing data</label>
                                 </div>
+                                <button type="submit" class="btn btn-sm btn-primary w-100 fw-semibold">
+                                  <i class="bi bi-upload me-1"></i> Import Students
+                                </button>
                               </form>
-                              <div class="mt-2"><a href="{% url 'students_sample_csv' %}">Download CSV Template</a></div>
+                              <div class="mt-3 pt-2 border-top text-center">
+                                <a href="{% url 'students_sample_csv' %}" class="small text-decoration-none"><i class="bi bi-download me-1"></i> Download CSV Template</a>
+                              </div>
                             </div>
                           </div>
                         </div>
                         {% endif %}
 
                         {% if perms.programs.add_adult %}
-                        <div class="col-12 col-lg-6">
-                          <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Parents</h5>
-                              <p class="card-text">Import parent/guardian contacts.</p>
+                        <div class="col-12 col-md-6 col-lg-4">
+                          <div class="card border rounded-3 h-100 shadow-none bg-light bg-opacity-25">
+                            <div class="card-body d-flex flex-column p-3">
+                              <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-success bg-opacity-10 text-success p-2 rounded-2 me-2"><i class="bi bi-people-fill fs-6"></i></span>
+                                <h6 class="card-title fw-bold text-dark mb-0">Parents</h6>
+                              </div>
+                              <p class="card-text text-muted small mb-3">Import parent and guardian contact profiles.</p>
                               <form id="parent-import-form" action="{% url 'parent_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
                                 {% csrf_token %}
-                                <div class="d-flex gap-2">
-                                  <input type="file" name="file" id="parent-import-file" class="form-control" accept=".csv,.xlsx" />
-                                  <button type="submit" class="btn btn-primary">Import</button>
+                                <div class="mb-2">
+                                  <input type="file" name="file" id="parent-import-file" class="form-control form-control-sm" accept=".csv,.xlsx" required />
                                 </div>
-                                <div class="form-check mt-2">
+                                <div class="form-check mb-3">
                                   <input class="form-check-input" type="checkbox" value="1" id="parent-overwrite" name="overwrite" />
-                                  <label class="form-check-label" for="parent-overwrite">Overwrite existing data</label>
+                                  <label class="form-check-label small text-muted" for="parent-overwrite">Overwrite existing data</label>
                                 </div>
+                                <button type="submit" class="btn btn-sm btn-success w-100 fw-semibold">
+                                  <i class="bi bi-upload me-1"></i> Import Parents
+                                </button>
                               </form>
-                              <div class="mt-2"><a href="{% url 'parents_sample_csv' %}">Download CSV Template</a></div>
+                              <div class="mt-3 pt-2 border-top text-center">
+                                <a href="{% url 'parents_sample_csv' %}" class="small text-decoration-none"><i class="bi bi-download me-1"></i> Download CSV Template</a>
+                              </div>
                             </div>
                           </div>
                         </div>
                         {% endif %}
 
                         {% if perms.programs.change_student %}
-                        <div class="col-12 col-lg-6">
-                          <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Student-Parent Relationships</h5>
-                              <p class="card-text">Link existing students to parent/guardian contacts and set relationship types. Safe to re-run; idempotent.</p>
+                        <div class="col-12 col-md-6 col-lg-4">
+                          <div class="card border rounded-3 h-100 shadow-none bg-light bg-opacity-25">
+                            <div class="card-body d-flex flex-column p-3">
+                              <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-info bg-opacity-10 text-info p-2 rounded-2 me-2"><i class="bi bi-link-45deg fs-6"></i></span>
+                                <h6 class="card-title fw-bold text-dark mb-0">Student-Parent Relationships</h6>
+                              </div>
+                              <p class="card-text text-muted small mb-3">Link existing students to parent contacts.</p>
                               <form id="relationships-import-form" action="{% url 'relationship_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
                                 {% csrf_token %}
-                                <div class="d-flex gap-2">
-                                  <input type="file" name="file" id="relationships-import-file" class="form-control" accept=".csv,.xlsx" />
-                                  <button type="submit" class="btn btn-primary">Import</button>
+                                <div class="mb-2">
+                                  <input type="file" name="file" id="relationships-import-file" class="form-control form-control-sm" accept=".csv,.xlsx" required />
                                 </div>
-                                <div class="d-flex gap-3 mt-2">
+                                <div class="d-flex gap-3 mb-3">
                                   <div class="form-check">
                                     <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
-                                    <label class="form-check-label" for="relationships-dry-run">Dry run</label>
+                                    <label class="form-check-label small text-muted" for="relationships-dry-run">Dry run</label>
                                   </div>
                                   <div class="form-check">
                                     <input class="form-check-input" type="checkbox" value="1" id="relationships-overwrite" name="overwrite" />
-                                    <label class="form-check-label" for="relationships-overwrite">Overwrite existing data</label>
+                                    <label class="form-check-label small text-muted" for="relationships-overwrite">Overwrite</label>
                                   </div>
                                 </div>
+                                <button type="submit" class="btn btn-sm btn-info text-dark w-100 fw-semibold">
+                                  <i class="bi bi-upload me-1"></i> Import Relationships
+                                </button>
                               </form>
-                              <div class="mt-2"><a href="{% url 'relationships_sample_csv' %}">Download CSV Template</a></div>
+                              <div class="mt-3 pt-2 border-top text-center">
+                                <a href="{% url 'relationships_sample_csv' %}" class="small text-decoration-none"><i class="bi bi-download me-1"></i> Download CSV Template</a>
+                              </div>
                             </div>
                           </div>
                         </div>
                         {% endif %}
 
                         {% if perms.programs.add_adult %}
-                        <div class="col-12 col-lg-6">
-                          <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Mentors</h5>
-                              <p class="card-text">Import mentors with emails and roles.</p>
+                        <div class="col-12 col-md-6 col-lg-4">
+                          <div class="card border rounded-3 h-100 shadow-none bg-light bg-opacity-25">
+                            <div class="card-body d-flex flex-column p-3">
+                              <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-warning bg-opacity-10 text-warning p-2 rounded-2 me-2"><i class="bi bi-person-badge-fill fs-6"></i></span>
+                                <h6 class="card-title fw-bold text-dark mb-0">Mentors</h6>
+                              </div>
+                              <p class="card-text text-muted small mb-3">Import mentors, volunteers, and clearances.</p>
                               <form id="mentor-import-form" action="{% url 'mentor_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
                                 {% csrf_token %}
-                                <div class="d-flex gap-2">
-                                  <input type="file" name="file" id="mentor-import-file" class="form-control" accept=".csv,.xlsx" />
-                                  <button type="submit" class="btn btn-primary">Import</button>
+                                <div class="mb-2">
+                                  <input type="file" name="file" id="mentor-import-file" class="form-control form-control-sm" accept=".csv,.xlsx" required />
                                 </div>
-                                <div class="form-check mt-2">
+                                <div class="form-check mb-3">
                                   <input class="form-check-input" type="checkbox" value="1" id="mentor-overwrite" name="overwrite" />
-                                  <label class="form-check-label" for="mentor-overwrite">Overwrite existing data</label>
+                                  <label class="form-check-label small text-muted" for="mentor-overwrite">Overwrite existing data</label>
                                 </div>
+                                <button type="submit" class="btn btn-sm btn-warning text-dark w-100 fw-semibold">
+                                  <i class="bi bi-upload me-1"></i> Import Mentors
+                                </button>
                               </form>
-                              <div class="mt-2"><a href="{% url 'mentors_sample_csv' %}">Download CSV Template</a></div>
+                              <div class="mt-3 pt-2 border-top text-center">
+                                <a href="{% url 'mentors_sample_csv' %}" class="small text-decoration-none"><i class="bi bi-download me-1"></i> Download CSV Template</a>
+                              </div>
                             </div>
                           </div>
                         </div>
                         {% endif %}
 
                         {% if perms.programs.add_school %}
-                        <div class="col-12 col-lg-6">
-                          <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Schools</h5>
-                              <p class="card-text">Import schools with district and address details.</p>
+                        <div class="col-12 col-md-6 col-lg-4">
+                          <div class="card border rounded-3 h-100 shadow-none bg-light bg-opacity-25">
+                            <div class="card-body d-flex flex-column p-3">
+                              <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary p-2 rounded-2 me-2"><i class="bi bi-building fs-6"></i></span>
+                                <h6 class="card-title fw-bold text-dark mb-0">Schools</h6>
+                              </div>
+                              <p class="card-text text-muted small mb-3">Import schools and school districts.</p>
                               <form id="school-import-form" action="{% url 'school_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
                                 {% csrf_token %}
-                                <div class="d-flex gap-2">
-                                  <input type="file" name="file" id="school-import-file" class="form-control" accept=".csv,.xlsx" />
-                                  <button type="submit" class="btn btn-primary">Import</button>
+                                <div class="mb-2">
+                                  <input type="file" name="file" id="school-import-file" class="form-control form-control-sm" accept=".csv,.xlsx" required />
                                 </div>
-                                <div class="form-check mt-2">
+                                <div class="form-check mb-3">
                                   <input class="form-check-input" type="checkbox" value="1" id="school-overwrite" name="overwrite" />
-                                  <label class="form-check-label" for="school-overwrite">Overwrite existing data</label>
+                                  <label class="form-check-label small text-muted" for="school-overwrite">Overwrite existing data</label>
                                 </div>
+                                <button type="submit" class="btn btn-sm btn-secondary w-100 fw-semibold">
+                                  <i class="bi bi-upload me-1"></i> Import Schools
+                                </button>
                               </form>
-                              <div class="mt-2"><a href="{% url 'schools_sample_csv' %}">Download CSV Template</a></div>
+                              <div class="mt-3 pt-2 border-top text-center">
+                                <a href="{% url 'schools_sample_csv' %}" class="small text-decoration-none"><i class="bi bi-download me-1"></i> Download CSV Template</a>
+                              </div>
                             </div>
                           </div>
                         </div>
                         {% endif %}
 
                         {% if perms.programs.change_student %}
-                        <div class="col-12 col-lg-6">
-                          <div class="card h-100">
-                            <div class="card-body d-flex flex-column">
-                              <h5 class="card-title">Attendance</h5>
-                              <p class="card-text">Import attendance sessions from legacy attendance system by CSV export. Requires selecting a Program.</p>
-                              <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
-                                <div class="row g-2 align-items-start">
-                                  <div class="col-12">
-                                    <label for="attendance-program" class="form-label">Program</label>
-                                                                        <select id="attendance-program" name="program_id" class="form-select" required>
-                                                                            <option value="">Select a program...</option>
-                                                                            {% for p in attendance_programs|default:programs %}
-                                      <option value="{{ p.id }}">{{ p.name_with_dates }}</option>
-                                                                            {% endfor %}
-                                                                        </select>
-                                  </div>
-                                  <div class="col-12 d-flex gap-2">
-                                    <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" />
-                                    <button type="submit" class="btn btn-primary">Import</button>
-                                  </div>
+                        <div class="col-12 col-md-6 col-lg-4">
+                          <div class="card border rounded-3 h-100 shadow-none bg-light bg-opacity-25">
+                            <div class="card-body d-flex flex-column p-3">
+                              <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-danger bg-opacity-10 text-danger p-2 rounded-2 me-2"><i class="bi bi-clock-history fs-6"></i></span>
+                                <h6 class="card-title fw-bold text-dark mb-0">Attendance</h6>
+                              </div>
+                              <p class="card-text text-muted small mb-3">Import attendance logs from CSV for a specific program.</p>
+                              <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">
+                                {% csrf_token %}
+                                <div class="mb-2">
+                                  <select id="attendance-program" name="program_id" class="form-select form-select-sm" required>
+                                    <option value="">Select a program...</option>
+                                    {% for p in attendance_programs|default:programs %}
+                                    <option value="{{ p.id }}">{{ p.name_with_dates }}</option>
+                                    {% endfor %}
+                                  </select>
                                 </div>
-                                <div class="form-check mt-2">
-                                    <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
-                                    <label class="form-check-label" for="attendance-overwrite">Overwrite existing data</label>
+                                <div class="mb-2">
+                                  <input type="file" name="file" id="attendance-import-file" class="form-control form-control-sm" accept=".csv" required />
                                 </div>
-                                <div class="form-text mt-2">Times can be in local time (e.g., 2025-09-01 20:15) or ISO format with timezone shifts (e.g., 2025-09-01T20:15:00-04:00). If time_out is blank, an open session will be created. Use visitor_team_number for visitor rows only.</div>
-                                <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>
+                                <div class="form-check mb-3">
+                                  <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
+                                  <label class="form-check-label small text-muted" for="attendance-overwrite">Overwrite existing data</label>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-danger w-100 fw-semibold">
+                                  <i class="bi bi-upload me-1"></i> Import Attendance
+                                </button>
                               </form>
+                              <div class="mt-3 pt-2 border-top text-center">
+                                <a href="{% url 'attendance_sample_csv' %}" class="small text-decoration-none"><i class="bi bi-download me-1"></i> Download CSV Template</a>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -560,24 +758,21 @@
 
         <!-- Kiosk Sign-In Tab -->
         <div class="tab-pane fade {% if active_tab == 'kiosk_configs' %}show active{% endif %}" id="kiosk_configs" role="tabpanel" aria-labelledby="kiosk_configs-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Kiosk Sign-In Pages</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">
-                        Each kiosk configuration creates a public sign-in page at
-                        <code>/kiosk/&lt;id&gt;/</code> that students and visitors can use
-                        to tap in and out without logging in to the portal.
-                        Set a PC or tablet to kiosk mode and point it at the URL shown below.
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-tablet text-primary me-2"></i>Kiosk Sign-In Stations</h5>
+                    <p class="text-muted small mb-0">
+                        Public sign-in stations at <code>/kiosk/&lt;id&gt;/</code> let students and visitors tap RFID cards or check in without logging into the portal.
                     </p>
-                    <div class="table-responsive mb-4">
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Label</th>
-                                    <th>Program</th>
-                                    <th>Active</th>
+                                    <th>Station Label</th>
+                                    <th>Linked Program</th>
+                                    <th>Status</th>
                                     <th>Kiosk URL</th>
                                     <th class="text-end">Actions</th>
                                 </tr>
@@ -585,45 +780,61 @@
                             <tbody>
                                 {% for k in kiosk_configs %}
                                 <tr>
-                                    <td>{{ k.label }}</td>
-                                    <td>{{ k.program }}</td>
-                                    <td><span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ k.is_active|yesno:"Active,Inactive" }}</span></td>
-                                    <td><a href="/kiosk/{{ k.pk }}/" target="_blank"><code>/kiosk/{{ k.pk }}/</code></a></td>
-                                    <td class="text-end d-flex gap-2 justify-content-end">
-                                        <form action="{% url 'portal_kiosk' %}" method="post" class="d-inline">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="toggle_kiosk_config">
-                                            <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
-                                            <button class="btn btn-sm {% if k.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
-                                                {% if k.is_active %}Deactivate{% else %}Activate{% endif %}
-                                            </button>
-                                        </form>
-                                        <form action="{% url 'portal_kiosk' %}" method="post" class="d-inline js-confirm" data-confirm="Delete this kiosk configuration?">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="delete_kiosk_config">
-                                            <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
-                                            <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                        </form>
+                                    <td class="fw-semibold text-dark">{{ k.label }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ k.program }}</span></td>
+                                    <td>
+                                        <span class="badge {% if k.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ k.is_active|yesno:"Active,Inactive" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="/kiosk/{{ k.pk }}/" target="_blank" class="text-decoration-none">
+                                            <code>/kiosk/{{ k.pk }}/</code> <i class="bi bi-box-arrow-up-right small text-muted"></i>
+                                        </a>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <form action="{% url 'portal_kiosk' %}" method="post" class="d-inline">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="toggle_kiosk_config">
+                                                <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
+                                                <button class="btn btn-sm {% if k.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                    {% if k.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                </button>
+                                            </form>
+                                            <form action="{% url 'portal_kiosk' %}" method="post" class="d-inline js-confirm" data-confirm="Delete this kiosk configuration?">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="delete_kiosk_config">
+                                                <input type="hidden" name="kiosk_config_id" value="{{ k.pk }}">
+                                                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="5" class="text-center py-4 text-muted">No kiosk configurations yet. Add one below.</td></tr>
+                                <tr><td colspan="5" class="text-center py-4 text-muted">No kiosk stations configured yet. Add one below.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
 
-                    <!-- Add Kiosk Form -->
-                    <h6 class="mb-3">Create New Kiosk</h6>
+            <!-- Add Kiosk Form -->
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-plus-circle text-success me-2"></i>Create New Kiosk Station</h5>
+                </div>
+                <div class="card-body p-3">
                     <form method="post" action="{% url 'portal_kiosk' %}" class="row g-3 align-items-end">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_kiosk_config">
                         <div class="col-md-5">
-                            <label for="kioskLabel" class="form-label">Label</label>
+                            <label for="kioskLabel" class="form-label fw-semibold small">Station Label</label>
                             <input type="text" id="kioskLabel" name="label" class="form-control" placeholder="e.g. Build Space Entry" required>
                         </div>
                         <div class="col-md-5">
-                            <label for="kioskProgram" class="form-label">Program</label>
+                            <label for="kioskProgram" class="form-label fw-semibold small">Program</label>
                             <select id="kioskProgram" name="program_id" class="form-select" required>
                                 <option value="">Select program…</option>
                                 {% for p in attendance_programs %}
@@ -632,7 +843,9 @@
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100">Add Kiosk</button>
+                            <button type="submit" class="btn btn-success w-100 fw-semibold">
+                                <i class="bi bi-plus-lg me-1"></i> Add Kiosk
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -641,56 +854,60 @@
 
         <!-- Sliding Scale Tab -->
         <div class="tab-pane fade {% if active_tab == 'sliding_scale_settings' %}show active{% endif %}" id="sliding_scale_settings" role="tabpanel" aria-labelledby="sliding_scale_settings-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Sliding Scale Applications</h5>
-                    <a href="{% url 'sliding_scale_review_list' %}" class="btn btn-sm btn-primary">
-                        Review Applications
-                        {% if pending_sliding_scale_count %}<span class="badge bg-light text-dark ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
+            <!-- Review Queue Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4 bg-primary bg-opacity-10 border-primary">
+                <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h5 class="fw-bold text-dark mb-1"><i class="bi bi-percent text-primary me-2"></i>Sliding Scale Application Review</h5>
+                        <p class="text-muted small mb-0">Review submitted household income questionnaires, decrypt tax forms, and record decisions.</p>
+                    </div>
+                    <a href="{% url 'sliding_scale_review_list' %}" class="btn btn-primary px-4 fw-semibold">
+                        <i class="bi bi-inbox me-1"></i> Review Applications
+                        {% if pending_sliding_scale_count %}<span class="badge bg-danger ms-1">{{ pending_sliding_scale_count }}</span>{% endif %}
                     </a>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted mb-0">Review, approve, or decline pending sliding scale applications submitted by parents.</p>
                 </div>
             </div>
 
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Income Guideline Settings</h5>
+            <!-- Settings Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-calculator text-primary me-2"></i>Income Guideline Formula &amp; Parameters</h5>
+                    <p class="text-muted small mb-0">These values determine the suggested tuition discount percentage based on household size and AGI.</p>
                 </div>
-                <div class="card-body">
-                    <p class="text-muted">
-                        These numbers are used to calculate the suggested sliding scale discount from a family's household size and
-                        adjusted gross income (AGI), based on federal poverty guidelines:
-                    </p>
-                    <pre class="bg-light p-3 rounded"><code>fed_base = base_amount + household_size * additional_member_amount
-low_boundary = fed_base * low_multiplier
-high_boundary = fed_base * high_multiplier
-discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) * 100)</code></pre>
+                <div class="card-body p-4">
+                    <div class="bg-light p-3 rounded-3 mb-4 font-monospace small border">
+                        <div class="text-dark"><strong>Formula:</strong></div>
+                        <code>fed_base = base_amount + household_size * additional_member_amount</code><br>
+                        <code>low_boundary = fed_base * low_multiplier</code><br>
+                        <code>high_boundary = fed_base * high_multiplier</code><br>
+                        <code>discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) * 100)</code>
+                    </div>
                     <form method="post" action="{% url 'portal_sliding_scale_settings' %}" class="row g-3">
                         {% csrf_token %}
                         <div class="col-md-3">
-                            <label for="base_amount" class="form-label">Base Amount ($)</label>
+                            <label for="base_amount" class="form-label fw-semibold small">Base Amount ($)</label>
                             <input type="number" step="0.01" class="form-control" id="base_amount" name="base_amount" value="{{ sliding_scale_settings.base_amount }}" required>
-                            <div class="form-text">Poverty guideline base for a 1-person household.</div>
+                            <div class="form-text">Poverty guideline base for 1 person.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="additional_member_amount" class="form-label">Per Additional Member ($)</label>
+                            <label for="additional_member_amount" class="form-label fw-semibold small">Per Additional Member ($)</label>
                             <input type="number" step="0.01" class="form-control" id="additional_member_amount" name="additional_member_amount" value="{{ sliding_scale_settings.additional_member_amount }}" required>
-                            <div class="form-text">Added for each household member beyond the first.</div>
+                            <div class="form-text">Added for each additional person.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="low_multiplier" class="form-label">Lower Boundary Multiplier</label>
+                            <label for="low_multiplier" class="form-label fw-semibold small">Lower Multiplier</label>
                             <input type="number" step="0.01" class="form-control" id="low_multiplier" name="low_multiplier" value="{{ sliding_scale_settings.low_multiplier }}" required>
-                            <div class="form-text">e.g. 1.5 = 150% of poverty guideline.</div>
+                            <div class="form-text">e.g. 1.5 = 150% of poverty base.</div>
                         </div>
                         <div class="col-md-3">
-                            <label for="high_multiplier" class="form-label">Upper Boundary Multiplier</label>
+                            <label for="high_multiplier" class="form-label fw-semibold small">Upper Multiplier</label>
                             <input type="number" step="0.01" class="form-control" id="high_multiplier" name="high_multiplier" value="{{ sliding_scale_settings.high_multiplier }}" required>
-                            <div class="form-text">e.g. 4 = 400% of poverty guideline.</div>
+                            <div class="form-text">e.g. 4.0 = 400% of poverty base.</div>
                         </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary">Save Sliding Scale Settings</button>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                <i class="bi bi-check2 me-1"></i> Save Sliding Scale Settings
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -699,17 +916,17 @@ discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) 
 
         <!-- Agreements Tab -->
         <div class="tab-pane fade {% if active_tab == 'agreements' %}show active{% endif %}" id="agreements" role="tabpanel" aria-labelledby="agreements-tab">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Existing Agreements</h5>
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-check text-primary me-2"></i>Existing Mentor Agreements</h5>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Title</th>
-                                    <th>Slug</th>
+                                    <th>Document Title</th>
+                                    <th>Slug Identifier</th>
                                     <th>Version</th>
                                     <th>Effective Date</th>
                                     <th>Status</th>
@@ -719,36 +936,36 @@ discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) 
                             <tbody>
                                 {% for agreement in mentor_agreements %}
                                 <tr>
-                                    <td>{{ agreement.title }}</td>
+                                    <td class="fw-semibold text-dark">{{ agreement.title }}</td>
                                     <td><code>{{ agreement.slug }}</code></td>
-                                    <td>v{{ agreement.version }}</td>
+                                    <td><span class="badge bg-light text-dark border">v{{ agreement.version }}</span></td>
                                     <td>{{ agreement.effective_date|date:"M j, Y" }}</td>
                                     <td>
                                         <span class="badge {% if agreement.is_active %}bg-success{% else %}bg-secondary{% endif %}">
                                             {{ agreement.is_active|yesno:"Active,Draft" }}
                                         </span>
                                     </td>
-                                    <td class="text-end d-flex gap-1 justify-content-end">
-                                        <form method="post" class="d-inline" action="{% url 'portal_agreements' %}">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="toggle_agreement">
-                                            <input type="hidden" name="agreement_id" value="{{ agreement.id }}">
-                                            <button class="btn btn-sm {% if agreement.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
-                                                {% if agreement.is_active %}Deactivate{% else %}Activate{% endif %}
-                                            </button>
-                                        </form>
-                                        <form method="post" class="d-inline js-confirm" data-confirm="Delete this agreement and all its versions? This cannot be undone." action="{% url 'portal_agreements' %}">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="delete_agreement">
-                                            <input type="hidden" name="agreement_id" value="{{ agreement.id }}">
-                                            <button class="btn btn-sm btn-outline-danger">Delete</button>
-                                        </form>
+                                    <td class="text-end">
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <form method="post" class="d-inline" action="{% url 'portal_agreements' %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="toggle_agreement">
+                                                <input type="hidden" name="agreement_id" value="{{ agreement.id }}">
+                                                <button class="btn btn-sm {% if agreement.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                    {% if agreement.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                </button>
+                                            </form>
+                                            <form method="post" class="d-inline js-confirm" data-confirm="Delete this agreement and all its versions? This cannot be undone." action="{% url 'portal_agreements' %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="delete_agreement">
+                                                <input type="hidden" name="slug" value="{{ agreement.slug }}">
+                                                <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">No agreements created yet.</td>
-                                </tr>
+                                <tr><td colspan="6" class="text-center py-4 text-muted">No agreements created yet. Add one below.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -756,62 +973,65 @@ discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) 
                 </div>
             </div>
 
-            <!-- Create New Agreement -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Create New Agreement</h5>
+            <!-- Create Agreement Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-plus-circle text-success me-2"></i>Create New Agreement</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     <form method="post" action="{% url 'portal_agreements' %}" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="add_agreement">
                         <div class="row g-3">
                             <div class="col-md-4">
-                                <label for="new_slug" class="form-label">Slug</label>
+                                <label for="new_slug" class="form-label fw-semibold small">Slug Identifier</label>
                                 <input type="text" name="slug" id="new_slug" class="form-control" placeholder="e.g. data-access-policy" required pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only">
                                 <div class="form-text">URL-friendly identifier. All versions of this agreement share the same slug.</div>
                             </div>
                             <div class="col-md-8">
-                                <label for="new_title" class="form-label">Title</label>
-                                <input type="text" name="title" id="new_title" class="form-control" required>
+                                <label for="new_title" class="form-label fw-semibold small">Document Title</label>
+                                <input type="text" name="title" id="new_title" class="form-control" required placeholder="e.g. Mentor Code of Conduct">
                             </div>
                             <div class="col-12">
-                                <label for="new_content" class="form-label">Content (Markdown)</label>
-                                <textarea name="content" id="new_content" class="form-control" rows="8" placeholder="Write agreement content in Markdown, or upload a document below."></textarea>
+                                <label for="new_content" class="form-label fw-semibold small">Content (Markdown)</label>
+                                <textarea name="content" id="new_content" class="form-control font-monospace small" rows="6" placeholder="Write agreement content in Markdown, or upload a document below."></textarea>
                                 <div class="form-text">Leave blank if uploading a document instead.</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="new_document" class="form-label">Document (PDF, etc.)</label>
+                                <label for="new_document" class="form-label fw-semibold small">Upload Document (PDF / DOCX)</label>
                                 <input type="file" name="document" id="new_document" class="form-control" accept=".pdf,.doc,.docx">
-                                <div class="form-text">Leave empty if writing markdown content above.</div>
+                                <div class="form-text">Optional if markdown text is entered above.</div>
                             </div>
                             <div class="col-md-3">
-                                <label for="new_effective_date" class="form-label">Effective Date</label>
+                                <label for="new_effective_date" class="form-label fw-semibold small">Effective Date</label>
                                 <input type="date" name="effective_date" id="new_effective_date" class="form-control" required>
                             </div>
-                            <div class="col-md-3 d-flex align-items-end">
+                            <div class="col-md-3 d-flex align-items-center pt-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" name="is_active" id="new_is_active" checked>
-                                    <label class="form-check-label" for="new_is_active">Active</label>
+                                    <label class="form-check-label fw-semibold small" for="new_is_active">Make Active</label>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-success">Create Agreement</button>
+                            <div class="col-12 d-flex justify-content-end">
+                                <button type="submit" class="btn btn-success px-4 fw-semibold">
+                                    <i class="bi bi-plus-lg me-1"></i> Create Agreement
+                                </button>
                             </div>
                         </div>
                     </form>
                 </div>
             </div>
 
+            <!-- Edit / New Version Sections -->
             {% regroup mentor_agreements by slug as slug_groups %}
             {% for group in slug_groups %}
             {% with current=group.list|first %}
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Update: {{ current.title }}</h5>
-                    <span class="badge bg-info">{{ group.list|length }} version{{ group.list|length|pluralize }}</span>
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-pencil-square text-primary me-2"></i>Update: {{ current.title }}</h5>
+                    <span class="badge bg-info text-dark">{{ group.list|length }} version{{ group.list|length|pluralize }}</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     <form method="post" action="{% url 'portal_agreements' %}" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update_agreement">
@@ -819,41 +1039,41 @@ discount_percent = 100 - ((AGI - low_boundary) / (high_boundary - low_boundary) 
                         <input type="hidden" name="slug" value="{{ current.slug }}">
                         <div class="row g-3">
                             <div class="col-md-4">
-                                <label class="form-label">Slug</label>
+                                <label class="form-label fw-semibold small">Slug Identifier</label>
                                 <input type="text" class="form-control" value="{{ current.slug }}" disabled>
                             </div>
                             <div class="col-md-8">
-                                <label for="edit_title_{{ current.id }}" class="form-label">Title</label>
+                                <label for="edit_title_{{ current.id }}" class="form-label fw-semibold small">Document Title</label>
                                 <input type="text" name="title" id="edit_title_{{ current.id }}" class="form-control" value="{{ current.title }}" required>
                             </div>
                             <div class="col-12">
-                                <label for="edit_content_{{ current.id }}" class="form-label">Content (Markdown)</label>
-                                <textarea name="content" id="edit_content_{{ current.id }}" class="form-control" rows="8">{{ current.content }}</textarea>
+                                <label for="edit_content_{{ current.id }}" class="form-label fw-semibold small">Content (Markdown)</label>
+                                <textarea name="content" id="edit_content_{{ current.id }}" class="form-control font-monospace small" rows="6">{{ current.content }}</textarea>
                                 <div class="form-text">
                                     {% if current.document %}
-                                    Currently has a document uploaded: <a href="{{ current.document.url }}" target="_blank">{{ current.document.name }}</a>.
+                                    Currently attached document: <a href="{{ current.document.url }}" target="_blank">{{ current.document.name }}</a>.
                                     {% endif %}
-                                    Leave blank if using a document.
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <label for="edit_document_{{ current.id }}" class="form-label">Replace Document</label>
+                                <label for="edit_document_{{ current.id }}" class="form-label fw-semibold small">Replace Document</label>
                                 <input type="file" name="document" id="edit_document_{{ current.id }}" class="form-control" accept=".pdf,.doc,.docx">
-                                <div class="form-text">Upload a new file to create a new version. Leave empty to keep the current one.</div>
+                                <div class="form-text">Uploading a new file will automatically create a new version.</div>
                             </div>
                             <div class="col-md-3">
-                                <label for="edit_effective_date_{{ current.id }}" class="form-label">Effective Date</label>
+                                <label for="edit_effective_date_{{ current.id }}" class="form-label fw-semibold small">Effective Date</label>
                                 <input type="date" name="effective_date" id="edit_effective_date_{{ current.id }}" class="form-control" value="{{ current.effective_date|date:'Y-m-d' }}" required>
                             </div>
-                            <div class="col-md-3 d-flex align-items-end">
+                            <div class="col-md-3 d-flex align-items-center pt-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" name="is_active" id="edit_is_active_{{ current.id }}" {% if current.is_active %}checked{% endif %}>
-                                    <label class="form-check-label" for="edit_is_active_{{ current.id }}">Active</label>
+                                    <label class="form-check-label fw-semibold small" for="edit_is_active_{{ current.id }}">Active</label>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-primary">Save Changes</button>
-                                <small class="text-muted ms-2">Editing content or uploading a new document creates a new version.</small>
+                            <div class="col-12 d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                    <i class="bi bi-save me-1"></i> Save Changes &amp; New Version
+                                </button>
                             </div>
                         </div>
                     </form>

@@ -2,122 +2,163 @@
 {% block title %}Review Sliding Scale Application — {{ application.student }}{% endblock %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 780px;">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Review Sliding Scale Application</h1>
-    <a href="{% url 'sliding_scale_review_list' %}" class="btn btn-outline-secondary">Back to Queue</a>
-  </div>
-
-  <div class="card shadow-sm mb-4">
-    <div class="card-header bg-light">
-      <h5 class="mb-0">Application for {{ application.student }}</h5>
-    </div>
-    <div class="card-body">
-      <dl class="row mb-0">
-        <dt class="col-sm-4">Applied By</dt>
-        <dd class="col-sm-8">{{ application.applied_by|default:"—" }}</dd>
-
-        <dt class="col-sm-4">Household Size</dt>
-        <dd class="col-sm-8">{{ application.family_size|default:"—" }}</dd>
-
-        <dt class="col-sm-4">Adjusted Gross Income</dt>
-        <dd class="col-sm-8">{% if application.adjusted_gross_income %}${{ application.adjusted_gross_income|floatformat:2 }}{% else %}—{% endif %}</dd>
-
-        <dt class="col-sm-4">Suggested Discount</dt>
-        <dd class="col-sm-8">
-          {% if suggested_percent is not None %}
-            {{ suggested_percent }}% <span class="text-muted">(based on current sliding scale settings)</span>
-          {% else %}
-            —
-          {% endif %}
-        </dd>
-
-        {% if application.notes %}
-          <dt class="col-sm-4">Parent Notes</dt>
-          <dd class="col-sm-8">{{ application.notes|linebreaksbr }}</dd>
-        {% endif %}
-      </dl>
+<div class="container mt-4" style="max-width: 860px;">
+  <div class="row mb-3">
+    <div class="col">
+      <a href="{% url 'sliding_scale_review_list' %}" class="link-secondary text-decoration-none small fw-semibold">
+        <i class="bi bi-arrow-left me-1"></i> Back to Review Queue
+      </a>
     </div>
   </div>
 
-  <div class="card shadow-sm mb-4">
-    <div class="card-header bg-light">
-      <h5 class="mb-0">Uploaded Documents</h5>
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1 fw-bold text-dark">Review Sliding Scale Application</h1>
+      <p class="text-muted small mb-0">Evaluate household income details and verify supporting tax documentation for {{ application.student }}.</p>
     </div>
-    <div class="card-body">
-      {% if application.tax_forms.exists %}
-        <ul class="list-group list-group-flush">
-          {% for tax_form in application.tax_forms.all %}
-            {% url 'sliding_scale_tax_form_view' sliding_id=application.pk form_id=tax_form.pk as tax_form_url %}
-            <li class="list-group-item">
-              <div class="d-flex justify-content-between align-items-center">
-                <span>Document uploaded {{ tax_form.uploaded_at|date:"M j, Y H:i" }}</span>
-                <span>
-                  <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#tax-form-preview-{{ tax_form.pk }}">
-                    View
-                  </button>
-                  <a href="{{ tax_form_url }}?download=1" class="btn btn-sm btn-outline-secondary">Download</a>
-                </span>
-              </div>
-              <div class="collapse mt-3" id="tax-form-preview-{{ tax_form.pk }}">
-                <iframe src="{{ tax_form_url }}" title="Tax document preview" class="w-100 border rounded" style="height: 600px;"></iframe>
-              </div>
-            </li>
-          {% endfor %}
-        </ul>
-        <div class="form-text mt-2">
-          Documents are decrypted on the fly when previewed or downloaded here — the file stored on disk stays
-          encrypted. All documents will be permanently deleted once you approve or decline this application.
+  </div>
+
+  <!-- Applicant Summary Card -->
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom">
+      <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-person-badge text-primary me-2"></i>Application Details for {{ application.student }}</h5>
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-sm-6 col-md-3">
+          <div class="text-muted small fw-semibold text-uppercase">Applied By</div>
+          <div class="fw-bold text-dark mt-1">{{ application.applied_by|default:"—" }}</div>
         </div>
-      {% else %}
-        <p class="text-muted mb-0">No documents were uploaded with this application.</p>
+        <div class="col-sm-6 col-md-3">
+          <div class="text-muted small fw-semibold text-uppercase">Household Size</div>
+          <div class="fw-bold text-dark mt-1"><span class="badge bg-light text-dark border">{{ application.family_size|default:"—" }} members</span></div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+          <div class="text-muted small fw-semibold text-uppercase">Adjusted Gross Income</div>
+          <div class="fw-bold text-dark mt-1">{% if application.adjusted_gross_income %}${{ application.adjusted_gross_income|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+          <div class="text-muted small fw-semibold text-uppercase">Suggested Discount</div>
+          <div class="fw-bold text-primary mt-1">
+            {% if suggested_percent is not None %}
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fs-6">{{ suggested_percent }}% off</span>
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if application.notes %}
+        <div class="mt-4 pt-3 border-top">
+          <div class="text-muted small fw-semibold text-uppercase mb-1">Parent Statement / Notes</div>
+          <div class="p-3 bg-light rounded-3 text-dark small">{{ application.notes|linebreaksbr }}</div>
+        </div>
       {% endif %}
     </div>
   </div>
 
-  <div class="row">
-    <div class="col-md-6 mb-4">
-      <div class="card h-100 border-success">
-        <div class="card-header bg-success bg-opacity-10">
-          <h5 class="mb-0">Approve</h5>
+  <!-- Uploaded Documents Card -->
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+      <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-file-earmark-lock text-primary me-2"></i>Uploaded Tax Documentation</h5>
+      <span class="badge bg-light text-muted border">{{ application.tax_forms.count }} document{{ application.tax_forms.count|pluralize }}</span>
+    </div>
+    <div class="card-body p-4">
+      {% if application.tax_forms.exists %}
+        <div class="list-group list-group-flush border rounded-3 mb-3">
+          {% for tax_form in application.tax_forms.all %}
+            {% url 'sliding_scale_tax_form_view' sliding_id=application.pk form_id=tax_form.pk as tax_form_url %}
+            <div class="list-group-item p-3">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-file-earmark-pdf text-danger fs-5"></i>
+                  <div>
+                    <span class="fw-semibold text-dark">Encrypted Tax Document</span>
+                    <div class="text-muted small">Uploaded {{ tax_form.uploaded_at|date:"M j, Y H:i" }}</div>
+                  </div>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" data-bs-toggle="collapse" data-bs-target="#tax-form-preview-{{ tax_form.pk }}">
+                    <i class="bi bi-eye me-1"></i> Preview
+                  </button>
+                  <a href="{{ tax_form_url }}?download=1" class="btn btn-sm btn-outline-secondary fw-semibold">
+                    <i class="bi bi-download me-1"></i> Download
+                  </a>
+                </div>
+              </div>
+              <div class="collapse mt-3" id="tax-form-preview-{{ tax_form.pk }}">
+                <iframe src="{{ tax_form_url }}" title="Tax document preview" class="w-100 border rounded-3" style="height: 500px;"></iframe>
+              </div>
+            </div>
+          {% endfor %}
         </div>
-        <div class="card-body">
+        <div class="alert alert-info py-2 px-3 mb-0 small border-0 bg-info bg-opacity-10 text-dark">
+          <i class="bi bi-shield-check text-info me-1"></i>
+          <strong>Privacy Guarantee:</strong> Documents are decrypted on the fly in memory. All files on disk are permanently deleted automatically once this application is approved or declined.
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 small">No tax documents were attached to this application.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Review Decision Actions -->
+  <div class="row g-4 mb-5">
+    <!-- Approve Card -->
+    <div class="col-md-6">
+      <div class="card h-100 shadow-sm border-0 rounded-3 border-top border-success border-3">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-bold text-success"><i class="bi bi-check-circle me-2"></i>Approve Application</h5>
+        </div>
+        <div class="card-body p-4">
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="approve">
             <div class="mb-3">
-              <label for="percent" class="form-label">Discount Percent</label>
-              <input type="number" step="0.01" min="0" max="100" class="form-control" id="percent" name="percent" value="{{ suggested_percent|default:'' }}" required>
+              <label for="percent" class="form-label fw-semibold small">Approved Discount Percent <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <input type="number" step="0.01" min="0" max="100" class="form-control" id="percent" name="percent" value="{{ suggested_percent|default:'' }}" required>
+                <span class="input-group-text">%</span>
+              </div>
+              <div class="form-text small">Applies to all tuition fees across programs.</div>
             </div>
             <div class="mb-3">
-              <label for="date" class="form-label">Effective Date</label>
+              <label for="date" class="form-label fw-semibold small">Effective Start Date</label>
               <input type="date" class="form-control" id="date" name="date" value="{{ application.date|date:'Y-m-d'|default:'' }}">
-              <div class="form-text">Leave blank to start immediately.</div>
+              <div class="form-text small">Leave blank to start immediately.</div>
             </div>
-            <div class="mb-3">
-              <label for="expiration_date" class="form-label">Valid Through (Expiration Date)</label>
+            <div class="mb-4">
+              <label for="expiration_date" class="form-label fw-semibold small">Valid Through (Expiration Date)</label>
               <input type="date" class="form-control" id="expiration_date" name="expiration_date" value="{{ application.expiration_date|date:'Y-m-d'|default:'' }}">
-              <div class="form-text">Leave blank for no expiration.</div>
+              <div class="form-text small">Leave blank for no automatic expiration.</div>
             </div>
-            <button type="submit" class="btn btn-success">Approve Application</button>
+            <button type="submit" class="btn btn-success w-100 fw-semibold py-2">
+              <i class="bi bi-check-lg me-1"></i> Approve Application
+            </button>
           </form>
         </div>
       </div>
     </div>
-    <div class="col-md-6 mb-4">
-      <div class="card h-100 border-danger">
-        <div class="card-header bg-danger bg-opacity-10">
-          <h5 class="mb-0">Decline</h5>
+
+    <!-- Decline Card -->
+    <div class="col-md-6">
+      <div class="card h-100 shadow-sm border-0 rounded-3 border-top border-danger border-3">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-bold text-danger"><i class="bi bi-x-circle me-2"></i>Decline Application</h5>
         </div>
-        <div class="card-body">
+        <div class="card-body p-4">
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="decline">
-            <div class="mb-3">
-              <label for="decline_reason" class="form-label">Reason (shown to the parent)</label>
-              <textarea class="form-control" id="decline_reason" name="decline_reason" rows="4" placeholder="e.g. Income exceeds the sliding scale threshold, or the documents provided don't match the situation described." required></textarea>
+            <div class="mb-4">
+              <label for="decline_reason" class="form-label fw-semibold small">Reason for Decline <span class="text-danger">*</span></label>
+              <textarea class="form-control" id="decline_reason" name="decline_reason" rows="7" placeholder="e.g. Household income exceeds the sliding scale threshold, or the documentation provided does not match the situation described." required></textarea>
+              <div class="form-text small">This explanation will be shared with the parent.</div>
             </div>
-            <button type="submit" class="btn btn-danger">Decline Application</button>
+            <button type="submit" class="btn btn-danger w-100 fw-semibold py-2">
+              <i class="bi bi-x-lg me-1"></i> Decline Application
+            </button>
           </form>
         </div>
       </div>

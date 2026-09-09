@@ -9,39 +9,72 @@
     <script src="{% static js %}" nonce="{{ csp_nonce }}"></script>
   {% endfor %}
 {% endblock %}
+
 {% block content %}
+<div class="container mt-4" style="max-width: 860px;">
   <div class="row mb-3">
     <div class="col">
-      <a class="link-secondary" href="{% url 'program_fee_select' program.id %}">← Back to Manage Fees</a>
+      <a class="link-secondary text-decoration-none small fw-semibold" href="{% url 'program_fee_select' program.id %}">
+        <i class="bi bi-arrow-left me-1"></i> Back to Manage Fees
+      </a>
     </div>
   </div>
-  <div class="row">
-    <div class="col-lg-10 col-xl-8">
-      <h1 class="h4">{% if is_create %}Add Fee{% else %}Edit Fee{% endif %}</h1>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-header bg-white py-3 border-bottom">
+      <h1 class="h4 mb-1 fw-bold text-dark">{% if is_create %}Add Program Fee{% else %}Edit Program Fee{% endif %}</h1>
+      <p class="text-muted small mb-0">Set the amount, effective billing dates, and choose which students this fee applies to in {{ program.name }}.</p>
+    </div>
+    <div class="card-body p-4">
       <form method="post" novalidate>
         {% csrf_token %}
         {{ form.program }}
-        {% render_field form.name %}
-        {% render_field form.amount %}
-        {% render_field form.effective_date %}
-        {% render_field form.due_date %}
+        
+        <div class="row g-3 mb-3">
+          <div class="col-md-8">
+            {% render_field form.name %}
+          </div>
+          <div class="col-md-4">
+            {% render_field form.amount %}
+          </div>
+        </div>
 
-        <div class="mb-3">
-          {{ form.students.label_tag }}
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            {% render_field form.effective_date %}
+          </div>
+          <div class="col-md-6">
+            {% render_field form.due_date %}
+          </div>
+        </div>
+
+        <!-- Student Applicability Section -->
+        <div class="card border rounded-3 p-3 bg-light bg-opacity-50 mb-4">
+          <h6 class="fw-bold text-dark mb-1"><i class="bi bi-people text-primary me-2"></i>Student Applicability</h6>
+          <div class="text-muted small mb-3">
+            Select specific students below to restrict this fee to them. If no students are selected, the fee automatically applies to <strong>all active enrolled students</strong> in the program.
+          </div>
+          
           {% if form.students.field.queryset.exists %}
             {{ form.students }}
           {% else %}
-            <div class="alert alert-warning py-2 mb-1">No active, enrolled students are available to select. This fee will apply to every student in the program.</div>
+            <div class="alert alert-warning py-2 mb-1 small">
+              <i class="bi bi-exclamation-triangle me-1"></i> No active, enrolled students are available to select. This fee will apply to every student in the program.
+            </div>
           {% endif %}
-          {% if form.students.help_text %}<div class="form-text">{{ form.students.help_text }}</div>{% endif %}
-          {% for e in form.students.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          
+          {% if form.students.help_text %}<div class="form-text small">{{ form.students.help_text }}</div>{% endif %}
+          {% for e in form.students.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
         </div>
 
-        <div class="d-flex gap-2 mt-4">
-          <button class="btn btn-primary" type="submit">Save Fee &amp; Applicability</button>
-          <a class="btn btn-outline-secondary" href="{% url 'program_fee_select' program.id %}">Cancel</a>
+        <div class="d-flex gap-2 justify-content-end pt-3 border-top">
+          <a class="btn btn-outline-secondary px-4 fw-semibold" href="{% url 'program_fee_select' program.id %}">Cancel</a>
+          <button class="btn btn-primary px-4 fw-semibold" type="submit">
+            <i class="bi bi-check2 me-1"></i> Save Fee &amp; Applicability
+          </button>
         </div>
       </form>
     </div>
   </div>
+</div>
 {% endblock %}
