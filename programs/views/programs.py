@@ -1,9 +1,10 @@
+import datetime
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Q, Value
+from django.db.models import Count, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -72,8 +73,15 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     section = "programs"
 
     def get_queryset(self):
-        # Keep a base queryset; ordering will be handled in context via grouping
-        qs = Program.objects.all()
+        # Base queryset with prefetched features and student counts
+        qs = Program.objects.prefetch_related("features").annotate(
+            active_student_count=Count(
+                "enrollment",
+                filter=Q(enrollment__active=True, enrollment__student__graduated=False),
+                distinct=True,
+            ),
+            total_student_count=Count("enrollment", distinct=True),
+        )
 
         role = get_user_role(self.request.user)
         if role == "Mentor":
@@ -94,6 +102,8 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         programs = list(ctx["programs"])
 
         def status(prog):
+            if not prog.active:
+                return "past"
             sd = prog.start_date
             ed = prog.end_date
             if sd and sd > today:
@@ -105,23 +115,24 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
         future = sorted(
             [p for p in programs if status(p) == "future"],
-            key=lambda p: p.name or "",
-        )
-        future.sort(
-            key=lambda p: (p.start_date is not None, p.start_date), reverse=True
+            key=lambda p: (
+                p.start_date or datetime.date.max,
+                (p.name or "").lower(),
+            ),
         )
 
         current = sorted(
             [p for p in programs if status(p) == "current"],
-            key=lambda p: p.name or "",
+            key=lambda p: (p.name or "").lower(),
         )
-        current.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
 
         past = sorted(
             [p for p in programs if status(p) == "past"],
-            key=lambda p: p.name or "",
+            key=lambda p: (
+                -(p.end_date or p.start_date or datetime.date.min).toordinal(),
+                (p.name or "").lower(),
+            ),
         )
-        past.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
 
         # Group past programs by school year (July–June) based on end date,
         # newest school year first.
@@ -140,10 +151,20 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
             past_grouped.setdefault(school_year_label(p), []).append(p)
         for label in past_grouped:
             past_grouped[label].sort(
-                key=lambda p: (p.end_date is not None, p.end_date), reverse=True
+                key=lambda p: (
+                    -(p.end_date or p.start_date or datetime.date.min).toordinal(),
+                    (p.name or "").lower(),
+                )
             )
         past_programs_by_year = sorted(
             past_grouped.items(), key=lambda kv: kv[0], reverse=True
+        )
+
+        active_count = len(current)
+        upcoming_count = len(future)
+        past_count = len(past)
+        total_enrolled_active = sum(
+            getattr(p, "active_student_count", 0) for p in current
         )
 
         ctx.update(
@@ -152,6 +173,11 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
                 "current_programs": current,
                 "past_programs": past,
                 "past_programs_by_year": past_programs_by_year,
+                "active_programs_count": active_count,
+                "upcoming_programs_count": upcoming_count,
+                "past_programs_count": past_count,
+                "past_seasons_count": len(past_programs_by_year),
+                "total_enrolled_active_students": total_enrolled_active,
             }
         )
         return ctx

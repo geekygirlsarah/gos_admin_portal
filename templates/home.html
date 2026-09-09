@@ -1,102 +1,415 @@
 {% extends 'base.html' %}
-{% load permission_tags %}
-{% block title %}Girls of Steel Portal{% endblock %}
+{% load permission_tags static %}
+{% block title %}Programs — Girls of Steel Portal{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
+
 {% block content %}
     {% if user.is_authenticated %}
-      <div class="row mb-3">
-        <div class="col">
-          <h1 class="h3">Welcome, {{ user.first_name|default:user.username }}!</h1>
-        </div>
-      </div>
       {% can_read user 'programs' as can_read_programs %}
       {% if can_read_programs %}
-      <div class="row mb-3">
-        <div class="col d-flex align-items-center justify-content-between">
-          <h2 class="h4 m-0">Programs</h2>
-          <div class="d-flex gap-2">
-            {% user_role user as role %}
-            {% if role == 'LeadMentor' %}
-              <a class="btn btn-outline-secondary" href="{% url 'role_permission_settings' %}">Role Permissions</a>
-            {% endif %}
-            {% if perms.programs.add_program %}
-              <a class="btn btn-primary" href="/programs/new/">+ Add Program</a>
-            {% endif %}
-          </div>
+      {% user_role user as role %}
+
+      <!-- Page Header & Action Bar -->
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+          <h1 class="h3 mb-0 fw-bold">Programs</h1>
+          <div class="text-muted small">Manage program cohorts, rosters, operations, and historical seasons</div>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <a class="btn btn-outline-primary" href="{% url 'program_messaging' %}">
+            <i class="bi bi-envelope me-1"></i>Message Programs
+          </a>
+          {% if role == 'LeadMentor' %}
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-gear me-1"></i>Admin ▾
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li>
+                  <a class="dropdown-item" href="{% url 'role_permission_settings' %}">
+                    <i class="bi bi-shield-lock me-2"></i>Role Permissions
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'school_list' %}">
+                    <i class="bi bi-building me-2"></i>School &amp; District Directory
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'import_dashboard' %}">
+                    <i class="bi bi-cloud-arrow-up me-2"></i>Import Data
+                  </a>
+                </li>
+              </ul>
+            </div>
+          {% endif %}
+          {% if perms.programs.add_program or role == 'LeadMentor' %}
+            <a class="btn btn-primary" href="{% url 'program_create' %}">
+              <i class="bi bi-plus-circle me-1"></i>Add Program
+            </a>
+          {% endif %}
         </div>
       </div>
+
       {% if future_programs or current_programs or past_programs %}
-        <div class="row">
-          <div class="col">
-            {% if future_programs %}
-              <h3 class="h5 mt-3">Upcoming Programs</h3>
-              <ul class="list-group mb-3">
-                {% for program in future_programs %}
-                  <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      {% can_read user 'programs' program as can_open_program %}{% if can_open_program %}<a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>{% else %}<span>{{ program.name }}</span>{% endif %}
-                      {% if program.start_date %}
-                        <small class="text-muted ms-2">starts {{ program.start_date }}</small>
-                      {% endif %}
-                      {% if not program.active %}
-                        <span class="badge bg-secondary ms-2">inactive</span>
-                      {% endif %}
-                    </div>
-                  </li>
-                {% endfor %}
-              </ul>
-            {% endif %}
+        <!-- Summary KPI Metric Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 border-top border-3 border-success rounded-3 bg-light">
+              <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span class="text-muted small fw-semibold text-uppercase">Total Active Programs</span>
+                  <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                    <i class="bi bi-play-circle-fill"></i>
+                  </div>
+                </div>
+                <h3 class="h4 mb-0 fw-bold text-dark">{{ active_programs_count }}</h3>
+                <div class="text-muted small">Currently in session</div>
+              </div>
+            </div>
+          </div>
 
-            {% if current_programs %}
-              <h3 class="h5 mt-3">Current Programs</h3>
-              <ul class="list-group mb-3">
-                {% for program in current_programs %}
-                  <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      {% can_read user 'programs' program as can_open_program %}{% if can_open_program %}<a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>{% else %}<span>{{ program.name }}</span>{% endif %}
-                      {% if program.start_date or program.end_date %}
-                        <small class="text-muted ms-2">
-                          {% if program.start_date %}{{ program.start_date }}{% endif %}
-                          {% if program.end_date %} – {{ program.end_date }}{% endif %}
-                        </small>
-                      {% endif %}
-                      {% if not program.active %}
-                        <span class="badge bg-secondary ms-2">inactive</span>
-                      {% endif %}
-                    </div>
-                  </li>
-                {% endfor %}
-              </ul>
-            {% endif %}
+          <div class="col-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 border-top border-3 border-primary rounded-3 bg-light">
+              <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span class="text-muted small fw-semibold text-uppercase">Active Students</span>
+                  <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                    <i class="bi bi-person-check-fill"></i>
+                  </div>
+                </div>
+                <h3 class="h4 mb-0 fw-bold text-dark">{{ total_enrolled_active_students }}</h3>
+                <div class="text-muted small">Enrolled in active programs</div>
+              </div>
+            </div>
+          </div>
 
-            {% if past_programs %}
-              <h3 class="h5 mt-3">Past Programs</h3>
-              {% for label, year_programs in past_programs_by_year %}
-                <h4 class="h6 mt-3 text-muted">{{ label }} School Year</h4>
-                <ul class="list-group mb-3">
-                  {% for program in year_programs %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                      <div>
-                        {% can_read user 'programs' program as can_open_program %}{% if can_open_program %}<a href="/programs/{{ program.id }}/" class="text-decoration-none">{{ program.name }}</a>{% else %}<span>{{ program.name }}</span>{% endif %}
-                        {% if program.end_date %}
-                          <small class="text-muted ms-2">ended {{ program.end_date }}</small>
+          <div class="col-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 border-top border-3 border-info rounded-3 bg-light">
+              <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span class="text-muted small fw-semibold text-uppercase">Upcoming Programs</span>
+                  <div class="rounded-circle bg-info bg-opacity-10 p-2 text-info d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                    <i class="bi bi-calendar-event-fill"></i>
+                  </div>
+                </div>
+                <h3 class="h4 mb-0 fw-bold text-dark">{{ upcoming_programs_count }}</h3>
+                <div class="text-muted small">Starting soon / in setup</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 border-top border-3 border-secondary rounded-3 bg-light">
+              <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span class="text-muted small fw-semibold text-uppercase">Archived Programs</span>
+                  <div class="rounded-circle bg-secondary bg-opacity-10 p-2 text-secondary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                    <i class="bi bi-archive-fill"></i>
+                  </div>
+                </div>
+                <h3 class="h4 mb-0 fw-bold text-dark">{{ past_programs_count }}</h3>
+                <div class="text-muted small">Across {{ past_seasons_count }} season{{ past_seasons_count|pluralize }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search & Status Filter Controls -->
+        <div class="card shadow-sm border-0 mb-4 bg-body">
+          <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-6 col-lg-5">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                  <input type="text" id="programSearchInput" class="form-control border-start-0" placeholder="Search programs by name, season, or grade...">
+                  <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn" title="Clear search" style="display: none;">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-6 col-lg-7 d-flex justify-content-md-end">
+                <div class="btn-group btn-group-sm w-100 w-md-auto" role="group" id="programStatusFilterGroup">
+                  <button type="button" class="btn btn-outline-primary active" data-filter="all">All Programs</button>
+                  <button type="button" class="btn btn-outline-primary" data-filter="active">Current ({{ active_programs_count }})</button>
+                  <button type="button" class="btn btn-outline-primary" data-filter="upcoming">Upcoming ({{ upcoming_programs_count }})</button>
+                  <button type="button" class="btn btn-outline-primary" data-filter="past">Past ({{ past_programs_count }})</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Programs Section -->
+        {% if current_programs %}
+        <section class="mb-5 program-section" data-section-type="active">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h2 class="h5 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+              <i class="bi bi-play-circle text-success"></i>Current Programs
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2">{{ current_programs|length }}</span>
+            </h2>
+          </div>
+          <div class="row g-3">
+            {% for program in current_programs %}
+              {% can_read user 'programs' program as can_open_program %}
+              <div class="col-md-6 col-xl-4 program-card-item" data-program-name="{{ program.name|lower }}" data-program-year="{{ program.year_display|lower }}" data-program-grade="{{ program.grade_range_display|lower }}" data-program-status="active">
+                <div class="card h-100 shadow-sm border-0 border-top border-3 border-success rounded-3">
+                  <div class="card-body d-flex flex-column p-3">
+                    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                      <h3 class="h6 mb-0 fw-bold">
+                        {% if can_open_program %}
+                          <a href="/programs/{{ program.id }}/" class="text-dark text-decoration-none hover-primary">{{ program.name }}</a>
+                        {% else %}
+                          <span class="text-dark">{{ program.name }}</span>
                         {% endif %}
+                      </h3>
+                      <div class="d-flex gap-1 flex-shrink-0">
                         {% if not program.active %}
-                          <span class="badge bg-secondary ms-2">inactive</span>
+                          <span class="badge bg-secondary">inactive</span>
+                        {% else %}
+                          <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">Active</span>
                         {% endif %}
                       </div>
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% endfor %}
+                    </div>
+
+                    {% if program.year_display or program.grade_range_display %}
+                      <div class="text-muted small mb-2 d-flex flex-wrap gap-1 align-items-center">
+                        {% if program.year_display %}
+                          <span class="badge bg-light text-secondary border"><i class="bi bi-calendar3 me-1"></i>{{ program.year_display }}</span>
+                        {% endif %}
+                        {% if program.grade_range_display %}
+                          <span class="badge bg-light text-secondary border"><i class="bi bi-mortarboard me-1"></i>{{ program.grade_range_display }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+
+                    {% if program.description %}
+                      <p class="card-text text-muted small mb-3 flex-grow-1">{{ program.description|truncatewords:20 }}</p>
+                    {% else %}
+                      <div class="flex-grow-1"></div>
+                    {% endif %}
+
+                    <!-- Program Stats & Features -->
+                    <div class="border-top pt-2 mt-auto">
+                      <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                        <span><i class="bi bi-people-fill text-primary me-1"></i><strong>{{ program.active_student_count|default:"0" }}</strong> active students</span>
+                        {% if program.start_date or program.end_date %}
+                          <span>
+                            <i class="bi bi-clock me-1"></i>{% if program.start_date %}{{ program.start_date }}{% endif %}{% if program.end_date %} – {{ program.end_date }}{% endif %}
+                          </span>
+                        {% endif %}
+                      </div>
+
+                      {% if program.features.all %}
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                          {% for feat in program.features.all %}
+                            <span class="badge bg-light text-dark border small py-1 px-2" style="font-size: 0.72rem;">{{ feat.name }}</span>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+
+                      <div class="d-flex justify-content-between align-items-center gap-2 pt-1">
+                        {% if can_open_program %}
+                          <a href="/programs/{{ program.id }}/" class="btn btn-sm btn-primary flex-grow-1">
+                            Open Program <i class="bi bi-arrow-right ms-1"></i>
+                          </a>
+                          <a href="{% url 'program_assignment' program.id %}" class="btn btn-sm btn-outline-secondary" title="View Roster">
+                            <i class="bi bi-people"></i> Roster
+                          </a>
+                          <a href="{% url 'program_email' program.id %}" class="btn btn-sm btn-outline-secondary" title="Message Program">
+                            <i class="bi bi-envelope"></i>
+                          </a>
+                        {% else %}
+                          <span class="text-muted small"><i class="bi bi-lock me-1"></i>Read-only</span>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+
+        <!-- Upcoming Programs Section -->
+        {% if future_programs %}
+        <section class="mb-5 program-section" data-section-type="upcoming">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h2 class="h5 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+              <i class="bi bi-calendar-event text-info"></i>Upcoming Programs
+              <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-2">{{ future_programs|length }}</span>
+            </h2>
+          </div>
+          <div class="row g-3">
+            {% for program in future_programs %}
+              {% can_read user 'programs' program as can_open_program %}
+              <div class="col-md-6 col-xl-4 program-card-item" data-program-name="{{ program.name|lower }}" data-program-year="{{ program.year_display|lower }}" data-program-grade="{{ program.grade_range_display|lower }}" data-program-status="upcoming">
+                <div class="card h-100 shadow-sm border-0 border-top border-3 border-info rounded-3">
+                  <div class="card-body d-flex flex-column p-3">
+                    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                      <h3 class="h6 mb-0 fw-bold">
+                        {% if can_open_program %}
+                          <a href="/programs/{{ program.id }}/" class="text-dark text-decoration-none hover-primary">{{ program.name }}</a>
+                        {% else %}
+                          <span class="text-dark">{{ program.name }}</span>
+                        {% endif %}
+                      </h3>
+                      <div class="d-flex gap-1 flex-shrink-0">
+                        {% if not program.active %}
+                          <span class="badge bg-secondary">inactive</span>
+                        {% else %}
+                          <span class="badge bg-info bg-opacity-10 text-info border border-info-subtle">Upcoming</span>
+                        {% endif %}
+                      </div>
+                    </div>
+
+                    {% if program.year_display or program.grade_range_display %}
+                      <div class="text-muted small mb-2 d-flex flex-wrap gap-1 align-items-center">
+                        {% if program.year_display %}
+                          <span class="badge bg-light text-secondary border"><i class="bi bi-calendar3 me-1"></i>{{ program.year_display }}</span>
+                        {% endif %}
+                        {% if program.grade_range_display %}
+                          <span class="badge bg-light text-secondary border"><i class="bi bi-mortarboard me-1"></i>{{ program.grade_range_display }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+
+                    {% if program.description %}
+                      <p class="card-text text-muted small mb-3 flex-grow-1">{{ program.description|truncatewords:20 }}</p>
+                    {% else %}
+                      <div class="flex-grow-1"></div>
+                    {% endif %}
+
+                    <div class="border-top pt-2 mt-auto">
+                      <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                        <span><i class="bi bi-people-fill text-muted me-1"></i><strong>{{ program.active_student_count|default:"0" }}</strong> enrolled</span>
+                        {% if program.start_date %}
+                          <span><i class="bi bi-calendar-check me-1"></i>Starts {{ program.start_date }}</span>
+                        {% endif %}
+                      </div>
+
+                      {% if program.features.all %}
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                          {% for feat in program.features.all %}
+                            <span class="badge bg-light text-dark border small py-1 px-2" style="font-size: 0.72rem;">{{ feat.name }}</span>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+
+                      <div class="d-flex justify-content-between align-items-center gap-2 pt-1">
+                        {% if can_open_program %}
+                          <a href="/programs/{{ program.id }}/" class="btn btn-sm btn-primary w-100">
+                            Open Program <i class="bi bi-arrow-right ms-1"></i>
+                          </a>
+                        {% else %}
+                          <span class="text-muted small"><i class="bi bi-lock me-1"></i>Read-only</span>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+
+        <!-- Past Programs Section -->
+        {% if past_programs %}
+        <section class="mb-5 program-section" data-section-type="past">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <h2 class="h5 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+              <i class="bi bi-archive text-secondary"></i>Past &amp; Historical Programs
+              <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-2">{{ past_programs|length }}</span>
+            </h2>
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-sm btn-outline-secondary" type="button" id="toggleAllPastSeasonsBtn">
+                <i class="bi bi-arrows-expand me-1"></i>Expand / Collapse All
+              </button>
+            </div>
+          </div>
+
+          <div class="accordion shadow-sm border-0 rounded-3" id="pastProgramsAccordion">
+            {% for label, year_programs in past_programs_by_year %}
+              <div class="accordion-item border mb-2 rounded-3 overflow-hidden past-season-group" data-season-label="{{ label|lower }}">
+                <h3 class="accordion-header" id="headingPast_{{ forloop.counter }}">
+                  <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} bg-light py-2 px-3 fw-semibold text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePast_{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapsePast_{{ forloop.counter }}">
+                    <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                      <span>
+                        <i class="bi bi-mortarboard text-muted me-2"></i>{{ label }} School Year
+                      </span>
+                      <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill">{{ year_programs|length }} program{{ year_programs|length|pluralize }}</span>
+                    </div>
+                  </button>
+                </h3>
+                <div id="collapsePast_{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="headingPast_{{ forloop.counter }}">
+                  <div class="accordion-body p-0">
+                    <div class="list-group list-group-flush">
+                      {% for program in year_programs %}
+                        {% can_read user 'programs' program as can_open_program %}
+                        <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center py-2 px-3 program-card-item" data-program-name="{{ program.name|lower }}" data-program-year="{{ program.year_display|lower }}" data-program-grade="{{ program.grade_range_display|lower }}" data-program-status="past">
+                          <div class="d-flex align-items-center gap-2">
+                            {% if can_open_program %}
+                              <a href="/programs/{{ program.id }}/" class="text-decoration-none fw-semibold text-dark hover-primary">{{ program.name }}</a>
+                            {% else %}
+                              <span class="fw-semibold text-dark">{{ program.name }}</span>
+                            {% endif %}
+                            {% if program.end_date %}
+                              <small class="text-muted"><i class="bi bi-calendar-x me-1"></i>ended {{ program.end_date }}</small>
+                            {% elif program.start_date %}
+                              <small class="text-muted"><i class="bi bi-calendar3 me-1"></i>{{ program.start_date }}</small>
+                            {% endif %}
+                            {% if not program.active %}
+                              <span class="badge bg-secondary ms-1">inactive</span>
+                            {% endif %}
+                          </div>
+                          <div class="d-flex align-items-center gap-3">
+                            <small class="text-muted"><i class="bi bi-people me-1"></i>{{ program.total_student_count|default:"0" }} enrolled</small>
+                            {% if can_open_program %}
+                              <a href="/programs/{{ program.id }}/" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.8rem;">
+                                View Archive &raquo;
+                              </a>
+                            {% endif %}
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+
+        <div id="noSearchResultsAlert" class="card shadow-sm border-0 rounded-3 text-center py-4 bg-light" style="display: none;">
+          <div class="card-body">
+            <i class="bi bi-search text-muted fs-3 mb-2 d-block"></i>
+            <h4 class="h6 fw-bold text-dark mb-1">No matching programs found</h4>
+            <p class="text-muted small mb-0">Try adjusting your search terms or filter selection.</p>
+          </div>
+        </div>
+
+      {% else %}
+        <div class="card shadow-sm border-0 rounded-3 text-center py-5 bg-light">
+          <div class="card-body">
+            <div class="rounded-circle bg-primary bg-opacity-10 p-3 d-inline-flex align-items-center justify-content-center text-primary mb-3" style="width: 64px; height: 64px;">
+              <i class="bi bi-folder-plus fs-2"></i>
+            </div>
+            <h3 class="h5 fw-bold text-dark">No Programs Configured Yet</h3>
+            <p class="text-muted small mb-3">Get started by creating your organization's first program cohort.</p>
+            {% if perms.programs.add_program or role == 'LeadMentor' %}
+              <a class="btn btn-primary" href="{% url 'program_create' %}">
+                <i class="bi bi-plus-circle me-1"></i>Create First Program
+              </a>
             {% endif %}
           </div>
         </div>
-      {% else %}
-        <div class="alert alert-info">No programs yet. <a class="alert-link" href="/programs/new/">Create the first program</a>.</div>
       {% endif %}
+
       {% else %}
-        <div class="alert alert-warning">You do not have permission to view program information.</div>
+        <div class="alert alert-warning shadow-sm">You do not have permission to view program information.</div>
       {% endif %}
 
     {% else %}
@@ -109,4 +422,125 @@
         </p>
       </div>
     {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function() {
+  const searchInput = document.getElementById("programSearchInput");
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
+  const filterButtons = document.querySelectorAll("#programStatusFilterGroup button");
+  const programCardItems = document.querySelectorAll(".program-card-item");
+  const programSections = document.querySelectorAll(".program-section");
+  const pastSeasonGroups = document.querySelectorAll(".past-season-group");
+  const noResultsAlert = document.getElementById("noSearchResultsAlert");
+  const toggleAllSeasonsBtn = document.getElementById("toggleAllPastSeasonsBtn");
+
+  let currentFilter = "all";
+  let currentQuery = "";
+
+  function applyFilters() {
+    let totalVisible = 0;
+
+    programCardItems.forEach(item => {
+      const name = item.dataset.programName || "";
+      const year = item.dataset.programYear || "";
+      const grade = item.dataset.programGrade || "";
+      const status = item.dataset.programStatus || "";
+
+      const matchesQuery = !currentQuery || name.includes(currentQuery) || year.includes(currentQuery) || grade.includes(currentQuery);
+      const matchesFilter = currentFilter === "all" || status === currentFilter;
+
+      if (matchesQuery && matchesFilter) {
+        item.style.display = "";
+        totalVisible++;
+      } else {
+        item.style.display = "none";
+      }
+    });
+
+    // Update season accordion groups in past section
+    pastSeasonGroups.forEach(group => {
+      const visibleChildren = group.querySelectorAll(".program-card-item:not([style*='display: none'])");
+      if (visibleChildren.length > 0) {
+        group.style.display = "";
+      } else {
+        group.style.display = "none";
+      }
+    });
+
+    // Update section visibility
+    programSections.forEach(section => {
+      const visibleInSection = section.querySelectorAll(".program-card-item:not([style*='display: none'])");
+      if (visibleInSection.length > 0) {
+        section.style.display = "";
+      } else {
+        section.style.display = "none";
+      }
+    });
+
+    if (noResultsAlert) {
+      noResultsAlert.style.display = totalVisible === 0 ? "block" : "none";
+    }
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", function() {
+      currentQuery = this.value.trim().toLowerCase();
+      if (clearSearchBtn) {
+        clearSearchBtn.style.display = currentQuery ? "block" : "none";
+      }
+      applyFilters();
+    });
+  }
+
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener("click", function() {
+      if (searchInput) {
+        searchInput.value = "";
+        currentQuery = "";
+        clearSearchBtn.style.display = "none";
+        searchInput.focus();
+        applyFilters();
+      }
+    });
+  }
+
+  filterButtons.forEach(btn => {
+    btn.addEventListener("click", function() {
+      filterButtons.forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+      currentFilter = this.dataset.filter || "all";
+      applyFilters();
+    });
+  });
+
+  if (toggleAllSeasonsBtn) {
+    let allExpanded = false;
+    toggleAllSeasonsBtn.addEventListener("click", function() {
+      const collapses = document.querySelectorAll("#pastProgramsAccordion .accordion-collapse");
+      const buttons = document.querySelectorAll("#pastProgramsAccordion .accordion-button");
+      allExpanded = !allExpanded;
+
+      collapses.forEach(c => {
+        if (allExpanded) {
+          c.classList.add("show");
+        } else {
+          c.classList.remove("show");
+        }
+      });
+
+      buttons.forEach(b => {
+        if (allExpanded) {
+          b.classList.remove("collapsed");
+          b.setAttribute("aria-expanded", "true");
+        } else {
+          b.classList.add("collapsed");
+          b.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+  }
+});
+</script>
 {% endblock %}

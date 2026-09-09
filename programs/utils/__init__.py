@@ -37,6 +37,12 @@ from .notifications import (
     send_otp_email,
     send_templated_notification,
 )
+from .programs import (
+    GroupedProgramChoiceField,
+    GroupedProgramModelChoiceIterator,
+    get_grouped_program_choices,
+    group_programs_by_status,
+)
 from .students import active_students, active_students_in_program
 from .urls import (
     generate_signed_parent_url,
@@ -91,6 +97,11 @@ __all__ = [
     "get_lead_mentor_notification_email",
     "send_otp_email",
     "send_templated_notification",
+    # programs
+    "group_programs_by_status",
+    "get_grouped_program_choices",
+    "GroupedProgramModelChoiceIterator",
+    "GroupedProgramChoiceField",
     # students
     "active_students",
     "active_students_in_program",

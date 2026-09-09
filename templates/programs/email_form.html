@@ -92,15 +92,13 @@
             <!-- Program Selection -->
             <div class="mb-4">
               <label for="id_program" class="form-label fw-semibold text-dark">Program <span class="text-danger">*</span></label>
-              <select name="program" id="id_program" class="form-select">
-                {% for choice in form.program.field.choices %}
-                  {% if choice.0 %}
-                    <option value="{{ choice.0 }}" {% if form.program.value|stringformat:"s" == choice.0|stringformat:"s" or form.program.initial.id|stringformat:"s" == choice.0|stringformat:"s" or program.id|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>{{ choice.1 }}</option>
-                  {% else %}
-                    <option value="" {% if not form.program.value and not form.program.initial and not program %}selected{% endif %}>--- Select a Program ---</option>
-                  {% endif %}
-                {% endfor %}
-              </select>
+              {{ form.program }}
+              <div class="form-check form-switch mt-2 js-past-programs-toggle-container">
+                <input class="form-check-input js-toggle-past-programs" type="checkbox" id="togglePastPrograms_id_program" data-program-select="id_program">
+                <label class="form-check-label small text-muted" for="togglePastPrograms_id_program">
+                  <i class="bi bi-archive me-1"></i>Show past &amp; archived programs
+                </label>
+              </div>
               {% if form.program.help_text %}
                 <div class="form-text small">{{ form.program.help_text }}</div>
               {% endif %}

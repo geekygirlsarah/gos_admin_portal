@@ -223,3 +223,15 @@ def divide(value, arg):
         return float(value) / float(arg)
     except (ValueError, TypeError, ZeroDivisionError):
         return 0
+
+
+@register.filter
+def group_programs(programs):
+    """Group a collection of programs by status into active, upcoming, and past lists.
+    Usage: {% with grouped=programs|group_programs %}
+    """
+    from programs.utils.programs import group_programs_by_status
+
+    if not programs:
+        return {"active": [], "upcoming": [], "past": []}
+    return group_programs_by_status(programs)

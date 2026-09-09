@@ -2,6 +2,7 @@ from django import forms
 
 from orders.models import Order, OrderItem, ShippingCarrier, Vendor
 from programs.models import Crew, Program, SubTeam, Team
+from programs.utils import GroupedProgramChoiceField
 
 # Sentinel value for the "Not listed" option in the order form's vendor
 # dropdown. Chosen with a value unlikely to collide with a Vendor primary key.
@@ -150,7 +151,7 @@ class OrderForm(forms.ModelForm):
     the order detail page so editing never silently unassigns items.
     """
 
-    program = forms.ModelChoiceField(
+    program = GroupedProgramChoiceField(
         queryset=Program.objects.none(),
         required=False,
         label="Program",
@@ -198,7 +199,7 @@ class OrderForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["program"].queryset = Program.objects.order_by("name")
+        self.fields["program"].queryset = Program.objects.all()
         self.fields["program"].initial = self.initial.get("program")
 
         choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static form_tags %}
 {% load permission_tags %}
 
 {% block title %}Attendance Hours Chart{% endblock %}
@@ -20,14 +20,38 @@
       <form method="get" class="row g-3 align-items-end">
         <div class="col-md-3">
           <label for="program_id" class="form-label">Program</label>
+          {% with grouped=programs|group_programs %}
           <select class="form-select form-select-sm" id="program_id" name="program_id">
             <option value="">-- Select Program --</option>
-            {% for p in programs %}
-            <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
-              {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
-            </option>
-            {% endfor %}
+            {% if grouped.active %}
+              <optgroup label="Active Programs">
+                {% for p in grouped.active %}
+                  <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+                    {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% if grouped.upcoming %}
+              <optgroup label="Upcoming Programs">
+                {% for p in grouped.upcoming %}
+                  <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+                    {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% if grouped.past %}
+              <optgroup label="Past / Archived Programs">
+                {% for p in grouped.past %}
+                  <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+                    {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
           </select>
+          {% endwith %}
         </div>
         <div class="col-md-2">
           <label for="date_from" class="form-label">Start Date</label>

@@ -7,6 +7,7 @@ from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
 from programs.utils import (
+    GroupedProgramChoiceField,
     active_students,
     active_students_in_program,
     format_grade,
@@ -678,9 +679,11 @@ class ProgramForm(forms.ModelForm):
 
 
 class ProgramEmailForm(forms.Form):
-    program = forms.ModelChoiceField(
+    program = GroupedProgramChoiceField(
         queryset=Program.objects.all(),
         required=False,
+        empty_label="--- Select a Program ---",
+        widget=forms.Select(attrs={"class": "form-select", "id": "id_program"}),
         help_text="Select the program whose contacts you want to email.",
     )
     recipient_groups = forms.MultipleChoiceField(
@@ -826,7 +829,11 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
 
 
 class ProgramEmailBalancesForm(forms.Form):
-    program = forms.ModelChoiceField(queryset=Program.objects.all(), required=False)
+    program = GroupedProgramChoiceField(
+        queryset=Program.objects.all(),
+        required=False,
+        empty_label="--- Select a Program ---",
+    )
     subject = forms.CharField(
         max_length=255, help_text="Subject for the email to each family/student."
     )

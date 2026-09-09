@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-09-08
 
+### Added
+- **Modernized and streamlined Programs landing page (`/programs`)**:
+  - **Programs Hub & Responsive Cards (`templates/home.html`, `programs/views/programs.py`)**: Replaced flat list groups with modern responsive cards displaying clear status badges (Active, Upcoming, Inactive), season year and grade-range badges, active student enrollment counts, enabled feature module tags, and direct quick-action buttons (`Open Program`, `Roster`, `Message Program` for current programs, and streamlined `Open Program` action for upcoming programs).
+  - **Summary KPI Metric Tiles**: Added top KPI summary cards across program cohorts: **Total Active Programs**, **Active Students** enrolled, **Upcoming Programs**, and **Archived Programs** spanning historical seasons.
+  - **Live Search & Status Filtering Toolbar**: Added an interactive filter toolbar supporting real-time search across program names, season years, and grade ranges, alongside one-click status filter buttons (`All Programs`, `Current`, `Upcoming`, `Past`).
+  - **Structured & Collapsible Past Seasons Archive**: Organized historical cohorts into collapsible school-year accordion groups with program counts, an `Expand / Collapse All` toggle, and direct archive access, keeping 16 years of historical records accessible without cluttering the main screen.
+- **Status-Based Temporal Program Grouping with Archived Programs Toggle**:
+  - **3-Tier `<optgroup>` Dropdown Structure (`programs/utils/programs.py`, `templates/programs/email_form.html`, `templates/applications/review/list.html`, `templates/attendance/all_attendance.html`, `templates/attendance/hours_chart.html`, `templates/attendance/hours_visualization.html`)**: Organized program selection menus into three distinct status tiers: **Active Programs** (alphabetically ordered current cohorts), **Upcoming Programs** (chronologically ordered by earliest start date), and **Past / Archived Programs** (reverse-chronologically ordered by newest historical season first).
+  - **Past & Archived Programs Toggle Switch (`programs/static/js/program_select.js`)**: Cleaned up the program selection interface by hiding past and archived cohorts behind a toggle switch (`Show past & archived programs`) by default across forms and filter dropdowns, preventing accidental messages and actions on past seasons while automatically revealing archived programs when viewing or pre-selecting a historical record.
+  - **Shared Program Grouping Utilities (`programs/utils/programs.py`, `GroupedProgramChoiceField`, `GroupedProgramModelChoiceIterator`, `group_programs_by_status`, `get_grouped_program_choices`)**: Encapsulated reusable status grouping and form field classes across Program Messaging, Email Balances, Order Creation, Application Review filtering, and Attendance Analytics.
+
 ### Fixed
 - **Fixed student and mentor photo cropping tool**: Removed corrupted integrity hashes from CropperJS assets in `templates/students/form.html` and `templates/mentors/form.html` that caused browsers to block photo crop initialization under Content Security Policy (CSP).
 - **Resolved Content Security Policy (CSP) blocking on print buttons and interactive scripts**:
