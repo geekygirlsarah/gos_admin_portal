@@ -1,0 +1,14 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel parent chaperone sign-up{% endblock %}
+{% block header %}You're signed up to chaperone {{ event.name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hi {{ adult.display_name }},</p>
+    <p>Thanks for signing up to chaperone the travel trip <strong>{{ event.name }}</strong>{% if program %}, part of the {{ program.name }} program{% endif %}.</p>
+    {% if departure %}
+    <p>Departure: <strong>{{ departure.display_label }}</strong>.</p>
+    {% endif %}
+    <p class="small text-muted mb-0">A Lead Mentor will reach out with chaperone details as the trip gets closer. You can change or cancel your chaperone sign-up any time from the Travel page.</p>
+</div>
+<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} to see trip details.</p>
+{% endblock %}

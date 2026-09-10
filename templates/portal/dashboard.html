@@ -195,6 +195,11 @@ STUDENT DASHBOARD
                                 <i class="bi bi-cart3 me-1"></i>Order Requests
                             </a>
                         {% endif %}
+                        {% if enrollment.has_travel %}
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'travel:event_list' enrollment.program.pk %}">
+                                <i class="bi bi-airplane me-1"></i>Travel
+                            </a>
+                        {% endif %}
                         <a class="btn btn-sm btn-outline-secondary" href="{% url 'program_student_map' enrollment.program.pk %}">
                             <i class="bi bi-geo-alt me-1"></i>Carpool Map
                         </a>
@@ -244,6 +249,29 @@ STUDENT DASHBOARD
                             {% endif %}
                         </div>
                     </div>
+
+                    {% if enrollment.has_travel %}
+                    <div class="mt-2 p-3 bg-light rounded-3 border-0">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <span class="fw-semibold small text-muted text-uppercase"><i class="bi bi-airplane me-1 text-primary"></i>Travel</span>
+                            <a href="{% url 'travel:event_list' enrollment.program.id %}" class="small text-decoration-none">View all &raquo;</a>
+                        </div>
+                        {% if enrollment.travel_highlights %}
+                            <ul class="list-unstyled mb-0 small">
+                                {% for signup in enrollment.travel_highlights %}
+                                    <li class="mb-1 d-flex justify-content-between align-items-center">
+                                        <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
+                                        <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
+                                            {{ signup.get_status_display }}
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted small mb-0">You're not signed up for any upcoming trips.</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -446,6 +474,40 @@ PARENT DASHBOARD
                                     {% endif %}
                                 </div>
                             </div>
+
+                            {# Travel #}
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 border-0 h-100">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <span class="fw-semibold small text-muted text-uppercase"><i class="bi bi-airplane me-1 text-primary"></i>Travel</span>
+                                        {% if row.enrollment.has_travel %}
+                                            <a href="{% url 'travel:event_list' row.enrollment.program.id %}" class="small text-decoration-none">View all &raquo;</a>
+                                        {% endif %}
+                                    </div>
+                                    {% if row.enrollment.has_travel %}
+                                        {% if row.enrollment.travel_highlights %}
+                                            <ul class="list-unstyled mb-0 small">
+                                                {% for signup in row.enrollment.travel_highlights %}
+                                                    <li class="mb-1 d-flex justify-content-between align-items-center">
+                                                        <span>{{ signup.event.name }} <span class="text-muted">({{ signup.event.start_date|date:"M j" }})</span></span>
+                                                        <span>
+                                                            {% if signup.status == 'interested' %}
+                                                                <a href="{% url 'travel:event_list' row.enrollment.program.id %}" class="badge bg-warning text-dark text-decoration-none rounded-pill">Action needed</a>
+                                                            {% else %}
+                                                                <span class="badge {% if signup.status == 'approved' %}bg-success{% else %}bg-secondary{% endif %} rounded-pill">{{ signup.get_status_display }}</span>
+                                                            {% endif %}
+                                                        </span>
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <p class="text-muted small mb-0">No upcoming trips.</p>
+                                        {% endif %}
+                                    {% else %}
+                                        <p class="text-muted mb-0 small">N/A</p>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}
@@ -586,6 +648,37 @@ MENTOR DASHBOARD
         </div>
     {% endif %}
 </section>
+
+{% if mentor_travel_signups %}
+<section class="mb-5">
+    <h2 class="h4 mb-3 fw-bold">My Travel Trips</h2>
+    <div class="card shadow-sm">
+        <ul class="list-group list-group-flush">
+            {% for signup in mentor_travel_signups %}
+            <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center py-3">
+                <div class="me-3">
+                    <strong class="d-block">{{ signup.event.name }}</strong>
+                    <small class="text-muted">
+                        <i class="bi bi-calendar-event me-1"></i>{{ signup.event.start_date|date:"N j, Y" }}
+                        <i class="bi bi-geo-alt ms-2 me-1"></i>{{ signup.event.destination|default:"Location TBD" }}
+                        {% if signup.is_driver %}
+                            <span class="badge bg-info text-dark ms-2 rounded-pill"><i class="bi bi-car-front me-1"></i>Driver</span>
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'travel:event_list' signup.event.program_id %}" class="btn btn-sm btn-outline-primary">View Trips</a>
+                    <form action="{% url 'travel:mentor_cancel' signup.event.program_id signup.event_id %}" method="post" class="mb-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Are you sure you want to cancel your signup for this trip?">Cancel</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>
+{% endif %}
 {% endif %}
 </div>
 {% endif %}

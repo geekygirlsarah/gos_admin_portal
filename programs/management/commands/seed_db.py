@@ -110,6 +110,15 @@ class Command(BaseCommand):
                 "description": "Enable student badges for this program.",
                 "display_order": 60,
             },
+            {
+                "key": "travel",
+                "name": "Travel",
+                "description": (
+                    "Enable the Travel section: trip info, student signups with "
+                    "parent approval, mentor signups, and cost check-lists."
+                ),
+                "display_order": 90,
+            },
         ]
 
         features_by_key = {}
@@ -182,6 +191,7 @@ class Command(BaseCommand):
                     "tshirt-size",
                     "badges",
                     "orders",
+                    "travel",
                 ],
             },
             {

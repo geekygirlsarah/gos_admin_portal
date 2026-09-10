@@ -345,6 +345,34 @@ def can_user_write(user, section, obj=None):
     if role is None:
         return False
 
+    # Travel: students and mentors may sign up (mentors to go along, students
+    # as interested passengers); a parent may only act on their own children's
+    # signups (approve/decline/undo). Parents never create trips and alumni
+    # never write travel at all.
+    if role == "Student" and section == "travel":
+        return True
+    if role == "Mentor" and section == "travel":
+        return True
+    if role == "Parent" and section == "travel":
+        if obj:
+            from travel.models import TravelParentChaperoneSignup, TravelSignup
+
+            if isinstance(obj, TravelSignup):
+                try:
+                    adult = user.adult_profile
+                except Adult.DoesNotExist:
+                    return False
+                return adult.students.filter(pk=obj.student_id).exists()
+            if isinstance(obj, TravelParentChaperoneSignup):
+                try:
+                    adult = user.adult_profile
+                except Adult.DoesNotExist:
+                    return False
+                return obj.adult_id == adult.pk
+        return False
+    if role == "Alumni" and section == "travel":
+        return False
+
     # Order requests: students and mentors may create requests (items) and edit
     # their own items while they are still unassigned to an order; once an item
     # is grouped into an order it can only be changed by a Lead Mentor.
@@ -505,6 +533,10 @@ def can_user_delete(user, section, obj=None):
 
     # Students can never delete outreach events
     if role == "Student" and section == "outreach":
+        return False
+
+    # Only Lead Mentors can delete travel trips
+    if section == "travel":
         return False
 
     # Order requests can only be deleted by Lead Mentors

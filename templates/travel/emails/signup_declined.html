@@ -1,0 +1,14 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel sign-up declined{% endblock %}
+{% block header %}Travel Declined: {{ event.name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hi{% if student %} {{ student.display_name }}{% endif %},</p>
+    <p>
+        Your sign-up for <strong>{{ event.name }}</strong>
+        {% if program %} ({{ program.name }}){% endif %} was declined by your parents/guardians.
+        If this seems like a mistake, please talk to them, or contact the program leads.
+    </p>
+</div>
+<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} for more detail.</p>
+{% endblock %}

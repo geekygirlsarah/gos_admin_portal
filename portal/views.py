@@ -111,10 +111,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from applications.models import Application
             from orders.models import OrderItem
             from programs.models import Program, SlidingScale
-            from programs.utils import active_students
+            from programs.utils import students_in_running_programs
 
             active_programs_count = Program.objects.filter(active=True).count()
-            active_students_count = active_students().count()
+            active_students_count = students_in_running_programs().count()
             pending_apps_count = Application.objects.filter(
                 status=Application.Status.SUBMITTED
             ).count()
@@ -157,6 +157,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     e.has_attendance = e.program.has_feature("attendance")
                     e.has_outreach = e.program.has_feature("outreach")
                     e.has_orders = e.program.has_feature("orders")
+                    e.has_travel = e.program.has_feature("travel")
                     if e.has_attendance:
                         e.attendance_stats = get_student_attendance_stats(
                             student, e.program
@@ -165,6 +166,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         from outreach.utils import get_student_outreach_stats
 
                         e.outreach_stats = get_student_outreach_stats(
+                            student, e.program
+                        )
+                    if e.has_travel:
+                        from travel.utils import get_student_travel_highlights
+
+                        e.travel_highlights = get_student_travel_highlights(
                             student, e.program
                         )
 
@@ -256,6 +263,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         e.has_attendance = e.program.has_feature("attendance")
                         e.has_outreach = e.program.has_feature("outreach")
                         e.has_orders = e.program.has_feature("orders")
+                        e.has_travel = e.program.has_feature("travel")
                         if e.has_attendance:
                             e.attendance_stats = get_student_attendance_stats(
                                 s, e.program
@@ -299,6 +307,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             for event in suggested:
                                 event.user_signup = False
                             e.outreach_highlights = signed_up + suggested
+
+                        if e.has_travel:
+                            from travel.utils import get_parent_travel_highlights
+
+                            highlights, pending = get_parent_travel_highlights(
+                                s, e.program
+                            )
+                            e.travel_highlights = highlights
+                            e.travel_pending = pending
 
                         row = {"enrollment": e, "balance": balance}
                         if e.program.status == "Active" and e.active:
@@ -365,6 +382,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     context["mentor_outreach_signups"] = [
                         s for s in mentor_signups if not s.shift.is_past
                     ]
+
+                    # Upcoming trips this mentor is going on.
+                    from travel.utils import get_mentor_travel_signups
+
+                    context["mentor_travel_signups"] = get_mentor_travel_signups(adult)
 
             if adult.is_alumni:
                 from programs.models import Enrollment

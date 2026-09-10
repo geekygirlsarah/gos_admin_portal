@@ -43,7 +43,11 @@ from .programs import (
     get_grouped_program_choices,
     group_programs_by_status,
 )
-from .students import active_students, active_students_in_program
+from .students import (
+    active_students,
+    active_students_in_program,
+    students_in_running_programs,
+)
 from .urls import (
     generate_signed_parent_url,
     get_safe_url,
@@ -105,4 +109,5 @@ __all__ = [
     # students
     "active_students",
     "active_students_in_program",
+    "students_in_running_programs",
 ]

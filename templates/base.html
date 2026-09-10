@@ -42,6 +42,11 @@
                     <li class="nav-item">
                         <a class="nav-link{% if request.resolver_match.view_name == 'parent_payments' %} active{% endif %}" href="{% url 'parent_payments' %}">Payments</a>
                     </li>
+                    {% for p in parent_travel_programs %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if parent_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
+                    </li>
+                    {% endfor %}
                     {% endif %}
 
                     {% if navbar_role == 'Student' and user.student_profile %}
@@ -72,6 +77,11 @@
                     {% for p in student_orders_programs %}
                     <li class="nav-item">
                         <a class="nav-link{% if 'orders' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'orders:order_list' p.pk %}">Order Requests{% if student_orders_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
+                    </li>
+                    {% endfor %}
+                    {% for p in student_travel_programs %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if 'travel' in request.path and current_program.pk == p.pk %} active{% endif %}" href="{% url 'travel:event_list' p.pk %}">Travel{% if student_travel_programs|length > 1 %} ({{ p.name }}){% endif %}</a>
                     </li>
                     {% endfor %}
                     {% endif %}
@@ -114,6 +124,9 @@
                                     {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' or navbar_role == 'Alumni' or navbar_role == 'Parent' %}
                                         {% if current_program_has_outreach %}
                                         <li><a class="dropdown-item{% if 'outreach' in request.path %} active{% endif %}" href="{% url 'outreach:event_list' current_program.pk %}">Outreach</a></li>
+                                        {% endif %}
+                                        {% if current_program_has_travel %}
+                                        <li><a class="dropdown-item{% if 'travel' in request.path %} active{% endif %}" href="{% url 'travel:event_list' current_program.pk %}">Travel</a></li>
                                         {% endif %}
                                     {% endif %}
                                     {% if navbar_role == 'Mentor' or navbar_role == 'LeadMentor' %}
