@@ -300,12 +300,8 @@ class FormBehaviorTests(TestCase):
         self.assertIn("info", choices)
         p = Program.objects.create(name="X")
         form2 = ProgramEmailForm(program=p)
-        self.assertTrue(hasattr(form2.fields["program"].widget, "input_type"))
-        self.assertEqual(
-            getattr(form2.fields["program"].widget, "input_type", ""), "hidden"
-        )
+        self.assertEqual(form2.fields["program"].initial, p)
         form_hidden_missing = ProgramEmailForm(
-            program=p,
             data={
                 "recipient_groups": ["students"],
                 "subject": "Hello",
@@ -314,7 +310,7 @@ class FormBehaviorTests(TestCase):
             },
         )
         self.assertFalse(form_hidden_missing.is_valid())
-        self.assertIn("__all__", form_hidden_missing.errors)
+        self.assertIn("program", form_hidden_missing.errors)
         form_hidden_ok = ProgramEmailForm(
             program=p,
             data={

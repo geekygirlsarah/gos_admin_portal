@@ -35,6 +35,7 @@ from programs.constants import (
     TSHIRT_SIZE_CHOICES,
 )
 from programs.models import Program, RaceEthnicity
+from programs.utils import GroupedProgramChoiceField
 from programs.utils.notifications import get_sender_connection
 
 from ..forms import StaffDocumentUploadForm
@@ -469,9 +470,10 @@ class ApplicationDataEditForm(forms.Form):
 
 
 class ApplicationEmailForm(forms.Form):
-    program = forms.ModelChoiceField(
+    program = GroupedProgramChoiceField(
         queryset=Program.objects.all(),
         required=False,
+        empty_label="All programs",
         widget=forms.Select(attrs={"class": "form-select"}),
         help_text="Select the program whose applicants you want to email. Leave blank for all programs.",
     )

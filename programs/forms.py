@@ -7,6 +7,7 @@ from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
 from programs.utils import (
+    GroupedProgramChoiceField,
     active_students,
     active_students_in_program,
     format_grade,
@@ -17,6 +18,7 @@ from .models import (
     Adult,
     BackgroundCheck,
     BackgroundCheckType,
+    Crew,
     Fee,
     Payment,
     Program,
@@ -24,6 +26,8 @@ from .models import (
     SchoolDistrict,
     SlidingScale,
     Student,
+    SubTeam,
+    Team,
 )
 from .widgets import DualListboxWidget
 
@@ -675,13 +679,15 @@ class ProgramForm(forms.ModelForm):
 
 
 class ProgramEmailForm(forms.Form):
-    program = forms.ModelChoiceField(
+    program = GroupedProgramChoiceField(
         queryset=Program.objects.all(),
         required=False,
+        empty_label="--- Select a Program ---",
+        widget=forms.Select(attrs={"class": "form-select", "id": "id_program"}),
         help_text="Select the program whose contacts you want to email.",
     )
     recipient_groups = forms.MultipleChoiceField(
-        required=True,
+        required=False,
         choices=[
             ("students", "Students"),
             ("parents", "Parents/Guardians"),
@@ -689,6 +695,24 @@ class ProgramEmailForm(forms.Form):
         ],
         widget=forms.CheckboxSelectMultiple(),
         help_text="Choose one or more groups to email.",
+    )
+    teams = forms.ModelMultipleChoiceField(
+        queryset=Team.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+        help_text="Optionally limit to students on specific teams.",
+    )
+    crews = forms.ModelMultipleChoiceField(
+        queryset=Crew.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+        help_text="Optionally limit to students in specific crews/projects.",
+    )
+    subteams = forms.ModelMultipleChoiceField(
+        queryset=SubTeam.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+        help_text="Optionally limit to students on specific subteams.",
     )
     subject = forms.CharField(max_length=255)
     body = forms.CharField(
@@ -700,9 +724,35 @@ class ProgramEmailForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
-        # Allow passing a fixed program via kwarg program
+        # Allow passing a fixed program via kwarg program or filtering by user
         program = kwargs.pop("program", None)
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+
+        if user:
+            from .permission_views import can_user_read, get_user_role
+
+            role = get_user_role(user)
+            if role == "LeadMentor":
+                self.fields["program"].queryset = Program.objects.all().order_by(
+                    "-active", "name"
+                )
+            elif role == "Mentor":
+                accessible = [
+                    p.pk
+                    for p in Program.objects.filter(active=True)
+                    if can_user_read(user, "programs", p)
+                ]
+                self.fields["program"].queryset = Program.objects.filter(
+                    pk__in=accessible
+                ).order_by("name")
+            else:
+                self.fields["program"].queryset = Program.objects.none()
+        else:
+            self.fields["program"].queryset = Program.objects.all().order_by(
+                "-active", "name"
+            )
+
         # Build sender choices from settings
         accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
         choices = []
@@ -744,14 +794,23 @@ class ProgramEmailForm(forms.Form):
         )
         if program is not None:
             self.fields["program"].initial = program
-            self.fields["program"].widget = forms.HiddenInput()
-            self.fields["program"].required = True
 
     def clean(self):
         cleaned = super().clean()
         prog = cleaned.get("program")
-        if self.fields["program"].widget.__class__ is forms.HiddenInput and not prog:
-            raise forms.ValidationError("Program is required.")
+        test_email = cleaned.get("test_email")
+        groups = cleaned.get("recipient_groups")
+
+        if not test_email:
+            if not prog:
+                self.add_error(
+                    "program", "Program is required when sending a broadcast."
+                )
+            if not groups:
+                self.add_error(
+                    "recipient_groups",
+                    "Please select at least one recipient group when sending a broadcast.",
+                )
         return cleaned
 
 
@@ -770,7 +829,11 @@ class StudentBalanceModelChoiceField(forms.ModelChoiceField):
 
 
 class ProgramEmailBalancesForm(forms.Form):
-    program = forms.ModelChoiceField(queryset=Program.objects.all(), required=False)
+    program = GroupedProgramChoiceField(
+        queryset=Program.objects.all(),
+        required=False,
+        empty_label="--- Select a Program ---",
+    )
     subject = forms.CharField(
         max_length=255, help_text="Subject for the email to each family/student."
     )

@@ -10,7 +10,7 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 
 from ..forms import ResumeApplicationForm
-from ..models import Application, SiteSettings
+from ..models import Application
 from ..services import PENDING_STATUSES, applications_for_user, get_program_buckets
 from .utils import (
     TOTAL_STEPS,
@@ -35,7 +35,6 @@ class WelcomeView(View):
             request,
             self.template_name,
             {
-                "settings_obj": SiteSettings.load(),
                 "resume_form": ResumeApplicationForm(),
                 "future_programs": future_programs,
                 "current_step": 1,
@@ -64,7 +63,6 @@ class ResumeView(View):
                 request,
                 self.template_name,
                 {
-                    "settings_obj": SiteSettings.load(),
                     "resume_form": form,
                     "future_programs": future_programs,
                     "current_step": 1,

@@ -123,53 +123,6 @@ class OtpVerifyResult(enum.Enum):
     TOO_MANY_ATTEMPTS = "too_many_attempts"
 
 
-# --- SiteSettings -----------------------------------------------------------
-
-
-class SiteSettings(models.Model):
-    """Singleton model for portal-wide configurable text.
-
-    For now this only holds the welcome message shown on Step 1 of the
-    application wizard, but it is intended to grow.
-    """
-
-    DEFAULT_WELCOME = (
-        "Welcome to the Girls of Steel application system! "
-        "Use this wizard to apply for one of our upcoming programs or start the process "
-        "of becoming a mentor."
-        "If you started an application earlier, you can resume it below "
-        "with your application ID."
-    )
-
-    welcome_message = models.TextField(
-        default=DEFAULT_WELCOME,
-        help_text=("Message shown on the first page of the public application wizard."),
-    )
-
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Site settings"
-        verbose_name_plural = "Site settings"
-
-    def __str__(self) -> str:  # pragma: no cover - trivial
-        return "Site settings"
-
-    def save(self, *args, **kwargs):
-        # Enforce singleton: always pk=1
-        self.pk = 1
-        super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):  # pragma: no cover - protected
-        # Don't allow deletion through the singleton.
-        return None
-
-    @classmethod
-    def load(cls) -> "SiteSettings":
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-
-
 # --- Application ------------------------------------------------------------
 
 

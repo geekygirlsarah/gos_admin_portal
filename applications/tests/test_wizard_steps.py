@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from applications.forms import NOT_LISTED_SCHOOL
 from applications.models import Application
 from programs.models import Adult, Program, School, Student
 
@@ -537,6 +538,58 @@ class Step5ValidationTests(TestCase):
         self.assertRedirects(
             response, reverse("apply_step6", kwargs={"app_id": self.app.application_id})
         )
+
+    def test_step5_shows_not_listed_school_option(self):
+        response = self.client.get(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="__not_listed__"')
+        self.assertContains(response, "My school isn&#x27;t listed")
+
+    def test_step5_not_listed_school_is_saved_as_flag(self):
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": "2010-01-01",
+                "school_name": NOT_LISTED_SCHOOL,
+                "grade": "9",
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("apply_step6", kwargs={"app_id": self.app.application_id}),
+            fetch_redirect_response=False,
+        )
+        self.app.refresh_from_db()
+        step5 = self.app.data.get("step5-student", {})
+        self.assertTrue(step5.get("_school_not_listed"))
+        self.assertEqual(step5.get("school_name"), "")
+
+    def test_step5_rejects_school_name_not_on_file(self):
+        response = self.client.post(
+            reverse("apply_step5", kwargs={"app_id": self.app.application_id}),
+            {
+                "legal_first_name": "Grace",
+                "last_name": "Hopper",
+                "address": "123 Main St",
+                "city": "Pittsburgh",
+                "state": "PA",
+                "zip_code": "15213",
+                "tshirt_size": "M",
+                "date_of_birth": "2010-01-01",
+                "school_name": "Some School That Does Not Exist",
+                "grade": "9",
+            },
+        )
+        self.assertContains(response, "Select a valid choice", status_code=200)
 
 
 class GradeValidationTests(TestCase):

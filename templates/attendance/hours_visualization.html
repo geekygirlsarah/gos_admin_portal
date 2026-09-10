@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static form_tags %}
 {% load permission_tags %}
 
 {% block title %}My Hours — {{ student.display_name }}{% endblock %}
@@ -27,14 +27,38 @@
     <form method="get" class="row g-2 align-items-end">
       <div class="col-auto">
         <label for="program_id" class="form-label">Program</label>
+        {% with grouped=enrolled_programs|group_programs %}
         <select class="form-select form-select-sm" id="program_id" name="program_id">
           <option value="">All programs</option>
-          {% for p in enrolled_programs %}
-          <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
-            {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
-          </option>
-          {% endfor %}
+          {% if grouped.active %}
+            <optgroup label="Active Programs">
+              {% for p in grouped.active %}
+                <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+                  {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+          {% if grouped.upcoming %}
+            <optgroup label="Upcoming Programs">
+              {% for p in grouped.upcoming %}
+                <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+                  {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+          {% if grouped.past %}
+            <optgroup label="Past / Archived Programs">
+              {% for p in grouped.past %}
+                <option value="{{ p.id }}" {% if selected_program and selected_program.id == p.id %}selected{% endif %}>
+                  {{ p.name }}{% if p.year_display %} ({{ p.year_display }}){% endif %}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
         </select>
+        {% endwith %}
       </div>
     </form>
   </div>

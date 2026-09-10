@@ -130,7 +130,7 @@
 
       <!-- Photo Cropper Modal (moved here from the second block) -->
       <div class="modal fade" id="photoCropModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered cropper-modal">
+        <div class="modal-dialog modal-lg modal-dialog-centered crop-modal-dialog">
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title">Crop Photo</h5>
@@ -139,8 +139,8 @@
             <div class="modal-body">
               <div class="row g-3 align-items-start">
                 <div class="col-md-8">
-                  <div class="ratio ratio-1x1 bg-light">
-                    <img id="cropperImage" alt="Crop preview" style="max-width:100%; display:block;">
+                  <div class="cropper-wrap">
+                    <img id="cropperImage" alt="Crop preview">
                   </div>
                 </div>
                 <div class="col-md-4">
@@ -167,9 +167,11 @@
   {% for js in form.media|media_scripts %}
     <script src="{% static js %}" nonce="{{ csp_nonce }}"></script>
   {% endfor %}
-  <link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">
+  <link href="{% static 'vendor/cropperjs/1.6.2/cropper.min.css' %}" rel="stylesheet">
   <style>
-    .cropper-modal .modal-body { max-height: 70vh; }
+    .crop-modal-dialog .modal-body { max-height: 70vh; overflow-y: auto; }
+    .cropper-wrap { position: relative; overflow: hidden; background: #e9ecef; border-radius: 0.375rem; }
+    .cropper-wrap img { display: block; max-width: 100%; }
     .cropper-preview.rounded-circle { width: 180px; height: 180px; overflow: hidden; border-radius: 50%; background: #f8f9fa; }
     .cropper-preview.small { width: 80px; height: 80px; }
   </style>
@@ -177,7 +179,7 @@
 
 
 {% block extra_scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" nonce="{{ csp_nonce }}"></script>
+  <script src="{% static 'vendor/cropperjs/1.6.2/cropper.min.js' %}" nonce="{{ csp_nonce }}"></script>
   <script nonce="{{ csp_nonce }}">
     (function(){
       var selector = 'input[type="file"][name="photo"]';

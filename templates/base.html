@@ -158,7 +158,7 @@
                             <ul class="dropdown-menu" aria-labelledby="attendanceDropdown">
                                 <li><a class="dropdown-item" href="{% url 'attendance_active' %}">Who's Here Now</a></li>
                                 {% if current_program %}
-                                <li><a class="dropdown-item" href="{% url 'program_hours' current_program.pk %}">Program Hours</a></li>
+                                <li><a class="dropdown-item" href="{% url 'attendance_hours_chart' %}?program_id={{ current_program.pk }}">Program Hours</a></li>
                                 {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'attendance_hours_chart' %}">Hours Chart</a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -302,6 +302,7 @@
     </div>
 </footer>
 
+<script src="{% static 'js/program_select.js' %}"></script>
 {% block extra_scripts %}{% endblock %}
 <script nonce="{{ csp_nonce }}">
     document.addEventListener('click', function(e) {

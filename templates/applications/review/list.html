@@ -1,6 +1,7 @@
 {% extends 'applications/review/_base.html' %}
 {% load sorting_tags %}
 {% load application_extras %}
+{% load form_tags %}
 {% block review_title %}Applications{% endblock %}
 
 {% block review_heading %}
@@ -113,14 +114,32 @@
         </div>
         <div class="col-sm-6 col-md-4 col-lg-3">
           <label class="form-label small fw-semibold text-muted mb-1" for="program-filter">Applicant Program</label>
+          {% with grouped=programs|group_programs %}
           <select class="form-select form-select-sm" name="program" id="program-filter">
             <option value="">All programs</option>
-            {% for prog in programs %}
-              <option value="{{ prog.id }}" {% if prog.id|stringformat:"s" == filter_program_id %}selected{% endif %}>
-                {{ prog.name }} {% if not prog.active %}(Inactive){% endif %}
-              </option>
-            {% endfor %}
+            {% if grouped.active %}
+              <optgroup label="Active Programs">
+                {% for prog in grouped.active %}
+                  <option value="{{ prog.id }}" {% if prog.id|stringformat:"s" == filter_program_id %}selected{% endif %}>{{ prog.name }}{% if prog.year_display %} ({{ prog.year_display }}){% endif %}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% if grouped.upcoming %}
+              <optgroup label="Upcoming Programs">
+                {% for prog in grouped.upcoming %}
+                  <option value="{{ prog.id }}" {% if prog.id|stringformat:"s" == filter_program_id %}selected{% endif %}>{{ prog.name }}{% if prog.year_display %} ({{ prog.year_display }}){% endif %}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            {% if grouped.past %}
+              <optgroup label="Past / Archived Programs">
+                {% for prog in grouped.past %}
+                  <option value="{{ prog.id }}" {% if prog.id|stringformat:"s" == filter_program_id %}selected{% endif %}>{{ prog.name }}{% if prog.year_display %} ({{ prog.year_display }}){% endif %}</option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
           </select>
+          {% endwith %}
         </div>
         <div class="col-sm-6 col-md-auto">
           <div class="form-check pt-sm-4">

@@ -1,9 +1,10 @@
+import datetime
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
-from django.db.models import Q, Value
+from django.db.models import Count, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -72,8 +73,15 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     section = "programs"
 
     def get_queryset(self):
-        # Keep a base queryset; ordering will be handled in context via grouping
-        qs = Program.objects.all()
+        # Base queryset with prefetched features and student counts
+        qs = Program.objects.prefetch_related("features").annotate(
+            active_student_count=Count(
+                "enrollment",
+                filter=Q(enrollment__active=True, enrollment__student__graduated=False),
+                distinct=True,
+            ),
+            total_student_count=Count("enrollment", distinct=True),
+        )
 
         role = get_user_role(self.request.user)
         if role == "Mentor":
@@ -94,6 +102,8 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
         programs = list(ctx["programs"])
 
         def status(prog):
+            if not prog.active:
+                return "past"
             sd = prog.start_date
             ed = prog.end_date
             if sd and sd > today:
@@ -105,23 +115,24 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
         future = sorted(
             [p for p in programs if status(p) == "future"],
-            key=lambda p: p.name or "",
-        )
-        future.sort(
-            key=lambda p: (p.start_date is not None, p.start_date), reverse=True
+            key=lambda p: (
+                p.start_date or datetime.date.max,
+                (p.name or "").lower(),
+            ),
         )
 
         current = sorted(
             [p for p in programs if status(p) == "current"],
-            key=lambda p: p.name or "",
+            key=lambda p: (p.name or "").lower(),
         )
-        current.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
 
         past = sorted(
             [p for p in programs if status(p) == "past"],
-            key=lambda p: p.name or "",
+            key=lambda p: (
+                -(p.end_date or p.start_date or datetime.date.min).toordinal(),
+                (p.name or "").lower(),
+            ),
         )
-        past.sort(key=lambda p: (p.end_date is not None, p.end_date), reverse=True)
 
         # Group past programs by school year (July–June) based on end date,
         # newest school year first.
@@ -140,10 +151,20 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
             past_grouped.setdefault(school_year_label(p), []).append(p)
         for label in past_grouped:
             past_grouped[label].sort(
-                key=lambda p: (p.end_date is not None, p.end_date), reverse=True
+                key=lambda p: (
+                    -(p.end_date or p.start_date or datetime.date.min).toordinal(),
+                    (p.name or "").lower(),
+                )
             )
         past_programs_by_year = sorted(
             past_grouped.items(), key=lambda kv: kv[0], reverse=True
+        )
+
+        active_count = len(current)
+        upcoming_count = len(future)
+        past_count = len(past)
+        total_enrolled_active = sum(
+            getattr(p, "active_student_count", 0) for p in current
         )
 
         ctx.update(
@@ -152,6 +173,11 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
                 "current_programs": current,
                 "past_programs": past,
                 "past_programs_by_year": past_programs_by_year,
+                "active_programs_count": active_count,
+                "upcoming_programs_count": upcoming_count,
+                "past_programs_count": past_count,
+                "past_seasons_count": len(past_programs_by_year),
+                "total_enrolled_active_students": total_enrolled_active,
             }
         )
         return ctx
@@ -951,8 +977,8 @@ class ProgramEmailView(LoginRequiredMixin, View):
     """Send a bulk email to a program's contacts.
 
     Lead Mentors can email any program; Mentors can email programs they can
-    read (current and upcoming). Program-wide messaging without a fixed
-    program stays Lead Mentor-only.
+    read (current and upcoming). Accessible via global /programs/messaging/
+    or program-scoped /programs/<pk>/email/.
     """
 
     template_name = "programs/email_form.html"
@@ -960,14 +986,33 @@ class ProgramEmailView(LoginRequiredMixin, View):
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             role = get_user_role(request.user)
-            pk = kwargs.get("pk")
+            pk = (
+                kwargs.get("pk")
+                or request.GET.get("program")
+                or request.GET.get("program_id")
+            )
             if pk:
-                program = get_object_or_404(Program, pk=pk)
-                allowed = role in ("LeadMentor", "Mentor") and can_user_read(
-                    request.user, "programs", program
-                )
+                try:
+                    program = Program.objects.get(pk=pk)
+                except (Program.DoesNotExist, ValueError):
+                    program = None
+                if program:
+                    allowed = (role == "LeadMentor") or (
+                        role == "Mentor"
+                        and can_user_read(request.user, "programs", program)
+                    )
+                else:
+                    allowed = role == "LeadMentor"
             else:
-                allowed = role == "LeadMentor"
+                if role == "LeadMentor":
+                    allowed = True
+                elif role == "Mentor":
+                    allowed = any(
+                        can_user_read(request.user, "programs", p)
+                        for p in Program.objects.filter(active=True)
+                    )
+                else:
+                    allowed = False
             if not allowed:
                 messages.error(
                     request, "You do not have permission to access that section."
@@ -975,21 +1020,74 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 return redirect("home")
         return super().dispatch(request, *args, **kwargs)
 
+    def _get_accessible_programs(self, user):
+        role = get_user_role(user)
+        if role == "LeadMentor":
+            return Program.objects.all().order_by("-active", "name")
+        elif role == "Mentor":
+            return [
+                p
+                for p in Program.objects.filter(active=True).order_by("name")
+                if can_user_read(user, "programs", p)
+            ]
+        return []
+
     def get(self, request, pk=None):
-        program = get_object_or_404(Program, pk=pk) if pk else None
-        form = ProgramEmailForm(program=program) if program else ProgramEmailForm()
-        return self._render(form, program)
+        role = get_user_role(request.user)
+        accessible_programs = self._get_accessible_programs(request.user)
+
+        program_id = pk or request.GET.get("program") or request.GET.get("program_id")
+        program = None
+        if program_id:
+            try:
+                program = Program.objects.get(pk=program_id)
+                if role == "Mentor" and not can_user_read(
+                    request.user, "programs", program
+                ):
+                    messages.error(
+                        request, "You do not have permission to view that program."
+                    )
+                    return redirect("home")
+            except (Program.DoesNotExist, ValueError):
+                program = None
+
+        if not program and accessible_programs:
+            program = (
+                accessible_programs[0]
+                if isinstance(accessible_programs, list)
+                else accessible_programs.first()
+            )
+
+        form = ProgramEmailForm(
+            user=request.user,
+            program=program,
+            initial={"program": program} if program else None,
+        )
+        return self._render(form, program, pk=pk)
 
     def post(self, request, pk=None):
-        program = get_object_or_404(Program, pk=pk) if pk else None
-        form = (
-            ProgramEmailForm(request.POST, program=program)
-            if program
-            else ProgramEmailForm(request.POST)
+        role = get_user_role(request.user)
+        program_from_url = get_object_or_404(Program, pk=pk) if pk else None
+        form = ProgramEmailForm(
+            request.POST, user=request.user, program=program_from_url
         )
         if form.is_valid():
-            prog = program or form.cleaned_data["program"]
-            groups = form.cleaned_data["recipient_groups"]
+            prog = form.cleaned_data.get("program")
+            test_email = form.cleaned_data.get("test_email")
+            if (
+                prog
+                and role == "Mentor"
+                and not can_user_read(request.user, "programs", prog)
+            ):
+                messages.error(
+                    request, "You do not have permission to email that program."
+                )
+                return redirect("home")
+
+            groups = form.cleaned_data.get("recipient_groups") or []
+            teams = form.cleaned_data.get("teams")
+            crews = form.cleaned_data.get("crews")
+            subteams = form.cleaned_data.get("subteams")
             subject = form.cleaned_data["subject"]
             html_body = form.cleaned_data["body"]
             # Inline CSS for better email client compatibility
@@ -998,21 +1096,32 @@ class ProgramEmailView(LoginRequiredMixin, View):
             except Exception:
                 inlined_html_body = html_body
             text_body = strip_tags(inlined_html_body)
-            test_email = form.cleaned_data.get("test_email")
+
+            if prog:
+                enrollments = Enrollment.objects.filter(
+                    program=prog, active=True, student__graduated=False
+                )
+                if teams:
+                    enrollments = enrollments.filter(team__in=teams)
+                if crews:
+                    enrollments = enrollments.filter(crew__in=crews)
+                if subteams:
+                    enrollments = enrollments.filter(subteam__in=subteams)
+
+                filtered_student_ids = enrollments.values_list("student_id", flat=True)
+            else:
+                filtered_student_ids = []
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(
-                    enrollment__program=prog, enrollment__active=True, graduated=False
-                ).distinct():
+                for s in Student.objects.filter(id__in=filtered_student_ids).distinct():
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.andrew_email:
                         recipients.add(s.andrew_email)
             if "parents" in groups:
                 for parent in Adult.objects.filter(
-                    students__enrollment__program=prog,
-                    students__enrollment__active=True,
+                    students__id__in=filtered_student_ids,
                     email_updates=True,
                     login_enabled=True,
                 ).distinct():
@@ -1026,8 +1135,11 @@ class ProgramEmailView(LoginRequiredMixin, View):
                         recipients.add(e)
 
             if not recipients and not test_email:
-                messages.error(request, "No recipients found for the selected groups.")
-                return self._render(form, prog)
+                messages.error(
+                    request,
+                    "No recipients found for the selected audience and groups.",
+                )
+                return self._render(form, prog, pk=pk)
 
             to_send = [test_email] if test_email else sorted(recipients)
 
@@ -1098,12 +1210,30 @@ class ProgramEmailView(LoginRequiredMixin, View):
                     exc_info=True,
                 )
                 messages.error(request, f"Failed to send email: {e}")
-                return self._render(form, prog)
+                return self._render(form, prog, pk=pk)
 
-        return self._render(form, program)
+        prog = None
+        if form.is_bound:
+            try:
+                prog_val = form.data.get("program")
+                if prog_val:
+                    prog = Program.objects.get(pk=prog_val)
+            except Exception:
+                prog = None
+        return self._render(form, prog or program_from_url, pk=pk)
 
-    def _render(self, form, program):
-        ctx = {"form": form, "program": program}
+    def _render(self, form, program, pk=None):
+        teams = Team.objects.all().order_by("team_type", "number")
+        crews = Crew.objects.select_related("program").all().order_by("name")
+        subteams = SubTeam.objects.select_related("program").all().order_by("name")
+        ctx = {
+            "form": form,
+            "program": program,
+            "teams": teams,
+            "crews": crews,
+            "subteams": subteams,
+            "is_program_scoped": bool(pk),
+        }
         return render(self.request, self.template_name, ctx)
 
 

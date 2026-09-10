@@ -8,12 +8,12 @@ from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from applications.models import (
     APP_ID_LENGTH,
     Application,
     OtpVerifyResult,
-    SiteSettings,
 )
 from programs.models import Program
 
@@ -86,6 +86,22 @@ class WizardFlowTests(TestCase):
         self.assertContains(response, "$300")
         # Closed programs are not shown here.
         self.assertNotContains(response, self.current_program.name)
+
+    def test_step1_shows_application_deadline(self):
+        response = self.client.get(reverse("apply_start"))
+        self.assertEqual(response.status_code, 200)
+        expected = date_format(self.future_program.applications_close, "F j, Y")
+        self.assertContains(response, f"Applications close on {expected}")
+
+    def test_step1_hides_deadline_when_close_date_unset(self):
+        # Program.save() backfills applications_close from end_date, so an
+        # end date not set must accompany the null close date.
+        self.future_program.applications_close = None
+        self.future_program.end_date = None
+        self.future_program.save()
+        response = self.client.get(reverse("apply_start"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Applications close on")
 
     def test_step1_shows_details_button_without_description_or_cost(self):
         # Programs with no description/cost on file must still offer a
@@ -278,6 +294,21 @@ class WizardFlowTests(TestCase):
         self.assertIn("6th", html)
         self.assertIn("Grade", html)
 
+    def test_step4_shows_application_deadline(self):
+        app = Application.objects.create(
+            applicant_type="parent",
+            email="parent@example.com",
+            current_step=4,
+            email_verified_at=timezone.now(),
+            status=Application.Status.EMAIL_VERIFIED,
+        )
+        response = self.client.get(
+            reverse("apply_step4", kwargs={"app_id": app.application_id})
+        )
+        self.assertEqual(response.status_code, 200)
+        expected = date_format(self.future_program.applications_close, "F j, Y")
+        self.assertContains(response, f"Applications close on {expected}")
+
     # --- Step 3 (Email Verify) -------------------------------------------
 
     def test_step3_get_issues_otp_and_emails_it(self):
@@ -395,10 +426,11 @@ class WizardFlowTests(TestCase):
         )
 
 
-class CustomWelcomeMessageTests(TestCase):
-    def test_step1_uses_custom_welcome_message(self):
-        s = SiteSettings.load()
-        s.welcome_message = "Hello prospective robot builder!"
-        s.save()
+class WelcomePageTests(TestCase):
+    def test_step1_shows_welcome_message(self):
         response = self.client.get(reverse("apply_start"))
-        self.assertContains(response, "Hello prospective robot builder!")
+        self.assertContains(
+            response, "Welcome to the Girls of Steel application system!"
+        )
+        self.assertContains(response, "Start a new application")
+        self.assertContains(response, "Resume an application")

@@ -109,6 +109,19 @@
       }
     );
 
+    var teamLabels = checkedLabels(form, 'teams');
+    if (teamLabels.length) {
+      parts.push('Teams: ' + teamLabels.join(', '));
+    }
+    var crewLabels = checkedLabels(form, 'crews');
+    if (crewLabels.length) {
+      parts.push('Crews / Projects: ' + crewLabels.join(', '));
+    }
+    var subteamLabels = checkedLabels(form, 'subteams');
+    if (subteamLabels.length) {
+      parts.push('SubTeams: ' + subteamLabels.join(', '));
+    }
+
     var filter = form.querySelector('select[name="recipient_filter"]');
     if (filter && filter.value) {
       var text = optionLabel(filter);
@@ -122,8 +135,8 @@
     var testEmail = form.querySelector('input[name="test_email"]');
     var testValue = testEmail ? cleanText(testEmail.value) : '';
     if (testValue) {
-      // Test sends bypass the normal audience entirely; surface that first.
-      parts.unshift('TEST ONLY — just you at ' + testValue);
+      // Test sends bypass the normal audience entirely.
+      return ['TEST ONLY — Send test copy to ' + testValue];
     }
 
     return parts;

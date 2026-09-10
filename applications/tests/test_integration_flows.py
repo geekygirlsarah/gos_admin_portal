@@ -346,5 +346,508 @@ class ApplicationIntegrationFlowTests(TestCase):
         self.assertEqual(app.status, Application.Status.CONVERTED)
         self.assertEqual(app.converted_student.legal_first_name, "Bob")
 
+    def test_parent_flow_survives_multistep_back_and_forward(self):
+        """
+        Story: a parent walks all the way through the wizard, then clicks
+        Back several steps (to Step 4), edits step 5, and comes forward again
+        through Step 9 and submits. No data may be lost while zig-zagging,
+        and the edited value plus the untouched values must all survive into
+        the final submitted payload.
+        """
+        # 1-4. Start and reach Step 5 (verified + program chosen).
+        response = self.client.post(reverse("apply_start"), follow=True)
+        app = Application.objects.get()
+        app_id = app.application_id
 
-import re
+        response = self.client.post(
+            reverse("apply_step2", args=[app_id]),
+            {"applicant_type": Application.Type.PARENT, "email": "parent@example.com"},
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 3)
+        otp = re.search(r"(\d{6})", mail.outbox[-1].body).group(1)
+
+        response = self.client.post(
+            reverse("apply_step3", args=[app_id]), {"code": otp}, follow=True
+        )
+        self.assertStepSuccess(response, app, 4)
+
+        response = self.client.post(
+            reverse("apply_step4", args=[app_id]),
+            {"program": self.program.pk},
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 5)
+
+        # 5-8. Fill Steps 5-8 to the confirm page.
+        step5_data = {
+            "legal_first_name": "Bob",
+            "last_name": "Builder",
+            "date_of_birth": "2012-05-05",
+            "address": "456 Oak Rd",
+            "city": "Pittsburgh",
+            "state": "PA",
+            "zip_code": "15202",
+            "school_name": self.school.name,
+            "grade": "8",
+            "graduation_year": 2030,
+            "confirm_age": True,
+            "confirm_grade": True,
+        }
+        response = self.client.post(
+            reverse("apply_step5", args=[app_id]), step5_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 6)
+
+        response = self.client.post(
+            reverse("apply_step6", args=[app_id]),
+            {
+                "interest_reason": "Loves building things",
+                "prior_robotics_experience": "Some motors",
+            },
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 7)
+
+        primary_parent_data = {
+            "legal_first_name": "Pat",
+            "last_name": "Parent",
+            "relationship_to_student": "parent",
+            "email": "parent@example.com",
+            "address": "456 Oak Rd",
+            "city": "Pittsburgh",
+            "state": "PA",
+            "zip_code": "15202",
+            "phone_number": "412-555-1212",
+            "phone_type": "cell",
+            "email_updates": True,
+        }
+        response = self.client.post(
+            reverse("apply_step7", args=[app_id]), primary_parent_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 8)
+
+        secondary_parent_data = {
+            "legal_first_name": "Mary",
+            "last_name": "Parent",
+            "relationship_to_student": "parent",
+            "phone_number": "412-555-1213",
+            "phone_type": "cell",
+            "email_updates": False,
+        }
+        response = self.client.post(
+            reverse("apply_step8", args=[app_id]), secondary_parent_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 9)
+        self.assertEqual(app.current_step, 9)
+
+        # --- Go BACK several steps (Step 8 -> Step 4). Every page must still
+        # render (not bounce forward), with the earlier answers prefilled ---
+        for step_url in [
+            reverse("apply_step8", args=[app_id]),
+            reverse("apply_step7", args=[app_id]),
+            reverse("apply_step6", args=[app_id]),
+            reverse("apply_step5", args=[app_id]),
+        ]:
+            response = self.client.get(step_url)
+            self.assertEqual(
+                response.status_code,
+                200,
+                f"Going back to {step_url} must render, not redirect.",
+            )
+
+        response = self.client.get(reverse("apply_step5", args=[app_id]))
+        self.assertEqual(
+            response.context["form"].initial.get("legal_first_name"), "Bob"
+        )
+        self.assertEqual(response.context["form"].initial.get("last_name"), "Builder")
+
+        response = self.client.get(reverse("apply_step4", args=[app_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["form"].initial.get("program"), self.program.pk
+        )
+
+        # Going back must not roll the stored progress backwards.
+        app.refresh_from_db()
+        self.assertEqual(app.current_step, 9)
+
+        # --- Edit Step 5 while back, then come forward again ---
+        edited = dict(step5_data, last_name="Builder-Prime")
+        response = self.client.post(
+            reverse("apply_step5", args=[app_id]), edited, follow=True
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.data["step5-student"]["last_name"], "Builder-Prime")
+        # Editing an earlier step must NOT clobber later steps' data.
+        self.assertEqual(
+            app.data["step6-experience"]["interest_reason"], "Loves building things"
+        )
+        self.assertEqual(app.data["step7-primaryparent"]["legal_first_name"], "Pat")
+
+        # Step 6 must still show the saved answer, then forward again.
+        response = self.client.get(reverse("apply_step6", args=[app_id]))
+        self.assertEqual(
+            response.context["form"].initial.get("interest_reason"),
+            "Loves building things",
+        )
+        response = self.client.post(
+            reverse("apply_step6", args=[app_id]),
+            {
+                "interest_reason": "Loves building things",
+                "prior_robotics_experience": "Some motors",
+            },
+            follow=True,
+        )
+        response = self.client.post(
+            reverse("apply_step7", args=[app_id]), primary_parent_data, follow=True
+        )
+        response = self.client.post(
+            reverse("apply_step8", args=[app_id]), secondary_parent_data, follow=True
+        )
+
+        # --- Review page must reflect the edit and the untouched answers ---
+        response = self.client.get(reverse("apply_step9", args=[app_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Builder-Prime")
+        self.assertContains(response, "Loves building things")
+        self.assertContains(response, "Mary")
+
+        # --- Submit ---
+        response = self.client.post(
+            reverse("apply_step9", args=[app_id]), {"confirm": True}, follow=True
+        )
+        self.assertStepSuccess(response, app, 10)
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.SUBMITTED)
+        self.assertEqual(app.data["step5-student"]["last_name"], "Builder-Prime")
+        self.assertEqual(
+            app.data["step6-experience"]["interest_reason"], "Loves building things"
+        )
+        self.assertEqual(
+            app.data["step6-experience"]["prior_robotics_experience"], "Some motors"
+        )
+        self.assertEqual(app.data["step7-primaryparent"]["legal_first_name"], "Pat")
+        self.assertEqual(app.data["step8-secondaryparent"]["legal_first_name"], "Mary")
+        self.assertEqual(app.program_id, self.program.pk)
+
+    def test_student_flow_survives_multistep_back_and_forward(self):
+        """
+        Story: a student walks through the wizard (student info + experience),
+        hands off to a parent who provides the parent steps, then the review
+        trips BACK several steps (as far as Step 5), edits the student info,
+        and comes forward again to submit. No data may be lost while
+        zig-zagging between the student- and parent-owned steps.
+        """
+        # 1-4. Start and reach Step 5 (verified + program chosen).
+        response = self.client.post(reverse("apply_start"), follow=True)
+        app = Application.objects.get()
+        app_id = app.application_id
+
+        response = self.client.post(
+            reverse("apply_step2", args=[app_id]),
+            {
+                "applicant_type": Application.Type.STUDENT,
+                "email": "student@example.com",
+            },
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 3)
+        otp = re.search(r"(\d{6})", mail.outbox[-1].body).group(1)
+
+        response = self.client.post(
+            reverse("apply_step3", args=[app_id]), {"code": otp}, follow=True
+        )
+        self.assertStepSuccess(response, app, 4)
+
+        response = self.client.post(
+            reverse("apply_step4", args=[app_id]),
+            {"program": self.program.pk},
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 5)
+
+        # 5-6. Student info + experience.
+        step5_data = {
+            "legal_first_name": "Ada",
+            "last_name": "Lovelace",
+            "date_of_birth": "2010-01-01",
+            "address": "123 Main St",
+            "city": "Pittsburgh",
+            "state": "PA",
+            "zip_code": "15201",
+            "school_name": self.school.name,
+            "grade": "10",
+            "graduation_year": 2028,
+            "confirm_age": True,
+            "confirm_grade": True,
+        }
+        response = self.client.post(
+            reverse("apply_step5", args=[app_id]), step5_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 6)
+
+        step6_data = {
+            "interest_reason": "I love robots",
+            "hoped_gains": "Programming skills",
+        }
+        response = self.client.post(
+            reverse("apply_step6", args=[app_id]), step6_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 7)
+
+        # 7. Hand off to a parent (student-initiated application).
+        response = self.client.post(
+            reverse("apply_step7", args=[app_id]),
+            {"parent_email": "parent@example.com"},
+            follow=True,
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.AWAITING_PARENT)
+        self.assertTrue(app.handoff_token)
+
+        # 8. Parent resumes via the emailed token link.
+        resume_url = reverse(
+            "apply_resume_link_with_token", args=[app_id, app.handoff_token]
+        )
+        response = self.client.get(resume_url, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        primary_parent_data = {
+            "legal_first_name": "Pat",
+            "last_name": "Parent",
+            "relationship_to_student": "parent",
+            "email": "parent@example.com",
+            "address": "123 Main St",
+            "city": "Pittsburgh",
+            "state": "PA",
+            "zip_code": "15201",
+            "phone_number": "412-555-1212",
+            "phone_type": "cell",
+            "email_updates": True,
+        }
+        response = self.client.post(
+            reverse("apply_step7", args=[app_id]), primary_parent_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 8)
+
+        secondary_parent_data = {
+            "legal_first_name": "Mary",
+            "last_name": "Parent",
+            "relationship_to_student": "parent",
+            "phone_number": "412-555-1213",
+            "phone_type": "cell",
+            "email_updates": False,
+        }
+        response = self.client.post(
+            reverse("apply_step8", args=[app_id]), secondary_parent_data, follow=True
+        )
+        self.assertStepSuccess(response, app, 9)
+        self.assertEqual(app.current_step, 9)
+
+        # --- Go BACK several steps (Step 8 -> Step 5). Every page must still
+        # render, with the earlier answers prefilled ---
+        for step_url in [
+            reverse("apply_step8", args=[app_id]),
+            reverse("apply_step7", args=[app_id]),
+            reverse("apply_step6", args=[app_id]),
+            reverse("apply_step5", args=[app_id]),
+        ]:
+            response = self.client.get(step_url)
+            self.assertEqual(
+                response.status_code,
+                200,
+                f"Going back to {step_url} must render, not redirect.",
+            )
+
+        response = self.client.get(reverse("apply_step5", args=[app_id]))
+        self.assertEqual(
+            response.context["form"].initial.get("legal_first_name"), "Ada"
+        )
+        self.assertEqual(response.context["form"].initial.get("last_name"), "Lovelace")
+
+        # Going back must not roll the stored progress backwards.
+        app.refresh_from_db()
+        self.assertEqual(app.current_step, 9)
+
+        # --- Edit the student info while back, then come forward again ---
+        edited = dict(step5_data, last_name="Lovelace-Byron")
+        response = self.client.post(
+            reverse("apply_step5", args=[app_id]), edited, follow=True
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.data["step5-student"]["last_name"], "Lovelace-Byron")
+        # Editing the student-owned step must NOT clobber the parent-owned
+        # steps (or the experience answers).
+        self.assertEqual(
+            app.data["step6-experience"]["interest_reason"], "I love robots"
+        )
+        self.assertEqual(app.data["step7-primaryparent"]["legal_first_name"], "Pat")
+
+        response = self.client.post(
+            reverse("apply_step6", args=[app_id]), step6_data, follow=True
+        )
+        response = self.client.post(
+            reverse("apply_step7", args=[app_id]), primary_parent_data, follow=True
+        )
+        response = self.client.post(
+            reverse("apply_step8", args=[app_id]), secondary_parent_data, follow=True
+        )
+
+        # --- Review page must reflect the edit and the untouched answers ---
+        response = self.client.get(reverse("apply_step9", args=[app_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lovelace-Byron")
+        self.assertContains(response, "I love robots")
+        self.assertContains(response, "Mary")
+
+        # --- Submit ---
+        response = self.client.post(
+            reverse("apply_step9", args=[app_id]), {"confirm": True}, follow=True
+        )
+        self.assertStepSuccess(response, app, 10)
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.SUBMITTED)
+        self.assertEqual(app.data["step5-student"]["last_name"], "Lovelace-Byron")
+        self.assertEqual(
+            app.data["step6-experience"]["interest_reason"], "I love robots"
+        )
+        self.assertEqual(
+            app.data["step6-experience"]["hoped_gains"], "Programming skills"
+        )
+        self.assertEqual(app.data["step7-primaryparent"]["legal_first_name"], "Pat")
+        self.assertEqual(app.data["step8-secondaryparent"]["legal_first_name"], "Mary")
+        self.assertEqual(app.program_id, self.program.pk)
+
+    def test_mentor_flow_survives_multistep_back_and_forward(self):
+        """
+        Story: a mentor walks through the mentor-only wizard (mentor info,
+        clearance interest "yes", clearance detail), then trips BACK several
+        steps (as far as mentor info), edits their employer, comes forward
+        again, and submits. No data may be lost while zig-zagging.
+        """
+        # 1-3. Start; mentor type + email; verify OTP -> mentor info
+        # (mentors skip program selection).
+        response = self.client.post(reverse("apply_start"), follow=True)
+        app = Application.objects.get()
+        app_id = app.application_id
+
+        response = self.client.post(
+            reverse("apply_step2", args=[app_id]),
+            {"applicant_type": Application.Type.MENTOR, "email": "mentor@example.com"},
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 3)
+        otp = re.search(r"(\d{6})", mail.outbox[-1].body).group(1)
+
+        response = self.client.post(
+            reverse("apply_step3", args=[app_id]), {"code": otp}, follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        app.refresh_from_db()
+        self.assertIsNotNone(app.email_verified_at)
+
+        # 4. Mentor info.
+        mentor_info_data = {
+            "legal_first_name": "Alex",
+            "preferred_first_name": "",
+            "last_name": "Lee",
+            "phone_number": "555-444-1212",
+            "phone_type": "cell",
+            "andrew_id": "",
+            "employer": "Acme Robotics",
+            "notes": "Excited to help.",
+        }
+        response = self.client.post(
+            reverse("apply_mentor_info", args=[app_id]),
+            mentor_info_data,
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 6)
+
+        # 5. Clearance interest ("yes" keeps the detail step).
+        clearance_interest_data = {"interested": "yes"}
+        response = self.client.post(
+            reverse("apply_mentor_clearance_interest", args=[app_id]),
+            clearance_interest_data,
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 7)
+
+        # 6. Clearance detail.
+        clearance_detail_data = {"paca": "have", "patch": "need", "fbi": "need"}
+        response = self.client.post(
+            reverse("apply_mentor_clearance_detail", args=[app_id]),
+            clearance_detail_data,
+            follow=True,
+        )
+        self.assertStepSuccess(response, app, 8)
+
+        # --- Go BACK several steps (confirm -> info). Every page must still
+        # render, with the earlier answers prefilled ---
+        for step_url in [
+            reverse("apply_mentor_confirm", args=[app_id]),
+            reverse("apply_mentor_clearance_detail", args=[app_id]),
+            reverse("apply_mentor_clearance_interest", args=[app_id]),
+            reverse("apply_mentor_info", args=[app_id]),
+        ]:
+            response = self.client.get(step_url)
+            self.assertEqual(
+                response.status_code,
+                200,
+                f"Going back to {step_url} must render, not redirect.",
+            )
+
+        response = self.client.get(reverse("apply_mentor_info", args=[app_id]))
+        self.assertEqual(
+            response.context["form"].initial.get("legal_first_name"), "Alex"
+        )
+        self.assertEqual(
+            response.context["form"].initial.get("employer"), "Acme Robotics"
+        )
+
+        # Going back must not roll the stored progress backwards.
+        app.refresh_from_db()
+        self.assertEqual(app.current_step, 8)
+
+        # --- Edit the mentor info while back, then come forward again ---
+        edited = dict(mentor_info_data, employer="Girls of Steel Robotics")
+        response = self.client.post(
+            reverse("apply_mentor_info", args=[app_id]), edited, follow=True
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.data["mentor_info"]["employer"], "Girls of Steel Robotics")
+        # Editing an earlier step must NOT clobber the clearance steps.
+        self.assertEqual(app.data["mentor_clearance_interest"]["interested"], "yes")
+        self.assertEqual(app.data["mentor_clearance_detail"]["paca"], "have")
+
+        response = self.client.post(
+            reverse("apply_mentor_clearance_interest", args=[app_id]),
+            clearance_interest_data,
+            follow=True,
+        )
+        response = self.client.post(
+            reverse("apply_mentor_clearance_detail", args=[app_id]),
+            clearance_detail_data,
+            follow=True,
+        )
+
+        # --- Confirm page must reflect the edit and the untouched answers ---
+        response = self.client.get(reverse("apply_mentor_confirm", args=[app_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Girls of Steel Robotics")
+        self.assertContains(response, "Alex")
+
+        # --- Submit ---
+        response = self.client.post(
+            reverse("apply_mentor_confirm", args=[app_id]),
+            {"confirm": True},
+            follow=True,
+        )
+        app.refresh_from_db()
+        self.assertEqual(app.status, Application.Status.SUBMITTED)
+        self.assertEqual(app.data["mentor_info"]["employer"], "Girls of Steel Robotics")
+        self.assertEqual(app.data["mentor_info"]["legal_first_name"], "Alex")
+        self.assertEqual(app.data["mentor_clearance_interest"]["interested"], "yes")
+        self.assertEqual(app.data["mentor_clearance_detail"]["paca"], "have")
+        self.assertEqual(app.data["mentor_clearance_detail"]["fbi"], "need")

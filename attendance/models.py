@@ -128,10 +128,6 @@ class AttendanceEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [
-            models.Index(fields=["program", "student", "occurred_at"]),
-            models.Index(fields=["program", "adult", "occurred_at"]),
-        ]
         ordering = ["-occurred_at", "-id"]
 
     def __str__(self):
@@ -160,7 +156,7 @@ class AttendanceSession(models.Model):
         help_text="FRC/FTC/FLL team number for visiting teams.",
     )
     check_in = models.DateTimeField(db_index=True)
-    check_out = models.DateTimeField(null=True, blank=True, db_index=True)
+    check_out = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.PositiveIntegerField(default=0)
     opened_by_event = models.ForeignKey(
         AttendanceEvent,
@@ -181,6 +177,7 @@ class AttendanceSession(models.Model):
 
     class Meta:
         indexes = [
+            models.Index(fields=["student", "check_in"]),
             models.Index(fields=["program", "student", "check_in"]),
             models.Index(fields=["program", "adult", "check_in"]),
             models.Index(

@@ -233,7 +233,12 @@ class StudentHoursViewTests(TestCase):
 
 
 class ProgramHoursViewTests(TestCase):
-    """Tests for the mentor program attendance dashboard."""
+    """Tests for the mentor program attendance dashboard.
+
+    The program-hours URL now redirects to the global attendance-hours-chart
+    page with ``program_id`` pre-selected, so both entry points share the
+    same template and feature set.
+    """
 
     def setUp(self):
         self.client = Client()
@@ -250,6 +255,8 @@ class ProgramHoursViewTests(TestCase):
             student=self.student2, program=self.program, active=True
         )
         self.url = reverse("program_hours", args=[self.program.pk])
+        self.chart_url = reverse("attendance_hours_chart")
+        self.program_chart_url = f"{self.chart_url}?program_id={self.program.pk}"
 
         # Create sessions
         now = timezone.now()
@@ -269,16 +276,24 @@ class ProgramHoursViewTests(TestCase):
         self.mentor_user = make_mentor_user()
         self.client.login(username="mentor", password="password123")  # nosec B106
 
-    def test_mentor_can_access(self):
+    def test_redirects_to_hours_chart(self):
+        """program_hours/<pk>/ redirects to hours-chart/?program_id=<pk>."""
         response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/attendance/hours-chart/", response.url)
+        self.assertIn(f"program_id={self.program.pk}", response.url)
+
+    def test_mentor_can_access_via_redirect(self):
+        response = self.client.get(self.url, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Fall Bot")
 
-    def test_lead_mentor_can_access(self):
-        lead_user = make_lead_mentor_user()
+    def test_lead_mentor_can_access_via_redirect(self):
+        make_lead_mentor_user()
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
-        response = self.client.get(self.url)
+        response = self.client.get(self.url, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Fall Bot")
 
     def test_unauthenticated_redirects_to_login(self):
         self.client.logout()
@@ -297,22 +312,26 @@ class ProgramHoursViewTests(TestCase):
         )
         url = reverse("program_hours", args=[no_att.pk])
         response = self.client.get(url)
+        # Redirects to hours-chart; the program won't appear in the
+        # attendance-enabled dropdown but the page still loads.
         self.assertEqual(response.status_code, 302)
+        final = self.client.get(url, follow=True)
+        self.assertEqual(final.status_code, 200)
 
-    def test_bar_chart_rendered(self):
-        response = self.client.get(self.url)
+    def test_bar_chart_rendered_via_redirect(self):
+        response = self.client.get(self.url, follow=True)
         content = response.content.decode()
-        self.assertIn("studentBarChart", content)
+        self.assertIn("studentHoursChart", content)
         self.assertIn("var labels", content)
 
-    def test_student_list_displayed(self):
-        response = self.client.get(self.url)
+    def test_student_list_displayed_via_redirect(self):
+        response = self.client.get(self.url, follow=True)
         content = response.content.decode()
         self.assertIn("Alice Smith", content)
         self.assertIn("Bob Jones", content)
         self.assertIn("Total Hours", content)
 
-    def test_student_list_sorted_by_hours(self):
+    def test_student_list_sorted_by_hours_via_redirect(self):
         # Give Alice more hours
         now = timezone.now()
         for i in range(5):
@@ -325,7 +344,7 @@ class ProgramHoursViewTests(TestCase):
                 check_out=check_out,
                 duration_minutes=120,
             )
-        response = self.client.get(self.url)
+        response = self.client.get(self.url, follow=True)
         content = response.content.decode()
         alice_pos = content.find("Alice Smith")
         bob_pos = content.find("Bob Jones")
@@ -333,21 +352,21 @@ class ProgramHoursViewTests(TestCase):
         self.assertGreater(bob_pos, -1)
         self.assertLess(alice_pos, bob_pos)
 
-    def test_view_hours_link_to_student_hours(self):
-        response = self.client.get(self.url)
+    def test_view_hours_link_to_student_hours_via_redirect(self):
+        response = self.client.get(self.url, follow=True)
         content = response.content.decode()
         self.assertIn(reverse("student_hours", args=[self.student1.pk]), content)
         self.assertIn(reverse("student_hours", args=[self.student2.pk]), content)
 
-    def test_empty_program(self):
+    def test_empty_program_via_redirect(self):
         empty_program = make_program(name="Empty Program", active=True)
         url = reverse("program_hours", args=[empty_program.pk])
-        response = self.client.get(url)
+        response = self.client.get(url, follow=True)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("No attendance data", content)
 
-    def test_program_dates_displayed(self):
-        response = self.client.get(self.url)
+    def test_program_dates_displayed_via_redirect(self):
+        response = self.client.get(self.url, follow=True)
         content = response.content.decode()
-        self.assertIn(self.program.start_date.strftime("%b"), content)
+        self.assertIn(self.program.start_date.isoformat(), content)

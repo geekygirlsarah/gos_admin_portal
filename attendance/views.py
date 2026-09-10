@@ -1054,15 +1054,23 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         total_sessions_count = sessions.count()
         open_sessions_count = sessions.filter(check_out__isnull=True).count()
-        from django.db.models import Sum
 
-        total_minutes = (
-            sessions.filter(duration_minutes__isnull=False).aggregate(
-                total=Sum("duration_minutes")
-            )["total"]
-            or 0
+        # Distinct people represented in the filtered sessions, broken down by
+        # person type. A session belongs to exactly one of the three buckets.
+        unique_students = (
+            sessions.filter(student__isnull=False).values("student").distinct().count()
         )
-        total_hours = round(total_minutes / 60.0, 1)
+        unique_mentors = (
+            sessions.filter(adult__isnull=False).values("adult").distinct().count()
+        )
+        unique_visitors = (
+            sessions.filter(student__isnull=True, adult__isnull=True)
+            .exclude(visitor_name="")
+            .values("visitor_name")
+            .distinct()
+            .count()
+        )
+        unique_attendees = unique_students + unique_mentors + unique_visitors
 
         programs = Program.objects.filter(features__key="attendance").distinct()
 
@@ -1094,7 +1102,10 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "current_dir": direction,
                 "total_sessions_count": total_sessions_count,
                 "open_sessions_count": open_sessions_count,
-                "total_hours": total_hours,
+                "unique_attendees": unique_attendees,
+                "unique_students": unique_students,
+                "unique_mentors": unique_mentors,
+                "unique_visitors": unique_visitors,
             },
         )
 
@@ -1577,6 +1588,7 @@ def attendance_hours_chart_view(request):
         .annotate(
             total_minutes=Sum("duration_minutes"),
             session_count=Count("id"),
+            days_attended=Count("check_in__date", distinct=True),
             last_attended=Max("check_in"),
         )
         .order_by("-total_minutes")
@@ -1604,6 +1616,7 @@ def attendance_hours_chart_view(request):
                 "total_hours": hours,
                 "avg_per_week": round(hours / student_weeks, 1),
                 "session_count": stat["session_count"],
+                "days": stat["days_attended"],
                 "last_attended": stat["last_attended"],
             }
         )
@@ -1629,6 +1642,7 @@ def attendance_hours_chart_view(request):
                     "total_hours": 0.0,
                     "avg_per_week": 0.0,
                     "session_count": 0,
+                    "days": 0,
                     "last_attended": None,
                 }
             )
@@ -1676,6 +1690,11 @@ def attendance_hours_chart_view(request):
             }
         )
 
+    # Axis orientation: names along the bottom (vertical bars, scrollable) or
+    # names along the left (horizontal bars, tall). Server-driven so the PNG
+    # and sort links stay consistent with what's displayed.
+    is_horizontal = request.GET.get("axis") == "horizontal"
+
     # Build clean sort URLs
     from urllib.parse import urlencode
 
@@ -1692,8 +1711,29 @@ def attendance_hours_chart_view(request):
         base_params["include_unlogged"] = "1"
     if days_of_week:
         base_params["days_of_week"] = days_of_week
+    if is_horizontal:
+        base_params["axis"] = "horizontal"
     sort_hours_url = f"?{urlencode(base_params, doseq=True)}&sort=hours"
     sort_alpha_url = f"?{urlencode(base_params, doseq=True)}&sort=alpha"
+
+    swap_params = {k: v for k, v in base_params.items() if k != "axis"}
+    if sort_by:
+        swap_params["sort"] = sort_by
+    swap_axis_url = (
+        f"{urlencode(swap_params, doseq=True)}"
+        f"&axis={'vertical' if is_horizontal else 'horizontal'}"
+    )
+    if swap_axis_url:
+        swap_axis_url = f"?{swap_axis_url}"
+
+    # Chart sizing. Vertical bars get a minimum width so every name has room
+    # and the wrapper scrolls left/right when the program is large.
+    if is_horizontal:
+        chart_height_px = max(350, student_count * 40 + 80)
+        chart_min_width_px = None
+    else:
+        chart_height_px = max(350, min(700, (student_count + 1) * 16))
+        chart_min_width_px = student_count * 150
 
     return render(
         request,
@@ -1716,6 +1756,10 @@ def attendance_hours_chart_view(request):
             "sort_by": sort_by,
             "sort_hours_url": sort_hours_url,
             "sort_alpha_url": sort_alpha_url,
+            "is_horizontal": is_horizontal,
+            "swap_axis_url": swap_axis_url,
+            "chart_height_px": chart_height_px,
+            "chart_min_width_px": chart_min_width_px,
             "overall_start_date": overall_start_date,
             "include_unlogged": include_unlogged,
             "days_of_week": days_of_week,
@@ -1725,66 +1769,11 @@ def attendance_hours_chart_view(request):
 
 @login_required
 def program_hours_view(request, program_id):
-    """Mentor attendance dashboard: bar chart of hours per student in a program."""
-    program = get_object_or_404(Program, pk=program_id)
+    """Redirect to the shared Hours Chart page with the program pre-selected."""
+    from django.http import HttpResponseRedirect
 
-    if not can_user_read(request.user, "attendance"):
-        messages.error(request, "You do not have permission to view attendance.")
-        return redirect("home")
-
-    if not program.has_feature("attendance"):
-        messages.error(request, "Attendance is not enabled for this program.")
-        return redirect("home")
-
-    from django.db.models import Count, Max, Sum
-
-    sessions = AttendanceSession.objects.filter(program=program).select_related(
-        "student"
-    )
-
-    # Aggregate per student
-    student_stats = (
-        sessions.filter(student__isnull=False)
-        .values("student__id", "student__preferred_first_name", "student__last_name")
-        .annotate(
-            total_minutes=Sum("duration_minutes"),
-            session_count=Count("id"),
-            last_attended=Max("check_in"),
-        )
-        .order_by("-total_minutes")
-    )
-
-    import json
-
-    chart_labels = []
-    chart_data = []
-    student_list = []
-
-    for stat in student_stats:
-        name = f"{stat['student__preferred_first_name']} {stat['student__last_name']}"
-        hours = round((stat["total_minutes"] or 0) / 60.0, 1)
-        chart_labels.append(name)
-        chart_data.append(hours)
-        student_list.append(
-            {
-                "id": stat["student__id"],
-                "name": name,
-                "total_hours": hours,
-                "session_count": stat["session_count"],
-                "last_attended": stat["last_attended"],
-            }
-        )
-
-    return render(
-        request,
-        "attendance/mentor_dashboard.html",
-        {
-            "program": program,
-            "chart_labels_json": json.dumps(chart_labels),
-            "chart_data_json": json.dumps(chart_data),
-            "student_list": student_list,
-        },
-    )
+    url = f"{reverse('attendance_hours_chart')}?{urlencode({'program_id': program_id})}"
+    return HttpResponseRedirect(url)
 
 
 class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):

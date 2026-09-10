@@ -12,81 +12,145 @@
 </p>
 
 <div class="mb-4">
-    <h2 class="h5">Program</h2>
-    <dl class="row mb-0">
-        <dt class="col-sm-4">Program</dt>
-        <dd class="col-sm-8">{{ application.program|default:"—" }}</dd>
-        <dt class="col-sm-4">Applicant type</dt>
-        <dd class="col-sm-8">{{ application.get_applicant_type_display|default:"—" }}</dd>
-        <dt class="col-sm-4">Email</dt>
-        <dd class="col-sm-8">{{ application.email|default:"—" }}</dd>
-    </dl>
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-calendar-event-fill text-primary"></i>
+                <h2 class="h6 mb-0 fw-bold">Program</h2>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'apply_step4' app_id=application.application_id %}">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-4">Program</dt>
+                <dd class="col-sm-8">{{ application.program|default:"—" }}</dd>
+                <dt class="col-sm-4">Applicant type</dt>
+                <dd class="col-sm-8">{{ application.get_applicant_type_display|default:"—" }}</dd>
+                <dt class="col-sm-4">Email</dt>
+                <dd class="col-sm-8">{{ application.email|default:"—" }}</dd>
+            </dl>
+        </div>
+    </div>
 </div>
 
 <div class="mb-4">
-    <h2 class="h5">Student</h2>
-    {% if step5_data %}
-        <dl class="row mb-0">
-            {% for k, v in step5_data.items %}
-                {% if not k == "grade" and not k == "graduation_year" and not k|slice:":1" == "_" and v is not None %}
-                    <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
-                {% endif %}
-            {% endfor %}
-            <dt class="col-sm-4">Grade</dt>
-            <dd class="col-sm-8">{{ step5_data|get_grade:application }}</dd>
-        </dl>
-    {% else %}
-        <p class="text-muted">No student information provided.</p>
-    {% endif %}
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-person-fill text-primary"></i>
+                <h2 class="h6 mb-0 fw-bold">Student</h2>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'apply_step5' app_id=application.application_id %}">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+        <div class="card-body">
+            {% if step5_data %}
+                <dl class="row mb-0">
+                    {% for k, v in step5_data.items %}
+                        {% if not k == "grade" and not k == "graduation_year" and not k|slice:":1" == "_" and v is not None %}
+                            <dt class="col-sm-4">{{ k|humanize_field }}</dt>
+                            {% if k == "school_name" and step5_school_not_listed %}
+                                <dd class="col-sm-8">My school isn't listed — we'll confirm the details with you.</dd>
+                            {% else %}
+                                <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    <dt class="col-sm-4">Grade</dt>
+                    <dd class="col-sm-8">{{ step5_data|get_grade:application }}</dd>
+                </dl>
+            {% else %}
+                <p class="text-muted mb-0">No student information provided.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <div class="mb-4">
-    <h2 class="h5">Experience and Interest</h2>
-    {% if step6_data %}
-        <dl class="row mb-0">
-            {% for k, v in step6_data.items %}
-                {% if not k|slice:":1" == "_" and v is not None %}
-                    <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
-                {% endif %}
-            {% endfor %}
-        </dl>
-    {% else %}
-        <p class="text-muted">No experience information provided.</p>
-    {% endif %}
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-stars text-primary"></i>
+                <h2 class="h6 mb-0 fw-bold">Experience and Interest</h2>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'apply_step6' app_id=application.application_id %}">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+        <div class="card-body">
+            {% if step6_data %}
+                <dl class="row mb-0">
+                    {% for k, v in step6_data.items %}
+                        {% if not k|slice:":1" == "_" and v is not None %}
+                            <dt class="col-sm-4">{{ k|humanize_field }}</dt>
+                            <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
+                        {% endif %}
+                    {% endfor %}
+                </dl>
+            {% else %}
+                <p class="text-muted mb-0">No experience information provided.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <div class="mb-4">
-    <h2 class="h5">Primary adult contact</h2>
-    {% if step7_data %}
-        <dl class="row mb-0">
-            {% for k, v in step7_data.items %}
-                {% if v is not None and not k|slice:":1" == "_" %}
-                    <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
-                {% endif %}
-            {% endfor %}
-        </dl>
-    {% else %}
-        <p class="text-muted">No primary adult contact information provided.</p>
-    {% endif %}
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-person-heart text-primary"></i>
+                <h2 class="h6 mb-0 fw-bold">Primary adult contact</h2>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'apply_step7' app_id=application.application_id %}">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+        <div class="card-body">
+            {% if step7_data %}
+                <dl class="row mb-0">
+                    {% for k, v in step7_data.items %}
+                        {% if v is not None and not k|slice:":1" == "_" %}
+                            <dt class="col-sm-4">{{ k|humanize_field }}</dt>
+                            <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
+                        {% endif %}
+                    {% endfor %}
+                </dl>
+            {% else %}
+                <p class="text-muted mb-0">No primary adult contact information provided.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <div class="mb-4">
-    <h2 class="h5">Secondary adult contact</h2>
-    {% if step8_data and not step8_skipped %}
-        <dl class="row mb-0">
-            {% for k, v in step8_data.items %}
-                {% if v is not None and not k|slice:":1" == "_" %}
-                    <dt class="col-sm-4">{{ k|humanize_field }}</dt>
-                    <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
-                {% endif %}
-            {% endfor %}
-        </dl>
-    {% else %}
-        <p class="text-muted">No secondary adult contact information provided.</p>
-    {% endif %}
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-person-plus-fill text-primary"></i>
+                <h2 class="h6 mb-0 fw-bold">Secondary adult contact</h2>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'apply_step8' app_id=application.application_id %}">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+        <div class="card-body">
+            {% if step8_data and not step8_skipped %}
+                <dl class="row mb-0">
+                    {% for k, v in step8_data.items %}
+                        {% if v is not None and not k|slice:":1" == "_" %}
+                            <dt class="col-sm-4">{{ k|humanize_field }}</dt>
+                            <dd class="col-sm-8">{{ v|format_application_value:k }}</dd>
+                        {% endif %}
+                    {% endfor %}
+                </dl>
+            {% else %}
+                <p class="text-muted mb-0">No secondary adult contact information provided.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <form method="post" novalidate>

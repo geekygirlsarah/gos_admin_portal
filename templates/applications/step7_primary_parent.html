@@ -41,6 +41,14 @@
             Please review and update anything that has changed.
         </div>
     {% endif %}
+    <div class="alert alert-info d-flex gap-2 align-items-start" role="note">
+        <i class="bi bi-info-circle mt-1"></i>
+        <div>
+            These fields are for the <strong>adult contact's own details</strong> —
+            not the student's. Please enter the adult's name, email, phone, and
+            address here.
+        </div>
+    </div>
     <p>
         Please provide the primary adult contact's information.
         The primary adult contact is the one we will reach out to
@@ -65,13 +73,24 @@
         </form>
     </div>
     {% endif %}
-    <form method="post" novalidate>
+    <form method="post" novalidate data-wizard-autosave="step7-primaryparent">
         {% csrf_token %}
         {% if form.non_field_errors %}
             <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
         {% endif %}
         <div class="row g-3">
             {% for field in form %}
+                {% if field.name == 'relationship_to_student' %}
+                    <div class="col-12 d-flex align-items-center gap-2 mt-4 mb-0">
+                        <i class="bi bi-link-45deg text-primary"></i>
+                        <h2 class="h6 mb-0 fw-bold text-uppercase">Relationship to student</h2>
+                    </div>
+                {% elif field.name == 'email' %}
+                    <div class="col-12 d-flex align-items-center gap-2 mt-4 mb-0">
+                        <i class="bi bi-envelope-fill text-primary"></i>
+                        <h2 class="h6 mb-0 fw-bold text-uppercase">Contact &amp; address</h2>
+                    </div>
+                {% endif %}
                 <div class="col-12 {% if field.name == 'email_updates' %}col-md-12{% else %}col-md-6{% endif %}">
                     {% if field.field.widget.input_type == 'checkbox' %}
                         <div class="form-check mt-2">
