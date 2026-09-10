@@ -40,13 +40,18 @@
       <div class="card shadow-sm h-100 border-0 bg-light">
         <div class="card-body">
           <div class="d-flex align-items-center justify-content-between">
-            <span class="text-muted small fw-semibold text-uppercase">Total Logged Hours</span>
+            <span class="text-muted small fw-semibold text-uppercase">Unique Attendees</span>
             <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success">
-              <i class="bi bi-clock-history fs-5"></i>
+              <i class="bi bi-people fs-5"></i>
             </div>
           </div>
-          <h3 class="h4 mb-0 fw-bold mt-2">{{ total_hours|default:"0.0" }} hrs</h3>
-          <div class="text-muted small">Accumulated attendance time</div>
+          <h3 class="h4 mb-0 fw-bold mt-2">{{ unique_attendees|default:"0" }}</h3>
+          <div class="text-muted small">
+            {{ unique_students|default:"0" }} student{{ unique_students|pluralize }} &middot;
+            {{ unique_mentors|default:"0" }} mentor{{ unique_mentors|pluralize }} &middot;
+            {{ unique_visitors|default:"0" }} visitor{{ unique_visitors|pluralize }}
+          </div>
+          <div class="text-muted small">Distinct people matching current filters</div>
         </div>
       </div>
     </div>

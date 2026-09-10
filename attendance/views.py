@@ -1054,15 +1054,23 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         total_sessions_count = sessions.count()
         open_sessions_count = sessions.filter(check_out__isnull=True).count()
-        from django.db.models import Sum
 
-        total_minutes = (
-            sessions.filter(duration_minutes__isnull=False).aggregate(
-                total=Sum("duration_minutes")
-            )["total"]
-            or 0
+        # Distinct people represented in the filtered sessions, broken down by
+        # person type. A session belongs to exactly one of the three buckets.
+        unique_students = (
+            sessions.filter(student__isnull=False).values("student").distinct().count()
         )
-        total_hours = round(total_minutes / 60.0, 1)
+        unique_mentors = (
+            sessions.filter(adult__isnull=False).values("adult").distinct().count()
+        )
+        unique_visitors = (
+            sessions.filter(student__isnull=True, adult__isnull=True)
+            .exclude(visitor_name="")
+            .values("visitor_name")
+            .distinct()
+            .count()
+        )
+        unique_attendees = unique_students + unique_mentors + unique_visitors
 
         programs = Program.objects.filter(features__key="attendance").distinct()
 
@@ -1094,7 +1102,10 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "current_dir": direction,
                 "total_sessions_count": total_sessions_count,
                 "open_sessions_count": open_sessions_count,
-                "total_hours": total_hours,
+                "unique_attendees": unique_attendees,
+                "unique_students": unique_students,
+                "unique_mentors": unique_mentors,
+                "unique_visitors": unique_visitors,
             },
         )
 

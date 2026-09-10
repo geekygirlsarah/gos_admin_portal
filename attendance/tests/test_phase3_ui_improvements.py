@@ -42,6 +42,65 @@ class Phase3AttendanceUITests(TestCase):
             graduation_year=2027,
         )
 
+    def test_all_attendance_unique_attendees_breakdown(self):
+        now = timezone.now()
+        # 1 mentor session
+        AttendanceSession.objects.create(
+            program=self.program,
+            adult=self.mentor_adult,
+            check_in=now - timedelta(hours=3),
+            check_out=now - timedelta(hours=2),
+            duration_minutes=60,
+        )
+        # 2 sessions for the same student (1 unique student)
+        for hours in (4, 2):
+            AttendanceSession.objects.create(
+                program=self.program,
+                student=self.student,
+                check_in=now - timedelta(hours=hours),
+                check_out=now - timedelta(hours=hours - 1),
+                duration_minutes=60,
+            )
+        # 2 visitor sessions: 2 distinct visitor names
+        for name in ("Visit A", "Visit A", "Visit B"):
+            AttendanceSession.objects.create(
+                program=self.program,
+                student=None,
+                adult=None,
+                visitor_name=name,
+                check_in=now - timedelta(hours=1),
+                check_out=now - timedelta(minutes=30),
+                duration_minutes=30,
+            )
+
+        self.client.login(
+            username="lead_attendance", password="password123"  # nosec B106
+        )
+        resp = self.client.get(reverse("all_attendance"))
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(resp.context["unique_attendees"], 4)
+        self.assertEqual(resp.context["unique_students"], 1)
+        self.assertEqual(resp.context["unique_mentors"], 1)
+        self.assertEqual(resp.context["unique_visitors"], 2)
+
+        content = resp.content.decode()
+        self.assertIn("Unique Attendees", content)
+        self.assertIn("1 student", content)
+        self.assertIn("1 mentor", content)
+        self.assertIn("2 visitors", content)
+
+    def test_all_attendance_unique_attendees_breakdown_full_range(self):
+        """When no sessions exist, the breakdown reads 0 / 0 / 0."""
+        self.client.login(
+            username="lead_attendance", password="password123"  # nosec B106
+        )
+        resp = self.client.get(reverse("all_attendance"))
+        self.assertEqual(resp.context["unique_attendees"], 0)
+        self.assertEqual(resp.context["unique_students"], 0)
+        self.assertEqual(resp.context["unique_mentors"], 0)
+        self.assertEqual(resp.context["unique_visitors"], 0)
+
     def test_all_attendance_kpi_cards_and_export_dropdown(self):
         # Create closed and open sessions
         now = timezone.now()
@@ -67,8 +126,9 @@ class Phase3AttendanceUITests(TestCase):
 
         # Check KPI summary cards
         self.assertContains(resp, "Total Sessions")
-        self.assertContains(resp, "Total Logged Hours")
+        self.assertContains(resp, "Unique Attendees")
         self.assertContains(resp, "Open Sessions")
+        self.assertNotContains(resp, "Total Logged Hours")
 
         # Check Export dropdown preserving button IDs
         self.assertContains(resp, 'id="exportCsvBtn"')
