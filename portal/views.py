@@ -111,10 +111,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from applications.models import Application
             from orders.models import OrderItem
             from programs.models import Program, SlidingScale
-            from programs.utils import active_students
+            from programs.utils import students_in_running_programs
 
             active_programs_count = Program.objects.filter(active=True).count()
-            active_students_count = active_students().count()
+            active_students_count = students_in_running_programs().count()
             pending_apps_count = Application.objects.filter(
                 status=Application.Status.SUBMITTED
             ).count()
