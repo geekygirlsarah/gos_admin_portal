@@ -1676,6 +1676,11 @@ def attendance_hours_chart_view(request):
             }
         )
 
+    # Axis orientation: names along the bottom (vertical bars, scrollable) or
+    # names along the left (horizontal bars, tall). Server-driven so the PNG
+    # and sort links stay consistent with what's displayed.
+    is_horizontal = request.GET.get("axis") == "horizontal"
+
     # Build clean sort URLs
     from urllib.parse import urlencode
 
@@ -1692,8 +1697,29 @@ def attendance_hours_chart_view(request):
         base_params["include_unlogged"] = "1"
     if days_of_week:
         base_params["days_of_week"] = days_of_week
+    if is_horizontal:
+        base_params["axis"] = "horizontal"
     sort_hours_url = f"?{urlencode(base_params, doseq=True)}&sort=hours"
     sort_alpha_url = f"?{urlencode(base_params, doseq=True)}&sort=alpha"
+
+    swap_params = {k: v for k, v in base_params.items() if k != "axis"}
+    if sort_by:
+        swap_params["sort"] = sort_by
+    swap_axis_url = (
+        f"{urlencode(swap_params, doseq=True)}"
+        f"&axis={'vertical' if is_horizontal else 'horizontal'}"
+    )
+    if swap_axis_url:
+        swap_axis_url = f"?{swap_axis_url}"
+
+    # Chart sizing. Vertical bars get a minimum width so every name has room
+    # and the wrapper scrolls left/right when the program is large.
+    if is_horizontal:
+        chart_height_px = max(350, student_count * 40 + 80)
+        chart_min_width_px = None
+    else:
+        chart_height_px = max(350, min(700, (student_count + 1) * 16))
+        chart_min_width_px = student_count * 150
 
     return render(
         request,
@@ -1716,6 +1742,10 @@ def attendance_hours_chart_view(request):
             "sort_by": sort_by,
             "sort_hours_url": sort_hours_url,
             "sort_alpha_url": sort_alpha_url,
+            "is_horizontal": is_horizontal,
+            "swap_axis_url": swap_axis_url,
+            "chart_height_px": chart_height_px,
+            "chart_min_width_px": chart_min_width_px,
             "overall_start_date": overall_start_date,
             "include_unlogged": include_unlogged,
             "days_of_week": days_of_week,

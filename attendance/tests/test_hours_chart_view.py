@@ -450,3 +450,59 @@ class AttendanceHoursChartViewTests(TestCase):
         response = self.client.get(url)
         content = response.content.decode()
         self.assertIn("checked", content)
+
+    # ── Axis swap ──
+
+    def test_swap_axis_button_present(self):
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn("Swap Axis", content)
+        self.assertIn("swapAxisBtn", content)
+        self.assertIn("chartScrollWrap", content)
+
+    def test_default_axis_is_vertical(self):
+        response = self.client.get(self.program_url)
+        self.assertFalse(response.context["is_horizontal"])
+        content = response.content.decode()
+        self.assertIn("indexAxis: 'x'", content)
+        self.assertNotIn("indexAxis: 'y'", content)
+        self.assertIn("axis=horizontal", content)
+
+    def test_horizontal_axis_requested(self):
+        response = self.client.get(f"{self.program_url}&axis=horizontal")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["is_horizontal"])
+        content = response.content.decode()
+        self.assertIn("indexAxis: 'y'", content)
+        self.assertNotIn("indexAxis: 'x'", content)
+        self.assertIn("axis=vertical", content)
+
+    def test_invalid_axis_defaults_to_vertical(self):
+        response = self.client.get(f"{self.program_url}&axis=diagonal")
+        self.assertFalse(response.context["is_horizontal"])
+        content = response.content.decode()
+        self.assertIn("indexAxis: 'x'", content)
+
+    def test_swap_link_preserves_filters_and_switches_axis(self):
+        url = (
+            f"{self.url}?program_id={self.program.pk}"
+            "&include_unlogged=1&sort=alpha&axis=horizontal"
+        )
+        response = self.client.get(url)
+        swap_url = response.context["swap_axis_url"]
+        self.assertIn("axis=vertical", swap_url)
+        self.assertIn(f"program_id={self.program.pk}", swap_url)
+        self.assertIn("include_unlogged=1", swap_url)
+        self.assertIn("sort=alpha", swap_url)
+
+    def test_horizontal_axis_preserved_in_sort_urls(self):
+        response = self.client.get(f"{self.program_url}&axis=horizontal")
+        self.assertIn("axis=horizontal", response.context["sort_hours_url"])
+        self.assertIn("axis=horizontal", response.context["sort_alpha_url"])
+
+    def test_vertical_chart_has_wide_min_width_for_scrolling(self):
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn("min-width", content)
+        # With two students the wrapper still scrolls horizontally when needed.
+        self.assertIn("overflow-x", content)

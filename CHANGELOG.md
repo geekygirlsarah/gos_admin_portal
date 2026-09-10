@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-09-10
 
+### Added
+- **Hours Chart: "Swap Axis" button**: The attendance hours chart can now switch between names along the bottom (the default wide view, which scrolls left/right so every student's name stays legible even in large programs) and names along the left (a tall view, useful for at-a-glance and for printing/downloading a vertical PNG). Both the sort buttons and the axis choice are preserved. The **Download PNG** button saves whichever orientation is on screen.
+
 ### Changed
 - **Attendance hours charts are now one shared page**: The "Hours Chart" (from the Attendance menu) and "Program Hours" (from a program's Attendance menu) now use the exact same page and features — date-range and day-of-week filters, average-hours reference lines, sort by hours or name, "include students with no logged hours", summary stats, and PNG download. Opening "Program Hours" just lands you on the same chart with that program pre-selected in the dropdown. This also fixes student names showing up as "None [last name]" in the program view for students without a preferred first name — the shared page always shows the student's display name. The old `/attendance/program-hours/<id>/` URL still works; it now redirects to the shared chart.
 

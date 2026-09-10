@@ -177,14 +177,19 @@
           <a href="{{ sort_hours_url }}" class="btn btn-outline-secondary {% if sort_by == 'hours' %}active{% endif %}">Sort by Hours</a>
           <a href="{{ sort_alpha_url }}" class="btn btn-outline-secondary {% if sort_by == 'alpha' %}active{% endif %}">A → Z</a>
         </div>
+        <a href="{{ swap_axis_url }}" role="button" class="btn btn-sm btn-outline-secondary me-2 {% if is_horizontal %}active{% endif %}" id="swapAxisBtn" title="Swap between names along the bottom (wide) and names along the left (tall)">
+          <i class="bi bi-arrow-left-right"></i> Swap Axis
+        </a>
         <button class="btn btn-sm btn-outline-secondary" id="downloadChart">
           <i class="bi bi-download"></i> Download PNG
         </button>
       </div>
     </div>
     <div class="card-body">
-      <div style="height: {{ student_list|length|add:1 }}rem; min-height: 350px; max-height: 700px;">
-        <canvas id="studentHoursChart"></canvas>
+      <div id="chartScrollWrap" style="overflow-x: auto;">
+        <div id="chartContainer" class="chart-container{% if is_horizontal %} chart-container-horizontal{% else %} chart-container-vertical{% endif %}" style="height: {{ chart_height_px }}px;{% if chart_min_width_px %} min-width: {{ chart_min_width_px }}px;{% endif %}">
+          <canvas id="studentHoursChart"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -246,12 +251,13 @@ document.addEventListener('DOMContentLoaded', function() {
   if (labels.length > 0) {
     var ctx = document.getElementById('studentHoursChart');
     if (ctx) {
+      var isHorizontal = {% if is_horizontal %}true{% else %}false{% endif %};
       var annotations = {};
       annotationLines.forEach(function(line, i) {
-        annotations['line' + i] = {
+        var minKey = isHorizontal ? 'xMin' : 'yMin';
+        var maxKey = isHorizontal ? 'xMax' : 'yMax';
+        var annotation = {
           type: 'line',
-          yMin: line.y,
-          yMax: line.y,
           borderColor: line.color,
           borderWidth: 2,
           borderDash: [6, 4],
@@ -265,6 +271,9 @@ document.addEventListener('DOMContentLoaded', function() {
             padding: { top: 2, bottom: 2, left: 6, right: 6 }
           }
         };
+        annotation[minKey] = line.y;
+        annotation[maxKey] = line.y;
+        annotations['line' + i] = annotation;
       });
 
       var chart = new Chart(ctx, {
@@ -282,18 +291,28 @@ document.addEventListener('DOMContentLoaded', function() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          indexAxis: {% if is_horizontal %}'y'{% else %}'x'{% endif %},
           plugins: {
             legend: { display: false },
             annotation: { annotations: annotations },
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return context.parsed.y + ' hours';
+                  var value = isHorizontal ? context.parsed.x : context.parsed.y;
+                  return value + ' hours';
                 }
               }
             }
           },
-          scales: {
+          scales: {% if is_horizontal %}{
+            x: {
+              beginAtZero: true,
+              title: { display: true, text: 'Hours' }
+            },
+            y: {
+              title: { display: true, text: 'Students' }
+            }
+          }{% else %}{
             y: {
               beginAtZero: true,
               title: { display: true, text: 'Hours' }
@@ -301,13 +320,13 @@ document.addEventListener('DOMContentLoaded', function() {
             x: {
               title: { display: true, text: 'Students' }
             }
-          }
+          }{% endif %}
         }
       });
 
       document.getElementById('downloadChart').addEventListener('click', function() {
         var link = document.createElement('a');
-        link.download = 'attendance-hours-chart.png';
+        link.download = isHorizontal ? 'attendance-hours-chart-horizontal.png' : 'attendance-hours-chart-wide.png';
         link.href = chart.toBase64Image();
         link.click();
       });
