@@ -156,6 +156,13 @@ class MessagingUIImprovementsTests(TestCase):
         self.assertContains(response, "Summer Camp 2027")
         self.assertNotContains(response, "Past Season 2024")
 
+    def test_mentor_does_not_see_past_programs_toggle(self):
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_messaging"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Show past &amp; archived programs")
+        self.assertNotContains(response, "js-toggle-past-programs")
+
     def test_preselection_via_program_email_url(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106
         response = self.client.get(
@@ -276,6 +283,66 @@ class MessagingUIImprovementsTests(TestCase):
         # Ensure scripts have nonce
         self.assertContains(response, 'nonce="')
         self.assertNotContains(response, "onclick=")
+
+    def test_subgroups_without_assigned_students_are_hidden(self):
+        Team.objects.create(team_type="FLL", number=303, name="Orphan FLL")
+        Crew.objects.create(name="Orphan Crew", program=self.active_program)
+        SubTeam.objects.create(name="Orphan Subteam", program=self.active_program)
+
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_messaging"))
+        self.assertEqual(response.status_code, 200)
+        # Assigned subgroups still render
+        self.assertContains(response, "Girls of Steel")
+        self.assertContains(response, "Mechanical")
+        self.assertContains(response, "Chassis")
+        # Subgroups with no assigned students are hidden
+        self.assertNotContains(response, "Orphan FLL")
+        self.assertNotContains(response, "Orphan Crew")
+        self.assertNotContains(response, "Orphan Subteam")
+
+    def test_subgroup_hidden_when_only_graduated_student_assigned(self):
+        graduated = Student.objects.create(
+            legal_first_name="Grad",
+            last_name="Alumna",
+            personal_email="grad@example.com",
+            graduated=True,
+        )
+        team_grad = Team.objects.create(
+            team_type="FTC", number=999, name="Graduated Team"
+        )
+        Enrollment.objects.create(
+            student=graduated,
+            program=self.active_program,
+            team=team_grad,
+            active=True,
+        )
+
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_messaging"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Graduated Team")
+
+    def test_subgroup_hidden_when_enrollment_inactive(self):
+        inactive_team = Team.objects.create(
+            team_type="FTC", number=998, name="Dropped Out Team"
+        )
+        dropout = Student.objects.create(
+            legal_first_name="Dee",
+            last_name="Dropped",
+            personal_email="dee@example.com",
+        )
+        Enrollment.objects.create(
+            student=dropout,
+            program=self.active_program,
+            team=inactive_team,
+            active=False,
+        )
+
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        response = self.client.get(reverse("program_messaging"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Dropped Out Team")
 
     def test_send_test_email_without_program_or_recipient_groups(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106

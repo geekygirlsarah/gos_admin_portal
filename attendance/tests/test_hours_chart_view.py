@@ -460,13 +460,13 @@ class AttendanceHoursChartViewTests(TestCase):
         self.assertIn("swapAxisBtn", content)
         self.assertIn("chartScrollWrap", content)
 
-    def test_default_axis_is_vertical(self):
+    def test_default_axis_is_horizontal(self):
         response = self.client.get(self.program_url)
-        self.assertFalse(response.context["is_horizontal"])
+        self.assertTrue(response.context["is_horizontal"])
         content = response.content.decode()
-        self.assertIn("indexAxis: 'x'", content)
-        self.assertNotIn("indexAxis: 'y'", content)
-        self.assertIn("axis=horizontal", content)
+        self.assertIn("indexAxis: 'y'", content)
+        self.assertNotIn("indexAxis: 'x'", content)
+        self.assertIn("axis=vertical", content)
 
     def test_horizontal_axis_requested(self):
         response = self.client.get(f"{self.program_url}&axis=horizontal")
@@ -477,11 +477,11 @@ class AttendanceHoursChartViewTests(TestCase):
         self.assertNotIn("indexAxis: 'x'", content)
         self.assertIn("axis=vertical", content)
 
-    def test_invalid_axis_defaults_to_vertical(self):
+    def test_invalid_axis_defaults_to_horizontal(self):
         response = self.client.get(f"{self.program_url}&axis=diagonal")
-        self.assertFalse(response.context["is_horizontal"])
+        self.assertTrue(response.context["is_horizontal"])
         content = response.content.decode()
-        self.assertIn("indexAxis: 'x'", content)
+        self.assertIn("indexAxis: 'y'", content)
 
     def test_swap_link_preserves_filters_and_switches_axis(self):
         url = (
@@ -592,9 +592,40 @@ class AttendanceHoursChartViewTests(TestCase):
         content = response.content.decode()
         self.assertIn(">Days<", content)
 
-    def test_vertical_chart_has_wide_min_width_for_scrolling(self):
+    def test_vertical_chart_adaptive_with_expand_button(self):
+        """Wide (vertical-bar) layout fits the container by default and offers
+        an expand icon that widens it so the wrapper scrolls."""
+        url = f"{self.program_url}&axis=vertical"
+        response = self.client.get(url)
+        self.assertFalse(response.context["is_horizontal"])
+        content = response.content.decode()
+        # Default is adaptive: no forced per-student min-width inline.
+        self.assertIn("indexAxis: 'x'", content)
+        self.assertIn('id="expandChartBtn"', content)
+        self.assertIn("data-chart-min-width", content)
+        self.assertIn("chartScrollWrap", content)
+        self.assertNotIn("min-width: ", content)
+
+    def test_horizontal_chart_has_no_expand_button(self):
+        """The default tall layout doesn't need the width-expand icon."""
         response = self.client.get(self.program_url)
         content = response.content.decode()
-        self.assertIn("min-width", content)
-        # With two students the wrapper still scrolls horizontally when needed.
+        self.assertNotIn('id="expandChartBtn"', content)
+
+    def test_vertical_chart_rotates_name_labels_to_fit(self):
+        """Names on the bottom axis rotate 90 degrees instead of ~15 so all
+        students fit in less horizontal space."""
+        url = f"{self.program_url}&axis=vertical"
+        response = self.client.get(url)
+        content = response.content.decode()
+        self.assertIn("autoSkip: false", content)
+        self.assertIn("maxRotation: 90", content)
+        self.assertIn("minRotation: 90", content)
+
+    def test_horizontal_chart_keeps_name_labels_flat(self):
+        """The default tall layout leaves names on the left, unrotated."""
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertNotIn("maxRotation", content)
+        self.assertNotIn("autoSkip", content)
         self.assertIn("overflow-x", content)

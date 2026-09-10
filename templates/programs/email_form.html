@@ -93,12 +93,14 @@
             <div class="mb-4">
               <label for="id_program" class="form-label fw-semibold text-dark">Program <span class="text-danger">*</span></label>
               {{ form.program }}
-              <div class="form-check form-switch mt-2 js-past-programs-toggle-container">
-                <input class="form-check-input js-toggle-past-programs" type="checkbox" id="togglePastPrograms_id_program" data-program-select="id_program">
-                <label class="form-check-label small text-muted" for="togglePastPrograms_id_program">
-                  <i class="bi bi-archive me-1"></i>Show past &amp; archived programs
-                </label>
-              </div>
+              {% if navbar_role == 'LeadMentor' %}
+                <div class="form-check form-switch mt-2 js-past-programs-toggle-container">
+                  <input class="form-check-input js-toggle-past-programs" type="checkbox" id="togglePastPrograms_id_program" data-program-select="id_program">
+                  <label class="form-check-label small text-muted" for="togglePastPrograms_id_program">
+                    <i class="bi bi-archive me-1"></i>Show past &amp; archived programs
+                  </label>
+                </div>
+              {% endif %}
               {% if form.program.help_text %}
                 <div class="form-text small">{{ form.program.help_text }}</div>
               {% endif %}
