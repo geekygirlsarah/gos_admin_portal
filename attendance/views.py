@@ -1725,66 +1725,11 @@ def attendance_hours_chart_view(request):
 
 @login_required
 def program_hours_view(request, program_id):
-    """Mentor attendance dashboard: bar chart of hours per student in a program."""
-    program = get_object_or_404(Program, pk=program_id)
+    """Redirect to the shared Hours Chart page with the program pre-selected."""
+    from django.http import HttpResponseRedirect
 
-    if not can_user_read(request.user, "attendance"):
-        messages.error(request, "You do not have permission to view attendance.")
-        return redirect("home")
-
-    if not program.has_feature("attendance"):
-        messages.error(request, "Attendance is not enabled for this program.")
-        return redirect("home")
-
-    from django.db.models import Count, Max, Sum
-
-    sessions = AttendanceSession.objects.filter(program=program).select_related(
-        "student"
-    )
-
-    # Aggregate per student
-    student_stats = (
-        sessions.filter(student__isnull=False)
-        .values("student__id", "student__preferred_first_name", "student__last_name")
-        .annotate(
-            total_minutes=Sum("duration_minutes"),
-            session_count=Count("id"),
-            last_attended=Max("check_in"),
-        )
-        .order_by("-total_minutes")
-    )
-
-    import json
-
-    chart_labels = []
-    chart_data = []
-    student_list = []
-
-    for stat in student_stats:
-        name = f"{stat['student__preferred_first_name']} {stat['student__last_name']}"
-        hours = round((stat["total_minutes"] or 0) / 60.0, 1)
-        chart_labels.append(name)
-        chart_data.append(hours)
-        student_list.append(
-            {
-                "id": stat["student__id"],
-                "name": name,
-                "total_hours": hours,
-                "session_count": stat["session_count"],
-                "last_attended": stat["last_attended"],
-            }
-        )
-
-    return render(
-        request,
-        "attendance/mentor_dashboard.html",
-        {
-            "program": program,
-            "chart_labels_json": json.dumps(chart_labels),
-            "chart_data_json": json.dumps(chart_data),
-            "student_list": student_list,
-        },
-    )
+    url = f"{reverse('attendance_hours_chart')}?{urlencode({'program_id': program_id})}"
+    return HttpResponseRedirect(url)
 
 
 class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
