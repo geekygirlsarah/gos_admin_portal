@@ -1223,9 +1223,26 @@ class ProgramEmailView(LoginRequiredMixin, View):
         return self._render(form, prog or program_from_url, pk=pk)
 
     def _render(self, form, program, pk=None):
-        teams = Team.objects.all().order_by("team_type", "number")
-        crews = Crew.objects.select_related("program").all().order_by("name")
-        subteams = SubTeam.objects.select_related("program").all().order_by("name")
+        active_assignments = Enrollment.objects.filter(
+            active=True, student__graduated=False
+        )
+        teams = (
+            Team.objects.filter(enrollments__in=active_assignments)
+            .distinct()
+            .order_by("team_type", "number")
+        )
+        crews = (
+            Crew.objects.select_related("program")
+            .filter(enrollments__in=active_assignments)
+            .distinct()
+            .order_by("name")
+        )
+        subteams = (
+            SubTeam.objects.select_related("program")
+            .filter(enrollments__in=active_assignments)
+            .distinct()
+            .order_by("name")
+        )
         ctx = {
             "form": form,
             "program": program,
