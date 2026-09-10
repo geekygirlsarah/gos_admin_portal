@@ -142,7 +142,7 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, "New subteam name for Girls of Steel FRC...")
 
     def test_student_and_mentor_photo_crop_assets_rendering(self):
-        """Photo crop modal should render cleanly without broken integrity hashes on CropperJS assets."""
+        """Photo crop modal renders local Cropper assets with a showing crop box."""
         student = Student.objects.create(
             legal_first_name="Jane",
             last_name="Doe",
@@ -150,30 +150,56 @@ class SettingsUIImprovementsTests(TestCase):
         )
         self._login(self.lead_user)
 
-        # Student create form
+        # Student create + edit forms
         resp_create = self.client.get(reverse("student_create"))
-        self.assertEqual(resp_create.status_code, 200)
-        self.assertContains(resp_create, "Crop Photo")
-        self.assertContains(
-            resp_create,
-            '<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"',
-        )
-        self.assertContains(
-            resp_create,
-            '<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">',
-        )
-
-        # Student edit form
         resp_student = self.client.get(reverse("student_edit", args=[student.pk]))
-        self.assertEqual(resp_student.status_code, 200)
-        self.assertContains(resp_student, "Crop Photo")
+        for resp in (resp_create, resp_student):
+            self.assertEqual(resp.status_code, 200)
+            self.assertContains(resp, "Crop Photo")
+            # CropperJS must be served from local static files so it can never be
+            # blocked by CSP or CDN availability (previously gray modal + dead JS).
+            self.assertContains(
+                resp,
+                'src="/static/vendor/cropperjs/1.6.2/cropper.min.js"',
+            )
+            self.assertContains(
+                resp,
+                'href="/static/vendor/cropperjs/1.6.2/cropper.min.css"',
+            )
+            # The crop image must NOT be wrapped in Bootstrap's .ratio. CropperJS
+            # positions its container with inline `position: relative`, which
+            # overrides `.ratio > *`'s absolute positioning and pushes the crop
+            # area below the visible modal (gray box, unclickable confirm).
+            self.assertNotContains(resp, 'class="ratio ratio-1x1 bg-light"')
+            self.assertContains(resp, 'class="cropper-wrap"')
+            # The modal dialog must NOT be tagged `cropper-modal`: CropperJS ships
+            # an unscoped `.cropper-modal { background-color:#000; opacity:.5 }`
+            # rule, which would render the entire dialog 50% transparent black
+            # (whole screen gray, UI grayed out) by class-name collision.
+            self.assertNotContains(resp, '"cropper-modal"')
+            self.assertContains(
+                resp,
+                'class="modal-dialog modal-lg modal-dialog-centered crop-modal-dialog"',
+            )
+
+        # Adult forms (mentors/parents/adults edit their profile here) must offer
+        # the same photo cropping instead of a bare file input.
+        resp_adult = self.client.get(reverse("adult_create"))
+        self.assertEqual(resp_adult.status_code, 200)
+        self.assertContains(resp_adult, "Crop Photo")
         self.assertContains(
-            resp_student,
-            '<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"',
+            resp_adult,
+            'src="/static/vendor/cropperjs/1.6.2/cropper.min.js"',
         )
         self.assertContains(
-            resp_student,
-            '<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" rel="stylesheet">',
+            resp_adult,
+            'href="/static/vendor/cropperjs/1.6.2/cropper.min.css"',
+        )
+        self.assertContains(resp_adult, 'class="cropper-wrap"')
+        self.assertNotContains(resp_adult, '"cropper-modal"')
+        self.assertContains(
+            resp_adult,
+            'class="modal-dialog modal-lg modal-dialog-centered crop-modal-dialog"',
         )
 
     def test_program_edit_settings_ui(self):

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-10
+
+### Fixed
+- **Photo cropping now actually shows and works on profile edit pages**: The crop tool on the student form (and the mirrored mentor form) looked like a dead gray box because the image was wrapped in Bootstrap's `.ratio` container, which CropperJS's own container positioning overrode — pushing the real crop area below the visible modal where it overflowed behind the "Crop & Use" button (so nothing was clickable). The image is now wrapped in a simple `.cropper-wrap` that keeps the crop box inside the modal, and the modal body scrolls if the image is tall. The same fix also ships locally-vendored CropperJS assets (`/static/vendor/cropperjs/`) in favor of the CDN links, so the cropping tool can never be blocked again by CDN availability or Content Security Policy.
+- **Mentors, parents, and adult volunteers can now crop their profile photos too**: The adult edit form (used by mentor/adult/parent profiles) previously offered a plain photo upload with no cropping. It now has the same "Crop Photo" dialog as the student form — square crop with circular previews, drag-to-position, scroll/pinch to zoom — consistent with the rest of the portal.
+
 ## 2026-09-09
 
 ### Changed
