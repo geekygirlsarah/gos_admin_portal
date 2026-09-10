@@ -12,7 +12,7 @@ These guidelines help coding agents (like Junie) understand the project, its str
 
 ## Project Overview
 
-Girls of Steel (GoS) Admin Portal is a Django 5 web application for managing:
+Girls of Steel (GoS) Admin Portal is a Django 6.1 web application for managing:
 - Programs and student enrollments
 - Students (profiles, photos, school, graduation year, demographics)
 - Adults (Parents, Mentors, Volunteers, Alumni) and their relationships to students
