@@ -108,7 +108,7 @@ class KioskPageViewTests(TestCase):
         self.assertNotIn("position-fixed top-0 start-50", content)
         self.assertIn("position-fixed bottom-0", content)
 
-    def test_kiosk_page_reminds_students_to_use_member_tab(self):
+    def test_kiosk_page_reminds_students_to_use_member_section(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
         cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
         self.client.cookies[cookie_name] = "1"
@@ -116,17 +116,16 @@ class KioskPageViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("Girls of Steel student", content)
-        self.assertIn("Member", content)
+        self.assertIn("Members side", content)
 
-    def test_kiosk_page_switches_back_to_member_tab_after_guest_signin(self):
+    def test_kiosk_page_focuses_member_input_after_guest_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
         cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
         self.client.cookies[cookie_name] = "1"
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("member-tab", content)
-        self.assertIn("showMemberTab", content)
+        self.assertIn("memberInput", content)
 
     def test_kiosk_enter_key_wired_to_member_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
@@ -166,6 +165,106 @@ class KioskPageViewTests(TestCase):
             content,
             "Pressing Enter in the guest team number field should trigger sign-in",
         )
+
+    def test_kiosk_page_has_two_column_layout(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("col-md-6", content)
+        self.assertIn("MEMBER SIGN-IN", content)
+        self.assertIn("VISITOR / GUEST", content)
+
+    def test_kiosk_page_has_no_tabs(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertNotIn("nav-tabs", content)
+        self.assertNotIn('data-bs-toggle="tab"', content)
+
+    def test_kiosk_page_has_flash_overlay(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("flashOverlay", content)
+        self.assertIn("flash-icon", content)
+        self.assertIn("flash-message", content)
+
+    def test_kiosk_page_has_rfid_detection_on_visitor_input(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("guestInput", content)
+        self.assertIn("0-9a-fA-F", content)
+
+    def test_kiosk_detects_short_decimal_rfid_not_just_long_hex(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("^[0-9]+$", content)
+        self.assertIn("val.length >= 3", content)
+
+    def test_kiosk_member_not_found_shows_red_flash(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(
+            'showFlash("RFID card not recognized',
+            content,
+            "An unrecognized RFID should trigger the full-screen red flash, "
+            "not just the bottom toast.",
+        )
+        self.assertIn(
+            'showFlash("Member not found',
+            content,
+            "An unmatched member name should trigger the full-screen red flash.",
+        )
+
+    def test_kiosk_page_has_show_flash_function(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("showFlash", content)
+
+    def test_kiosk_page_member_column_has_rfid_hint(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("RFID", content)
+        self.assertIn("memberInput", content)
+
+    def test_kiosk_page_visitor_column_has_member_warning(self):
+        url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
+        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
+        self.client.cookies[cookie_name] = "1"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Girls of Steel student", content)
+        self.assertIn("Members side", content)
 
 
 class KioskUnlockEndpointTests(TestCase):
