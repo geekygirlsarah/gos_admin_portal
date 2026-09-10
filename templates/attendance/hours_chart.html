@@ -180,6 +180,11 @@
         <a href="{{ swap_axis_url }}" role="button" class="btn btn-sm btn-outline-secondary me-2 {% if is_horizontal %}active{% endif %}" id="swapAxisBtn" title="Swap between names along the bottom (wide) and names along the left (tall)">
           <i class="bi bi-arrow-left-right"></i> Swap Axis
         </a>
+        {% if not is_horizontal %}
+        <button class="btn btn-sm btn-outline-secondary me-2" id="expandChartBtn" type="button" title="Expand chart to see every name (scroll)">
+          <i class="bi bi-arrows-expand"></i>
+        </button>
+        {% endif %}
         <button class="btn btn-sm btn-outline-secondary" id="downloadChart">
           <i class="bi bi-download"></i> Download PNG
         </button>
@@ -187,7 +192,7 @@
     </div>
     <div class="card-body">
       <div id="chartScrollWrap" style="overflow-x: auto;">
-        <div id="chartContainer" class="chart-container{% if is_horizontal %} chart-container-horizontal{% else %} chart-container-vertical{% endif %}" style="height: {{ chart_height_px }}px;{% if chart_min_width_px %} min-width: {{ chart_min_width_px }}px;{% endif %}">
+        <div id="chartContainer" class="chart-container{% if is_horizontal %} chart-container-horizontal{% else %} chart-container-vertical{% endif %}" style="height: {{ chart_height_px }}px;"{% if chart_min_width_px %} data-chart-min-width="{{ chart_min_width_px }}"{% endif %}>
           <canvas id="studentHoursChart"></canvas>
         </div>
       </div>
@@ -320,7 +325,13 @@ document.addEventListener('DOMContentLoaded', function() {
               title: { display: true, text: 'Hours' }
             },
             x: {
-              title: { display: true, text: 'Students' }
+              title: { display: true, text: 'Students' },
+              ticks: {
+                autoSkip: false,
+                maxRotation: 90,
+                minRotation: 90,
+                font: { size: 11 }
+              }
             }
           }{% endif %}
         }
@@ -332,6 +343,25 @@ document.addEventListener('DOMContentLoaded', function() {
         link.href = chart.toBase64Image();
         link.click();
       });
+
+      var chartContainer = document.getElementById('chartContainer');
+      var expandBtn = document.getElementById('expandChartBtn');
+      if (chartContainer && expandBtn) {
+        var minWidthPx = parseInt(chartContainer.getAttribute('data-chart-min-width'), 10);
+        expandBtn.addEventListener('click', function() {
+          var expanded = chartContainer.classList.toggle('expanded');
+          if (expanded) {
+            chartContainer.style.minWidth = minWidthPx + 'px';
+            expandBtn.innerHTML = '<i class="bi bi-arrows-collapse"></i>';
+            expandBtn.title = 'Shrink chart back to fit the screen';
+          } else {
+            chartContainer.style.minWidth = '';
+            expandBtn.innerHTML = '<i class="bi bi-arrows-expand"></i>';
+            expandBtn.title = 'Expand chart to see every name (scroll)';
+          }
+          chart.resize();
+        });
+      }
     }
   }
 

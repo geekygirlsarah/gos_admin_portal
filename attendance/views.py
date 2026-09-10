@@ -1690,10 +1690,11 @@ def attendance_hours_chart_view(request):
             }
         )
 
-    # Axis orientation: names along the bottom (vertical bars, scrollable) or
-    # names along the left (horizontal bars, tall). Server-driven so the PNG
-    # and sort links stay consistent with what's displayed.
-    is_horizontal = request.GET.get("axis") == "horizontal"
+    # Axis orientation: names along the left (horizontal bars, tall) is the
+    # default so every student is visible and comparable; pass axis=vertical
+    # for names along the bottom (vertical bars, wide). Server-driven so the
+    # PNG and sort links stay consistent with what's displayed.
+    is_horizontal = request.GET.get("axis") != "vertical"
 
     # Build clean sort URLs
     from urllib.parse import urlencode
@@ -1711,8 +1712,7 @@ def attendance_hours_chart_view(request):
         base_params["include_unlogged"] = "1"
     if days_of_week:
         base_params["days_of_week"] = days_of_week
-    if is_horizontal:
-        base_params["axis"] = "horizontal"
+    base_params["axis"] = "horizontal" if is_horizontal else "vertical"
     sort_hours_url = f"?{urlencode(base_params, doseq=True)}&sort=hours"
     sort_alpha_url = f"?{urlencode(base_params, doseq=True)}&sort=alpha"
 
@@ -1726,8 +1726,10 @@ def attendance_hours_chart_view(request):
     if swap_axis_url:
         swap_axis_url = f"?{swap_axis_url}"
 
-    # Chart sizing. Vertical bars get a minimum width so every name has room
-    # and the wrapper scrolls left/right when the program is large.
+    # Chart sizing. The tall (names-left) layout always fits horizontally. The
+    # wide (names-bottom) layout is adaptive to the container by default; its
+    # per-student minimum width is only applied client-side by the expand
+    # button so the wrapper can scroll when a program is large.
     if is_horizontal:
         chart_height_px = max(350, student_count * 40 + 80)
         chart_min_width_px = None
