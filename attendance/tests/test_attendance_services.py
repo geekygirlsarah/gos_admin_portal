@@ -165,6 +165,32 @@ class AttendanceSessionIndexTests(TestCase):
             ["program", "visitor_name", "check_in"],
         )
 
+    def test_attendance_session_has_student_time_index(self):
+        """The per-student detail/sort path should be index-served."""
+        indexes = {index.name: index for index in AttendanceSession._meta.indexes}
+        match = next(
+            (i for i in indexes.values() if i.fields == ["student", "check_in"]),
+            None,
+        )
+        self.assertIsNotNone(match)
+        self.assertIsNone(match.condition)
+
+    def test_attendance_session_has_no_single_column_check_out_index(self):
+        """A lone check_out index is redundant: the partial open indexes
+        already serve every check_out__isnull lookup."""
+        check_out_field = AttendanceSession._meta.get_field("check_out")
+        self.assertFalse(check_out_field.db_index)
+
+    def test_attendance_event_has_no_program_composite_indexes(self):
+        """No query filters events by program+occurred_at, so the program
+        composites are pure write overhead and must not exist."""
+        events_index_names = {i.name for i in AttendanceEvent._meta.indexes}
+        for name in events_index_names:
+            self.assertFalse(
+                name.startswith("attendance__program"),
+                f"unexpected program composite index {name}",
+            )
+
 
 class AttendanceModelReliabilityTests(TestCase):
     def setUp(self):
