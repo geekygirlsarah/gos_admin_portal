@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block title %}Travel - {{ program.name }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h1 class="h3 fw-bold mb-1"><i class="bi bi-airplane me-2 text-primary"></i>Travel</h1>
+            <p class="text-muted mb-0">Trips and events for {{ program.name }}</p>
+        </div>
+        {% if can_add %}
+        <a href="{% url 'travel:event_create' program.id %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Trip
+        </a>
+        {% endif %}
+    </div>
+
+    {% if parent_has_pending %}
+    <div class="alert alert-warning shadow-sm">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Action needed:</strong> some of your students' travel sign-ups are waiting for parent approval.
+    </div>
+    {% endif %}
+
+    {% if upcoming_events %}
+    <div class="mb-4">
+        <h2 class="h5 fw-semibold text-uppercase text-muted">Upcoming Trips</h2>
+        {% for event in upcoming_events %}
+        <div class="card mb-3 shadow-sm border-0 border-top border-3 border-primary rounded-3">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                    <div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <h3 class="h5 mb-0 fw-bold">{{ event.name }}</h3>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill">Upcoming</span>
+                        </div>
+                        <div class="text-muted small mt-1">
+                            <i class="bi bi-calendar3 me-1"></i>{{ event.start_date|date:"N j, Y" }}
+                            {% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}
+                            {% if event.location_name %}
+                            <span class="ms-3"><i class="bi bi-geo-alt me-1"></i>{{ event.location_name }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if event.requires_permission_form %}
+                        <a href="{{ event.permission_form.url }}" class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener">
+                            <i class="bi bi-file-earmark-pdf me-1"></i>Permission Form
+                        </a>
+                        {% endif %}
+                        {% if can_manage %}
+                        <a href="{% url 'travel:event_edit' program.id event.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <a href="{% url 'travel:event_delete' program.id event.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if event.description %}
+                <p class="mb-3">{{ event.description|linebreaksbr }}</p>
+                {% endif %}
+
+                <div class="row g-3">
+                    {# Departures #}
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3 h-100">
+                            <span class="fw-semibold small text-muted text-uppercase d-block mb-2">
+                                <i class="bi bi-sign-turn-slight-right me-1 text-primary"></i>Departures
+                            </span>
+                            {% for d in event.ordered_departures %}
+                            <div class="mb-2">
+                                <strong>{{ d.display_label }}</strong>
+                                {% if d.meeting_location %}<div class="small text-muted"><i class="bi bi-geo-alt me-1"></i>{{ d.meeting_location }}</div>{% endif %}
+                                {% if d.notes %}<div class="small text-muted">{{ d.notes }}</div>{% endif %}
+                            </div>
+                            {% empty %}
+                            <p class="text-muted small mb-0">Departures will be announced soon.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {# Costs #}
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3 h-100">
+                            <span class="fw-semibold small text-muted text-uppercase d-block mb-2">
+                                <i class="bi bi-cash-coin me-1 text-success"></i>Anticipated Costs
+                            </span>
+                            {% for opt in event.ordered_cost_options %}
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div><strong>{{ opt.name }}</strong>{% if opt.unit_label %} <span class="text-muted small">({{ opt.unit_label }})</span>{% endif %}</div>
+                                    {% if opt.notes %}<div class="small text-muted">{{ opt.notes }}</div>{% endif %}
+                                </div>
+                                <span class="fw-semibold">${{ opt.amount|floatformat:2 }}</span>
+                            </div>
+                            {% empty %}
+                            <p class="text-muted small mb-0">Costs will be posted soon.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if can_manage %}
+                {# ── Lead mentor: roster + add student ────────────────────── #}
+                <hr>
+                <h4 class="h6 fw-semibold">Student Sign-ups</h4>
+                {% for signup in event.signups.all %}
+                <div class="d-flex flex-wrap justify-content-between align-items-center py-1 border-bottom">
+                    <div>
+                        <strong>{{ signup.student.display_name }}</strong>
+                        <span class="badge {% if signup.status == 'approved' %}bg-success{% elif signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ signup.get_status_display }}</span>
+                        {% if signup.departure %}<span class="text-muted small ms-2">{{ signup.departure.display_label }}</span>{% endif %}
+                        {% if signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ signup.approved_total|floatformat:2 }}</span>{% endif %}
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        {% if signup.status == 'approved' and signup.permission_acknowledged %}
+                        <span class="small text-muted"><i class="bi bi-check2-circle text-success me-1"></i>Permission form acknowledged</span>
+                        {% endif %}
+                        {% if signup.can_be_withdrawn %}
+                        <form action="{% url 'travel:signup_withdraw' program.id signup.id %}" method="post" class="mb-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Withdraw {{ signup.student.display_name }} from {{ event.name }}?">Withdraw</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted small">No students signed up yet.</p>
+                {% endfor %}
+
+                {% with staff_form=staff_signup_forms|get_item:event.id %}
+                {% if staff_form %}
+                <form action="{% url 'travel:signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-end gap-2 mt-3">
+                    {% csrf_token %}
+                    <div>
+                        <label class="form-label small mb-0" for="id_student_{{ event.id }}">Add a student</label>
+                        <div>{{ staff_form.student }}</div>
+                    </div>
+                    {% if event.has_multiple_departures %}
+                    <div>
+                        <label class="form-label small mb-0" for="id_departure_{{ event.id }}">Departure</label>
+                        <div>
+                            <select name="departure" id="id_departure_{{ event.id }}" class="form-select form-select-sm">
+                                {% for d in event.ordered_departures %}
+                                <option value="{{ d.id }}">{{ d.display_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex flex-wrap gap-3">
+                        {% for opt in event.ordered_cost_options %}
+                        <div class="form-check form-check-inline small">
+                            <input class="form-check-input" type="checkbox" name="cost_items" value="{{ opt.id }}" id="staff_cost_{{ event.id }}_{{ opt.id }}">
+                            <label class="form-check-label" for="staff_cost_{{ event.id }}_{{ opt.id }}">{{ opt.name }} (${{ opt.amount|floatformat:2 }})</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-outline-success">Add student</button>
+                </form>
+                {% endif %}
+                {% endwith %}
+
+                {# Mentor sign-ups (visible to all) #}
+                {% if event.mentor_signups.all %}
+                <h4 class="h6 fw-semibold mt-3">Mentors Going</h4>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for ms in event.mentor_signups.all %}
+                    <span class="badge {% if ms.is_driver %}bg-info text-dark{% else %}bg-secondary{% endif %} rounded-pill">
+                        {{ ms.adult.display_name }}{% if ms.is_driver %} <i class="bi bi-car-front"></i> Driver{% endif %}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endif %}
+
+                {# ── Parent chaperones ────────────────────────────────────── #}
+                {% with cs_form=chaperone_staff_forms|get_item:event.id %}
+                {% if event.parent_chaperones.all or cs_form or can_chaperone or event.id in my_chaperone_event_ids %}
+                <div class="mt-3">
+                    <h4 class="h6 fw-semibold">Parent Chaperones</h4>
+                    {% if event.parent_chaperones.all %}
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% for cs in event.parent_chaperones.all %}
+                        <span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 rounded-pill d-inline-flex align-items-center">
+                            <span>{{ cs.adult.display_name }}{% if cs.departure %} <span class="small opacity-75">({{ cs.departure.display_label }})</span>{% endif %}</span>
+                            {% if can_manage %}
+                            <form action="{% url 'travel:chaperone_remove' program.id cs.id %}" method="post" class="d-inline mb-0 ms-1">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-close btn-close-sm p-1" style="font-size:.4rem;" aria-label="Remove {{ cs.adult.display_name }}" title="Remove {{ cs.adult.display_name }}"></button>
+                            </form>
+                            {% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% elif not cs_form and not can_chaperone %}
+                    <p class="text-muted small mb-0">No parents signed up to chaperone yet.</p>
+                    {% endif %}
+
+                    {% if can_chaperone %}
+                    {% if event.id in my_chaperone_event_ids %}
+                    <form action="{% url 'travel:chaperone_cancel' program.id event.id %}" method="post" class="mb-0 mt-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-warning js-confirm" data-confirm="Back out of chaperoning {{ event.name }}?">
+                            <i class="bi bi-person-dash me-1"></i>I'm no longer available
+                        </button>
+                    </form>
+                    {% else %}
+                    <form action="{% url 'travel:chaperone_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                        {% csrf_token %}
+                        <span class="small text-muted">Parents of students in this program are welcome to come along:</span>
+                        {% if event.has_multiple_departures %}
+                        <select name="departure" class="form-select form-select-sm" style="width:auto;" id="chaperone_departure_{{ event.id }}">
+                            {% for d in event.ordered_departures %}
+                            <option value="{{ d.id }}">{{ d.display_label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                        <button type="submit" class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-person-plus me-1"></i>I'd like to chaperone
+                        </button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
+
+                    {% if cs_form %}
+                    <form action="{% url 'travel:chaperone_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-end gap-2 mt-2">
+                        {% csrf_token %}
+                        <div>
+                            <label class="form-label small mb-0">Add a parent</label>
+                            <div>{{ cs_form.adult }}</div>
+                        </div>
+                        {% if event.has_multiple_departures %}
+                        <div>
+                            <label class="form-label small mb-0">Departure</label>
+                            <div>
+                                <select name="departure" class="form-select form-select-sm">
+                                    {% for d in event.ordered_departures %}
+                                    <option value="{{ d.id }}">{{ d.display_label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <button type="submit" class="btn btn-sm btn-outline-warning">Add chaperone</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {# ── Student view ─────────────────────────────────────────── #}
+                {% if user_role == 'Student' %}
+                {% with my_signup=signup_by_event|get_item:event.id %}
+                {% if my_signup %}
+                <div class="alert {% if my_signup.status == 'approved' %}alert-success{% elif my_signup.status == 'withdrawn' %}alert-secondary{% else %}alert-warning{% endif %} mb-0 mt-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <strong>You're signed up:</strong>
+                            <span class="badge {% if my_signup.status == 'approved' %}bg-success{% elif my_signup.status == 'withdrawn' %}bg-secondary{% else %}bg-warning text-dark{% endif %} ms-1 rounded-pill">{{ my_signup.get_status_display }}</span>
+                            {% if my_signup.departure %}<span class="small text-muted ms-2">{{ my_signup.departure.display_label }}</span>{% endif %}
+                            {% if my_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ my_signup.approved_total|floatformat:2 }}</span>
+                            {% elif my_signup.status == 'interested' and my_signup.total_cost %}<span class="small text-muted ms-2">Planned cost: ${{ my_signup.total_cost|floatformat:2 }}</span>{% endif %}
+                        </div>
+                        <div class="d-flex gap-2">
+                            {% if my_signup.can_be_withdrawn %}
+                            <form action="{% url 'travel:signup_withdraw' program.id my_signup.id %}" method="post" class="mb-0">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Back out of {{ event.name }}?">Back out</button>
+                            </form>
+                            {% endif %}
+                            {% if my_signup.can_be_signed_up_again %}
+                            <form action="{% url 'travel:signup_rejoin' program.id my_signup.id %}" method="post" class="mb-0">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Sign up again</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                {% with signup_form=signup_forms|get_item:event.id %}
+                {% if signup_form %}
+                <form action="{% url 'travel:signup' program.id event.id %}" method="post" class="card card-body bg-light mt-3">
+                    {% csrf_token %}
+                    <div class="d-flex flex-wrap align-items-end gap-2">
+                        {% if event.has_multiple_departures %}
+                        <div>
+                            <label class="form-label small mb-0" for="id_student_departure_{{ event.id }}">Departure</label>
+                            <select name="departure" id="id_student_departure_{{ event.id }}" class="form-select form-select-sm">
+                                {% for d in event.ordered_departures %}
+                                <option value="{{ d.id }}">{{ d.display_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-pencil-square me-1"></i>I'm interested
+                        </button>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3 mt-2">
+                        <span class="small text-muted me-2">I'd like to be charged for:</span>
+                        {% for opt in event.ordered_cost_options %}
+                        <div class="form-check form-check-inline small">
+                            <input class="form-check-input" type="checkbox" name="cost_items" value="{{ opt.id }}" id="student_cost_{{ event.id }}_{{ opt.id }}">
+                            <label class="form-check-label" for="student_cost_{{ event.id }}_{{ opt.id }}">{{ opt.name }} (${{ opt.amount|floatformat:2 }})</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if event.requires_permission_form %}
+                    <p class="small text-muted mt-2 mb-0">
+                        <i class="bi bi-info-circle me-1"></i>This trip has a permission form (see the button above); your parent will be asked to acknowledge it when they approve.
+                    </p>
+                    {% endif %}
+                </form>
+                {% endif %}
+                {% endwith %}
+                {% endif %}
+                {% endwith %}
+                {% endif %}
+
+                {# ── Parent view ──────────────────────────────────────────── #}
+                {% if parent_rows %}
+                {% for parent_row in parent_rows %}
+                {% with parent_signup=parent_row.signup_by_event|get_item:event.id %}
+                {% if parent_signup %}
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3 p-2 border rounded">
+                    <div>
+                        <strong>{{ parent_row.student.display_name }}</strong>
+                        <span class="badge {% if parent_signup.status == 'approved' %}bg-success{% elif parent_signup.status == 'interested' %}bg-warning text-dark{% else %}bg-secondary{% endif %} ms-1 rounded-pill">{{ parent_signup.get_status_display }}</span>
+                        {% if parent_signup.departure %}<span class="small text-muted ms-2">{{ parent_signup.departure.display_label }}</span>{% endif %}
+                        {% if parent_signup.status == 'approved' %}<span class="small text-muted ms-2">Approved cost: ${{ parent_signup.approved_total|floatformat:2 }}</span>{% endif %}
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% if parent_signup.status == 'interested' %}
+                        {% if event.requires_permission_form %}
+                        <div class="small text-muted">
+                            <i class="bi bi-file-earmark-check me-1"></i>Please review the <a href="{{ event.permission_form.url }}" target="_blank" rel="noopener">permission form</a> and acknowledge it to approve.
+                        </div>
+                        {% endif %}
+                        <form action="{% url 'travel:signup_approve' program.id parent_signup.id %}" method="post" class="mb-0">
+                            {% csrf_token %}
+                            {% if event.requires_permission_form %}
+                            <div class="form-check small mb-1">
+                                <input class="form-check-input" type="checkbox" name="permission_acknowledged" value="1" id="ack_{{ parent_signup.id }}" required>
+                                <label class="form-check-label" for="ack_{{ parent_signup.id }}">I reviewed the permission form</label>
+                            </div>
+                            {% endif %}
+                            <button type="submit" class="btn btn-sm btn-success">
+                                <i class="bi bi-check-lg me-1"></i>Approve
+                                {% if parent_signup.total_cost %}- ${{ parent_signup.total_cost|floatformat:2 }}{% endif %}
+                            </button>
+                        </form>
+                        <form action="{% url 'travel:signup_decline' program.id parent_signup.id %}" method="post" class="mb-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Decline {{ parent_row.student.display_name }}'s sign-up for {{ event.name }}?">Decline</button>
+                        </form>
+                        {% elif parent_signup.can_be_undone %}
+                        <form action="{% url 'travel:signup_undo' program.id parent_signup.id %}" method="post" class="mb-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">Undo decision</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endwith %}
+                {% endfor %}
+                {% endif %}
+
+                {# ── Mentor view ──────────────────────────────────────────── #}
+                {% if viewer_is_mentor %}
+                {% if event.id in mentor_signup_event_ids %}
+                <div class="alert alert-success mb-0 mt-3 py-2 d-flex flex-wrap justify-content-between align-items-center">
+                    <div class="small">
+                        <i class="bi bi-check-circle me-1"></i><strong>You're going</strong>
+                        {% for ms in event.mentor_signups.all %}
+                    {% if ms.adult_id == request.user.adult_profile.pk %}
+                    {% if ms.is_driver %}<span class="badge bg-info text-dark ms-2 rounded-pill"><i class="bi bi-car-front me-1"></i>Driver</span>{% endif %}
+                    {% if ms.departure %}<span class="text-muted ms-2">{{ ms.departure.display_label }}</span>{% endif %}
+                    {% endif %}
+                    {% endfor %}
+                    </div>
+                    <form action="{% url 'travel:mentor_cancel' program.id event.id %}" method="post" class="mb-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger js-confirm" data-confirm="Cancel your sign-up for {{ event.name }}?">Cancel</button>
+                    </form>
+                </div>
+                {% else %}
+                <form action="{% url 'travel:mentor_signup' program.id event.id %}" method="post" class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                    {% csrf_token %}
+                    <span class="small text-muted">Mentors are welcome to come along as chaperones:</span>
+                    {% if event.has_multiple_departures %}
+                    <select name="departure" class="form-select form-select-sm" style="width: auto;" id="mentor_departure_{{ event.id }}">
+                        {% for d in event.ordered_departures %}
+                        <option value="{{ d.id }}">{{ d.display_label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                    <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-plus me-1"></i>I'm going</button>
+                </form>
+                {% endif %}
+
+                {% if event.mentor_signups.all %}
+                <p class="small text-muted mt-2 mb-0">
+                    <i class="bi bi-people me-1"></i>
+                    Mentors going:
+                    {% for ms in event.mentor_signups.all %}
+                    <span class="badge {% if ms.is_driver %}bg-info text-dark{% else %}bg-secondary{% endif %} rounded-pill me-1">{{ ms.adult.display_name }}{% if ms.is_driver %} <i class="bi bi-car-front"></i>{% endif %}</span>
+                    {% endfor %}
+                </p>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-light border shadow-sm">No upcoming trips have been posted yet. Check back soon!</div>
+    {% endif %}
+
+    {% if past_events %}
+    <h2 class="h5 fw-semibold text-uppercase text-muted mb-2">Past Trips</h2>
+    <div class="list-group mb-4">
+        {% for event in past_events %}
+        <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center">
+            <div>
+                <strong>{{ event.name }}</strong>
+                <span class="text-muted small ms-2">{{ event.start_date|date:"N j, Y" }}{% if event.end_date and event.end_date != event.start_date %} &ndash; {{ event.end_date|date:"N j, Y" }}{% endif %}</span>
+                {% if event.location_name %}<span class="text-muted small ms-2">{{ event.location_name }}</span>{% endif %}
+            </div>
+            {% if can_manage %}
+            <div class="d-flex gap-2">
+                <a href="{% url 'travel:event_edit' program.id event.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                <a href="{% url 'travel:event_delete' program.id event.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

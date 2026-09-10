@@ -1,0 +1,15 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel sign-up withdrawn{% endblock %}
+{% block header %}No longer going: {{ event.name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hi{% if student %} {{ student.display_name }}{% endif %},</p>
+    <p>
+        {% if student %}The sign-up for {{ student.display_name }}{% else %}The sign-up{% endif %}
+        for <strong>{{ event.name }}</strong>
+        {% if program %} ({{ program.name }}){% endif %} has been withdrawn.
+    </p>
+    <p>Nothing further is needed. If the sign-up was withdrawn by mistake, the student can sign up again from the Travel page.</p>
+</div>
+<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} for more detail.</p>
+{% endblock %}

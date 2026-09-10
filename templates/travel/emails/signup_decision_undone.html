@@ -1,0 +1,19 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel decision updated{% endblock %}
+{% block header %}Travel decision updated: {{ event.name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hi{% if student %} {{ student.display_name }}{% endif %},</p>
+    <p>
+        The earlier approve/decline decision for the trip
+        <strong>{{ event.name }}</strong>
+        {% if program %} ({{ program.name }}){% endif %} was undone, and the sign-up is
+        back to <strong>awaiting parent approval</strong>.
+    </p>
+    <p>
+        Parents/guardians, please log in to the Girls of Steel Portal and review this sign-up
+        again from the Travel page.
+    </p>
+</div>
+<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} for more detail.</p>
+{% endblock %}

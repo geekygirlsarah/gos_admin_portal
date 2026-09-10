@@ -1,0 +1,26 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel approval requested{% endblock %}
+{% block header %}Action Needed: Approve {{ student.display_name }}'s Travel {% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hello,</p>
+    <p>
+        {{ student.display_name }} has signed up for the travel trip
+        <strong>{{ event.name }}</strong>{% if program %}, part of the {{ program.name }} program{% endif %}.
+    </p>
+    {% if departure %}
+    <p>
+        Departure: <strong>{{ departure.display_label }}</strong> &mdash; {{ departure.depart_date|date:"N j, Y" }}
+        {% if departure.return_date %} (returning {{ departure.return_date|date:"N j, Y" }}){% endif %}
+    </p>
+    {% endif %}
+    <p>Please log in to the Girls of Steel Portal and approve or decline this sign-up from the Travel page.</p>
+    {% if permission_form_available %}
+    <p>
+        <strong>Note:</strong> this trip requires a signed permission form. The permission form is
+        available on the trip page, and you will be asked to acknowledge it when you approve.
+    </p>
+    {% endif %}
+</div>
+<p class="small text-muted">If you have questions about this trip, contact the program leads.</p>
+{% endblock %}

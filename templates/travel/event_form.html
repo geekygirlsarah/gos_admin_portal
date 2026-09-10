@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Trip - {{ program.name }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <h1 class="h3 fw-bold mb-1">{% if form.instance.pk %}Edit Trip{% else %}Add Trip{% endif %}</h1>
+            <p class="text-muted mb-4">{{ program.name }}</p>
+
+            <form method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                {% for field in form %}
+                <div class="mb-3">
+                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                    {% endif %}
+                    {% if field.errors %}
+                    <div class="text-danger small">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <h2 class="h5 fw-semibold mt-4 mb-2">
+                    <i class="bi bi-sign-turn-slight-right me-1 text-primary"></i>Departures
+                </h2>
+                <p class="text-muted small mb-2">When will the group leave? Add one row per departure group (e.g. "Bus 1", "Saturday flight"). If you don't know yet, leave this empty.</p>
+                {{ departure_formset.management_form }}
+                {% if departure_formset.non_form_errors %}
+                <div class="alert alert-danger">{{ departure_formset.non_form_errors }}</div>
+                {% endif %}
+                <div id="departure-forms">
+                    {% for form in departure_formset %}
+                    <div class="card card-body bg-light mb-3">
+                        {{ form.id }}
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0" for="{{ form.label.id_for_label }}">{{ form.label.label }}</label>
+                                {{ form.label }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0" for="{{ form.leave_date.id_for_label }}">{{ form.leave_date.label }}</label>
+                                {{ form.leave_date }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0" for="{{ form.leave_time.id_for_label }}">{{ form.leave_time.label }}</label>
+                                {{ form.leave_time }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-0" for="{{ form.meeting_location.id_for_label }}">{{ form.meeting_location.label }}</label>
+                                {{ form.meeting_location }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-0" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+                                {{ form.notes }}
+                            </div>
+                        </div>
+                        {% if form.instance.pk %}
+                        <div class="form-check mt-2">
+                            {{ form.DELETE }}
+                            <label class="form-check-label small" for="{{ form.DELETE.id_for_label }}">Delete this departure</label>
+                        </div>
+                        {% endif %}
+                        {% if form.errors %}
+                        <div class="text-danger small mt-1">{{ form.errors }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" id="add-departure" class="btn btn-outline-secondary btn-sm mb-3">
+                    <i class="bi bi-plus-lg me-1"></i>Add Another Departure
+                </button>
+
+                <h2 class="h5 fw-semibold mt-4 mb-2">
+                    <i class="bi bi-cash-coin me-1 text-success"></i>Costs
+                </h2>
+                <p class="text-muted small mb-2">Check-list items that make up the trip's cost (hotel, van, flight, additional fees). Students/parents will pick the ones that apply to them. Sort order: lower numbers appear first.</p>
+                {{ cost_formset.management_form }}
+                {% if cost_formset.non_form_errors %}
+                <div class="alert alert-danger">{{ cost_formset.non_form_errors }}</div>
+                {% endif %}
+                <div id="cost-forms">
+                    {% for form in cost_formset %}
+                    <div class="card card-body bg-light mb-3">
+                        {{ form.id }}
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label small mb-0" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                                {{ form.name }}
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-0" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+                                {{ form.amount }}
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-0" for="{{ form.unit_label.id_for_label }}">{{ form.unit_label.label }}</label>
+                                {{ form.unit_label }}
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-0" for="{{ form.sort_order.id_for_label }}">{{ form.sort_order.label }}</label>
+                                {{ form.sort_order }}
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label small mb-0" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+                                {{ form.notes }}
+                            </div>
+                        </div>
+                        {% if form.instance.pk %}
+                        <div class="form-check mt-2">
+                            {{ form.DELETE }}
+                            <label class="form-check-label small" for="{{ form.DELETE.id_for_label }}">Delete this cost</label>
+                        </div>
+                        {% endif %}
+                        {% if form.errors %}
+                        <div class="text-danger small mt-1">{{ form.errors }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" id="add-cost" class="btn btn-outline-secondary btn-sm mb-3">
+                    <i class="bi bi-plus-lg me-1"></i>Add Another Cost
+                </button>
+
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">Save Trip</button>
+                    <a href="{% url 'travel:event_list' program.id %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<template id="empty-departure-form-template">
+    <div class="card card-body bg-light mb-3">
+        {{ departure_formset.empty_form.id }}
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small mb-0" for="{{ departure_formset.empty_form.label.id_for_label }}">{{ departure_formset.empty_form.label.label }}</label>
+                {{ departure_formset.empty_form.label }}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-0" for="{{ departure_formset.empty_form.leave_date.id_for_label }}">{{ departure_formset.empty_form.leave_date.label }}</label>
+                {{ departure_formset.empty_form.leave_date }}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-0" for="{{ departure_formset.empty_form.leave_time.id_for_label }}">{{ departure_formset.empty_form.leave_time.label }}</label>
+                {{ departure_formset.empty_form.leave_time }}
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small mb-0" for="{{ departure_formset.empty_form.meeting_location.id_for_label }}">{{ departure_formset.empty_form.meeting_location.label }}</label>
+                {{ departure_formset.empty_form.meeting_location }}
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small mb-0" for="{{ departure_formset.empty_form.notes.id_for_label }}">{{ departure_formset.empty_form.notes.label }}</label>
+                {{ departure_formset.empty_form.notes }}
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="empty-cost-form-template">
+    <div class="card card-body bg-light mb-3">
+        {{ cost_formset.empty_form.id }}
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small mb-0" for="{{ cost_formset.empty_form.name.id_for_label }}">{{ cost_formset.empty_form.name.label }}</label>
+                {{ cost_formset.empty_form.name }}
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-0" for="{{ cost_formset.empty_form.amount.id_for_label }}">{{ cost_formset.empty_form.amount.label }}</label>
+                {{ cost_formset.empty_form.amount }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0" for="{{ cost_formset.empty_form.unit_label.id_for_label }}">{{ cost_formset.empty_form.unit_label.label }}</label>
+                {{ cost_formset.empty_form.unit_label }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-0" for="{{ cost_formset.empty_form.sort_order.id_for_label }}">{{ cost_formset.empty_form.sort_order.label }}</label>
+                {{ cost_formset.empty_form.sort_order }}
+            </div>
+            <div class="col-md-12">
+                <label class="form-label small mb-0" for="{{ cost_formset.empty_form.notes.id_for_label }}">{{ cost_formset.empty_form.notes.label }}</label>
+                {{ cost_formset.empty_form.notes }}
+            </div>
+        </div>
+    </div>
+</template>
+
+<script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function () {
+        function wireAddButton(addButtonId, containerId, totalFormsInputId, templateId) {
+            var addButton = document.getElementById(addButtonId);
+            var container = document.getElementById(containerId);
+            var totalFormsInput = document.getElementById(totalFormsInputId);
+            var template = document.getElementById(templateId);
+            if (!addButton || !container || !totalFormsInput || !template) return;
+            addButton.addEventListener('click', function () {
+                var formCount = parseInt(totalFormsInput.value, 10);
+                var newFormHtml = template.innerHTML.replace(/__prefix__/g, formCount);
+                var wrapper = document.createElement('div');
+                wrapper.innerHTML = newFormHtml.trim();
+                container.appendChild(wrapper.firstElementChild);
+                totalFormsInput.value = formCount + 1;
+            });
+        }
+        wireAddButton('add-departure', 'departure-forms', 'id_departures-TOTAL_FORMS', 'empty-departure-form-template');
+        wireAddButton('add-cost', 'cost-forms', 'id_costs-TOTAL_FORMS', 'empty-cost-form-template');
+    });
+</script>
+{% endblock extra_scripts %}

@@ -152,6 +152,7 @@ INSTALLED_APPS = [
     "guest_forms",
     "outreach",
     "orders",
+    "travel",
     "badges",
     "pghistory",
     "pgtrigger",

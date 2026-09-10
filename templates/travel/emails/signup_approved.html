@@ -1,0 +1,16 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Travel sign-up approved{% endblock %}
+{% block header %}Travel Approved: {{ event.name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hi{% if student %} {{ student.display_name }}{% endif %},</p>
+    <p>Your sign-up for <strong>{{ event.name }}</strong>{% if program %}, part of the {{ program.name }} program{% endif %}, has been approved.</p>
+    {% if departure %}
+    <p>Departure: <strong>{{ departure.display_label }}</strong> &mdash; {{ departure.depart_date|date:"N j, Y" }}{% if departure.return_date %} (returning {{ departure.return_date|date:"N j, Y" }}){% endif %}.</p>
+    {% endif %}
+    {% if approved_total is not None %}
+    <p>Approved cost: <strong>${{ approved_total|floatformat:2 }}</strong></p>
+    {% endif %}
+</div>
+<p class="small text-muted">Log in to the Girls of Steel Portal and open the Travel page for {{ program.name }} to see trip details.</p>
+{% endblock %}
