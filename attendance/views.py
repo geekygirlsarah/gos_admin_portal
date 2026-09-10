@@ -1577,6 +1577,7 @@ def attendance_hours_chart_view(request):
         .annotate(
             total_minutes=Sum("duration_minutes"),
             session_count=Count("id"),
+            days_attended=Count("check_in__date", distinct=True),
             last_attended=Max("check_in"),
         )
         .order_by("-total_minutes")
@@ -1604,6 +1605,7 @@ def attendance_hours_chart_view(request):
                 "total_hours": hours,
                 "avg_per_week": round(hours / student_weeks, 1),
                 "session_count": stat["session_count"],
+                "days": stat["days_attended"],
                 "last_attended": stat["last_attended"],
             }
         )
@@ -1629,6 +1631,7 @@ def attendance_hours_chart_view(request):
                     "total_hours": 0.0,
                     "avg_per_week": 0.0,
                     "session_count": 0,
+                    "days": 0,
                     "last_attended": None,
                 }
             )

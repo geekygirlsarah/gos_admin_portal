@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-09-10
 
 ### Added
+- **Hours Chart: "Days" column**: The Student Hours table on the attendance hours chart now shows how many distinct days each student attended, alongside the existing Hours, Avg Hrs/Wk, and Sessions columns. It counts the number of different calendar days a student checked in, so tapping in and out several times on the same day counts once. The count respects the same date-range and "Filter by Days" settings as the rest of the page.
 - **Hours Chart: "Swap Axis" button**: The attendance hours chart can now switch between names along the bottom (the default wide view, which scrolls left/right so every student's name stays legible even in large programs) and names along the left (a tall view, useful for at-a-glance and for printing/downloading a vertical PNG). Both the sort buttons and the axis choice are preserved. The **Download PNG** button saves whichever orientation is on screen.
 
 ### Changed

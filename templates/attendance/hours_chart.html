@@ -202,9 +202,10 @@
         <thead>
           <tr>
             <th>Student</th>
+            <th class="text-end">Days</th>
+            <th class="text-end">Sessions</th>
             <th class="text-end">Total Hours</th>
             <th class="text-end">Avg Hrs/Wk</th>
-            <th class="text-end">Sessions</th>
             <th>Last Attended</th>
             <th></th>
           </tr>
@@ -213,9 +214,10 @@
           {% for s in student_list %}
           <tr>
             <td>{{ s.name }}</td>
+            <td class="text-end">{{ s.days }}</td>
+            <td class="text-end">{{ s.session_count }}</td>
             <td class="text-end">{{ s.total_hours }}</td>
             <td class="text-end">{{ s.avg_per_week }}</td>
-            <td class="text-end">{{ s.session_count }}</td>
             <td>{% if s.last_attended %}{{ s.last_attended|date:"N j, Y" }}{% else %}—{% endif %}</td>
             <td>
               <a href="{% url 'student_hours' s.id %}" class="btn btn-sm btn-outline-primary">

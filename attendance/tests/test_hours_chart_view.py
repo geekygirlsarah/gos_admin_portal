@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
@@ -499,6 +499,98 @@ class AttendanceHoursChartViewTests(TestCase):
         response = self.client.get(f"{self.program_url}&axis=horizontal")
         self.assertIn("axis=horizontal", response.context["sort_hours_url"])
         self.assertIn("axis=horizontal", response.context["sort_alpha_url"])
+
+    def test_days_column_counts_distinct_attended_days(self):
+        """Multiple sessions on one day count as one attended day."""
+        days_program = make_program(
+            name="Days Bot",
+            start_date=timezone.now().date() - timedelta(days=30),
+        )
+        student = make_student(preferred_first_name="Kate", last_name="Casey")
+        Enrollment.objects.create(student=student, program=days_program, active=True)
+
+        now = timezone.now()
+        day1 = now.date()
+        day2 = now.date() - timedelta(days=3)
+        day1_midday = timezone.make_aware(
+            datetime.combine(day1, datetime.min.time()).replace(
+                hour=12, minute=0, second=0
+            ),
+            timezone.get_current_timezone(),
+        )
+        for offset, minutes in [(0, 60), (2, 90)]:
+            check_in = day1_midday + timedelta(hours=offset)
+            AttendanceSession.objects.create(
+                program=days_program,
+                student=student,
+                check_in=check_in,
+                check_out=check_in + timedelta(minutes=minutes),
+                duration_minutes=minutes,
+            )
+        day2_midday = timezone.make_aware(
+            datetime.combine(day2, datetime.min.time()).replace(
+                hour=12, minute=0, second=0
+            ),
+            timezone.get_current_timezone(),
+        )
+        AttendanceSession.objects.create(
+            program=days_program,
+            student=student,
+            check_in=day2_midday,
+            check_out=day2_midday + timedelta(hours=1),
+            duration_minutes=60,
+        )
+
+        url = f"{self.url}?program_id={days_program.pk}"
+        response = self.client.get(url)
+        student_list = response.context["student_list"]
+        entry = next(s for s in student_list if s["name"] == "Kate Casey")
+        self.assertEqual(entry["session_count"], 3)
+        self.assertEqual(entry["days"], 2)
+
+    def test_days_column_reflects_day_of_week_filter(self):
+        """Days counts only the checked weekdays."""
+        days_program = make_program(
+            name="Days Bot",
+            start_date=timezone.now().date() - timedelta(days=30),
+        )
+        student = make_student(preferred_first_name="Mona", last_name="Lise")
+        Enrollment.objects.create(student=student, program=days_program, active=True)
+
+        now = timezone.now()
+        # Build sessions on the two most recent Mondays (Django week_day=2).
+        today = now.date()
+        monday1 = today - timedelta(days=today.weekday())
+        monday2 = monday1 - timedelta(days=7)
+        for monday in (monday1, monday2):
+            midday = timezone.make_aware(
+                datetime.combine(monday, datetime.min.time()).replace(
+                    hour=12, minute=0, second=0
+                ),
+                timezone.get_current_timezone(),
+            )
+            AttendanceSession.objects.create(
+                program=days_program,
+                student=student,
+                check_in=midday,
+                check_out=midday + timedelta(hours=1),
+                duration_minutes=60,
+            )
+
+        url = f"{self.url}?program_id={days_program.pk}&days_of_week=2"
+        response = self.client.get(url)
+        student_list = response.context["student_list"]
+        entry = next(s for s in student_list if s["name"] == "Mona Lise")
+        self.assertEqual(entry["days"], 2)
+
+        url = f"{self.url}?program_id={days_program.pk}&days_of_week=3"
+        response = self.client.get(url)
+        self.assertEqual(response.context["student_list"], [])
+
+    def test_days_column_rendered_in_table(self):
+        response = self.client.get(self.program_url)
+        content = response.content.decode()
+        self.assertIn(">Days<", content)
 
     def test_vertical_chart_has_wide_min_width_for_scrolling(self):
         response = self.client.get(self.program_url)
