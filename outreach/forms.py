@@ -1,20 +1,69 @@
 from django import forms
 
-from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
+from outreach.models import (
+    OutreachEvent,
+    OutreachLocation,
+    OutreachShift,
+    OutreachSignup,
+)
 from programs.models import Student
 from programs.utils import active_students_in_program
 from programs.widgets import DualListboxWidget
 
 
+class SavedLocationField(forms.ModelChoiceField):
+    """``OutreachLocation`` dropdown that shows both the name and address."""
+
+    def label_from_instance(self, obj):
+        return f"{obj.name} – {obj.address}"
+
+
+class OutreachLocationForm(forms.ModelForm):
+    class Meta:
+        model = OutreachLocation
+        fields = ["name", "address"]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={"placeholder": "e.g. North Hills Community Center"}
+            ),
+            "address": forms.TextInput(
+                attrs={"placeholder": "e.g. 123 Main St, Pittsburgh, PA 15212"}
+            ),
+        }
+
+
 class OutreachEventForm(forms.ModelForm):
+    saved_location = SavedLocationField(
+        queryset=OutreachLocation.objects.order_by("name"),
+        required=False,
+        empty_label="Choose a saved location…",
+        label="Saved location",
+        help_text=(
+            "Pick a saved location to auto-fill the name and address below, "
+            "or type a brand-new one."
+        ),
+    )
+
     class Meta:
         model = OutreachEvent
         fields = [
             "name",
+            "saved_location",
             "location_name",
             "location_address",
             "description",
         ]
+
+    def __init__(self, *args, **kwargs):
+        instance = kwargs.get("instance")
+        super().__init__(*args, **kwargs)
+        if instance and instance.pk and instance.location_name:
+            match = OutreachLocation.objects.filter(
+                name=instance.location_name,
+                address=instance.location_address,
+            ).first()
+            if match:
+                self.fields["saved_location"].initial = match.pk
 
 
 class OutreachShiftForm(forms.ModelForm):

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load form_tags %}
+
+{% block title %}{{ page_title }} - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'outreach:event_list' program.id %}">Outreach Events</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Saved Locations</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ page_title }}</h1>
+        <a href="{% url 'outreach:location_create' program.id %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Location
+        </a>
+    </div>
+
+    <div class="d-flex gap-2 mb-3">
+        <a href="{% url 'outreach:event_list' program.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-calendar-event me-1"></i>Outreach Events
+        </a>
+    </div>
+
+    <p class="text-muted">
+        Venues we've been to before. They appear in the location picker on the event
+        form (all programs), so organizers can reuse a place instead of retyping it.
+        Editing a saved location never rewrites past events - each event keeps the
+        name and address it was saved with.
+    </p>
+
+    {% if locations %}
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Address</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for location in locations %}
+                        <tr>
+                            <td>{{ location.name }}</td>
+                            <td class="text-muted small">{{ location.address }}</td>
+                            <td class="text-end text-nowrap">
+                                <a href="{% url 'outreach:location_edit' program.id location.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'outreach:location_delete' program.id location.pk %}" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-light text-center border">
+            <i class="bi bi-geo-alt me-2"></i>No saved locations yet. Add the places you hold outreach events so organizers can pick from a list.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

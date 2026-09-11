@@ -11,6 +11,23 @@ urlpatterns = [
     path(
         "<int:pk>/delete/", views.OutreachEventDeleteView.as_view(), name="event_delete"
     ),
+    # Saved-location reference list (org-wide, mentor/Lead Mentor managed)
+    path("locations/", views.OutreachLocationListView.as_view(), name="location_list"),
+    path(
+        "locations/create/",
+        views.OutreachLocationCreateView.as_view(),
+        name="location_create",
+    ),
+    path(
+        "locations/<int:pk>/edit/",
+        views.OutreachLocationUpdateView.as_view(),
+        name="location_edit",
+    ),
+    path(
+        "locations/<int:pk>/delete/",
+        views.OutreachLocationDeleteView.as_view(),
+        name="location_delete",
+    ),
     path(
         "shifts/<int:shift_pk>/signup/",
         views.OutreachShiftSignupView.as_view(),

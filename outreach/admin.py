@@ -2,10 +2,17 @@ from django.contrib import admin
 
 from outreach.models import (
     OutreachEvent,
+    OutreachLocation,
     OutreachMentorSignup,
     OutreachShift,
     OutreachSignup,
 )
+
+
+@admin.register(OutreachLocation)
+class OutreachLocationAdmin(admin.ModelAdmin):
+    list_display = ("name", "address", "created_at")
+    search_fields = ("name", "address")
 
 
 class OutreachShiftInline(admin.TabularInline):

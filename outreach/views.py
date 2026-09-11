@@ -1,24 +1,26 @@
 from datetime import date, time
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 from django.db.models.functions import Coalesce
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
 from outreach.forms import (
     OutreachEventForm,
+    OutreachLocationForm,
     OutreachManageSignupsForm,
     OutreachSetTimesForm,
     OutreachShiftFormSet,
 )
 from outreach.models import (
     OutreachEvent,
+    OutreachLocation,
     OutreachMentorSignup,
     OutreachShift,
     OutreachSignup,
@@ -55,6 +57,140 @@ class OutreachProgramMixin:
 
     def get_success_url(self):
         return reverse("outreach:event_list", kwargs={"program_id": self.program.id})
+
+
+class OutreachLocationAccessMixin(UserPassesTestMixin):
+    """Saved-location list is curated by mentors and Lead Mentors.
+
+    Students may pick from the saved list in the event form (and are shown a
+    manual entry fallback), but only organizers manage the list itself.
+    """
+
+    def test_func(self):
+        return user_is_mentor_or_lead(self.request.user)
+
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            messages.error(
+                self.request,
+                "Only mentors and Lead Mentors can manage outreach locations.",
+            )
+            return redirect("home")
+        return super().handle_no_permission()
+
+
+class OutreachLocationPickerMixin:
+    """Context helpers for the event form's saved-location picker.
+
+    Adds ``can_add_location`` (whether the "add a new saved location" modal
+    is offered) and ``locations_data`` (a JSON list used by the template's
+    JavaScript to auto-fill the name/address inputs).
+    """
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["can_add_location"] = user_is_mentor_or_lead(self.request.user)
+        context["locations_data"] = list(
+            OutreachLocation.objects.order_by("name").values("id", "name", "address")
+        )
+        context["location_create_url"] = reverse(
+            "outreach:location_create", kwargs={"program_id": self.program.id}
+        )
+        return context
+
+
+class OutreachLocationListView(
+    LoginRequiredMixin, OutreachProgramMixin, OutreachLocationAccessMixin, ListView
+):
+    """Org-wide list of saved outreach locations (mentor/Lead Mentor managed)."""
+
+    model = OutreachLocation
+    template_name = "outreach/location_list.html"
+    context_object_name = "locations"
+
+    def get_queryset(self):
+        return OutreachLocation.objects.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Saved Locations"
+        return context
+
+
+class OutreachLocationCreateView(
+    LoginRequiredMixin,
+    OutreachProgramMixin,
+    OutreachLocationAccessMixin,
+    CreateView,
+):
+    model = OutreachLocation
+    form_class = OutreachLocationForm
+    template_name = "outreach/location_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Add Location"
+        return context
+
+    def form_valid(self, form):
+        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            location = form.save()
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "id": location.pk,
+                    "name": location.name,
+                    "address": location.address,
+                }
+            )
+        messages.success(self.request, f"Location '{form.instance.name}' added.")
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+    def get_success_url(self):
+        return reverse("outreach:location_list", kwargs={"program_id": self.program.id})
+
+
+class OutreachLocationUpdateView(
+    LoginRequiredMixin,
+    OutreachProgramMixin,
+    OutreachLocationAccessMixin,
+    UpdateView,
+):
+    model = OutreachLocation
+    form_class = OutreachLocationForm
+    template_name = "outreach/location_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Location"
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Location '{form.instance.name}' updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("outreach:location_list", kwargs={"program_id": self.program.id})
+
+
+class OutreachLocationDeleteView(
+    LoginRequiredMixin, OutreachProgramMixin, OutreachLocationAccessMixin, DeleteView
+):
+    model = OutreachLocation
+    template_name = "outreach/location_confirm_delete.html"
+
+    def form_valid(self, form):
+        name = self.object.name
+        messages.success(self.request, f"Location '{name}' deleted.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("outreach:location_list", kwargs={"program_id": self.program.id})
 
 
 class OutreachEventListView(
@@ -205,6 +341,7 @@ class OutreachEventCreateView(
     OutreachProgramMixin,
     DynamicWritePermissionMixin,
     OutreachShiftFormSetMixin,
+    OutreachLocationPickerMixin,
     CreateView,
 ):
     model = OutreachEvent
@@ -245,6 +382,7 @@ class OutreachEventUpdateView(
     OutreachProgramMixin,
     DynamicWritePermissionMixin,
     OutreachShiftFormSetMixin,
+    OutreachLocationPickerMixin,
     UpdateView,
 ):
     model = OutreachEvent

@@ -78,6 +78,36 @@
     </div>
 </div>
 
+{# ── "Add new saved location" modal (mentors/lead mentors only) ── #}
+{% if can_add_location %}
+<div class="modal fade" id="addLocationModal" tabindex="-1" aria-labelledby="addLocationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addLocationModalLabel">Add a saved location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">This venue will be saved for reuse on other outreach events.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="newLocationName">Name</label>
+                    <input type="text" class="form-control" id="newLocationName" maxlength="255">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="newLocationAddress">Address</label>
+                    <input type="text" class="form-control" id="newLocationAddress" maxlength="255">
+                </div>
+                <div id="addLocationErrors"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveNewLocationBtn">Save Location</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <template id="empty-shift-form-template">
     <div class="card mb-2 shift-form">
         <div class="card-body">
@@ -100,21 +130,131 @@
     </div>
 </template>
 
+{{ locations_data|json_script:"locations-data" }}
+
 <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
-        var addButton = document.getElementById('add-shift');
-        var container = document.getElementById('shift-forms');
-        var totalFormsInput = document.getElementById('id_shifts-TOTAL_FORMS');
-        var template = document.getElementById('empty-shift-form-template');
+        // ── Saved-location picker ──
+        var savedLocations = JSON.parse(document.getElementById('locations-data').textContent);
+        var byId = {};
+        savedLocations.forEach(function (l) { byId[l.id] = l; });
 
-        addButton.addEventListener('click', function () {
-            var formCount = parseInt(totalFormsInput.value, 10);
-            var newFormHtml = template.innerHTML.replace(/__prefix__/g, formCount);
-            var wrapper = document.createElement('div');
-            wrapper.innerHTML = newFormHtml.trim();
-            container.appendChild(wrapper.firstElementChild);
-            totalFormsInput.value = formCount + 1;
-        });
+        var locationSelect = document.getElementById('id_saved_location');
+        var nameInput      = document.getElementById('id_location_name');
+        var addressInput   = document.getElementById('id_location_address');
+        var canAddLocation = {{ can_add_location|yesno:"true,false,false" }};
+
+        if (locationSelect && canAddLocation) {
+            // Append "Add a new location…" option at the end
+            var addOpt = new Option('➕ Add a new location\u2026', '__add__');
+            locationSelect.appendChild(addOpt);
+        }
+
+        if (locationSelect) {
+            locationSelect.addEventListener('change', function () {
+                if (this.value === '__add__') {
+                    // Reset back to placeholder and open the modal
+                    this.value = '';
+                    if (canAddLocation) {
+                        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('addLocationModal'));
+                        modal.show();
+                    }
+                    return;
+                }
+                var loc = byId[Number(this.value)];
+                if (loc) {
+                    nameInput.value    = loc.name;
+                    addressInput.value = loc.address;
+                }
+            });
+        }
+
+        // ── "Add new location" modal submit (AJAX) ──
+        var saveBtn = document.getElementById('saveNewLocationBtn');
+        if (saveBtn) {
+            var createUrl  = '{{ location_create_url|escapejs }}';
+            var csrfToken  = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+            saveBtn.addEventListener('click', function () {
+                var newName    = document.getElementById('newLocationName').value.trim();
+                var newAddress = document.getElementById('newLocationAddress').value.trim();
+                var errorsDiv  = document.getElementById('addLocationErrors');
+                errorsDiv.innerHTML = '';
+
+                if (!newName || !newAddress) {
+                    errorsDiv.innerHTML = '<div class="text-danger">Both name and address are required.</div>';
+                    return;
+                }
+
+                var params = new URLSearchParams({
+                    name: newName,
+                    address: newAddress,
+                    csrfmiddlewaretoken: csrfToken
+                });
+
+                fetch(createUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: params
+                }).then(function (resp) {
+                    return resp.json().then(function (data) {
+                        if (resp.ok && data.ok) {
+                            // Update local lookup
+                            byId[data.id] = { id: data.id, name: data.name, address: data.address };
+
+                            // Add option (before the "Add…" sentinel if present)
+                            var opt = new Option(data.name + ' \u2013 ' + data.address, data.id);
+                            var sentinel = locationSelect.querySelector('option[value="__add__"]');
+                            if (sentinel) {
+                                locationSelect.insertBefore(opt, sentinel);
+                            } else {
+                                locationSelect.appendChild(opt);
+                            }
+                            locationSelect.value = data.id;
+
+                            nameInput.value    = data.name;
+                            addressInput.value = data.address;
+
+                            // Reset modal fields & close
+                            document.getElementById('newLocationName').value    = '';
+                            document.getElementById('newLocationAddress').value = '';
+                            errorsDiv.innerHTML = '';
+                            bootstrap.Modal.getInstance(document.getElementById('addLocationModal')).hide();
+                        } else {
+                            // Show field errors
+                            var errs = data.errors || {};
+                            var html = '';
+                            Object.keys(errs).forEach(function (field) {
+                                errs[field].forEach(function (msg) {
+                                    html += '<div class="text-danger">' + msg + '</div>';
+                                });
+                            });
+                            errorsDiv.innerHTML = html || '<div class="text-danger">Could not save the location.</div>';
+                        }
+                    });
+                }).catch(function () {
+                    errorsDiv.innerHTML = '<div class="text-danger">A network error occurred. Please try again.</div>';
+                });
+            });
+        }
+
+        // ── Add-shift button ──
+        var addButton      = document.getElementById('add-shift');
+        var shiftContainer = document.getElementById('shift-forms');
+        var totalFormsInput = document.getElementById('id_shifts-TOTAL_FORMS');
+        var template       = document.getElementById('empty-shift-form-template');
+
+        if (addButton) {
+            addButton.addEventListener('click', function () {
+                var formCount = parseInt(totalFormsInput.value, 10);
+                var newFormHtml = template.innerHTML.replace(/__prefix__/g, formCount);
+                var wrapper = document.createElement('div');
+                wrapper.innerHTML = newFormHtml.trim();
+                shiftContainer.appendChild(wrapper.firstElementChild);
+                totalFormsInput.value = formCount + 1;
+            });
+        }
     });
 </script>
 {% endblock %}
