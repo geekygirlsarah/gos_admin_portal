@@ -190,6 +190,8 @@ def can_user_read(user, section, obj=None):
             default_read = False
         if role == "Student" and section == "outreach":
             default_read = True
+        if role == "Alumni" and section == "calendar":
+            default_read = False
         can_read_section = perm.can_read if perm else default_read
 
     # Only Lead Mentors and Parents can view payments/fees/sliding scale

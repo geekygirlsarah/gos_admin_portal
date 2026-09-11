@@ -34,6 +34,7 @@ EXEMPT_PATH_PREFIXES = (
     "/signout/",  # public digital sign-out pages
     "/api/v1/",  # API endpoints use X-API-KEY header auth, not session auth
     "/kiosk/",  # public kiosk attendance sign-in pages
+    "/calendar/",  # public calendar + ICS feeds (public feeds only for anon)
     "/health/",  # health check endpoint for infrastructure monitoring
     settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,

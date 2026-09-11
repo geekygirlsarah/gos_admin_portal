@@ -92,6 +92,12 @@
                     </li>
                     {% endif %}
 
+                    {% if navbar_role == 'Student' or navbar_is_parent or navbar_role == 'Mentor' or navbar_role == 'LeadMentor' %}
+                    <li class="nav-item">
+                        <a class="nav-link{% if 'calendar' in request.path %} active{% endif %}" href="{% url 'calendar_feeds:calendar_view' %}">Calendar</a>
+                    </li>
+                    {% endif %}
+
                     {% if carpool_map_programs %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle{% if 'map' in request.path %} active{% endif %}" href="#" id="carpoolMapDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Carpool Map</a>
@@ -232,6 +238,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'program_messaging' %}">Message Programs</a></li>
                                 <li><a class="dropdown-item" href="{% url 'portal_settings' %}">Settings</a></li>
+                                <li><a class="dropdown-item" href="{% url 'calendar_feeds:feed_list' %}">Calendar Feeds</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="/admin/audit/auditlog/">Audit Logs</a></li>
                             </ul>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Exceptions - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex justify-content-between align-items-center">
+    <div>
+        <h1>Event Exceptions</h1>
+        <p class="text-muted">One-off changes to <strong>{{ event.title }}</strong></p>
+    </div>
+    <a href="{% url 'calendar_feeds:exception_create' event.pk %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Add Exception
+    </a>
+</div>
+
+<a href="{% url 'calendar_feeds:calendar_view' %}" class="text-decoration-none mb-3 d-inline-block">&larr; Back to Calendar</a>
+
+{% if exceptions %}
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Original Date</th>
+                <th>Type</th>
+                <th>Details</th>
+                <th>Note</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exc in exceptions %}
+            <tr>
+                <td>{{ exc.original_date|date:"M j, Y" }}</td>
+                <td>
+                    {% if exc.change_type == "moved" %}<span class="badge bg-warning text-dark">Moved</span>
+                    {% elif exc.change_type == "deleted" %}<span class="badge bg-danger">Deleted</span>
+                    {% else %}<span class="badge bg-primary">Changed</span>{% endif %}
+                </td>
+                <td>
+                    {% if exc.change_type == "moved" %}
+                        {{ exc.new_start_datetime|date:"M j, Y g:i A" }} - {{ exc.new_end_datetime|date:"g:i A" }}
+                    {% elif exc.change_type == "changed" %}
+                        {{ exc.new_title|default:event.title }}{% if exc.new_location %} · {{ exc.new_location }}{% endif %}
+                    {% else %}
+                        Skipped
+                    {% endif %}
+                </td>
+                <td class="text-muted">{{ exc.note|default:"-" }}</td>
+                <td class="text-end">
+                    <a href="{% url 'calendar_feeds:exception_edit' exc.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">No exceptions for this event yet.</div>
+{% endif %}
+{% endblock %}

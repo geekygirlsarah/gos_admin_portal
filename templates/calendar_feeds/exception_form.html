@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}{% if exception %}Edit{% else %}Create{% endif %} Exception - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>{% if exception %}Edit Exception{% else %}Create Exception{% endif %}</h1>
+    <p class="text-muted">For event: <strong>{{ event.title }}</strong></p>
+    <a href="{% url 'calendar_feeds:calendar_view' %}" class="text-decoration-none">&larr; Back to Calendar</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Exception Details</h5>
+                </div>
+                <div class="card-body">
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% for error in field.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    {% if exception %}Save Changes{% else %}Create Exception{% endif %}
+                </button>
+                <a href="{% url 'calendar_feeds:calendar_view' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+        {% if exception %}
+        <form method="post" action="{% url 'calendar_feeds:exception_delete' exception.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger js-confirm" data-confirm="Remove this exception?">
+                <i class="bi bi-trash"></i> Remove Exception
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -154,6 +154,7 @@ INSTALLED_APPS = [
     "orders",
     "travel",
     "badges",
+    "calendar_feeds",
     "pghistory",
     "pgtrigger",
     "audit",

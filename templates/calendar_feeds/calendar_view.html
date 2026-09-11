@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Calendar - Girls of Steel Portal{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.css" rel="stylesheet">
+<style>
+    #calendar { max-width: 100%; }
+    .fc .fc-toolbar-title { font-size: 1.4rem; }
+    .feed-toggle { display: inline-flex; align-items: center; gap: 0.4rem; margin-right: 1rem; }
+    .feed-toggle .color-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .fc-event { cursor: pointer; }
+    #eventDetailModal .modal-body p { margin-bottom: 0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Calendar</h1>
+    <div>
+        {% if can_create_feed %}
+        <a href="{% url 'calendar_feeds:feed_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-gear"></i> Manage Feeds
+        </a>
+        {% endif %}
+        <a href="{% url 'calendar_feeds:ics_public' %}" class="btn btn-outline-secondary btn-sm" title="Subscribe to public ICS feed">
+            <i class="bi bi-calendar-plus"></i> Subscribe (ICS)
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <div class="d-flex flex-wrap align-items-center">
+            <strong class="me-2">Feeds:</strong>
+            {% for feed in feeds %}
+            <label class="feed-toggle">
+                <input type="checkbox" class="feed-toggle-cb" value="{{ feed.pk }}" data-color="{{ feed.color }}"
+                    {% if feed.pk in selected_feed_pks %}checked{% endif %}>
+                <span class="color-dot" style="background-color: {{ feed.color }};"></span>
+                {{ feed.name }}
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<!-- Event Detail Modal -->
+<div class="modal fade" id="eventDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventDetailTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>When:</strong> <span id="eventDetailWhen"></span></p>
+                <p id="eventDetailLocationRow"><strong>Location:</strong> <span id="eventDetailLocation"></span></p>
+                <p id="eventDetailDescRow"><strong>Description:</strong></p>
+                <p id="eventDetailDescription"></p>
+                <p><strong>Feed:</strong> <span id="eventDetailFeed"></span></p>
+            </div>
+            <div class="modal-footer">
+                <a id="eventDetailEditBtn" href="#" class="btn btn-primary btn-sm">Edit</a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var feedCbs = document.querySelectorAll('.feed-toggle-cb');
+    var eventDetailModal = new bootstrap.Modal(document.getElementById('eventDetailModal'));
+
+    function getSelectedFeeds() {
+        var selected = [];
+        feedCbs.forEach(function(cb) {
+            if (cb.checked) selected.push(cb.value);
+        });
+        return selected;
+    }
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'next5Days',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'next5Days,timeGridWeek,dayGridMonth,timeGridDay,listWeek'
+        },
+        views: {
+            next5Days: {
+                type: 'timeGrid',
+                duration: { days: 5 },
+                buttonText: 'Next 5'
+            }
+        },
+        events: function(info, successCallback, failureCallback) {
+            var feeds = getSelectedFeeds();
+            var params = new URLSearchParams();
+            params.append('start', info.startStr.split('T')[0]);
+            params.append('end', info.endStr.split('T')[0]);
+            feeds.forEach(function(f) { params.append('feed', f); });
+
+            fetch("{% url 'calendar_feeds:api_events' %}?" + params.toString())
+                .then(function(response) { return response.json(); })
+                .then(function(data) { successCallback(data.events); })
+                .catch(function(err) { failureCallback(err); });
+        },
+        eventClick: function(info) {
+            var props = info.event.extendedProps;
+            document.getElementById('eventDetailTitle').textContent = info.event.title;
+            document.getElementById('eventDetailFeed').textContent = props.feed_name || '';
+
+            var when = '';
+            if (info.event.allDay) {
+                when = info.event.start.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+            } else {
+                when = info.event.start.toLocaleString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit'}) +
+                       ' - ' + info.event.end.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+            }
+            document.getElementById('eventDetailWhen').textContent = when;
+
+            var locRow = document.getElementById('eventDetailLocationRow');
+            var loc = props.location || '';
+            if (loc) {
+                locRow.style.display = '';
+                document.getElementById('eventDetailLocation').textContent = loc;
+            } else {
+                locRow.style.display = 'none';
+            }
+
+            var descRow = document.getElementById('eventDetailDescRow');
+            var desc = props.description || '';
+            if (desc) {
+                descRow.style.display = '';
+                document.getElementById('eventDetailDescription').textContent = desc;
+            } else {
+                descRow.style.display = 'none';
+            }
+
+            var editBtn = document.getElementById('eventDetailEditBtn');
+            if (props.event_pk) {
+                editBtn.href = '{% url "calendar_feeds:event_edit" 0 %}'.replace('0', props.event_pk);
+                editBtn.style.display = '';
+            } else {
+                editBtn.style.display = 'none';
+            }
+
+            eventDetailModal.show();
+        },
+        editable: false,
+        dayMaxEvents: 4,
+        nowIndicator: true,
+    });
+    calendar.render();
+
+    feedCbs.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            calendar.refetchEvents();
+        });
+    });
+});
+</script>
+{% endblock %}

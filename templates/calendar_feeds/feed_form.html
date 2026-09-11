@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{% if creating %}Create{% else %}Edit{% endif %} Calendar Feed - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>{% if creating %}Create Calendar Feed{% else %}Edit: {{ feed.name }}{% endif %}</h1>
+    <a href="{% url 'calendar_feeds:feed_list' %}" class="text-decoration-none">&larr; Back to Feeds</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0">Feed Settings</h5></div>
+                <div class="card-body">
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% for error in field.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header"><h5 class="mb-0">Access Control (per role)</h5></div>
+                <div class="card-body">
+                    <p class="text-muted">Configure which roles can read and write events on this feed. Lead Mentors always have full access.</p>
+                    {{ acl_formset.management_form }}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Role</th>
+                                    <th>Can Read</th>
+                                    <th>Can Write</th>
+                                    <th>Delete</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for acl_form in acl_formset %}
+                                <tr>
+                                    <td>{{ acl_form.role }}</td>
+                                    <td class="text-center">{{ acl_form.can_read }}</td>
+                                    <td class="text-center">{{ acl_form.can_write }}</td>
+                                    <td class="text-center">
+                                        {{ acl_form.id }}
+                                        {% if acl_form.instance.pk %}
+                                        {{ acl_form.DELETE }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    {% if creating %}Create Feed{% else %}Save Changes{% endif %}
+                </button>
+                <a href="{% url 'calendar_feeds:feed_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

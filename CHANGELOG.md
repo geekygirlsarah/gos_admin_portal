@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-11
+
+### Added
+- **Calendar with subscribable feeds**: The portal now has a **Calendar** page (linked from the main menu, and open to visitors at `/calendar/`) that shows upcoming events across multiple color-coded calendars. Teams can manage feeds and events from the new "Calendar" section in Portal Settings (or the Calendar page for Lead Mentors): create **public** feeds anyone can view or **member** feeds readable by specific roles (Lead Mentors, Mentors, Parents, Students, Alumni — each can be given read and/or edit rights). Each feed has its own **ICS link** (e.g. `https://portal.../calendar/<name>/feed.ics`) you can subscribe to in Google Calendar or Apple Calendar, plus one combined public link. Events can be one-time or **repeating** (enter any standard recurrence rule, e.g. every week on Wednesdays) and can be **changed or moved on a single date** without affecting the other occurrences. **Outreach events now appear automatically** in an "Outreach" calendar on the Calendar page whenever outreach shifts are created or updated anywhere in the portal. A **reminder email** command (`send_calendar_reminders`) can notify everyone about events happening in the next week (run weekly by your system administrator). Student leadership, outreach, and other team calendars can be created by Lead Mentors from Portal Settings, then shared with families.
+
 ## 2026-09-10
 
 ### Added
