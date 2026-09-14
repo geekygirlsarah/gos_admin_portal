@@ -1,0 +1,35 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Upcoming Events Reminder{% endblock %}
+{% block header %}Upcoming Events{% endblock %}
+
+{% block content %}
+<p>Hello{% if user.get_full_name %} {{ user.get_full_name }}{% endif %},</p>
+<p>Here are upcoming events in the next <strong>{{ days_ahead }} day(s)</strong>:</p>
+
+{% for feed, instances in feed_events %}
+<h2 style="font-size: 18px; margin: 24px 0 8px; border-bottom: 1px solid #dee2e6; padding-bottom: 4px; color: {{ feed.color }};">
+    {{ feed.name }}
+</h2>
+<table style="width: 100%; border-collapse: collapse;">
+    {% for inst in instances %}
+    <tr style="border-bottom: 1px solid #e9ecef;">
+        <td style="padding: 8px 4px; width: 55%;">
+            <strong>{{ inst.title }}</strong>
+            {% if inst.location %}<div class="small text-muted">Location: {{ inst.location }}</div>{% endif %}
+        </td>
+        <td style="padding: 8px 4px; text-align: right;">
+            {% if inst.all_day %}
+            {{ inst.date|date:"l, F j" }}
+            {% else %}
+            {{ inst.start_datetime|date:"l, F j" }} at {{ inst.start_datetime|date:"g:i A" }}{% if inst.end_time %} - {{ inst.end_datetime|date:"g:i A" }}{% endif %}
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endfor %}
+
+<p class="mt-4">Log in to the portal to view the full calendar: <a href="{{ calendar_url|default:'#' }}">Calendar</a></p>
+<p class="small text-muted">You are receiving this email because you have access to one or more calendar feeds in the portal.</p>
+{% endblock %}

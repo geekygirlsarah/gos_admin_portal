@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-14
+
+### Added
+- **Parent cleanup commands**: Two new administrator commands make it easier to find and fix records left behind by old application-wizard bugs. `python manage.py find_duplicate_parents` reports parent/guardian records that look like the same person (same email plus name, or same name plus phone when no email is on file), separating unambiguous duplicates from cases that need a human (unnamed `(unknown)` records, or parents sharing an email with similar names). `python manage.py find_disassociated_parents` replays every converted application against its resulting student and reports parents that were captured but never linked (or linked in the wrong slot). Both are read-only by default; the reported IDs can then be fixed by hand in the portal. Pass `--fix` to `find_duplicate_parents` to merge only the unambiguous groups (reusing the exact logic of the Merge Parents page, keeping the most complete record), and to `find_disassociated_parents` to re-link unambiguous orphaned parents into the correct slot. All `--fix` actions are recorded in the audit log.
+
+## 2026-09-11
+
+### Added
+- **Outreach: saved locations you can pick from instead of retyping**: Outreach event forms now start with a **Saved location** picker listing venues we've used before (name and address). Picking one fills in the location name and address automatically, and organizers can type a brand-new venue as before. Mentors and Lead Mentors can add a new location right from the event form (a "➕ Add a new location…" option), and manage the whole list — add, edit, or delete venues — from a new **Saved Locations** page (the "Saved Locations" button on the Outreach Events page). Each event keeps its own name/address, so editing or deleting a saved location never rewrites past events.
+- **Calendar with subscribable feeds**: The portal now has a **Calendar** page (linked from the main menu, and open to visitors at `/calendar/`) that shows upcoming events across multiple color-coded calendars. Teams can manage feeds and events from the new "Calendar" section in Portal Settings (or the Calendar page for Lead Mentors): create **public** feeds anyone can view or **member** feeds readable by specific roles (Lead Mentors, Mentors, Parents, Students, Alumni — each can be given read and/or edit rights). Each feed has its own **ICS link** (e.g. `https://portal.../calendar/<name>/feed.ics`) you can subscribe to in Google Calendar or Apple Calendar, plus one combined public link. Events can be one-time or **repeating** (enter any standard recurrence rule, e.g. every week on Wednesdays) and can be **changed or moved on a single date** without affecting the other occurrences. **Outreach events now appear automatically** in an "Outreach" calendar on the Calendar page whenever outreach shifts are created or updated anywhere in the portal. A **reminder email** command (`send_calendar_reminders`) can notify everyone about events happening in the next week (run weekly by your system administrator). Student leadership, outreach, and other team calendars can be created by Lead Mentors from Portal Settings, then shared with families.
+
 ## 2026-09-10
 
 ### Added

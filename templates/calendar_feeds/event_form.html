@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}{% if creating %}Create{% else %}Edit{% endif %} Event - {{ feed.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>{% if creating %}Create Event on {{ feed.name }}{% else %}Edit: {{ event.title }}{% endif %}</h1>
+    <a href="{% url 'calendar_feeds:calendar_view' %}" class="text-decoration-none">&larr; Back to Calendar</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Event Details</h5>
+                </div>
+                <div class="card-body">
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% for error in field.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if event and event.is_recurring %}
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Recurring Event</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">This is a recurring event. To move or delete a single instance, create an exception instead of editing the entire series.</p>
+                    <a href="{% url 'calendar_feeds:exception_create' event.pk %}" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-plus-lg"></i> Add Exception for This Event
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    {% if creating %}Create Event{% else %}Save Changes{% endif %}
+                </button>
+                <a href="{% url 'calendar_feeds:calendar_view' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

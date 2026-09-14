@@ -300,6 +300,7 @@ class RolePermission(models.Model):
         ("orders-request", "Orders - Place item request"),
         ("orders-manage", "Orders - Place new orders"),
         ("orders-shipping", "Orders - Add shipping"),
+        ("calendar", "Calendar"),
     ]
     ROLE_CHOICES = [
         ("Mentor", "Mentor"),

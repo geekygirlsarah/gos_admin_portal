@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Permissions: {{ feed.name }} - Girls of Steel Portal{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>Permissions: {{ feed.name }}</h1>
+    <a href="{% url 'calendar_feeds:feed_list' %}" class="text-decoration-none">&larr; Back to Feeds</a>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    {{ acl_formset.management_form }}
+
+    <div class="card">
+        <div class="card-body">
+            <p class="text-muted">Configure which roles can read and write events on this feed. Lead Mentors always have full access.</p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Can Read</th>
+                            <th>Can Write</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for acl_form in acl_formset %}
+                        <tr>
+                            <td>{{ acl_form.role }}</td>
+                            <td class="text-center">{{ acl_form.can_read }}</td>
+                            <td class="text-center">{{ acl_form.can_write }}</td>
+                            <td class="text-center">
+                                {{ acl_form.id }}
+                                {% if acl_form.instance.pk %}
+                                {{ acl_form.DELETE }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">Save Permissions</button>
+        <a href="{% url 'calendar_feeds:feed_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

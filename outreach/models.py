@@ -4,6 +4,33 @@ from django.db import models
 from programs.models import Adult, Student
 
 
+class OutreachLocation(models.Model):
+    """A reusable outreach venue (name + address) events can be scheduled at.
+
+    This is a reference list, not a foreign key: ``OutreachEvent`` keeps its
+    own ``location_name``/``location_address`` snapshot so history is never
+    rewritten when the saved location is edited. Mentors pick from this list
+    (or type a fresh venue) in the event form.
+    """
+
+    name = models.CharField(max_length=255)
+    address = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "address"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "address"],
+                name="unique_outreach_location",
+            )
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class OutreachEvent(models.Model):
     program = models.ForeignKey(
         "programs.Program",
