@@ -85,6 +85,22 @@ class FindDuplicateParentsTests(TestCase):
 
         self.assertIn("4125551234", output)
 
+    def test_report_includes_relationship_and_specific_type(self):
+        parent = _parent("Jane", "Doe", personal_email="jane@example.com")
+        _parent("Jane", "Doe", personal_email="jane@example.com")
+        student = _student()
+        AdultStudentRelationship.objects.create(
+            adult=parent,
+            student=student,
+            relationship_to_student="parent",
+            specific_relationship="father",
+        )
+
+        output = self._run()
+
+        self.assertIn("parent/father of Student", output)
+        self.assertIn(f"Student #{student.pk}", output)
+
     def test_anonymous_placeholder_parent_reported_as_review_only(self):
         _parent("Jane", "Doe", personal_email="jane@example.com")
         _parent("(unknown)", "(unknown)", personal_email="jane@example.com")

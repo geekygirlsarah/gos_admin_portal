@@ -36,7 +36,7 @@ from collections import defaultdict
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from programs.models import Adult
+from programs.models import Adult, AdultStudentRelationship
 
 _PLACEHOLDER = "(unknown)"
 
@@ -242,6 +242,33 @@ def _group_has_multiple_logins(group):
     return sum(1 for a in group["adults"] if a.user_id) >= 2
 
 
+def _relationship_labels(relations_by_adult, adult_pk):
+    return relations_by_adult.get(adult_pk) or []
+
+
+def _load_relationships(parents):
+    """Map ``adult pk`` -> relationship labels per linked student.
+
+    Labels are compact, e.g. ``parent/father of Student #4``, so the report
+    shows *what kind* of relationship (``relationship_to_student``) and the
+    specific role (``specific_relationship``) alongside each parent.
+    """
+    relations = defaultdict(list)
+    if not parents:
+        return relations
+    rels = (
+        AdultStudentRelationship.objects.filter(adult_id__in=[a.pk for a in parents])
+        .select_related("student")
+        .order_by("student__pk")
+    )
+    for rel in rels:
+        label = rel.relationship_to_student or "parent"
+        if rel.specific_relationship:
+            label = f"{label}/{rel.specific_relationship}"
+        relations[rel.adult_id].append(f"{label} of Student #{rel.student_id}")
+    return relations
+
+
 class Command(BaseCommand):
     help = (
         "Find duplicate parent/guardian Adult records (read-only); "
@@ -266,21 +293,24 @@ class Command(BaseCommand):
             .prefetch_related("students")
         )
         strong, review = find_duplicate_groups(parents)
+        relations_by_adult = _load_relationships(parents)
 
         merged_info = {}
         skipped = []
         if fix:
-            skipped, merged_info = self._merge_strong_groups(strong)
+            skipped, merged_info = self._merge_strong_groups(strong, relations_by_adult)
 
-        self._print_report(strong, review, merged_info, skipped, fix)
+        self._print_report(
+            strong, review, merged_info, skipped, fix, relations_by_adult
+        )
 
     # ------------------------------------------------------------------ merge
-    def _merge_strong_groups(self, strong):
+    def _merge_strong_groups(self, strong, relations_by_adult):
         """Merge unambiguous groups; return (skipped groups, merged info).
 
-        ``merged_info`` maps ``id(group)`` -> ``(keep, [(source_pk, ...)])``
-        using values captured *before* the source rows were deleted (a deleted
-        model instance has its ``pk`` stripped).
+        ``merged_info`` maps ``id(group)`` -> ``(keep, [(source_pk, name,
+        rels)])`` using values captured *before* the source rows were deleted
+        (a deleted model instance has its ``pk`` stripped).
         """
         from audit.events import AuditEvent
         from audit.service import log_event
@@ -304,7 +334,13 @@ class Command(BaseCommand):
             for source in sources:
                 source_pk = source.pk
                 source_name = source.display_name
-                source_snapshots.append((source_pk, source_name))
+                source_snapshots.append(
+                    (
+                        source_pk,
+                        source_name,
+                        _relationship_labels(relations_by_adult, source_pk),
+                    )
+                )
                 with transaction.atomic():
                     _transfer_parent_relationships(keep, source)
                     _transfer_parent_related_records(keep, source)
@@ -329,7 +365,9 @@ class Command(BaseCommand):
         return skipped, merged_info
 
     # ---------------------------------------------------------------- report
-    def _print_report(self, strong, review, merged_info, skipped, fix):
+    def _print_report(
+        self, strong, review, merged_info, skipped, fix, relations_by_adult
+    ):
         self.stdout.write(
             self.style.SUCCESS("Duplicate parents report\n========================\n")
         )
@@ -337,10 +375,10 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("No duplicate parents found."))
             return
 
-        self._print_strong(strong, merged_info, skipped, fix)
-        self._print_review(review)
+        self._print_strong(strong, merged_info, skipped, fix, relations_by_adult)
+        self._print_review(review, relations_by_adult)
 
-    def _print_strong(self, strong, merged_info, skipped, fix):
+    def _print_strong(self, strong, merged_info, skipped, fix, relations_by_adult):
         self.stdout.write(
             f"[1] UNAMBIGUOUS DUPLICATES ({len(strong)} group(s))\n{'-' * 60}"
         )
@@ -359,17 +397,25 @@ class Command(BaseCommand):
                 keep = _pick_keep(group["adults"])
                 for adult in group["adults"]:
                     tag = "survivor" if adult.pk == keep.pk else "duplicate"
-                    self.stdout.write(f"    {tag:8s}: {self._fmt_adult(adult, tag)}")
+                    self.stdout.write(
+                        f"    {tag:8s}: "
+                        f"{self._fmt_adult(adult, tag, relations_by_adult)}"
+                    )
                 self.stdout.write(
                     f"    Suggested: merge the duplicate(s) into #{keep.pk} "
                     "(most complete record), e.g. via the Merge Parents page."
                 )
             elif id(group) in merged_info:
                 keep, source_snapshots = merged_info[id(group)]
-                self.stdout.write(f"    keep  : {self._fmt_adult(keep, 'survivor')}")
-                for source_pk, source_name in source_snapshots:
+                self.stdout.write(
+                    f"    keep  : "
+                    f"{self._fmt_adult(keep, 'survivor', relations_by_adult)}"
+                )
+                for source_pk, source_name, rels in source_snapshots:
+                    rels_text = "; ".join(rels) if rels else "-"
                     self.stdout.write(
-                        f"    merged: Adult #{source_pk} {source_name} " f"[into keep]"
+                        f"    merged: Adult #{source_pk} {source_name} "
+                        f"[into keep] rels:{rels_text}"
                     )
             elif group in skipped:
                 self.stdout.write(
@@ -378,7 +424,7 @@ class Command(BaseCommand):
                 )
             self.stdout.write("")
 
-    def _print_review(self, review):
+    def _print_review(self, review, relations_by_adult):
         self.stdout.write(
             f"[2] NEEDS MANUAL REVIEW ({len(review)} candidate(s))\n{'-' * 60}"
         )
@@ -388,16 +434,19 @@ class Command(BaseCommand):
         for group in review:
             self.stdout.write(f'  - {group["note"]}')
             for adult in group["adults"]:
-                self.stdout.write(f"      {self._fmt_adult(adult, 'review')}")
+                self.stdout.write(
+                    f"      {self._fmt_adult(adult, 'review', relations_by_adult)}"
+                )
             self.stdout.write("")
 
-    def _fmt_adult(self, adult, tag):
+    def _fmt_adult(self, adult, tag, relations_by_adult):
         email = _email_key(adult.personal_email) or "-"
         phone = _phone_key(adult.phone_number) or "-"
         students = adult.students.count()
         login = adult.user.email if adult.user_id else "-"
+        rels = "; ".join(_relationship_labels(relations_by_adult, adult.pk)) or "-"
         return (
             f"Adult #{adult.pk} {adult.display_name} "
             f"[{tag}] email:{email} phone:{phone} "
-            f"students:{students} login:{login}"
+            f"students:{students} login:{login} rels:{rels}"
         )
