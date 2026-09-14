@@ -17,9 +17,12 @@ per converted application:
 * ``ROLE_MISMATCH`` -- linked, but not as the primary/secondary contact the
   application designated.
 * ``DISASSOCIATED`` -- exactly one ``Adult`` matches the application's parent
-  (by email) but it is not linked to the student at all.
-* ``AMBIGUOUS`` -- several adults match (e.g. a shared family email); needs a
-  human.
+  (by name, or by email when no name was captured) but it is not linked to the
+  student at all. Matching never relies on email alone, because parents in one
+  family often share an address -- the parent is identified by name so a
+  shared email doesn't point the app's primary at the secondary's record.
+* ``AMBIGUOUS`` -- several adults match (e.g. duplicate same-name records)
+  needs a human.
 * ``MISSING`` -- no ``Adult`` record matches; the parent never made it in.
 * ``NOT_CAPTURED`` -- the application has no usable data for that slot.
 
@@ -104,12 +107,23 @@ def _linked_name_match(student, desc):
 
 
 def _match_linked(student, desc):
-    """Find which linked ``Adult`` (if any) matches the expected parent."""
-    if desc["email"]:
+    """Return the linked ``Adult`` that is the *same person* as the expected
+    parent, or ``None``.
+
+    Identity is decided by name, never by email alone: parents in one family
+    often share an address, so an email-only match can land on the wrong family
+    member (the app's primary can look "linked" when really the secondary's
+    record happens to hold the shared email). When the application captured no
+    usable name (email only), fall back to email identity.
+    """
+    match = _linked_name_match(student, desc)
+    if match is not None:
+        return match
+    if not (desc["first"] and desc["last"]) and desc["email"]:
         for adult in student.adults.all():
             if desc["email"] in _adult_email_keys(adult):
                 return adult
-    return _linked_name_match(student, desc)
+    return None
 
 
 def _adult_records_for_email(email):
@@ -119,48 +133,80 @@ def _adult_records_for_email(email):
     return matches
 
 
-def _find_unlinked(desc):
-    """Look for an unlinked ``Adult`` matching the expected parent.
-
-    Returns ``(status, extra, detail)``. ``extra`` is the matched ``Adult`` or
-    ``None``; ``detail`` is the human-readable explanation.
-    """
-    if desc["email"]:
-        matches = _adult_records_for_email(desc["email"])
-        if len(matches) == 1:
-            return (
-                DISASSOCIATED,
-                matches[0],
-                f"Adult #{matches[0].pk} {matches[0].display_name} exists but "
-                "is not linked to this student",
-            )
-        if len(matches) > 1:
-            return (
-                AMBIGUOUS,
-                None,
-                f"{len(matches)} adult records share this email -- merge them "
-                "first, then link",
-            )
-
-    name_matches = list(
+def _adult_records_for_name(desc):
+    return list(
         Adult.objects.filter(
             legal_first_name__iexact=desc["first"], last_name__iexact=desc["last"]
         )
     )
-    if len(name_matches) == 1:
-        return (
-            DISASSOCIATED,
-            name_matches[0],
-            f"Adult #{name_matches[0].pk} {name_matches[0].display_name} exists "
-            "but is not linked to this student (matched by name)",
-        )
-    if len(name_matches) > 1:
-        return (
-            AMBIGUOUS,
-            None,
-            f"{len(name_matches)} adult records match this name -- needs "
-            "manual review",
-        )
+
+
+def _name_label(desc):
+    return f"{desc['first']} {desc['last']}".strip()
+
+
+def _find_unlinked(student, desc):
+    """Look for an ``Adult`` that represents the expected parent but is not
+    linked to the student.
+
+    Returns ``(status, extra, detail)``. ``extra`` is the matched ``Adult`` or
+    ``None``; ``detail`` is the human-readable explanation.
+    """
+    linked_ids = {a.id for a in student.adults.all()}
+
+    if desc["first"] and desc["last"]:
+        name_matches = _adult_records_for_name(desc)
+        if len(name_matches) == 1:
+            return (
+                DISASSOCIATED,
+                name_matches[0],
+                f"Adult #{name_matches[0].pk} {name_matches[0].display_name} "
+                "exists but is not linked to this student (matched by name)",
+            )
+        if len(name_matches) > 1:
+            return (
+                AMBIGUOUS,
+                None,
+                f"{len(name_matches)} adult records match this name -- needs "
+                "manual review",
+            )
+
+    if desc["email"]:
+        email_matches = _adult_records_for_email(desc["email"])
+        if len(email_matches) > 1:
+            return (
+                AMBIGUOUS,
+                None,
+                f"{len(email_matches)} adult records share this email -- merge "
+                "them first, then link",
+            )
+        if len(email_matches) == 1:
+            adult = email_matches[0]
+            if adult.id in linked_ids:
+                return (
+                    MISSING,
+                    None,
+                    f'no record exists for "{_name_label(desc)}"; Adult '
+                    f"#{adult.pk} {adult.display_name} has this email but is "
+                    "already linked -- likely a shared family email; the "
+                    "application's parent has no record of their own",
+                )
+            if desc["first"] and desc["last"]:
+                return (
+                    MISSING,
+                    None,
+                    f'no record exists for "{_name_label(desc)}"; Adult '
+                    f"#{adult.pk} {adult.display_name} has this email but a "
+                    "different name -- likely a shared family email; review "
+                    "manually",
+                )
+            return (
+                DISASSOCIATED,
+                adult,
+                f"Adult #{adult.pk} {adult.display_name} exists but is not "
+                "linked to this student",
+            )
+
     return MISSING, None, "no adult record matches -- the parent never converted"
 
 
@@ -196,7 +242,7 @@ def classify(student, slot, desc):
             f"as the {slot} contact (currently {current})",
         )
 
-    return _find_unlinked(desc)
+    return _find_unlinked(student, desc)
 
 
 def analyze_application(application):
@@ -373,14 +419,33 @@ class Command(BaseCommand):
                 f"Student #{student.pk} {student.display_name} "
                 f"(program: {program})"
             )
-            for slot, status, adult, desc, _, detail in rows_by_app[application.pk]:
+            for slot, status, adult, desc, step, detail in rows_by_app[application.pk]:
                 if desc is not None:
                     name = f"{desc['first']} {desc['last']}".strip() or "no name"
                     email = f" <{desc['email']}>" if desc["email"] else ""
                 else:
                     name = "no name"
                     email = ""
-                self.stdout.write(f'  {slot.title()}: "{name}"{email}  [{status}]')
+                role = self._role_label(step)
+                self.stdout.write(
+                    f'  {slot.title()}: "{name}"{email}  [{status}]{role}'
+                )
                 if detail:
                     self.stdout.write(f"      {detail}")
             self.stdout.write("")
+
+    def _role_label(self, step):
+        """Render the captured ``relationship_to_student`` (e.g. parent) and
+        the free-text ``specific_relationship`` (e.g. grandfather), e.g.
+        ``  (relationship: parent/grandfather)``. Empty when the application
+        captured neither."""
+        if not isinstance(step, dict):
+            return ""
+        relationship = (step.get("relationship_to_student") or "").strip()
+        specific = (step.get("specific_relationship") or "").strip()
+        if not relationship and not specific:
+            return ""
+        label = relationship or specific
+        if relationship and specific:
+            label = f"{relationship}/{specific}"
+        return f"  (relationship: {label})"
