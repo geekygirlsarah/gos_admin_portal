@@ -55,6 +55,8 @@ Girls of Steel (GoS) Admin Portal is a Django 6.1 web application for managing:
 | Seed dev data | `python manage.py seed_db` |
 | Seed mentor agreement | `python manage.py seed_mentor_agreement` |
 | Find disconnected accounts | `python manage.py find_disconnected_accounts` (add `--fix` to re-link unambiguous matches; read-only by default) |
+| Find duplicate parents | `python manage.py find_duplicate_parents` (add `--fix` to merge unambiguous duplicate parent `Adult`s — same email `+` name, or same name `+` phone when there is no email — keeping the most complete record; review candidates like unnamed `(unknown)` records or similar-name/shared-email pairs are never auto-merged; groups where 2+ members have their own login are skipped; merges reuse the `Adult` merge helpers and log `RECORDS_MERGED`) |
+| Find disassociated parents | `python manage.py find_disassociated_parents` (add `--all` to list every converted application, `--fix` to re-link only unambiguous `DISASSOCIATED` orphans into the empty primary/secondary slot; never creates `Adult` rows or overrides existing contact pointers; logs `GUARDIAN_ADDED`) |
 | Merge duplicate user accounts | `python manage.py merge_user_accounts --source <pk> --target <pk>` (add `--execute` to apply; moves emails/permissions/references then removes the source account) |
 | Start dev server | `python manage.py runserver` |
 | Start production web server (Render) | `./start.sh` (gunicorn + uvicorn; see the file for the `--max-requests` recycling rationale) |

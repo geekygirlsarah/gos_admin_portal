@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-14
+
+### Added
+- **Parent cleanup commands**: Two new administrator commands make it easier to find and fix records left behind by old application-wizard bugs. `python manage.py find_duplicate_parents` reports parent/guardian records that look like the same person (same email plus name, or same name plus phone when no email is on file), separating unambiguous duplicates from cases that need a human (unnamed `(unknown)` records, or parents sharing an email with similar names). `python manage.py find_disassociated_parents` replays every converted application against its resulting student and reports parents that were captured but never linked (or linked in the wrong slot). Both are read-only by default; the reported IDs can then be fixed by hand in the portal. Pass `--fix` to `find_duplicate_parents` to merge only the unambiguous groups (reusing the exact logic of the Merge Parents page, keeping the most complete record), and to `find_disassociated_parents` to re-link unambiguous orphaned parents into the correct slot. All `--fix` actions are recorded in the audit log.
+
 ## 2026-09-11
 
 ### Added
