@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-18
+
+### Added
+- **Outreach: Lead Mentors can manage which mentors support a shift**: Beyond the existing student "Sign-ups" editing, Lead Mentors now have a **Mentor Sign-ups** button on each shift that lets them add or remove the mentors supporting it from a picker — handy when someone needs to be swapped in for a shift or a roster needs correcting after the fact. Regular mentors can still only sign themselves up or out.
+- **Outreach: mentor support is always visible on event cards**: Each shift now always shows its **Mentors** line (with a count), listing who's supporting it — and when nobody has signed up yet it reads *"No mentors have signed up yet"* instead of hiding the section, so it's easy to spot a shift that needs support.
+- **Outreach: "Needs Support" summary for mentors**: The summary tile that used to just show the program name now shows how many **upcoming events** still need at least one **Champion**, one **Helper**, and one **Mentor** — at a glance, mentors and Lead Mentors can see which roles are understaffed across all upcoming outreach.
+
+## 2026-09-15
+
+### Changed
+- **Under the hood: an organization foundation (no visible change yet)**: The portal now keeps track of which "organization" each program, student, application, attendance record, and outreach item belongs to. For now there is exactly one — Girls of Steel — and existing data is automatically assigned to it when you upgrade. Nothing looks or behaves differently today, but this lays the groundwork so the portal can eventually host and keep separate more than one robotics team (each with its own programs, students, and settings) in the future.
+
 ## 2026-09-14
 
 ### Added

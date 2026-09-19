@@ -509,9 +509,8 @@ class AttendanceHoursChartViewTests(TestCase):
         student = make_student(preferred_first_name="Kate", last_name="Casey")
         Enrollment.objects.create(student=student, program=days_program, active=True)
 
-        now = timezone.now()
-        day1 = now.date()
-        day2 = now.date() - timedelta(days=3)
+        day1 = timezone.localdate()
+        day2 = timezone.localdate() - timedelta(days=3)
         day1_midday = timezone.make_aware(
             datetime.combine(day1, datetime.min.time()).replace(
                 hour=12, minute=0, second=0
@@ -557,9 +556,10 @@ class AttendanceHoursChartViewTests(TestCase):
         student = make_student(preferred_first_name="Mona", last_name="Lise")
         Enrollment.objects.create(student=student, program=days_program, active=True)
 
-        now = timezone.now()
         # Build sessions on the two most recent Mondays (Django week_day=2).
-        today = now.date()
+        # Anchor to the LOCAL date so the view's default date_to (local today)
+        # never filters out "day 1" when UTC is already a day ahead.
+        today = timezone.localdate()
         monday1 = today - timedelta(days=today.weekday())
         monday2 = monday1 - timedelta(days=7)
         for monday in (monday1, monday2):

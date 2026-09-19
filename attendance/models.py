@@ -22,6 +22,14 @@ class KioskConfig(models.Model):
         max_length=100,
         help_text="Human-readable name for this kiosk (e.g. 'Build Space Entry').",
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="kiosk_configs",
+        help_text="Organization that owns this kiosk config (multi-tenant; null until backfilled).",
+    )
     program = models.ForeignKey(
         "programs.Program",
         on_delete=models.PROTECT,
@@ -45,6 +53,14 @@ class KioskConfig(models.Model):
 
 class KioskDevice(models.Model):
     name = models.CharField(max_length=100)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="kiosk_devices",
+        help_text="Organization that owns this device (multi-tenant; null until backfilled).",
+    )
     program = models.ForeignKey("programs.Program", on_delete=models.PROTECT)
     api_key = models.CharField(max_length=64, unique=True)
     is_active = models.BooleanField(default=True)
@@ -60,6 +76,14 @@ class KioskDevice(models.Model):
 
 class RFIDCard(models.Model):
     uid = models.CharField(max_length=64, unique=True)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rfid_cards",
+        help_text="Organization that owns this card (multi-tenant; null until backfilled).",
+    )
     student = models.ForeignKey(
         "programs.Student",
         on_delete=models.CASCADE,
@@ -108,6 +132,14 @@ class AttendanceEvent(models.Model):
     student = models.ForeignKey(
         "programs.Student", on_delete=models.PROTECT, null=True, blank=True
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_events",
+        help_text="Organization this attendance event belongs to (multi-tenant; null until backfilled).",
+    )
     adult = models.ForeignKey(
         "programs.Adult", on_delete=models.PROTECT, null=True, blank=True
     )
@@ -145,6 +177,14 @@ class AttendanceSession(models.Model):
     program = models.ForeignKey("programs.Program", on_delete=models.PROTECT)
     student = models.ForeignKey(
         "programs.Student", on_delete=models.PROTECT, null=True, blank=True
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_sessions",
+        help_text="Organization this attendance session belongs to (multi-tenant; null until backfilled).",
     )
     adult = models.ForeignKey(
         "programs.Adult", on_delete=models.PROTECT, null=True, blank=True
@@ -229,6 +269,14 @@ class DigitalSignoutConfig(models.Model):
         max_length=100,
         help_text="Human-readable name for this sign-out station (e.g. 'Front Door').",
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signout_configs",
+        help_text="Organization that owns this sign-out station (multi-tenant; null until backfilled).",
+    )
     program = models.ForeignKey(
         "programs.Program",
         on_delete=models.PROTECT,
@@ -271,6 +319,14 @@ class StudentPresence(models.Model):
     student = models.ForeignKey(
         "programs.Student", on_delete=models.PROTECT, related_name="presences"
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_presences",
+        help_text="Organization that owns this presence record (multi-tenant; null until backfilled).",
+    )
     date = models.DateField(default=timezone.localdate)
     status = models.CharField(max_length=8, choices=STATUS_CHOICES)
     marked_by = models.ForeignKey(
@@ -298,6 +354,14 @@ class DigitalSignout(models.Model):
     and when it happened.
     """
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="digital_signouts",
+        help_text="Organization that owns this sign-out (multi-tenant; null until backfilled).",
+    )
     config = models.ForeignKey(
         DigitalSignoutConfig,
         on_delete=models.PROTECT,

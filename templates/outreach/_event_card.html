@@ -85,16 +85,20 @@
                     </ul>
                     {% endif %}
 
-                    {% if shift.mentor_signups.all %}
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span><strong>Mentors:</strong></span>
                         <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">{{ shift.mentor_signups.count }}</span>
                     </div>
+                    {% if shift.mentor_signups.all %}
                     <ul class="list-unstyled mb-2 text-muted small ps-1">
                         {% for mentor_signup in shift.mentor_signups.all %}
                             <li><i class="bi bi-person-badge text-secondary me-1"></i>{{ mentor_signup.adult.full_name }}</li>
                         {% endfor %}
                     </ul>
+                    {% else %}
+                    <p class="text-muted small fst-italic mb-2 ps-1">
+                        <i class="bi bi-person-dash me-1"></i>No mentors have signed up yet
+                    </p>
                     {% endif %}
                 </div>
 
@@ -163,6 +167,12 @@
                     <button type="button" class="btn btn-outline-primary btn-sm manage-signups-btn"
                             data-url="{% url 'outreach:shift_manage_signups' program.id shift.pk %}">
                         <i class="bi bi-people me-1"></i>Sign-ups
+                    </button>
+                    {% endif %}
+                    {% if user_role == 'LeadMentor' %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm manage-mentor-signups-btn"
+                            data-url="{% url 'outreach:shift_manage_mentor_signups' program.id shift.pk %}">
+                        <i class="bi bi-person-badge me-1"></i>Mentor Sign-ups
                     </button>
                     {% endif %}
                 </div>

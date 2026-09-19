@@ -113,7 +113,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from programs.models import Program, SlidingScale
             from programs.utils import students_in_running_programs
 
-            active_programs_count = Program.objects.filter(active=True).count()
+            active_programs_count = (
+                Program.objects.for_organization(
+                    getattr(self.request, "organization", None)
+                )
+                .filter(active=True)
+                .count()
+            )
             active_students_count = students_in_running_programs().count()
             pending_apps_count = Application.objects.filter(
                 status=Application.Status.SUBMITTED
@@ -124,8 +130,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             ).count()
 
             orders_program = (
-                Program.objects.filter(active=True, features__key="orders").first()
-                or Program.objects.filter(active=True).first()
+                Program.objects.for_organization(
+                    getattr(self.request, "organization", None)
+                )
+                .filter(active=True, features__key="orders")
+                .first()
+                or Program.objects.for_organization(
+                    getattr(self.request, "organization", None)
+                )
+                .filter(active=True)
+                .first()
             )
 
             context["lead_stats"] = {
@@ -362,7 +376,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
                 # Get all programs that are currently Active or Upcoming so
                 # mentors can prepare (rosters, emails) before a program starts.
-                all_active = Program.objects.filter(active=True).order_by("name")
+                all_active = (
+                    Program.objects.for_organization(
+                        getattr(self.request, "organization", None)
+                    )
+                    .filter(active=True)
+                    .order_by("name")
+                )
                 mentor_active_programs = [
                     p for p in all_active if p.status in ("Active", "Upcoming")
                 ]
@@ -400,7 +420,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         elif is_lead_mentor:
             from programs.models import Program
 
-            all_active = Program.objects.filter(active=True).order_by("name")
+            all_active = (
+                Program.objects.for_organization(
+                    getattr(self.request, "organization", None)
+                )
+                .filter(active=True)
+                .order_by("name")
+            )
             mentor_active_programs = [
                 p for p in all_active if p.status in ("Active", "Upcoming")
             ]

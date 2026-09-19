@@ -77,6 +77,9 @@ class StudentForm(forms.ModelForm):
             "updated_at",
             "primary_contact_relationship",
             "secondary_contact_relationship",
+            # Multi-tenant org scoping is system-managed for now (the portal
+            # hardcodes the single organization), not a mentor-editable field.
+            "organization",
         ]
         widgets = {
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),

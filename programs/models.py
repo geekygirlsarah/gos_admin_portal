@@ -349,7 +349,34 @@ class ProgramFeature(models.Model):
         return self.name
 
 
+class ProgramQuerySet(models.QuerySet):
+    """Program queryset helpers for organization (multi-tenant) scoping.
+
+    Phase 1 adds the nullable ``organization`` FK without enforcing scoping.
+    ``for_organization`` therefore keeps rows that aren't organization-scoped
+    yet (``organization__isnull=True``) visible alongside the matching org, so
+    existing and freshly created un-tagged records behave exactly as before.
+    A ``None`` organization (e.g. none resolved on the request) returns
+    everything.
+    """
+
+    def for_organization(self, organization):
+        if organization is None:
+            return self
+        return self.filter(
+            models.Q(organization=organization) | models.Q(organization__isnull=True)
+        )
+
+
 class Program(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="programs",
+        help_text="Organization that owns this program (multi-tenant; null until backfilled).",
+    )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     active = models.BooleanField(default=True)
@@ -393,6 +420,8 @@ class Program(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ProgramQuerySet.as_manager()
 
     class Meta:
         ordering = ["name"]
@@ -632,6 +661,14 @@ def _student_photo_upload_to(instance, filename):
 
 @pghistory.track()
 class Student(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="students",
+        help_text="Organization that owns this student (multi-tenant; null until backfilled).",
+    )
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -1165,6 +1202,14 @@ class Student(models.Model):
 
 @pghistory.track()
 class Enrollment(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments",
+        help_text="Organization that owns this enrollment (multi-tenant; null until backfilled).",
+    )
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     program = models.ForeignKey(Program, on_delete=models.CASCADE)
     team = models.ForeignKey(
@@ -1234,6 +1279,14 @@ def _adult_photo_upload_to(instance, filename):
 
 @pghistory.track()
 class Adult(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="adults",
+        help_text="Organization that owns this adult (multi-tenant; null until backfilled).",
+    )
     # Role flags
     is_parent = models.BooleanField(
         default=False,
@@ -1514,6 +1567,14 @@ class Adult(models.Model):
 
 
 class Fee(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fees",
+        help_text="Organization that owns this fee (multi-tenant; null until backfilled).",
+    )
     program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name="fees")
     name = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=8, decimal_places=2)
@@ -1538,6 +1599,15 @@ class Fee(models.Model):
 
 
 class Payment(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="Organization that owns this payment (multi-tenant; null until backfilled).",
+    )
+
     PAID_VIA_CHOICES = [
         ("check", "Check"),
         ("credit_card", "Credit Card"),
@@ -1683,6 +1753,14 @@ class SlidingScale(models.Model):
         (STATUS_DECLINED, "Declined"),
     ]
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sliding_scales",
+        help_text="Organization that owns this sliding-scale application (multi-tenant; null until backfilled).",
+    )
     student = models.ForeignKey(
         "Student", on_delete=models.CASCADE, related_name="sliding_scales"
     )
@@ -1806,6 +1884,14 @@ class FeeAssignment(models.Model):
     """
 
     fee = models.ForeignKey("Fee", on_delete=models.CASCADE, related_name="assignments")
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fee_assignments",
+        help_text="Organization that owns this fee assignment (multi-tenant; null until backfilled).",
+    )
     student = models.ForeignKey(
         "Student", on_delete=models.CASCADE, related_name="fee_assignments"
     )
@@ -2003,6 +2089,14 @@ class BackgroundCheck(models.Model):
         null=True,
         blank=True,
         related_name="background_checks",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="background_checks",
+        help_text="Organization that owns this background check (multi-tenant; null until backfilled).",
     )
     adult = models.ForeignKey(
         Adult,

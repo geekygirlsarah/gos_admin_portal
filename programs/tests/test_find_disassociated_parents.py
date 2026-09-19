@@ -158,10 +158,47 @@ class FindDisassociatedParentsTests(TestCase):
         self.assertIn("MISSING", output)
         self.assertIn("nobody@example.com", output)
 
+    def test_report_shows_relationship_and_specific_type(self):
+        student = self._student()
+        self._adult("Jane", "Smith", email="jane@example.com")
+        app = self._app(
+            student,
+            step7={
+                "legal_first_name": "Jane",
+                "last_name": "Smith",
+                "email": "jane@example.com",
+                "relationship_to_student": "parent",
+                "specific_relationship": "grandfather",
+            },
+        )
+
+        output = self._run()
+
+        self.assertIn(app.application_id, output)
+        self.assertIn("relationship: parent/grandfather", output)
+
+    def test_report_omits_relationship_when_application_has_none(self):
+        student = self._student()
+        orphan = self._adult("Jane", "Smith", email="jane@example.com")
+        self._app(
+            student,
+            step7={
+                "legal_first_name": "Jane",
+                "last_name": "Smith",
+                "email": "jane@example.com",
+            },
+        )
+
+        output = self._run()
+
+        self.assertIn(f"#{orphan.pk}", output)
+        self.assertNotIn("relationship:", output)
+
     def test_shared_email_multiple_adults_reported_ambiguous(self):
+        """Two duplicate records with the same name AND email stay ambiguous."""
         student = self._student()
         self._adult("Jane", "Smith", email="family@example.com")
-        self._adult("John", "Smith", email="family@example.com")
+        self._adult("Jane", "Smith", email="family@example.com")
         self._app(
             student,
             step7={
@@ -175,6 +212,85 @@ class FindDisassociatedParentsTests(TestCase):
 
         self.assertIn("AMBIGUOUS", output)
         self.assertIn("family@example.com", output)
+
+    def test_shared_email_single_name_match_is_disassociated(self):
+        """A unique well-named record among email-shares is the clear parent."""
+        student = self._student()
+        jane = self._adult("Jane", "Smith", email="family@example.com")
+        self._adult("John", "Smith", email="family@example.com")
+        self._app(
+            student,
+            step7={
+                "legal_first_name": "Jane",
+                "last_name": "Smith",
+                "email": "family@example.com",
+            },
+        )
+
+        output = self._run()
+
+        self.assertIn("DISASSOCIATED", output)
+        self.assertIn(f"#{jane.pk}", output)
+
+    def test_shared_family_email_not_flagged_as_role_mismatch(self):
+        """Both app parents on one email, one linked: the email match must not
+        blame the linked parent for the *other* parent's missing slot.
+
+        Regression: the app's primary was "Pushkarraj <dr.deshmukh@gmail.com>";
+        only the secondary "Swati <dr.deshmukh@gmail.com>" ever converted and
+        is linked. An email-only match used to flag Swati as ROLE_MISMATCH for
+        the primary slot, even though she is a different (correct) person.
+        """
+        student = self._student()
+        swati = self._adult("Swati", "Suryawanshi", email="dr.deshmukh@gmail.com")
+        rel = self._link(swati, student)
+        self._set_secondary(student, rel)
+        app = self._app(
+            student,
+            step7={
+                "legal_first_name": "Pushkarraj",
+                "last_name": "Deshmukh",
+                "email": "dr.deshmukh@gmail.com",
+            },
+            step8={
+                "legal_first_name": "Swati",
+                "last_name": "Suryawanshi",
+                "email": "",
+            },
+        )
+
+        output = self._run()
+
+        self.assertNotIn("ROLE_MISMATCH", output)
+        self.assertNotIn("linked but not set", output)
+        self.assertIn("MISSING", output)
+        self.assertIn(f"#{swati.pk}", output)
+        self.assertIn(app.application_id, output)
+        self.assertIn("OK", output)
+
+    def test_shared_email_with_separate_unlinked_record_is_disassociated(self):
+        """Both parents converted separately but share an email; the orphaned
+        primary (matched by name) is still safely auto-linkable."""
+        student = self._student()
+        swati = self._adult("Swati", "Suryawanshi", email="dr.deshmukh@gmail.com")
+        pushkarraj = self._adult(
+            "Pushkarraj", "Deshmukh", email="dr.deshmukh@gmail.com"
+        )
+        rel = self._link(swati, student)
+        self._set_secondary(student, rel)
+        self._app(
+            student,
+            step7={
+                "legal_first_name": "Pushkarraj",
+                "last_name": "Deshmukh",
+                "email": "dr.deshmukh@gmail.com",
+            },
+        )
+
+        output = self._run()
+
+        self.assertIn("DISASSOCIATED", output)
+        self.assertIn(f"#{pushkarraj.pk}", output)
 
     def test_parent_linked_but_not_in_expected_slot_reported(self):
         student = self._student()
@@ -340,10 +456,11 @@ class FindDisassociatedParentsTests(TestCase):
             ).exists()
         )
 
-    def test_fix_does_nothing_for_ambiguous_email(self):
+    def test_fix_does_nothing_when_name_is_ambiguous(self):
+        """Two records with the same name (duplicates) are never auto-linked."""
         student = self._student()
         a = self._adult("Jane", "Smith", email="family@example.com")
-        b = self._adult("John", "Smith", email="family@example.com")
+        b = self._adult("Jane", "Smith", email="family@example.com")
         self._app(
             student,
             step7={
@@ -360,6 +477,27 @@ class FindDisassociatedParentsTests(TestCase):
                 adult__in=[a, b], student=student
             ).exists()
         )
+
+    def test_fix_links_unique_name_match_among_shared_email(self):
+        """A unique name match auto-links even when the email is a shared
+        family address."""
+        student = self._student()
+        jane = self._adult("Jane", "Smith", email="family@example.com")
+        self._adult("John", "Smith", email="family@example.com")
+        self._app(
+            student,
+            step7={
+                "legal_first_name": "Jane",
+                "last_name": "Smith",
+                "email": "family@example.com",
+            },
+        )
+
+        self._run(fix=True)
+
+        student.refresh_from_db()
+        self.assertTrue(jane in student.adults.all())
+        self.assertEqual(student.primary_contact_id, jane.pk)
 
     def test_fix_logs_audit_event(self):
         student = self._student()

@@ -1,6 +1,6 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
-anyio==4.12.0
+anyio==4.15.1
 asgiref==3.11.0
 attrs==25.4.0
 Authlib==1.7.2
@@ -105,7 +105,7 @@ tomlkit==0.15.0
 tqdm==4.68.2
 typer==0.26.7
 typing-inspection==0.4.2
-typing_extensions==4.15.0
+typing_extensions==4.16.0
 tzdata==2026.2
 urllib3==2.7.0
 uvicorn==0.40.0

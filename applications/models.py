@@ -130,6 +130,15 @@ class OtpVerifyResult(enum.Enum):
 class Application(models.Model):
     """A single in-progress or completed application to a Program."""
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applications",
+        help_text="Organization this application is submitted to (multi-tenant; null until backfilled).",
+    )
+
     class Type(models.TextChoices):
         STUDENT = "student", "Student"
         PARENT = "parent", "Parent / Guardian"
@@ -464,6 +473,14 @@ class ApplicationDocumentSubmission(models.Model):
         Application,
         on_delete=models.CASCADE,
         related_name="document_submissions",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_document_submissions",
+        help_text="Organization that owns this submission (multi-tenant; null until backfilled).",
     )
     document = models.ForeignKey(
         "programs.ProgramDocument",

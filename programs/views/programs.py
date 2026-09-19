@@ -74,13 +74,22 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
 
     def get_queryset(self):
         # Base queryset with prefetched features and student counts
-        qs = Program.objects.prefetch_related("features").annotate(
-            active_student_count=Count(
-                "enrollment",
-                filter=Q(enrollment__active=True, enrollment__student__graduated=False),
-                distinct=True,
-            ),
-            total_student_count=Count("enrollment", distinct=True),
+        qs = (
+            Program.objects.for_organization(
+                getattr(self.request, "organization", None)
+            )
+            .prefetch_related("features")
+            .annotate(
+                active_student_count=Count(
+                    "enrollment",
+                    filter=Q(
+                        enrollment__active=True,
+                        enrollment__student__graduated=False,
+                    ),
+                    distinct=True,
+                ),
+                total_student_count=Count("enrollment", distinct=True),
+            )
         )
 
         role = get_user_role(self.request.user)

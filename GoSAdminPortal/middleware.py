@@ -1,3 +1,4 @@
+import functools
 import logging
 import zoneinfo
 
@@ -13,6 +14,20 @@ from applications.rate_limiting import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _default_organization():
+    """Return the single hardcoded GoS organization row, or ``None``.
+
+    Memoized per process so we don't add a database query to every request.
+    Phase 1 has exactly one organization, seeded by the
+    ``organizations.0002_seed_gos_organization`` migration; Phase 2 will
+    resolve the org from the request hostname instead.
+    """
+    from organizations.models import Organization
+
+    return Organization.objects.filter(slug="gos").first()
+
 
 EXEMPT_URL_NAMES = {
     "account_login",
@@ -80,6 +95,29 @@ class LoginRequiredMiddleware:
                 )
                 continue
         return False
+
+
+class OrganizationMiddleware:
+    """Attach the active organization to every request as ``request.organization``.
+
+    Phase 1 (multi-tenant groundwork): there is exactly one organization —
+    Girls of Steel (slug ``gos``) — resolved here via the memoized
+    :func:`_default_organization` helper. Later phases will resolve the
+    organization from the request's hostname/subdomain.
+
+    ``request.organization`` is ``None`` when the GoS row doesn't exist yet,
+    so pages degrade gracefully: scoping helpers (e.g.
+    ``Program.objects.for_organization``) treat ``None`` as "return everything".
+    """
+
+    _resolve = functools.lru_cache(maxsize=1)(_default_organization)
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        request.organization = OrganizationMiddleware._resolve()
+        return self.get_response(request)
 
 
 class ApplyRateLimitMiddleware:
