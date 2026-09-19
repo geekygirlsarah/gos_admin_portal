@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-15
+
+### Changed
+- **Under the hood: an organization foundation (no visible change yet)**: The portal now keeps track of which "organization" each program, student, application, attendance record, and outreach item belongs to. For now there is exactly one — Girls of Steel — and existing data is automatically assigned to it when you upgrade. Nothing looks or behaves differently today, but this lays the groundwork so the portal can eventually host and keep separate more than one robotics team (each with its own programs, students, and settings) in the future.
+
 ## 2026-09-14
 
 ### Added

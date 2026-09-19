@@ -144,6 +144,7 @@ INSTALLED_APPS = [
     "allauth.account",
     # Local apps
     "django.forms",
+    "organizations",
     "programs",
     "attendance",
     "api",
@@ -177,6 +178,8 @@ MIDDLEWARE = [
     # authenticated navbar.
     "GoSAdminPortal.middleware.ApplyRateLimitMiddleware",
     "GoSAdminPortal.middleware.TimezoneMiddleware",
+    # Attaches request.organization (single hardcoded GoS org for now).
+    "GoSAdminPortal.middleware.OrganizationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",

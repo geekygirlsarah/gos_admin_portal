@@ -13,6 +13,14 @@ class OutreachLocation(models.Model):
     (or type a fresh venue) in the event form.
     """
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="outreach_locations",
+        help_text="Organization that owns this saved location (multi-tenant; null until backfilled).",
+    )
     name = models.CharField(max_length=255)
     address = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -32,6 +40,14 @@ class OutreachLocation(models.Model):
 
 
 class OutreachEvent(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="outreach_events",
+        help_text="Organization that owns this event (multi-tenant; null until backfilled).",
+    )
     program = models.ForeignKey(
         "programs.Program",
         on_delete=models.CASCADE,
@@ -125,6 +141,14 @@ class OutreachEvent(models.Model):
 
 
 class OutreachShift(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="outreach_shifts",
+        help_text="Organization that owns this shift (multi-tenant; null until backfilled).",
+    )
     event = models.ForeignKey(
         OutreachEvent, on_delete=models.CASCADE, related_name="shifts"
     )
@@ -191,6 +215,14 @@ class OutreachSignup(models.Model):
         (HELPER, "Helper"),
     ]
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="outreach_signups",
+        help_text="Organization that owns this signup (multi-tenant; null until backfilled).",
+    )
     student = models.ForeignKey(
         Student, on_delete=models.CASCADE, related_name="outreach_signups"
     )
@@ -272,6 +304,14 @@ class OutreachMentorSignup(models.Model):
     capacity limit — any number of mentors may support a shift.
     """
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="outreach_mentor_signups",
+        help_text="Organization that owns this mentor signup (multi-tenant; null until backfilled).",
+    )
     adult = models.ForeignKey(
         Adult,
         on_delete=models.CASCADE,

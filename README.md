@@ -48,6 +48,7 @@ All tasks related to the portal are to try to aim for these three goals:
 ## Project Structure
 The repository is organized into several Django apps:
 - `programs/`: The core application managing programs, students, adults (parents/mentors), fees, payments, and enrollments.
+- `organizations/`: Multi-tenant foundation — organizations that own the portal's data (currently a single seeded "Girls of Steel" row).
 - `applications/`: A multi-step public application wizard (`/apply/`) and staff review workflow.
 - `attendance/`: Kiosk-based attendance tracking using RFIDs and names, including visitor management.
 - `portal/`: Shared dashboard views and global settings management.
