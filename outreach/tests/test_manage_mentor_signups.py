@@ -105,6 +105,18 @@ class OutreachManageMentorSignupsViewTest(TestCase):
         self.assertIn(localize(self.shift.date), html)
         self.assertNotIn(str(self.shift.date), html)
 
+    def test_success_message_shown_once(self):
+        self.client.login(username="lead", password="password")  # nosec B106
+        resp = self.client.post(
+            self.manage_url, {"mentors": [self.mentor_adult.pk]}, follow=True
+        )
+        html = resp.content.decode()
+        message = (
+            f"Mentor signups for {self.event.name} on {localize(self.shift.date)} "
+            "updated successfully."
+        )
+        self.assertEqual(html.count(message), 1)
+
     def test_regular_mentor_is_denied(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         resp = self.client.get(self.manage_url)

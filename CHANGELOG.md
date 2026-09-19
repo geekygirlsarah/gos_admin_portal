@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Outreach: friendly dates in sign-up messages**: The confirmation messages after saving student or mentor sign-ups (and the messages when you sign up to support a shift) now show the shift date in a friendly format like "Oct. 24, 2026" instead of raw "2026-10-24".
+- **Outreach: success messages no longer appear twice**: The confirmation after saving sign-ups (and the check-in page messages) used to show up both at the top of the page and again lower down — each message is now displayed exactly once.
 
 ## 2026-09-15
 

@@ -248,6 +248,15 @@ class CheckinActionsTests(CheckinBase):
         self.assertEqual(signup.role, OutreachSignup.HELPER)
         self.assertIsNotNone(signup.checked_in_at)
 
+    def test_walk_up_message_shown_once(self):
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = self._url(self.grace_shift)
+        resp = self.client.post(
+            url, {"action": "walk_up", "student_id": self.stranger.pk}, follow=True
+        )
+        html = resp.content.decode()
+        self.assertEqual(html.count(f"{self.stranger.display_name} checked in."), 1)
+
     def test_walk_up_for_signed_up_student_is_idempotent(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         url = self._url(self.grace_shift)
