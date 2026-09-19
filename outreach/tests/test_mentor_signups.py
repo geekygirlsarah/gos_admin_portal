@@ -1,19 +1,12 @@
 from datetime import date, time, timedelta
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
 from outreach.models import OutreachMentorSignup
 from outreach.tests.factories import create_outreach_event
-from programs.models import (
-    Adult,
-    Enrollment,
-    Program,
-    ProgramFeature,
-    School,
-    Student,
-)
+from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
 def _next_year_month_day():
@@ -309,3 +302,82 @@ class MentorSignupVisibilityTest(TestCase):
         self.client.login(username="student", password="password")  # nosec B106
         resp = self.client.get(self.list_url)
         self.assertNotContains(resp, self.signup_url)
+
+
+class MentorSignupOrderingTest(TestCase):
+    """Mentors are listed by display name, never in creation/pk order."""
+
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.feature, _ = ProgramFeature.objects.get_or_create(
+            key="outreach", defaults={"name": "Outreach"}
+        )
+        self.program = Program.objects.create(name="Test Program")
+        self.program.features.add(self.feature)
+
+        self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.lead_user = User.objects.create_user(
+            username="lead", password="password"  # nosec B106
+        )
+        self.lead_user.groups.add(self.lead_group)
+
+        self.student_user = User.objects.create_user(
+            username="student", password="password"  # nosec B106
+        )
+        Student.objects.create(
+            user=self.student_user,
+            legal_first_name="Test",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+
+        self.event = create_outreach_event(
+            program=self.program,
+            name="Test Event",
+            location_name="Test Location",
+            location_address="123 Test St",
+            start_date=_next_year_month_day(),
+            start_time=time(10, 0),
+            end_time=time(12, 0),
+        )
+        self.shift = self.event.shifts.first()
+
+        # Deliberately created out of alphabetical order.
+        self.adults = []
+        for legal, last in [("Casey", "Chen"), ("Ava", "Adams"), ("Bob", "Brown")]:
+            adult = Adult.objects.create(
+                legal_first_name=legal,
+                last_name=last,
+                is_mentor=True,
+                mentor_active=True,
+            )
+            OutreachMentorSignup.objects.create(adult=adult, shift=self.shift)
+            self.adults.append(adult)
+
+    def test_signups_ordered_by_display_name(self):
+        names = [s.adult.display_name for s in self.shift.mentor_signups.all()]
+        self.assertEqual(names, ["Ava Adams", "Bob Brown", "Casey Chen"])
+
+    def test_roster_rendered_in_name_order(self):
+        self.client.login(username="student", password="password")  # nosec B106
+        resp = self.client.get(reverse("outreach:event_list", args=[self.program.id]))
+        html = resp.content.decode()
+        pos = {a.display_name: html.find(a.display_name) for a in self.adults}
+        self.assertTrue(all(p >= 0 for p in pos.values()))
+        ordered_positions = [pos[name] for name in sorted(pos)]
+        self.assertEqual(ordered_positions, sorted(ordered_positions))
+
+    def test_manage_form_available_list_sorted(self):
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse(
+            "outreach:shift_manage_mentor_signups",
+            args=[self.program.id, self.shift.pk],
+        )
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        pos = {a.display_name: html.find(a.display_name) for a in self.adults}
+        self.assertTrue(all(p >= 0 for p in pos.values()))
+        ordered_positions = [pos[name] for name in sorted(pos)]
+        self.assertEqual(ordered_positions, sorted(ordered_positions))

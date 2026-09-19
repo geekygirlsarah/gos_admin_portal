@@ -1,4 +1,6 @@
 from django import forms
+from django.db.models import F, Q
+from django.db.models.functions import Coalesce, Lower
 
 from outreach.models import (
     OutreachEvent,
@@ -242,9 +244,20 @@ class OutreachManageMentorSignupsForm(forms.Form):
 
     def _mentor_queryset(self):
         # All active mentors plus anyone already signed up (so previously
-        # signed-up mentors who were later deactivated stay removable).
-        return active_mentors() | Adult.objects.filter(
-            outreach_mentor_signups__shift=self.shift
+        # signed-up mentors who were later deactivated stay removable),
+        # ordered by display name to match the event card roster. The
+        # "signed up" branch is a pk__in subquery rather than an OR-joined
+        # queryset, so a mentor supporting several shifts is never listed
+        # more than once.
+        signed_up = Adult.objects.filter(outreach_mentor_signups__shift=self.shift)
+        return (
+            Adult.objects.filter(Q(pk__in=active_mentors()) | Q(pk__in=signed_up))
+            .annotate(
+                _sort_first_name=Lower(
+                    Coalesce(F("preferred_first_name"), F("legal_first_name"))
+                )
+            )
+            .order_by("_sort_first_name", Lower("last_name"))
         )
 
     def save(self):

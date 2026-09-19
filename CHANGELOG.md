@@ -8,6 +8,11 @@ All notable changes to this project will be documented in this file.
 - **Outreach: Lead Mentors can manage which mentors support a shift**: Beyond the existing student "Sign-ups" editing, Lead Mentors now have a **Mentor Sign-ups** button on each shift that lets them add or remove the mentors supporting it from a picker — handy when someone needs to be swapped in for a shift or a roster needs correcting after the fact. Regular mentors can still only sign themselves up or out.
 - **Outreach: mentor support is always visible on event cards**: Each shift now always shows its **Mentors** line (with a count), listing who's supporting it — and when nobody has signed up yet it reads *"No mentors have signed up yet"* instead of hiding the section, so it's easy to spot a shift that needs support.
 - **Outreach: "Needs Support" summary for mentors**: The summary tile that used to just show the program name now shows how many **upcoming events** still need at least one **Champion**, one **Helper**, and one **Mentor** — at a glance, mentors and Lead Mentors can see which roles are understaffed across all upcoming outreach.
+- **Outreach: mentors listed by name everywhere**: The mentors shown on event cards and in the Lead Mentor "Mentor Sign-ups" picker are now sorted by display name instead of appearing in a random order, so it's easy to find who you're looking for.
+- **Outreach: no more duplicate mentor names in the Sign-ups picker**: Fixed a bug where a mentor supporting more than one shift anywhere in the program could appear more than once in the "Mentor Sign-ups" picker — each mentor now shows up exactly once, in both the "All Active Mentors" and "Supporting Mentors" lists.
+
+### Changed
+- **Outreach: friendly dates in sign-up messages**: The confirmation messages after saving student or mentor sign-ups (and the messages when you sign up to support a shift) now show the shift date in a friendly format like "Oct. 24, 2026" instead of raw "2026-10-24".
 
 ## 2026-09-15
 
