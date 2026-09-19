@@ -113,13 +113,26 @@
             <div class="card shadow-sm h-100 border-0 bg-light">
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between">
-                        <span class="text-muted small fw-semibold text-uppercase">Program</span>
-                        <div class="rounded-circle bg-info bg-opacity-10 text-info p-2">
+                        <span class="text-muted small fw-semibold text-uppercase">Needs Support</span>
+                        <div class="rounded-circle bg-info bg-opacity-10 text-info">
                             <i class="bi bi-megaphone fs-5"></i>
                         </div>
                     </div>
-                    <h3 class="h5 mb-0 fw-bold mt-2 text-truncate">{{ program.name }}</h3>
-                    <div class="text-muted small">Outreach engagement workspace</div>
+                    <div class="text-muted small mt-2">Upcoming events still needing:</div>
+                    <div class="row text-center g-2 mt-1">
+                        <div class="col-4 border-end">
+                            <h4 class="mb-0 fw-bold text-success">{{ needs_champions_events|default:"0" }}</h4>
+                            <div class="text-muted small">Champions</div>
+                        </div>
+                        <div class="col-4 border-end">
+                            <h4 class="mb-0 fw-bold text-info">{{ needs_helpers_events|default:"0" }}</h4>
+                            <div class="text-muted small">Helpers</div>
+                        </div>
+                        <div class="col-4">
+                            <h4 class="mb-0 fw-bold text-secondary">{{ needs_mentors_events|default:"0" }}</h4>
+                            <div class="text-muted small">Mentors</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -291,34 +304,35 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     });
 
-    document.querySelectorAll('.manage-signups-btn').forEach(btn => {
+    // Shared handler for the manage-signups and manage-mentor-signups buttons.
+    function openManageSignups(url) {
+        modalContent.innerHTML = defaultContent;
+        manageSignupsModal.show();
+
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                modalContent.innerHTML = html;
+                if (typeof initDualListbox === 'function') {
+                    initDualListbox();
+                }
+            })
+            .catch(err => {
+                modalContent.innerHTML = `
+                    <div class="modal-header">
+                        <h5 class="modal-title">Error</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger">Failed to load signup management content. Please try again.</div>
+                    </div>
+                `;
+            });
+    }
+
+    document.querySelectorAll('.manage-signups-btn, .manage-mentor-signups-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            const url = this.getAttribute('data-url');
-            
-            // Show modal with spinner
-            modalContent.innerHTML = defaultContent;
-            manageSignupsModal.show();
-            
-            // Load content
-            fetch(url)
-                .then(response => response.text())
-                .then(html => {
-                    modalContent.innerHTML = html;
-                    if (typeof initDualListbox === 'function') {
-                        initDualListbox();
-                    }
-                })
-                .catch(err => {
-                    modalContent.innerHTML = `
-                        <div class="modal-header">
-                            <h5 class="modal-title">Error</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="alert alert-danger">Failed to load signup management content. Please try again.</div>
-                        </div>
-                    `;
-                });
+            openManageSignups(this.getAttribute('data-url'));
         });
     });
 

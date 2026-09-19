@@ -14,6 +14,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView, V
 from outreach.forms import (
     OutreachEventForm,
     OutreachLocationForm,
+    OutreachManageMentorSignupsForm,
     OutreachManageSignupsForm,
     OutreachSetTimesForm,
     OutreachShiftFormSet,
@@ -25,13 +26,10 @@ from outreach.models import (
     OutreachShift,
     OutreachSignup,
 )
-from outreach.utils import (
-    can_operate_checkin,
-    can_view_checkin,
-    compute_outreach_stats,
-)
+from outreach.utils import can_operate_checkin, can_view_checkin, compute_outreach_stats
 from programs.models import Program
 from programs.permission_views import (
+    LeadMentorRequiredMixin,
     can_user_delete,
     can_user_write,
     get_user_role,
@@ -193,6 +191,37 @@ class OutreachLocationDeleteView(
         return reverse("outreach:location_list", kwargs={"program_id": self.program.id})
 
 
+def compute_needs_support_counts(upcoming_events):
+    """Count upcoming events still needing a champion, helper, or mentor.
+
+    Each event is counted at most once per role. A shift needs a champion
+    when it is under its champion cap, a helper when under its helper cap,
+    and a mentor when no mentors have signed up.
+    """
+    needs_champions = 0
+    needs_helpers = 0
+    needs_mentors = 0
+    for event in upcoming_events:
+        event_needs_champion = False
+        event_needs_helper = False
+        event_needs_mentor = False
+        for shift in event.ordered_shifts:
+            signups = list(shift.signups.all())
+            n_champions = sum(1 for s in signups if s.role == OutreachSignup.CHAMPION)
+            n_helpers = sum(1 for s in signups if s.role == OutreachSignup.HELPER)
+            n_mentors = len(list(shift.mentor_signups.all()))
+            if n_champions < shift.max_champions:
+                event_needs_champion = True
+            if n_helpers < shift.max_helpers:
+                event_needs_helper = True
+            if n_mentors == 0:
+                event_needs_mentor = True
+        needs_champions += int(event_needs_champion)
+        needs_helpers += int(event_needs_helper)
+        needs_mentors += int(event_needs_mentor)
+    return needs_champions, needs_helpers, needs_mentors
+
+
 class OutreachEventListView(
     LoginRequiredMixin, OutreachProgramMixin, DynamicReadPermissionMixin, ListView
 ):
@@ -230,6 +259,16 @@ class OutreachEventListView(
         context["past_events"] = past_events
         context["upcoming_count"] = len(upcoming_events)
         context["past_count"] = len(past_events)
+
+        if role in ("Mentor", "LeadMentor"):
+            # "Needs Support" KPI: how many upcoming events still need a
+            # champion, helper, or mentor so understaffed outreach is easy
+            # to spot.
+            (
+                context["needs_champions_events"],
+                context["needs_helpers_events"],
+                context["needs_mentors_events"],
+            ) = compute_needs_support_counts(upcoming_events)
 
         if role == "Student":
             try:
@@ -585,6 +624,61 @@ class OutreachShiftManageSignupsView(
             messages.success(
                 request,
                 f"Signups for {shift.event.name} on {shift.date} updated successfully.",
+            )
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(
+                        request,
+                        (
+                            f"{field.capitalize()}: {error}"
+                            if field != "__all__"
+                            else error
+                        ),
+                    )
+
+        return redirect("outreach:event_list", program_id=self.program.id)
+
+
+class OutreachShiftManageMentorSignupsView(
+    LoginRequiredMixin, OutreachProgramMixin, LeadMentorRequiredMixin, View
+):
+    """Lead Mentor-only management of which mentors support a shift.
+
+    Mentors can manage student signups themselves, but adjusting the mentor
+    support roster is reserved for Lead Mentors. There is no capacity limit
+    on mentor signups, so editing is a simple add/remove picker.
+    """
+
+    def get_object(self):
+        return get_object_or_404(
+            OutreachShift,
+            pk=self.kwargs.get("shift_pk"),
+            event__program=self.program,
+        )
+
+    def get(self, request, program_id, shift_pk):
+        shift = self.get_object()
+        form = OutreachManageMentorSignupsForm(shift=shift)
+        return render(
+            request,
+            "outreach/_manage_mentor_signups_modal_content.html",
+            {
+                "shift": shift,
+                "form": form,
+                "program": self.program,
+            },
+        )
+
+    def post(self, request, program_id, shift_pk):
+        shift = self.get_object()
+        form = OutreachManageMentorSignupsForm(request.POST, shift=shift)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Mentor signups for {shift.event.name} on {shift.date} "
+                "updated successfully.",
             )
         else:
             for field, errors in form.errors.items():

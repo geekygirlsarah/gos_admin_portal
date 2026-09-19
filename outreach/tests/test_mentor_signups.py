@@ -272,6 +272,19 @@ class MentorSignupVisibilityTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Molly Mentor")
 
+    def test_mentor_section_always_shown_with_names(self):
+        self.client.login(username="student", password="password")  # nosec B106
+        resp = self.client.get(self.list_url)
+        self.assertContains(resp, "<strong>Mentors:</strong>")
+        self.assertNotContains(resp, "No mentors have signed up yet")
+
+    def test_mentor_section_shows_placeholder_when_unsupported(self):
+        self.shift.mentor_signups.all().delete()
+        self.client.login(username="student", password="password")  # nosec B106
+        resp = self.client.get(self.list_url)
+        self.assertContains(resp, "<strong>Mentors:</strong>")
+        self.assertContains(resp, "No mentors have signed up yet")
+
     def test_signed_up_mentor_sees_cancel_button(self):
         self.client.login(username="mentor", password="password")  # nosec B106
         resp = self.client.get(self.list_url)

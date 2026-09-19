@@ -3,11 +3,12 @@ from django import forms
 from outreach.models import (
     OutreachEvent,
     OutreachLocation,
+    OutreachMentorSignup,
     OutreachShift,
     OutreachSignup,
 )
-from programs.models import Student
-from programs.utils import active_students_in_program
+from programs.models import Adult, Student
+from programs.utils import active_mentors, active_students_in_program
 from programs.widgets import DualListboxWidget
 
 
@@ -213,3 +214,42 @@ class OutreachManageSignupsForm(forms.Form):
                 student=student,
                 defaults={"role": OutreachSignup.HELPER},
             )
+
+
+class OutreachManageMentorSignupsForm(forms.Form):
+    """Lead Mentor-only management of which mentors support a shift.
+
+    Mirrors ``OutreachManageSignupsForm``: a dual-listbox picker of active
+    mentors whose selection replaces the shift's current mentor signups.
+    There is no capacity limit for mentor support signups.
+    """
+
+    mentors = forms.ModelMultipleChoiceField(
+        queryset=Adult.objects.none(),
+        required=False,
+        widget=DualListboxWidget(
+            available_label="All Active Mentors", selected_label="Supporting Mentors"
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.shift = kwargs.pop("shift")
+        super().__init__(*args, **kwargs)
+        self.fields["mentors"].queryset = self._mentor_queryset()
+        self.fields["mentors"].initial = self.shift.mentor_signups.values_list(
+            "adult_id", flat=True
+        )
+
+    def _mentor_queryset(self):
+        # All active mentors plus anyone already signed up (so previously
+        # signed-up mentors who were later deactivated stay removable).
+        return active_mentors() | Adult.objects.filter(
+            outreach_mentor_signups__shift=self.shift
+        )
+
+    def save(self):
+        mentors = self.cleaned_data["mentors"]
+        all_new_adult_ids = [adult.id for adult in mentors]
+        self.shift.mentor_signups.exclude(adult_id__in=all_new_adult_ids).delete()
+        for adult in mentors:
+            OutreachMentorSignup.objects.get_or_create(shift=self.shift, adult=adult)
