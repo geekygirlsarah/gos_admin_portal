@@ -1,5 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import F
+from django.db.models.functions import Coalesce, Lower
 
 from programs.models import Adult, Student
 
@@ -325,6 +327,13 @@ class OutreachMentorSignup(models.Model):
 
     class Meta:
         unique_together = ("adult", "shift")
+        ordering = [
+            Lower(
+                Coalesce(F("adult__preferred_first_name"), F("adult__legal_first_name"))
+            ),
+            Lower("adult__last_name"),
+            "adult__pk",
+        ]
 
     def __str__(self):
         return f"{self.adult} - {self.shift.event.name}"

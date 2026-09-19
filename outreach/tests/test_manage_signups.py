@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import localize
 
 from outreach.models import OutreachEvent, OutreachSignup
 from outreach.tests.factories import create_outreach_event
@@ -75,6 +76,30 @@ class OutreachManageSignupsTest(TestCase):
         )
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
+
+    def test_manage_dialog_shows_friendly_date(self):
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = reverse(
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
+        )
+        resp = self.client.get(url)
+        html = resp.content.decode()
+        self.assertIn(f"({localize(self.shift.date)})", html)
+        self.assertNotIn(str(self.shift.date), html)
+
+    def test_success_message_shows_friendly_date(self):
+        self.client.login(username="mentor", password="password")  # nosec B106
+        url = reverse(
+            "outreach:shift_manage_signups", args=[self.program.id, self.shift.pk]
+        )
+        resp = self.client.post(
+            url,
+            {"champions": [self.student1.pk], "helpers": [self.student2.pk]},
+            follow=True,
+        )
+        html = resp.content.decode()
+        self.assertIn(localize(self.shift.date), html)
+        self.assertNotIn(str(self.shift.date), html)
 
     def test_event_list_includes_dual_listbox_assets(self):
         self.client.login(username="mentor", password="password")  # nosec B106

@@ -9,6 +9,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import localize
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
 from outreach.forms import (
@@ -540,12 +541,12 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
         if created:
             messages.success(
                 request,
-                f"Thanks! You are signed up to support {shift.event.name} on {shift.date}.",
+                f"Thanks! You are signed up to support {shift.event.name} on {localize(shift.date)}.",
             )
         else:
             messages.info(
                 request,
-                f"You are already signed up to support {shift.event.name} on {shift.date}.",
+                f"You are already signed up to support {shift.event.name} on {localize(shift.date)}.",
             )
 
         return redirect("outreach:event_list", program_id=self.program.id)
@@ -623,7 +624,7 @@ class OutreachShiftManageSignupsView(
             form.save()
             messages.success(
                 request,
-                f"Signups for {shift.event.name} on {shift.date} updated successfully.",
+                f"Signups for {shift.event.name} on {localize(shift.date)} updated successfully.",
             )
         else:
             for field, errors in form.errors.items():
@@ -677,7 +678,7 @@ class OutreachShiftManageMentorSignupsView(
             form.save()
             messages.success(
                 request,
-                f"Mentor signups for {shift.event.name} on {shift.date} "
+                f"Mentor signups for {shift.event.name} on {localize(shift.date)} "
                 "updated successfully.",
             )
         else:
