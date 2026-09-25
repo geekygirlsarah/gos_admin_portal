@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-24
+
+### Fixed
+- **Orders: Student and Mentor read permissions in Portal Settings**: Fixed a bug where the permissions settings page failed to display the "Read" radio option as selected for viewable order sections (`orders-view`). This previously caused read permissions to be inadvertently cleared whenever permissions were saved, blocking students from viewing order pages or submitting item requests even when write permissions were configured.
+
 ## 2026-09-18
 
 ### Added

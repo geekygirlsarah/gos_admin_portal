@@ -452,7 +452,7 @@ GEOCODING_USER_AGENT = os.getenv("GEOCODING_USER_AGENT", "GoSAdminPortal/1.0")
 GEOCODING_TIMEOUT = int(os.getenv("GEOCODING_TIMEOUT", "10"))
 # Nominatim asks for at most 1 request/second.
 GEOCODING_DELAY_SECONDS = float(os.getenv("GEOCODING_DELAY_SECONDS", "1.0"))
-MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "") if not TESTING else ""
 
 # Content Security Policy (Django built-in CSP)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed

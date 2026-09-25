@@ -99,15 +99,22 @@ class MapboxBackend(BaseGeocodingBackend):
             )
             response.raise_for_status()
             data = response.json()
-            features = data.get("features", [])
-            if features:
-                # Mapbox returns [longitude, latitude] in the "center" field.
-                center = features[0].get("center")
-                if center and len(center) == 2:
-                    lat, lon = float(center[1]), float(center[0])
-                    if lat is not None and lon is not None:
-                        return (lat, lon)
-        except (requests.RequestException, TypeError, ValueError, KeyError):
+            if isinstance(data, dict):
+                features = data.get("features", [])
+                if features:
+                    # Mapbox returns [longitude, latitude] in the "center" field.
+                    center = features[0].get("center")
+                    if center and len(center) == 2:
+                        lat, lon = float(center[1]), float(center[0])
+                        if lat is not None and lon is not None:
+                            return (lat, lon)
+        except (
+            requests.RequestException,
+            TypeError,
+            ValueError,
+            KeyError,
+            AttributeError,
+        ):
             pass
         return None
 
