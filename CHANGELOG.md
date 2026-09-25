@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-09-24
 
+### Added
+- **Orders: Prompt for shipping cost and tax when marking an order as placed**: When Lead Mentors or administrators place a vendor order and click "Ordered" / "Mark as Ordered", a confirmation dialog now allows them to record the final shipping cost and sales tax right when placing the order. When mentors bundle items together initially, shipping and tax are optional and can be left blank. Teams can also view and edit shipping cost and tax at any time from the order's Shipping & Cost Details section.
+
 ### Fixed
 - **Orders: Student and Mentor read permissions in Portal Settings**: Fixed a bug where the permissions settings page failed to display the "Read" radio option as selected for viewable order sections (`orders-view`). This previously caused read permissions to be inadvertently cleared whenever permissions were saved, blocking students from viewing order pages or submitting item requests even when write permissions were configured.
 

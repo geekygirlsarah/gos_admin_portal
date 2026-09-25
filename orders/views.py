@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -642,18 +642,45 @@ class OrderMarkOrderedView(
     back to ordered. Either way the order stays on the active list (it is only
     archived once received)."""
 
+    @staticmethod
+    def _parse_optional_cost(raw_val):
+        if not raw_val:
+            return None, True
+        val = raw_val.strip()
+        if not val:
+            return None, True
+        try:
+            cost = Decimal(val)
+            if cost >= Decimal("0"):
+                return cost, True
+        except (InvalidOperation, TypeError, ValueError):
+            pass
+        return None, False
+
+    def _mark_as_ordered(self, request, order):
+        order.status = Order.STATUS_ORDERED
+        order.ordered_at = timezone.now()
+        order.ordered_by = request.user
+        update_fields = ["status", "ordered_at", "ordered_by"]
+
+        for field in ("shipping_cost", "tax"):
+            if field in request.POST:
+                val, valid = self._parse_optional_cost(request.POST.get(field))
+                if valid:
+                    setattr(order, field, val)
+                    update_fields.append(field)
+
+        order.save(update_fields=update_fields)
+        messages.success(
+            request,
+            f"Order {order} marked as ordered.",
+        )
+        return redirect("orders:order_list", program_id=self.program.id)
+
     def post(self, request, program_id, pk):
         order = get_object_or_404(Order, pk=pk)
         if order.status == Order.STATUS_PENDING:
-            order.status = Order.STATUS_ORDERED
-            order.ordered_at = timezone.now()
-            order.ordered_by = request.user
-            order.save(update_fields=["status", "ordered_at", "ordered_by"])
-            messages.success(
-                request,
-                f"Order {order} marked as ordered.",
-            )
-            return redirect("orders:order_list", program_id=self.program.id)
+            return self._mark_as_ordered(request, order)
         if order.status == Order.STATUS_SHIPPED:
             order.status = Order.STATUS_ORDERED
             order.shipped_date = None

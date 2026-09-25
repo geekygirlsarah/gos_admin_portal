@@ -323,12 +323,46 @@
                         <td class="text-end text-nowrap">
                             {% if is_lead %}
                             {% if order.status == "pending" %}
-                            <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as ordered">
-                                    <i class="bi bi-check2-circle"></i> Ordered
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#markOrderedModal{{ order.pk }}" title="Mark as ordered">
+                                <i class="bi bi-check2-circle"></i> Ordered
+                            </button>
+                            <div class="modal fade text-start" id="markOrderedModal{{ order.pk }}" tabindex="-1" aria-labelledby="markOrderedModalLabel{{ order.pk }}" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <form method="post" action="{% url 'orders:order_mark_ordered' program.id order.pk %}">
+                                            {% csrf_token %}
+                                            <div class="modal-header bg-success text-white">
+                                                <h5 class="modal-title" id="markOrderedModalLabel{{ order.pk }}">Confirm Order #{{ order.pk }} Placed</h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p class="text-muted small mb-3">
+                                                    Confirm that Order #{{ order.pk }} has been placed with <strong>{{ order.vendor_name|default:"the vendor" }}</strong>.
+                                                    You can record the final shipping cost and sales tax now, or update them later.
+                                                </p>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label for="id_modal_shipping_cost_{{ order.pk }}" class="form-label">Shipping Cost ($)</label>
+                                                        <input type="number" step="0.01" min="0" name="shipping_cost" id="id_modal_shipping_cost_{{ order.pk }}" class="form-control" placeholder="0.00" value="{% if order.shipping_cost %}{{ order.shipping_cost }}{% endif %}">
+                                                        <div class="form-text">Optional</div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="id_modal_tax_{{ order.pk }}" class="form-label">Tax ($)</label>
+                                                        <input type="number" step="0.01" min="0" name="tax" id="id_modal_tax_{{ order.pk }}" class="form-control" placeholder="0.00" value="{% if order.tax %}{{ order.tax }}{% endif %}">
+                                                        <div class="form-text">Optional</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class="bi bi-check2-circle me-1"></i>Confirm &amp; Mark Ordered
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
                             {% elif order.status == "ordered" %}
                             <form method="post" action="{% url 'orders:order_mark_shipped' program.id order.pk %}" class="d-inline">
                                 {% csrf_token %}
