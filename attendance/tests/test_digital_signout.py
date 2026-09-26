@@ -7,13 +7,9 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from attendance.models import (
-    DigitalSignout,
-    DigitalSignoutConfig,
-    StudentPresence,
-)
+from attendance.models import DigitalSignout, DigitalSignoutConfig, StudentPresence
 from attendance.signout_views import _decode_signature
-from programs.models import AdultStudentRelationship, Enrollment
+from programs.models import AdultStudentRelationship, Crew, Enrollment, SubTeam, Team
 
 from .base import (
     make_adult,
@@ -234,6 +230,71 @@ class AttendancePresenceTests(TestCase):
         )
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(DigitalSignout.objects.count(), 0)
+
+
+class SignoutGroupBadgeTests(TestCase):
+    """Who's Here Today shows team/crew/subteam badges like other program pages."""
+
+    def setUp(self):
+        self.program = make_program()
+        self.client = Client()
+        self.client.force_login(make_lead_mentor_user())
+        self.url = reverse("program_digital_signout", args=[self.program.pk])
+        self.team = Team.objects.create(
+            team_type="FRC", number=1, name="Steel", color="#c1121f"
+        )
+        self.crew = Crew.objects.create(
+            name="Build Crew", program=self.program, color="#2a9d8f"
+        )
+        self.subteam = SubTeam.objects.create(
+            name="Drivetrain", program=self.program, color="#3a86ff"
+        )
+        self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
+        Enrollment.objects.create(
+            student=self.student,
+            program=self.program,
+            team=self.team,
+            crew=self.crew,
+            subteam=self.subteam,
+        )
+
+    def test_badges_render_next_to_student_name(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "FRC 1 Steel")
+        self.assertContains(response, "Build Crew")
+        self.assertContains(response, "Drivetrain")
+        self.assertContains(response, "team-badge")
+        self.assertContains(response, "crew-badge")
+        self.assertContains(response, "subteam-badge")
+        # Group colors are applied inline (as on the program detail/photo pages).
+        self.assertContains(response, "background-color: #c1121f")
+        self.assertContains(response, "background-color: #2a9d8f")
+        self.assertContains(response, "background-color: #3a86ff")
+
+    def test_student_without_group_shows_no_badges(self):
+        ungrouped_program = make_program(name="Ungrouped Program")
+        other = make_student(preferred_first_name="Grace", last_name="Hopper")
+        Enrollment.objects.create(student=other, program=ungrouped_program)
+        response = self.client.get(
+            reverse("program_digital_signout", args=[ungrouped_program.pk])
+        )
+        self.assertContains(response, "Grace")
+        self.assertNotContains(response, "team-badge")
+        self.assertNotContains(response, "crew-badge")
+        self.assertNotContains(response, "subteam-badge")
+
+    def test_badges_come_from_this_programs_enrollment(self):
+        # A student can hold a different team in another program; the badges
+        # must follow the program being viewed.
+        other_program = make_program(name="Other Program")
+        other_team = Team.objects.create(team_type="FTC", number=9, name="Nine")
+        Enrollment.objects.create(
+            student=self.student, program=other_program, team=other_team
+        )
+        response = self.client.get(self.url)
+        self.assertContains(response, "FRC 1 Steel")
+        self.assertNotContains(response, "FTC 9")
 
 
 class SignoutConfigModelTests(TestCase):

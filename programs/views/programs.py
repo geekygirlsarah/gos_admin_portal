@@ -1500,8 +1500,18 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
             ).select_related("student")
         }
         presence_students = list(_active_students(program))
+        # Team/crew/subteam live on the program enrollment, so pull this
+        # program's enrollments in one query and hand each student theirs for
+        # the group badges next to their name.
+        enrollments_by_student = {
+            e.student_id: e
+            for e in Enrollment.objects.filter(
+                program=program, active=True
+            ).select_related("team", "crew", "subteam")
+        }
         for student in presence_students:
             student.today_presence = today_presence.get(student.pk)
+            student.program_enrollment = enrollments_by_student.get(student.pk)
         return render(
             request,
             self.template_name,

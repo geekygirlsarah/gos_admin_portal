@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-26
+
+### Added
+- **Digital Sign-out: see team, crew, and subteam badges when marking attendance**: The "Who's Here Today?" list on a program's Digital Sign-out page now shows each student's Team, Crew, and Subteam badges (in their group colors) next to their name, so mentors taking attendance can tell groups apart at a glance — the same badges you see on the program Students page and photo grid.
+
+## 2026-09-25
+
+### Added
+- **Local Development Email Safety & Redirection**:
+  - **Console backend default in development**: In local development (`DEBUG=True`), `EMAIL_BACKEND` now defaults to `django.core.mail.backends.console.EmailBackend`. Outgoing emails (including login OTP codes and notification emails) print directly to the developer terminal rather than attempting live SMTP delivery, preventing real students or parents from being inadvertently emailed during testing.
+  - **Email redirection backend (`EMAIL_REDIRECT_TO`)**: Added `RedirectEmailBackend` (`GoSAdminPortal.mail_backends.RedirectEmailBackend`) to safely reroute all outgoing emails to a designated developer or team inbox (e.g. `EMAIL_REDIRECT_TO="dev-team@example.com"`). The subject line is automatically prepended with `[DEV to: <original_recipients>]` and original recipient headers are preserved in `X-Original-To`.
+  - **Outgoing email disable switch**: Support for disabling outgoing emails completely via `EMAILS_ENABLED=False` or `DISABLE_OUTGOING_EMAILS=True`, routing all messages into Django's silent dummy black-hole backend.
+  - **Backend alias support**: `EMAIL_BACKEND` environment variable now supports friendly aliases: `console`, `smtp`, `dummy`, `locmem`, `filebased`, and `redirect`.
+  - **Database email anonymization command (`anonymize_emails`)**: Added `python manage.py anonymize_emails` with `--domain` (default `example.com`), `--dry-run`, and `--force` flags to quickly scrub all real email addresses on Students, Adults, Users, and Applications in imported databases.
+
 ## 2026-09-24
 
 ### Added
