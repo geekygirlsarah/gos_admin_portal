@@ -81,3 +81,10 @@ logs/
 
 # Node (if any frontend added later)
 node_modules/
+
+# Built frontend artifacts (the directory is kept via .gitkeep so Django's
+# staticfiles.E002 check passes in CI; `npm run build` regenerates these)
+programs/static_built/*.js
+programs/static_built/*.js.map
+programs/static_built/*.css
+!programs/static_built/.gitkeep

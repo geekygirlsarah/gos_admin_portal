@@ -612,6 +612,50 @@ class ResendEmailTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
 
 
+class ApplicationMessagingTests(TestCase):
+    """Bulk applicant email (ApplicationEmailView) must sanitize + normalize
+    the composed body into a full HTML email with a readable text part."""
+
+    def setUp(self):
+        self.app = _make_application()
+        self.user = _reviewer_user()
+        self.client.force_login(self.user)
+        mail.outbox = []
+        self.url = reverse("application_review_messaging")
+
+    def _post(self, **overrides):
+        data = {
+            "program": "",
+            "statuses": [self.app.status],
+            "subject": "Application Update",
+            "body": (
+                "<p>Good news</p>"
+                '<p style="mso-list:l0 level1 lfo1"><span style="mso-list:'
+                'Ignore">-<span>&nbsp;</span></span>Bring paperwork</p>'
+            ),
+            "test_email": "",
+            "from_account": "",
+        }
+        data.update(overrides)
+        return self.client.post(self.url, data)
+
+    def test_sends_normalized_html_and_plain_text(self):
+        response = self._post()
+        self.assertEqual(response.status_code, 302)
+        # One message per recipient (parent + student) with the same content.
+        self.assertEqual(len(mail.outbox), 2)
+        recipients = {m.to[0] for m in mail.outbox}
+        self.assertEqual(recipients, {"parent@example.com", "ada@example.com"})
+        sent = mail.outbox[0]
+        html_part = sent.alternatives[0][0]
+        self.assertEqual(sent.alternatives[0][1], "text/html")
+        self.assertIn("<!DOCTYPE html>", html_part)
+        self.assertIn("<ul><li>Bring paperwork</li></ul>", html_part)
+        self.assertNotIn("mso-list", html_part)
+        self.assertNotIn("mso-list", sent.body)
+        self.assertIn("\u2022 Bring paperwork", sent.body)
+
+
 class StaffDocumentUploadTests(TestCase):
     """Lead mentors can upload signed documents on behalf of applicants
     (e.g. paper copies received in person)."""

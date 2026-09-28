@@ -7,6 +7,7 @@ student list pages), matching the behavior of the program detail page.
 from decimal import Decimal
 
 from django.contrib.auth.models import Group, User
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -19,7 +20,7 @@ from programs.forms import (
     ProgramEmailBalancesForm,
     SlidingScaleForm,
 )
-from programs.models import Enrollment, Fee, FeeAssignment, Program, Student
+from programs.models import Adult, Enrollment, Fee, FeeAssignment, Program, Student
 
 
 class ActiveStudentDropdownTests(TestCase):
@@ -112,6 +113,50 @@ class ActiveStudentDropdownTests(TestCase):
         self.assertNotIn(self.graduated, qs)
         self.assertNotIn(self.other_program_student, qs)
         self.assertNotIn(self.unenrolled, qs)
+
+    def test_balances_email_normalizes_message_and_inlines_styles(self):
+        parent = Adult.objects.create(
+            legal_first_name="Pat",
+            last_name="Parent",
+            personal_email="pat.balance@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=True,
+        )
+        parent.students.add(self.active)
+        lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        user = User.objects.create_user(
+            username="lead_bal", password="password123"  # nosec B106
+        )
+        user.groups.add(lead_group)
+        self.client.login(username="lead_bal", password="password123")  # nosec B106
+
+        response = self.client.post(
+            reverse("program_dues_email", args=[self.program.pk]),
+            {
+                "program": self.program.pk,
+                "subject": "Balance due",
+                "default_message": (
+                    "<p>Dues coming</p>"
+                    '<p style="mso-list:l0 level1 lfo1"><span style="mso-list:'
+                    'Ignore">-<span>&nbsp;</span></span>Pay by Friday</p>'
+                ),
+                "recipient_filter": "all",
+                "student": "",
+                "test_email": "",
+                "from_account": "DEFAULT",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertEqual(sent.to, ["pat.balance@example.com"])
+        html_part = sent.alternatives[0][0]
+        self.assertIn("Program", html_part)  # rendered balance sheet
+        self.assertIn("<ul><li>Pay by Friday</li></ul>", html_part)
+        self.assertNotIn("mso-list", html_part)
+        self.assertNotIn("mso-list", sent.body)
+        self.assertIn("\u2022 Pay by Friday", sent.body)
 
     def test_fee_assignment_form_only_lists_active_enrolled(self):
         fee = Fee.objects.create(program=self.program, name="Dues", amount="25.00")

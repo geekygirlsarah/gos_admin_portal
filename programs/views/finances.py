@@ -13,7 +13,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import strip_tags
 from django.views.generic import CreateView, ListView, UpdateView, View
 from premailer import transform
 
@@ -48,6 +47,7 @@ from ..utils import (
     get_student_program_balance,
     redirect_back,
 )
+from ..utils.email_html import html_to_text, normalize_email_html
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
@@ -964,7 +964,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 "sliding_scale": data["sliding_scale"],
             }
             # Include optional rich-text message inside the template so styles apply correctly
-            ctx["message_html"] = default_message or ""
+            ctx["message_html"] = normalize_email_html(default_message or "")
             balance_html = render_to_string(
                 "programs/balance_sheet_email.html", ctx, request=None
             )
@@ -973,7 +973,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 inlined_html = transform(full_html)
             except Exception:
                 inlined_html = full_html
-            text_body = strip_tags(inlined_html)
+            text_body = html_to_text(inlined_html)
 
             # Ensure dest is a list of flat email strings
             if isinstance(dest, str):

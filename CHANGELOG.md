@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-09-28
+
+### Added
+- **New rich-text editor for composing emails**: The message body on the "Email Program", "Applicant Messaging", and (optional) balance-sheet email pages now uses a new self-hosted editor (Tiptap) that keeps Word and Google Docs pastes readable — pasted lists stay lists (real bullets) instead of turning into run-together text, tables keep their borders, and line breaks no longer balloon into extra blank lines. Emails are sent as clean HTML with a readable plain-text fallback, and the preview shown before sending matches what recipients receive.
+
 ## 2026-09-26
 
 ### Added

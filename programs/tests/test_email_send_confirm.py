@@ -87,3 +87,44 @@ class EmailSendConfirmModalTests(TestCase):
         self._login_reviewer()
         response = self.client.get(reverse("application_review_messaging"))
         self._assert_modal_present(response)
+
+    def test_compose_pages_use_tiptap_editor_not_quill(self):
+        program = Program.objects.create(name="Test Program", active=True)
+        superuser = User.objects.create_superuser(
+            username="lead_mentor", password="password123"  # nosec B106
+        )
+        self._login_reviewer()
+        cases = [
+            (reverse("application_review_messaging"), None),
+            (
+                reverse("program_email", args=[program.pk]),
+                superuser,
+            ),
+            (reverse("program_messaging"), superuser),
+            (
+                reverse("program_dues_email", args=[program.pk]),
+                superuser,
+            ),
+        ]
+        for url, account in cases:
+            with self.subTest(url=url):
+                if account is superuser:
+                    self.client.login(
+                        username="lead_mentor",
+                        password="password123",  # nosec B106
+                    )
+                else:
+                    self.client.login(
+                        username="reviewer",
+                        password="password123",  # nosec B106
+                    )
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(
+                    response, "data-email-editor", msg_prefix=f"{url}: "
+                )
+                self.assertContains(response, "email-editor.js", msg_prefix=f"{url}: ")
+                self.assertNotContains(response, "vendor/quill", msg_prefix=f"{url}: ")
+                self.assertNotContains(
+                    response, "quill-better-table", msg_prefix=f"{url}: "
+                )

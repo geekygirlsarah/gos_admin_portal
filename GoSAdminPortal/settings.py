@@ -274,7 +274,12 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 # Ensure project-level static assets are collected (e.g., static/samples/students_sample.csv)
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "programs", "static")]
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "programs", "static"),
+    # Compiled frontend bundles (built by `npm run build`; directory is kept in
+    # git via .gitkeep so staticfiles.E002 stays silent in fresh checkouts)
+    os.path.join(BASE_DIR, "programs", "static_built"),
+]
 
 # This production code might break development mode, so we check whether we're in DEBUG mode
 if not DEBUG:

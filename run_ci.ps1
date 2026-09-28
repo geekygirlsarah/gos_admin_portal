@@ -4,6 +4,10 @@ python -m pip install --upgrade pip
 Write-Host "--- Installing Dependencies ---" -ForegroundColor Cyan
 python -m pip install -r requirements.txt
 
+Write-Host "--- Building Frontend Bundle ---" -ForegroundColor Cyan
+npm.cmd ci
+npm.cmd run build
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "--- Running Checks (flake8, black, isort, bandit) in Parallel ---" -ForegroundColor Cyan

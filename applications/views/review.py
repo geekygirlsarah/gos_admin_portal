@@ -21,9 +21,7 @@ from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
-from django.utils.html import strip_tags
 from django.views import View
-from premailer import transform
 
 from audit.events import AuditEvent
 from audit.service import log_event
@@ -36,6 +34,7 @@ from programs.constants import (
 )
 from programs.models import Program, RaceEthnicity
 from programs.utils import GroupedProgramChoiceField
+from programs.utils.email_html import build_email_parts
 from programs.utils.notifications import get_sender_connection
 
 from ..forms import StaffDocumentUploadForm
@@ -1231,13 +1230,10 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             statuses = form.cleaned_data["statuses"]
             subject = form.cleaned_data["subject"]
             html_body = form.cleaned_data["body"]
-
-            # Inline CSS for better email client compatibility
-            try:
-                inlined_html_body = transform(html_body)
-            except Exception:
-                inlined_html_body = html_body
-            text_body = strip_tags(inlined_html_body)
+            # Sanitize + normalize the fragment, wrap it in an email document
+            # and inline CSS so the message renders the way it looked in the
+            # compose editor, with a readable plain-text alternative.
+            inlined_html_body, text_body = build_email_parts(html_body)
             test_email = form.cleaned_data.get("test_email")
 
             apps = Application.objects.filter(status__in=statuses)

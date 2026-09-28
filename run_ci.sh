@@ -7,6 +7,10 @@ python -m pip install --upgrade pip
 echo "--- Installing Dependencies ---"
 pip install -r requirements.txt
 
+echo "--- Building Frontend Bundle ---"
+npm ci
+npm run build
+
 echo "--- Running Checks in Parallel ---"
 # Launch independent checks in background
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics &
