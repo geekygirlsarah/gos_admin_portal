@@ -11,6 +11,10 @@
   padding: 0.25rem;
   border-bottom: 1px solid #dee2e6;
   background: #f8f9fa;
+  /* Keep the formatting controls reachable while scrolling a long message. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 .email-editor .btn-toolbar .btn.active {
@@ -22,6 +26,10 @@
 .email-editor .tiptap {
   padding: 0.75rem 1rem;
   min-height: 180px;
+  /* A long message scrolls inside the editor instead of growing the page, so the
+     toolbar (and the caret's scroll position) stay where the writer left them. */
+  max-height: 60vh;
+  overflow-y: auto;
   outline: none;
   font-size: 1rem;
   line-height: 1.5;
@@ -93,6 +101,16 @@
 }
 .email-editor .tiptap .resize-cursor {
   cursor: col-resize;
+}
+
+/* Embedded images: mirrors EMAIL_BASE_CSS's `img{max-width:100%;height:auto;}` so a
+   pasted picture is sized the same on the compose screen as it is in the email. */
+.email-editor .tiptap img {
+  max-width: 100%;
+  height: auto;
+}
+.email-editor .tiptap img.ProseMirror-selectednode {
+  outline: 2px solid #0d6efd;
 }
 
 /* Placeholder text. */

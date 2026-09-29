@@ -8,7 +8,12 @@ These cover the four problems that made the old Quill composer frustrating:
 * the plain-text alternative ran list items and table cells together
 """
 
+import base64
+import re
+from io import BytesIO
+
 from django.test import SimpleTestCase
+from PIL import Image
 
 from programs.utils.email_html import (
     html_to_text,
@@ -375,3 +380,97 @@ class WrapEmailDocumentTests(SimpleTestCase):
         out = wrap_email_document("<p>ok</p><script>alert(1)</script>")
         self.assertNotIn("script", out)
         self.assertIn("ok", out)
+
+
+# A 1x1 pixel PNG. `base64.b64decode(..., validate=True)` accepts this verbatim,
+# so it stands in for an image a user actually pasted into the editor.
+_ONE_PX_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGA"
+    "hKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def _data_url(mime="image/png", b64=_ONE_PX_PNG):
+    return f"data:{mime};base64,{b64}"
+
+
+def _png_data_url():
+    return _data_url(b64=_ONE_PX_PNG)
+
+
+def _large_png_data_url(width=4000, height=3000):
+    img = Image.new("RGB", (width, height), (200, 60, 60))
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return _data_url(b64=base64.b64encode(buf.getvalue()).decode("ascii"))
+
+
+class EmailHtmlEmbeddedImageTests(SimpleTestCase):
+    """Editors paste images as ``data:`` URLs; emails should keep them.
+
+    The sanitizer must never trust a ``data:`` URL (only nh3's allowlist of
+    schemes survives), so embedded images are extracted, re-encoded to a
+    bounded JPEG server-side, and re-injected *after* sanitization.
+    """
+
+    def test_pasted_data_url_image_is_embedded(self):
+        out = normalize_email_html(
+            f'<p>See:</p><img src="{_png_data_url()}" alt="Battery">'
+        )
+        self.assertIn("<img", out)
+        self.assertIn('src="data:image/jpeg;base64,', out)
+        self.assertIn('alt="Battery"', out)
+
+    def test_remote_image_url_passes_through_unchanged(self):
+        out = normalize_email_html('<img src="https://example.com/logo.png">')
+        self.assertIn("https://example.com/logo.png", out)
+
+    def test_data_url_on_anchor_is_stripped(self):
+        out = normalize_email_html('<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>')
+        self.assertNotIn("data:text/html", out)
+
+    def test_non_image_data_url_on_img_is_dropped(self):
+        out = normalize_email_html(
+            '<p>kept</p><img src="data:text/html;base64,PHNjcmlwdD4=" alt="nope">'
+        )
+        self.assertNotIn("<img", out)
+        self.assertIn("kept", out)
+
+    def test_garbage_image_data_url_is_dropped_gracefully(self):
+        out = normalize_email_html(
+            '<p>kept</p><img src="data:image/png;base64,not-a-real-image" alt="bad">'
+        )
+        self.assertNotIn("<img", out)
+        self.assertIn("kept", out)
+
+    def test_svg_data_url_is_not_embedded(self):
+        svg = _data_url(
+            mime="image/svg+xml",
+            b64="PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+PC9zdmc+",
+        )
+        out = normalize_email_html(f'<p>kept</p><img src="{svg}" alt="svg">')
+        self.assertNotIn("<img", out)
+
+    def test_embedded_image_is_downscaled_to_email_safe_dimensions(self):
+        out = normalize_email_html(f'<img src="{_large_png_data_url()}" alt="big">')
+        match = re.search(r'src="(data:image/jpeg;base64,[^"]+)"', out)
+        self.assertIsNotNone(match, out)
+        decoded = base64.b64decode(match.group(1).partition("base64,")[2])
+        dims = Image.open(BytesIO(decoded)).size
+        self.assertLessEqual(
+            max(dims), 1600, f"re-encoded image {dims} is not downscaled"
+        )
+
+    def test_embedded_images_are_capped_in_number(self):
+        url = _png_data_url()
+        html = "".join(f'<p>pic</p><img src="{url}" alt="p">' for _ in range(6))
+        out = normalize_email_html(html)
+        self.assertLessEqual(out.count("<img"), 5)
+
+    def test_embedded_image_alt_text_reaches_the_plain_text_alt(self):
+        text = html_to_text(f'<img src="{_png_data_url()}" alt="Battery diagram">')
+        self.assertIn("Battery diagram", text)
+
+    def test_embedded_images_survive_the_full_email_wrap(self):
+        out = wrap_email_document(f'<p>Hi</p><img src="{_png_data_url()}" alt="Logo">')
+        self.assertIn('src="data:image/jpeg;base64,', out)

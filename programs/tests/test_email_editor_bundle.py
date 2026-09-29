@@ -23,3 +23,32 @@ class EmailEditorBundleTests(SimpleTestCase):
     def test_editor_stylesheet_is_found(self):
         path = finders.find("css/email_editor.css")
         self.assertIsNotNone(path)
+
+
+class EmailEditorStylesheetTests(SimpleTestCase):
+    """A long message must not push the toolbar (and the caret) off-screen."""
+
+    def _css(self) -> str:
+        with open(finders.find("css/email_editor.css"), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_toolbar_sticks_to_the_top_of_the_viewport(self):
+        css = self._css()
+        self.assertRegex(
+            css,
+            r"\.email-editor \.btn-toolbar\s*\{[^}]*position:\s*sticky",
+            "The compose toolbar must stay visible while scrolling a long message.",
+        )
+
+    def test_typing_area_is_bounded_and_scrolls_internally(self):
+        css = self._css()
+        self.assertRegex(
+            css,
+            r"\.email-editor \.tiptap\s*\{[^}]*max-height:",
+            "The typing area must stop growing at a bounded height.",
+        )
+        self.assertRegex(
+            css,
+            r"\.email-editor \.tiptap\s*\{[^}]*overflow-y:\s*auto",
+            "The typing area must scroll inside itself.",
+        )

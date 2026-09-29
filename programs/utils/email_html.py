@@ -12,6 +12,8 @@ turns that into markup an email client can render predictably:
   ``<ul>``/``<ol>`` elements, nested by their level
 * drops blank spacer paragraphs that add phantom vertical space
 * gives tables borders, collapsed borders and sensible widths
+* keeps pasted images (``data:`` URLs) as bounded, re-encoded JPEGs while
+  never letting the raw ``data:`` blob through the sanitizer
 * produces a readable plain-text alternative
 
 ``EMAIL_BASE_CSS`` is the single source of truth for how a message body looks
@@ -21,7 +23,10 @@ the WYSIWYG canvas matches what the recipient sees. Change one, change both.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
+from io import BytesIO
 from typing import Any, Final
 
 import nh3
@@ -171,6 +176,18 @@ EMAIL_ALLOWED_CSS_PROPERTIES: Final[frozenset[str]] = frozenset(
 )
 
 EMAIL_URL_SCHEMES: Final[set[str]] = {"http", "https", "mailto", "tel"}
+
+# --------------------------------------------------------------------------
+# Embedded images
+# --------------------------------------------------------------------------
+# Editors paste images as `data:` URLs. nh3 must never be told to allow `data:`
+# (that would also permit `data:text/html` on anchors), so pasted images are
+# extracted *before* sanitization, re-encoded to a bounded JPEG, and re-injected
+# as `data:image/jpeg` *after* it.
+EMAIL_MAX_EMBEDDED_IMAGES: Final[int] = 5
+EMAIL_EMBEDDED_IMAGE_MAX_DIMENSION: Final[int] = 1600
+EMAIL_EMBEDDED_IMAGE_QUALITY: Final[int] = 82
+EMAIL_EMBEDDED_IMAGE_MAX_BYTES: Final[int] = 2_500_000
 
 # --------------------------------------------------------------------------
 # Email base styles
@@ -561,10 +578,127 @@ def _flatten_list_items(root: etree._Element) -> None:
             li.append(element)
 
 
+# --------------------------------------------------------------------------
+# Embedded images
+# --------------------------------------------------------------------------
+
+_EMBEDDED_DATA_RE: Final[re.Pattern[str]] = re.compile(
+    r"^data:image/(?:png|jpe?g|gif|webp|bmp|avif);base64,",
+    re.IGNORECASE,
+)
+_EMBEDDED_SENTINEL_INDEX: Final[str] = "#gos-inline-img-"
+_EMBEDDED_SENTINEL_RE: Final[re.Pattern[str]] = re.compile(r"^#gos-inline-img-(\d+)$")
+# A sentinel index that never appears in `\d+` above, marking images that were
+# pasted but could not be embedded (too many, undecodable, oversized, SVG).
+_EMBEDDED_DROPPED: Final[str] = "#gos-inline-img-drop"
+
+
+def _reencode_embedded(raw: bytes) -> str | None:
+    """Decode ``raw`` image bytes into an email-safe embedded JPEG data URL.
+
+    Returns ``None`` when Pillow is unavailable or the blob is not a loadable
+    image (Pillow also guards decompression bombs via ``MAX_IMAGE_PIXELS``).
+    """
+    from PIL import Image, ImageOps
+
+    try:
+        img = Image.open(BytesIO(raw))
+        img.load()
+    except Exception:
+        return None
+
+    def encode(dimension: int, quality: int) -> bytes:
+        copy = img.copy()
+        copy.thumbnail((dimension, dimension), Image.Resampling.LANCZOS)
+        buffer = BytesIO()
+        copy.save(buffer, format="JPEG", quality=quality, optimize=True)
+        return buffer.getvalue()
+
+    try:
+        img = ImageOps.exif_transpose(img)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        output = encode(
+            EMAIL_EMBEDDED_IMAGE_MAX_DIMENSION, EMAIL_EMBEDDED_IMAGE_QUALITY
+        )
+        if len(output) > EMAIL_EMBEDDED_IMAGE_MAX_BYTES:
+            output = encode(
+                EMAIL_EMBEDDED_IMAGE_MAX_DIMENSION // 2,
+                EMAIL_EMBEDDED_IMAGE_QUALITY - 20,
+            )
+        if len(output) > EMAIL_EMBEDDED_IMAGE_MAX_BYTES:
+            return None
+        return "data:image/jpeg;base64," + base64.b64encode(output).decode("ascii")
+    except Exception:
+        return None
+
+
+def _extract_embedded_images(fragment: str) -> tuple[str, dict[int, str]]:
+    """Swap pasted ``data:`` image blobs for sentinel URLs.
+
+    Returns ``(fragment, kept)`` where ``kept[i]`` is the re-encoded JPEG data
+    URL that must replace ``src="#gos-inline-img-i"`` after sanitization.
+    Images that cannot be embedded (raw ``data:`` strips the src under nh3) are
+    marked so the post-sanitize pass drops the whole ``<img>`` element.
+    """
+    try:
+        root = lxml_html.fragment_fromstring(fragment, create_parent="div")
+    except (etree.ParserError, ValueError):
+        return fragment, {}
+
+    kept: dict[int, str] = {}
+    seen = 0
+    changed = False
+    for el in root.iter("img"):
+        if not isinstance(el.tag, str):
+            continue
+        src = (el.get("src") or "").strip()
+        if not src.startswith("data:"):
+            continue
+        # Any `data:` image src must be resolved here: nh3 will strip the
+        # scheme, so a `data:` URL left in place becomes a broken `<img>`. Mark
+        # every one (embeddable or not) so the post-clean pass can drop the tag.
+        changed = True
+        marker = _EMBEDDED_DROPPED
+        if _EMBEDDED_DATA_RE.match(src) and seen < EMAIL_MAX_EMBEDDED_IMAGES:
+            _, _, payload = src.partition("base64,")
+            try:
+                raw = base64.b64decode(payload, validate=True)
+            except (binascii.Error, ValueError):
+                raw = None
+            data_url = _reencode_embedded(raw) if raw else None
+            if data_url is not None:
+                kept[seen] = data_url
+                marker = f"{_EMBEDDED_SENTINEL_INDEX}{seen}"
+                seen += 1
+        el.set("src", marker)
+    if not changed:
+        return fragment, {}
+    return _inner_html(root), kept
+
+
+def _restore_embedded_images(root: etree._Element, kept: dict[int, str]) -> None:
+    """Replace sentinels with the re-encoded data URLs; drop unembeddable imgs."""
+    for el in list(root.iter("img")):
+        src = el.get("src") or ""
+        if src == _EMBEDDED_DROPPED:
+            _detach(el)
+            continue
+        match = _EMBEDDED_SENTINEL_RE.match(src)
+        if not match:
+            continue
+        data_url = kept.get(int(match.group(1)))
+        if data_url is None:
+            _detach(el)
+            continue
+        el.set("src", data_url)
+
+
 def normalize_email_html(fragment: str) -> str:
     """Return sanitized, email-normalized HTML for a message body fragment."""
     if not fragment or not fragment.strip():
         return ""
+    fragment, embedded = _extract_embedded_images(fragment)
     cleaned = nh3.clean(
         fragment,
         tags=set(EMAIL_ALLOWED_TAGS),
@@ -578,6 +712,7 @@ def normalize_email_html(fragment: str) -> str:
     if not cleaned.strip():
         return ""
     wrapper = lxml_html.fragment_fromstring(cleaned, create_parent="div")
+    _restore_embedded_images(wrapper, embedded)
     _rebuild_word_lists(wrapper)
     _drop_meaningless_attributes(wrapper)
     _remove_spacer_blocks(wrapper)

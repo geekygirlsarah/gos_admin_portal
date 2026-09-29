@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { initEditor, wordListHtmlToHtml } from "../email-editor.js";
+import { initEditor, wordListHtmlToHtml, readImageFile, imageFromClipboard } from "../email-editor.js";
 
 const WORD_LIST_HTML = [
   "<p class='MsoNormal'>Bring tools</p>",
@@ -115,5 +115,45 @@ describe("wordListHtmlToHtml", () => {
     const out = wordListHtmlToHtml(nested);
     expect(out).toMatch(/<li>Top<ul><li>Sub<\/li><\/ul><\/li>/);
     expect(out).toContain("Top two");
+  });
+});
+
+describe("image paste", () => {
+  // 1x1 transparent PNG.
+  const PNG_BYTES = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    ),
+    (c) => c.charCodeAt(0)
+  );
+
+  it("reads an image file into a data URL", async () => {
+    const file = new File([PNG_BYTES], "photo.png", { type: "image/png" });
+    const src = await readImageFile(file);
+    expect(src.startsWith("data:image/png;base64,")).toBe(true);
+  });
+
+  it("finds the first image in a clipboard payload", () => {
+    const image = new File([PNG_BYTES], "a.png", { type: "image/png" });
+    const doc = new File([PNG_BYTES], "b.pdf", { type: "application/pdf" });
+    const found = imageFromClipboard({ files: [doc, image] });
+    expect(found).toBe(image);
+  });
+
+  it("ignores a clipboard with no image files", () => {
+    const doc = new File([PNG_BYTES], "b.pdf", { type: "application/pdf" });
+    expect(imageFromClipboard({ files: [doc] })).toBe(null);
+    expect(imageFromClipboard(null)).toBe(null);
+    expect(imageFromClipboard({})).toBe(null);
+  });
+
+  it("inserts a pasted image as a data URL that reaches the textarea", async () => {
+    const { editor, ta } = mountEditor("");
+    const file = new File([PNG_BYTES], "photo.png", { type: "image/png" });
+    const src = await readImageFile(file);
+    editor.chain().focus().setImage({ src, alt: "Photo" }).run();
+    expect(ta.value).toContain("<img");
+    expect(ta.value).toContain("data:image/png;base64,");
+    expect(ta.value).toContain('alt="Photo"');
   });
 });

@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **New rich-text editor for composing emails**: The message body on the "Email Program", "Applicant Messaging", and (optional) balance-sheet email pages now uses a new self-hosted editor (Tiptap) that keeps Word and Google Docs pastes readable — pasted lists stay lists (real bullets) instead of turning into run-together text, tables keep their borders, and line breaks no longer balloon into extra blank lines. Emails are sent as clean HTML with a readable plain-text fallback, and the preview shown before sending matches what recipients receive.
+- **Paste and insert images in emails**: You can now paste a picture straight into a message (copy an image from a browser, screenshot tool, or file manager and hit Ctrl/Cmd+V) or add one with the new "Insert image" button in the editor toolbar. The picture is shrunk to a sensible size, converted to a lightweight JPEG, and embedded directly in the email so it displays for everyone — no broken icon placeholders. Up to 5 images per message; an image's alt text is used in the plain-text version for recipients who can't see images.
+- **Longer emails stay comfortable to write**: The compose box no longer grows to the full length of your message — it keeps a comfortable height and scrolls as you type — and the formatting toolbar stays pinned to the top so bold, lists, and the "Insert image" button are always one click away instead of scrolled off-screen.
 
 ## 2026-09-26
 

@@ -7,6 +7,7 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import { TableKit } from "@tiptap/extension-table";
 import ListKeymap from "@tiptap/extension-list-keymap";
+import Image from "@tiptap/extension-image";
 
 const TOOLBAR = [
   { icon: "bi-type-bold", title: "Bold", run: (e) => e.chain().focus().toggleBold().run(), isActive: (e) => e.isActive("bold") },
@@ -21,6 +22,7 @@ const TOOLBAR = [
   { icon: "bi-table", title: "Insert table", run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), isActive: (e) => e.isActive("table") },
   { icon: "bi-table-column", title: "Delete table", run: (e) => e.chain().focus().deleteTable().run() },
   { type: "separator" },
+  { icon: "bi-image", title: "Insert image", run: (e) => pickImageFile(e) },
   { icon: "bi-link-45deg", title: "Add link", run: (e) => promptForLink(e) },
   { icon: "bi-link-45deg", title: "Remove link", run: (e) => e.chain().focus().extendMarkRange("link").unsetLink().run() },
   { type: "separator" },
@@ -43,6 +45,48 @@ function promptForLink(editor) {
     return;
   }
   editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+}
+
+// ---------------------------------------------------------------------------
+// Images
+//
+// Tiptap's Image extension only models the node; it does not read the
+// clipboard for you. Pasted or picked images become `data:` URLs in the
+// editor, and the server-side normalizer re-encodes them to a bounded JPEG
+// (see EMAIL_MAX_EMBEDDED_IMAGES in programs/utils/email_html.py) before
+// they leave the compose page.
+// ---------------------------------------------------------------------------
+
+function readImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageFromClipboard(clipboardData) {
+  if (!clipboardData) {
+    return null;
+  }
+  const files = Array.from(clipboardData.files || []);
+  return files.find((file) => file.type && file.type.startsWith("image/")) || null;
+}
+
+function pickImageFile(editor) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    if (file) {
+      readImageFile(file).then((src) => {
+        editor.chain().focus().setImage({ src }).run();
+      });
+    }
+  });
+  input.click();
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +253,7 @@ function initEditor(textarea) {
         linkOnPaste: true,
       }),
       Placeholder.configure({ placeholder }),
+      Image.configure({ allowBase64: true }),
       TextAlign.configure({ types: ["paragraph", "heading"] }),
       TableKit.configure({
         table: { resizable: true },
@@ -221,6 +266,19 @@ function initEditor(textarea) {
     editorProps: {
       handlePaste(view, event) {
         const clipboard = event.clipboardData;
+        const image = imageFromClipboard(clipboard);
+        if (image) {
+          // Pasted image files never carry text/html, so handle them before
+          // the Word-list transform below.
+          readImageFile(image).then((src) => {
+            view.dispatch(
+              view.state.tr.replaceSelection(
+                view.state.schema.nodes.image.create({ src })
+              )
+            );
+          });
+          return true;
+        }
         const html = clipboard && clipboard.getData("text/html");
         if (!html) {
           return false; // Let ProseMirror's default (plain text) handling run.
@@ -265,7 +323,7 @@ export function init() {
     .forEach((text) => initEditor(text));
 }
 
-export { initEditor, promptForLink, wordListHtmlToHtml };
+export { initEditor, promptForLink, wordListHtmlToHtml, readImageFile, imageFromClipboard, pickImageFile };
 
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
