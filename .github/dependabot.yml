@@ -1,0 +1,55 @@
+version: 2
+
+updates:
+  # Python dependencies from requirements.txt. Dependabot alerts (Security tab)
+  # are free on private repos and cover the vulnerable-dependency half of what
+  # OSV-Scanner was doing, so this is the main source of new-version PRs.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Django and its ecosystem move together; upgrading them as a batch avoids
+      # a half-migrated stack.
+      django:
+        patterns:
+          - "django*"
+          - "django-*"
+      python-rest:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "django*"
+          - "django-*"
+
+  # npm dependencies for the Tiptap email-editor bundle.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Tiptap packages share a single lockstep versioning scheme; upgrading them
+      # individually can produce a mismatched editor.
+      tiptap:
+        patterns:
+          - "@tiptap/*"
+      npm-tooling:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@tiptap/*"
+
+  # Keeps the pinned action SHAs in the workflow files current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns:
+          - "*"
