@@ -20,3 +20,7 @@ jobs:
     uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8"
     with:
       fail-on-vuln: false
+      # Code scanning requires GitHub Advanced Security on private repos, which
+      # is not enabled here. Keep the SARIF artifact, but skip the Security-tab
+      # upload.
+      upload-sarif: false

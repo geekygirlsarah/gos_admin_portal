@@ -67,6 +67,12 @@ jobs:
 
   gitleaks:
     runs-on: ubuntu-latest
+    # Required on private repos: the default GITHUB_TOKEN is read-only once a
+    # repository is private, and gitleaks-action needs pull-requests to read
+    # PR commits and post review comments.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
       with:
