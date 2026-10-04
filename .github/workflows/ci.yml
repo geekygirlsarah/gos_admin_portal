@@ -113,6 +113,15 @@ jobs:
     - name: Install Dependencies
       run: |
         uv pip install --system -r requirements.txt
+    - name: Set up Node.js
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444  # v5
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - name: Install frontend dependencies
+      run: npm ci
+    - name: Build frontend bundle
+      run: npm run build
     - name: Django System Check
       run: |
         python manage.py check
