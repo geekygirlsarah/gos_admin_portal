@@ -119,10 +119,10 @@
                                         <td class="text-center">
                                             {% if item.mentor %}
                                             <div class="btn-group btn-group-sm w-100" role="group" aria-label="{{ item.name }} Mentor Access">
-                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_none" value="none" {% if not item.mentor.can_read and not item.mentor.can_write %}checked{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_none" value="none" {% if not item.mentor.can_read and not item.mentor.can_write or not item.uses_write and not item.mentor.can_read or not item.uses_read and not item.mentor.can_write %}checked{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-secondary py-1 px-2 small" for="perm_{{ item.mentor.id }}_none" title="No Access">None</label>
 
-                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_read" value="read" {% if item.uses_read and item.mentor.can_read and not item.mentor.can_write %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_read" value="read" {% if item.uses_read and item.mentor.can_read and not item.mentor.can_write or item.uses_read and not item.uses_write and item.mentor.can_read %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-primary py-1 px-2 small" for="perm_{{ item.mentor.id }}_read" title="Read Only">Read</label>
 
                                                 <input type="radio" class="btn-check" name="perm_{{ item.mentor.id }}" id="perm_{{ item.mentor.id }}_write" value="write" {% if item.uses_write and item.mentor.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %} autocomplete="off">
@@ -134,13 +134,13 @@
                                         <td class="text-center">
                                             {% if item.parent %}
                                             <div class="btn-group btn-group-sm w-100" role="group" aria-label="{{ item.name }} Parent Access">
-                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_none" value="none" {% if not item.parent.can_read and not item.parent.can_write or item.orders_section %}checked{% endif %} {% if item.orders_section %}disabled{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_none" value="none" {% if not item.parent.can_read and not item.parent.can_write or not item.uses_write and not item.parent.can_read or not item.uses_read and not item.parent.can_write or item.orders_section %}checked{% endif %} {% if item.orders_section %}disabled{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-secondary py-1 px-2 small" for="perm_{{ item.parent.id }}_none" title="No Access">None</label>
 
-                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_read" value="read" {% if not item.orders_section and item.parent.can_read and not item.parent.can_write %}checked{% endif %} {% if not item.uses_read or item.orders_section %}disabled{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_read" value="read" {% if not item.orders_section and item.uses_read and item.parent.can_read and not item.parent.can_write or not item.orders_section and item.uses_read and not item.uses_write and item.parent.can_read %}checked{% endif %} {% if not item.uses_read or item.orders_section %}disabled{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-primary py-1 px-2 small" for="perm_{{ item.parent.id }}_read" title="Read Only">Read</label>
 
-                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_write" value="write" {% if not item.orders_section and item.parent.can_write %}checked{% endif %} {% if not item.uses_write or item.orders_section %}disabled{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.parent.id }}" id="perm_{{ item.parent.id }}_write" value="write" {% if not item.orders_section and item.uses_write and item.parent.can_write %}checked{% endif %} {% if not item.uses_write or item.orders_section %}disabled{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-success py-1 px-2 small" for="perm_{{ item.parent.id }}_write" title="Read &amp; Write">R / W</label>
                                             </div>
                                             {% endif %}
@@ -149,10 +149,10 @@
                                         <td class="text-center">
                                             {% if item.student %}
                                             <div class="btn-group btn-group-sm w-100" role="group" aria-label="{{ item.name }} Student Access">
-                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_none" value="none" {% if not item.student.can_read and not item.student.can_write %}checked{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_none" value="none" {% if not item.student.can_read and not item.student.can_write or not item.uses_write and not item.student.can_read or not item.uses_read and not item.student.can_write %}checked{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-secondary py-1 px-2 small" for="perm_{{ item.student.id }}_none" title="No Access">None</label>
 
-                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_read" value="read" {% if item.uses_read and item.student.can_read and not item.student.can_write %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %} autocomplete="off">
+                                                <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_read" value="read" {% if item.uses_read and item.student.can_read and not item.student.can_write or item.uses_read and not item.uses_write and item.student.can_read %}checked{% endif %} {% if not item.uses_read %}disabled{% endif %} autocomplete="off">
                                                 <label class="btn btn-outline-primary py-1 px-2 small" for="perm_{{ item.student.id }}_read" title="Read Only">Read</label>
 
                                                 <input type="radio" class="btn-check" name="perm_{{ item.student.id }}" id="perm_{{ item.student.id }}_write" value="write" {% if item.uses_write and item.student.can_write %}checked{% endif %} {% if not item.uses_write %}disabled{% endif %} autocomplete="off">

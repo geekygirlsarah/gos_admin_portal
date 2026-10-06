@@ -139,15 +139,6 @@
     </div>
     {% endif %}
 
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        {% endfor %}
-    {% endif %}
-
     {# ── Events Sections ── #}
     {% if user_role == 'Student' and my_events %}
         <div class="d-flex align-items-center gap-2 mb-3">

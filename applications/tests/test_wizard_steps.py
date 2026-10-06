@@ -13,6 +13,13 @@ from applications.forms import NOT_LISTED_SCHOOL
 from applications.models import Application
 from programs.models import Adult, Program, School, Student
 
+# Step 5 rejects applicants older than 18, so DOBs are anchored to today rather
+# than hardcoded to a fixed year (which would quietly start failing once that
+# date turned 18). 15 years old sits comfortably inside the limit.
+_FIFTEEN_YEAR_OLD_DOB = (
+    timezone.localdate() - datetime.timedelta(days=15 * 365)
+).strftime("%Y-%m-%d")
+
 
 def _verified(**kwargs):
     """Convenience: create an application that has cleared Steps 1-4."""
@@ -99,7 +106,7 @@ class Step5StudentInfoTests(TestCase):
                 "allergies": "",
                 "dietary_restrictions": "",
                 "medical_notes": "",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _FIFTEEN_YEAR_OLD_DOB,
             },
         )
         self.assertRedirects(
@@ -558,7 +565,7 @@ class Step5ValidationTests(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "tshirt_size": "M",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _FIFTEEN_YEAR_OLD_DOB,
                 "school_name": NOT_LISTED_SCHOOL,
                 "grade": "9",
             },
@@ -584,7 +591,7 @@ class Step5ValidationTests(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "tshirt_size": "M",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _FIFTEEN_YEAR_OLD_DOB,
                 "school_name": "Some School That Does Not Exist",
                 "grade": "9",
             },

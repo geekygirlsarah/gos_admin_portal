@@ -63,12 +63,14 @@ class Phase1UIImprovementsTests(TestCase):
             relationship_to_student="parent",
         )
 
-        # Program
+        # Program. Date window is relative to today so it stays "Active" whenever the
+        # suite runs (Program.status compares against timezone.now()).
+        today = datetime.date.today()
         self.program = Program.objects.create(
             name="Robotics Flagship",
             active=True,
-            start_date=datetime.date(2026, 1, 1),
-            end_date=datetime.date(2026, 12, 31),
+            start_date=today - datetime.timedelta(days=180),
+            end_date=today + datetime.timedelta(days=180),
         )
         f_att, _ = ProgramFeature.objects.get_or_create(
             key="attendance", defaults={"name": "Attendance"}
@@ -137,7 +139,9 @@ class Phase1UIImprovementsTests(TestCase):
                 student=self.student,
                 check_type=c_type,
                 cleared=True,
-                obtained_date=datetime.date(2026, 1, 1),
+                # Clearances are valid 5 years (obtained + 5y); anchor to today
+                # so they don't silently expire and flip this assertion.
+                obtained_date=datetime.date.today() - datetime.timedelta(days=365),
             )
         response2 = self.client.get(url)
         self.assertEqual(response2.status_code, 200)

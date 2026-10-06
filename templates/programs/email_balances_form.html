@@ -2,13 +2,9 @@
 {% block title %}Email Balances — {{ program.name }}{% endblock %}
 {% block extra_head %}
   {% load static %}
-  <link href="{% static 'vendor/quill/2.0.3/quill.snow.css' %}" rel="stylesheet">
-  <link href="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.css' %}" rel="stylesheet">
+  <link href="{% static 'css/email_editor.css' %}" rel="stylesheet">
   <style nonce="{{ csp_nonce }}">
-    #editor { height: 300px; }
-    .ql-editor table { border-collapse: collapse; width: 100%; }
-    .ql-editor table td, .ql-editor table th { border: 1px solid #dee2e6; padding: 6px; }
-    .d-none { display: none !important; }
+    #id_body { display: none !important; }
   </style>
 {% endblock %}
 {% block content %}
@@ -49,9 +45,9 @@
             {{ form.subject }}
           </div>
           <div class="mb-0">
-            <label class="form-label">Message</label>
-            <div id="editor" class="form-control"></div>
-            <input type="hidden" name="default_message" id="id_body" value="{{ form.default_message.value|default:'' }}">
+            <label class="form-label" for="id_body">Message</label>
+            <textarea name="default_message" id="id_body" class="d-none" rows="12"
+                      data-email-editor data-email-editor-placeholder="Optional message (appears above the balance sheet)...">{{ form.default_message.value|default:'' }}</textarea>
             <div class="form-text">Optional message that will appear above the balance sheet. Rich text is supported and will be sent as HTML with a plain-text fallback.</div>
           </div>
         </div>
@@ -88,20 +84,7 @@
 {% endblock %}
 {% block extra_scripts %}
   {% load static %}
-  <script src="{% static 'vendor/quill/2.0.3/quill.js' %}"></script>
-  <script src="{% static 'vendor/quill-better-table/1.2.10/quill-better-table.min.js' %}"></script>
-  <script nonce="{{ csp_nonce }}">
-    (function(){
-      if (typeof window.quillBetterTable === 'undefined') {
-        var s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js';
-        s.async = true;
-        s.nonce = "{{ csp_nonce }}";
-        document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
-      }
-    })();
-  </script>
-  <script src="{% static 'js/email_form.js' %}"></script>
+  <script src="{% static 'email-editor.js' %}"></script>
   <script src="{% static 'js/email_send_confirm.js' %}"></script>
   <script nonce="{{ csp_nonce }}">
     (function() {

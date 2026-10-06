@@ -12,6 +12,7 @@ Covers:
 from io import StringIO
 
 from django.contrib.auth.models import Group, User
+from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -246,6 +247,40 @@ class MessagingUIImprovementsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # Maya + Peter = 2 recipients
         self.assertContains(response, "Email sent to 2 recipient(s)")
+
+    def test_sent_email_uses_normalized_wrapped_and_text_alternative(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        post_data = {
+            "program": self.active_program.pk,
+            "recipient_groups": ["students"],
+            "subject": "Word Paste Check",
+            # Word-style paste: an mso gutter span is allowed through nh3's
+            # sanitizer, so bulk email must be wrapped in a full document with
+            # the sanitized/normalized HTML body and a real plain-text part.
+            "body": (
+                "<p>Intro</p>"
+                '<p style="mso-list:l0 level1 lfo1"><span style="mso-list:'
+                'Ignore">-<span>&nbsp;</span></span>First</p>'
+                '<p style="mso-list:l0 level1 lfo1"><span style="mso-list:'
+                'Ignore">-<span>&nbsp;</span></span>Second</p>'
+            ),
+            "from_account": "DEFAULT",
+        }
+        response = self.client.post(
+            reverse("program_messaging"), data=post_data, follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Email sent to 3 recipient(s)")
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        html_part = sent.alternatives[0][0]
+        self.assertEqual(sent.alternatives[0][1], "text/html")
+        self.assertIn("<!DOCTYPE html>", html_part)
+        self.assertIn("<ul><li>First</li><li>Second</li></ul>", html_part)
+        self.assertNotIn("mso-list", html_part)
+        self.assertIn("\u2022 First", sent.body)
+        self.assertIn("\u2022 Second", sent.body)
+        self.assertNotIn("<p>", sent.body)
 
     def test_command_get_program_emails_with_subgroup_filters(self):
         out = StringIO()

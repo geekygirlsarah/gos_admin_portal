@@ -1,6 +1,7 @@
 import datetime
 
 from django.test import TestCase
+from django.utils import timezone
 
 from programs.forms import BackgroundChecksForm
 from programs.models import Adult, BackgroundCheck, BackgroundCheckType, Student
@@ -157,7 +158,10 @@ class BackgroundCheckStatusTagTests(TestCase):
             student=self.student,
             check_type=BackgroundCheckType.FBI,
             cleared=True,
-            obtained_date=datetime.date(2022, 1, 1),
+            # Clearances are valid for 5 years (expiration = obtained + 5y), so
+            # anchor this to today rather than a fixed year that would silently
+            # flip is_valid to False once that year passes.
+            obtained_date=timezone.localdate() - datetime.timedelta(days=30),
         )
         tpl = Template(
             "{% load form_tags %}"
@@ -196,7 +200,12 @@ class StudentDetailBackgroundCheckViewTests(TestCase):
     def test_not_required_shows_not_needed_message(self):
         from django.urls import reverse
 
-        self.student.date_of_birth = datetime.date(2012, 1, 1)
+        # Clearances are only required for students 17+ as of Sept 1 of the current
+        # academic year, so pin this to a 12-year-old: a hardcoded DOB would
+        # eventually cross that threshold and flip the expected message.
+        self.student.date_of_birth = timezone.localdate() - datetime.timedelta(
+            days=12 * 365
+        )
         self.student.save()
         url = reverse("student_detail", args=[self.student.pk])
         resp = self.client.get(url)

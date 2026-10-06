@@ -274,7 +274,12 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 # Ensure project-level static assets are collected (e.g., static/samples/students_sample.csv)
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "programs", "static")]
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "programs", "static"),
+    # Compiled frontend bundles (built by `npm run build`; directory is kept in
+    # git via .gitkeep so staticfiles.E002 stays silent in fresh checkouts)
+    os.path.join(BASE_DIR, "programs", "static_built"),
+]
 
 # This production code might break development mode, so we check whether we're in DEBUG mode
 if not DEBUG:
@@ -337,18 +342,58 @@ ACCOUNT_FORMS = {
 }
 
 # Email (SMTP) configuration via environment variables (Django 6.1+ MAILERS).
-# Default to the SMTP backend; without credentials it just can't connect, which
-# is fine for `manage.py check` and tests (Django's test runner swaps in the
-# locmem backend). We deliberately avoid assigning a development-only backend
-# (console/locmem) to MAILERS["default"] because Django 6.1's system check
-# (mail.E001) rejects them when no credentials are present. For local dev that
-# prints emails to the console instead, set EMAIL_BACKEND explicitly to
-# django.core.mail.backends.console.EmailBackend.
-# Only SMTP mailers receive transport options (host/port/credentials); other
-# backends would reject them as unknown OPTIONS.
-_mail_backend = os.getenv("EMAIL_BACKEND")
-if not _mail_backend:
-    _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
+#
+# Safe Development Defaults:
+# - In DEBUG=True (local development), EMAIL_BACKEND defaults to
+#   `django.core.mail.backends.console.EmailBackend` so no emails are sent over
+#   the network and all outgoing emails (including login OTP codes) are printed
+#   directly to the terminal console.
+# - In DEBUG=False (production), EMAIL_BACKEND defaults to
+#   `django.core.mail.backends.smtp.EmailBackend` and connects to the SMTP server.
+#
+# Customization options via environment variables:
+# - EMAIL_BACKEND: Full class path or friendly alias ('console', 'smtp', 'dummy',
+#   'locmem', 'filebased', 'redirect').
+# - EMAILS_ENABLED / DISABLE_OUTGOING_EMAILS: If disabled (e.g. EMAILS_ENABLED=False
+#   or DISABLE_OUTGOING_EMAILS=True), routes to `django.core.mail.backends.dummy.EmailBackend`
+#   (completely silent black-hole).
+# - EMAIL_REDIRECT_TO: If set (e.g. 'developer@example.com'), all outgoing emails
+#   are safely rerouted to this address with the original recipients in the subject.
+# - EMAIL_FILE_PATH: Directory path for `filebased.EmailBackend` (default `tmp/app-emails`).
+_EMAIL_BACKEND_ALIASES = {
+    "console": "django.core.mail.backends.console.EmailBackend",
+    "smtp": "django.core.mail.backends.smtp.EmailBackend",
+    "dummy": "django.core.mail.backends.dummy.EmailBackend",
+    "locmem": "django.core.mail.backends.locmem.EmailBackend",
+    "filebased": "django.core.mail.backends.filebased.EmailBackend",
+    "redirect": "GoSAdminPortal.mail_backends.RedirectEmailBackend",
+}
+
+_emails_disabled = (
+    os.getenv("EMAILS_ENABLED", "").strip().lower() in ["0", "false", "no", "off"]
+    or os.getenv("DISABLE_OUTGOING_EMAILS", "").strip().lower()
+    in ["1", "true", "yes", "on"]
+    or os.getenv("EMAIL_DISABLED", "").strip().lower() in ["1", "true", "yes", "on"]
+)
+
+EMAIL_REDIRECT_TO = os.getenv("EMAIL_REDIRECT_TO", "").strip() or None
+_email_file_path = os.getenv("EMAIL_FILE_PATH", str(BASE_DIR / "tmp" / "app-emails"))
+EMAILS_ENABLED = not _emails_disabled
+
+if _emails_disabled:
+    _mail_backend = "django.core.mail.backends.dummy.EmailBackend"
+else:
+    _mail_backend_env = os.getenv("EMAIL_BACKEND", "").strip()
+    if _mail_backend_env:
+        _mail_backend = _EMAIL_BACKEND_ALIASES.get(
+            _mail_backend_env.lower(), _mail_backend_env
+        )
+    elif EMAIL_REDIRECT_TO:
+        _mail_backend = "GoSAdminPortal.mail_backends.RedirectEmailBackend"
+    elif DEBUG:
+        _mail_backend = "django.core.mail.backends.console.EmailBackend"
+    else:
+        _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
 
 _smtp_options = {
     "host": os.getenv("EMAIL_HOST", "smtp.fastmail.com"),
@@ -360,14 +405,22 @@ _smtp_options = {
     "timeout": int(os.getenv("EMAIL_TIMEOUT", "30")),
 }
 
+if _mail_backend == "django.core.mail.backends.smtp.EmailBackend":
+    _backend_options = dict(_smtp_options)
+elif _mail_backend == "GoSAdminPortal.mail_backends.RedirectEmailBackend":
+    _backend_options = {
+        "redirect_to": EMAIL_REDIRECT_TO,
+        "backend_options": dict(_smtp_options),
+    }
+elif _mail_backend == "django.core.mail.backends.filebased.EmailBackend":
+    _backend_options = {"file_path": _email_file_path}
+else:
+    _backend_options = {}
+
 MAILERS = {
     "default": {
         "BACKEND": _mail_backend,
-        "OPTIONS": (
-            dict(_smtp_options)
-            if _mail_backend == "django.core.mail.backends.smtp.EmailBackend"
-            else {}
-        ),
+        "OPTIONS": _backend_options,
     },
 }
 
@@ -452,7 +505,7 @@ GEOCODING_USER_AGENT = os.getenv("GEOCODING_USER_AGENT", "GoSAdminPortal/1.0")
 GEOCODING_TIMEOUT = int(os.getenv("GEOCODING_TIMEOUT", "10"))
 # Nominatim asks for at most 1 request/second.
 GEOCODING_DELAY_SECONDS = float(os.getenv("GEOCODING_DELAY_SECONDS", "1.0"))
-MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "") if not TESTING else ""
 
 # Content Security Policy (Django built-in CSP)
 # Allow only self by default; permit Bootstrap CDN used in base.html; images and fonts as needed
@@ -506,21 +559,30 @@ if _email_accounts_env:
 
 # One MAILERS alias per sender account so the messaging UI can select a
 # connection with that account's credentials via `mail.mailers["sender_<key>"]`.
-# Only meaningful when the SMTP backend is in use. The account dropdown in the
-# views matches on `key or email`; keep the alias scheme in sync with
-# `programs/utils/notifications.get_sender_connection()`.
-if _mail_backend == "django.core.mail.backends.smtp.EmailBackend":
-    for _account in EMAIL_SENDER_ACCOUNTS:
-        _account_key = _account.get("key") or _account.get("email")
-        if not _account_key:
-            continue
+# The account dropdown in the views matches on `key or email`; keep the alias
+# scheme in sync with `programs/utils/notifications.get_sender_connection()`.
+for _account in EMAIL_SENDER_ACCOUNTS:
+    _account_key = _account.get("key") or _account.get("email")
+    if not _account_key:
+        continue
+    if _mail_backend == "django.core.mail.backends.smtp.EmailBackend":
         _account_options = dict(_smtp_options)
         _account_options["username"] = _account.get("username") or ""
         _account_options["password"] = _account.get("password") or ""
-        MAILERS[f"sender_{_account_key}"] = {
-            "BACKEND": _mail_backend,
-            "OPTIONS": _account_options,
+    elif _mail_backend == "GoSAdminPortal.mail_backends.RedirectEmailBackend":
+        _acc_smtp = dict(_smtp_options)
+        _acc_smtp["username"] = _account.get("username") or ""
+        _acc_smtp["password"] = _account.get("password") or ""
+        _account_options = {
+            "redirect_to": EMAIL_REDIRECT_TO,
+            "backend_options": _acc_smtp,
         }
+    else:
+        _account_options = dict(_backend_options)
+    MAILERS[f"sender_{_account_key}"] = {
+        "BACKEND": _mail_backend,
+        "OPTIONS": _account_options,
+    }
 
 # Administrators who get error emails
 # Provide comma-separated emails via ADMIN_EMAILS env var, e.g., "admin1@example.com,admin2@example.com"

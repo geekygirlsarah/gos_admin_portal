@@ -195,6 +195,10 @@ class OrderForm(forms.ModelForm):
             "shipping_cost": forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
             "tax": forms.NumberInput(attrs={"min": "0", "step": "0.01"}),
         }
+        help_texts = {
+            "shipping_cost": "Optional — can be entered when placing the order or later.",
+            "tax": "Optional — can be entered when placing the order or later.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -280,11 +284,15 @@ class ShippingInfoForm(forms.ModelForm):
             "tracking_number",
             "shipped_date",
             "delivery_estimate",
+            "shipping_cost",
+            "tax",
         ]
         labels = {
             "tracking_number": "Tracking",
             "shipped_date": "Shipped",
             "delivery_estimate": "Est. delivery",
+            "shipping_cost": "Shipping cost",
+            "tax": "Tax",
         }
         widgets = {
             "tracking_number": forms.TextInput(
@@ -292,6 +300,16 @@ class ShippingInfoForm(forms.ModelForm):
             ),
             "shipped_date": forms.DateInput(attrs={"type": "date"}),
             "delivery_estimate": forms.DateInput(attrs={"type": "date"}),
+            "shipping_cost": forms.NumberInput(
+                attrs={"min": "0", "step": "0.01", "placeholder": "0.00"}
+            ),
+            "tax": forms.NumberInput(
+                attrs={"min": "0", "step": "0.01", "placeholder": "0.00"}
+            ),
+        }
+        help_texts = {
+            "shipping_cost": "Amount charged for shipping, added to the order total.",
+            "tax": "Sales tax charged, added to the order total.",
         }
 
     def __init__(self, *args, **kwargs):

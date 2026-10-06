@@ -8,6 +8,12 @@ set -o errexit
 python -m pip install --upgrade pip
 python -m pip install --no-cache-dir -r requirements.txt
 
+# Build the frontend bundle (Tiptap email editor). This MUST happen before
+# collectstatic: production uses CompressedManifestStaticFilesStorage, which
+# raises when {% static %} points at a file missing from the manifest.
+npm ci
+npm run build
+
 # Run the deployment-mode system check. Local dev / CI can't pass --deploy
 # (they lack production env vars and DEBUG stays on), so run it here, in the
 # build step, where Render provides the real production settings the check is

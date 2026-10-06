@@ -1,0 +1,9 @@
+This directory holds the compiled frontend bundle produced by `npm run build`
+(see `esbuild.mjs` and `frontend/email-editor.js`).
+
+The bundle is a build artifact and is git-ignored; this `.gitkeep` commits the
+directory itself so `manage.py check` (which hard-fails with staticfiles.E002
+when a `STATICFILES_DIRS` entry missing) stays green in fresh checkouts and CI.
+
+`build.sh` runs `npm run build` before `collectstatic`, so production is fine
+too.

@@ -9,9 +9,7 @@ from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import strip_tags
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
-from premailer import transform
 
 from ..forms import (
     AddExistingStudentToProgramForm,
@@ -45,6 +43,7 @@ from ..utils import (
     redirect_back,
     resolve_address_points,
 )
+from ..utils.email_html import build_email_parts
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
@@ -1099,12 +1098,10 @@ class ProgramEmailView(LoginRequiredMixin, View):
             subteams = form.cleaned_data.get("subteams")
             subject = form.cleaned_data["subject"]
             html_body = form.cleaned_data["body"]
-            # Inline CSS for better email client compatibility
-            try:
-                inlined_html_body = transform(html_body)
-            except Exception:
-                inlined_html_body = html_body
-            text_body = strip_tags(inlined_html_body)
+            # Sanitize + normalize the fragment, wrap it in an email document
+            # and inline CSS, so the message renders the way it looked in the
+            # compose editor. Also builds a readable plain-text alternative.
+            inlined_html_body, text_body = build_email_parts(html_body)
 
             if prog:
                 enrollments = Enrollment.objects.filter(
@@ -1500,8 +1497,18 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
             ).select_related("student")
         }
         presence_students = list(_active_students(program))
+        # Team/crew/subteam live on the program enrollment, so pull this
+        # program's enrollments in one query and hand each student theirs for
+        # the group badges next to their name.
+        enrollments_by_student = {
+            e.student_id: e
+            for e in Enrollment.objects.filter(
+                program=program, active=True
+            ).select_related("team", "crew", "subteam")
+        }
         for student in presence_students:
             student.today_presence = today_presence.get(student.pk)
+            student.program_enrollment = enrollments_by_student.get(student.pk)
         return render(
             request,
             self.template_name,

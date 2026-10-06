@@ -1,0 +1,123 @@
+/* Email compose editor (Tiptap). These styles mirror programs/utils/email_html.py
+ * EMAIL_BASE_CSS so what you see in the editor matches what lands in email. */
+
+.email-editor {
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.email-editor .btn-toolbar {
+  padding: 0.25rem;
+  border-bottom: 1px solid #dee2e6;
+  background: #f8f9fa;
+  /* Keep the formatting controls reachable while scrolling a long message. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.email-editor .btn-toolbar .btn.active {
+  background-color: #e7f1ff;
+  border-color: #a7c8f2;
+  color: #0d6efd;
+}
+
+.email-editor .tiptap {
+  padding: 0.75rem 1rem;
+  min-height: 180px;
+  /* A long message scrolls inside the editor instead of growing the page, so the
+     toolbar (and the caret's scroll position) stay where the writer left them. */
+  max-height: 60vh;
+  overflow-y: auto;
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.email-editor .tiptap:focus {
+  outline: none;
+}
+
+/* Give every ProseMirror block the same margins the emails carry. */
+.email-editor .tiptap p {
+  margin: 0 0 12px 0;
+}
+.email-editor .tiptap p:last-child {
+  margin-bottom: 0;
+}
+.email-editor .tiptap blockquote {
+  border-left: 3px solid #dee2e6;
+  margin: 0 0 12px 0;
+  padding-left: 12px;
+  color: #6c757d;
+}
+
+.email-editor .tiptap ul,
+.email-editor .tiptap ol {
+  margin: 0 0 12px 0;
+  padding-left: 24px;
+}
+
+/* Tables: same treatment as the balance sheet / table mso cleanup. */
+.email-editor .tiptap table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 12px 0;
+  table-layout: fixed;
+}
+.email-editor .tiptap td,
+.email-editor .tiptap th {
+  border: 1px solid #dee2e6;
+  padding: 6px;
+  vertical-align: top;
+  min-width: 1em;
+  position: relative;
+}
+.email-editor .tiptap th {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+.email-editor .tiptap .selectedCell:after {
+  background: rgba(13, 110, 253, 0.1);
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+.email-editor .tiptap .column-resize-handle {
+  background-color: #0d6efd;
+  bottom: -2px;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+  pointer-events: none;
+}
+.email-editor .tiptap .resize-cursor {
+  cursor: col-resize;
+}
+
+/* Embedded images: mirrors EMAIL_BASE_CSS's `img{max-width:100%;height:auto;}` so a
+   pasted picture is sized the same on the compose screen as it is in the email. */
+.email-editor .tiptap img {
+  max-width: 100%;
+  height: auto;
+}
+.email-editor .tiptap img.ProseMirror-selectednode {
+  outline: 2px solid #0d6efd;
+}
+
+/* Placeholder text. */
+.email-editor .tiptap p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

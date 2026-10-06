@@ -1,6 +1,6 @@
 """Field validation tests: phone and ZIP code validation on models and forms."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -8,6 +8,11 @@ from django.test import TestCase
 from applications.forms import MentorInfoForm, ParentInfoForm, StudentInfoForm
 from programs.forms import StudentForm
 from programs.models import Adult, School, Student
+
+# Applicant/student forms reject dates of birth that imply an age over 18, so
+# DOBs are anchored to today rather than hardcoded to a fixed year (which would
+# start failing once that date turned 18). 15 years old is safely inside.
+_STUDENT_DOB = (date.today() - timedelta(days=15 * 365)).strftime("%Y-%m-%d")
 
 
 class PhoneValidationTestCase(TestCase):
@@ -104,7 +109,7 @@ class PhoneValidationTestCase(TestCase):
             "legal_first_name": "Test",
             "last_name": "Student",
             "phone_number": "123",
-            "date_of_birth": "2010-01-01",
+            "date_of_birth": _STUDENT_DOB,
         }
         form = StudentForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -120,7 +125,7 @@ class PhoneValidationTestCase(TestCase):
                 "legal_first_name": "A",
                 "last_name": "B",
                 "phone_number": "123",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _STUDENT_DOB,
             }
         )
         self.assertFalse(form.is_valid())
@@ -137,7 +142,7 @@ class PhoneValidationTestCase(TestCase):
                 "state": "PA",
                 "zip_code": "15213",
                 "tshirt_size": "M",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _STUDENT_DOB,
                 "school_name": "Pittsburgh High",
                 "grade": "9",
             }
@@ -204,7 +209,7 @@ class ZipValidationTestCase(TestCase):
             legal_first_name="Test",
             preferred_first_name="Test",
             last_name="Student",
-            date_of_birth="2010-01-01",
+            date_of_birth=_STUDENT_DOB,
         )
         for invalid_zip in ["123", "1234", "123456", "abcde"]:
             student.zip_code = invalid_zip
@@ -218,7 +223,7 @@ class ZipValidationTestCase(TestCase):
         form_data = {
             "legal_first_name": "Test",
             "last_name": "Student",
-            "date_of_birth": "2010-01-01",
+            "date_of_birth": _STUDENT_DOB,
             "zip_code": "123",
         }
         form = StudentForm(data=form_data)
@@ -234,7 +239,7 @@ class ZipValidationTestCase(TestCase):
             data={
                 "legal_first_name": "A",
                 "last_name": "B",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _STUDENT_DOB,
                 "zip_code": "123",
             }
         )
@@ -245,7 +250,7 @@ class ZipValidationTestCase(TestCase):
             data={
                 "legal_first_name": "A",
                 "last_name": "B",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _STUDENT_DOB,
                 "zip_code": "12345",
             }
         )

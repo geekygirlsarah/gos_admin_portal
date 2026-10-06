@@ -437,3 +437,54 @@ class AssignmentTests(TestCase):
             [e.student.display_name for e in inactive_enrollments],
             ["Adam Wilson", "Zoe Taylor"],
         )
+
+
+class GroupBadgeRenderingTests(TestCase):
+    """The shared team/crew/subteam pill partial renders on student cards."""
+
+    def setUp(self):
+        self.password = "password"  # nosec B105
+        self.user = User.objects.create_superuser(
+            username="badgeadmin", password=self.password, email="admin@example.com"
+        )
+        self.client.login(username="badgeadmin", password=self.password)
+        self.program = Program.objects.create(name="Badge Program")
+        self.team = Team.objects.create(
+            team_type="FRC", number=1, name="Steel", color="#c1121f"
+        )
+        self.crew = Crew.objects.create(
+            name="Build Crew", program=self.program, color="#2a9d8f"
+        )
+        self.subteam = SubTeam.objects.create(
+            name="Drivetrain", program=self.program, color="#3a86ff"
+        )
+        self.student = Student.objects.create(
+            legal_first_name="Ada", last_name="Lovelace"
+        )
+        self.enrollment = Enrollment.objects.create(
+            student=self.student,
+            program=self.program,
+            active=True,
+            team=self.team,
+            crew=self.crew,
+            subteam=self.subteam,
+        )
+
+    def test_photo_grid_shows_group_badges(self):
+        url = reverse("program_student_photos", args=[self.program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "FRC 1 Steel")
+        self.assertContains(response, "Build Crew")
+        self.assertContains(response, "Drivetrain")
+        self.assertContains(response, "team-badge")
+        self.assertContains(response, "crew-badge")
+        self.assertContains(response, "subteam-badge")
+
+    def test_program_detail_shows_group_badges(self):
+        url = reverse("program_detail", args=[self.program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "FRC 1 Steel")
+        self.assertContains(response, "Build Crew")
+        self.assertContains(response, "Drivetrain")

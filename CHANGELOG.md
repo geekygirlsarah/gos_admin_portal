@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-04
+
+### Fixed
+- **Email compose pages now build their editor in CI**: The automated test run previously failed on "The email editor bundle is missing" because CI installed Python dependencies but never installed Node packages or compiled the email-editor bundle that the compose pages load. Continuous integration now installs Node and runs the frontend build before the Django checks and tests, matching the local and production build scripts.
+- **Attendance "Hours Chart" day filters and calendar (ICS) feed tests no longer expire**: A handful of automated checks hardcoded specific calendar dates (early September 2026) while the pages they exercise only show a rolling window of recent events (the last 30 days). Once that window moved past the fixed dates, the checks failed even though nothing was actually broken. These checks now pick dates relative to the day they run, so they keep testing the same behavior indefinitely instead of silently expiring.
+- **Demo data always includes programs that are running "now"**: The `seed_db` demo-data command gave each program a fixed set of calendar months, so the four current-season programs only overlapped "today" between mid-June and late October. Outside that window the demo database had no current programs at all — dashboards and rosters looked empty and an automated check failed (the first of which would have started failing on November 1, 2026). Those programs are now positioned relative to the day you seed, so you always get the same useful mix of past, current, and upcoming programs no matter when you run it.
+- **More date-sensitive checks no longer expire**: Several other automated checks used fixed dates for programs, birthdates, graduation years, and background-check clearance dates. Because those values are validated against the current date (a program has to be running, an applicant has to be 18 or younger, a clearance stays valid for five years), the checks would have started failing as the calendar moved on. They now derive those values from the day they run and keep testing the same behavior indefinitely.
+
+## 2026-09-28
+
+### Added
+- **New rich-text editor for composing emails**: The message body on the "Email Program", "Applicant Messaging", and (optional) balance-sheet email pages now uses a new self-hosted editor (Tiptap) that keeps Word and Google Docs pastes readable — pasted lists stay lists (real bullets) instead of turning into run-together text, tables keep their borders, and line breaks no longer balloon into extra blank lines. Emails are sent as clean HTML with a readable plain-text fallback, and the preview shown before sending matches what recipients receive.
+- **Paste and insert images in emails**: You can now paste a picture straight into a message (copy an image from a browser, screenshot tool, or file manager and hit Ctrl/Cmd+V) or add one with the new "Insert image" button in the editor toolbar. The picture is shrunk to a sensible size, converted to a lightweight JPEG, and embedded directly in the email so it displays for everyone — no broken icon placeholders. Up to 5 images per message; an image's alt text is used in the plain-text version for recipients who can't see images.
+- **Longer emails stay comfortable to write**: The compose box no longer grows to the full length of your message — it keeps a comfortable height and scrolls as you type — and the formatting toolbar stays pinned to the top so bold, lists, and the "Insert image" button are always one click away instead of scrolled off-screen.
+
+## 2026-09-26
+
+### Added
+- **Digital Sign-out: see team, crew, and subteam badges when marking attendance**: The "Who's Here Today?" list on a program's Digital Sign-out page now shows each student's Team, Crew, and Subteam badges (in their group colors) next to their name, so mentors taking attendance can tell groups apart at a glance — the same badges you see on the program Students page and photo grid.
+
+## 2026-09-25
+
+### Added
+- **Local Development Email Safety & Redirection**:
+  - **Console backend default in development**: In local development (`DEBUG=True`), `EMAIL_BACKEND` now defaults to `django.core.mail.backends.console.EmailBackend`. Outgoing emails (including login OTP codes and notification emails) print directly to the developer terminal rather than attempting live SMTP delivery, preventing real students or parents from being inadvertently emailed during testing.
+  - **Email redirection backend (`EMAIL_REDIRECT_TO`)**: Added `RedirectEmailBackend` (`GoSAdminPortal.mail_backends.RedirectEmailBackend`) to safely reroute all outgoing emails to a designated developer or team inbox (e.g. `EMAIL_REDIRECT_TO="dev-team@example.com"`). The subject line is automatically prepended with `[DEV to: <original_recipients>]` and original recipient headers are preserved in `X-Original-To`.
+  - **Outgoing email disable switch**: Support for disabling outgoing emails completely via `EMAILS_ENABLED=False` or `DISABLE_OUTGOING_EMAILS=True`, routing all messages into Django's silent dummy black-hole backend.
+  - **Backend alias support**: `EMAIL_BACKEND` environment variable now supports friendly aliases: `console`, `smtp`, `dummy`, `locmem`, `filebased`, and `redirect`.
+  - **Database email anonymization command (`anonymize_emails`)**: Added `python manage.py anonymize_emails` with `--domain` (default `example.com`), `--dry-run`, and `--force` flags to quickly scrub all real email addresses on Students, Adults, Users, and Applications in imported databases.
+
+## 2026-09-24
+
+### Added
+- **Orders: Prompt for shipping cost and tax when marking an order as placed**: When Lead Mentors or administrators place a vendor order and click "Ordered" / "Mark as Ordered", a confirmation dialog now allows them to record the final shipping cost and sales tax right when placing the order. When mentors bundle items together initially, shipping and tax are optional and can be left blank. Teams can also view and edit shipping cost and tax at any time from the order's Shipping & Cost Details section.
+
+### Fixed
+- **Orders: Student and Mentor read permissions in Portal Settings**: Fixed a bug where the permissions settings page failed to display the "Read" radio option as selected for viewable order sections (`orders-view`). This previously caused read permissions to be inadvertently cleared whenever permissions were saved, blocking students from viewing order pages or submitting item requests even when write permissions were configured.
+
 ## 2026-09-18
 
 ### Added
@@ -13,6 +51,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Outreach: friendly dates in sign-up messages**: The confirmation messages after saving student or mentor sign-ups (and the messages when you sign up to support a shift) now show the shift date in a friendly format like "Oct. 24, 2026" instead of raw "2026-10-24".
+- **Outreach: success messages no longer appear twice**: The confirmation after saving sign-ups (and the check-in page messages) used to show up both at the top of the page and again lower down — each message is now displayed exactly once.
 
 ## 2026-09-15
 

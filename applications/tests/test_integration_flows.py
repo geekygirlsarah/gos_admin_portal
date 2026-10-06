@@ -13,6 +13,28 @@ from applications.models import Application
 from programs.models import Enrollment, Program, RaceEthnicity, School, Student
 
 
+def _student_dob():
+    """DOB for a student applicant, relative to today.
+
+    Step 5 rejects applicants older than 18, so a hardcoded DOB would start
+    failing once that fixed date turned 18. 15 years old is safely inside the
+    limit for any day the suite runs.
+    """
+    return (timezone.localdate() - datetime.timedelta(days=15 * 365)).strftime(
+        "%Y-%m-%d"
+    )
+
+
+def _graduation_year(years_ahead=2):
+    """Graduation year relative to today.
+
+    ``graduation_year`` is validated with ``min_value = timezone.now().year``,
+    so a hardcoded year eventually falls below the floor and the step is
+    rejected.
+    """
+    return timezone.localdate().year + years_ahead
+
+
 class ApplicationIntegrationFlowTests(TestCase):
     """
     High-level integration tests for the public application wizard
@@ -111,14 +133,14 @@ class ApplicationIntegrationFlowTests(TestCase):
             {
                 "legal_first_name": "Ada",
                 "last_name": "Lovelace",
-                "date_of_birth": "2010-01-01",
+                "date_of_birth": _student_dob(),
                 "address": "123 Main St",
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15201",
                 "school_name": self.school.name,
                 "grade": "10",
-                "graduation_year": 2028,
+                "graduation_year": _graduation_year(),
                 "tshirt_size": "M",
                 "confirm_age": True,
                 "confirm_grade": True,
@@ -267,14 +289,14 @@ class ApplicationIntegrationFlowTests(TestCase):
             {
                 "legal_first_name": "Bob",
                 "last_name": "Builder",
-                "date_of_birth": "2012-05-05",
+                "date_of_birth": _student_dob(),
                 "address": "456 Oak Rd",
                 "city": "Pittsburgh",
                 "state": "PA",
                 "zip_code": "15202",
                 "school_name": self.school.name,
                 "grade": "8",
-                "graduation_year": 2030,
+                "graduation_year": _graduation_year(),
                 "confirm_age": True,
                 "confirm_grade": True,
             },
@@ -383,14 +405,14 @@ class ApplicationIntegrationFlowTests(TestCase):
         step5_data = {
             "legal_first_name": "Bob",
             "last_name": "Builder",
-            "date_of_birth": "2012-05-05",
+            "date_of_birth": _student_dob(),
             "address": "456 Oak Rd",
             "city": "Pittsburgh",
             "state": "PA",
             "zip_code": "15202",
             "school_name": self.school.name,
             "grade": "8",
-            "graduation_year": 2030,
+            "graduation_year": _graduation_year(),
             "confirm_age": True,
             "confirm_grade": True,
         }
@@ -571,14 +593,14 @@ class ApplicationIntegrationFlowTests(TestCase):
         step5_data = {
             "legal_first_name": "Ada",
             "last_name": "Lovelace",
-            "date_of_birth": "2010-01-01",
+            "date_of_birth": _student_dob(),
             "address": "123 Main St",
             "city": "Pittsburgh",
             "state": "PA",
             "zip_code": "15201",
             "school_name": self.school.name,
             "grade": "10",
-            "graduation_year": 2028,
+            "graduation_year": _graduation_year(),
             "confirm_age": True,
             "confirm_grade": True,
         }
