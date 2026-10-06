@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from programs.models import (
     Adult,
@@ -26,19 +27,23 @@ class CondensedProgramCardsTests(TestCase):
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
 
+        # Dates are relative to today so "Active"/"Upcoming" hold whenever the
+        # suite runs. Program.status compares against timezone.now(), and
+        # Mentors can only read programs that are Active or Upcoming.
+        today = timezone.localdate()
         self.program = Program.objects.create(
             name="Girls of Steel FRC 2026-2027",
             active=True,
             description="A very long program description that should not clutter the condensed dashboard program card view.",
-            start_date=datetime.date(2026, 9, 1),
-            end_date=datetime.date(2027, 5, 31),
+            start_date=today - datetime.timedelta(days=30),
+            end_date=today + datetime.timedelta(days=240),
         )
         self.upcoming_program = Program.objects.create(
             name="Girls of Steel FTC 2026-2027",
             active=True,
             description="Another detailed description for the upcoming FTC robotics competition program.",
-            start_date=datetime.date(2026, 11, 1),
-            end_date=datetime.date(2027, 4, 30),
+            start_date=today + datetime.timedelta(days=60),
+            end_date=today + datetime.timedelta(days=240),
         )
 
         self.feat_att, _ = ProgramFeature.objects.get_or_create(

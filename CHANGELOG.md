@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-04
+
+### Fixed
+- **Email compose pages now build their editor in CI**: The automated test run previously failed on "The email editor bundle is missing" because CI installed Python dependencies but never installed Node packages or compiled the email-editor bundle that the compose pages load. Continuous integration now installs Node and runs the frontend build before the Django checks and tests, matching the local and production build scripts.
+- **Attendance "Hours Chart" day filters and calendar (ICS) feed tests no longer expire**: A handful of automated checks hardcoded specific calendar dates (early September 2026) while the pages they exercise only show a rolling window of recent events (the last 30 days). Once that window moved past the fixed dates, the checks failed even though nothing was actually broken. These checks now pick dates relative to the day they run, so they keep testing the same behavior indefinitely instead of silently expiring.
+- **Demo data always includes programs that are running "now"**: The `seed_db` demo-data command gave each program a fixed set of calendar months, so the four current-season programs only overlapped "today" between mid-June and late October. Outside that window the demo database had no current programs at all — dashboards and rosters looked empty and an automated check failed (the first of which would have started failing on November 1, 2026). Those programs are now positioned relative to the day you seed, so you always get the same useful mix of past, current, and upcoming programs no matter when you run it.
+- **More date-sensitive checks no longer expire**: Several other automated checks used fixed dates for programs, birthdates, graduation years, and background-check clearance dates. Because those values are validated against the current date (a program has to be running, an applicant has to be 18 or younger, a clearance stays valid for five years), the checks would have started failing as the calendar moved on. They now derive those values from the day they run and keep testing the same behavior indefinitely.
+
 ## 2026-09-28
 
 ### Added

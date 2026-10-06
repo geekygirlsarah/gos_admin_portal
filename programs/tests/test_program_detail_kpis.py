@@ -64,12 +64,16 @@ class ProgramDetailKPITests(TestCase):
             relationship_to_student="parent",
         )
 
-        # Program with features
+        # Program with features. The date window is relative to today so the
+        # program stays "Active" whenever the suite runs: Program.status
+        # compares start_date/end_date against timezone.now(), and Mentors only
+        # get read access to Active/Upcoming programs.
+        today = timezone.localdate()
         self.program = Program.objects.create(
             name="Robotics Flagship",
             active=True,
-            start_date=datetime.date(2026, 1, 1),
-            end_date=datetime.date(2026, 12, 31),
+            start_date=today - datetime.timedelta(days=180),
+            end_date=today + datetime.timedelta(days=180),
         )
         self.f_bg, _ = ProgramFeature.objects.get_or_create(
             key="background-checks", defaults={"name": "Background Checks"}

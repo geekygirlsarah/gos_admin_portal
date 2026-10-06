@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import User
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -33,12 +33,32 @@ class AttendanceHoursChartFilterTest(TestCase):
             legal_first_name="John", last_name="Doe", graduated=False
         )
 
-        # Create sessions on different days
-        # Sunday=1, Monday=2, Tuesday=3, Wednesday=4, Thursday=5, Friday=6, Saturday=7 in Django check_in__week_day
-        # In Python datetime.weekday(): Monday=0, ..., Sunday=6
+        # Create sessions on different days.
+        # Django's `check_in__week_day` uses Sunday=1, Monday=2, Tuesday=3,
+        # Wednesday=4, Thursday=5, Friday=6, Saturday=7, while Python's
+        # `date.weekday()` uses Monday=0 ... Sunday=6.
+        #
+        # The hours-chart view defaults its date range to the selected
+        # program's window (clamped to today), so these sessions must sit in
+        # the recent past *relative to when the suite runs* — pinned calendar
+        # dates eventually fall outside that rolling window and the filter
+        # tests would match nothing.
+        tz = timezone.get_current_timezone()
+        today = timezone.localdate()
 
-        # Monday (2026-08-31)
-        monday_dt = datetime(2026, 8, 31, 10, 0, tzinfo=timezone.get_current_timezone())
+        # Anchor on the most recent completed Monday that is at least a week
+        # back, so Monday/Tuesday/Wednesday all land inside the window.
+        monday_date = today - timedelta(days=today.weekday() + 7)
+        # Django week_day value for a given Python weekday (Mon=0 -> 2).
+        self.monday_dow = monday_date.weekday() + 2
+        self.tuesday_dow = monday_date.weekday() + 3
+        self.wednesday_dow = monday_date.weekday() + 4
+        self.thursday_dow = monday_date.weekday() + 5
+
+        # Monday
+        monday_dt = datetime(
+            monday_date.year, monday_date.month, monday_date.day, 10, 0, tzinfo=tz
+        )
         AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
@@ -47,8 +67,8 @@ class AttendanceHoursChartFilterTest(TestCase):
             duration_minutes=120,
         )
 
-        # Tuesday (2026-09-01)
-        tuesday_dt = datetime(2026, 9, 1, 10, 0, tzinfo=timezone.get_current_timezone())
+        # Tuesday
+        tuesday_dt = monday_dt + timedelta(days=1)
         AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
@@ -57,10 +77,8 @@ class AttendanceHoursChartFilterTest(TestCase):
             duration_minutes=180,
         )
 
-        # Wednesday (2026-09-02)
-        wednesday_dt = datetime(
-            2026, 9, 2, 10, 0, tzinfo=timezone.get_current_timezone()
-        )
+        # Wednesday
+        wednesday_dt = monday_dt + timedelta(days=2)
         AttendanceSession.objects.create(
             program=self.program,
             student=self.student,
@@ -72,9 +90,10 @@ class AttendanceHoursChartFilterTest(TestCase):
         self.url = reverse("attendance_hours_chart")
 
     def test_filter_by_single_day(self):
-        """Test filtering by Tuesday (3)."""
+        """Test filtering by Tuesday."""
         response = self.client.get(
-            self.url, {"program_id": self.program.id, "days_of_week": ["3"]}
+            self.url,
+            {"program_id": self.program.id, "days_of_week": [self.tuesday_dow]},
         )
         self.assertEqual(response.status_code, 200)
 
@@ -84,9 +103,13 @@ class AttendanceHoursChartFilterTest(TestCase):
         self.assertEqual(student_list[0]["total_hours"], 3.0)
 
     def test_filter_by_multiple_days(self):
-        """Test filtering by Monday (2) and Wednesday (4)."""
+        """Test filtering by Monday and Wednesday."""
         response = self.client.get(
-            self.url, {"program_id": self.program.id, "days_of_week": ["2", "4"]}
+            self.url,
+            {
+                "program_id": self.program.id,
+                "days_of_week": [self.monday_dow, self.wednesday_dow],
+            },
         )
         self.assertEqual(response.status_code, 200)
 
@@ -96,9 +119,10 @@ class AttendanceHoursChartFilterTest(TestCase):
         self.assertEqual(student_list[0]["total_hours"], 6.0)
 
     def test_filter_by_no_matching_days(self):
-        """Test filtering by Thursday (5) where no sessions exist."""
+        """Test filtering by Thursday, where no sessions exist."""
         response = self.client.get(
-            self.url, {"program_id": self.program.id, "days_of_week": ["5"]}
+            self.url,
+            {"program_id": self.program.id, "days_of_week": [self.thursday_dow]},
         )
         self.assertEqual(response.status_code, 200)
 

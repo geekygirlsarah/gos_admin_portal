@@ -20,9 +20,10 @@ class SeedOrdersFeatureTests(TestCase):
         from programs.management.commands.seed_db import Command
 
         cmd = Command()
-        this_year = date.today().year
+        today = date.today()
+        this_year = today.year
         features = cmd._seed_features()
-        programs = cmd._seed_programs(this_year, features)
+        programs = cmd._seed_programs(this_year, features, today)
         flagship = next(
             p for p in programs if p.name == f"Girls of Steel FRC {this_year}"
         )

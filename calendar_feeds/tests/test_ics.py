@@ -15,6 +15,20 @@ from calendar_feeds.tests.factories import (
 )
 
 
+def _within_feed_window(days_from_today=7, hour=10):
+    """Return an aware datetime inside the feeds' rolling ICS window.
+
+    ``PublicICSFeedView``/``FeedICSView`` only emit events between 30 days ago
+    and a year ahead, so events must be positioned relative to *today* rather
+    than pinned to a fixed date that eventually ages out of that window.
+    """
+    day = timezone.localdate() + timedelta(days=days_from_today)
+    return timezone.make_aware(
+        timezone.datetime.combine(day, timezone.datetime.min.time()).replace(hour=hour),
+        timezone.UTC,
+    )
+
+
 class PublicICSViewTests(TestCase):
     def setUp(self):
         self.feed = make_feed(
@@ -22,9 +36,7 @@ class PublicICSViewTests(TestCase):
             visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
             slug="public-cal",
         )
-        self.start = timezone.make_aware(
-            timezone.datetime(2026, 9, 3, 10, 0), timezone.UTC
-        )
+        self.start = _within_feed_window()
         make_event(
             self.feed,
             title="Public Event",
@@ -70,9 +82,7 @@ class FeedICSViewTests(TestCase):
             slug="members",
             acls={"Mentor": (True, True)},
         )
-        self.start = timezone.make_aware(
-            timezone.datetime(2026, 9, 3, 10, 0), timezone.UTC
-        )
+        self.start = _within_feed_window()
         make_event(
             self.feed,
             title="Private Event",
@@ -112,7 +122,7 @@ class ICSEventFormatTests(TestCase):
             visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
             slug="recur-test",
         )
-        start = timezone.make_aware(timezone.datetime(2026, 9, 1, 10, 0), timezone.UTC)
+        start = _within_feed_window(days_from_today=7, hour=10)
         make_event(
             feed,
             title="Weekly Meeting",
@@ -129,7 +139,7 @@ class ICSEventFormatTests(TestCase):
             visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
             slug="allday-test",
         )
-        start = timezone.make_aware(timezone.datetime(2026, 9, 5, 0, 0), timezone.UTC)
+        start = _within_feed_window(days_from_today=9, hour=0)
         make_event(
             feed,
             title="All Day",
@@ -142,15 +152,13 @@ class ICSEventFormatTests(TestCase):
         self.assertIn("DTSTART;VALUE=DATE", body)
 
     def test_deleted_exception_emitted_as_exdate(self):
-        from datetime import date
-
         from calendar_feeds.models import EventException
 
         feed = make_feed(
             visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
             slug="exc-test",
         )
-        start = timezone.make_aware(timezone.datetime(2026, 9, 1, 10, 0), timezone.UTC)
+        start = _within_feed_window(days_from_today=7, hour=10)
         event = make_event(
             feed,
             title="Weekly",
@@ -158,11 +166,14 @@ class ICSEventFormatTests(TestCase):
             end_datetime=start + timedelta(hours=1),
             rrule_ical="FREQ=WEEKLY;BYDAY=TU",
         )
+        # Delete the *second* weekly occurrence so the EXDATE lands inside the
+        # feed's rolling window regardless of when the suite runs.
+        deleted_date = (start + timedelta(days=7)).date()
         EventException.objects.create(
             event=event,
-            original_date=date(2026, 9, 8),
+            original_date=deleted_date,
             change_type=EventException.CHANGE_DELETED,
         )
         resp = self.client.get(f"/calendar/{feed.slug}/feed.ics")
         body = resp.content.decode("utf-8")
-        self.assertIn("EXDATE:20260908", body)
+        self.assertIn(f"EXDATE:{deleted_date.strftime('%Y%m%d')}", body)

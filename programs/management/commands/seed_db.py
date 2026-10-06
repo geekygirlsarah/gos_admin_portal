@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -37,7 +37,7 @@ class Command(BaseCommand):
 
         schools = self._seed_schools()
         features = self._seed_features()
-        programs = self._seed_programs(this_year, features)
+        programs = self._seed_programs(this_year, features, today)
         adults = self._seed_adults(this_year)
         students = self._seed_students(this_year, schools, adults)
 
@@ -129,7 +129,13 @@ class Command(BaseCommand):
             features_by_key[feature_obj.key] = feature_obj
         return features_by_key
 
-    def _seed_programs(self, this_year, features):
+    def _seed_programs(self, this_year, features, today):
+        # The four `this_year` programs below are anchored to `today` with fixed
+        # day offsets so they are always "current", no matter which day the seed
+        # runs. The this_year-2/-1 programs are always in the past and the
+        # this_year+1 programs always in the future, so their calendar-year dates
+        # need no rebasing. This keeps the dev dataset's past/current/future
+        # spread (and the seed test's variety assertions) stable year-round.
         program_blueprints = [
             {
                 "name": f"Astro Robotics {this_year - 2}",
@@ -179,8 +185,8 @@ class Command(BaseCommand):
                 "name": f"Girls of Steel FRC {this_year}",
                 "description": "Current flagship FIRST Robotics Competition team season.",
                 "active": True,
-                "start_date": date(this_year, 1, 1),
-                "end_date": date(this_year, 10, 30),
+                "start_date": today - timedelta(days=90),
+                "end_date": today + timedelta(days=60),
                 "cost": "$500",
                 "grade_range_start": 9,
                 "grade_range_end": 12,
@@ -198,8 +204,8 @@ class Command(BaseCommand):
                 "name": f"AI + Vision Robotics {this_year}",
                 "description": "Current computer vision and autonomous controls cohort.",
                 "active": True,
-                "start_date": date(this_year, 3, 1),
-                "end_date": date(this_year, 11, 15),
+                "start_date": today - timedelta(days=60),
+                "end_date": today + timedelta(days=120),
                 "cost": "$420",
                 "grade_range_start": 8,
                 "grade_range_end": 12,
@@ -209,8 +215,8 @@ class Command(BaseCommand):
                 "name": f"Mechanical Design Lab {this_year}",
                 "description": "Current CAD and fabrication intensive.",
                 "active": True,
-                "start_date": date(this_year, 6, 15),
-                "end_date": date(this_year, 11, 30),
+                "start_date": today - timedelta(days=30),
+                "end_date": today + timedelta(days=150),
                 "cost": "$360",
                 "grade_range_start": 7,
                 "grade_range_end": 12,
@@ -220,8 +226,8 @@ class Command(BaseCommand):
                 "name": f"STEM Outreach Ambassadors {this_year}",
                 "description": "Current community outreach and mentoring program.",
                 "active": True,
-                "start_date": date(this_year, 2, 15),
-                "end_date": date(this_year, 12, 15),
+                "start_date": today - timedelta(days=120),
+                "end_date": today + timedelta(days=30),
                 "cost": "$200",
                 "grade_range_start": 6,
                 "grade_range_end": 12,
