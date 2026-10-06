@@ -1,11 +1,9 @@
 import functools
 import logging
-import zoneinfo
 
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
-from django.utils import timezone
 
 from applications.rate_limiting import (
     get_client_ip,
@@ -63,7 +61,11 @@ class LoginRequiredMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.user.is_authenticated or self._is_exempt(request.path):
+        # Check exemption BEFORE touching request.user: reading the lazy user
+        # loads the session from the DB, and exempt file paths (e.g. a photo
+        # grid's concurrent /media/ GETs) must stay DB-free — that pattern
+        # exhausted Postgres connection slots in production.
+        if self._is_exempt(request.path) or request.user.is_authenticated:
             return self.get_response(request)
         return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
 
@@ -148,26 +150,6 @@ class ApplyRateLimitMiddleware:
         return self.get_response(request)
 
 
-class TimezoneMiddleware:
-    """
-    Middleware to activate the user's preferred timezone from the session.
-    """
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        tzname = request.session.get("django_timezone")
-        if tzname:
-            try:
-                timezone.activate(zoneinfo.ZoneInfo(tzname))
-            except Exception:
-                timezone.deactivate()
-        else:
-            timezone.deactivate()
-        return self.get_response(request)
-
-
 class MentorAgreementMiddleware:
     """Redirect mentors who have not accepted all current agreements.
 
@@ -188,17 +170,18 @@ class MentorAgreementMiddleware:
     def __call__(self, request):
         if not getattr(settings, "MENTOR_AGREEMENT_ENABLED", True):
             return self.get_response(request)
+        # Skip non-portal paths (media, static, admin, API, etc.) BEFORE
+        # touching request.user: reading the lazy user loads the session
+        # from the DB, and exempt file paths must stay DB-free (concurrent
+        # photo loads exhausted Postgres connection slots in production).
+        for prefix in EXEMPT_PATH_PREFIXES:
+            if prefix and request.path.startswith(prefix):
+                return self.get_response(request)
         if not request.user.is_authenticated:
             return self.get_response(request)
         # Don't redirect away from the agreement page itself.
         if request.path.startswith("/mentor-agreement/"):
             return self.get_response(request)
-
-        # Skip non-portal paths (media, static, admin, API, etc.) so that
-        # file downloads, static assets, and admin pages stay accessible.
-        for prefix in EXEMPT_PATH_PREFIXES:
-            if prefix and request.path.startswith(prefix):
-                return self.get_response(request)
 
         # Only apply to users who have a mentor role.
         from programs.permission_views import user_is_mentor

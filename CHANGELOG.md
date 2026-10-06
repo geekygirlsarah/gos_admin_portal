@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-06
+
+### Fixed
+- **Photo pages no longer risk overloading the database**: A page full of photos (like a program's photo grid) loads each image with its own request, and every one of those requests used to check who's logged in by reading the database. Enough photos loading at once could use up every connection the database allows, which then caused confusing "connection slots" server errors across the whole portal. Image, font/style/script, and health-check requests now skip all sign-in and session lookups, so browsing photos never touches the database.
+- **The "Something went wrong" error page now shows even when the database is down**: The 500 error page previously tried to render the signed-in user's navigation menu, which needs the database — exactly what's unavailable during a database outage. The page now renders on its own without the site menu, so visitors get the friendly error message instead of a blank page.
+
+### Changed
+- **Removed an unused hidden step on every page**: A leftover internal setting (a per-user timezone preference that was never actually set anywhere) caused an extra database read on every single request. Nothing changes visually — times continue to display in the portal's home timezone as before.
+
 ## 2026-10-04
 
 ### Fixed

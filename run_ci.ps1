@@ -30,6 +30,7 @@ if ($failed) {
 }
 
 Write-Host "--- Static Analysis (semgrep) ---" -ForegroundColor Cyan
+$env:PYTHONUTF8 = "1"
 semgrep --config auto .
 
 Write-Host "--- Security Scan (safety) ---" -ForegroundColor Cyan
