@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-13
+
+### Changed
+- **Students are marked inactive instead of being removed from a program**: The "Remove" button on a program's student list now reads "Mark Inactive" and simply moves the student to the "Students No Longer Active" section while keeping all of their records (enrollments, fees, attendance, history) intact. Students in that inactive section get a "Mark Active" button to bring them back, so a student who returns to a program can be reactivated without anyone having to re-add them. Graduated students don't show the reactivate button.
+
 ## 2026-10-06
 
 ### Fixed

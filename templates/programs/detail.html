@@ -431,9 +431,9 @@
                     <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.id %}" title="View Attendance">Attendance</a>
                   {% endif %}
                   {% if can_manage_students %}
-                    <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0 d-inline">
+                    <form action="{% url 'program_student_deactivate' program.id s.id %}" method="post" class="m-0 d-inline">
                       {% csrf_token %}
-                      <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.display_name }} from {{ program.name }}?" title="Remove from Program">Remove</button>
+                      <button class="btn btn-sm btn-outline-warning js-confirm" type="submit" data-confirm="Mark {{ s.display_name }} inactive in {{ program.name }}? They will move to the inactive list." title="Mark Inactive">Mark Inactive</button>
                     </form>
                   {% endif %}
                 </div>
@@ -491,10 +491,10 @@
                   {% if 'attendance' in program.feature_keys and can_view_attendance %}
                     <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.id %}">Attendance</a>
                   {% endif %}
-                  {% if can_manage_students %}
-                    <form action="{% url 'program_student_remove' program.id s.id %}" method="post" class="m-0 d-inline">
+                  {% if can_manage_students and not s.graduated %}
+                    <form action="{% url 'program_student_activate' program.id s.id %}" method="post" class="m-0 d-inline">
                       {% csrf_token %}
-                      <button class="btn btn-sm btn-outline-danger js-confirm" type="submit" data-confirm="Remove {{ s.display_name }} from {{ program.name }}?">Remove</button>
+                      <button class="btn btn-sm btn-outline-success" type="submit" title="Mark Active">Mark Active</button>
                     </form>
                   {% endif %}
                 </div>

@@ -825,14 +825,35 @@ class ProgramEnrollmentUpdateView(
         return redirect("program_detail", pk=pk)
 
 
-class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramStudentDeactivateView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = "programs.change_student"
 
     def post(self, request, pk, student_id):
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
-        Enrollment.objects.filter(student=student, program=program).delete()
-        messages.success(request, f"Removed {student} from {program}.")
+        enrollment = Enrollment.objects.filter(student=student, program=program).first()
+        if enrollment and enrollment.active:
+            enrollment.active = False
+            enrollment.save(update_fields=["active"])
+            messages.success(request, f"Marked {student} inactive in {program}.")
+        else:
+            messages.info(request, f"{student} is already inactive in {program}.")
+        return redirect("program_detail", pk=program.pk)
+
+
+class ProgramStudentActivateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "programs.change_student"
+
+    def post(self, request, pk, student_id):
+        program = get_object_or_404(Program, pk=pk)
+        student = get_object_or_404(Student, pk=student_id)
+        enrollment = Enrollment.objects.filter(student=student, program=program).first()
+        if enrollment and not enrollment.active:
+            enrollment.active = True
+            enrollment.save(update_fields=["active"])
+            messages.success(request, f"Marked {student} active in {program}.")
+        else:
+            messages.info(request, f"{student} is already active in {program}.")
         return redirect("program_detail", pk=program.pk)
 
 
