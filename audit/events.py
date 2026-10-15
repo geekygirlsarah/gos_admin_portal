@@ -27,6 +27,9 @@ class AuditEvent(models.TextChoices):
     # --- Data Merge ---
     RECORDS_MERGED = "RECORDS_MERGED", "Duplicate records merged"
 
+    # --- Deletion ---
+    RECORD_DELETED = "RECORD_DELETED", "Record deleted"
+
     # --- Sensitive Data Access ---
     SENSITIVE_DATA_VIEW = "SENSITIVE_DATA_VIEW", "Sensitive data viewed by mentor"
 

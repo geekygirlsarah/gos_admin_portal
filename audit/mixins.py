@@ -1,5 +1,5 @@
 from audit.events import AuditEvent
-from audit.service import log_event
+from audit.service import log_deletion, log_event
 from programs.permission_views import get_user_role
 
 
@@ -87,3 +87,31 @@ class SensitiveDataViewMixin:
                 )
 
         return response
+
+
+class AuditedDeleteMixin:
+    """Write a RECORD_DELETED audit entry before a generic DeleteView deletes.
+
+    Mix this in ahead of ``DeleteView`` in the MRO. The entry is written in
+    ``form_valid`` *before* delegating to ``super()`` (which performs the delete),
+    so the object is still live when its snapshot is captured.
+
+    Subclasses may override :meth:`audit_snapshot` to record the fields that
+    matter for their model, or set ``audit_notes`` for a custom message.
+    """
+
+    audit_notes: str = ""
+
+    def audit_snapshot(self, obj) -> dict | None:
+        """Return a small ``before`` dict for the audit entry (default: None)."""
+        return None
+
+    def form_valid(self, form):
+        obj = getattr(self, "object", None) or self.get_object()
+        log_deletion(
+            resource=obj,
+            request=self.request,
+            before=self.audit_snapshot(obj),
+            notes=self.audit_notes or f"{type(obj).__name__} deleted: {obj}",
+        )
+        return super().form_valid(form)

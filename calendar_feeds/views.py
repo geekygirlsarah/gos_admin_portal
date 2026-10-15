@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 
+from audit.service import log_deletion
 from programs.permission_views import LeadMentorRequiredMixin
 
 from .forms import (
@@ -182,6 +183,12 @@ class FeedDeleteView(LeadMentorRequiredMixin, View):
     def post(self, request, pk):
         feed = get_object_or_404(CalendarFeed, pk=pk)
         name = feed.name
+        log_deletion(
+            resource=feed,
+            request=request,
+            before={"name": name, "slug": feed.slug, "source_type": feed.source_type},
+            notes=f"Calendar feed '{name}' deleted.",
+        )
         feed.delete()
         messages.success(request, f"Calendar feed '{name}' deleted.")
         return redirect("calendar_feeds:feed_list")
@@ -304,6 +311,16 @@ class EventDeleteView(LoginRequiredMixin, View):
             return redirect("calendar_feeds:calendar_view")
 
         title = event.title
+        log_deletion(
+            resource=event,
+            request=request,
+            before={
+                "title": title,
+                "start_datetime": str(event.start_datetime),
+                "feed": str(event.feed),
+            },
+            notes=f"Calendar event '{title}' deleted.",
+        )
         event.delete()
         messages.success(request, f"Event '{title}' deleted.")
         return redirect("calendar_feeds:calendar_view")
@@ -403,6 +420,16 @@ class EventExceptionDeleteView(LoginRequiredMixin, View):
             messages.error(request, "You do not have permission to modify this event.")
             return redirect("calendar_feeds:calendar_view")
 
+        log_deletion(
+            resource=exception,
+            request=request,
+            before={
+                "event": str(exception.event),
+                "change": exception.get_change_type_display(),
+                "original_date": str(exception.original_date),
+            },
+            notes="Event exception removed.",
+        )
         exception.delete()
         messages.success(request, "Event exception removed.")
         return redirect("calendar_feeds:calendar_view")

@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
+from audit.events import AuditEvent
+from audit.service import log_event
 from guest_forms.forms import GuestFormForm
 from guest_forms.models import GuestForm, GuestFormSubmission
 
@@ -159,6 +161,13 @@ class GuestFormDeleteView(GuestFormReviewRequiredMixin, View):
     def post(self, request, form_id):
         guest_form = get_object_or_404(GuestForm, pk=form_id)
         name = guest_form.name
+        log_event(
+            event=AuditEvent.RECORD_DELETED,
+            resource=guest_form,
+            request=request,
+            before={"name": name, "submission_count": guest_form.submissions.count()},
+            notes=f"Guest form '{name}' deleted.",
+        )
         guest_form.delete()
-        messages.success(request, f"Deleted guest form “{name}”.")
+        messages.success(request, f'Deleted guest form "{name}".')
         return redirect("guest_form_manage_list")

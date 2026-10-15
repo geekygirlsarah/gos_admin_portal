@@ -25,7 +25,7 @@
             {% csrf_token %}
             
             <div class="d-grid gap-3">
-                <button type="submit" name="action" value="resume" class="btn btn-primary btn-lg">
+                <button type="submit" name="action" value="resume" class="btn btn-primary btn-lg js-confirm" data-confirm="Resume your previous application and discard this one?">
                     Resume my previous application ({{ existing.application_id }})
                 </button>
                 

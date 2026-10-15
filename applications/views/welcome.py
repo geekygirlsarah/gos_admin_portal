@@ -9,6 +9,9 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
+from audit.events import AuditEvent
+from audit.service import log_event
+
 from ..forms import ResumeApplicationForm
 from ..models import Application
 from ..services import PENDING_STATUSES, applications_for_user, get_program_buckets
@@ -149,6 +152,17 @@ class ApplicationWithdrawView(LoginRequiredMixin, View):
         if application is None:
             return redirect("profile_dashboard")
         app_str = application.application_id
+        log_event(
+            event=AuditEvent.RECORD_DELETED,
+            resource=application,
+            request=request,
+            before={
+                "application_id": app_str,
+                "status": application.status,
+                "email": application.email,
+            },
+            notes=f"Application {app_str} withdrawn (deleted) by its owner.",
+        )
         application.delete()
         messages.success(request, f"Your application {app_str} was withdrawn.")
         return redirect("profile_dashboard")

@@ -89,8 +89,12 @@ class SchoolMergeView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
         keep = form.cleaned_data["keep"]
         source = form.cleaned_data["source"]
+        source_pk, source_name = source.pk, source.name
         with transaction.atomic():
             contact_fields = [
                 "district",
@@ -108,6 +112,19 @@ class SchoolMergeView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
                 keep.save()
             Student.objects.filter(school=source).update(school=keep)
             source.delete()
+
+        log_event(
+            request=self.request,
+            event=AuditEvent.RECORDS_MERGED,
+            resource=keep,
+            before={"source_name": source_name, "source_pk": source_pk},
+            after={"keep_name": keep.name, "keep_pk": keep.pk},
+            notes=(
+                f'School "{source_name}" (pk={source_pk}) merged into '
+                f'"{keep.name}" (pk={keep.pk}). All students were reassigned.'
+            ),
+        )
+
         messages.success(
             self.request,
             f'Merged "{source.name}" into "{keep.name}". '
@@ -178,8 +195,19 @@ class DistrictDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
         )
 
     def post(self, request, *args, **kwargs):
+        from audit.service import log_deletion
+
         district = get_object_or_404(SchoolDistrict, pk=kwargs["pk"])
         name = district.name
+        school_count = district.schools.count()
+        log_deletion(
+            resource=district,
+            request=request,
+            before={"name": name, "school_count": school_count},
+            notes=(
+                f"District '{name}' deleted; {school_count} school(s) left unassigned."
+            ),
+        )
         district.delete()
         messages.success(
             request, f'Deleted district "{name}". Schools in it were unassigned.'

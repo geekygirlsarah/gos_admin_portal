@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-15
+
+### Added
+- **Every delete now asks "are you sure?" and is recorded**: Destructive actions across the portal — deleting an order, item, vendor, shipping company, outreach event or location, travel event, calendar feed or event, school district, program document, application, guest form, tax form, team/crew/subteam, kiosk configuration, mentor agreement, attendance entry, or a sliding-scale application — now show a confirmation prompt before anything is removed, so a stray click can no longer wipe data. Each confirmed deletion is also written to the audit log (a new "Record deleted" event type), capturing who deleted what and a snapshot of the record, so there is always a trail for the things that are gone.
+
+### Fixed
+- **Deleting a mentor agreement version from Portal Settings now works**: The Delete button in Portal Settings → Agreements posted the wrong identifier, so clicking it silently failed with "Agreement not found." It now deletes the chosen version as expected.
+
 ## 2026-10-13
 
 ### Changed

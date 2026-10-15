@@ -16,6 +16,8 @@ from django.utils import timezone
 from django.views.generic import CreateView, ListView, UpdateView, View
 from premailer import transform
 
+from audit.service import log_deletion
+
 from ..forms import (
     FeeAssignmentEditForm,
     FeeForm,
@@ -445,6 +447,15 @@ class SlidingScaleTaxFormDeleteView(
             pk=form_id,
             sliding_scale_id=sliding_id,
         )
+        log_deletion(
+            resource=tax_form,
+            request=request,
+            before={
+                "sliding_scale_id": sliding_id,
+                "file_name": os.path.basename(tax_form.file.name or ""),
+            },
+            notes="Uploaded tax form deleted.",
+        )
         tax_form.file.delete(save=False)
         tax_form.delete()
         messages.success(request, "Tax form deleted.")
@@ -730,6 +741,16 @@ class SlidingScaleWithdrawView(LoginRequiredMixin, View):
         for tax_form in application.tax_forms.all():
             tax_form.file.delete(save=False)
             tax_form.delete()
+        log_deletion(
+            resource=application,
+            request=request,
+            before={
+                "student": str(student),
+                "status": application.status,
+                "percent": application.percent,
+            },
+            notes=f"Sliding scale application for {student} withdrawn by parent.",
+        )
         application.delete()
 
         messages.success(

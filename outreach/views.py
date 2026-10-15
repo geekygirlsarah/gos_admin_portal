@@ -12,6 +12,8 @@ from django.utils import timezone
 from django.utils.formats import localize
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
+from audit.mixins import AuditedDeleteMixin
+from audit.service import log_deletion
 from outreach.forms import (
     OutreachEventForm,
     OutreachLocationForm,
@@ -178,10 +180,17 @@ class OutreachLocationUpdateView(
 
 
 class OutreachLocationDeleteView(
-    LoginRequiredMixin, OutreachProgramMixin, OutreachLocationAccessMixin, DeleteView
+    LoginRequiredMixin,
+    OutreachProgramMixin,
+    OutreachLocationAccessMixin,
+    AuditedDeleteMixin,
+    DeleteView,
 ):
     model = OutreachLocation
     template_name = "outreach/location_confirm_delete.html"
+
+    def audit_snapshot(self, obj):
+        return {"name": obj.name, "address": obj.address}
 
     def form_valid(self, form):
         name = self.object.name
@@ -434,12 +443,17 @@ class OutreachEventUpdateView(
         return OutreachEvent.objects.filter(program=self.program)
 
 
-class OutreachEventDeleteView(LoginRequiredMixin, OutreachProgramMixin, DeleteView):
+class OutreachEventDeleteView(
+    LoginRequiredMixin, OutreachProgramMixin, AuditedDeleteMixin, DeleteView
+):
     model = OutreachEvent
     template_name = "outreach/event_confirm_delete.html"
 
     def get_queryset(self):
         return OutreachEvent.objects.filter(program=self.program)
+
+    def audit_snapshot(self, obj):
+        return {"name": obj.name, "program_id": obj.program_id}
 
     def dispatch(self, request, *args, **kwargs):
         # Initialize program via mixin logic first
@@ -496,6 +510,16 @@ class OutreachShiftCancelView(LoginRequiredMixin, OutreachProgramMixin, View):
         try:
             student = request.user.student_profile
             signup = OutreachSignup.objects.get(student=student, shift=shift)
+            log_deletion(
+                resource=signup,
+                request=request,
+                before={
+                    "student": str(student),
+                    "shift": f"{shift.event.name} ({shift.date})",
+                    "role": signup.role,
+                },
+                notes=f"Outreach signup cancelled for shift on {shift.date}.",
+            )
             signup.delete()
             messages.success(request, "Signup cancelled.")
         except OutreachSignup.DoesNotExist:
@@ -563,6 +587,15 @@ class OutreachShiftMentorCancelView(LoginRequiredMixin, OutreachProgramMixin, Vi
         try:
             signup = OutreachMentorSignup.objects.get(
                 adult=request.user.adult_profile, shift=shift
+            )
+            log_deletion(
+                resource=signup,
+                request=request,
+                before={
+                    "adult": str(signup.adult),
+                    "shift": f"{shift.event.name} ({shift.date})",
+                },
+                notes=f"Mentor support signup cancelled for shift on {shift.date}.",
             )
             signup.delete()
             messages.success(request, "Support signup cancelled.")

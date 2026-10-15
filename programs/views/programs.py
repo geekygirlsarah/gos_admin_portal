@@ -829,12 +829,26 @@ class ProgramStudentDeactivateView(LoginRequiredMixin, PermissionRequiredMixin, 
     permission_required = "programs.change_student"
 
     def post(self, request, pk, student_id):
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
         enrollment = Enrollment.objects.filter(student=student, program=program).first()
         if enrollment and enrollment.active:
             enrollment.active = False
             enrollment.save(update_fields=["active"])
+            log_event(
+                request=request,
+                event=AuditEvent.ENROLLMENT_CHANGED,
+                resource=enrollment,
+                before={"active": True},
+                after={"active": False},
+                notes=(
+                    f"{student} marked inactive in {program} "
+                    f"(enrollment pk={enrollment.pk})."
+                ),
+            )
             messages.success(request, f"Marked {student} inactive in {program}.")
         else:
             messages.info(request, f"{student} is already inactive in {program}.")
@@ -845,12 +859,26 @@ class ProgramStudentActivateView(LoginRequiredMixin, PermissionRequiredMixin, Vi
     permission_required = "programs.change_student"
 
     def post(self, request, pk, student_id):
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
         enrollment = Enrollment.objects.filter(student=student, program=program).first()
         if enrollment and not enrollment.active:
             enrollment.active = True
             enrollment.save(update_fields=["active"])
+            log_event(
+                request=request,
+                event=AuditEvent.ENROLLMENT_CHANGED,
+                resource=enrollment,
+                before={"active": False},
+                after={"active": True},
+                notes=(
+                    f"{student} marked active in {program} "
+                    f"(enrollment pk={enrollment.pk})."
+                ),
+            )
             messages.success(request, f"Marked {student} active in {program}.")
         else:
             messages.info(request, f"{student} is already active in {program}.")
@@ -1750,7 +1778,19 @@ class ProgramDocumentDeleteView(
         )
 
     def post(self, request, *args, **kwargs):
+        from audit.service import log_deletion
+
         name = self.document.name
+        log_deletion(
+            resource=self.document,
+            request=request,
+            before={
+                "name": name,
+                "program": str(self.program),
+                "file_name": self.document.file.name if self.document.file else None,
+            },
+            notes=f"Program document deleted from {self.program}.",
+        )
         self.document.delete()
         messages.success(request, f"Deleted document \u201c{name}\u201d.")
         return redirect("program_detail", pk=self.program.pk)

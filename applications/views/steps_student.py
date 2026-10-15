@@ -9,6 +9,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
+from audit.events import AuditEvent
+from audit.service import log_event
 from programs.models import Student
 from programs.utils import (
     calculate_grade,
@@ -348,6 +350,20 @@ class Step3DuplicateFoundView(View):
             # Resume existing: delete current, redirect to the most recent old one
             oldest_existing = existing_query.order_by("-updated_at").first()
             if oldest_existing:
+                log_event(
+                    event=AuditEvent.RECORD_DELETED,
+                    resource=application,
+                    request=request,
+                    before={
+                        "application_id": application.application_id,
+                        "status": application.status,
+                        "email": application.email,
+                    },
+                    notes=(
+                        "Duplicate draft discarded to resume previous application "
+                        f"{oldest_existing.application_id}."
+                    ),
+                )
                 application.delete()
                 messages.info(
                     request,
@@ -358,6 +374,18 @@ class Step3DuplicateFoundView(View):
 
         elif action == "start_over":
             # Start over: delete all old ones, continue with current
+            stale_ids = list(existing_query.values_list("application_id", flat=True))
+            if stale_ids:
+                log_event(
+                    event=AuditEvent.RECORD_DELETED,
+                    resource=application,
+                    request=request,
+                    before={"discarded_application_ids": stale_ids},
+                    notes=(
+                        "Previous application(s) cleared by applicant to start over: "
+                        + ", ".join(stale_ids)
+                    ),
+                )
             existing_query.delete()
             messages.info(request, "Previous application(s) cleared. Starting fresh.")
             return _redirect_after_email_verified(application)
