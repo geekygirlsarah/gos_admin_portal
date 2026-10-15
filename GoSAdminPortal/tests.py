@@ -1,15 +1,20 @@
 import datetime
 import logging
+import os
 from contextlib import contextmanager
+from unittest import mock
 
 from asgiref.sync import async_to_sync, sync_to_async
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
 from django.http import HttpResponse
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
+from audit.middleware import AuditHistoryMiddleware
 from GoSAdminPortal.adapter import _find_or_provision_user_for_email
-from GoSAdminPortal.middleware import LoginRequiredMiddleware
+from GoSAdminPortal.middleware import LoginRequiredMiddleware, MentorAgreementMiddleware
+from GoSAdminPortal.views import handler500
 
 
 @contextmanager
@@ -522,3 +527,155 @@ class LoginPolicyByRoleTest(TestCase):
             _find_or_provision_user_for_email("student.personal@example.com")
         )
         self.assertTrue(_find_or_provision_user_for_email("student1@andrew.cmu.edu"))
+
+
+class _ExplodingUser:
+    """Stand-in for ``request.user`` that fails on any attribute access.
+
+    Exempt paths (media/static/health/...) must be decided *before* auth
+    state is read: touching ``request.user`` loads the session from the
+    database, and a photo grid fires dozens of concurrent ``/media/``
+    requests — that pattern exhausted Postgres connection slots in
+    production (``remaining connection slots are reserved for
+    roles with the SUPERUSER attribute``).
+    """
+
+    @property
+    def is_authenticated(self):
+        raise AssertionError("request.user accessed for an exempt path")
+
+
+class _ExplodingSession:
+    """Stand-in for ``request.session`` that fails on any read."""
+
+    def get(self, *args, **kwargs):
+        raise AssertionError("request.session accessed for an exempt path")
+
+
+class ExemptPathNoAuthSessionTests(TestCase):
+    """Exempt paths must not touch ``request.user``/``request.session``."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    @staticmethod
+    def _passthrough(request):
+        return HttpResponse("OK")
+
+    def _exempt_request(self, path):
+        request = self.factory.get(path)
+        request.user = _ExplodingUser()
+        request.session = _ExplodingSession()
+        return request
+
+    def test_login_required_media_path_skips_user_and_session(self):
+        middleware = LoginRequiredMiddleware(self._passthrough)
+        response = middleware(self._exempt_request("/media/photos/students/x.jpg"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_login_required_static_path_skips_user_and_session(self):
+        middleware = LoginRequiredMiddleware(self._passthrough)
+        response = middleware(self._exempt_request("/static/css/main.css"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_login_required_health_path_skips_user_and_session(self):
+        middleware = LoginRequiredMiddleware(self._passthrough)
+        response = middleware(self._exempt_request("/health/"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_mentor_agreement_media_path_skips_user_and_session(self):
+        # MENTOR_AGREEMENT_ENABLED is off during tests by default, so force
+        # it on to exercise the real code path that reads request.user.
+        with override_settings(MENTOR_AGREEMENT_ENABLED=True):
+            middleware = MentorAgreementMiddleware(self._passthrough)
+            response = middleware(self._exempt_request("/media/photos/students/x.jpg"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_timezone_middleware_removed(self):
+        # Nothing ever wrote session["django_timezone"], so the middleware
+        # only ever read the session (a DB query per request) without
+        # effect. Times display via settings.TIME_ZONE instead.
+        self.assertNotIn(
+            "GoSAdminPortal.middleware.TimezoneMiddleware", settings.MIDDLEWARE
+        )
+        from GoSAdminPortal import middleware as portal_middleware
+
+        self.assertFalse(hasattr(portal_middleware, "TimezoneMiddleware"))
+
+
+class AuditHistoryMediaPathTests(TestCase):
+    """pghistory's middleware reads user/session while building its context.
+
+    On Postgres it must skip media/static paths so concurrent file requests
+    stay DB-free.
+    """
+
+    def test_media_path_does_not_build_pghistory_context(self):
+        request = RequestFactory().get("/media/photos/students/x.jpg")
+        request.user = _ExplodingUser()
+
+        def get_response(req):
+            return HttpResponse("OK")
+
+        middleware = AuditHistoryMiddleware(get_response)
+        with mock.patch("audit.middleware.connection") as mock_connection:
+            mock_connection.vendor = "postgresql"
+            response = middleware(request)
+        self.assertEqual(response.status_code, 200)
+
+
+class MediaRequestDbFreeTests(TestCase):
+    """A media request must perform zero DB queries end-to-end.
+
+    Production incident: each concurrent ``/media/`` GET opened its own
+    session/user DB connection (requests run in per-request threads), and a
+    photo grid exhausted Postgres connection slots.
+    """
+
+    MEDIA_REL = os.path.join("photos", "students", "_db_free_probe.jpg")
+
+    def setUp(self):
+        full_path = os.path.join(settings.MEDIA_ROOT, self.MEDIA_REL)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, "wb") as probe:
+            probe.write(b"\xff\xd8\xff\xe0db-free-probe")
+        self.addCleanup(self._remove_probe, full_path)
+
+        user = User.objects.create_user(username="media_user")
+        self.client.force_login(user)
+        # Prime OrganizationMiddleware's process-wide cache so its one-time
+        # org lookup happens outside the assertNumQueries() block below.
+        self.client.get("/health/")
+
+    @staticmethod
+    def _remove_probe(path):
+        if os.path.exists(path):
+            os.remove(path)
+
+    def test_media_get_performs_zero_queries(self):
+        url = settings.MEDIA_URL + self.MEDIA_REL.replace(os.sep, "/")
+        with self.assertNumQueries(0):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            # Exhausting the streaming iterator fires response.close(),
+            # releasing the file handle before cleanup deletes it.
+            b"".join(response.streaming_content)
+
+
+class Handler500RenderTests(TestCase):
+    """The 500 page must render while the DB is down.
+
+    request.user, sessions, and context processors are all unavailable
+    during a database outage — the error page must not depend on them.
+    """
+
+    def test_handler500_does_not_touch_the_request(self):
+        class ExplodingRequest:
+            def __getattr__(self, attr):
+                raise AssertionError(
+                    f"request.{attr} accessed while rendering 500.html"
+                )
+
+        response = handler500(ExplodingRequest())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn(b"500 Server Error", response.content)

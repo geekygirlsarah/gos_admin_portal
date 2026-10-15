@@ -74,7 +74,7 @@
               <span class="badge bg-warning text-dark me-2"><i class="bi bi-clock me-1"></i>Sliding Scale Pending Review</span>
               <span class="small text-muted">Application pending review by a Lead Mentor.</span>
             </div>
-            <form method="post" action="{{ student_row.sliding_scale_withdraw_url }}" class="d-inline m-0">
+            <form method="post" action="{{ student_row.sliding_scale_withdraw_url }}" class="d-inline m-0 js-confirm" data-confirm="Withdraw the sliding-scale application for {{ student_row.student.display_name }}? This will permanently remove the application and any uploaded tax forms.">
               {% csrf_token %}
               <button type="submit" class="btn btn-sm btn-outline-danger">Withdraw Application</button>
             </form>

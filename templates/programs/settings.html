@@ -958,7 +958,7 @@
                                             <form method="post" class="d-inline js-confirm" data-confirm="Delete this agreement and all its versions? This cannot be undone." action="{% url 'portal_agreements' %}">
                                                 {% csrf_token %}
                                                 <input type="hidden" name="action" value="delete_agreement">
-                                                <input type="hidden" name="slug" value="{{ agreement.slug }}">
+                                                <input type="hidden" name="agreement_id" value="{{ agreement.id }}">
                                                 <button class="btn btn-sm btn-outline-danger">Delete</button>
                                             </form>
                                         </div>

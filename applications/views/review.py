@@ -1059,6 +1059,17 @@ class ApplicationDeleteView(_ReviewerRequiredMixin, View):
             Application, application_id=(app_id or "").upper()
         )
         app_str = application.application_id
+        log_event(
+            event=AuditEvent.RECORD_DELETED,
+            resource=application,
+            request=request,
+            before={
+                "application_id": app_str,
+                "status": application.status,
+                "email": application.email,
+            },
+            notes=f"Application {app_str} deleted by reviewer.",
+        )
         application.delete()
         messages.success(request, f"Deleted application {app_str}.")
         return redirect("application_review_list")
@@ -1071,6 +1082,23 @@ class ApplicationCleanupView(_ReviewerRequiredMixin, View):
         cutoff = timezone.now() - timezone.timedelta(days=30)
         stale_apps = Application.objects.filter(created_at__lt=cutoff)
         count = stale_apps.count()
+        sample = stale_apps.first()
+        if sample is not None:
+            log_event(
+                event=AuditEvent.RECORD_DELETED,
+                resource=sample,
+                request=request,
+                before={
+                    "count": count,
+                    "cutoff": cutoff.isoformat(),
+                    "statuses": sorted(
+                        stale_apps.values_list("status", flat=True).distinct()
+                    ),
+                },
+                notes=(
+                    f"Bulk cleanup: {count} application(s) older than 30 days deleted."
+                ),
+            )
         stale_apps.delete()
 
         if count > 0:

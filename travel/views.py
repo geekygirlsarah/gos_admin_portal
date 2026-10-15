@@ -9,6 +9,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
+from audit.mixins import AuditedDeleteMixin
+from audit.service import log_deletion
 from programs.models import Program, Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
@@ -320,12 +322,22 @@ class TravelEventUpdateView(
         return TravelEvent.objects.filter(program=self.program)
 
 
-class TravelEventDeleteView(LoginRequiredMixin, TravelProgramMixin, DeleteView):
+class TravelEventDeleteView(
+    LoginRequiredMixin, TravelProgramMixin, AuditedDeleteMixin, DeleteView
+):
     model = TravelEvent
     template_name = "travel/event_confirm_delete.html"
 
     def get_queryset(self):
         return TravelEvent.objects.filter(program=self.program)
+
+    def audit_snapshot(self, obj):
+        return {
+            "name": obj.name,
+            "start_date": str(obj.start_date),
+            "end_date": str(obj.end_date),
+            "program_id": obj.program_id,
+        }
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
@@ -653,6 +665,12 @@ class TravelMentorCancelView(LoginRequiredMixin, TravelProgramMixin, View):
         except Exception:
             messages.error(request, "You are not signed up to go on this trip.")
             return redirect("travel:event_list", program_id=self.program.id)
+        log_deletion(
+            resource=signup,
+            request=request,
+            before={"adult": str(signup.adult), "event": event.name},
+            notes=f"Mentor cancelled travel signup for '{event.name}'.",
+        )
         signup.delete()
         notify_mentor_signup_cancelled(signup)
         messages.info(request, f"You're no longer going to {event.name}.")
@@ -771,6 +789,12 @@ class TravelParentChaperoneCancelView(LoginRequiredMixin, TravelProgramMixin, Vi
         except Exception:
             messages.error(request, "You are not signed up to chaperone this trip.")
             return redirect("travel:event_list", program_id=self.program.id)
+        log_deletion(
+            resource=signup,
+            request=request,
+            before={"adult": str(signup.adult), "event": event.name},
+            notes=f"Parent cancelled chaperone signup for '{event.name}'.",
+        )
         signup.delete()
         notify_parent_chaperone_signup_cancelled(signup)
         messages.info(
@@ -789,6 +813,12 @@ class TravelParentChaperoneRemoveView(
             TravelParentChaperoneSignup, pk=pk, event__program=self.program
         )
         name, event_name = signup.adult.display_name, signup.event.name
+        log_deletion(
+            resource=signup,
+            request=request,
+            before={"adult": str(signup.adult), "event": event_name},
+            notes=f"Lead Mentor removed {name} from chaperoning '{event_name}'.",
+        )
         signup.delete()
         notify_parent_chaperone_signup_cancelled(signup)
         messages.info(request, f"{name} is no longer chaperoning {event_name}.")

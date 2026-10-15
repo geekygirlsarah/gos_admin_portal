@@ -1,11 +1,14 @@
-from io import BytesIO
+import csv
+from datetime import date
+from decimal import Decimal
+from io import BytesIO, StringIO
 
 from django.contrib.auth.models import Group, Permission, User
 from django.test import TestCase
 from django.urls import reverse
 from openpyxl import load_workbook
 
-from programs.models import Enrollment, Program, Student
+from programs.models import Adult, Enrollment, Fee, Payment, Program, Student
 
 
 class ProgramStudentExportViewTests(TestCase):
@@ -104,3 +107,161 @@ class ProgramStudentExportViewTests(TestCase):
         url = reverse("program_student_export", args=[9999])
         resp = self.client.get(url)
         self.assertIn(resp.status_code, (302, 404))
+
+
+class ProgramStudentExportExtendedTests(TestCase):
+    """Tests for the optional Lead Mentor export field groups and CSV format."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="leadmentor", password="pass12345"  # nosec B106
+        )
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+        self.client.login(username="leadmentor", password="pass12345")  # nosec B106
+
+        self.program = Program.objects.create(name="Robotics", active=True)
+
+        self.student_a = Student.objects.create(
+            legal_first_name="Alice",
+            last_name="Smith",
+            graduation_year=2029,
+            personal_email="alice@example.com",
+            phone_number="555-1234",
+        )
+        Enrollment.objects.create(
+            student=self.student_a, program=self.program, active=True
+        )
+
+        self.parent_one = Adult.objects.create(
+            legal_first_name="Mary",
+            last_name="Smith",
+            personal_email="mary@example.com",
+            phone_number="555-0001",
+            email_updates=True,
+        )
+        self.parent_two = Adult.objects.create(
+            legal_first_name="John",
+            last_name="Smith",
+            personal_email="john@example.com",
+            phone_number="555-0002",
+        )
+        self.student_a.primary_contact = self.parent_one
+        self.student_a.secondary_contact = self.parent_two
+        self.student_a.save()
+
+        # Customize the primary relationship so its labels are exercised.
+        self.student_a.primary_contact_relationship.specific_relationship = "mother"
+        self.student_a.primary_contact_relationship.save()
+
+    def _url(self, query=""):
+        base = reverse("program_student_export", args=[self.program.pk])
+        return f"{base}?{query}" if query else base
+
+    def _sheet(self, resp):
+        return load_workbook(BytesIO(resp.content)).active
+
+    def test_default_export_unchanged(self):
+        ws = self._sheet(self.client.get(self._url()))
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(headers, ["First Name", "Last Name", "Grade"])
+
+    def test_contact_group_adds_student_email_and_school(self):
+        ws = self._sheet(self.client.get(self._url("groups=contact")))
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(
+            headers,
+            [
+                "First Name",
+                "Last Name",
+                "Grade",
+                "Student Email",
+                "Student Phone",
+                "School",
+                "Graduation Year",
+            ],
+        )
+        row = {h: cell.value for h, cell in zip(headers, ws[2])}
+        self.assertEqual(row["Student Email"], "alice@example.com")
+        self.assertEqual(row["Student Phone"], "555-1234")
+        self.assertEqual(row["Graduation Year"], 2029)
+
+    def test_parents_group_adds_parent_contacts(self):
+        ws = self._sheet(self.client.get(self._url("groups=parents")))
+        headers = [cell.value for cell in ws[1]]
+        self.assertIn("Parent 1 Name", headers)
+        self.assertIn("Parent 2 Email", headers)
+        row = {h: cell.value for h, cell in zip(headers, ws[2])}
+        self.assertEqual(row["Parent 1 Name"], "Mary Smith")
+        self.assertEqual(row["Parent 1 Relationship"], "Parent")
+        self.assertEqual(row["Parent 1 Specific Relationship"], "mother")
+        self.assertEqual(row["Parent 1 Email"], "mary@example.com")
+        self.assertEqual(row["Parent 1 Phone"], "555-0001")
+        self.assertEqual(row["Parent 1 Email Updates"], "Yes")
+        self.assertEqual(row["Parent 2 Name"], "John Smith")
+        self.assertEqual(row["Parent 2 Relationship"], "Parent")
+        self.assertEqual(row["Parent 2 Email"], "john@example.com")
+        self.assertEqual(row["Parent 2 Email Updates"], "No")
+
+    def test_balance_group_adds_balance_columns(self):
+        Fee.objects.create(
+            program=self.program, name="Tuition", amount=Decimal("100.00")
+        )
+        Payment.objects.create(
+            student=self.student_a,
+            program=self.program,
+            amount=Decimal("40.00"),
+            paid_on=date.today(),
+        )
+        ws = self._sheet(self.client.get(self._url("groups=balance")))
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(
+            headers[-4:],
+            ["Total Fees", "Discount", "Payments", "Balance Due"],
+        )
+        row = {h: cell.value for h, cell in zip(headers, ws[2])}
+        self.assertEqual(row["Balance Due"], 60)
+        self.assertEqual(row["Payments"], 40)
+
+    def test_multiple_groups_combine_in_order(self):
+        ws = self._sheet(self.client.get(self._url("groups=balance&groups=contact")))
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(
+            headers[3:7],
+            [
+                "Student Email",
+                "Student Phone",
+                "School",
+                "Graduation Year",
+            ],
+        )
+        self.assertEqual(
+            headers[-4:],
+            [
+                "Total Fees",
+                "Discount",
+                "Payments",
+                "Balance Due",
+            ],
+        )
+
+    def test_csv_format_returns_csv(self):
+        resp = self.client.get(self._url("format=csv&groups=contact"))
+        self.assertEqual(resp["Content-Type"], "text/csv")
+        self.assertIn(".csv", resp["Content-Disposition"])
+        rows = list(csv.reader(StringIO(resp.content.decode("utf-8"))))
+        self.assertEqual(rows[0][:3], ["First Name", "Last Name", "Grade"])
+        self.assertEqual(rows[1][0], "Alice")
+        self.assertIn("Student Email", rows[0])
+
+    def test_extra_groups_ignored_for_non_lead_mentor(self):
+        mentor = User.objects.create_user(
+            username="mentor", password="pass12345"  # nosec B106
+        )
+        mentor_group, _ = Group.objects.get_or_create(name="Mentor")
+        mentor.groups.add(mentor_group)
+        self.client.login(username="mentor", password="pass12345")  # nosec B106
+
+        ws = self._sheet(self.client.get(self._url("groups=contact,parents,balance")))
+        headers = [cell.value for cell in ws[1]]
+        self.assertEqual(headers, ["First Name", "Last Name", "Grade"])

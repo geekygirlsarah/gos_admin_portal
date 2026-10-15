@@ -3,8 +3,9 @@ from django.contrib import messages
 from django.core import mail
 from django.core.cache import cache
 from django.db import connection
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
 
 EMAIL_HEALTH_CACHE_KEY = "health:email_status"
 
@@ -82,5 +83,10 @@ def handler400(request, exception=None):
 def handler500(request):
     """
     Custom 500 handler that shows a friendly error page.
+
+    Rendered WITHOUT the request (no context processors): the 500 case often
+    IS a database outage, during which request.user/session cannot be
+    resolved. ``templates/500.html`` is therefore standalone and never
+    extends ``base.html``.
     """
-    return render(request, "500.html", status=500)
+    return HttpResponse(render_to_string("500.html"), status=500)

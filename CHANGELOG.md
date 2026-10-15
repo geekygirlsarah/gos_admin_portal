@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-15
+
+### Added
+- **Lead Mentors can export richer student lists**: The "Export Students" action on a program now opens a small window for Lead Mentors where they can choose an Excel or CSV file and tick exactly what to include - the usual names and grades, plus student contact details (email, phone, school), parent/guardian contacts (with each guardian's relationship, specific relationship like mother/stepdad, contact details, and whether they've agreed to receive updates), and balance information (fees, discount, payments, balance due). Everything is ticked by default, so "export" gives the full picture in one click, and the plain name-and-grade export is still available to every other staff member as before.
+- **Every delete now asks "are you sure?" and is recorded**: Destructive actions across the portal — deleting an order, item, vendor, shipping company, outreach event or location, travel event, calendar feed or event, school district, program document, application, guest form, tax form, team/crew/subteam, kiosk configuration, mentor agreement, attendance entry, or a sliding-scale application — now show a confirmation prompt before anything is removed, so a stray click can no longer wipe data. Each confirmed deletion is also written to the audit log (a new "Record deleted" event type), capturing who deleted what and a snapshot of the record, so there is always a trail for the things that are gone.
+
+### Fixed
+- **Deleting a mentor agreement version from Portal Settings now works**: The Delete button in Portal Settings → Agreements posted the wrong identifier, so clicking it silently failed with "Agreement not found." It now deletes the chosen version as expected.
+
+## 2026-10-13
+
+### Changed
+- **Students are marked inactive instead of being removed from a program**: The "Remove" button on a program's student list now reads "Mark Inactive" and simply moves the student to the "Students No Longer Active" section while keeping all of their records (enrollments, fees, attendance, history) intact. Students in that inactive section get a "Mark Active" button to bring them back, so a student who returns to a program can be reactivated without anyone having to re-add them. Graduated students don't show the reactivate button.
+
+## 2026-10-06
+
+### Fixed
+- **Photo pages no longer risk overloading the database**: A page full of photos (like a program's photo grid) loads each image with its own request, and every one of those requests used to check who's logged in by reading the database. Enough photos loading at once could use up every connection the database allows, which then caused confusing "connection slots" server errors across the whole portal. Image, font/style/script, and health-check requests now skip all sign-in and session lookups, so browsing photos never touches the database.
+- **The "Something went wrong" error page now shows even when the database is down**: The 500 error page previously tried to render the signed-in user's navigation menu, which needs the database — exactly what's unavailable during a database outage. The page now renders on its own without the site menu, so visitors get the friendly error message instead of a blank page.
+
+### Changed
+- **Removed an unused hidden step on every page**: A leftover internal setting (a per-user timezone preference that was never actually set anywhere) caused an extra database read on every single request. Nothing changes visually — times continue to display in the portal's home timezone as before.
+
 ## 2026-10-04
 
 ### Fixed

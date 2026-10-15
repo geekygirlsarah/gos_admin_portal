@@ -1,4 +1,5 @@
 import pghistory.middleware
+from django.conf import settings
 from django.db import connection
 
 
@@ -30,9 +31,23 @@ class AuditHistoryMiddleware(pghistory.middleware.HistoryMiddleware):
     """
 
     def __call__(self, request):
-        if connection.vendor != "postgresql":
+        if connection.vendor != "postgresql" or self._is_file_path(request.path):
             return self.get_response(request)
         return super().__call__(request)
+
+    @staticmethod
+    def _is_file_path(path):
+        """True for media/static paths.
+
+        File requests do no model writes, so there is no audit context to
+        capture — and building one would read request.user/session from the
+        DB, which concurrent photo loads must not do (that pattern exhausted
+        Postgres connection slots in production).
+        """
+        for prefix in (settings.MEDIA_URL, settings.STATIC_URL):
+            if prefix and path.startswith(prefix):
+                return True
+        return False
 
     def get_context(self, request) -> dict:
         context = super().get_context(request)

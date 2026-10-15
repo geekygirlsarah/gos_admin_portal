@@ -57,15 +57,16 @@ from .views import (
     ProgramPaymentPrintView,
     ProgramSchoolsView,
     ProgramSignoutSheetView,
+    ProgramStudentActivateView,
     ProgramStudentAddView,
     ProgramStudentBalancePrintView,
     ProgramStudentBalanceView,
+    ProgramStudentDeactivateView,
     ProgramStudentDocumentsView,
     ProgramStudentExportView,
     ProgramStudentMapView,
     ProgramStudentPhotoListView,
     ProgramStudentQuickCreateView,
-    ProgramStudentRemoveView,
     ProgramUpdateView,
     RelationshipImportView,
     SchoolCreateView,
@@ -403,11 +404,18 @@ urlpatterns = [
         name="program_enrollment_update",
     ),
     path(
-        "<int:pk>/students/<int:student_id>/remove/",
+        "<int:pk>/students/<int:student_id>/deactivate/",
         permission_required("programs.change_student")(
-            ProgramStudentRemoveView.as_view()
+            ProgramStudentDeactivateView.as_view()
         ),
-        name="program_student_remove",
+        name="program_student_deactivate",
+    ),
+    path(
+        "<int:pk>/students/<int:student_id>/activate/",
+        permission_required("programs.change_student")(
+            ProgramStudentActivateView.as_view()
+        ),
+        name="program_student_activate",
     ),
     path(
         "<int:pk>/students/<int:student_id>/balance/",

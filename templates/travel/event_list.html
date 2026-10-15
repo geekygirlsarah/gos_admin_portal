@@ -186,7 +186,7 @@
                         <span class="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 rounded-pill d-inline-flex align-items-center">
                             <span>{{ cs.adult.display_name }}{% if cs.departure %} <span class="small opacity-75">({{ cs.departure.display_label }})</span>{% endif %}</span>
                             {% if can_manage %}
-                            <form action="{% url 'travel:chaperone_remove' program.id cs.id %}" method="post" class="d-inline mb-0 ms-1">
+                            <form action="{% url 'travel:chaperone_remove' program.id cs.id %}" method="post" class="d-inline mb-0 ms-1 js-confirm" data-confirm="Remove {{ cs.adult.display_name }} from chaperoning {{ event.name }}?">
                                 {% csrf_token %}
                                 <button type="submit" class="btn-close btn-close-sm p-1" style="font-size:.4rem;" aria-label="Remove {{ cs.adult.display_name }}" title="Remove {{ cs.adult.display_name }}"></button>
                             </form>

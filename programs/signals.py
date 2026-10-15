@@ -435,7 +435,24 @@ def notify_parents_on_sliding_scale_added(sender, instance, created, **kwargs):
     ):
         # Auto-delete uploaded tax/personal documents once the application has
         # been reviewed — we don't want to hold on to them.
+        from audit.context import get_current_request
+        from audit.service import log_deletion
+
+        audit_request = get_current_request()
         for tax_form in instance.tax_forms.all():
+            log_deletion(
+                resource=tax_form,
+                request=audit_request,
+                before={
+                    "sliding_scale_id": instance.pk,
+                    "student": str(student),
+                    "review_status": instance.status,
+                },
+                notes=(
+                    "Tax form auto-deleted after sliding scale review "
+                    f"({instance.get_status_display()})."
+                ),
+            )
             try:
                 tax_form.file.delete(save=False)
             except OSError:

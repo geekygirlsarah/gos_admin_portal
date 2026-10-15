@@ -40,6 +40,7 @@ from ..permission_views import (
 from ..utils import (
     active_students_in_program,
     get_safe_url,
+    get_student_balance_data,
     redirect_back,
     resolve_address_points,
 )
@@ -825,14 +826,63 @@ class ProgramEnrollmentUpdateView(
         return redirect("program_detail", pk=pk)
 
 
-class ProgramStudentRemoveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class ProgramStudentDeactivateView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = "programs.change_student"
 
     def post(self, request, pk, student_id):
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
         program = get_object_or_404(Program, pk=pk)
         student = get_object_or_404(Student, pk=student_id)
-        Enrollment.objects.filter(student=student, program=program).delete()
-        messages.success(request, f"Removed {student} from {program}.")
+        enrollment = Enrollment.objects.filter(student=student, program=program).first()
+        if enrollment and enrollment.active:
+            enrollment.active = False
+            enrollment.save(update_fields=["active"])
+            log_event(
+                request=request,
+                event=AuditEvent.ENROLLMENT_CHANGED,
+                resource=enrollment,
+                before={"active": True},
+                after={"active": False},
+                notes=(
+                    f"{student} marked inactive in {program} "
+                    f"(enrollment pk={enrollment.pk})."
+                ),
+            )
+            messages.success(request, f"Marked {student} inactive in {program}.")
+        else:
+            messages.info(request, f"{student} is already inactive in {program}.")
+        return redirect("program_detail", pk=program.pk)
+
+
+class ProgramStudentActivateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "programs.change_student"
+
+    def post(self, request, pk, student_id):
+        from audit.events import AuditEvent
+        from audit.service import log_event
+
+        program = get_object_or_404(Program, pk=pk)
+        student = get_object_or_404(Student, pk=student_id)
+        enrollment = Enrollment.objects.filter(student=student, program=program).first()
+        if enrollment and not enrollment.active:
+            enrollment.active = True
+            enrollment.save(update_fields=["active"])
+            log_event(
+                request=request,
+                event=AuditEvent.ENROLLMENT_CHANGED,
+                resource=enrollment,
+                before={"active": False},
+                after={"active": True},
+                notes=(
+                    f"{student} marked active in {program} "
+                    f"(enrollment pk={enrollment.pk})."
+                ),
+            )
+            messages.success(request, f"Marked {student} active in {program}.")
+        else:
+            messages.info(request, f"{student} is already active in {program}.")
         return redirect("program_detail", pk=program.pk)
 
 
@@ -1565,24 +1615,178 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
         )
 
 
+_STUDENT_EXPORT_BASE_HEADERS = ["First Name", "Last Name", "Grade"]
+_STUDENT_EXPORT_CONTACT_HEADERS = [
+    "Student Email",
+    "Student Phone",
+    "School",
+    "Graduation Year",
+]
+_STUDENT_EXPORT_PARENT_HEADERS = [
+    "Parent 1 Name",
+    "Parent 1 Relationship",
+    "Parent 1 Specific Relationship",
+    "Parent 1 Email",
+    "Parent 1 Phone",
+    "Parent 1 Email Updates",
+    "Parent 2 Name",
+    "Parent 2 Relationship",
+    "Parent 2 Specific Relationship",
+    "Parent 2 Email",
+    "Parent 2 Phone",
+    "Parent 2 Email Updates",
+]
+_STUDENT_EXPORT_BALANCE_HEADERS = [
+    "Total Fees",
+    "Discount",
+    "Payments",
+    "Balance Due",
+]
+# Optional column groups a Lead Mentor can request via ?groups=...
+_STUDENT_EXPORT_GROUPS = ("contact", "parents", "balance")
+
+
+def _adult_contact_values(relationship):
+    """Return contact columns for one parent/guardian relationship.
+
+    Columns: [name, relationship, specific relationship, email, phone,
+    email-updates]. Blank/No when the relationship (or its adult) is missing.
+    """
+    if relationship is None or relationship.adult is None:
+        return ["", "", "", "", "", "No"]
+    adult = relationship.adult
+    email = adult.personal_email or adult.andrew_email or ""
+    return [
+        adult.display_name,
+        relationship.get_relationship_to_student_display(),
+        relationship.specific_relationship or "",
+        email,
+        adult.phone_number or "",
+        "Yes" if adult.email_updates else "No",
+    ]
+
+
+def _student_export_headers(groups):
+    """Return the header row for the requested optional column groups."""
+    headers = list(_STUDENT_EXPORT_BASE_HEADERS)
+    if "contact" in groups:
+        headers += _STUDENT_EXPORT_CONTACT_HEADERS
+    if "parents" in groups:
+        headers += _STUDENT_EXPORT_PARENT_HEADERS
+    if "balance" in groups:
+        headers += _STUDENT_EXPORT_BALANCE_HEADERS
+    return headers
+
+
+def _student_export_row(student, program, groups, can_view_sliding):
+    """Return one export row for a student, honoring the requested groups."""
+    row = [
+        student.preferred_first_name or student.legal_first_name,
+        student.last_name,
+        student.grade_display or "",
+    ]
+
+    if "contact" in groups:
+        row += [
+            student.personal_email or student.andrew_email or "",
+            student.phone_number or "",
+            student.school.name if student.school else "",
+            student.graduation_year or "",
+        ]
+
+    if "parents" in groups:
+        row += _adult_contact_values(student.primary_contact_relationship)
+        row += _adult_contact_values(student.secondary_contact_relationship)
+
+    if "balance" in groups:
+        balance_data = get_student_balance_data(
+            student, program, can_view_sliding=can_view_sliding
+        )
+        row += [
+            float(balance_data["total_fees"]),
+            float(balance_data["total_sliding"]),
+            float(balance_data["total_payments"]),
+            float(balance_data["balance"]),
+        ]
+
+    return row
+
+
+def _students_xlsx_response(program, headers, rows):
+    from io import BytesIO
+
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Students"
+    ws.append(headers)
+    for row in rows:
+        ws.append(row)
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    filename = f"{program.name} - Students.xlsx"
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _students_csv_response(program, headers, rows):
+    import csv
+
+    from django.http import HttpResponse
+
+    filename = f"{program.name} - Students.csv"
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return response
+
+
 class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
-    """Export active students in a program as an Excel (.xlsx) file."""
+    """Export active students in a program as an Excel (.xlsx) or CSV file.
+
+    Lead Mentors can request extra columns via repeated/CSV ``?groups=`` values
+    (``contact``, ``parents``, ``balance``) and choose the output format with
+    ``?format=csv``. Extra groups are ignored for non-Lead-Mentor roles, who
+    always get the basic name/grade export.
+    """
 
     section = "programs"
 
     def get(self, request, pk):
-        from io import BytesIO
-
-        from django.http import HttpResponse
-        from openpyxl import Workbook
-
         program = get_object_or_404(Program, pk=pk)
+        user = request.user
+
+        groups = set()
+        if get_user_role(user) == "LeadMentor":
+            requested = []
+            for value in request.GET.getlist("groups"):
+                requested.extend(part.strip() for part in value.split(","))
+            groups = {g for g in requested if g in _STUDENT_EXPORT_GROUPS}
+
+        can_view_sliding = can_user_read(user, "sliding_scale")
 
         enrollments = (
             Enrollment.objects.filter(
                 program=program, active=True, student__graduated=False
             )
-            .select_related("student")
+            .select_related(
+                "student",
+                "student__school",
+                "student__primary_contact_relationship__adult",
+                "student__secondary_contact_relationship__adult",
+            )
             .annotate(
                 sort_first=Lower(
                     Coalesce(
@@ -1595,32 +1799,15 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
             .order_by("sort_first", "sort_last")
         )
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Students"
-        ws.append(["First Name", "Last Name", "Grade"])
+        headers = _student_export_headers(groups)
+        rows = [
+            _student_export_row(enrollment.student, program, groups, can_view_sliding)
+            for enrollment in enrollments
+        ]
 
-        for enrollment in enrollments:
-            student = enrollment.student
-            ws.append(
-                [
-                    student.preferred_first_name or student.legal_first_name,
-                    student.last_name,
-                    student.grade_display or "",
-                ]
-            )
-
-        buffer = BytesIO()
-        wb.save(buffer)
-        buffer.seek(0)
-
-        filename = f"{program.name} - Students.xlsx"
-        response = HttpResponse(
-            buffer.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
+        if request.GET.get("format", "xlsx").lower() == "csv":
+            return _students_csv_response(program, headers, rows)
+        return _students_xlsx_response(program, headers, rows)
 
 
 class ProgramDocumentCreateView(
@@ -1729,7 +1916,19 @@ class ProgramDocumentDeleteView(
         )
 
     def post(self, request, *args, **kwargs):
+        from audit.service import log_deletion
+
         name = self.document.name
+        log_deletion(
+            resource=self.document,
+            request=request,
+            before={
+                "name": name,
+                "program": str(self.program),
+                "file_name": self.document.file.name if self.document.file else None,
+            },
+            notes=f"Program document deleted from {self.program}.",
+        )
         self.document.delete()
         messages.success(request, f"Deleted document \u201c{name}\u201d.")
         return redirect("program_detail", pk=self.program.pk)

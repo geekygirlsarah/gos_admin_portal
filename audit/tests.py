@@ -1,8 +1,11 @@
 import json
 import logging
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
@@ -10,12 +13,16 @@ from applications.models import Application
 from audit.events import AuditEvent
 from audit.logging_handlers import AuditStderrHandler, AuditStdoutHandler
 from audit.models import AuditLog
-from audit.service import log_event
+from audit.service import log_deletion, log_event
+from orders.models import Order, OrderItem, Vendor
 from programs.models import (
     Adult,
     AdultStudentRelationship,
     Enrollment,
     Program,
+    ProgramFeature,
+    School,
+    SchoolDistrict,
     Student,
 )
 
@@ -549,3 +556,318 @@ class AuditUtilsTest(TestCase):
 
         anomalies = detect_session_anomalies(hours=1)
         self.assertGreater(anomalies.count(), 0)
+
+
+def _grant_permission(user, codename):
+    perm = Permission.objects.get(codename=codename)
+    user.user_permissions.add(perm)
+    return perm
+
+
+class LogDeletionServiceTests(TestCase):
+    """``log_deletion`` writes an immutable RECORD_DELETED entry with a snapshot."""
+
+    def test_records_entry_with_before_snapshot(self):
+        student = Student.objects.create(
+            legal_first_name="Del", last_name="Eted", graduation_year=2030
+        )
+
+        entry = log_deletion(
+            resource=student,
+            before={"name": str(student)},
+            notes="Deleted in a test.",
+        )
+
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.event, AuditEvent.RECORD_DELETED)
+        self.assertEqual(entry.resource_type, "Student")
+        self.assertEqual(entry.resource_id, str(student.pk))
+        self.assertEqual(entry.before, {"name": str(student)})
+        self.assertIn("Deleted in a test.", entry.notes)
+
+    def test_default_notes_are_generated(self):
+        student = Student.objects.create(
+            legal_first_name="No", last_name="Notes", graduation_year=2030
+        )
+        entry = log_deletion(resource=student)
+        self.assertIn("deleted", entry.notes.lower())
+
+
+class AuditedDeleteMixinViewTests(TestCase):
+    """The mixin logs RECORD_DELETED before a generic DeleteView removes the row."""
+
+    def setUp(self):
+        self.feature, _ = ProgramFeature.objects.get_or_create(
+            key="orders", defaults={"name": "Order Requests"}
+        )
+        self.program = Program.objects.create(name="Orders Program", active=True)
+        self.program.features.add(self.feature)
+
+        self.lead = User.objects.create_user(
+            username="lead_mixin", password="password123"  # nosec B106
+        )
+        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.lead.groups.add(lm_group)
+        self.client.force_login(self.lead)
+
+    def test_vendor_delete_logs_record_deleted(self):
+        vendor = Vendor.objects.create(
+            name="Acme Parts", website="https://acme.example.com"
+        )
+        url = reverse("orders:vendor_delete", args=[self.program.pk, vendor.pk])
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Vendor.objects.filter(pk=vendor.pk).exists())
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.RECORD_DELETED,
+            resource_type="Vendor",
+            resource_id=str(vendor.pk),
+        ).first()
+        self.assertIsNotNone(log, "Vendor delete should log RECORD_DELETED")
+        self.assertEqual(log.before["name"], "Acme Parts")
+        self.assertEqual(log.actor, self.lead)
+
+    def test_order_delete_returns_items_and_logs(self):
+        order = Order.objects.create(program=self.program, vendor_name="Acme Parts")
+        item = OrderItem.objects.create(
+            program=self.program,
+            item_name="Hex Driver",
+            quantity="1",
+            order=order,
+        )
+        url = reverse("orders:order_delete", args=[self.program.pk, order.pk])
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
+        item.refresh_from_db()
+        self.assertIsNone(item.order_id, "Items should return to the request pool")
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.RECORD_DELETED,
+            resource_type="Order",
+            resource_id=str(order.pk),
+        ).first()
+        self.assertIsNotNone(log, "Order delete should log RECORD_DELETED")
+
+
+class DistrictDeleteAuditTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="district_admin", password="password123"  # nosec B106
+        )
+        _grant_permission(self.user, "delete_schooldistrict")
+        self.client.force_login(self.user)
+
+    def test_district_delete_logs_school_count(self):
+        district = SchoolDistrict.objects.create(name="North Allegheny SD")
+        School.objects.create(name="NA High School", district=district)
+
+        response = self.client.post(
+            reverse("school_district_delete", args=[district.pk])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(SchoolDistrict.objects.filter(pk=district.pk).exists())
+        log = AuditLog.objects.filter(
+            event=AuditEvent.RECORD_DELETED,
+            resource_type="SchoolDistrict",
+            resource_id=str(district.pk),
+        ).first()
+        self.assertIsNotNone(log, "District delete should log RECORD_DELETED")
+        self.assertEqual(log.before["name"], "North Allegheny SD")
+        self.assertEqual(log.before["school_count"], 1)
+
+    def test_district_confirm_page_renders(self):
+        district = SchoolDistrict.objects.create(name="PPS")
+        response = self.client.get(
+            reverse("school_district_delete", args=[district.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Delete District")
+
+
+class SchoolMergeAuditTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="merge_admin", password="password123"  # nosec B106
+        )
+        _grant_permission(self.user, "change_school")
+        self.client.force_login(self.user)
+
+    def test_school_merge_logs_records_merged_with_source(self):
+        keep = School.objects.create(name="Plum Senior High School")
+        source = School.objects.create(name="Plum SHS")
+        Student.objects.create(
+            legal_first_name="A",
+            last_name="Student",
+            school=source,
+            graduation_year=2027,
+        )
+
+        response = self.client.post(
+            reverse("school_merge"), {"keep": keep.pk, "source": source.pk}
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(School.objects.filter(pk=source.pk).exists())
+        log = AuditLog.objects.filter(
+            event=AuditEvent.RECORDS_MERGED,
+            actor=self.user,
+        ).first()
+        self.assertIsNotNone(log, "School merge should log RECORDS_MERGED")
+        self.assertEqual(log.before["source_pk"], source.pk)
+        self.assertEqual(log.before["source_name"], "Plum SHS")
+        self.assertEqual(log.after["keep_pk"], keep.pk)
+
+
+class EnrollmentToggleAuditTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="toggle_admin", password="password123"  # nosec B106
+        )
+        _grant_permission(self.user, "change_student")
+        self.client.force_login(self.user)
+        self.program = Program.objects.create(name="Toggle Program")
+        self.student = Student.objects.create(
+            legal_first_name="Toggle", last_name="Student", graduation_year=2028
+        )
+        self.enrollment = Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
+        )
+
+    def test_deactivate_logs_enrollment_changed(self):
+        response = self.client.post(
+            reverse(
+                "program_student_deactivate", args=[self.program.pk, self.student.pk]
+            )
+        )
+        self.assertEqual(response.status_code, 302)
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.ENROLLMENT_CHANGED,
+            resource_id=str(self.enrollment.pk),
+        ).first()
+        self.assertIsNotNone(log, "Deactivate should log ENROLLMENT_CHANGED")
+        self.assertEqual(log.before["active"], True)
+        self.assertEqual(log.after["active"], False)
+
+    def test_activate_logs_enrollment_changed(self):
+        self.enrollment.active = False
+        self.enrollment.save(update_fields=["active"])
+
+        response = self.client.post(
+            reverse("program_student_activate", args=[self.program.pk, self.student.pk])
+        )
+        self.assertEqual(response.status_code, 302)
+
+        log = (
+            AuditLog.objects.filter(
+                event=AuditEvent.ENROLLMENT_CHANGED,
+                resource_id=str(self.enrollment.pk),
+            )
+            .order_by("-timestamp")
+            .first()
+        )
+        self.assertIsNotNone(log, "Activate should log ENROLLMENT_CHANGED")
+        self.assertEqual(log.before["active"], False)
+        self.assertEqual(log.after["active"], True)
+
+
+class ApplicationDeleteAuditTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="app_admin", password="password123"  # nosec B106
+        )
+        ct, _ = ContentType.objects.get_or_create(
+            app_label="applications", model="application"
+        )
+        perm, _ = Permission.objects.get_or_create(
+            content_type=ct,
+            codename="review_application",
+            defaults={"name": "Can review applications"},
+        )
+        self.user.user_permissions.add(perm)
+        self.client.force_login(self.user)
+        self.app = Application.objects.create(
+            email="delete-me@example.com",
+            status=Application.Status.SUBMITTED,
+            data={
+                "step5-student": {"legal_first_name": "Ada", "last_name": "Lovelace"}
+            },
+        )
+
+    def test_delete_logs_record_deleted(self):
+        app_pk = self.app.pk
+        app_id = self.app.application_id
+        response = self.client.post(
+            reverse("application_review_delete", kwargs={"app_id": app_id})
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Application.objects.filter(pk=app_pk).exists())
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.RECORD_DELETED,
+            resource_type="Application",
+            resource_id=str(app_pk),
+        ).first()
+        self.assertIsNotNone(log, "Application delete should log RECORD_DELETED")
+        self.assertEqual(log.before["application_id"], app_id)
+        self.assertEqual(log.actor, self.user)
+
+
+class ConfirmDialogCoverageTests(TestCase):
+    """Destructive buttons/forms must carry the shared js-confirm dialog."""
+
+    def _template(self, rel_path):
+        return (Path(settings.BASE_DIR) / "templates" / rel_path).read_text(
+            encoding="utf-8"
+        )
+
+    def test_sliding_scale_withdraw_has_confirm(self):
+        html = self._template("parents/payments.html")
+        self.assertIn("js-confirm", html)
+        self.assertIn("Withdraw the sliding-scale application", html)
+
+    def test_travel_chaperone_remove_has_confirm(self):
+        html = self._template("travel/event_list.html")
+        self.assertIn("js-confirm", html)
+        self.assertIn("Remove {{ cs.adult.display_name }} from chaperoning", html)
+
+    def test_duplicate_application_resume_has_confirm(self):
+        html = self._template("applications/step3_duplicate_found.html")
+        self.assertIn("js-confirm", html)
+
+    def test_program_settings_team_crew_subteam_deletes_have_confirm(self):
+        html = self._template("programs/settings.html")
+        self.assertIn('data-submit-id="delete-team-{{ team.id }}"', html)
+        self.assertIn('data-submit-id="delete-crew-{{ crew.id }}"', html)
+        self.assertIn('data-submit-id="delete-subteam-{{ subteam.id }}"', html)
+
+    def test_settings_agreement_delete_posts_agreement_id(self):
+        """Regression: the delete form must post agreement_id (the view's key),
+        not slug, or the Delete button silently fails."""
+        html = self._template("programs/settings.html")
+        self.assertIn('value="delete_agreement"', html)
+        self.assertIn('name="agreement_id"', html)
+
+    def test_program_settings_page_renders_confirm_dialogs(self):
+        lead = User.objects.create_superuser(
+            username="settings_lead",
+            email="settings@example.com",
+            password="password123",  # nosec B106
+        )
+        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        lead.groups.add(lm_group)
+        self.client.force_login(lead)
+
+        from programs.models import Team
+
+        Team.objects.create(team_type="FRC", number=1, name="Alpha")
+
+        response = self.client.get(reverse("portal_settings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "js-confirm")
+        self.assertContains(response, "delete-team-")

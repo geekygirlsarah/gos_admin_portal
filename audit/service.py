@@ -109,3 +109,29 @@ def log_event(
             type(e).__name__,
         )
         return None
+
+
+def log_deletion(
+    *,
+    resource,
+    request=None,
+    actor=None,
+    before: dict | None = None,
+    notes: str = "",
+) -> AuditLog | None:
+    """
+    Write an immutable RECORD_DELETED audit entry for a record about to be removed.
+
+    Call this immediately BEFORE ``obj.delete()`` (or in ``form_valid`` ahead of
+    ``super().form_valid(form)`` for generic ``DeleteView`` subclasses) so the
+    snapshot in ``before`` still describes a live row. Failures are swallowed the
+    same way as :func:`log_event`.
+    """
+    return log_event(
+        event=AuditEvent.RECORD_DELETED,
+        resource=resource,
+        request=request,
+        actor=actor,
+        before=before,
+        notes=notes or f"{type(resource).__name__} deleted",
+    )

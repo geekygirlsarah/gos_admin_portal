@@ -16,6 +16,7 @@ from django.views.generic import (
     View,
 )
 
+from audit.mixins import AuditedDeleteMixin
 from orders.forms import (
     NOT_LISTED_VENDOR,
     OrderForm,
@@ -604,7 +605,11 @@ class OrderUpdateView(
 
 
 class OrderDeleteView(
-    LoginRequiredMixin, OrderStaffRequiredMixin, OrderProgramMixin, DeleteView
+    LoginRequiredMixin,
+    AuditedDeleteMixin,
+    OrderStaffRequiredMixin,
+    OrderProgramMixin,
+    DeleteView,
 ):
     model = Order
     template_name = "orders/order_confirm_delete.html"
@@ -617,6 +622,14 @@ class OrderDeleteView(
             messages.error(request, "You do not have permission to delete that order.")
             return redirect("orders:order_list", program_id=kwargs.get("program_id"))
         return super().dispatch(request, *args, **kwargs)
+
+    def audit_snapshot(self, obj):
+        return {
+            "vendor_name": obj.vendor_name,
+            "status": obj.status,
+            "total": str(obj.total) if obj.total is not None else None,
+            "item_count": obj.item_count,
+        }
 
     def form_valid(self, form):
         # Return grouped items to the request pool rather than deleting them.
@@ -926,12 +939,22 @@ class ItemUpdateView(
         return super().form_valid(form)
 
 
-class ItemDeleteView(LoginRequiredMixin, OrderProgramMixin, DeleteView):
+class ItemDeleteView(
+    LoginRequiredMixin, AuditedDeleteMixin, OrderProgramMixin, DeleteView
+):
     model = OrderItem
     template_name = "orders/item_confirm_delete.html"
 
     def get_queryset(self):
         return OrderItem.objects.select_related("program")
+
+    def audit_snapshot(self, obj):
+        return {
+            "item_name": obj.item_name,
+            "quantity": str(obj.quantity),
+            "unit_price": str(obj.unit_price) if obj.unit_price is not None else None,
+            "order_id": obj.order_id,
+        }
 
     def dispatch(self, request, *args, **kwargs):
         if not can_user_delete(request.user, "orders-request", self.get_object()):
@@ -1005,10 +1028,17 @@ class VendorUpdateView(
 
 
 class VendorDeleteView(
-    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, DeleteView
+    LoginRequiredMixin,
+    AuditedDeleteMixin,
+    OrderProgramMixin,
+    LeadMentorRequiredMixin,
+    DeleteView,
 ):
     model = Vendor
     template_name = "orders/vendor_confirm_delete.html"
+
+    def audit_snapshot(self, obj):
+        return {"name": obj.name, "website": obj.website}
 
     def form_valid(self, form):
         name = self.object.name
@@ -1088,10 +1118,17 @@ class ShippingCarrierUpdateView(
 
 
 class ShippingCarrierDeleteView(
-    LoginRequiredMixin, OrderProgramMixin, LeadMentorRequiredMixin, DeleteView
+    LoginRequiredMixin,
+    AuditedDeleteMixin,
+    OrderProgramMixin,
+    LeadMentorRequiredMixin,
+    DeleteView,
 ):
     model = ShippingCarrier
     template_name = "orders/carrier_confirm_delete.html"
+
+    def audit_snapshot(self, obj):
+        return {"name": obj.name, "tracking_url_template": obj.tracking_url_template}
 
     def form_valid(self, form):
         name = self.object.name

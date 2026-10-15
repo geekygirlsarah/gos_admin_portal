@@ -177,7 +177,6 @@ MIDDLEWARE = [
     # Placed after AuthenticationMiddleware so the 429 page can render the
     # authenticated navbar.
     "GoSAdminPortal.middleware.ApplyRateLimitMiddleware",
-    "GoSAdminPortal.middleware.TimezoneMiddleware",
     # Attaches request.organization (single hardcoded GoS org for now).
     "GoSAdminPortal.middleware.OrganizationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",

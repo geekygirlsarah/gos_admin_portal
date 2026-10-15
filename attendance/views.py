@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
+from audit.service import log_deletion
 from programs.models import Adult, Program, Student
 from programs.permission_views import (
     LeadMentorRequiredMixin,
@@ -138,6 +139,17 @@ def student_attendance_view(request, pk):
             session_id = request.POST.get("session_id")
             session = get_object_or_404(
                 AttendanceSession, id=session_id, student=student
+            )
+            log_deletion(
+                resource=session,
+                request=request,
+                before={
+                    "student": str(student),
+                    "program": str(session.program),
+                    "check_in": str(session.check_in),
+                    "check_out": str(session.check_out),
+                },
+                notes=f"Attendance session for {student} deleted.",
             )
             session.delete()
             return redirect("student_attendance", pk=student.pk)
@@ -1233,6 +1245,19 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             messages.success(request, "Attendance entry updated.")
 
         elif action == "delete":
+            log_deletion(
+                resource=session,
+                request=request,
+                before={
+                    "student": str(session.student) if session.student else None,
+                    "adult": str(session.adult) if session.adult else None,
+                    "visitor_name": session.visitor_name,
+                    "program": str(session.program) if session.program else None,
+                    "check_in": str(session.check_in),
+                    "check_out": str(session.check_out),
+                },
+                notes="Attendance entry deleted from All Program Entries.",
+            )
             session.delete()
             messages.success(request, "Attendance entry deleted.")
 
@@ -1809,19 +1834,34 @@ class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             elif not selected_names:
                 messages.error(request, "Select at least one visitor name to merge.")
             else:
-                # Update all sessions
-                AttendanceSession.objects.filter(
-                    student__isnull=True,
-                    adult__isnull=True,
-                    visitor_name__in=selected_names,
-                ).update(visitor_name=target_name)
+                from audit.events import AuditEvent
+                from audit.service import log_event
 
-                # Update all events
-                AttendanceEvent.objects.filter(
+                visitor_sessions = AttendanceSession.objects.filter(
                     student__isnull=True,
                     adult__isnull=True,
                     visitor_name__in=selected_names,
-                ).update(visitor_name=target_name)
+                )
+                visitor_events = AttendanceEvent.objects.filter(
+                    student__isnull=True,
+                    adult__isnull=True,
+                    visitor_name__in=selected_names,
+                )
+                sample = visitor_sessions.first() or visitor_events.first()
+                if sample is not None:
+                    log_event(
+                        event=AuditEvent.RECORDS_MERGED,
+                        resource=sample,
+                        request=request,
+                        before={"merged_names": sorted(set(selected_names))},
+                        after={"target_name": target_name},
+                        notes=(
+                            f"{len(selected_names)} visitor names merged into "
+                            f"'{target_name}'."
+                        ),
+                    )
+                visitor_sessions.update(visitor_name=target_name)
+                visitor_events.update(visitor_name=target_name)
 
                 messages.success(
                     request,

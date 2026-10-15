@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
+from audit.service import log_deletion
 from programs.constants import TEAM_TYPES
 
 from .models import (
@@ -782,7 +783,20 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_team":
             team_id = request.POST.get("team_id")
             if team_id:
-                Team.objects.filter(id=team_id).delete()
+                team = Team.objects.filter(id=team_id).first()
+                if team:
+                    log_deletion(
+                        resource=team,
+                        request=request,
+                        before={
+                            "team_type": team.team_type,
+                            "number": team.number,
+                            "name": team.name,
+                            "color": team.color,
+                        },
+                        notes="Team deleted from Portal Settings.",
+                    )
+                    team.delete()
                 messages.success(request, "Team deleted.")
             return redirect("/programs/settings/?tab=teams")
 
@@ -824,7 +838,19 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_crew":
             crew_id = request.POST.get("crew_id")
             if crew_id:
-                Crew.objects.filter(id=crew_id).delete()
+                crew = Crew.objects.filter(id=crew_id).first()
+                if crew:
+                    log_deletion(
+                        resource=crew,
+                        request=request,
+                        before={
+                            "name": crew.name,
+                            "color": crew.color,
+                            "program_id": crew.program_id,
+                        },
+                        notes="Crew deleted from Portal Settings.",
+                    )
+                    crew.delete()
                 messages.success(request, "Crew deleted.")
             return redirect("/programs/settings/?tab=crews")
 
@@ -862,7 +888,19 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_subteam":
             subteam_id = request.POST.get("subteam_id")
             if subteam_id:
-                SubTeam.objects.filter(id=subteam_id).delete()
+                subteam = SubTeam.objects.filter(id=subteam_id).first()
+                if subteam:
+                    log_deletion(
+                        resource=subteam,
+                        request=request,
+                        before={
+                            "name": subteam.name,
+                            "color": subteam.color,
+                            "program_id": subteam.program_id,
+                        },
+                        notes="SubTeam deleted from Portal Settings.",
+                    )
+                    subteam.delete()
                 messages.success(request, "SubTeam deleted.")
             return redirect("/programs/settings/?tab=subteams")
 
@@ -902,7 +940,19 @@ class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_kiosk_config" and KioskConfig:
             kiosk_config_id = request.POST.get("kiosk_config_id")
             if kiosk_config_id:
-                KioskConfig.objects.filter(id=kiosk_config_id).delete()
+                kiosk = KioskConfig.objects.filter(id=kiosk_config_id).first()
+                if kiosk:
+                    log_deletion(
+                        resource=kiosk,
+                        request=request,
+                        before={
+                            "label": kiosk.label,
+                            "program_id": kiosk.program_id,
+                            "is_active": kiosk.is_active,
+                        },
+                        notes="Kiosk configuration deleted from Portal Settings.",
+                    )
+                    kiosk.delete()
                 messages.success(request, "Kiosk configuration deleted.")
             return redirect("/programs/settings/?tab=kiosk_configs")
 
@@ -1023,10 +1073,27 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 from programs.models import MentorAgreementAcceptance
 
                 versions = MentorAgreement.objects.filter(slug=agreement.slug)
+                acceptance_count = MentorAgreementAcceptance.objects.filter(
+                    agreement__in=versions
+                ).count()
+                count = versions.count()
+                log_deletion(
+                    resource=agreement,
+                    request=request,
+                    before={
+                        "title": title,
+                        "slug": agreement.slug,
+                        "version_count": count,
+                        "acceptance_count": acceptance_count,
+                    },
+                    notes=(
+                        f"Mentor agreement '{title}' and {count} version(s) deleted "
+                        f"({acceptance_count} acceptance record(s) removed)."
+                    ),
+                )
                 MentorAgreementAcceptance.objects.filter(
                     agreement__in=versions
                 ).delete()
-                count = versions.count()
                 versions.delete()
                 messages.success(
                     request,
