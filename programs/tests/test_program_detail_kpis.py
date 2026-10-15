@@ -273,3 +273,21 @@ class ProgramDetailKPITests(TestCase):
 
         self.assertContains(resp, "1 student")
         self.assertContains(resp, "0 teams &middot; 0 subteams &middot; 0 projects")
+
+    def test_lead_mentor_sees_export_options_modal(self):
+        self.client.login(username="lead_user", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="exportStudentsModal"')
+        self.assertContains(resp, 'name="groups" value="contact"')
+        self.assertContains(resp, 'name="groups" value="parents"')
+        self.assertContains(resp, 'name="groups" value="balance"')
+
+    def test_mentor_gets_plain_export_link(self):
+        self.client.login(username="mentor_user", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="exportStudentsModal"')
+        self.assertContains(
+            resp, reverse("program_student_export", args=[self.program.pk])
+        )

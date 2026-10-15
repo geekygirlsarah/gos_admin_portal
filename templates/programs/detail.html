@@ -129,9 +129,15 @@
                 </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
-                  <a class="dropdown-item" href="{% url 'program_student_export' program.id %}">
-                    <i class="bi bi-download me-2"></i>Export Students
-                  </a>
+                  {% if role == 'LeadMentor' %}
+                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#exportStudentsModal">
+                      <i class="bi bi-download me-2"></i>Export Students
+                    </button>
+                  {% else %}
+                    <a class="dropdown-item" href="{% url 'program_student_export' program.id %}">
+                      <i class="bi bi-download me-2"></i>Export Students
+                    </a>
+                  {% endif %}
                 </li>
               </ul>
             </div>
@@ -507,6 +513,57 @@
 
     </div>
   </div>
+
+  {% if role == 'LeadMentor' %}
+  <div class="modal fade" id="exportStudentsModal" tabindex="-1" aria-labelledby="exportStudentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" method="get" action="{% url 'program_student_export' program.id %}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exportStudentsModalLabel">Export Students</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Choose what to include in the export for <strong>{{ program.name }}</strong>.</p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Format</label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="format" id="exportFormatXlsx" value="xlsx" checked>
+              <label class="form-check-label" for="exportFormatXlsx">Excel (.xlsx)</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="format" id="exportFormatCsv" value="csv">
+              <label class="form-check-label" for="exportFormatCsv">CSV (.csv)</label>
+            </div>
+          </div>
+          <div>
+            <label class="form-label fw-semibold">Include</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" checked disabled>
+              <label class="form-check-label">Name &amp; grade</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="groups" value="contact" id="exportGroupContact" checked>
+              <label class="form-check-label" for="exportGroupContact">Student contact info (email, phone, school)</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="groups" value="parents" id="exportGroupParents" checked>
+              <label class="form-check-label" for="exportGroupParents">Parent/guardian contacts</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="groups" value="balance" id="exportGroupBalance" checked>
+              <label class="form-check-label" for="exportGroupBalance">Balance information (fees, payments, balance due)</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <a class="btn btn-link" href="{% url 'program_student_export' program.id %}">Basic export</a>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-download me-1"></i>Export</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

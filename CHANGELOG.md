@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-15
 
 ### Added
+- **Lead Mentors can export richer student lists**: The "Export Students" action on a program now opens a small window for Lead Mentors where they can choose an Excel or CSV file and tick exactly what to include - the usual names and grades, plus student contact details (email, phone, school), parent/guardian contacts (with each guardian's relationship, specific relationship like mother/stepdad, contact details, and whether they've agreed to receive updates), and balance information (fees, discount, payments, balance due). Everything is ticked by default, so "export" gives the full picture in one click, and the plain name-and-grade export is still available to every other staff member as before.
 - **Every delete now asks "are you sure?" and is recorded**: Destructive actions across the portal — deleting an order, item, vendor, shipping company, outreach event or location, travel event, calendar feed or event, school district, program document, application, guest form, tax form, team/crew/subteam, kiosk configuration, mentor agreement, attendance entry, or a sliding-scale application — now show a confirmation prompt before anything is removed, so a stray click can no longer wipe data. Each confirmed deletion is also written to the audit log (a new "Record deleted" event type), capturing who deleted what and a snapshot of the record, so there is always a trail for the things that are gone.
 
 ### Fixed
