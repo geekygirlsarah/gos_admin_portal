@@ -1624,7 +1624,9 @@ class Payment(models.Model):
     )
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     paid_on = models.DateField()
-    paid_via = models.CharField(max_length=20, choices=PAID_VIA_CHOICES, default="cash")
+    paid_via = models.CharField(
+        max_length=20, choices=PAID_VIA_CHOICES, default="credit_card"
+    )
     check_number = models.PositiveIntegerField(blank=True, null=True)
     camp_hours = models.PositiveIntegerField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
