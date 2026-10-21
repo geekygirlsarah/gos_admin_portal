@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-21
+
+### Fixed
+- **Outreach: Overlapping shift sign-up prevention**: Students can no longer be signed up for conflicting or overlapping outreach shifts on the same date. The system now validates shift times on sign-up to prevent double-booking students across concurrent outreach events.
+- **Sliding scale: Expiration date validation**: Added validation preventing sliding scale discount expiration dates from being set earlier than their effective start dates, protecting student balance sheets and fee calculations from date anomalies.
+- **Digital Sign-out: Required student selection and presence validation**: Hardened the digital sign-out kiosk station backend to strictly validate student selections upon submission, preventing empty or absent student sign-out requests from processing.
+- **Applicant review: Resilient application conversion**: The application conversion pipeline now defensively handles malformed or incomplete applicant and guardian data payloads, surfacing clear error messages rather than unhandled server errors during staff reviews.
+
+### Added
+- **Expanded negative and edge-case test coverage**: Added comprehensive automated test cases across applicant conversions, digital signature decoding, order quantity/pricing boundaries, calendar recurrence error recovery, batch imports, and sliding scale date boundaries to ensure system stability.
+
 ## 2026-10-19
 
 ### Added
