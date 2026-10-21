@@ -26,6 +26,8 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from dataclasses import dataclass
+from email.message import MIMEPart
 from io import BytesIO
 from typing import Any, Final
 
@@ -175,19 +177,46 @@ EMAIL_ALLOWED_CSS_PROPERTIES: Final[frozenset[str]] = frozenset(
     }
 )
 
-EMAIL_URL_SCHEMES: Final[set[str]] = {"http", "https", "mailto", "tel"}
+EMAIL_URL_SCHEMES: Final[set[str]] = {"http", "https", "mailto", "tel", "cid"}
 
 # --------------------------------------------------------------------------
 # Embedded images
 # --------------------------------------------------------------------------
 # Editors paste images as `data:` URLs. nh3 must never be told to allow `data:`
 # (that would also permit `data:text/html` on anchors), so pasted images are
-# extracted *before* sanitization, re-encoded to a bounded JPEG, and re-injected
-# as `data:image/jpeg` *after* it.
+# extracted *before* sanitization, re-encoded to a bounded JPEG, replaced with
+# `cid:` references in the HTML, and returned as `InlineImage` instances to be
+# attached as inline MIME parts.
 EMAIL_MAX_EMBEDDED_IMAGES: Final[int] = 5
 EMAIL_EMBEDDED_IMAGE_MAX_DIMENSION: Final[int] = 1600
 EMAIL_EMBEDDED_IMAGE_QUALITY: Final[int] = 82
 EMAIL_EMBEDDED_IMAGE_MAX_BYTES: Final[int] = 2_500_000
+
+
+@dataclass(frozen=True)
+class InlineImage:
+    """An image extracted from rich-text to be attached as an inline MIME part."""
+
+    content_id: str
+    data: bytes
+    content_type: str = "image/jpeg"
+    filename: str = "image.jpg"
+
+    def to_mime(self) -> MIMEPart:
+        subtype = (
+            self.content_type.split("/")[-1] if "/" in self.content_type else "jpeg"
+        )
+        msg = MIMEPart()
+        msg.set_content(
+            self.data,
+            maintype="image",
+            subtype=subtype,
+            disposition="inline",
+            filename=self.filename,
+        )
+        msg.add_header("Content-ID", f"<{self.content_id}>")
+        return msg
+
 
 # --------------------------------------------------------------------------
 # Email base styles
@@ -593,8 +622,8 @@ _EMBEDDED_SENTINEL_RE: Final[re.Pattern[str]] = re.compile(r"^#gos-inline-img-(\
 _EMBEDDED_DROPPED: Final[str] = "#gos-inline-img-drop"
 
 
-def _reencode_embedded(raw: bytes) -> str | None:
-    """Decode ``raw`` image bytes into an email-safe embedded JPEG data URL.
+def _reencode_embedded(raw: bytes) -> bytes | None:
+    """Decode ``raw`` image bytes into an email-safe JPEG binary.
 
     Returns ``None`` when Pillow is unavailable or the blob is not a loadable
     image (Pillow also guards decompression bombs via ``MAX_IMAGE_PIXELS``).
@@ -628,25 +657,25 @@ def _reencode_embedded(raw: bytes) -> str | None:
             )
         if len(output) > EMAIL_EMBEDDED_IMAGE_MAX_BYTES:
             return None
-        return "data:image/jpeg;base64," + base64.b64encode(output).decode("ascii")
+        return output
     except Exception:
         return None
 
 
-def _extract_embedded_images(fragment: str) -> tuple[str, dict[int, str]]:
+def _extract_embedded_images(fragment: str) -> tuple[str, list[InlineImage]]:
     """Swap pasted ``data:`` image blobs for sentinel URLs.
 
-    Returns ``(fragment, kept)`` where ``kept[i]`` is the re-encoded JPEG data
-    URL that must replace ``src="#gos-inline-img-i"`` after sanitization.
+    Returns ``(fragment, kept)`` where ``kept`` is a list of `InlineImage`
+    instances corresponding to ``#gos-inline-img-0``, ``#gos-inline-img-1``, etc.
     Images that cannot be embedded (raw ``data:`` strips the src under nh3) are
     marked so the post-sanitize pass drops the whole ``<img>`` element.
     """
     try:
         root = lxml_html.fragment_fromstring(fragment, create_parent="div")
     except (etree.ParserError, ValueError):
-        return fragment, {}
+        return fragment, []
 
-    kept: dict[int, str] = {}
+    kept: list[InlineImage] = []
     seen = 0
     changed = False
     for el in root.iter("img"):
@@ -666,19 +695,27 @@ def _extract_embedded_images(fragment: str) -> tuple[str, dict[int, str]]:
                 raw = base64.b64decode(payload, validate=True)
             except (binascii.Error, ValueError):
                 raw = None
-            data_url = _reencode_embedded(raw) if raw else None
-            if data_url is not None:
-                kept[seen] = data_url
+            jpeg_bytes = _reencode_embedded(raw) if raw else None
+            if jpeg_bytes is not None:
+                cid = f"img_{seen}@gos"
+                kept.append(
+                    InlineImage(
+                        content_id=cid,
+                        data=jpeg_bytes,
+                        content_type="image/jpeg",
+                        filename=f"img_{seen}.jpg",
+                    )
+                )
                 marker = f"{_EMBEDDED_SENTINEL_INDEX}{seen}"
                 seen += 1
         el.set("src", marker)
     if not changed:
-        return fragment, {}
+        return fragment, []
     return _inner_html(root), kept
 
 
-def _restore_embedded_images(root: etree._Element, kept: dict[int, str]) -> None:
-    """Replace sentinels with the re-encoded data URLs; drop unembeddable imgs."""
+def _restore_embedded_images(root: etree._Element, kept: list[InlineImage]) -> None:
+    """Replace sentinels with CID URLs; drop unembeddable imgs."""
     for el in list(root.iter("img")):
         src = el.get("src") or ""
         if src == _EMBEDDED_DROPPED:
@@ -687,11 +724,19 @@ def _restore_embedded_images(root: etree._Element, kept: dict[int, str]) -> None
         match = _EMBEDDED_SENTINEL_RE.match(src)
         if not match:
             continue
-        data_url = kept.get(int(match.group(1)))
-        if data_url is None:
+        idx = int(match.group(1))
+        if idx >= len(kept):
             _detach(el)
             continue
-        el.set("src", data_url)
+        el.set("src", f"cid:{kept[idx].content_id}")
+
+
+def extract_inline_images(fragment: str) -> list[InlineImage]:
+    """Extract embedded images from ``fragment`` as `InlineImage` instances."""
+    if not fragment or not fragment.strip():
+        return []
+    _, images = _extract_embedded_images(fragment)
+    return images
 
 
 def normalize_email_html(fragment: str) -> str:
@@ -727,18 +772,20 @@ def wrap_email_document(fragment: str) -> str:
     return _EMAIL_DOCUMENT.format(css=EMAIL_BASE_CSS, content=content)
 
 
-def build_email_parts(fragment: str) -> tuple[str, str]:
-    """Build the ``(html, text)`` bodies for a message sent from a fragment.
+def build_email_parts(fragment: str) -> tuple[str, str, list[InlineImage]]:
+    """Build the ``(html, text, inline_images)`` parts for a message sent from a fragment.
 
-    Wraps the fragment in an email document, inlines CSS with premailer and
-    derives a readable plain-text alternative.
+    Wraps the fragment in an email document, inlines CSS with premailer,
+    extracts inline images for MIME attachment, and derives a readable
+    plain-text alternative.
     """
+    images = extract_inline_images(fragment)
     document = wrap_email_document(fragment)
     try:
         inlined = transform(document)
     except Exception:  # pragma: no cover - premailer is already defensive
         inlined = document
-    return inlined, html_to_text(inlined)
+    return inlined, html_to_text(inlined), images
 
 
 # --------------------------------------------------------------------------

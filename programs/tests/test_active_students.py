@@ -158,6 +158,51 @@ class ActiveStudentDropdownTests(TestCase):
         self.assertNotIn("mso-list", sent.body)
         self.assertIn("\u2022 Pay by Friday", sent.body)
 
+    def test_balances_email_with_pasted_image_attaches_cid_image(self):
+        parent = Adult.objects.create(
+            legal_first_name="Pat",
+            last_name="Parent",
+            personal_email="pat.balance.img@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=True,
+        )
+        parent.students.add(self.active)
+        lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        user = User.objects.create_user(
+            username="lead_bal_img", password="password123"  # nosec B106
+        )
+        user.groups.add(lead_group)
+        self.client.login(username="lead_bal_img", password="password123")  # nosec B106
+
+        png_data_url = (
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGA"
+            "hKmMIQAAAABJRU5ErkJggg=="
+        )
+        response = self.client.post(
+            reverse("program_dues_email", args=[self.program.pk]),
+            {
+                "program": self.program.pk,
+                "subject": "Balance due with chart",
+                "default_message": f'<p>Please see invoice below:</p><img src="{png_data_url}" alt="Invoice receipt">',
+                "recipient_filter": "all",
+                "student": "",
+                "test_email": "",
+                "from_account": "DEFAULT",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        html_part = sent.alternatives[0][0]
+        self.assertIn('src="cid:img_0@gos"', html_part)
+        self.assertNotIn("data:image", html_part)
+        self.assertEqual(len(sent.attachments), 1)
+        self.assertEqual(sent.attachments[0]["Content-ID"], "<img_0@gos>")
+        self.assertEqual(
+            sent.attachments[0]["Content-Disposition"], 'inline; filename="img_0.jpg"'
+        )
+
     def test_fee_assignment_form_only_lists_active_enrolled(self):
         fee = Fee.objects.create(program=self.program, name="Dues", amount="25.00")
         form = FeeAssignmentEditForm(program=self.program, fee=fee)

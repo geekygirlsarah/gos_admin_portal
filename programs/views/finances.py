@@ -49,7 +49,7 @@ from ..utils import (
     get_student_program_balance,
     redirect_back,
 )
-from ..utils.email_html import html_to_text, normalize_email_html
+from ..utils.email_html import extract_inline_images, html_to_text, normalize_email_html
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
@@ -971,6 +971,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 # send one email to combined recipients per student
                 to_send.append((t["emails"], t))
 
+        message_html = normalize_email_html(default_message or "")
+        message_images = extract_inline_images(default_message or "")
+
         sent_total = 0
         for dest, data in to_send:
             # Render balance sheet HTML
@@ -985,7 +988,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 "sliding_scale": data["sliding_scale"],
             }
             # Include optional rich-text message inside the template so styles apply correctly
-            ctx["message_html"] = normalize_email_html(default_message or "")
+            ctx["message_html"] = message_html
             balance_html = render_to_string(
                 "programs/balance_sheet_email.html", ctx, request=None
             )
@@ -1023,6 +1026,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 connection=connection,
             )
             email.attach_alternative(inlined_html, "text/html")
+            for inline_img in message_images:
+                email.attach(inline_img.to_mime())
             try:
                 sent = email.send()
                 sent_total += sent

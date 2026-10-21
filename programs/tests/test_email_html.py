@@ -9,13 +9,15 @@ These cover the four problems that made the old Quill composer frustrating:
 """
 
 import base64
-import re
 from io import BytesIO
 
+from django.core.mail import EmailMultiAlternatives
 from django.test import SimpleTestCase
 from PIL import Image
 
 from programs.utils.email_html import (
+    build_email_parts,
+    extract_inline_images,
     html_to_text,
     normalize_email_html,
     wrap_email_document,
@@ -406,24 +408,46 @@ def _large_png_data_url(width=4000, height=3000):
 
 
 class EmailHtmlEmbeddedImageTests(SimpleTestCase):
-    """Editors paste images as ``data:`` URLs; emails should keep them.
+    """Editors paste images as ``data:`` URLs; emails convert them to CID inline attachments.
 
-    The sanitizer must never trust a ``data:`` URL (only nh3's allowlist of
+    The sanitizer must never trust raw ``data:`` URLs (only nh3's allowlist of
     schemes survives), so embedded images are extracted, re-encoded to a
-    bounded JPEG server-side, and re-injected *after* sanitization.
+    bounded JPEG server-side, replaced with ``cid:`` references in the HTML,
+    and attached as inline MIME parts. This ensures the HTML payload remains
+    tiny (well beneath Gmail's 102 KB limit) while images display seamlessly.
     """
 
-    def test_pasted_data_url_image_is_embedded(self):
+    def test_pasted_data_url_image_is_converted_to_cid(self):
         out = normalize_email_html(
             f'<p>See:</p><img src="{_png_data_url()}" alt="Battery">'
         )
         self.assertIn("<img", out)
-        self.assertIn('src="data:image/jpeg;base64,', out)
+        self.assertIn('src="cid:img_0@gos"', out)
+        self.assertNotIn("data:image", out)
         self.assertIn('alt="Battery"', out)
+
+    def test_extract_inline_images_returns_reencoded_images(self):
+        images = extract_inline_images(
+            f'<p>See:</p><img src="{_png_data_url()}" alt="Battery">'
+        )
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0].content_id, "img_0@gos")
+        self.assertEqual(images[0].content_type, "image/jpeg")
+        self.assertEqual(images[0].filename, "img_0.jpg")
+        self.assertTrue(images[0].data.startswith(b"\xff\xd8"))  # JPEG header
+
+    def test_inline_image_to_mime_creates_valid_mime_image(self):
+        images = extract_inline_images(f'<img src="{_png_data_url()}" alt="Battery">')
+        self.assertEqual(len(images), 1)
+        mime = images[0].to_mime()
+        self.assertEqual(mime["Content-ID"], "<img_0@gos>")
+        self.assertEqual(mime["Content-Disposition"], 'inline; filename="img_0.jpg"')
 
     def test_remote_image_url_passes_through_unchanged(self):
         out = normalize_email_html('<img src="https://example.com/logo.png">')
         self.assertIn("https://example.com/logo.png", out)
+        images = extract_inline_images('<img src="https://example.com/logo.png">')
+        self.assertEqual(len(images), 0)
 
     def test_data_url_on_anchor_is_stripped(self):
         out = normalize_email_html('<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>')
@@ -452,11 +476,9 @@ class EmailHtmlEmbeddedImageTests(SimpleTestCase):
         self.assertNotIn("<img", out)
 
     def test_embedded_image_is_downscaled_to_email_safe_dimensions(self):
-        out = normalize_email_html(f'<img src="{_large_png_data_url()}" alt="big">')
-        match = re.search(r'src="(data:image/jpeg;base64,[^"]+)"', out)
-        self.assertIsNotNone(match, out)
-        decoded = base64.b64decode(match.group(1).partition("base64,")[2])
-        dims = Image.open(BytesIO(decoded)).size
+        images = extract_inline_images(f'<img src="{_large_png_data_url()}" alt="big">')
+        self.assertEqual(len(images), 1)
+        dims = Image.open(BytesIO(images[0].data)).size
         self.assertLessEqual(
             max(dims), 1600, f"re-encoded image {dims} is not downscaled"
         )
@@ -465,7 +487,20 @@ class EmailHtmlEmbeddedImageTests(SimpleTestCase):
         url = _png_data_url()
         html = "".join(f'<p>pic</p><img src="{url}" alt="p">' for _ in range(6))
         out = normalize_email_html(html)
+        images = extract_inline_images(html)
         self.assertLessEqual(out.count("<img"), 5)
+        self.assertLessEqual(len(images), 5)
+
+    def test_multiple_images_receive_distinct_cids(self):
+        url = _png_data_url()
+        html = f'<img src="{url}" alt="1"><img src="{url}" alt="2">'
+        out = normalize_email_html(html)
+        images = extract_inline_images(html)
+        self.assertEqual(len(images), 2)
+        self.assertIn('src="cid:img_0@gos"', out)
+        self.assertIn('src="cid:img_1@gos"', out)
+        self.assertEqual(images[0].content_id, "img_0@gos")
+        self.assertEqual(images[1].content_id, "img_1@gos")
 
     def test_embedded_image_alt_text_reaches_the_plain_text_alt(self):
         text = html_to_text(f'<img src="{_png_data_url()}" alt="Battery diagram">')
@@ -473,4 +508,46 @@ class EmailHtmlEmbeddedImageTests(SimpleTestCase):
 
     def test_embedded_images_survive_the_full_email_wrap(self):
         out = wrap_email_document(f'<p>Hi</p><img src="{_png_data_url()}" alt="Logo">')
-        self.assertIn('src="data:image/jpeg;base64,', out)
+        self.assertIn('src="cid:img_0@gos"', out)
+        self.assertNotIn("data:image", out)
+
+    def test_build_email_parts_returns_cid_html_and_inline_images(self):
+        html_doc, text_doc, images = build_email_parts(
+            f'<p>Meeting recap</p><img src="{_png_data_url()}" alt="Whiteboard">'
+        )
+        self.assertIn('src="cid:img_0@gos"', html_doc)
+        self.assertNotIn("data:image", html_doc)
+        self.assertIn("Whiteboard", text_doc)
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0].content_id, "img_0@gos")
+
+    def test_large_image_html_size_stays_below_10kb(self):
+        large_url = _large_png_data_url()
+        self.assertGreater(len(large_url), 50_000)
+        html_doc, _, images = build_email_parts(
+            f'<h1>Weekly Update</h1><p>Here is our progress:</p><img src="{large_url}" alt="Big">'
+        )
+        # The HTML size should be compact (~1-3 KB), well beneath Gmail's 102 KB threshold
+        self.assertLess(len(html_doc.encode("utf-8")), 10_000)
+        self.assertEqual(len(images), 1)
+
+    def test_email_multi_alternatives_with_cid_image_attaches_correctly(self):
+        html_doc, text_doc, images = build_email_parts(
+            f'<p>Notice</p><img src="{_png_data_url()}" alt="Pic">'
+        )
+        msg = EmailMultiAlternatives(
+            subject="Test Subject",
+            body=text_doc,
+            from_email="noreply@example.com",
+            to=["recipient@example.com"],
+        )
+        msg.attach_alternative(html_doc, "text/html")
+        for img in images:
+            msg.attach(img.to_mime())
+
+        # Verify MIME structure
+        raw_msg = msg.message()
+        self.assertTrue(raw_msg.is_multipart())
+        attachments = msg.attachments
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(attachments[0]["Content-ID"], "<img_0@gos>")

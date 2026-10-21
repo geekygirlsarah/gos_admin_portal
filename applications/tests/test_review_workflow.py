@@ -655,6 +655,26 @@ class ApplicationMessagingTests(TestCase):
         self.assertNotIn("mso-list", sent.body)
         self.assertIn("\u2022 Bring paperwork", sent.body)
 
+    def test_sends_email_with_pasted_image_as_cid_attachment(self):
+        png_data_url = (
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGA"
+            "hKmMIQAAAABJRU5ErkJggg=="
+        )
+        response = self._post(
+            body=f'<p>Important update</p><img src="{png_data_url}" alt="Flyer">'
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 2)
+        sent = mail.outbox[0]
+        html_part = sent.alternatives[0][0]
+        self.assertIn('src="cid:img_0@gos"', html_part)
+        self.assertNotIn("data:image", html_part)
+        self.assertEqual(len(sent.attachments), 1)
+        self.assertEqual(sent.attachments[0]["Content-ID"], "<img_0@gos>")
+        self.assertEqual(
+            sent.attachments[0]["Content-Disposition"], 'inline; filename="img_0.jpg"'
+        )
+
 
 class StaffDocumentUploadTests(TestCase):
     """Lead mentors can upload signed documents on behalf of applicants

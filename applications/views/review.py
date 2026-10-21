@@ -1261,7 +1261,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             # Sanitize + normalize the fragment, wrap it in an email document
             # and inline CSS so the message renders the way it looked in the
             # compose editor, with a readable plain-text alternative.
-            inlined_html_body, text_body = build_email_parts(html_body)
+            inlined_html_body, text_body, inline_images = build_email_parts(html_body)
             test_email = form.cleaned_data.get("test_email")
 
             apps = Application.objects.filter(status__in=statuses)
@@ -1296,6 +1296,8 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
                             connection=connection,
                         )
                         msg.attach_alternative(inlined_html_body, "text/html")
+                        for inline_img in inline_images:
+                            msg.attach(inline_img.to_mime())
                         msg.send()
 
                 messages.success(

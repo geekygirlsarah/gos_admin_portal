@@ -409,3 +409,32 @@ class MessagingUIImprovementsTests(TestCase):
             response,
             "Please select at least one recipient group when sending a broadcast.",
         )
+
+    def test_send_email_with_pasted_image_attaches_cid_image(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        png_data_url = (
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGA"
+            "hKmMIQAAAABJRU5ErkJggg=="
+        )
+        post_data = {
+            "test_email": "preview@example.com",
+            "subject": "Email with Image",
+            "body": f'<p>Announcement with photo</p><img src="{png_data_url}" alt="Team photo">',
+            "from_account": "DEFAULT",
+        }
+        response = self.client.post(
+            reverse("program_messaging"), data=post_data, follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        sent_email = mail.outbox[0]
+        # Inlined HTML should reference CID instead of huge data URL
+        self.assertIn('src="cid:img_0@gos"', sent_email.alternatives[0][0])
+        self.assertNotIn("data:image", sent_email.alternatives[0][0])
+        # Attachment should be present with matching Content-ID
+        self.assertEqual(len(sent_email.attachments), 1)
+        self.assertEqual(sent_email.attachments[0]["Content-ID"], "<img_0@gos>")
+        self.assertEqual(
+            sent_email.attachments[0]["Content-Disposition"],
+            'inline; filename="img_0.jpg"',
+        )

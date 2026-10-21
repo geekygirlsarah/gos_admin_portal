@@ -1,5 +1,12 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { initEditor, wordListHtmlToHtml, readImageFile, imageFromClipboard } from "../email-editor.js";
+import {
+  initEditor,
+  wordListHtmlToHtml,
+  readImageFile,
+  imageFromClipboard,
+  estimateHtmlPayloadSize,
+  formatBytes,
+} from "../email-editor.js";
 
 const WORD_LIST_HTML = [
   "<p class='MsoNormal'>Bring tools</p>",
@@ -155,5 +162,53 @@ describe("image paste", () => {
     expect(ta.value).toContain("<img");
     expect(ta.value).toContain("data:image/png;base64,");
     expect(ta.value).toContain('alt="Photo"');
+  });
+});
+
+describe("payload size calculation and warnings", () => {
+  it("formats byte values appropriately", () => {
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(500)).toBe("500 B");
+    expect(formatBytes(2048)).toBe("2.0 KB");
+    expect(formatBytes(85 * 1024)).toBe("85.0 KB");
+  });
+
+  it("calculates string byte length", () => {
+    expect(estimateHtmlPayloadSize("")).toBe(0);
+    expect(estimateHtmlPayloadSize("<p>Hello</p>")).toBe(12);
+  });
+
+  it("normalizes data image URLs to simulated CID references for estimation", () => {
+    const fakeBase64 = "A".repeat(50000);
+    const htmlWithDataImg = `<p>Test</p><img src="data:image/jpeg;base64,${fakeBase64}" alt="test">`;
+    const estimated = estimateHtmlPayloadSize(htmlWithDataImg);
+    // 50KB data URL should be estimated as compact CID reference (< 100 bytes)
+    expect(estimated).toBeLessThan(200);
+  });
+
+  it("renders size indicator in editor footer", () => {
+    const { editor } = mountEditor("<p>Simple message</p>");
+    const footer = document.querySelector(".email-editor-footer");
+    expect(footer).toBeTruthy();
+    const counter = footer.querySelector(".email-editor-size-counter");
+    expect(counter.textContent).toContain("B");
+  });
+
+  it("shows advisory warning when message exceeds 75 KB", () => {
+    // Generate text of ~80 KB
+    const bigHtml = "<p>" + "A".repeat(80 * 1024) + "</p>";
+    mountEditor(bigHtml);
+    const status = document.querySelector(".email-editor-status");
+    expect(status.textContent).toContain("Large message");
+    expect(status.textContent).toContain("102 KB");
+  });
+
+  it("shows critical warning when message exceeds 95 KB", () => {
+    // Generate text of ~100 KB
+    const hugeHtml = "<p>" + "A".repeat(100 * 1024) + "</p>";
+    mountEditor(hugeHtml);
+    const status = document.querySelector(".email-editor-status");
+    expect(status.textContent).toContain("Very large message");
+    expect(status.textContent).toContain("Gmail will clip");
   });
 });

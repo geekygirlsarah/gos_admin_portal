@@ -229,6 +229,58 @@ function createToolbar(editor) {
   return bar;
 }
 
+// ---------------------------------------------------------------------------
+// Payload size estimation and warning indicators
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function estimateHtmlPayloadSize(html) {
+  if (!html || !html.trim()) {
+    return 0;
+  }
+  // Replace data: image URIs with simulated cid: references because the backend
+  // extracts them as inline MIME attachments, keeping the HTML payload compact.
+  const normalized = html.replace(
+    /data:image\/[a-zA-Z0-9+.-]+;base64,[^"'>\s]+/gi,
+    "cid:img_0@gos"
+  );
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(normalized).length;
+  }
+  if (typeof Blob !== "undefined") {
+    return new Blob([normalized]).size;
+  }
+  return normalized.length;
+}
+
+function updateSizeStatus(bytes, statusEl, counterEl) {
+  if (!counterEl) return;
+  const sizeFormatted = formatBytes(bytes);
+  counterEl.textContent = `Size: ${sizeFormatted}`;
+
+  if (!statusEl) return;
+
+  const WARN_THRESHOLD = 75 * 1024; // 75 KB
+  const CRITICAL_THRESHOLD = 95 * 1024; // 95 KB (near Gmail 102 KB limit)
+
+  if (bytes >= CRITICAL_THRESHOLD) {
+    statusEl.innerHTML = `<span class="badge text-bg-danger me-1"><i class="bi bi-exclamation-octagon-fill me-1"></i>Very large message (${sizeFormatted})</span> <strong class="text-danger">Gmail will clip this message and hide content under "View entire message".</strong>`;
+    counterEl.className = "email-editor-size-counter text-nowrap ms-auto text-danger fw-semibold";
+  } else if (bytes >= WARN_THRESHOLD) {
+    statusEl.innerHTML = `<span class="badge text-bg-warning me-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>Large message (${sizeFormatted})</span> <span class="text-warning-emphasis">Approaching Gmail's 102 KB clipping threshold. Consider reviewing before send.</span>`;
+    counterEl.className = "email-editor-size-counter text-nowrap ms-auto text-warning-emphasis";
+  } else {
+    statusEl.innerHTML = "";
+    counterEl.className = "email-editor-size-counter text-nowrap ms-auto text-muted";
+  }
+}
+
 function initEditor(textarea) {
   const wrap = document.createElement("div");
   wrap.className = "email-editor border rounded";
@@ -302,13 +354,37 @@ function initEditor(textarea) {
   const toolbar = createToolbar(editor);
   wrap.insertBefore(toolbar, editor.view.dom);
 
+  const footer = document.createElement("div");
+  footer.className =
+    "email-editor-footer d-flex justify-content-between align-items-center px-2 py-1 small border-top bg-light text-muted";
+
+  const statusEl = document.createElement("div");
+  statusEl.className = "email-editor-status d-flex align-items-center gap-1 flex-wrap";
+  statusEl.setAttribute("role", "status");
+  statusEl.setAttribute("aria-live", "polite");
+
+  const counterEl = document.createElement("div");
+  counterEl.className = "email-editor-size-counter text-nowrap ms-auto";
+
+  footer.appendChild(statusEl);
+  footer.appendChild(counterEl);
+  wrap.appendChild(footer);
+
+  const refreshSize = () => {
+    const html = editor.getHTML();
+    const bytes = estimateHtmlPayloadSize(html);
+    updateSizeStatus(bytes, statusEl, counterEl);
+  };
+
   // Keep the hidden textarea in sync so the form submits the generated HTML,
   // and mark it touched so client-side "you have unsaved changes" still sees edits.
   const sync = () => {
     textarea.value = editor.getHTML();
     textarea.dataset.touched = "true";
+    refreshSize();
   };
   editor.on("update", sync);
+  refreshSize();
 
   const form = textarea.form;
   if (form) {
@@ -323,7 +399,17 @@ export function init() {
     .forEach((text) => initEditor(text));
 }
 
-export { initEditor, promptForLink, wordListHtmlToHtml, readImageFile, imageFromClipboard, pickImageFile };
+export {
+  initEditor,
+  promptForLink,
+  wordListHtmlToHtml,
+  readImageFile,
+  imageFromClipboard,
+  pickImageFile,
+  estimateHtmlPayloadSize,
+  formatBytes,
+  updateSizeStatus,
+};
 
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {

@@ -142,6 +142,7 @@ class ProgramStudentExportExtendedTests(TestCase):
         )
         self.parent_two = Adult.objects.create(
             legal_first_name="John",
+            preferred_first_name="Johnny",
             last_name="Smith",
             personal_email="john@example.com",
             phone_number="555-0002",
@@ -189,16 +190,19 @@ class ProgramStudentExportExtendedTests(TestCase):
     def test_parents_group_adds_parent_contacts(self):
         ws = self._sheet(self.client.get(self._url("groups=parents")))
         headers = [cell.value for cell in ws[1]]
-        self.assertIn("Parent 1 Name", headers)
+        self.assertIn("Parent 1 First Name", headers)
+        self.assertIn("Parent 1 Last Name", headers)
         self.assertIn("Parent 2 Email", headers)
         row = {h: cell.value for h, cell in zip(headers, ws[2])}
-        self.assertEqual(row["Parent 1 Name"], "Mary Smith")
+        self.assertEqual(row["Parent 1 First Name"], "Mary")
+        self.assertEqual(row["Parent 1 Last Name"], "Smith")
         self.assertEqual(row["Parent 1 Relationship"], "Parent")
         self.assertEqual(row["Parent 1 Specific Relationship"], "mother")
         self.assertEqual(row["Parent 1 Email"], "mary@example.com")
         self.assertEqual(row["Parent 1 Phone"], "555-0001")
         self.assertEqual(row["Parent 1 Email Updates"], "Yes")
-        self.assertEqual(row["Parent 2 Name"], "John Smith")
+        self.assertEqual(row["Parent 2 First Name"], "Johnny")
+        self.assertEqual(row["Parent 2 Last Name"], "Smith")
         self.assertEqual(row["Parent 2 Relationship"], "Parent")
         self.assertEqual(row["Parent 2 Email"], "john@example.com")
         self.assertEqual(row["Parent 2 Email Updates"], "No")
