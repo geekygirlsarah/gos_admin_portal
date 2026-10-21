@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load permission_tags %}
 {% block title %}Payment — {{ student.display_name }} — {{ program.name }}{% endblock %}
 {% block nav_programs_active %} active{% endblock %}
 {% block content %}
@@ -10,9 +11,25 @@
 
   <div class="row">
     <div class="col-lg-10 col-xl-8">
-      <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h4 mb-0">Payment Details</h1>
-        <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="{% url 'program_payment_print' program.id payment.id %}">Printable Version</a>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="{% url 'program_payment_print' program.id payment.id %}">
+            <i class="bi bi-printer me-1"></i>Printable Version
+          </a>
+          {% can_write user 'payments' payment as can_edit_payment %}
+          {% if can_edit_payment %}
+            <a class="btn btn-primary" href="{% url 'program_payment_edit' program.id payment.id %}">
+              <i class="bi bi-pencil me-1"></i>Edit Payment
+            </a>
+          {% endif %}
+          {% can_delete user 'payments' payment as can_delete_payment %}
+          {% if can_delete_payment %}
+            <a class="btn btn-outline-danger" href="{% url 'program_payment_delete' program.id payment.id %}">
+              <i class="bi bi-trash me-1"></i>Delete Payment
+            </a>
+          {% endif %}
+        </div>
       </div>
       <p class="mb-1"><span class="fw-semibold">Program:</span> {{ program.name }}</p>
       <p class="mb-3"><span class="fw-semibold">Student:</span> {{ student.display_name }}</p>

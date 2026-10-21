@@ -53,8 +53,10 @@ from .views import (
     ProgramListView,
     ProgramMedicalInfoView,
     ProgramPaymentCreateView,
+    ProgramPaymentDeleteView,
     ProgramPaymentDetailView,
     ProgramPaymentPrintView,
+    ProgramPaymentUpdateView,
     ProgramSchoolsView,
     ProgramSignoutSheetView,
     ProgramStudentActivateView,
@@ -437,6 +439,20 @@ urlpatterns = [
         "<int:pk>/payments/<int:payment_id>/",
         login_required(ProgramPaymentDetailView.as_view()),
         name="program_payment_detail",
+    ),
+    path(
+        "<int:pk>/payments/<int:payment_id>/edit/",
+        permission_required("programs.change_payment")(
+            ProgramPaymentUpdateView.as_view()
+        ),
+        name="program_payment_edit",
+    ),
+    path(
+        "<int:pk>/payments/<int:payment_id>/delete/",
+        permission_required("programs.delete_payment")(
+            ProgramPaymentDeleteView.as_view()
+        ),
+        name="program_payment_delete",
     ),
     path(
         "<int:pk>/payments/<int:payment_id>/print/",

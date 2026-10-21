@@ -13,9 +13,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from django.views.generic import CreateView, ListView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 from premailer import transform
 
+from audit.mixins import AuditedDeleteMixin
 from audit.service import log_deletion
 
 from ..forms import (
@@ -39,6 +40,7 @@ from ..models import (
 )
 from ..permission_views import (
     LeadMentorRequiredMixin,
+    can_user_delete,
     can_user_read,
     get_user_role,
     user_is_parent,
@@ -266,6 +268,139 @@ class ProgramPaymentCreateView(
         )
         messages.success(self.request, "Payment recorded successfully.")
         return redirect("program_detail", pk=self.program.pk)
+
+
+class ProgramPaymentUpdateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    DynamicWritePermissionMixin,
+    UpdateView,
+):
+    model = Payment
+    form_class = PaymentForm
+    template_name = "programs/payment_form.html"
+    section = "payments"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            Payment, pk=self.kwargs["payment_id"], program=self.program
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_edit"] = True
+        return ctx
+
+    def form_valid(self, form):
+        try:
+            before = Payment.objects.get(pk=self.object.pk)
+        except Payment.DoesNotExist:
+            before = None
+        obj = form.save(commit=False)
+        obj.program = self.program
+        obj.save()
+        user = getattr(self.request, "user", None)
+        user_repr = (
+            f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}"
+            if getattr(user, "is_authenticated", False)
+            else "anonymous"
+        )
+        for f in getattr(form, "changed_data", []) or []:
+            old = getattr(before, f, None) if before is not None else None
+            new = getattr(obj, f, None)
+            forms_logger.info(
+                "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
+                "Payment",
+                obj.pk,
+                "update",
+                user_repr,
+                f,
+                self._fmt_val(old),
+                self._fmt_val(new),
+            )
+        messages.success(self.request, "Payment updated successfully.")
+        return redirect("program_payment_detail", pk=self.program.pk, payment_id=obj.pk)
+
+
+class ProgramPaymentDeleteView(
+    LoginRequiredMixin,
+    DynamicWritePermissionMixin,
+    AuditedDeleteMixin,
+    DeleteView,
+):
+    model = Payment
+    template_name = "programs/payment_confirm_delete.html"
+    section = "payments"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        obj = self.get_object()
+        if not can_user_delete(request.user, "payments", obj):
+            messages.error(
+                request, "You do not have permission to delete this payment."
+            )
+            return redirect(
+                "program_student_balance",
+                pk=self.program.pk,
+                student_id=obj.student_id,
+            )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            Payment, pk=self.kwargs["payment_id"], program=self.program
+        )
+
+    def audit_snapshot(self, obj):
+        return {
+            "payment_id": obj.pk,
+            "student_id": obj.student_id,
+            "student_name": str(obj.student),
+            "program_id": obj.program_id,
+            "program_name": str(obj.program),
+            "amount": str(obj.amount),
+            "paid_via": obj.paid_via,
+            "paid_on": str(obj.paid_on),
+            "check_number": obj.check_number,
+            "notes": obj.notes,
+        }
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["payment"] = self.object
+        ctx["student"] = self.object.student
+        return ctx
+
+    def form_valid(self, form):
+        payment = self.get_object()
+        student = payment.student
+        amount = payment.amount
+        self.student_id = payment.student_id
+        response = super().form_valid(form)
+        messages.success(
+            self.request,
+            f"Payment of ${amount:.2f} for {student} was deleted.",
+        )
+        return response
+
+    def get_success_url(self):
+        if hasattr(self, "student_id") and self.student_id:
+            return reverse(
+                "program_student_balance",
+                kwargs={"pk": self.program.pk, "student_id": self.student_id},
+            )
+        return reverse("program_detail", kwargs={"pk": self.program.pk})
 
 
 class ProgramPaymentDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, View):

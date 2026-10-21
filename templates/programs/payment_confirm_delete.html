@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Delete Payment — {{ program.name }}{% endblock %}
+{% block nav_programs_active %} active{% endblock %}
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <a class="link-secondary" href="{% url 'program_payment_detail' program.id payment.id %}">← Back to Payment Details</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-8 col-xl-6">
+      <div class="card border-danger shadow-sm">
+        <div class="card-header bg-danger text-white">
+          <h1 class="h5 mb-0">Delete Payment</h1>
+        </div>
+        <div class="card-body">
+          <p>
+            Are you sure you want to delete the payment of
+            <strong>${{ payment.amount|floatformat:2 }}</strong> recorded on
+            <strong>{{ payment.paid_on }}</strong> for
+            <strong>{{ student.display_name }}</strong>?
+          </p>
+          <p class="text-danger small">
+            This will remove the payment from {{ student.display_name }}'s balance sheet for {{ program.name }}. This action cannot be undone.
+          </p>
+          <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2 mt-4">
+              <button type="submit" class="btn btn-danger">Confirm Delete</button>
+              <a href="{% url 'program_payment_detail' program.id payment.id %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
