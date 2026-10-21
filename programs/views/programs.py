@@ -1675,9 +1675,11 @@ def _adult_contact_values(relationship):
     ]
 
 
-def _student_export_headers(groups):
+def _student_export_headers(groups, is_lead=False):
     """Return the header row for the requested optional column groups."""
     headers = list(_STUDENT_EXPORT_BASE_HEADERS)
+    if is_lead:
+        headers.append("Active")
     if "contact" in groups:
         headers += _STUDENT_EXPORT_CONTACT_HEADERS
     if "parents" in groups:
@@ -1687,13 +1689,17 @@ def _student_export_headers(groups):
     return headers
 
 
-def _student_export_row(student, program, groups, can_view_sliding):
-    """Return one export row for a student, honoring the requested groups."""
+def _student_export_row(enrollment, program, groups, can_view_sliding, is_lead=False):
+    """Return one export row for an enrollment/student, honoring the requested groups."""
+    student = enrollment.student
     row = [
         student.preferred_first_name or student.legal_first_name,
         student.last_name,
         student.grade_display or "",
     ]
+    if is_lead:
+        is_active = bool(enrollment.active and not student.graduated)
+        row.append("Yes" if is_active else "No")
 
     if "contact" in groups:
         row += [
@@ -1776,9 +1782,11 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
         user = request.user
+        role = get_user_role(user)
+        is_lead = role == "LeadMentor"
 
         groups = set()
-        if get_user_role(user) == "LeadMentor":
+        if is_lead:
             requested = []
             for value in request.GET.getlist("groups"):
                 requested.extend(part.strip() for part in value.split(","))
@@ -1786,31 +1794,58 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 
         can_view_sliding = can_user_read(user, "sliding_scale")
 
-        enrollments = (
-            Enrollment.objects.filter(
-                program=program, active=True, student__graduated=False
+        if is_lead:
+            enrollments = (
+                Enrollment.objects.filter(program=program)
+                .select_related(
+                    "student",
+                    "student__school",
+                    "student__primary_contact_relationship__adult",
+                    "student__secondary_contact_relationship__adult",
+                )
+                .annotate(
+                    sort_first=Lower(
+                        Coalesce(
+                            NullIf("student__preferred_first_name", Value("")),
+                            "student__legal_first_name",
+                        )
+                    ),
+                    sort_last=Lower("student__last_name"),
+                )
+                .order_by("sort_first", "sort_last")
             )
-            .select_related(
-                "student",
-                "student__school",
-                "student__primary_contact_relationship__adult",
-                "student__secondary_contact_relationship__adult",
+        else:
+            enrollments = (
+                Enrollment.objects.filter(
+                    program=program, active=True, student__graduated=False
+                )
+                .select_related(
+                    "student",
+                    "student__school",
+                    "student__primary_contact_relationship__adult",
+                    "student__secondary_contact_relationship__adult",
+                )
+                .annotate(
+                    sort_first=Lower(
+                        Coalesce(
+                            NullIf("student__preferred_first_name", Value("")),
+                            "student__legal_first_name",
+                        )
+                    ),
+                    sort_last=Lower("student__last_name"),
+                )
+                .order_by("sort_first", "sort_last")
             )
-            .annotate(
-                sort_first=Lower(
-                    Coalesce(
-                        NullIf("student__preferred_first_name", Value("")),
-                        "student__legal_first_name",
-                    )
-                ),
-                sort_last=Lower("student__last_name"),
-            )
-            .order_by("sort_first", "sort_last")
-        )
 
-        headers = _student_export_headers(groups)
+        headers = _student_export_headers(groups, is_lead=is_lead)
         rows = [
-            _student_export_row(enrollment.student, program, groups, can_view_sliding)
+            _student_export_row(
+                enrollment,
+                program,
+                groups,
+                can_view_sliding,
+                is_lead=is_lead,
+            )
             for enrollment in enrollments
         ]
 

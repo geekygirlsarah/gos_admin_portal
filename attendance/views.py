@@ -1569,7 +1569,12 @@ def attendance_hours_chart_view(request):
     )
     sessions = AttendanceSession.objects.filter(student__isnull=False)
     if selected_program:
-        sessions = sessions.filter(program=selected_program)
+        sessions = sessions.filter(
+            program=selected_program,
+            student__in=active_students_in_program(selected_program),
+        )
+    else:
+        sessions = sessions.filter(student__in=active_students())
     if date_from:
         sessions = sessions.filter(
             check_in__date__gte=date_from,

@@ -414,6 +414,47 @@ class AttendanceHoursChartViewTests(TestCase):
         self.assertNotIn("Inactive User", chart_labels)
         self.assertNotIn("Graduated Senior", chart_labels)
 
+    def test_logged_sessions_exclude_inactive_and_graduated_students(self):
+        # Inactive enrollment with logged sessions
+        inactive_student = make_student(
+            preferred_first_name="Former", last_name="Member"
+        )
+        Enrollment.objects.create(
+            student=inactive_student, program=self.program, active=False
+        )
+        AttendanceSession.objects.create(
+            student=inactive_student,
+            program=self.program,
+            check_in=timezone.now() - timedelta(days=2, hours=3),
+            check_out=timezone.now() - timedelta(days=2),
+            duration_minutes=180,
+        )
+
+        # Graduated student with logged sessions
+        grad_student = make_student(
+            preferred_first_name="Alum", last_name="Senior", graduated=True
+        )
+        Enrollment.objects.create(
+            student=grad_student, program=self.program, active=True
+        )
+        AttendanceSession.objects.create(
+            student=grad_student,
+            program=self.program,
+            check_in=timezone.now() - timedelta(days=3, hours=2),
+            check_out=timezone.now() - timedelta(days=3),
+            duration_minutes=120,
+        )
+
+        response = self.client.get(self.program_url)
+        self.assertEqual(response.status_code, 200)
+
+        chart_labels = json.loads(response.context["chart_labels_json"])
+        self.assertNotIn("Former Member", chart_labels)
+        self.assertNotIn("Alum Senior", chart_labels)
+        student_list = response.context["student_list"]
+        self.assertFalse(any(s["name"] == "Former Member" for s in student_list))
+        self.assertFalse(any(s["name"] == "Alum Senior" for s in student_list))
+
     def test_include_unlogged_sort_alpha_and_hours(self):
         student3 = make_student(preferred_first_name="Aaron", last_name="Adams")
         Enrollment.objects.create(student=student3, program=self.program, active=True)

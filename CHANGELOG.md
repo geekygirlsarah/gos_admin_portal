@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Mentors no longer see inactive students on program pages**: Inactive students (those marked inactive in a program or graduated) are now hidden from mentors when viewing a program's detail page, ensuring mentors only see currently active participants. Admins and Lead Mentors continue to see the "Students No Longer Active" section to manage inactive enrollments.
+- **Roster export active status and mentor isolation**: Student exports for mentors are now strictly limited to currently active enrolled students (basic Name and Grade export). For Lead Mentors, the detailed student export includes all enrolled students and features an additional "Active" column ("Yes"/"No") indicating their active enrollment status.
+- **Attendance charts exclude inactive students**: The program attendance hours chart and student attendance summaries now strictly exclude students who are inactive in the selected program or graduated, ensuring attendance statistics accurately reflect only active participants.
 
 ### Fixed
 - **Outreach: Overlapping shift sign-up prevention**: Students can no longer be signed up for conflicting or overlapping outreach shifts on the same date. The system now validates shift times on sign-up to prevent double-booking students across concurrent outreach events.

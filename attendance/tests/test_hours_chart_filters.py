@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
-from programs.models import Program, ProgramFeature, Student
+from programs.models import Enrollment, Program, ProgramFeature, Student
 
 
 class AttendanceHoursChartFilterTest(TestCase):
@@ -31,6 +31,9 @@ class AttendanceHoursChartFilterTest(TestCase):
 
         self.student = Student.objects.create(
             legal_first_name="John", last_name="Doe", graduated=False
+        )
+        Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
         )
 
         # Create sessions on different days.
