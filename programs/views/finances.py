@@ -44,6 +44,7 @@ from ..permission_views import (
     user_is_parent,
 )
 from ..utils import (
+    active_students_in_program,
     get_academic_year_ending,
     get_student_balance_data,
     get_student_program_balance,
@@ -885,10 +886,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
         selected = form.cleaned_data.get("from_account")
         connection, from_email = get_sender_connection(selected)
 
-        # Collect students enrolled in program
-        students_qs = Student.objects.filter(
-            enrollment__program=program
-        ).select_related("school")
+        # Collect students enrolled in program (active non-graduated students only)
+        students_qs = active_students_in_program(program).select_related("school")
         if recipient_filter == "individual" and selected_student:
             students_qs = students_qs.filter(pk=selected_student.pk)
 

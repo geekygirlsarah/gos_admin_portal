@@ -203,6 +203,119 @@ class ActiveStudentDropdownTests(TestCase):
             sent.attachments[0]["Content-Disposition"], 'inline; filename="img_0.jpg"'
         )
 
+    def test_balances_email_excludes_inactive_and_graduated_students(self):
+        """Balance emails must only be sent to parents of active students in the program."""
+        # Active student parent
+        active_parent = Adult.objects.create(
+            legal_first_name="Active",
+            last_name="Parent",
+            personal_email="active.parent@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=True,
+        )
+        active_parent.students.add(self.active)
+
+        # Inactive enrollment student parent
+        dropped_parent = Adult.objects.create(
+            legal_first_name="Dropped",
+            last_name="Parent",
+            personal_email="dropped.parent@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=True,
+        )
+        dropped_parent.students.add(self.dropped)
+
+        # Graduated student parent
+        grad_parent = Adult.objects.create(
+            legal_first_name="Grad",
+            last_name="Parent",
+            personal_email="grad.parent@example.com",
+            is_parent=True,
+            email_updates=True,
+            login_enabled=True,
+        )
+        grad_parent.students.add(self.graduated)
+
+        # Create a general program fee so every enrolled student has a balance
+        Fee.objects.create(
+            program=self.program, name="Program Fee", amount=Decimal("150.00")
+        )
+
+        lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        user = User.objects.create_user(
+            username="lead_bal_filter", password="password123"  # nosec B106
+        )
+        user.groups.add(lead_group)
+        self.client.login(
+            username="lead_bal_filter", password="password123"
+        )  # nosec B106
+
+        # 1. recipient_filter = "all"
+        mail.outbox = []
+        response = self.client.post(
+            reverse("program_dues_email", args=[self.program.pk]),
+            {
+                "program": self.program.pk,
+                "subject": "Balance due - all",
+                "default_message": "<p>Please pay dues.</p>",
+                "recipient_filter": "all",
+                "from_account": "DEFAULT",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["active.parent@example.com"])
+
+        # 2. recipient_filter = "positive"
+        mail.outbox = []
+        response = self.client.post(
+            reverse("program_dues_email", args=[self.program.pk]),
+            {
+                "program": self.program.pk,
+                "subject": "Balance due - positive",
+                "default_message": "<p>Please pay dues.</p>",
+                "recipient_filter": "positive",
+                "from_account": "DEFAULT",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["active.parent@example.com"])
+
+        # 3. recipient_filter = "non_zero"
+        mail.outbox = []
+        response = self.client.post(
+            reverse("program_dues_email", args=[self.program.pk]),
+            {
+                "program": self.program.pk,
+                "subject": "Balance due - non_zero",
+                "default_message": "<p>Please pay dues.</p>",
+                "recipient_filter": "non_zero",
+                "from_account": "DEFAULT",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["active.parent@example.com"])
+
+        # 4. recipient_filter = "individual" targeting an inactive student
+        mail.outbox = []
+        response = self.client.post(
+            reverse("program_dues_email", args=[self.program.pk]),
+            {
+                "program": self.program.pk,
+                "subject": "Balance due - individual inactive",
+                "default_message": "<p>Please pay dues.</p>",
+                "recipient_filter": "individual",
+                "student": self.dropped.pk,
+                "from_account": "DEFAULT",
+            },
+        )
+        # Should not send emails and show error or re-render
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_fee_assignment_form_only_lists_active_enrolled(self):
         fee = Fee.objects.create(program=self.program, name="Dues", amount="25.00")
         form = FeeAssignmentEditForm(program=self.program, fee=fee)
