@@ -150,6 +150,11 @@
                         </tfoot>
                     </table>
                 </div>
+                {% if sliding_scale and overlapping_sliding_count > 1 %}
+                    <div class="mt-2 mb-3 small text-muted">
+                        * Multiple sliding scale records on file ({{ overlapping_sliding_count }} approved records). The {{ sliding_scale.percent }}% discount was applied based on date precedence.
+                    </div>
+                {% endif %}
             {% else %}
                 <div class="alert alert-info">No financial entries yet for this student and program.</div>
             {% endif %}

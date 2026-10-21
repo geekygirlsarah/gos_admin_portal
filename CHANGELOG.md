@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **Balance emails only target active students**: Sending program balance emails (such as emailing all students with an outstanding balance) now strictly excludes inactive and graduated students, ensuring balance notifications and statements are only dispatched to currently active students and their families.
 
 ### Added
+- **Overlapping sliding scale notices and review indicators**: Added visual indicators and warnings across the portal when a student has multiple approved or pending sliding scale discount records. The sliding scale review queue highlights students with active discounts or multiple active records; the decision screen warns staff of existing approved records and clarifies that discounts do not stack; and student balance sheets display an informational notice explaining the date-precedence rule and which discount percentage is applied.
 - **Expanded negative and edge-case test coverage**: Added comprehensive automated test cases across applicant conversions, digital signature decoding, order quantity/pricing boundaries, calendar recurrence error recovery, batch imports, and sliding scale date boundaries to ensure system stability.
 
 ## 2026-10-19

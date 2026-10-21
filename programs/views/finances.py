@@ -540,9 +540,22 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
 
         past_by_year = sorted(past_grouped.items(), key=lambda kv: kv[0], reverse=True)
 
+        student_active_counts = {}
+        for app in active_applications:
+            if app.student_id:
+                student_active_counts[app.student_id] = (
+                    student_active_counts.get(app.student_id, 0) + 1
+                )
+        students_with_multiple_active = {
+            s_id for s_id, count in student_active_counts.items() if count > 1
+        }
+        students_with_active = set(student_active_counts.keys())
+
         ctx["active_applications"] = active_applications
         ctx["past_applications_by_year"] = past_by_year
         ctx["decided_applications"] = active_applications
+        ctx["students_with_multiple_active"] = students_with_multiple_active
+        ctx["students_with_active"] = students_with_active
         return ctx
 
 
@@ -563,6 +576,16 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
         suggested_percent = settings_obj.compute_discount_percent(
             application.family_size, application.adjusted_gross_income
         )
+        existing_approved_sliding_scales = (
+            SlidingScale.objects.filter(
+                student=application.student, status=SlidingScale.STATUS_APPROVED
+            )
+            .exclude(pk=application.pk)
+            .order_by(
+                F("date").desc(nulls_last=True),
+                "-created_at",
+            )
+        )
         return render(
             request,
             self.template_name,
@@ -570,6 +593,7 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
                 "application": application,
                 "suggested_percent": suggested_percent,
                 "settings_obj": settings_obj,
+                "existing_approved_sliding_scales": existing_approved_sliding_scales,
             },
         )
 
@@ -805,6 +829,10 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                 "total_payments": balance_data["total_payments"],
                 "balance": balance_data["balance"],
                 "sliding_scale": balance_data["sliding_scale"],
+                "all_overlapping_sliding_scales": balance_data[
+                    "all_overlapping_sliding_scales"
+                ],
+                "overlapping_sliding_count": balance_data["overlapping_sliding_count"],
             },
         )
 
@@ -858,6 +886,10 @@ class ProgramStudentBalancePrintView(
                 "total_payments": balance_data["total_payments"],
                 "balance": balance_data["balance"],
                 "sliding_scale": balance_data["sliding_scale"],
+                "all_overlapping_sliding_scales": balance_data[
+                    "all_overlapping_sliding_scales"
+                ],
+                "overlapping_sliding_count": balance_data["overlapping_sliding_count"],
             },
         )
 

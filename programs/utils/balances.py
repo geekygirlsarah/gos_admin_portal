@@ -87,6 +87,21 @@ def get_active_sliding_scale(student, on_date=None):
     return qs.order_by("-date", "-created_at").first()
 
 
+def get_sliding_scales_for_program(student, program):
+    """Return all SlidingScale records applicable to a student in a program,
+    ordered by most recent start date.
+    """
+    from ..models import SlidingScale
+
+    if student is None or program is None:
+        return []
+
+    approved = SlidingScale.objects.filter(
+        student=student, status=SlidingScale.STATUS_APPROVED
+    ).order_by("-date", "-created_at")
+    return [s for s in approved if program_overlaps_sliding_window(program, s)]
+
+
 def get_sliding_scale_for_program(student, program):
     """Return the SlidingScale record (if any) applicable to a student in a program.
 
@@ -94,18 +109,8 @@ def get_sliding_scale_for_program(student, program):
     effective window overlaps the program (or its fee dates), ordered by
     most recent start date.
     """
-    from ..models import SlidingScale
-
-    if student is None or program is None:
-        return None
-
-    approved = SlidingScale.objects.filter(
-        student=student, status=SlidingScale.STATUS_APPROVED
-    ).order_by("-date", "-created_at")
-    for s in approved:
-        if program_overlaps_sliding_window(program, s):
-            return s
-    return None
+    scales = get_sliding_scales_for_program(student, program)
+    return scales[0] if scales else None
 
 
 def get_student_balance_data(student, program, can_view_sliding=True):
@@ -118,7 +123,12 @@ def get_student_balance_data(student, program, can_view_sliding=True):
 
     # Gather entries: fees (program), sliding scale (if exists), and payments
     entries = []
-    sliding = get_sliding_scale_for_program(student, program)
+    all_overlapping_sliding_scales = (
+        get_sliding_scales_for_program(student, program) if can_view_sliding else []
+    )
+    sliding = (
+        all_overlapping_sliding_scales[0] if all_overlapping_sliding_scales else None
+    )
     sliding_overlaps = (
         program_overlaps_sliding_window(program, sliding) if sliding else False
     )
@@ -249,6 +259,8 @@ def get_student_balance_data(student, program, can_view_sliding=True):
         "total_payments": total_payments,
         "balance": balance,
         "sliding_scale": sliding,
+        "all_overlapping_sliding_scales": all_overlapping_sliding_scales,
+        "overlapping_sliding_count": len(all_overlapping_sliding_scales),
     }
 
 

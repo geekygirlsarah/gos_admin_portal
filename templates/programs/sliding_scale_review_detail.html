@@ -103,6 +103,28 @@
     </div>
   </div>
 
+  {% if existing_approved_sliding_scales %}
+    <div class="alert alert-warning mb-4 shadow-sm border-0 rounded-3">
+      <div class="d-flex align-items-start">
+        <i class="bi bi-exclamation-triangle-fill fs-5 me-3 text-warning"></i>
+        <div>
+          <h6 class="alert-heading fw-bold mb-1">Existing Active Discount Detected</h6>
+          <p class="mb-2 small">
+            {{ application.student }} already has {{ existing_approved_sliding_scales|length }} approved sliding scale record{{ existing_approved_sliding_scales|length|pluralize }}:
+          </p>
+          <ul class="mb-2 small ps-3">
+            {% for s in existing_approved_sliding_scales %}
+              <li><strong>{{ s.percent }}% off</strong> — {{ s.effective_dates_display }}</li>
+            {% endfor %}
+          </ul>
+          <p class="mb-0 small text-muted">
+            If approved, discounts will not stack. During overlapping periods, the record with the most recent start date takes precedence.
+          </p>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   <!-- Review Decision Actions -->
   <div class="row g-4 mb-5">
     <!-- Approve Card -->
