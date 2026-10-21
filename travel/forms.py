@@ -1,4 +1,6 @@
 from django import forms
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 
 from programs.models import Student
 from programs.utils import active_students_in_program
@@ -111,7 +113,17 @@ class TravelStaffSignupForm(TravelSignupForm):
         program = kwargs.pop("program", None)
         super().__init__(*args, **kwargs)
         if program is not None:
-            self.fields["student"].queryset = active_students_in_program(program)
+            self.fields["student"].queryset = active_students_in_program(
+                program
+            ).order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")),
+                        "legal_first_name",
+                    )
+                ),
+                Lower("last_name"),
+            )
 
     def clean_departure(self):
         departure = self.cleaned_data.get("departure")

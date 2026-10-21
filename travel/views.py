@@ -3,7 +3,8 @@ from datetime import date
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -86,14 +87,42 @@ class TravelEventListView(
             TravelSignup.objects.filter(event__program=self.program)
             .select_related("student", "departure", "approved_by", "event")
             .prefetch_related("cost_items")
-            .order_by("created_at")
+            .order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("student__preferred_first_name", Value("")),
+                        "student__legal_first_name",
+                    )
+                ),
+                Lower("student__last_name"),
+            )
         )
-        mentors_qs = TravelMentorSignup.objects.filter(
-            event__program=self.program
-        ).select_related("adult", "departure", "event")
-        chaperones_qs = TravelParentChaperoneSignup.objects.filter(
-            event__program=self.program
-        ).select_related("adult", "departure", "event")
+        mentors_qs = (
+            TravelMentorSignup.objects.filter(event__program=self.program)
+            .select_related("adult", "departure", "event")
+            .order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("adult__preferred_first_name", Value("")),
+                        "adult__legal_first_name",
+                    )
+                ),
+                Lower("adult__last_name"),
+            )
+        )
+        chaperones_qs = (
+            TravelParentChaperoneSignup.objects.filter(event__program=self.program)
+            .select_related("adult", "departure", "event")
+            .order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("adult__preferred_first_name", Value("")),
+                        "adult__legal_first_name",
+                    )
+                ),
+                Lower("adult__last_name"),
+            )
+        )
         return (
             TravelEvent.objects.filter(program=self.program)
             .prefetch_related(
@@ -217,7 +246,14 @@ class TravelEventListView(
             adult = None
         if adult is not None and adult.students.exists():
             parent_rows = []
-            for child in adult.all_students():
+            children = adult.all_students()
+            children.sort(
+                key=lambda s: (
+                    (s.preferred_first_name or s.legal_first_name or "").lower(),
+                    (s.last_name or "").lower(),
+                )
+            )
+            for child in children:
                 signups = [
                     s
                     for s in TravelSignup.objects.filter(
