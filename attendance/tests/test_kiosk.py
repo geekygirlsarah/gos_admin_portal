@@ -8,7 +8,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from attendance.models import KioskConfig, RFIDCard
-from programs.models import Adult, Program, ProgramFeature, Student
+from programs.models import Adult, Enrollment, Program, ProgramFeature, Student
 
 from .base import make_client, make_program
 
@@ -466,6 +466,9 @@ class KioskProxyLookupTests(TestCase):
         )
         self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
         self.student = Student.objects.create(legal_first_name="Bob", last_name="Jones")
+        Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
+        )
         self.rfid = RFIDCard.objects.create(uid="RFID999", student=self.student)
 
     def test_lookup_without_cookie_returns_403(self):
@@ -504,6 +507,7 @@ class KioskProxyLookupTests(TestCase):
         student = Student.objects.create(
             legal_first_name="Barbara", preferred_first_name="Babs", last_name="Smith"
         )
+        Enrollment.objects.create(student=student, program=self.program, active=True)
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Babs Smith"})
@@ -516,6 +520,7 @@ class KioskProxyLookupTests(TestCase):
         student = Student.objects.create(
             legal_first_name="Barbara", preferred_first_name="Babs", last_name="Smith"
         )
+        Enrollment.objects.create(student=student, program=self.program, active=True)
         self.client.cookies[self.cookie_name] = "1"
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Barbara Smith"})
@@ -635,6 +640,9 @@ class KioskFirstNameTests(TestCase):
             legal_first_name="Ada",
             preferred_first_name="Ada",
             last_name="Lovelace",
+        )
+        Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
         )
         self.mentor = Adult.objects.create(
             legal_first_name="Robert",

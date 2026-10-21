@@ -22,7 +22,7 @@ from attendance.services import (
     record_tap,
     resolve_card_by_uid,
 )
-from programs.models import Adult, Program, ProgramFeature, Student
+from programs.models import Adult, Enrollment, Program, ProgramFeature, Student
 
 from .base import make_program, make_student
 
@@ -119,6 +119,9 @@ class KioskApiReliabilityTests(TestCase):
         self.cookie_name = _cookie_name(self.kiosk.pk)
         self.student = make_student(
             preferred_first_name="Kiosk", last_name="Student", graduation_year=2027
+        )
+        Enrollment.objects.create(
+            student=self.student, program=self.program, active=True
         )
 
     def test_kiosk_tap_invalid_json_returns_400(self):

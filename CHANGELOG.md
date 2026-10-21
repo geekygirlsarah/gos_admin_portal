@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - **Attendance charts exclude inactive students**: The program attendance hours chart and student attendance summaries now strictly exclude students who are inactive in the selected program or graduated, ensuring attendance statistics accurately reflect only active participants.
 
 ### Fixed
+- **Attendance kiosk bounds student lookup and sign-in to active program members**: The attendance kiosk lookup and sign-in endpoints now strictly filter students by active enrollment in the kiosk's specific program, preventing past or un-enrolled students with matching names or RFIDs from appearing in member lookup suggestions or recording attendance for that program.
 - **Outreach: Overlapping shift sign-up prevention**: Students can no longer be signed up for conflicting or overlapping outreach shifts on the same date. The system now validates shift times on sign-up to prevent double-booking students across concurrent outreach events.
 - **Sliding scale: Expiration date validation**: Added validation preventing sliding scale discount expiration dates from being set earlier than their effective start dates, protecting student balance sheets and fee calculations from date anomalies.
 - **Digital Sign-out: Required student selection and presence validation**: Hardened the digital sign-out kiosk station backend to strictly validate student selections upon submission, preventing empty or absent student sign-out requests from processing.
