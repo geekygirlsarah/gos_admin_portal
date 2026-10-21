@@ -1093,10 +1093,22 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "sessions": sessions[:500],
                 "programs": programs,
                 "students": active_students().order_by(
-                    "preferred_first_name", "last_name"
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
                 ),
                 "mentors": Adult.objects.filter(is_mentor=True).order_by(
-                    "preferred_first_name", "last_name"
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
                 ),
                 "selected_program_id": (
                     int(params.get("program_id"))

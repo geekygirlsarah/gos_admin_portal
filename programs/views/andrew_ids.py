@@ -52,7 +52,8 @@ def andrew_id_management_view(request):
             )
 
         adult_qs = Adult.objects.filter(
-            Q(legal_first_name__icontains=search_query)
+            Q(preferred_first_name__icontains=search_query)
+            | Q(legal_first_name__icontains=search_query)
             | Q(last_name__icontains=search_query)
         )
         for a in adult_qs[:20]:
