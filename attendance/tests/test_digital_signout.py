@@ -660,7 +660,25 @@ class DecodeSignatureTests(TestCase):
         with self.assertRaises(ValidationError):
             _decode_signature("")
 
+    def test_none_rejected(self):
+        with self.assertRaises(ValidationError):
+            _decode_signature(None)
+
+    def test_wrong_scheme_rejected(self):
+        with self.assertRaises(ValidationError):
+            _decode_signature("https://example.com/signature.png")
+
+    def test_invalid_base64_data_rejected(self):
+        with self.assertRaises(ValidationError):
+            _decode_signature("data:image/png;base64,invalid!@#$base64===")
+
     def test_short_signature_rejected(self):
         data_url = "data:image/png;base64," + base64.b64encode(TINY_PNG[:10]).decode()
+        with self.assertRaises(ValidationError):
+            _decode_signature(data_url)
+
+    def test_valid_base64_non_png_header_rejected(self):
+        non_png_bytes = b"NOT_A_PNG_HEADER_PADDING_BYTES_1234567890_1234567890_1234567890_1234567890"
+        data_url = "data:image/png;base64," + base64.b64encode(non_png_bytes).decode()
         with self.assertRaises(ValidationError):
             _decode_signature(data_url)

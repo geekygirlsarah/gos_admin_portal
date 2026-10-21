@@ -232,3 +232,39 @@ class LegacyStepKeyRegressionTests(TestCase):
         app.refresh_from_db()
         self.assertNotIn("step7-primaryparent", app.data)
         self.assertEqual(app.data["step5-student"]["legal_first_name"], "Grace")
+
+
+class NormalizeStepKeysUnitTests(TestCase):
+    """Direct unit tests for normalize_step_keys helper function edge cases."""
+
+    def test_normalize_empty_or_none(self):
+        from applications.models import normalize_step_keys
+
+        self.assertEqual(normalize_step_keys(None), {})
+        self.assertEqual(normalize_step_keys({}), {})
+
+    def test_normalize_non_dict_legacy_value(self):
+        from applications.models import normalize_step_keys
+
+        result = normalize_step_keys({"step5": "invalid_string_not_dict"})
+        self.assertEqual(result, {"step5-student": {}})
+
+    def test_normalize_non_step_keys_preserved(self):
+        from applications.models import normalize_step_keys
+
+        input_data = {"custom_meta": 123, "step5": {"name": "Test"}}
+        result = normalize_step_keys(input_data)
+        self.assertEqual(result["custom_meta"], 123)
+        self.assertEqual(result["step5-student"], {"name": "Test"})
+        self.assertNotIn("step5", result)
+
+    def test_normalize_tie_preserves_current_key(self):
+        from applications.models import normalize_step_keys
+
+        # Equal score (1 filled, 1 total) -> current key should win
+        input_data = {
+            "step5": {"legal_first_name": "OldName"},
+            "step5-student": {"legal_first_name": "NewName"},
+        }
+        result = normalize_step_keys(input_data)
+        self.assertEqual(result["step5-student"]["legal_first_name"], "NewName")

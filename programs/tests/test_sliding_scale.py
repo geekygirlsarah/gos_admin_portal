@@ -935,3 +935,70 @@ class SlidingScaleIndexTests(TestCase):
                 )
             index_names = {row[0] for row in cursor.fetchall()}
         self.assertIn("slidingscale_active_lookup_idx", index_names)
+
+
+class SlidingScaleBoundaryAndRoundingTests(TestCase):
+    """Boundary conditions for date ranges and rounding behavior."""
+
+    def test_get_active_sliding_scale_exact_date_boundaries(self):
+        from programs.utils.balances import get_active_sliding_scale
+
+        student = Student.objects.create(
+            legal_first_name="Boundary", last_name="Student"
+        )
+        scale = SlidingScale.objects.create(
+            student=student,
+            percent=Decimal("50.00"),
+            status=SlidingScale.STATUS_APPROVED,
+            date=datetime.date(2026, 6, 1),
+            expiration_date=datetime.date(2026, 6, 30),
+        )
+
+        # 1 day before start date -> inactive
+        self.assertIsNone(
+            get_active_sliding_scale(student, on_date=datetime.date(2026, 5, 31))
+        )
+        # Exact start date -> active
+        self.assertEqual(
+            get_active_sliding_scale(student, on_date=datetime.date(2026, 6, 1)), scale
+        )
+        # Mid window -> active
+        self.assertEqual(
+            get_active_sliding_scale(student, on_date=datetime.date(2026, 6, 15)), scale
+        )
+        # Exact expiration date -> active
+        self.assertEqual(
+            get_active_sliding_scale(student, on_date=datetime.date(2026, 6, 30)), scale
+        )
+        # 1 day after expiration date -> inactive
+        self.assertIsNone(
+            get_active_sliding_scale(student, on_date=datetime.date(2026, 7, 1))
+        )
+
+    def test_compute_sliding_discount_rounded_boundary_cases(self):
+        from programs.utils.balances import compute_sliding_discount_rounded
+
+        # Missing inputs return 0
+        self.assertEqual(
+            compute_sliding_discount_rounded(None, Decimal("50")), Decimal("0")
+        )
+        self.assertEqual(
+            compute_sliding_discount_rounded(Decimal("100"), None), Decimal("0")
+        )
+
+        # Exact .50 rounds DOWN (HALF_DOWN)
+        # 25 * 10% = 2.50 -> 2
+        self.assertEqual(
+            compute_sliding_discount_rounded(Decimal("25.00"), Decimal("10.00")),
+            Decimal("2"),
+        )
+        # 25.10 * 10% = 2.51 -> 3
+        self.assertEqual(
+            compute_sliding_discount_rounded(Decimal("25.10"), Decimal("10.00")),
+            Decimal("3"),
+        )
+        # 24.90 * 10% = 2.49 -> 2
+        self.assertEqual(
+            compute_sliding_discount_rounded(Decimal("24.90"), Decimal("10.00")),
+            Decimal("2"),
+        )
