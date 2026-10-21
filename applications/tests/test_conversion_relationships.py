@@ -513,3 +513,36 @@ class DuplicateApplicationConversionTests(TestCase):
             student_b,
             Student.objects.filter(primary_contact_relationship__adult=parent),
         )
+
+    def test_convert_application_missing_step5_raises_conversion_error(self):
+        from applications.services import ApplicationConversionError
+
+        app = Application.objects.create(
+            program=self.program,
+            email="broken@example.com",
+            status=Application.Status.APPROVED_SIGNED,
+            data={},
+        )
+        with self.assertRaises(ApplicationConversionError):
+            convert_application_to_student(app)
+
+    def test_convert_application_non_dict_parent_and_invalid_race_handled(self):
+        app = Application.objects.create(
+            program=self.program,
+            email="malformed@example.com",
+            status=Application.Status.APPROVED_SIGNED,
+            data={
+                "step5-student": {
+                    "legal_first_name": "Malformed",
+                    "last_name": "Student",
+                    "date_of_birth": "2011-01-01",
+                    "race_ethnicities": "not-a-list-of-ids",
+                },
+                "step7-primaryparent": "string-instead-of-dict",
+                "step8-secondaryparent": 12345,
+            },
+        )
+        student = convert_application_to_student(app)
+        self.assertIsNotNone(student)
+        self.assertEqual(student.legal_first_name, "Malformed")
+        self.assertIsNone(student.primary_contact)

@@ -298,6 +298,27 @@ class OutreachSignup(models.Model):
                     f"This shift already has the maximum number of helpers ({self.shift.max_helpers})."
                 )
 
+        if self.student_id and self.shift_id:
+            shift = self.shift
+            if shift.date and shift.start_time and shift.end_time:
+                overlapping = (
+                    OutreachSignup.objects.filter(
+                        student_id=self.student_id,
+                        shift__date=shift.date,
+                        shift__start_time__lt=shift.end_time,
+                        shift__end_time__gt=shift.start_time,
+                    )
+                    .exclude(pk=self.pk)
+                    .exclude(shift_id=self.shift_id)
+                )
+                if overlapping.exists():
+                    conflict_event = (
+                        overlapping.select_related("shift__event").first().shift.event
+                    )
+                    raise ValidationError(
+                        f"Student is already signed up for an overlapping shift on this date ({conflict_event.name})."
+                    )
+
 
 class OutreachMentorSignup(models.Model):
     """A mentor volunteering to support a specific outreach shift.

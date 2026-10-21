@@ -1002,3 +1002,19 @@ class SlidingScaleBoundaryAndRoundingTests(TestCase):
             compute_sliding_discount_rounded(Decimal("24.90"), Decimal("10.00")),
             Decimal("2"),
         )
+
+    def test_sliding_scale_expiration_before_start_date_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+
+        student = Student.objects.create(
+            legal_first_name="InvalidDate", last_name="Student"
+        )
+        scale = SlidingScale(
+            student=student,
+            percent=Decimal("50.00"),
+            status=SlidingScale.STATUS_APPROVED,
+            date=datetime.date(2026, 6, 30),
+            expiration_date=datetime.date(2026, 6, 1),
+        )
+        with self.assertRaises(ValidationError):
+            scale.full_clean()

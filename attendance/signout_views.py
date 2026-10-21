@@ -203,7 +203,9 @@ def _handle_signout_submit(request, config, students, form_context):
     signature_payload = request.POST.get("signature") or ""
 
     student_id = request.POST.get("student_id")
-    if student_id:
+    if not student_id:
+        error = "Please select one of your students to sign out."
+    else:
         student = next((s for s in students if str(s.pk) == str(student_id)), None)
         if student is None:
             error = "Please select one of your students to sign out."

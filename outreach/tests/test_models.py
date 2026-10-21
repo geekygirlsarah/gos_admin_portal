@@ -90,6 +90,33 @@ class OutreachModelTest(TestCase):
             signup2.clean()
             signup2.save()
 
+    def test_overlapping_shift_signup_rejected(self):
+        event1 = create_outreach_event(
+            name="Event 1",
+            start_date="2027-09-01",
+            start_time="10:00:00",
+            end_time="12:00:00",
+        )
+        shift1 = event1.shifts.first()
+        OutreachSignup.objects.create(
+            student=self.student, shift=shift1, role=OutreachSignup.HELPER
+        )
+
+        # Event 2: 11:00 - 13:00 on same date (future)
+        event2 = create_outreach_event(
+            name="Conflicting Event",
+            start_date="2027-09-01",
+            start_time="11:00:00",
+            end_time="13:00:00",
+        )
+        shift2 = event2.shifts.first()
+
+        overlapping_signup = OutreachSignup(
+            student=self.student, shift=shift2, role=OutreachSignup.HELPER
+        )
+        with self.assertRaises(ValidationError):
+            overlapping_signup.clean()
+
 
 class OutreachShiftTest(TestCase):
     def setUp(self):

@@ -526,8 +526,12 @@ def _collect_applicant_recipients(application: Application) -> List[str]:
       captured one different from the application email.
     """
     data = application.data or {}
-    step5 = data.get("step5-student") or {}
-    step7 = data.get("step7-primaryparent") or {}
+    step5 = data.get("step5-student")
+    if not isinstance(step5, dict):
+        step5 = {}
+    step7 = data.get("step7-primaryparent")
+    if not isinstance(step7, dict):
+        step7 = {}
 
     candidates: List[str] = []
     # Primary applicant email (whoever started / verified the OTP).
@@ -677,7 +681,7 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
     """
     from programs.models import Adult
 
-    if not parent_data:
+    if not parent_data or not isinstance(parent_data, dict):
         return None
     email = (parent_data.get("email") or "").strip()
     legal_first = (
@@ -774,7 +778,10 @@ def _student_from_application(application: Application):
     # run ``normalize_step_data(save=True)`` first.
     application.normalize_step_data(save=False)
     data = application.data or {}
-    step5 = (normalize_step_keys(data).get("step5-student") or {}).copy()
+    step5_raw = normalize_step_keys(data).get("step5-student")
+    if not isinstance(step5_raw, dict):
+        step5_raw = {}
+    step5 = step5_raw.copy()
     existing_id = step5.pop("_existing_student_id", None)
 
     student = None
@@ -868,7 +875,9 @@ def _student_from_application(application: Application):
     _fill("medical_notes", step5.get("medical_notes"))
 
     # Experience / qualitative questions (from step6)
-    step6 = data.get("step6-experience") or {}
+    step6 = data.get("step6-experience")
+    if not isinstance(step6, dict):
+        step6 = {}
     _fill("interest_reason", step6.get("interest_reason"))
     _fill("hoped_gains", step6.get("hoped_gains"))
     _fill("prior_robotics_experience", step6.get("prior_robotics_experience"))
@@ -887,7 +896,11 @@ def _student_from_application(application: Application):
 
     # M2M Race ethnicities (only if student didn't already have some on file)
     race_ids = step5.get("race_ethnicities")
-    if race_ids and not student.race_ethnicities.exists():
+    if (
+        race_ids
+        and isinstance(race_ids, (list, tuple, set))
+        and not student.race_ethnicities.exists()
+    ):
         student.race_ethnicities.set(race_ids)
 
     return student

@@ -1834,6 +1834,17 @@ class SlidingScale(models.Model):
     def is_pending(self):
         return self.status == self.STATUS_PENDING
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        if self.date and self.expiration_date and self.expiration_date < self.date:
+            raise ValidationError(
+                {
+                    "expiration_date": "Expiration date cannot be earlier than start date."
+                }
+            )
+
     @property
     def is_active(self):
         """Whether this approved record currently applies (not expired)."""

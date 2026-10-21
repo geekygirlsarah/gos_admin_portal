@@ -474,6 +474,21 @@ class DigitalSignoutSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(DigitalSignout.objects.count(), 0)
 
+    def test_missing_student_id_rejected(self):
+        response = self._post(student_id="")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(DigitalSignout.objects.count(), 0)
+
+    def test_absent_enrolled_student_rejected(self):
+        absent_student = make_student(
+            preferred_first_name="Absent", last_name="Student"
+        )
+        Enrollment.objects.create(student=absent_student, program=self.program)
+        # Note: No StudentPresence(status=PRESENT) for today
+        response = self._post(student_id=absent_student.pk)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(DigitalSignout.objects.count(), 0)
+
 
 class DigitalSignoutManagementTests(TestCase):
     """Program-page management view: access control, unlock/lock cookie, config."""
