@@ -457,8 +457,8 @@
         {% endif %}
       </div>
 
-      <!-- Inactive Students Section -->
-      {% if role != 'Student' and inactive_enrollments %}
+      {% if role == 'LeadMentor' and inactive_enrollments %}
+        <!-- Inactive Students Section -->
         <div class="card shadow-sm mb-4 border-0 bg-light">
           <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
             <h3 class="h6 mb-0 text-muted fw-bold">Students No Longer Active</h3>

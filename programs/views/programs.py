@@ -605,10 +605,11 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
             ctx["can_view_documents"] = False
-            if role == "Student":
-                # Students see only active peers, no inactive section
-                ctx["inactive_enrollments"] = Enrollment.objects.none()
-                ctx["inactive_students"] = []
+            # Mentors and Students see only active peers, no inactive section
+            ctx["inactive_enrollments"] = Enrollment.objects.none()
+            ctx["inactive_students"] = []
+            ctx["inactive_enrollments_count"] = 0
+            ctx["enrolled_students"] = list(ctx["active_students"])
         else:
             ctx["can_manage_students"] = can_user_write(
                 self.request.user, "student_info"

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-21
 
+### Changed
+- **Mentors no longer see inactive students on program pages**: Inactive students (those marked inactive in a program or graduated) are now hidden from mentors when viewing a program's detail page, ensuring mentors only see currently active participants. Admins and Lead Mentors continue to see the "Students No Longer Active" section to manage inactive enrollments.
+
 ### Fixed
 - **Outreach: Overlapping shift sign-up prevention**: Students can no longer be signed up for conflicting or overlapping outreach shifts on the same date. The system now validates shift times on sign-up to prevent double-booking students across concurrent outreach events.
 - **Sliding scale: Expiration date validation**: Added validation preventing sliding scale discount expiration dates from being set earlier than their effective start dates, protecting student balance sheets and fee calculations from date anomalies.

@@ -435,6 +435,38 @@ class InactiveStudentTest(TestCase):
         self.assertIn(self.enrollment, active_enrollments)
         self.assertNotIn(self.inactive_enrollment, active_enrollments)
         self.assertIn(self.inactive_enrollment, inactive_enrollments)
+        self.assertContains(response, "Students No Longer Active")
+        self.assertContains(response, self.inactive_student.display_name)
+
+    def test_program_detail_hides_inactive_students_from_mentor(self):
+        mentor_user = User.objects.create_user(
+            username="mentor_tester",
+            password="password",
+            email="mentor_tester@andrew.cmu.edu",  # nosec B106
+        )
+        Adult.objects.create(
+            legal_first_name="Mentor",
+            last_name="Tester",
+            user=mentor_user,
+            is_mentor=True,
+            mentor_active=True,
+            andrew_id="mentor_tester",
+        )
+        mentor_group, _ = Group.objects.get_or_create(name="Mentor")
+        mentor_user.groups.add(mentor_group)
+
+        self.client.force_login(mentor_user)
+        response = self.client.get(reverse("program_detail", args=[self.program.pk]))
+        self.assertEqual(response.status_code, 200)
+        active_enrollments = list(response.context["active_enrollments"])
+        inactive_enrollments = list(response.context["inactive_enrollments"])
+        self.assertIn(self.enrollment, active_enrollments)
+        self.assertEqual(len(inactive_enrollments), 0)
+        self.assertEqual(len(response.context["inactive_students"]), 0)
+        self.assertEqual(response.context["inactive_enrollments_count"], 0)
+        self.assertNotIn(self.inactive_student, response.context["enrolled_students"])
+        self.assertNotContains(response, "Students No Longer Active")
+        self.assertNotContains(response, self.inactive_student.display_name)
 
     def test_messaging_excludes_inactive_enrollments(self):
         from django.core import mail
