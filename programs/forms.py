@@ -799,7 +799,10 @@ class ProgramEmailForm(forms.Form):
             ]
             initial_value = "DEFAULT"
         self.fields["from_account"] = forms.ChoiceField(
-            choices=choices, initial=initial_value, label="Send from"
+            choices=choices,
+            initial=initial_value,
+            label="Sender identity",
+            help_text="Select the sender identity and reply-to address.",
         )
         if program is not None:
             self.fields["program"].initial = program
@@ -913,7 +916,10 @@ class ProgramEmailBalancesForm(forms.Form):
             ]
             initial_value = "DEFAULT"
         self.fields["from_account"] = forms.ChoiceField(
-            choices=choices, initial=initial_value, label="Send from"
+            choices=choices,
+            initial=initial_value,
+            label="Sender identity",
+            help_text="Select the sender identity and reply-to address.",
         )
         if program is not None:
             self.fields["program"].initial = program

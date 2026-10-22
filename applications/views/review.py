@@ -496,7 +496,10 @@ class ApplicationEmailForm(forms.Form):
         help_text="Optional: send only to this address for testing.",
     )
     from_account = forms.ChoiceField(
-        required=False, widget=forms.Select(attrs={"class": "form-select"})
+        required=False,
+        label="Sender identity",
+        help_text="Select the sender identity and reply-to address.",
+        widget=forms.Select(attrs={"class": "form-select"}),
     )
 
     def __init__(self, *args, **kwargs):
@@ -1284,7 +1287,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
 
             # Determine sender account and SMTP connection
             selected = form.cleaned_data.get("from_account")
-            connection, from_email = get_sender_connection(selected)
+            connection, from_email, reply_to = get_sender_connection(selected)
 
             messages_to_send = []
             for addr in to_send:
@@ -1293,6 +1296,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
                     body=text_body,
                     from_email=from_email,
                     to=[addr],
+                    reply_to=[reply_to] if reply_to else None,
                     connection=connection,
                 )
                 msg.attach_alternative(inlined_html_body, "text/html")

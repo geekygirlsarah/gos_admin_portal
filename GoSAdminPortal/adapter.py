@@ -273,6 +273,13 @@ class AccountAdapter(DefaultAccountAdapter):
                 name=f"allauth-email-{email[:20]}",
             ).start()
 
+    def render_mail(self, template_prefix, email, context, headers=None):
+        msg = super().render_mail(template_prefix, email, context, headers=headers)
+        reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+        if reply_to and not msg.reply_to:
+            msg.reply_to = [reply_to]
+        return msg
+
     def format_email_subject(self, subject):
         """
         By default, allauth prepends the site name in brackets.
@@ -284,11 +291,15 @@ class AccountAdapter(DefaultAccountAdapter):
         """
         Include the display name if DEFAULT_FROM_NAME is set.
         """
-        email = super().get_from_email()
+        from_email = (
+            getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+            or getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            or super().get_from_email()
+        )
         name = getattr(settings, "DEFAULT_FROM_NAME", None)
-        if name and "<" not in email:
-            return f'"{name}" <{email}>'
-        return email
+        if name and "<" not in from_email:
+            return f'"{name}" <{from_email}>'
+        return from_email
 
 
 class ProvisioningRequestLoginCodeForm(RequestLoginCodeForm):

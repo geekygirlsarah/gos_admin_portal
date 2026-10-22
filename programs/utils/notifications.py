@@ -8,7 +8,7 @@ import secrets
 import string
 
 from django.conf import settings
-from django.core.mail import mailers, send_mail
+from django.core.mail import EmailMultiAlternatives, mailers, send_mail
 
 LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
@@ -20,10 +20,16 @@ def generate_otp(length=6):
 def send_otp_email(email, otp):
     from django.template.loader import render_to_string
 
-    from_email = settings.DEFAULT_FROM_EMAIL
+    from_email = (
+        getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+        or settings.DEFAULT_FROM_EMAIL
+    )
     name = getattr(settings, "DEFAULT_FROM_NAME", None)
-    if name:
+    if name and "<" not in from_email:
         from_email = f'"{name}" <{from_email}>'
+
+    reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+    reply_to_list = [reply_to] if reply_to else None
 
     context = {"code": otp}
     subject = render_to_string("account/email/login_code_subject.txt", context).strip()
@@ -31,13 +37,15 @@ def send_otp_email(email, otp):
     text_message = render_to_string("account/email/login_code_message.txt", context)
     html_message = render_to_string("account/email/login_code_message.html", context)
 
-    send_mail(
-        subject,
-        text_message,
-        from_email,
-        [email],
-        html_message=html_message,
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_message,
+        from_email=from_email,
+        to=[email],
+        reply_to=reply_to_list,
     )
+    msg.attach_alternative(html_message, "text/html")
+    msg.send()
 
 
 def get_lead_mentor_notification_email():
@@ -48,13 +56,13 @@ def get_lead_mentor_notification_email():
 
 
 def get_sender_connection(from_account):
-    """Return an ``(email_backend, from_email)`` pair for the messaging UI.
+    """Return an ``(email_backend, from_email, reply_to)`` tuple for the messaging UI.
 
     ``from_account`` is the ``from_account`` form value: ``"DEFAULT"`` (or an
     unrecognized value) selects the default MAILERS mailer and the default
     from address; any other value is matched against ``EMAIL_SENDER_ACCOUNTS``
     by ``key`` or ``email`` and selects the ``sender_<key>`` mailer configured
-    in settings with that account's SMTP credentials.
+    in settings with that account's credentials.
 
     The alias scheme here must stay in sync with the ``MAILERS`` entries built
     in ``GoSAdminPortal/settings.py``.
@@ -69,34 +77,59 @@ def get_sender_connection(from_account):
 
     if acc:
         alias = f"sender_{acc.get('key') or acc.get('email')}"
-        from_email = acc.get("email") or settings.DEFAULT_FROM_EMAIL
+        raw_email = acc.get("email") or settings.DEFAULT_FROM_EMAIL
         display_name = acc.get("display_name")
-        if display_name:
-            from_email = f'"{display_name}" <{from_email}>'
+        from_email = f'"{display_name}" <{raw_email}>' if display_name else raw_email
+        reply_to = (
+            acc.get("reply_to")
+            or raw_email
+            or getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+        )
     else:
         alias = "default"
-        from_email = settings.DEFAULT_FROM_EMAIL or "no-reply@example.com"
+        raw_email = (
+            getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+            or settings.DEFAULT_FROM_EMAIL
+            or "notifications@girlsofsteelrobotics.org"
+        )
         name = getattr(settings, "DEFAULT_FROM_NAME", None)
-        if name:
-            from_email = f'"{name}" <{from_email}>'
-    return mailers[alias], from_email
+        from_email = (
+            f'"{name}" <{raw_email}>' if (name and "<" not in raw_email) else raw_email
+        )
+        reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None) or raw_email
+    try:
+        backend_conn = mailers[alias]
+    except Exception:
+        backend_conn = mailers["default"]
+    return backend_conn, from_email, reply_to
 
 
 def send_templated_notification(
-    subject, template_name, context, recipient_list, from_email=None
+    subject, template_name, context, recipient_list, from_email=None, reply_to=None
 ):
     """
     Renders an HTML template and sends it as an email with a plain-text fallback
-    generated from the HTML content.
+    generated from the HTML content and proper Reply-To headers.
     """
     from django.template.loader import render_to_string
     from django.utils.html import strip_tags
 
     if from_email is None:
-        from_email = settings.DEFAULT_FROM_EMAIL
+        from_email = (
+            getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+            or settings.DEFAULT_FROM_EMAIL
+        )
         name = getattr(settings, "DEFAULT_FROM_NAME", None)
-        if name:
+        if name and "<" not in from_email:
             from_email = f'"{name}" <{from_email}>'
+
+    if reply_to is None:
+        default_reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+        reply_to_list = [default_reply_to] if default_reply_to else None
+    elif isinstance(reply_to, str):
+        reply_to_list = [reply_to]
+    else:
+        reply_to_list = list(reply_to)
 
     html_message = render_to_string(template_name, context)
     # Generate a reasonable plain text version from the HTML by stripping tags and unescaping
@@ -105,10 +138,12 @@ def send_templated_notification(
     plain_message = re.sub(r"\n\s*\n", "\n\n", plain_message)
 
     for recipient in recipient_list:
-        send_mail(
-            subject,
-            plain_message,
-            from_email,
-            [recipient],
-            html_message=html_message,
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_message,
+            from_email=from_email,
+            to=[recipient],
+            reply_to=reply_to_list,
         )
+        msg.attach_alternative(html_message, "text/html")
+        msg.send()

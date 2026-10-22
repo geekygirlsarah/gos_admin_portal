@@ -1204,7 +1204,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
             # Determine sender connection (selected sender account, or default)
             selected = form.cleaned_data.get("from_account")
-            connection, from_email = get_sender_connection(selected)
+            connection, from_email, reply_to = get_sender_connection(selected)
 
             messages_to_send = []
             for addr in to_send:
@@ -1213,6 +1213,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
                     body=text_body,
                     from_email=from_email,
                     to=[addr],
+                    reply_to=[reply_to] if reply_to else None,
                     connection=connection,
                 )
                 email.attach_alternative(inlined_html_body, "text/html")

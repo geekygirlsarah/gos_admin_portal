@@ -48,9 +48,13 @@ class ToSendEmailBackend(BaseEmailBackend):
     ):
         super().__init__(alias=alias)
         self.fail_silently = fail_silently
-        self.api_key = api_key or getattr(settings, "TOSEND_API_KEY", "")
+        self.api_key = (
+            api_key if api_key is not None else getattr(settings, "TOSEND_API_KEY", "")
+        )
         self.api_url = (
-            api_url or getattr(settings, "TOSEND_API_URL", "https://api.tosend.com")
+            api_url
+            if api_url is not None
+            else getattr(settings, "TOSEND_API_URL", "https://api.tosend.com")
         ).rstrip("/")
         self.timeout = (
             timeout if timeout is not None else getattr(settings, "TOSEND_TIMEOUT", 30)
