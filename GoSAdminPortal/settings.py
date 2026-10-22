@@ -352,13 +352,14 @@ ACCOUNT_FORMS = {
 #
 # Customization options via environment variables:
 # - EMAIL_BACKEND: Full class path or friendly alias ('console', 'smtp', 'dummy',
-#   'locmem', 'filebased', 'redirect').
+#   'locmem', 'filebased', 'redirect', 'tosend').
 # - EMAILS_ENABLED / DISABLE_OUTGOING_EMAILS: If disabled (e.g. EMAILS_ENABLED=False
 #   or DISABLE_OUTGOING_EMAILS=True), routes to `django.core.mail.backends.dummy.EmailBackend`
 #   (completely silent black-hole).
 # - EMAIL_REDIRECT_TO: If set (e.g. 'developer@example.com'), all outgoing emails
 #   are safely rerouted to this address with the original recipients in the subject.
 # - EMAIL_FILE_PATH: Directory path for `filebased.EmailBackend` (default `tmp/app-emails`).
+# - TOSEND_API_KEY: API Key for toSend REST API v2 backend (https://api.tosend.com).
 _EMAIL_BACKEND_ALIASES = {
     "console": "django.core.mail.backends.console.EmailBackend",
     "smtp": "django.core.mail.backends.smtp.EmailBackend",
@@ -366,6 +367,7 @@ _EMAIL_BACKEND_ALIASES = {
     "locmem": "django.core.mail.backends.locmem.EmailBackend",
     "filebased": "django.core.mail.backends.filebased.EmailBackend",
     "redirect": "GoSAdminPortal.mail_backends.RedirectEmailBackend",
+    "tosend": "GoSAdminPortal.mail_backends.ToSendEmailBackend",
 }
 
 _emails_disabled = (
@@ -379,6 +381,16 @@ EMAIL_REDIRECT_TO = os.getenv("EMAIL_REDIRECT_TO", "").strip() or None
 _email_file_path = os.getenv("EMAIL_FILE_PATH", str(BASE_DIR / "tmp" / "app-emails"))
 EMAILS_ENABLED = not _emails_disabled
 
+TOSEND_API_KEY = os.getenv("TOSEND_API_KEY", "").strip()
+TOSEND_API_URL = os.getenv("TOSEND_API_URL", "https://api.tosend.com").strip()
+TOSEND_TIMEOUT = int(os.getenv("TOSEND_TIMEOUT", "30"))
+
+_tosend_options = {
+    "api_key": TOSEND_API_KEY,
+    "api_url": TOSEND_API_URL,
+    "timeout": TOSEND_TIMEOUT,
+}
+
 if _emails_disabled:
     _mail_backend = "django.core.mail.backends.dummy.EmailBackend"
 else:
@@ -391,6 +403,8 @@ else:
         _mail_backend = "GoSAdminPortal.mail_backends.RedirectEmailBackend"
     elif DEBUG:
         _mail_backend = "django.core.mail.backends.console.EmailBackend"
+    elif TOSEND_API_KEY:
+        _mail_backend = "GoSAdminPortal.mail_backends.ToSendEmailBackend"
     else:
         _mail_backend = "django.core.mail.backends.smtp.EmailBackend"
 
@@ -406,11 +420,21 @@ _smtp_options = {
 
 if _mail_backend == "django.core.mail.backends.smtp.EmailBackend":
     _backend_options = dict(_smtp_options)
+elif _mail_backend == "GoSAdminPortal.mail_backends.ToSendEmailBackend":
+    _backend_options = dict(_tosend_options)
 elif _mail_backend == "GoSAdminPortal.mail_backends.RedirectEmailBackend":
-    _backend_options = {
-        "redirect_to": EMAIL_REDIRECT_TO,
-        "backend_options": dict(_smtp_options),
-    }
+    if TOSEND_API_KEY or (os.getenv("EMAIL_BACKEND", "").strip().lower() == "tosend"):
+        _backend_options = {
+            "redirect_to": EMAIL_REDIRECT_TO,
+            "backend": "GoSAdminPortal.mail_backends.ToSendEmailBackend",
+            "backend_options": dict(_tosend_options),
+        }
+    else:
+        _backend_options = {
+            "redirect_to": EMAIL_REDIRECT_TO,
+            "backend": "django.core.mail.backends.smtp.EmailBackend",
+            "backend_options": dict(_smtp_options),
+        }
 elif _mail_backend == "django.core.mail.backends.filebased.EmailBackend":
     _backend_options = {"file_path": _email_file_path}
 else:
@@ -568,14 +592,29 @@ for _account in EMAIL_SENDER_ACCOUNTS:
         _account_options = dict(_smtp_options)
         _account_options["username"] = _account.get("username") or ""
         _account_options["password"] = _account.get("password") or ""
+    elif _mail_backend == "GoSAdminPortal.mail_backends.ToSendEmailBackend":
+        _account_options = dict(_tosend_options)
+        if _account.get("api_key"):
+            _account_options["api_key"] = _account.get("api_key")
     elif _mail_backend == "GoSAdminPortal.mail_backends.RedirectEmailBackend":
-        _acc_smtp = dict(_smtp_options)
-        _acc_smtp["username"] = _account.get("username") or ""
-        _acc_smtp["password"] = _account.get("password") or ""
-        _account_options = {
-            "redirect_to": EMAIL_REDIRECT_TO,
-            "backend_options": _acc_smtp,
-        }
+        if TOSEND_API_KEY or _account.get("api_key"):
+            _acc_tosend = dict(_tosend_options)
+            if _account.get("api_key"):
+                _acc_tosend["api_key"] = _account.get("api_key")
+            _account_options = {
+                "redirect_to": EMAIL_REDIRECT_TO,
+                "backend": "GoSAdminPortal.mail_backends.ToSendEmailBackend",
+                "backend_options": _acc_tosend,
+            }
+        else:
+            _acc_smtp = dict(_smtp_options)
+            _acc_smtp["username"] = _account.get("username") or ""
+            _acc_smtp["password"] = _account.get("password") or ""
+            _account_options = {
+                "redirect_to": EMAIL_REDIRECT_TO,
+                "backend": "django.core.mail.backends.smtp.EmailBackend",
+                "backend_options": _acc_smtp,
+            }
     else:
         _account_options = dict(_backend_options)
     MAILERS[f"sender_{_account_key}"] = {

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-22
+
+### Added
+- **toSend REST API email backend integration**: Integrated native support for toSend v2 REST API (`ToSendEmailBackend`) for sending transactional and bulk emails via `POST /v2/emails` and `POST /v2/emails/batch` with automatic chunking of up to 100 messages per HTTP payload. Configurable via `TOSEND_API_KEY` (or `EMAIL_BACKEND=tosend`), with full support for `RedirectEmailBackend` dev routing and per-account sender identities.
+- **In-process background email dispatcher**: Added an asynchronous non-blocking email task dispatcher (`send_messages_in_background`) using a bounded worker thread pool, ensuring database connection safety and eliminating web request timeouts for bulk messaging without requiring external queue infrastructure like Celery or Redis.
+
+### Changed
+- **Individual recipient delivery for bulk emails**: Refactored bulk announcements (`ProgramEmailView`), applicant review messaging (`ApplicationEmailView`), and dues balance notices (`ProgramEmailBalancesView`) to construct individual messages per recipient addressed directly in `To:` rather than bundling 125+ recipients into a single `BCC` list. This prevents email provider spam flags, avoids BCC recipient caps, and dispatches in the background with immediate UI confirmation.
+
 ## 2026-10-21
 
 ### Changed

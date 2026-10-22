@@ -22,6 +22,7 @@ from programs.models import Adult, Crew, Enrollment, Program, Student, SubTeam, 
 
 class MessagingUIImprovementsTests(TestCase):
     def setUp(self):
+        mail.outbox = []
         # Create groups
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
@@ -271,7 +272,7 @@ class MessagingUIImprovementsTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Email sent to 3 recipient(s)")
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(len(mail.outbox), 3)
         sent = mail.outbox[0]
         html_part = sent.alternatives[0][0]
         self.assertEqual(sent.alternatives[0][1], "text/html")

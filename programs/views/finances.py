@@ -52,6 +52,7 @@ from ..utils import (
     get_student_program_balance,
     redirect_back,
 )
+from ..utils.email_async import send_messages_in_background
 from ..utils.email_html import extract_inline_images, html_to_text, normalize_email_html
 from ..utils.notifications import get_sender_connection
 from .mixins import (
@@ -1140,7 +1141,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
         message_html = normalize_email_html(default_message or "")
         message_images = extract_inline_images(default_message or "")
 
-        sent_total = 0
+        messages_to_send = []
         for dest, data in to_send:
             # Render balance sheet HTML
             ctx = {
@@ -1194,16 +1195,16 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
             email.attach_alternative(inlined_html, "text/html")
             for inline_img in message_images:
                 email.attach(inline_img.to_mime())
-            try:
-                sent = email.send()
-                sent_total += sent
-            except Exception as e:
-                logger.error(
-                    "ProgramEmailBalances: send failed for %s | error=%s",
-                    data["student"],
-                    e,
-                    exc_info=True,
-                )
+            messages_to_send.append(email)
+
+        try:
+            send_messages_in_background(messages_to_send, connection=connection)
+        except Exception as e:
+            logger.error(
+                "ProgramEmailBalances: background dispatch failed | error=%s",
+                e,
+                exc_info=True,
+            )
 
         if test_email:
             messages.success(request, f"Test email sent to {test_email}.")

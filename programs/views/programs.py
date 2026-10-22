@@ -44,6 +44,7 @@ from ..utils import (
     redirect_back,
     resolve_address_points,
 )
+from ..utils.email_async import send_messages_in_background
 from ..utils.email_html import build_email_parts
 from ..utils.notifications import get_sender_connection
 from .mixins import (
@@ -1204,29 +1205,20 @@ class ProgramEmailView(LoginRequiredMixin, View):
             # Determine sender connection (selected sender account, or default)
             selected = form.cleaned_data.get("from_account")
             connection, from_email = get_sender_connection(selected)
-            # For test sends, put recipient in the To field (some SMTP providers reject emails with empty To)
-            if test_email:
+
+            messages_to_send = []
+            for addr in to_send:
                 email = EmailMultiAlternatives(
                     subject=subject,
                     body=text_body,
                     from_email=from_email,
-                    to=[test_email],
+                    to=[addr],
                     connection=connection,
                 )
-                email.bcc = []
-            else:
-                email = EmailMultiAlternatives(
-                    subject=subject,
-                    body=text_body,
-                    from_email=from_email,
-                    to=[],
-                    connection=connection,
-                )
-                email.to = []  # ensure empty
-                email.bcc = to_send
-            email.attach_alternative(inlined_html_body, "text/html")
-            for inline_img in inline_images:
-                email.attach(inline_img.to_mime())
+                email.attach_alternative(inlined_html_body, "text/html")
+                for inline_img in inline_images:
+                    email.attach(inline_img.to_mime())
+                messages_to_send.append(email)
 
             # Log details about the outgoing message
             preview_recipients = to_send[:20]
@@ -1244,13 +1236,12 @@ class ProgramEmailView(LoginRequiredMixin, View):
             )
 
             try:
-                sent_count = email.send()
+                send_messages_in_background(messages_to_send, connection=connection)
                 logger.info(
-                    "ProgramEmail: email sent successfully | from=%s | to_count=%d | subject=%s | sent_count=%s",
+                    "ProgramEmail: email dispatch queued successfully | from=%s | to_count=%d | subject=%s",
                     from_email,
                     len(to_send),
                     subject,
-                    sent_count,
                 )
                 messages.success(
                     request,
