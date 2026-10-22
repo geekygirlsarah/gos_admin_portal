@@ -39,6 +39,10 @@
         .success-check { color: #28a745; font-size: 4rem; }
         .success-name { font-size: 2.2rem; }
         .success-student { font-size: 1.5rem; color: #333; }
+        .unlock-form-control { font-size: 1.25rem; padding: 0.6rem 0.85rem; }
+        .d-none { display: none !important; }
+        .btn-lock { font-size: 1rem; opacity: 0.8; }
+        .btn-lock:hover { opacity: 1; }
     </style>
 </head>
 <body>
@@ -56,13 +60,72 @@
 
 <div class="container" style="max-width: 640px;">
 {% if not is_unlocked %}
-    {# ── Locked / unlock-needed screen ─────────────────────────────────────── #}
-    <div class="text-center mt-5">
-        <div style="font-size: 5rem;">&#128274;</div>
-        <h2 class="mt-3" style="font-size: 2.5rem;">This sign-out station is locked.</h2>
-        <p class="lead text-muted" style="font-size: 1.5rem;">
-            A mentor needs to unlock it from the program page before students can be signed out.
-        </p>
+    {# ── Unlock form ────────────────────────────────────────────────────────── #}
+    <div class="card shadow mx-auto mt-4" style="max-width: 480px;">
+        <div class="card-header text-center">
+            <h4 class="mb-0">Unlock Sign-out Station</h4>
+        </div>
+        <div class="card-body p-4">
+            <p class="text-muted mb-4">
+                This sign-out station is locked. A mentor must enter their email to receive a sign-in code to activate this station.
+                After unlocking, the sign-out station will run for 8 hours without requiring a login.
+            </p>
+
+            <div id="unlockError" class="alert alert-danger d-none" role="alert"></div>
+
+            {% if user.is_authenticated and can_direct_unlock %}
+            <div class="mb-4 text-center p-3 border rounded bg-light">
+                <p class="mb-2">You are logged in as <strong>{{ user.get_full_name|default:user.email }}</strong>.</p>
+                <form method="post" action="{% url 'digital_signout' config.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="direct_unlock">
+                    <button type="submit" class="btn btn-signin w-100">Unlock Station Now</button>
+                </form>
+            </div>
+            <div class="text-center text-muted my-3">— or use email code —</div>
+            {% endif %}
+
+            <div id="requestCodeSection">
+                <div class="mb-4">
+                    <label for="unlockEmail" class="form-label">Mentor Email</label>
+                    <input
+                        type="email"
+                        id="unlockEmail"
+                        class="form-control unlock-form-control"
+                        placeholder="mentor@example.com"
+                        autocomplete="username"
+                    >
+                </div>
+                <div class="d-grid">
+                    <button id="requestCodeBtn" type="button" class="btn btn-signin">
+                        Send Unlock Code
+                    </button>
+                </div>
+            </div>
+
+            <div id="verifyCodeSection" class="d-none">
+                <div class="mb-4">
+                    <label for="unlockCode" class="form-label">Enter Code</label>
+                    <input
+                        type="text"
+                        id="unlockCode"
+                        class="form-control unlock-form-control text-center"
+                        placeholder="123456"
+                        maxlength="6"
+                        autocomplete="one-time-code"
+                    >
+                    <div class="form-text mt-2">Check your email for a 6-digit code.</div>
+                </div>
+                <div class="d-grid gap-2">
+                    <button id="unlockBtn" type="button" class="btn btn-signin">
+                        Unlock Station
+                    </button>
+                    <button id="signoutStartOverBtn" type="button" class="btn btn-link text-decoration-none">
+                        Start Over
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 {% elif success %}
     {# ── Success screen ───────────────────────────────────────────────────── #}
@@ -145,6 +208,12 @@
         </div>
     </form>
 
+    <div class="text-center mt-4 mb-4">
+        <button id="lockBtn" type="button" class="btn btn-sm btn-outline-secondary btn-lock">
+            🔒 Lock Station
+        </button>
+    </div>
+
     {# Hidden form used to undo a sign-out (submitted only after confirmation). #}
     <form id="undoForm" method="post" action="{% url 'digital_signout' config.pk %}" class="d-none">
         {% csrf_token %}
@@ -161,13 +230,143 @@
 (function () {
     "use strict";
 
+    var CONFIG_ID = {{ config.pk }};
+
+    function getCookie(name) {
+        var value = "; " + document.cookie;
+        var parts = value.split("; " + name + "=");
+        if (parts.length === 2) { return parts.pop().split(";").shift(); }
+        return "";
+    }
+
+    function csrfHeaders() {
+        return {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+        };
+    }
+
 {% if not is_unlocked %}
-    {# Station is locked — nothing to do #}
+    function showUnlockError(msg) {
+        var el = document.getElementById("unlockError");
+        if (el) {
+            el.textContent = msg;
+            el.classList.remove("d-none");
+        }
+    }
+
+    function doRequestCode() {
+        var email = (document.getElementById("unlockEmail").value || "").trim();
+        if (!email) {
+            showUnlockError("Please enter your email.");
+            return;
+        }
+        var btn = document.getElementById("requestCodeBtn");
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+
+        fetch("/api/v1/signout/" + CONFIG_ID + "/request_code/", {
+            method: "POST",
+            headers: csrfHeaders(),
+            body: JSON.stringify({ email: email }),
+        })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+            if (res.ok && res.data.success) {
+                document.getElementById("requestCodeSection").classList.add("d-none");
+                document.getElementById("verifyCodeSection").classList.remove("d-none");
+                document.getElementById("unlockCode").focus();
+            } else {
+                showUnlockError(res.data.error || "Failed to send code. Please try again.");
+                btn.disabled = false;
+                btn.textContent = "Send Unlock Code";
+            }
+        })
+        .catch(function () {
+            showUnlockError("Network error. Please try again.");
+            btn.disabled = false;
+            btn.textContent = "Send Unlock Code";
+        });
+    }
+
+    function doUnlock() {
+        var email = (document.getElementById("unlockEmail").value || "").trim();
+        var code = (document.getElementById("unlockCode").value || "").trim();
+        if (!email || !code) {
+            showUnlockError("Please enter the code sent to your email.");
+            return;
+        }
+        var btn = document.getElementById("unlockBtn");
+        btn.disabled = true;
+        btn.textContent = "Unlocking…";
+
+        fetch("/api/v1/signout/" + CONFIG_ID + "/unlock/", {
+            method: "POST",
+            headers: csrfHeaders(),
+            body: JSON.stringify({ email: email, code: code }),
+        })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+            if (res.ok && res.data.success) {
+                window.location.reload();
+            } else {
+                showUnlockError(res.data.error || "Invalid code. Please try again.");
+                btn.disabled = false;
+                btn.textContent = "Unlock Station";
+            }
+        })
+        .catch(function () {
+            showUnlockError("Network error. Please try again.");
+            btn.disabled = false;
+            btn.textContent = "Unlock Station";
+        });
+    }
+
+    function initUnlock() {
+        var requestCodeBtn = document.getElementById("requestCodeBtn");
+        var unlockBtn = document.getElementById("unlockBtn");
+        var unlockCode = document.getElementById("unlockCode");
+        var unlockEmail = document.getElementById("unlockEmail");
+        var startOverBtn = document.getElementById("signoutStartOverBtn");
+
+        if (requestCodeBtn) requestCodeBtn.addEventListener("click", doRequestCode);
+        if (unlockBtn) unlockBtn.addEventListener("click", doUnlock);
+        if (startOverBtn) {
+            startOverBtn.addEventListener("click", function () {
+                window.location.reload();
+            });
+        }
+        if (unlockCode) {
+            unlockCode.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { doUnlock(); }
+            });
+        }
+        if (unlockEmail) {
+            unlockEmail.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { doRequestCode(); }
+            });
+        }
+    }
+
+    initUnlock();
+
 {% elif success %}
     {# "Done" is a plain link that GETs back to a fresh form, so another
        student can be signed out. No JS needed — refreshing/re-loading the
        page never re-submits the previous POST. #}
 {% else %}
+    var lockBtn = document.getElementById("lockBtn");
+    if (lockBtn) {
+        lockBtn.addEventListener("click", function () {
+            fetch("/api/v1/signout/" + CONFIG_ID + "/lock/", {
+                method: "POST",
+                headers: csrfHeaders(),
+            }).then(function () {
+                window.location.reload();
+            });
+        });
+    }
+
     var canvas = document.getElementById("sigCanvas");
     var signaturePad = new SignaturePad(canvas, {
         minWidth: 1.2,

@@ -13,9 +13,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from django.views.generic import CreateView, ListView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 from premailer import transform
 
+from audit.mixins import AuditedDeleteMixin
 from audit.service import log_deletion
 
 from ..forms import (
@@ -39,17 +40,19 @@ from ..models import (
 )
 from ..permission_views import (
     LeadMentorRequiredMixin,
+    can_user_delete,
     can_user_read,
     get_user_role,
     user_is_parent,
 )
 from ..utils import (
+    active_students_in_program,
     get_academic_year_ending,
     get_student_balance_data,
     get_student_program_balance,
     redirect_back,
 )
-from ..utils.email_html import html_to_text, normalize_email_html
+from ..utils.email_html import extract_inline_images, html_to_text, normalize_email_html
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
@@ -265,6 +268,139 @@ class ProgramPaymentCreateView(
         )
         messages.success(self.request, "Payment recorded successfully.")
         return redirect("program_detail", pk=self.program.pk)
+
+
+class ProgramPaymentUpdateView(
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    DynamicWritePermissionMixin,
+    UpdateView,
+):
+    model = Payment
+    form_class = PaymentForm
+    template_name = "programs/payment_form.html"
+    section = "payments"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            Payment, pk=self.kwargs["payment_id"], program=self.program
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["program"] = self.program
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["is_edit"] = True
+        return ctx
+
+    def form_valid(self, form):
+        try:
+            before = Payment.objects.get(pk=self.object.pk)
+        except Payment.DoesNotExist:
+            before = None
+        obj = form.save(commit=False)
+        obj.program = self.program
+        obj.save()
+        user = getattr(self.request, "user", None)
+        user_repr = (
+            f"{getattr(user, 'pk', 'anon')}:{getattr(user, 'username', 'anonymous')}"
+            if getattr(user, "is_authenticated", False)
+            else "anonymous"
+        )
+        for f in getattr(form, "changed_data", []) or []:
+            old = getattr(before, f, None) if before is not None else None
+            new = getattr(obj, f, None)
+            forms_logger.info(
+                "FormSave: %s[%s] %s by %s | field=%s | from=%s | to=%s",
+                "Payment",
+                obj.pk,
+                "update",
+                user_repr,
+                f,
+                self._fmt_val(old),
+                self._fmt_val(new),
+            )
+        messages.success(self.request, "Payment updated successfully.")
+        return redirect("program_payment_detail", pk=self.program.pk, payment_id=obj.pk)
+
+
+class ProgramPaymentDeleteView(
+    LoginRequiredMixin,
+    DynamicWritePermissionMixin,
+    AuditedDeleteMixin,
+    DeleteView,
+):
+    model = Payment
+    template_name = "programs/payment_confirm_delete.html"
+    section = "payments"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        obj = self.get_object()
+        if not can_user_delete(request.user, "payments", obj):
+            messages.error(
+                request, "You do not have permission to delete this payment."
+            )
+            return redirect(
+                "program_student_balance",
+                pk=self.program.pk,
+                student_id=obj.student_id,
+            )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            Payment, pk=self.kwargs["payment_id"], program=self.program
+        )
+
+    def audit_snapshot(self, obj):
+        return {
+            "payment_id": obj.pk,
+            "student_id": obj.student_id,
+            "student_name": str(obj.student),
+            "program_id": obj.program_id,
+            "program_name": str(obj.program),
+            "amount": str(obj.amount),
+            "paid_via": obj.paid_via,
+            "paid_on": str(obj.paid_on),
+            "check_number": obj.check_number,
+            "notes": obj.notes,
+        }
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["program"] = self.program
+        ctx["payment"] = self.object
+        ctx["student"] = self.object.student
+        return ctx
+
+    def form_valid(self, form):
+        payment = self.get_object()
+        student = payment.student
+        amount = payment.amount
+        self.student_id = payment.student_id
+        response = super().form_valid(form)
+        messages.success(
+            self.request,
+            f"Payment of ${amount:.2f} for {student} was deleted.",
+        )
+        return response
+
+    def get_success_url(self):
+        if hasattr(self, "student_id") and self.student_id:
+            return reverse(
+                "program_student_balance",
+                kwargs={"pk": self.program.pk, "student_id": self.student_id},
+            )
+        return reverse("program_detail", kwargs={"pk": self.program.pk})
 
 
 class ProgramPaymentDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
@@ -539,9 +675,22 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
 
         past_by_year = sorted(past_grouped.items(), key=lambda kv: kv[0], reverse=True)
 
+        student_active_counts = {}
+        for app in active_applications:
+            if app.student_id:
+                student_active_counts[app.student_id] = (
+                    student_active_counts.get(app.student_id, 0) + 1
+                )
+        students_with_multiple_active = {
+            s_id for s_id, count in student_active_counts.items() if count > 1
+        }
+        students_with_active = set(student_active_counts.keys())
+
         ctx["active_applications"] = active_applications
         ctx["past_applications_by_year"] = past_by_year
         ctx["decided_applications"] = active_applications
+        ctx["students_with_multiple_active"] = students_with_multiple_active
+        ctx["students_with_active"] = students_with_active
         return ctx
 
 
@@ -562,6 +711,16 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
         suggested_percent = settings_obj.compute_discount_percent(
             application.family_size, application.adjusted_gross_income
         )
+        existing_approved_sliding_scales = (
+            SlidingScale.objects.filter(
+                student=application.student, status=SlidingScale.STATUS_APPROVED
+            )
+            .exclude(pk=application.pk)
+            .order_by(
+                F("date").desc(nulls_last=True),
+                "-created_at",
+            )
+        )
         return render(
             request,
             self.template_name,
@@ -569,6 +728,7 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
                 "application": application,
                 "suggested_percent": suggested_percent,
                 "settings_obj": settings_obj,
+                "existing_approved_sliding_scales": existing_approved_sliding_scales,
             },
         )
 
@@ -804,6 +964,10 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                 "total_payments": balance_data["total_payments"],
                 "balance": balance_data["balance"],
                 "sliding_scale": balance_data["sliding_scale"],
+                "all_overlapping_sliding_scales": balance_data[
+                    "all_overlapping_sliding_scales"
+                ],
+                "overlapping_sliding_count": balance_data["overlapping_sliding_count"],
             },
         )
 
@@ -857,6 +1021,10 @@ class ProgramStudentBalancePrintView(
                 "total_payments": balance_data["total_payments"],
                 "balance": balance_data["balance"],
                 "sliding_scale": balance_data["sliding_scale"],
+                "all_overlapping_sliding_scales": balance_data[
+                    "all_overlapping_sliding_scales"
+                ],
+                "overlapping_sliding_count": balance_data["overlapping_sliding_count"],
             },
         )
 
@@ -885,10 +1053,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
         selected = form.cleaned_data.get("from_account")
         connection, from_email = get_sender_connection(selected)
 
-        # Collect students enrolled in program
-        students_qs = Student.objects.filter(
-            enrollment__program=program
-        ).select_related("school")
+        # Collect students enrolled in program (active non-graduated students only)
+        students_qs = active_students_in_program(program).select_related("school")
         if recipient_filter == "individual" and selected_student:
             students_qs = students_qs.filter(pk=selected_student.pk)
 
@@ -971,6 +1137,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 # send one email to combined recipients per student
                 to_send.append((t["emails"], t))
 
+        message_html = normalize_email_html(default_message or "")
+        message_images = extract_inline_images(default_message or "")
+
         sent_total = 0
         for dest, data in to_send:
             # Render balance sheet HTML
@@ -985,7 +1154,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 "sliding_scale": data["sliding_scale"],
             }
             # Include optional rich-text message inside the template so styles apply correctly
-            ctx["message_html"] = normalize_email_html(default_message or "")
+            ctx["message_html"] = message_html
             balance_html = render_to_string(
                 "programs/balance_sheet_email.html", ctx, request=None
             )
@@ -1023,6 +1192,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 connection=connection,
             )
             email.attach_alternative(inlined_html, "text/html")
+            for inline_img in message_images:
+                email.attach(inline_img.to_mime())
             try:
                 sent = email.send()
                 sent_total += sent
@@ -1055,16 +1226,16 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
 
 class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """
-    Lists all students enrolled in a specific program and the total amount each currently owes
-    for that program, using the same balance computation as the per-program balance sheet.
+    Lists all students enrolled in a specific program with their dues owed and current balance,
+    using the same balance computation as the per-program balance sheet.
     """
 
     template_name = "programs/dues_owed.html"
     section = "programs"
 
-    def _program_balance_for_student(self, student, program):
+    def _program_balance_data_for_student(self, student, program):
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
-        return get_student_program_balance(
+        return get_student_balance_data(
             student,
             program,
             can_view_sliding=can_view_sliding,
@@ -1089,17 +1260,23 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         active_rows = []
         inactive_rows = []
-        grand_total = 0
+        total_dues = Decimal("0.00")
+        total_balance = Decimal("0.00")
         filter_owed = request.GET.get("filter") == "owed"
         for e in enrollments:
             s = e.student
-            balance_sum = self._program_balance_for_student(s, program)
-            if filter_owed and balance_sum <= 0:
+            balance_data = self._program_balance_data_for_student(s, program)
+            dues = balance_data["total_fees"] - balance_data["total_sliding"]
+            balance = balance_data["balance"]
+            if filter_owed and balance <= 0:
                 continue
 
             row = {
                 "student": s,
-                "amount_owed": balance_sum,
+                "dues": dues,
+                "dues_owed": dues,
+                "balance": balance,
+                "amount_owed": balance,
             }
 
             # A student is inactive if their enrollment is marked inactive,
@@ -1108,8 +1285,8 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 inactive_rows.append(row)
             else:
                 active_rows.append(row)
-
-            grand_total += balance_sum
+                total_dues += dues
+                total_balance += balance
 
         return render(
             request,
@@ -1119,7 +1296,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "active_rows": active_rows,
                 "inactive_rows": inactive_rows,
                 "rows": active_rows + inactive_rows,
-                "grand_total": grand_total,
+                "total_dues": total_dues,
+                "total_balance": total_balance,
+                "grand_total": total_balance,
                 "filter_owed": filter_owed,
             },
         )

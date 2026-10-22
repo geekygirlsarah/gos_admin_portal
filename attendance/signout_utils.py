@@ -1,8 +1,9 @@
 """Lock/unlock helpers for digital sign-out stations.
 
-Unlocking is done by a mentor from the program page and stores an HttpOnly
-cookie (mirroring the kiosk unlock), which then makes the public sign-out page
-usable on the tablet for ``_COOKIE_MAX_AGE`` seconds.
+Unlocking can be done directly from the sign-out station via mentor email OTP
+(or direct unlock if logged in) or by a mentor from the program page, storing
+an HttpOnly cookie which makes the public sign-out page usable for
+``_COOKIE_MAX_AGE`` seconds.
 """
 
 _COOKIE_MAX_AGE = 8 * 60 * 60  # 8 hours in seconds

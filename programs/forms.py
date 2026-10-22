@@ -420,7 +420,13 @@ class PaymentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Restrict student choices to those actively enrolled in this program
         # (excludes inactive enrollments and graduated students)
-        self.fields["student"].queryset = active_students_in_program(program).order_by(
+        qs = active_students_in_program(program)
+        if self.instance and self.instance.pk and self.instance.student_id:
+            student_ids = list(qs.values_list("pk", flat=True))
+            if self.instance.student_id not in student_ids:
+                student_ids.append(self.instance.student_id)
+            qs = Student.objects.filter(pk__in=student_ids)
+        self.fields["student"].queryset = qs.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),

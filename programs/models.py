@@ -1624,7 +1624,9 @@ class Payment(models.Model):
     )
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     paid_on = models.DateField()
-    paid_via = models.CharField(max_length=20, choices=PAID_VIA_CHOICES, default="cash")
+    paid_via = models.CharField(
+        max_length=20, choices=PAID_VIA_CHOICES, default="credit_card"
+    )
     check_number = models.PositiveIntegerField(blank=True, null=True)
     camp_hours = models.PositiveIntegerField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
@@ -1833,6 +1835,17 @@ class SlidingScale(models.Model):
     @property
     def is_pending(self):
         return self.status == self.STATUS_PENDING
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        if self.date and self.expiration_date and self.expiration_date < self.date:
+            raise ValidationError(
+                {
+                    "expiration_date": "Expiration date cannot be earlier than start date."
+                }
+            )
 
     @property
     def is_active(self):

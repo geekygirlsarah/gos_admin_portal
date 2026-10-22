@@ -10,8 +10,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from programs.permission_views import can_user_read, get_user_role
+
 from .models import DigitalSignout, DigitalSignoutConfig, StudentPresence
-from .signout_utils import _is_unlocked
+from .signout_utils import _clear_unlocked, _is_unlocked, _set_unlocked
 
 
 def _get_config_or_404(config_id):
@@ -108,6 +110,25 @@ def digital_signout(request, config_id):
     students = [s for s in _active_students(program) if s.pk in today_present_ids]
     is_unlocked = _is_unlocked(request, config.pk)
 
+    can_direct_unlock = False
+    if request.user.is_authenticated:
+        role = get_user_role(request.user)
+        if role in ("LeadMentor", "Mentor") and can_user_read(
+            request.user, "programs", program
+        ):
+            can_direct_unlock = True
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "direct_unlock" and can_direct_unlock:
+            response = redirect(_station_url(config.pk))
+            _set_unlocked(response, config.pk)
+            return response
+        if action == "lock":
+            response = redirect(_station_url(config.pk))
+            _clear_unlocked(response, config.pk)
+            return response
+
     if not is_unlocked:
         return render(
             request,
@@ -116,6 +137,7 @@ def digital_signout(request, config_id):
                 "config": config,
                 "program": program,
                 "is_unlocked": False,
+                "can_direct_unlock": can_direct_unlock,
             },
         )
 
@@ -203,7 +225,9 @@ def _handle_signout_submit(request, config, students, form_context):
     signature_payload = request.POST.get("signature") or ""
 
     student_id = request.POST.get("student_id")
-    if student_id:
+    if not student_id:
+        error = "Please select one of your students to sign out."
+    else:
         student = next((s for s in students if str(s.pk) == str(student_id)), None)
         if student is None:
             error = "Please select one of your students to sign out."

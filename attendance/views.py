@@ -1093,10 +1093,22 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "sessions": sessions[:500],
                 "programs": programs,
                 "students": active_students().order_by(
-                    "preferred_first_name", "last_name"
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
                 ),
                 "mentors": Adult.objects.filter(is_mentor=True).order_by(
-                    "preferred_first_name", "last_name"
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
                 ),
                 "selected_program_id": (
                     int(params.get("program_id"))
@@ -1569,7 +1581,12 @@ def attendance_hours_chart_view(request):
     )
     sessions = AttendanceSession.objects.filter(student__isnull=False)
     if selected_program:
-        sessions = sessions.filter(program=selected_program)
+        sessions = sessions.filter(
+            program=selected_program,
+            student__in=active_students_in_program(selected_program),
+        )
+    else:
+        sessions = sessions.filter(student__in=active_students())
     if date_from:
         sessions = sessions.filter(
             check_in__date__gte=date_from,

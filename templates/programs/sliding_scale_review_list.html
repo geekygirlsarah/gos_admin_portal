@@ -77,7 +77,12 @@
             <tbody>
               {% for application in applications %}
                 <tr>
-                  <td class="fw-semibold text-dark">{{ application.student }}</td>
+                  <td class="fw-semibold text-dark">
+                    {{ application.student }}
+                    {% if application.student_id in students_with_active %}
+                      <span class="badge bg-info-subtle text-info border border-info-subtle ms-1" title="Already has active sliding scale on file">Has Active Scale</span>
+                    {% endif %}
+                  </td>
                   <td>{{ application.applied_by|default:"—" }}</td>
                   <td><span class="badge bg-light text-dark border">{{ application.family_size|default:"—" }} members</span></td>
                   <td>{% if application.adjusted_gross_income %}<strong>${{ application.adjusted_gross_income|floatformat:2 }}</strong>{% else %}—{% endif %}</td>
@@ -130,7 +135,12 @@
             <tbody>
               {% for application in active_applications %}
                 <tr>
-                  <td class="fw-semibold text-dark">{{ application.student }}</td>
+                  <td class="fw-semibold text-dark">
+                    {{ application.student }}
+                    {% if application.student_id in students_with_multiple_active %}
+                      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1" title="Multiple active sliding scales on file">Multiple Active</span>
+                    {% endif %}
+                  </td>
                   <td>
                     <span class="badge {% if application.status == 'approved' %}bg-success{% elif application.status == 'declined' %}bg-danger{% else %}bg-secondary{% endif %}">
                       {{ application.get_status_display }}

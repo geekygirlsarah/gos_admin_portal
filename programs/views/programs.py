@@ -605,10 +605,11 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["can_view_payments"] = False
             ctx["can_view_attendance"] = False
             ctx["can_view_documents"] = False
-            if role == "Student":
-                # Students see only active peers, no inactive section
-                ctx["inactive_enrollments"] = Enrollment.objects.none()
-                ctx["inactive_students"] = []
+            # Mentors and Students see only active peers, no inactive section
+            ctx["inactive_enrollments"] = Enrollment.objects.none()
+            ctx["inactive_students"] = []
+            ctx["inactive_enrollments_count"] = 0
+            ctx["enrolled_students"] = list(ctx["active_students"])
         else:
             ctx["can_manage_students"] = can_user_write(
                 self.request.user, "student_info"
@@ -1150,8 +1151,9 @@ class ProgramEmailView(LoginRequiredMixin, View):
             html_body = form.cleaned_data["body"]
             # Sanitize + normalize the fragment, wrap it in an email document
             # and inline CSS, so the message renders the way it looked in the
-            # compose editor. Also builds a readable plain-text alternative.
-            inlined_html_body, text_body = build_email_parts(html_body)
+            # compose editor. Also builds a readable plain-text alternative and
+            # extracts inline CID image attachments.
+            inlined_html_body, text_body, inline_images = build_email_parts(html_body)
 
             if prog:
                 enrollments = Enrollment.objects.filter(
@@ -1223,6 +1225,8 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 email.to = []  # ensure empty
                 email.bcc = to_send
             email.attach_alternative(inlined_html_body, "text/html")
+            for inline_img in inline_images:
+                email.attach(inline_img.to_mime())
 
             # Log details about the outgoing message
             preview_recipients = to_send[:20]
@@ -1623,13 +1627,15 @@ _STUDENT_EXPORT_CONTACT_HEADERS = [
     "Graduation Year",
 ]
 _STUDENT_EXPORT_PARENT_HEADERS = [
-    "Parent 1 Name",
+    "Parent 1 First Name",
+    "Parent 1 Last Name",
     "Parent 1 Relationship",
     "Parent 1 Specific Relationship",
     "Parent 1 Email",
     "Parent 1 Phone",
     "Parent 1 Email Updates",
-    "Parent 2 Name",
+    "Parent 2 First Name",
+    "Parent 2 Last Name",
     "Parent 2 Relationship",
     "Parent 2 Specific Relationship",
     "Parent 2 Email",
@@ -1649,15 +1655,18 @@ _STUDENT_EXPORT_GROUPS = ("contact", "parents", "balance")
 def _adult_contact_values(relationship):
     """Return contact columns for one parent/guardian relationship.
 
-    Columns: [name, relationship, specific relationship, email, phone,
-    email-updates]. Blank/No when the relationship (or its adult) is missing.
+    Columns: [first name, last name, relationship, specific relationship,
+    email, phone, email-updates]. Blank/No when the relationship (or its
+    adult) is missing. Names are split so they can be sorted/filtered in a
+    spreadsheet, and follow the portal convention of preferred name first.
     """
     if relationship is None or relationship.adult is None:
-        return ["", "", "", "", "", "No"]
+        return ["", "", "", "", "", "", "No"]
     adult = relationship.adult
     email = adult.personal_email or adult.andrew_email or ""
     return [
-        adult.display_name,
+        adult.preferred_first_name or adult.legal_first_name,
+        adult.last_name,
         relationship.get_relationship_to_student_display(),
         relationship.specific_relationship or "",
         email,
@@ -1666,9 +1675,11 @@ def _adult_contact_values(relationship):
     ]
 
 
-def _student_export_headers(groups):
+def _student_export_headers(groups, is_lead=False):
     """Return the header row for the requested optional column groups."""
     headers = list(_STUDENT_EXPORT_BASE_HEADERS)
+    if is_lead:
+        headers.append("Active")
     if "contact" in groups:
         headers += _STUDENT_EXPORT_CONTACT_HEADERS
     if "parents" in groups:
@@ -1678,13 +1689,17 @@ def _student_export_headers(groups):
     return headers
 
 
-def _student_export_row(student, program, groups, can_view_sliding):
-    """Return one export row for a student, honoring the requested groups."""
+def _student_export_row(enrollment, program, groups, can_view_sliding, is_lead=False):
+    """Return one export row for an enrollment/student, honoring the requested groups."""
+    student = enrollment.student
     row = [
         student.preferred_first_name or student.legal_first_name,
         student.last_name,
         student.grade_display or "",
     ]
+    if is_lead:
+        is_active = bool(enrollment.active and not student.graduated)
+        row.append("Yes" if is_active else "No")
 
     if "contact" in groups:
         row += [
@@ -1767,9 +1782,11 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
         user = request.user
+        role = get_user_role(user)
+        is_lead = role == "LeadMentor"
 
         groups = set()
-        if get_user_role(user) == "LeadMentor":
+        if is_lead:
             requested = []
             for value in request.GET.getlist("groups"):
                 requested.extend(part.strip() for part in value.split(","))
@@ -1777,31 +1794,58 @@ class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, V
 
         can_view_sliding = can_user_read(user, "sliding_scale")
 
-        enrollments = (
-            Enrollment.objects.filter(
-                program=program, active=True, student__graduated=False
+        if is_lead:
+            enrollments = (
+                Enrollment.objects.filter(program=program)
+                .select_related(
+                    "student",
+                    "student__school",
+                    "student__primary_contact_relationship__adult",
+                    "student__secondary_contact_relationship__adult",
+                )
+                .annotate(
+                    sort_first=Lower(
+                        Coalesce(
+                            NullIf("student__preferred_first_name", Value("")),
+                            "student__legal_first_name",
+                        )
+                    ),
+                    sort_last=Lower("student__last_name"),
+                )
+                .order_by("sort_first", "sort_last")
             )
-            .select_related(
-                "student",
-                "student__school",
-                "student__primary_contact_relationship__adult",
-                "student__secondary_contact_relationship__adult",
+        else:
+            enrollments = (
+                Enrollment.objects.filter(
+                    program=program, active=True, student__graduated=False
+                )
+                .select_related(
+                    "student",
+                    "student__school",
+                    "student__primary_contact_relationship__adult",
+                    "student__secondary_contact_relationship__adult",
+                )
+                .annotate(
+                    sort_first=Lower(
+                        Coalesce(
+                            NullIf("student__preferred_first_name", Value("")),
+                            "student__legal_first_name",
+                        )
+                    ),
+                    sort_last=Lower("student__last_name"),
+                )
+                .order_by("sort_first", "sort_last")
             )
-            .annotate(
-                sort_first=Lower(
-                    Coalesce(
-                        NullIf("student__preferred_first_name", Value("")),
-                        "student__legal_first_name",
-                    )
-                ),
-                sort_last=Lower("student__last_name"),
-            )
-            .order_by("sort_first", "sort_last")
-        )
 
-        headers = _student_export_headers(groups)
+        headers = _student_export_headers(groups, is_lead=is_lead)
         rows = [
-            _student_export_row(enrollment.student, program, groups, can_view_sliding)
+            _student_export_row(
+                enrollment,
+                program,
+                groups,
+                can_view_sliding,
+                is_lead=is_lead,
+            )
             for enrollment in enrollments
         ]
 

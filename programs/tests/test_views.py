@@ -137,6 +137,21 @@ class ViewTests(TestCase):
         self.assertContains(resp, "Grade Range:")
         self.assertContains(resp, "9th–12th Grade")
 
+    def test_program_detail_container_width(self):
+        # Ensure the program detail page takes up the standard container width without constricting columns
+        from django.contrib.auth.models import Group
+
+        group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.user.groups.add(group)
+
+        self.client.login(username="tester", password="pass12345")  # nosec B106
+        program = Program.objects.create(name="Robot Camp", active=True)
+        url = reverse("program_detail", args=[program.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "col-lg-11")
+        self.assertNotContains(resp, "col-xl-10")
+
     def test_program_student_map_view_has_referrer_policy(self):
         # Add to LeadMentor group to satisfy permission checks
         from django.contrib.auth.models import Group

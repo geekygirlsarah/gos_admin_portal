@@ -15,6 +15,10 @@ from programs.models import (
     School,
     Student,
 )
+from travel.forms import (
+    TravelParentChaperoneStaffForm,
+    TravelStaffSignupForm,
+)
 from travel.models import (
     TravelCostOption,
     TravelDeparture,
@@ -617,3 +621,231 @@ class TravelViewTest(TestCase):
         self.client.login(username="lead", password="password")  # nosec B106
         self.client.post(url)
         self.assertFalse(TravelEvent.objects.filter(pk=self.event.id).exists())
+
+    # ── Sorting tests ─────────────────────────────────────────────────────
+
+    def test_student_signups_sorted_by_preferred_name(self):
+        s1 = Student.objects.create(
+            legal_first_name="Zachary",
+            preferred_first_name="Aaron",
+            last_name="Smith",
+            school=self.school,
+            graduation_year=2027,
+        )
+        s2 = Student.objects.create(
+            legal_first_name="Bob",
+            preferred_first_name="",
+            last_name="Jones",
+            school=self.school,
+            graduation_year=2027,
+        )
+        s3 = Student.objects.create(
+            legal_first_name="Charles",
+            preferred_first_name="Alice",
+            last_name="Brown",
+            school=self.school,
+            graduation_year=2027,
+        )
+        for s in (s1, s2, s3):
+            Enrollment.objects.create(student=s, program=self.program, active=True)
+
+        # Create signups in reverse alphabetical order: Zachary (Aaron), Bob, Charles (Alice)
+        TravelSignup.objects.create(student=s1, event=self.event)
+        TravelSignup.objects.create(student=s2, event=self.event)
+        TravelSignup.objects.create(student=s3, event=self.event)
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        resp = self.client.get(reverse("travel:event_list", args=[self.program.id]))
+        self.assertEqual(resp.status_code, 200)
+
+        event = resp.context["events"][0]
+        signup_names = [s.student.display_name for s in event.signups.all()]
+        self.assertEqual(
+            signup_names,
+            ["Aaron Smith", "Alice Brown", "Bob Jones"],
+        )
+
+    def test_mentor_signups_sorted_by_preferred_name(self):
+        m1 = Adult.objects.create(
+            legal_first_name="Zachary",
+            preferred_first_name="Aaron",
+            last_name="Smith",
+            is_mentor=True,
+            mentor_active=True,
+            personal_email="m1@example.com",
+        )
+        m2 = Adult.objects.create(
+            legal_first_name="Bob",
+            preferred_first_name="",
+            last_name="Jones",
+            is_mentor=True,
+            mentor_active=True,
+            personal_email="m2@example.com",
+        )
+        m3 = Adult.objects.create(
+            legal_first_name="Charles",
+            preferred_first_name="Alice",
+            last_name="Brown",
+            is_mentor=True,
+            mentor_active=True,
+            personal_email="m3@example.com",
+        )
+
+        # Create mentor signups in non-alphabetical order
+        TravelMentorSignup.objects.create(adult=m1, event=self.event)
+        TravelMentorSignup.objects.create(adult=m2, event=self.event)
+        TravelMentorSignup.objects.create(adult=m3, event=self.event)
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        resp = self.client.get(reverse("travel:event_list", args=[self.program.id]))
+        self.assertEqual(resp.status_code, 200)
+
+        event = resp.context["events"][0]
+        mentor_names = [s.adult.display_name for s in event.mentor_signups.all()]
+        self.assertEqual(
+            mentor_names,
+            ["Aaron Smith", "Alice Brown", "Bob Jones"],
+        )
+
+    def test_parent_chaperones_sorted_by_preferred_name(self):
+        p1 = Adult.objects.create(
+            legal_first_name="Zachary",
+            preferred_first_name="Aaron",
+            last_name="Smith",
+            is_parent=True,
+            personal_email="p1@example.com",
+        )
+        p2 = Adult.objects.create(
+            legal_first_name="Bob",
+            preferred_first_name="",
+            last_name="Jones",
+            is_parent=True,
+            personal_email="p2@example.com",
+        )
+        p3 = Adult.objects.create(
+            legal_first_name="Charles",
+            preferred_first_name="Alice",
+            last_name="Brown",
+            is_parent=True,
+            personal_email="p3@example.com",
+        )
+
+        # Create chaperone signups in non-alphabetical order
+        TravelParentChaperoneSignup.objects.create(adult=p1, event=self.event)
+        TravelParentChaperoneSignup.objects.create(adult=p2, event=self.event)
+        TravelParentChaperoneSignup.objects.create(adult=p3, event=self.event)
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        resp = self.client.get(reverse("travel:event_list", args=[self.program.id]))
+        self.assertEqual(resp.status_code, 200)
+
+        event = resp.context["events"][0]
+        chaperone_names = [s.adult.display_name for s in event.parent_chaperones.all()]
+        self.assertEqual(
+            chaperone_names,
+            ["Aaron Smith", "Alice Brown", "Bob Jones"],
+        )
+
+    def test_staff_signup_form_students_sorted_by_preferred_name(self):
+        s1 = Student.objects.create(
+            legal_first_name="Zachary",
+            preferred_first_name="Aaron",
+            last_name="Smith",
+            school=self.school,
+            graduation_year=2027,
+        )
+        s2 = Student.objects.create(
+            legal_first_name="Bob",
+            preferred_first_name="",
+            last_name="Jones",
+            school=self.school,
+            graduation_year=2027,
+        )
+        s3 = Student.objects.create(
+            legal_first_name="Charles",
+            preferred_first_name="Alice",
+            last_name="Brown",
+            school=self.school,
+            graduation_year=2027,
+        )
+        for s in (s1, s2, s3):
+            Enrollment.objects.create(student=s, program=self.program, active=True)
+
+        form = TravelStaffSignupForm(program=self.program)
+        student_names = [s.display_name for s in form.fields["student"].queryset]
+        self.assertEqual(
+            student_names,
+            ["Aaron Smith", "Alice Brown", "Bob Jones", "Test Student"],
+        )
+
+    def test_chaperone_staff_form_adults_sorted_by_preferred_name(self):
+        self.parent_adult.legal_first_name = "David"
+        self.parent_adult.last_name = "Parent"
+        self.parent_adult.save()
+
+        p1 = Adult.objects.create(
+            legal_first_name="Zachary",
+            preferred_first_name="Aaron",
+            last_name="Smith",
+            is_parent=True,
+            personal_email="p1@example.com",
+        )
+        p2 = Adult.objects.create(
+            legal_first_name="Bob",
+            preferred_first_name="",
+            last_name="Jones",
+            is_parent=True,
+            personal_email="p2@example.com",
+        )
+        p3 = Adult.objects.create(
+            legal_first_name="Charles",
+            preferred_first_name="Alice",
+            last_name="Brown",
+            is_parent=True,
+            personal_email="p3@example.com",
+        )
+        for p in (p1, p2, p3):
+            AdultStudentRelationship.objects.create(adult=p, student=self.student)
+
+        form = TravelParentChaperoneStaffForm(program=self.program)
+        adult_names = [a.display_name for a in form.fields["adult"].queryset]
+        self.assertEqual(
+            adult_names,
+            ["Aaron Smith", "Alice Brown", "Bob Jones", "David Parent"],
+        )
+
+    def test_parent_view_children_sorted_by_preferred_name(self):
+        s1 = Student.objects.create(
+            legal_first_name="Zachary",
+            preferred_first_name="Aaron",
+            last_name="Smith",
+            school=self.school,
+            graduation_year=2027,
+        )
+        s2 = Student.objects.create(
+            legal_first_name="Bob",
+            preferred_first_name="",
+            last_name="Jones",
+            school=self.school,
+            graduation_year=2027,
+        )
+        s3 = Student.objects.create(
+            legal_first_name="Charles",
+            preferred_first_name="Alice",
+            last_name="Brown",
+            school=self.school,
+            graduation_year=2027,
+        )
+        for s in (s1, s2, s3):
+            AdultStudentRelationship.objects.create(adult=self.parent_adult, student=s)
+
+        self.client.login(username="parent", password="password")  # nosec B106
+        resp = self.client.get(reverse("travel:event_list", args=[self.program.id]))
+        self.assertEqual(resp.status_code, 200)
+
+        parent_rows = resp.context["parent_rows"]
+        child_names = [r["student"].display_name for r in parent_rows]
+        self.assertEqual(
+            child_names,
+            ["Aaron Smith", "Alice Brown", "Bob Jones", "Test Student"],
+        )

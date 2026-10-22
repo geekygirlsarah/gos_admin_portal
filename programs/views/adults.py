@@ -58,12 +58,7 @@ class AdultsListView(
     section = "adult_info"
 
     sort_fields = {
-        "name": (
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
-        ),
+        "name": (Lower("sort_first"), Lower("last_name")),
         "email": Lower("personal_email"),
         "phone": "phone_number",
         "login_enabled": "login_enabled",
@@ -80,7 +75,15 @@ class AdultsListView(
 
     def get_queryset(self):
 
-        qs = Adult.objects.all().prefetch_related("students")
+        qs = (
+            Adult.objects.all()
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
+            )
+            .prefetch_related("students")
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -120,22 +123,25 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "parents"
 
     sort_fields = {
-        "name": (
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
-        ),
+        "name": (Lower("sort_first"), Lower("last_name")),
         "email": Lower("personal_email"),
         "phone": "phone_number",
     }
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = active_parents().prefetch_related(
-            "students__school",
-            "students__enrollment_set__program",
-            "adultstudentrelationship_set",
+        qs = (
+            active_parents()
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
+            )
+            .prefetch_related(
+                "students__school",
+                "students__enrollment_set__program",
+                "adultstudentrelationship_set",
+            )
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -175,12 +181,7 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "mentors"
 
     sort_fields = {
-        "name": (
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
-        ),
+        "name": (Lower("sort_first"), Lower("last_name")),
         "role": "role",
         "mentor_active": "mentor_active",
     }
@@ -195,9 +196,17 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         return qs
 
     def get_queryset(self):
-        qs = Adult.objects.filter(is_mentor=True).prefetch_related(
-            "students__enrollment_set__program",
-            "background_checks",
+        qs = (
+            Adult.objects.filter(is_mentor=True)
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
+            )
+            .prefetch_related(
+                "students__enrollment_set__program",
+                "background_checks",
+            )
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -229,12 +238,7 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     context_object_name = "alumni"
 
     sort_fields = {
-        "name": (
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
-        ),
+        "name": (Lower("sort_first"), Lower("last_name")),
         "email": Lower("personal_email"),
         "phone": "phone_number",
         "college": Lower("college"),
@@ -244,7 +248,15 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = active_alumni().prefetch_related("students__enrollment_set__program")
+        qs = (
+            active_alumni()
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
+            )
+            .prefetch_related("students__enrollment_set__program")
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
@@ -800,7 +812,12 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
         context = super().get_context_data(**kwargs)
         context["parents"] = list(
             active_parents()
-            .order_by("legal_first_name", "last_name")
+            .annotate(
+                sort_first=Coalesce(
+                    NullIf("preferred_first_name", Value("")), "legal_first_name"
+                )
+            )
+            .order_by(Lower("sort_first"), Lower("last_name"))
             .prefetch_related(
                 "students__school",
                 "students__enrollment_set__program",

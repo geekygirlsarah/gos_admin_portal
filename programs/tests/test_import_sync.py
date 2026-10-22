@@ -274,3 +274,41 @@ class ImportSampleCsvIntegrationTests(TestCase):
                 program=program, visitor_name="Jordan Lee", visitor_team_number=3504
             ).exists()
         )
+
+    def test_student_import_no_file_uploaded_returns_error(self):
+        response = self.client.post(reverse("student_import"), {}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Student.objects.count(), 0)
+
+    def test_student_import_unsupported_file_type_rejected(self):
+        payload = {
+            "file": SimpleUploadedFile(
+                "students.pdf", b"%PDF-1.4...", content_type="application/pdf"
+            )
+        }
+        response = self.client.post(reverse("student_import"), payload, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Student.objects.count(), 0)
+
+    def test_student_import_invalid_date_fails_gracefully_with_message(self):
+        csv_text = "\n".join(
+            [
+                "First Name,Legal First Name,Last Name,Date of Birth,School,Graduation Year,Active",
+                "Ada,Augusta Ada,Lovelace,not-a-valid-date,Byron Academy,2028,Yes",
+            ]
+        )
+        response = self._post_csv("student_import", csv_text)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Student.objects.count(), 0)
+        messages_list = [
+            m.message
+            for m in (
+                response.context["messages"]
+                if response.context and "messages" in response.context
+                else []
+            )
+        ]
+        self.assertTrue(
+            any("Import failed" in msg for msg in messages_list),
+            f"Expected import failure message in {messages_list}",
+        )

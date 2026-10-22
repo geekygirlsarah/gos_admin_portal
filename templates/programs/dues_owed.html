@@ -29,7 +29,8 @@
           <tr>
             <th>Student</th>
             <th>School</th>
-            <th class="text-end">Amount Owed</th>
+            <th class="text-end">Dues Owed</th>
+            <th class="text-end">Balance</th>
           </tr>
         </thead>
         <tbody>
@@ -42,13 +43,23 @@
                 <a class="text-decoration-none" href="{% url 'program_student_balance' program.id r.student.pk %}">{{ r.student.display_name }}</a>
               </td>
               <td>{{ r.student.school|default:'' }}</td>
-              <td class="text-end">${{ r.amount_owed|floatformat:2 }}</td>
+              <td class="text-end">${{ r.dues|floatformat:2 }}</td>
+              <td class="text-end">${{ r.balance|floatformat:2 }}</td>
             </tr>
           {% endfor %}
+
+          {% if active_rows %}
+            <tr class="table-light fw-bold border-top">
+              <th colspan="2" class="text-end">Total</th>
+              <th class="text-end">${{ total_dues|floatformat:2 }}</th>
+              <th class="text-end">${{ total_balance|floatformat:2 }}</th>
+            </tr>
+          {% endif %}
 
           {% if inactive_rows %}
             <tr class="table-light">
               <th colspan="2" class="text-muted small py-1">Inactive / Graduated Students</th>
+              <th class="text-end text-muted small py-1">Dues Owed</th>
               <th class="text-end text-muted small py-1">Balance</th>
             </tr>
             {% for r in inactive_rows %}
@@ -60,17 +71,12 @@
                   <a class="text-muted text-decoration-none" href="{% url 'program_student_balance' program.id r.student.pk %}">{{ r.student.display_name }}</a>
                 </td>
                 <td>{{ r.student.school|default:'' }}</td>
-                <td class="text-end">${{ r.amount_owed|floatformat:2 }}</td>
+                <td class="text-end">${{ r.dues|floatformat:2 }}</td>
+                <td class="text-end">${{ r.balance|floatformat:2 }}</td>
               </tr>
             {% endfor %}
           {% endif %}
         </tbody>
-        <tfoot>
-          <tr>
-            <th colspan="2" class="text-end">Total Owed</th>
-            <th class="text-end">${{ grand_total|floatformat:2 }}</th>
-          </tr>
-        </tfoot>
       </table>
     </div>
   {% else %}

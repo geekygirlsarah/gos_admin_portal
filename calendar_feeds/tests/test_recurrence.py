@@ -214,3 +214,42 @@ class AllDayEventTests(TestCase):
         self.assertEqual(len(instances), 2)
         for inst in instances:
             self.assertTrue(inst["all_day"])
+
+
+class InvalidRecurrenceTests(TestCase):
+    """Resilience against malformed or corrupt RRULE data."""
+
+    def test_malformed_rrule_returns_empty_instances_without_crashing(self):
+        feed = make_feed()
+        start = utc_dt(2026, 9, 1, 10, 0)
+        CalendarEvent.objects.create(
+            feed=feed,
+            title="Corrupt RRULE Event",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=1),
+            rrule_ical="THIS_IS_NOT_A_VALID_RRULE_STRING",
+        )
+        instances = expand_events_for_range(feed, date(2026, 9, 1), date(2026, 9, 30))
+        self.assertEqual(len(instances), 0)
+
+    def test_malformed_rrule_does_not_break_valid_events_in_same_feed(self):
+        feed = make_feed()
+        start = utc_dt(2026, 9, 1, 10, 0)
+        # Corrupt recurring event
+        CalendarEvent.objects.create(
+            feed=feed,
+            title="Broken Event",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=1),
+            rrule_ical="INVALID_SYNTAX_RRULE",
+        )
+        # Valid one-off event
+        make_event(
+            feed,
+            title="Good Event",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=1),
+        )
+        instances = expand_events_for_range(feed, date(2026, 9, 1), date(2026, 9, 30))
+        self.assertEqual(len(instances), 1)
+        self.assertEqual(instances[0]["title"], "Good Event")

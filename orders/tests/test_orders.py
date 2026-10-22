@@ -228,6 +228,33 @@ class ItemCreateEditTests(TestCase):
         resp = self.client.get(self.list_url)
         self.assertContains(resp, "Visible Vendor")
 
+    def test_item_create_rejects_negative_quantity(self):
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {"item_name": "Bad Item", "quantity": "-5", "unit_price": "1.00"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(OrderItem.objects.filter(item_name="Bad Item").exists())
+
+    def test_item_create_rejects_zero_quantity(self):
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {"item_name": "Zero Item", "quantity": "0", "unit_price": "1.00"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(OrderItem.objects.filter(item_name="Zero Item").exists())
+
+    def test_item_create_rejects_negative_unit_price(self):
+        self.login(self.student)
+        resp = self.client.post(
+            self.create_url,
+            {"item_name": "Negative Price", "quantity": "1", "unit_price": "-10.00"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(OrderItem.objects.filter(item_name="Negative Price").exists())
+
 
 class OrderGroupingTests(TestCase):
     def setUp(self):
@@ -979,3 +1006,29 @@ class OrderModelTests(TestCase):
         order = make_order(program, created_by=student)
         make_item(program, requested_by=student, order=order, unit_price=None)
         self.assertIsNone(order.total)
+
+    def test_order_total_mixed_priced_and_unpriced_with_shipping_and_tax(self):
+        program = make_program()
+        student = make_student_user(program=program)
+        order = make_order(
+            program, created_by=student, shipping_cost="5.00", tax="2.50"
+        )
+        make_item(
+            program,
+            item_name="Priced Item",
+            requested_by=student,
+            order=order,
+            quantity="3",
+            unit_price="10.00",
+        )
+        make_item(
+            program,
+            item_name="Unpriced Item",
+            requested_by=student,
+            order=order,
+            quantity="1",
+            unit_price=None,
+        )
+        self.assertEqual(order.item_count, 2)
+        # Total should be (3 * 10.00) + 5.00 + 2.50 = 37.50
+        self.assertEqual(order.total, Decimal("37.50"))

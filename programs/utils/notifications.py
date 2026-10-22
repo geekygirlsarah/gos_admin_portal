@@ -18,15 +18,26 @@ def generate_otp(length=6):
 
 
 def send_otp_email(email, otp):
-    subject = "Your GoS Admin Portal Verification Code"
-    message = (
-        f"Your verification code is: {otp}\n\nThis code will expire in 10 minutes."
-    )
+    from django.template.loader import render_to_string
+
     from_email = settings.DEFAULT_FROM_EMAIL
     name = getattr(settings, "DEFAULT_FROM_NAME", None)
     if name:
         from_email = f'"{name}" <{from_email}>'
-    send_mail(subject, message, from_email, [email])
+
+    context = {"code": otp}
+    subject = render_to_string("account/email/login_code_subject.txt", context).strip()
+    subject = "".join(subject.splitlines())
+    text_message = render_to_string("account/email/login_code_message.txt", context)
+    html_message = render_to_string("account/email/login_code_message.html", context)
+
+    send_mail(
+        subject,
+        text_message,
+        from_email,
+        [email],
+        html_message=html_message,
+    )
 
 
 def get_lead_mentor_notification_email():

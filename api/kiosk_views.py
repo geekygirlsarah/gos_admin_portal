@@ -18,7 +18,7 @@ from attendance.kiosk_utils import (
 from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
 from attendance.services import get_attendance_stats, record_tap
 from programs.models import Adult, Student
-from programs.utils import active_mentors, active_students
+from programs.utils import active_mentors, active_students_in_program
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ def kiosk_tap(request, kiosk_id):
     adult = None
     if student_id:
         try:
-            student = active_students().get(pk=student_id)
+            student = active_students_in_program(config.program).get(pk=student_id)
         except Student.DoesNotExist:
             return JsonResponse({"error": "Student not found or inactive."}, status=404)
     if adult_id:
@@ -197,8 +197,22 @@ def kiosk_tap(request, kiosk_id):
             from attendance.services import resolve_person_by_uid
 
             person = resolve_person_by_uid(rfid_uid)
-            student = person if isinstance(person, Student) else None
-            adult = person if isinstance(person, Adult) else None
+            if isinstance(person, Student):
+                try:
+                    student = active_students_in_program(config.program).get(
+                        pk=person.pk
+                    )
+                except Student.DoesNotExist:
+                    return JsonResponse(
+                        {"error": "Student not found or inactive."}, status=404
+                    )
+            elif isinstance(person, Adult):
+                try:
+                    adult = active_mentors().get(pk=person.pk)
+                except Adult.DoesNotExist:
+                    return JsonResponse(
+                        {"error": "Adult not found or inactive."}, status=404
+                    )
 
         if not (student or adult):
             return JsonResponse({"error": "Member not found."}, status=400)
@@ -265,7 +279,7 @@ def kiosk_lookup(request, kiosk_id):
     """GET /api/v1/kiosk/<id>/lookup/
     Student lookup by name or RFID. Requires the unlock cookie.
     """
-    _get_kiosk_or_404(kiosk_id)
+    config = _get_kiosk_or_404(kiosk_id)
     if not _is_unlocked(request, kiosk_id):
         return JsonResponse({"error": "Kiosk is locked."}, status=403)
 
@@ -278,20 +292,32 @@ def kiosk_lookup(request, kiosk_id):
 
         card = resolve_card_by_uid(rfid)
         if card:
-            person = card.student or card.adult
-            results = [
-                {
-                    "id": person.pk,
-                    "name": _person_first_name(student=card.student, adult=card.adult),
-                    "type": "student" if card.student else "mentor",
-                }
-            ]
-        else:
-            results = []
+            if card.student:
+                if (
+                    active_students_in_program(config.program)
+                    .filter(pk=card.student.pk)
+                    .exists()
+                ):
+                    results = [
+                        {
+                            "id": card.student.pk,
+                            "name": _person_first_name(student=card.student),
+                            "type": "student",
+                        }
+                    ]
+            elif card.adult:
+                if active_mentors().filter(pk=card.adult.pk).exists():
+                    results = [
+                        {
+                            "id": card.adult.pk,
+                            "name": _person_first_name(adult=card.adult),
+                            "type": "mentor",
+                        }
+                    ]
     elif name:
         parts = name.split()
         # Search students
-        student_qs = active_students()
+        student_qs = active_students_in_program(config.program)
         for part in parts:
             student_qs = student_qs.filter(
                 Q(preferred_first_name__icontains=part)

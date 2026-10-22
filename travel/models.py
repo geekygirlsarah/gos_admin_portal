@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 
 from programs.models import Adult, Student
 
@@ -221,7 +223,16 @@ class TravelSignup(models.Model):
 
     class Meta:
         unique_together = ("student", "event")
-        ordering = ["created_at"]
+        ordering = [
+            Lower(
+                Coalesce(
+                    NullIf("student__preferred_first_name", Value("")),
+                    "student__legal_first_name",
+                )
+            ),
+            Lower("student__last_name"),
+            "student__pk",
+        ]
 
     def __str__(self):
         return f"{self.student} - {self.event.name} ({self.get_status_display()})"
@@ -354,6 +365,16 @@ class TravelMentorSignup(models.Model):
 
     class Meta:
         unique_together = ("adult", "event")
+        ordering = [
+            Lower(
+                Coalesce(
+                    NullIf("adult__preferred_first_name", Value("")),
+                    "adult__legal_first_name",
+                )
+            ),
+            Lower("adult__last_name"),
+            "adult__pk",
+        ]
 
     def __str__(self):
         return f"{self.adult} - {self.event.name}"
@@ -390,7 +411,16 @@ class TravelParentChaperoneSignup(models.Model):
 
     class Meta:
         unique_together = ("adult", "event")
-        ordering = ["created_at"]
+        ordering = [
+            Lower(
+                Coalesce(
+                    NullIf("adult__preferred_first_name", Value("")),
+                    "adult__legal_first_name",
+                )
+            ),
+            Lower("adult__last_name"),
+            "adult__pk",
+        ]
 
     def __str__(self):
         return f"{self.adult} - {self.event.name}"
@@ -407,7 +437,15 @@ class TravelParentChaperoneSignup(models.Model):
                 students__in=active_students_in_program(program),
             )
             .distinct()
-            .order_by("last_name", "legal_first_name")
+            .order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")),
+                        "legal_first_name",
+                    )
+                ),
+                Lower("last_name"),
+            )
         )
 
     def clean(self):

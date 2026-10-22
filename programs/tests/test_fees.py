@@ -7,7 +7,7 @@ from django.core import mail
 from django.test import TestCase, override_settings
 
 from programs.forms import PaymentForm, ProgramEmailForm, SlidingScaleForm
-from programs.models import Enrollment, Fee, Program, SlidingScale, Student
+from programs.models import Enrollment, Fee, Payment, Program, SlidingScale, Student
 from programs.views import compute_sliding_discount_rounded
 
 
@@ -257,6 +257,11 @@ class FormBehaviorTests(TestCase):
         self.assertIn(self.enrolled_student, list(form.fields["student"].queryset))
         self.assertNotIn(self.not_enrolled, list(form.fields["student"].queryset))
         self.assertNotIn("fee", form.fields)
+
+    def test_payment_form_defaults_paid_via_to_credit_card(self):
+        form = PaymentForm(program=self.program)
+        self.assertEqual(form.fields["paid_via"].initial, "credit_card")
+        self.assertEqual(Payment._meta.get_field("paid_via").default, "credit_card")
 
     def test_sliding_scale_form_percent_validation_and_queryset(self):
         form = SlidingScaleForm(
