@@ -1,1 +1,1 @@
-Login code for GoS Portal: {{ code }}
+{% if application %}Your Girls of Steel application verification code{% elif subject %}{{ subject }}{% else %}Login code for GoS Portal: {{ code }}{% endif %}

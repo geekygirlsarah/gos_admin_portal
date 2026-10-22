@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-21
 
 ### Changed
+- **Unified templated OTP verification and login emails**: All OTP and verification code emails (including portal login codes, public application verification codes with resume links, and notification verification emails) now share a unified, standardized template format with both HTML and plain-text alternatives, removing all hardcoded message strings.
 - **Program student list table width**: Expanded the program detail page's student roster and header layout to use the full standard container width with equal margins on both sides, matching the layout of the adult, parent, and student directory pages.
 - **Travel pages sort students, parents, and mentors by preferred name**: Student sign-ups, mentor sign-ups, parent chaperones, staff sign-up forms, and parent view student listings on travel pages are now consistently sorted using the standard name order (preferred first name, falling back to legal first name, followed by last name).
 - **Payment form payment type default**: The payment recording form now defaults the "Paid via" payment method dropdown to "Credit Card" instead of "Cash", matching the most commonly used payment method.

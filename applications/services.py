@@ -7,7 +7,7 @@ import threading
 from typing import Iterable, List, Optional
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import close_old_connections, transaction
 from django.db.models import Q
 from django.template.loader import render_to_string
@@ -66,40 +66,28 @@ def _should_send_async() -> bool:
     return getattr(settings, "EMAIL_ASYNC", True)
 
 
-def send_otp_email(application: Application, code: str, request=None) -> None:
-    """Email the OTP code to the application's email, including resume info."""
-    if not application.email:
-        logger.warning(
-            "Refusing to send OTP for application %s: no email on file",
-            application.application_id,
-        )
+def _send_html_email(
+    subject: str,
+    text_body: str,
+    html_body: Optional[str],
+    recipients: List[str],
+) -> None:
+    if not recipients:
         return
 
-    resume_url = _absolute_apply_url(request, application)
-    subject = "Your Girls of Steel application verification code"
-    body = (
-        "Hi,\n\n"
-        "Thanks for starting an application with Girls of Steel Robotics!\n\n"
-        f"Your verification code is: {code}\n\n"
-        "This code expires in 15 minutes.\n\n"
-        "You can also resume your application any time using:\n"
-        f"  Application ID: {application.application_id}\n"
-        f"  Resume link:    {resume_url}\n\n"
-        "If you did not start an application with Girls of Steel, you can safely ignore this email.\n"
-    )
-
-    def _send(close_connections: bool = False):
+    def _do_send(close_connections: bool = False):
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=_from_email(),
+            to=recipients,
+        )
+        if html_body:
+            msg.attach_alternative(html_body, "text/html")
         try:
-            send_mail(
-                subject=subject,
-                message=body,
-                from_email=_from_email(),
-                recipient_list=[application.email],
-            )
-        except Exception:
-            logger.exception(
-                "Failed to send OTP email for %s", application.application_id
-            )
+            msg.send()
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Failed to send email %r to %r", subject, recipients)
         finally:
             # Only close connections from a background thread. The thread-local
             # connection must be released before the thread exits, but closing
@@ -110,12 +98,40 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
 
     if _should_send_async():
         threading.Thread(
-            target=_send,
+            target=_do_send,
             kwargs={"close_connections": True},
-            name=f"otp-email-{application.pk}",
+            name=f"html-email-{subject[:20]}",
         ).start()
     else:
-        _send()
+        _do_send()
+
+
+def send_otp_email(application: Application, code: str, request=None) -> None:
+    """Email the OTP code to the application's email, including resume info."""
+    if not application.email:
+        logger.warning(
+            "Refusing to send OTP for application %s: no email on file",
+            application.application_id,
+        )
+        return
+
+    resume_url = _absolute_apply_url(request, application)
+    ctx = {
+        "code": code,
+        "application": application,
+        "resume_url": resume_url,
+    }
+    subject = render_to_string("account/email/login_code_subject.txt", ctx).strip()
+    subject = "".join(subject.splitlines())
+    text_body = render_to_string("account/email/login_code_message.txt", ctx)
+    html_body = render_to_string("account/email/login_code_message.html", ctx)
+
+    _send_html_email(
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        recipients=[application.email],
+    )
 
 
 def get_program_buckets():
@@ -413,46 +429,6 @@ def adult_to_prefill(adult, student=None) -> dict:
 # ---------------------------------------------------------------------------
 # Additional emails (Steps 6 & 8)
 # ---------------------------------------------------------------------------
-
-
-def _send_html_email(
-    subject: str,
-    text_body: str,
-    html_body: Optional[str],
-    recipients: List[str],
-) -> None:
-    if not recipients:
-        return
-
-    def _do_send(close_connections: bool = False):
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=_from_email(),
-            to=recipients,
-        )
-        if html_body:
-            msg.attach_alternative(html_body, "text/html")
-        try:
-            msg.send()
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Failed to send email %r to %r", subject, recipients)
-        finally:
-            # Only close connections from a background thread. The thread-local
-            # connection must be released before the thread exits, but closing
-            # connections synchronously (e.g. inside tests) can drop a live
-            # transaction's connection.
-            if close_connections:
-                close_old_connections()
-
-    if _should_send_async():
-        threading.Thread(
-            target=_do_send,
-            kwargs={"close_connections": True},
-            name=f"html-email-{subject[:20]}",
-        ).start()
-    else:
-        _do_send()
 
 
 def send_parent_handoff_email(

@@ -1,12 +1,27 @@
 Hi,
 
-You (or someone else) requested a login code for the Girls of Steel Portal.
+{% if application %}Thanks for starting an application with Girls of Steel Robotics!
+
+Your verification code is:
+
+{{ code }}
+
+This code expires in 15 minutes.
+
+You can also resume your application any time using:
+  Application ID: {{ application.application_id }}
+  Resume link:    {{ resume_url }}
+
+If you did not start an application with Girls of Steel, you can safely ignore this email.
+{% else %}You (or someone else) requested a login code for the Girls of Steel Portal.
 
 Your login code is:
 
 {{ code }}
 
-If you did not request this code, you can safely ignore this email.
+{% if expires_in %}This code will expire in {{ expires_in }}.
 
+{% endif %}If you did not request this code, you can safely ignore this email.
+{% endif %}
 Have a great day,
 Girls of Steel Robotics
