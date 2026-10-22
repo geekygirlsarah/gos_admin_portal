@@ -1052,7 +1052,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
 
         # Build sender connection (reuse logic from get_sender_connection)
         selected = form.cleaned_data.get("from_account")
-        connection, from_email = get_sender_connection(selected)
+        connection, from_email, reply_to = get_sender_connection(selected)
 
         # Collect students enrolled in program (active non-graduated students only)
         students_qs = active_students_in_program(program).select_related("school")
@@ -1190,6 +1190,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 from_email=from_email,
                 to=to_addr,
                 bcc=bcc,
+                reply_to=[reply_to] if reply_to else None,
                 connection=connection,
             )
             email.attach_alternative(inlined_html, "text/html")

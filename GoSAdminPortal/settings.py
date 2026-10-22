@@ -447,8 +447,14 @@ MAILERS = {
     },
 }
 
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "")
-DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Admin")
+DEFAULT_FROM_EMAIL = os.getenv(
+    "DEFAULT_FROM_EMAIL", "notifications@girlsofsteelrobotics.org"
+)
+DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Notifications")
+NOTIFICATION_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "").strip() or None
+DEFAULT_REPLY_TO_EMAIL = os.getenv(
+    "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"
+)
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 # Health check throttling

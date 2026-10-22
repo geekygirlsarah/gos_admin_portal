@@ -33,9 +33,13 @@ def normalize_email(email: str) -> str:
 
 
 def _from_email() -> str:
-    email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or "noreply@example.com"
+    email = (
+        getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+        or getattr(settings, "DEFAULT_FROM_EMAIL", "")
+        or "notifications@girlsofsteelrobotics.org"
+    )
     name = getattr(settings, "DEFAULT_FROM_NAME", None)
-    if name:
+    if name and "<" not in email:
         return f'"{name}" <{email}>'
     return email
 
@@ -75,12 +79,16 @@ def _send_html_email(
     if not recipients:
         return
 
+    reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+    reply_to_list = [reply_to] if reply_to else None
+
     def _do_send(close_connections: bool = False):
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
             from_email=_from_email(),
             to=recipients,
+            reply_to=reply_to_list,
         )
         if html_body:
             msg.attach_alternative(html_body, "text/html")
