@@ -1226,16 +1226,16 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
 
 class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """
-    Lists all students enrolled in a specific program and the total amount each currently owes
-    for that program, using the same balance computation as the per-program balance sheet.
+    Lists all students enrolled in a specific program with their dues owed and current balance,
+    using the same balance computation as the per-program balance sheet.
     """
 
     template_name = "programs/dues_owed.html"
     section = "programs"
 
-    def _program_balance_for_student(self, student, program):
+    def _program_balance_data_for_student(self, student, program):
         can_view_sliding = can_user_read(self.request.user, "sliding_scale")
-        return get_student_program_balance(
+        return get_student_balance_data(
             student,
             program,
             can_view_sliding=can_view_sliding,
@@ -1260,17 +1260,23 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         active_rows = []
         inactive_rows = []
-        grand_total = 0
+        total_dues = Decimal("0.00")
+        total_balance = Decimal("0.00")
         filter_owed = request.GET.get("filter") == "owed"
         for e in enrollments:
             s = e.student
-            balance_sum = self._program_balance_for_student(s, program)
-            if filter_owed and balance_sum <= 0:
+            balance_data = self._program_balance_data_for_student(s, program)
+            dues = balance_data["total_fees"] - balance_data["total_sliding"]
+            balance = balance_data["balance"]
+            if filter_owed and balance <= 0:
                 continue
 
             row = {
                 "student": s,
-                "amount_owed": balance_sum,
+                "dues": dues,
+                "dues_owed": dues,
+                "balance": balance,
+                "amount_owed": balance,
             }
 
             # A student is inactive if their enrollment is marked inactive,
@@ -1279,8 +1285,8 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 inactive_rows.append(row)
             else:
                 active_rows.append(row)
-
-            grand_total += balance_sum
+                total_dues += dues
+                total_balance += balance
 
         return render(
             request,
@@ -1290,7 +1296,9 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "active_rows": active_rows,
                 "inactive_rows": inactive_rows,
                 "rows": active_rows + inactive_rows,
-                "grand_total": grand_total,
+                "total_dues": total_dues,
+                "total_balance": total_balance,
+                "grand_total": total_balance,
                 "filter_owed": filter_owed,
             },
         )
