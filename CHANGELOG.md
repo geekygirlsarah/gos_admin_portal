@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-21
 
 ### Changed
+- **Program student list table width**: Expanded the program detail page's student roster and header layout to use the full standard container width with equal margins on both sides, matching the layout of the adult, parent, and student directory pages.
 - **Travel pages sort students, parents, and mentors by preferred name**: Student sign-ups, mentor sign-ups, parent chaperones, staff sign-up forms, and parent view student listings on travel pages are now consistently sorted using the standard name order (preferred first name, falling back to legal first name, followed by last name).
 - **Payment form payment type default**: The payment recording form now defaults the "Paid via" payment method dropdown to "Credit Card" instead of "Cash", matching the most commonly used payment method.
 - **Mentors no longer see inactive students on program pages**: Inactive students (those marked inactive in a program or graduated) are now hidden from mentors when viewing a program's detail page, ensuring mentors only see currently active participants. Admins and Lead Mentors continue to see the "Students No Longer Active" section to manage inactive enrollments.
