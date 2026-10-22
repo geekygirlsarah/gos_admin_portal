@@ -34,6 +34,7 @@ from programs.constants import (
 )
 from programs.models import Program, RaceEthnicity
 from programs.utils import GroupedProgramChoiceField
+from programs.utils.email_async import send_messages_in_background
 from programs.utils.email_html import build_email_parts
 from programs.utils.notifications import get_sender_connection
 
@@ -1285,21 +1286,22 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             selected = form.cleaned_data.get("from_account")
             connection, from_email = get_sender_connection(selected)
 
-            try:
-                with connection:
-                    for addr in to_send:
-                        msg = EmailMultiAlternatives(
-                            subject=subject,
-                            body=text_body,
-                            from_email=from_email,
-                            to=[addr],
-                            connection=connection,
-                        )
-                        msg.attach_alternative(inlined_html_body, "text/html")
-                        for inline_img in inline_images:
-                            msg.attach(inline_img.to_mime())
-                        msg.send()
+            messages_to_send = []
+            for addr in to_send:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=from_email,
+                    to=[addr],
+                    connection=connection,
+                )
+                msg.attach_alternative(inlined_html_body, "text/html")
+                for inline_img in inline_images:
+                    msg.attach(inline_img.to_mime())
+                messages_to_send.append(msg)
 
+            try:
+                send_messages_in_background(messages_to_send, connection=connection)
                 messages.success(
                     request,
                     f"Successfully sent email to {len(to_send)} recipient(s).",
