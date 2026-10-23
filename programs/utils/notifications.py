@@ -17,18 +17,26 @@ def generate_otp(length=6):
     return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
-def send_otp_email(email, otp):
+def send_otp_email(email, otp, organization=None):
     from django.template.loader import render_to_string
 
+    from organizations.utils import get_organization_email_settings
+
+    org_cfg = get_organization_email_settings(organization)
     from_email = (
-        getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+        org_cfg.get("notification_from_email")
+        or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
         or settings.DEFAULT_FROM_EMAIL
     )
-    name = getattr(settings, "DEFAULT_FROM_NAME", None)
+    name = org_cfg.get("sender_display_name") or getattr(
+        settings, "DEFAULT_FROM_NAME", None
+    )
     if name and "<" not in from_email:
         from_email = f'"{name}" <{from_email}>'
 
-    reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+    reply_to = org_cfg.get("reply_to_email") or getattr(
+        settings, "DEFAULT_REPLY_TO_EMAIL", None
+    )
     reply_to_list = [reply_to] if reply_to else None
 
     context = {"code": otp}
@@ -55,19 +63,19 @@ def get_lead_mentor_notification_email():
     return getattr(settings, "LEAD_MENTOR_NOTIFICATION_EMAIL", LEAD_MENTOR_EMAIL)
 
 
-def get_sender_connection(from_account):
+def get_sender_connection(from_account, organization=None):
     """Return an ``(email_backend, from_email, reply_to)`` tuple for the messaging UI.
 
     ``from_account`` is the ``from_account`` form value: ``"DEFAULT"`` (or an
     unrecognized value) selects the default MAILERS mailer and the default
-    from address; any other value is matched against ``EMAIL_SENDER_ACCOUNTS``
-    by ``key`` or ``email`` and selects the ``sender_<key>`` mailer configured
-    in settings with that account's credentials.
-
-    The alias scheme here must stay in sync with the ``MAILERS`` entries built
-    in ``GoSAdminPortal/settings.py``.
+    from address; any other value is matched against the organization's or
+    settings' ``EMAIL_SENDER_ACCOUNTS`` by ``key`` or ``email``.
     """
-    accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+    from organizations.utils import get_organization_email_settings, get_sender_accounts
+
+    accounts = get_sender_accounts(organization)
+    org_cfg = get_organization_email_settings(organization)
+
     acc = None
     if accounts and from_account and from_account != "DEFAULT":
         for a in accounts:
@@ -77,26 +85,38 @@ def get_sender_connection(from_account):
 
     if acc:
         alias = f"sender_{acc.get('key') or acc.get('email')}"
-        raw_email = acc.get("email") or settings.DEFAULT_FROM_EMAIL
+        raw_email = (
+            acc.get("email")
+            or org_cfg.get("notification_from_email")
+            or settings.DEFAULT_FROM_EMAIL
+        )
         display_name = acc.get("display_name")
         from_email = f'"{display_name}" <{raw_email}>' if display_name else raw_email
         reply_to = (
             acc.get("reply_to")
             or raw_email
+            or org_cfg.get("reply_to_email")
             or getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
         )
     else:
         alias = "default"
         raw_email = (
-            getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+            org_cfg.get("notification_from_email")
+            or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
             or settings.DEFAULT_FROM_EMAIL
             or "notifications@girlsofsteelrobotics.org"
         )
-        name = getattr(settings, "DEFAULT_FROM_NAME", None)
+        name = org_cfg.get("sender_display_name") or getattr(
+            settings, "DEFAULT_FROM_NAME", None
+        )
         from_email = (
             f'"{name}" <{raw_email}>' if (name and "<" not in raw_email) else raw_email
         )
-        reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None) or raw_email
+        reply_to = (
+            org_cfg.get("reply_to_email")
+            or getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+            or raw_email
+        )
     try:
         backend_conn = mailers[alias]
     except Exception:
@@ -105,7 +125,13 @@ def get_sender_connection(from_account):
 
 
 def send_templated_notification(
-    subject, template_name, context, recipient_list, from_email=None, reply_to=None
+    subject,
+    template_name,
+    context,
+    recipient_list,
+    from_email=None,
+    reply_to=None,
+    organization=None,
 ):
     """
     Renders an HTML template and sends it as an email with a plain-text fallback
@@ -114,17 +140,26 @@ def send_templated_notification(
     from django.template.loader import render_to_string
     from django.utils.html import strip_tags
 
+    from organizations.utils import get_organization_email_settings
+
+    org_cfg = get_organization_email_settings(organization)
+
     if from_email is None:
         from_email = (
-            getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+            org_cfg.get("notification_from_email")
+            or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
             or settings.DEFAULT_FROM_EMAIL
         )
-        name = getattr(settings, "DEFAULT_FROM_NAME", None)
+        name = org_cfg.get("sender_display_name") or getattr(
+            settings, "DEFAULT_FROM_NAME", None
+        )
         if name and "<" not in from_email:
             from_email = f'"{name}" <{from_email}>'
 
     if reply_to is None:
-        default_reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+        default_reply_to = org_cfg.get("reply_to_email") or getattr(
+            settings, "DEFAULT_REPLY_TO_EMAIL", None
+        )
         reply_to_list = [default_reply_to] if default_reply_to else None
     elif isinstance(reply_to, str):
         reply_to_list = [reply_to]
