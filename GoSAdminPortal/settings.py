@@ -384,6 +384,7 @@ EMAILS_ENABLED = not _emails_disabled
 TOSEND_API_KEY = os.getenv("TOSEND_API_KEY", "").strip()
 TOSEND_API_URL = os.getenv("TOSEND_API_URL", "https://api.tosend.com").strip()
 TOSEND_TIMEOUT = int(os.getenv("TOSEND_TIMEOUT", "30"))
+TOSEND_WEBHOOK_SECRET = os.getenv("TOSEND_WEBHOOK_SECRET", "").strip()
 
 _tosend_options = {
     "api_key": TOSEND_API_KEY,

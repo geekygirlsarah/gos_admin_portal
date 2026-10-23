@@ -37,6 +37,8 @@ EXEMPT_URL_NAMES = {
     "non_discrimination_policy",
     "health",
     "mentor_agreement",
+    "tosend_webhook",
+    "api_tosend_webhook",
 }
 
 EXEMPT_PATH_PREFIXES = (
@@ -46,6 +48,8 @@ EXEMPT_PATH_PREFIXES = (
     "/guest/",  # public guest permission forms
     "/signout/",  # public digital sign-out pages
     "/api/v1/",  # API endpoints use X-API-KEY header auth, not session auth
+    "/api/webhooks/",  # public webhook endpoints (toSend, etc.)
+    "/programs/webhooks/",  # public webhook endpoints
     "/kiosk/",  # public kiosk attendance sign-in pages
     "/calendar/",  # public calendar + ICS feeds (public feeds only for anon)
     "/health/",  # health check endpoint for infrastructure monitoring

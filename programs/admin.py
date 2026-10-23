@@ -6,6 +6,7 @@ from .models import (
     Adult,
     AdultStudentRelationship,
     BackgroundCheck,
+    EmailDeliveryEvent,
     Enrollment,
     Fee,
     MentorAgreement,
@@ -550,3 +551,30 @@ class MentorAgreementSubmissionAdmin(admin.ModelAdmin):
     search_fields = ("adult__legal_first_name", "adult__last_name")
     autocomplete_fields = ("adult", "agreement")
     readonly_fields = ("uploaded_at",)
+
+
+@admin.register(EmailDeliveryEvent)
+class EmailDeliveryEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "recipient_email",
+        "event_type",
+        "bounce_type",
+        "student",
+        "adult",
+        "resolved",
+        "created_at",
+    )
+    list_filter = ("event_type", "bounce_type", "resolved", "created_at")
+    search_fields = (
+        "recipient_email",
+        "message_id",
+        "reason",
+        "student__preferred_first_name",
+        "student__legal_first_name",
+        "student__last_name",
+        "adult__preferred_first_name",
+        "adult__legal_first_name",
+        "adult__last_name",
+    )
+    autocomplete_fields = ("student", "adult", "resolved_by")
+    readonly_fields = ("created_at",)

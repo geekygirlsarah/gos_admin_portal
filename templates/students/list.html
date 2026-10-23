@@ -176,6 +176,11 @@
                       <a class="text-decoration-none fw-semibold text-dark" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
                         {{ s.display_name }}
                       </a>
+                      {% if s.has_email_delivery_issue %}
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill ms-1" title="Email delivery issue detected">
+                          <i class="bi bi-exclamation-triangle-fill me-1"></i>Delivery Issue
+                        </span>
+                      {% endif %}
                     </div>
                   </div>
                 </td>

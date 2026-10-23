@@ -117,6 +117,15 @@
                 </div>
             </div>
         </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card shadow-sm h-100 border-0 bg-light">
+                <div class="card-body py-3">
+                    <div class="text-muted small fw-semibold">Delivery Issues</div>
+                    <h3 class="mb-0 fw-bold {% if lead_stats.pending_email_issues_count > 0 %}text-danger{% else %}text-muted{% endif %}">{{ lead_stats.pending_email_issues_count }}</h3>
+                    <a href="{% url 'email_delivery_issues_list' %}" class="small text-decoration-none mt-2 d-inline-block">View Issues &raquo;</a>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="card shadow-sm border-0 bg-light">
         <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
@@ -124,6 +133,7 @@
             <a href="{% url 'application_review_list' %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-check me-1"></i>Review Applications</a>
             <a href="{% url 'program_list' %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-calendar3 me-1"></i>Programs</a>
             <a href="{% url 'all_attendance' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clock-history me-1"></i>All Attendance</a>
+            <a href="{% url 'email_delivery_issues_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-envelope-exclamation me-1"></i>Email Issues</a>
             <a href="{% url 'portal_settings' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-gear me-1"></i>Portal Settings</a>
         </div>
     </div>

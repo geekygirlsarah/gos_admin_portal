@@ -91,7 +91,7 @@ class StudentListView(
             "school",
             "primary_contact_relationship__adult",
             "secondary_contact_relationship__adult",
-        ).prefetch_related("adults", "enrollment_set__program")
+        ).prefetch_related("adults", "enrollment_set__program", "email_delivery_events")
 
         # Order by preferred/display name if present, otherwise legal first name, then last name (case-insensitive)
         qs = qs.annotate(
@@ -298,6 +298,8 @@ class StudentDetailView(
     section = "student_info"
 
     def get_queryset(self):
+        from django.db.models import Prefetch
+
         return (
             super()
             .get_queryset()
@@ -311,11 +313,17 @@ class StudentDetailView(
                 "adultstudentrelationship_set",
                 "background_checks",
                 "race_ethnicities",
-                "signed_documents__program_document",
-                "enrollment_set__program",
-                "enrollment_set__team",
-                "enrollment_set__crew",
-                "enrollment_set__subteam",
+                Prefetch(
+                    "signed_documents",
+                    queryset=StudentDocument.objects.select_related("program_document"),
+                ),
+                Prefetch(
+                    "enrollment_set",
+                    queryset=Enrollment.objects.select_related(
+                        "program", "team", "crew", "subteam"
+                    ),
+                ),
+                "email_delivery_events",
             )
         )
 
@@ -329,14 +337,14 @@ class StudentDetailView(
 
         ctx["role"] = get_user_role(self.request.user)
         student = self.object
-        # Union of enabled feature keys across all enrolled programs
-        keys = set(
-            k
-            for k in student.programs.values_list("features__key", flat=True).distinct()
-            if k
-        )
+        enrollments = list(student.enrollment_set.all())
+        keys = set()
+        for e in enrollments:
+            for f in e.program.features.all():
+                if f.key:
+                    keys.add(f.key)
         ctx["program_feature_keys"] = keys
-        ctx["enrollments"] = student.enrollment_set.all()
+        ctx["enrollments"] = enrollments
         return ctx
 
 

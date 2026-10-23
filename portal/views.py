@@ -110,7 +110,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         if is_lead_mentor:
             from applications.models import Application
             from orders.models import OrderItem
-            from programs.models import Program, SlidingScale
+            from programs.models import EmailDeliveryEvent, Program, SlidingScale
             from programs.utils import students_in_running_programs
 
             active_programs_count = (
@@ -127,6 +127,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             pending_orders_count = OrderItem.objects.filter(order__isnull=True).count()
             pending_sliding_count = SlidingScale.objects.filter(
                 status=SlidingScale.STATUS_PENDING
+            ).count()
+            pending_email_issues_count = EmailDeliveryEvent.objects.filter(
+                resolved=False,
+                event_type__in=[
+                    EmailDeliveryEvent.EVENT_BOUNCED,
+                    EmailDeliveryEvent.EVENT_COMPLAINT,
+                ],
             ).count()
 
             orders_program = (
@@ -148,6 +155,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 "pending_applications_count": pending_apps_count,
                 "pending_orders_count": pending_orders_count,
                 "pending_sliding_count": pending_sliding_count,
+                "pending_email_issues_count": pending_email_issues_count,
                 "orders_program_pk": (orders_program.pk if orders_program else None),
             }
 
