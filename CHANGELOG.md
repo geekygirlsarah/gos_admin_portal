@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-23
+
+### Changed
+- **Clear, accessible wording for Email Settings and Custom Domains**: Updated the Email Settings page in Portal Settings to use friendly, non-technical explanations for all email delivery and sender configuration options. Replaced technical references (such as toSend engine and email delivery protocols) with straightforward language clarifying that messages are sent from the system's email address by default and can be customized with a friendly sender name, reply-to address, or custom sender profiles. Added a clear guidance box explaining custom sending domain setup (using verification records with domain registrars without needing changes to existing MX records or email inboxes).
+
 ## 2026-10-22
 
 ### Added
+- **Organization email settings and sender identity management in Portal Settings**: Added a dedicated "Email Settings" tab in Portal Settings for configuring tenant sender branding, primary Reply-To routing, and team broadcast sender identities (e.g. Leads, Info, FLL). Staff can manage custom sender identities with display names and tailored reply-to addresses, ensuring high deliverability across transactional notifications and bulk broadcast features.
 - **toSend REST API email backend integration**: Integrated native support for toSend v2 REST API (`ToSendEmailBackend`) for sending transactional and bulk emails via `POST /v2/emails` and `POST /v2/emails/batch` with automatic chunking of up to 100 messages per HTTP payload. Configurable via `TOSEND_API_KEY` (or `EMAIL_BACKEND=tosend`), with full support for `RedirectEmailBackend` dev routing and per-account sender identities.
 - **In-process background email dispatcher**: Added an asynchronous non-blocking email task dispatcher (`send_messages_in_background`) using a bounded worker thread pool, ensuring database connection safety and eliminating web request timeouts for bulk messaging without requiring external queue infrastructure like Celery or Redis.
 - **Dedicated notification sender identity and Reply-To routing**: Added support for distinct notification and broadcast sender configurations (`NOTIFICATION_FROM_EMAIL`, `DEFAULT_REPLY_TO_EMAIL`, and `DEFAULT_FROM_NAME`). Transactional notices, login OTP codes, and public application verification emails now send from a dedicated notifications identity while attaching Reply-To headers directed to the team or admin email address (`leads@girlsofsteelrobotics.org`). Bulk messaging views allow selecting sender identities with aligned Reply-To addresses.

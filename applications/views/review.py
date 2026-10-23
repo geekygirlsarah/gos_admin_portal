@@ -504,8 +504,14 @@ class ApplicationEmailForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Build sender choices from settings
-        accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+        # Build sender choices from organization settings
+        from organizations.utils import (
+            get_organization_email_settings,
+            get_sender_accounts,
+        )
+
+        accounts = get_sender_accounts()
+        org_cfg = get_organization_email_settings()
         choices = []
         initial_value = None
         if accounts:
@@ -518,8 +524,12 @@ class ApplicationEmailForm(forms.Form):
             if choices:
                 initial_value = choices[0][0]
         else:
-            default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
-            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            default_email = org_cfg.get("notification_from_email") or getattr(
+                settings, "DEFAULT_FROM_EMAIL", ""
+            )
+            default_name = org_cfg.get("sender_display_name") or getattr(
+                settings, "DEFAULT_FROM_NAME", None
+            )
             if default_name:
                 label = (
                     f"Default ({default_name} <{default_email}>)"

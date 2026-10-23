@@ -7,6 +7,7 @@ from attendance.views import AttendanceImportView, student_attendance_view
 from .permission_views import (
     PortalAgreementView,
     PortalCrewView,
+    PortalEmailSettingsView,
     PortalKioskView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
@@ -661,6 +662,11 @@ urlpatterns = [
         "settings/agreements/",
         PortalAgreementView.as_view(),
         name="portal_agreements",
+    ),
+    path(
+        "settings/email/",
+        PortalEmailSettingsView.as_view(),
+        name="portal_email_settings",
     ),
     path(
         "andrew-ids/",

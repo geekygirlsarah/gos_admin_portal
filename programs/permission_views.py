@@ -684,6 +684,14 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         if KioskConfig:
             kiosk_configs = KioskConfig.objects.select_related("program").all()
 
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_email_settings,
+        )
+
+        org = getattr(request, "organization", None) or get_default_organization()
+        email_settings = get_organization_email_settings(org)
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -701,6 +709,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "mentor_agreement_slugs": MentorAgreement.objects.values_list(
                 "slug", flat=True
             ).distinct(),
+            "organization": org,
+            "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
@@ -1104,3 +1114,126 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             return redirect("/programs/settings/?tab=agreements")
 
         return redirect("/programs/settings/?tab=agreements")
+
+
+class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles updating organization email settings and sender identities from Portal Settings."""
+
+    def post(self, request):
+        from organizations.models import Organization
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_email_settings,
+            update_organization_email_settings,
+        )
+
+        org = getattr(request, "organization", None) or get_default_organization()
+        if not org:
+            org = Organization.objects.filter(is_active=True).first()
+            if not org:
+                org, _ = Organization.objects.get_or_create(
+                    slug="gos", defaults={"name": "Girls of Steel"}
+                )
+
+        action = request.POST.get("action")
+        email_cfg = get_organization_email_settings(org)
+
+        if action == "update_email_settings":
+            sender_display_name = request.POST.get("sender_display_name", "").strip()
+            reply_to_email = request.POST.get("reply_to_email", "").strip()
+            notification_from_email = request.POST.get(
+                "notification_from_email", ""
+            ).strip()
+
+            custom_domain_enabled = request.POST.get("custom_domain_enabled") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            custom_domain_domain = request.POST.get("custom_domain_domain", "").strip()
+            custom_domain_from_email = request.POST.get(
+                "custom_domain_from_email", ""
+            ).strip()
+
+            email_cfg["sender_display_name"] = sender_display_name
+            email_cfg["reply_to_email"] = reply_to_email
+            email_cfg["notification_from_email"] = notification_from_email
+            email_cfg["custom_domain"] = {
+                "enabled": custom_domain_enabled,
+                "domain": custom_domain_domain,
+                "from_email": custom_domain_from_email,
+            }
+
+            update_organization_email_settings(org, email_cfg)
+            messages.success(request, "Email settings updated successfully.")
+            return redirect("/programs/settings/?tab=email")
+
+        elif action == "add_sender_account":
+            key = request.POST.get("key", "").strip().lower()
+            display_name = request.POST.get("display_name", "").strip()
+            email = request.POST.get("email", "").strip()
+            reply_to = request.POST.get("reply_to", "").strip() or email
+
+            if not key or not email:
+                messages.error(
+                    request, "Key and email are required for sender identities."
+                )
+                return redirect("/programs/settings/?tab=email")
+
+            accounts = list(email_cfg.get("sender_accounts", []))
+            if any(a.get("key") == key for a in accounts):
+                messages.error(
+                    request, f"Sender identity with key '{key}' already exists."
+                )
+                return redirect("/programs/settings/?tab=email")
+
+            accounts.append(
+                {
+                    "key": key,
+                    "display_name": display_name,
+                    "email": email,
+                    "reply_to": reply_to,
+                }
+            )
+            email_cfg["sender_accounts"] = accounts
+            update_organization_email_settings(org, email_cfg)
+            messages.success(request, f"Sender identity '{display_name or key}' added.")
+            return redirect("/programs/settings/?tab=email")
+
+        elif action == "update_sender_account":
+            key = request.POST.get("key", "").strip().lower()
+            display_name = request.POST.get("display_name", "").strip()
+            email = request.POST.get("email", "").strip()
+            reply_to = request.POST.get("reply_to", "").strip() or email
+
+            accounts = list(email_cfg.get("sender_accounts", []))
+            updated = False
+            for acc in accounts:
+                if acc.get("key") == key:
+                    acc["display_name"] = display_name
+                    acc["email"] = email
+                    acc["reply_to"] = reply_to
+                    updated = True
+                    break
+
+            if updated:
+                email_cfg["sender_accounts"] = accounts
+                update_organization_email_settings(org, email_cfg)
+                messages.success(request, f"Sender identity '{key}' updated.")
+            else:
+                messages.error(request, f"Sender identity '{key}' not found.")
+            return redirect("/programs/settings/?tab=email")
+
+        elif action == "delete_sender_account":
+            key = request.POST.get("key", "").strip().lower()
+            accounts = list(email_cfg.get("sender_accounts", []))
+            initial_count = len(accounts)
+            accounts = [a for a in accounts if a.get("key") != key]
+            if len(accounts) < initial_count:
+                email_cfg["sender_accounts"] = accounts
+                update_organization_email_settings(org, email_cfg)
+                messages.success(request, f"Sender identity '{key}' deleted.")
+            return redirect("/programs/settings/?tab=email")
+
+        return redirect("/programs/settings/?tab=email")
