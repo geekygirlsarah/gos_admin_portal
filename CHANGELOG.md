@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-23
 
 ### Added
+- **Automated Weekly Email Digest (`send_weekly_digest`)**: Added an automated Sunday morning digest system summarizing the week ahead tailored per role:
+  - **Students**: Confirmed outreach shifts with dates, times, venue locations and addresses; open outreach opportunities in enrolled active programs needing Champions or Helpers; attendance hours snapshot; and upcoming travel commitments.
+  - **Parents / Guardians**: Student schedules and outreach commitments, open volunteer opportunities, attendance summary, and travel highlights for their enrolled students. Guaranteed delivery ensures at least one guardian per active student receives notifications even if updates are disabled on secondary contacts.
+  - **Mentors / Staff**: Confirmed mentoring and outreach support shifts, events needing mentors or student leads, and logged mentoring hours.
+  - **Smart Suppression**: Empty digests with no upcoming commitments or attendance activity are automatically suppressed to minimize inbox fatigue.
+- **Automated Monthly Balance Statements (`send_monthly_balances`)**: Added an automated monthly statement dispatched on the 1st of each month to parents and guardians for students with outstanding program fees or balances due across running programs, complete with itemized dues, sliding-scale adjustments, recorded payments, and a direct link to pay online.
 - **toSend Webhook Receiver & Email Delivery Issue Monitoring**: Added an automated webhook receiver (`/api/webhooks/tosend/` and `/programs/webhooks/tosend/`) to capture email delivery failures, permanent/hard bounces, and spam complaints from toSend's API. Webhooks are secured with HMAC-SHA256 signature verification (`TOSEND_WEBHOOK_SECRET`). Incoming events are stored in `EmailDeliveryEvent`, automatically linked to matching Student, Adult, or Application records, and logged in the immutable audit log (`AuditEvent.EMAIL_DELIVERY_FAILED` and `AuditEvent.EMAIL_COMPLAINT`).
 - **Immediate Lead Mentor Alerts for Critical Delivery Issues**: The portal automatically dispatches an immediate email alert to Lead Mentors whenever a hard bounce or spam complaint occurs, providing diagnostic reasons and recipient details so staff can reach out by phone or correct contact info.
 - **Visual Profile Badges & Delivery Warning Banners**: Displayed prominent warning banners on Student and Adult profile detail pages and warning badges on directory rosters when an email delivery issue is detected.

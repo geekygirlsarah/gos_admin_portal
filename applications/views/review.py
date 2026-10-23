@@ -515,14 +515,14 @@ class ApplicationEmailForm(forms.Form):
         choices = []
         initial_value = None
         if accounts:
+            choices.append(("DEFAULT", "Default configured sender"))
             for acc in accounts:
                 email = acc.get("email") or ""
                 display = acc.get("display_name") or email or "Sender"
                 value = acc.get("key") or email
                 label = f"{display} <{email}>" if email else display
                 choices.append((value, label))
-            if choices:
-                initial_value = choices[0][0]
+            initial_value = "DEFAULT"
         else:
             default_email = org_cfg.get("notification_from_email") or getattr(
                 settings, "DEFAULT_FROM_EMAIL", ""
