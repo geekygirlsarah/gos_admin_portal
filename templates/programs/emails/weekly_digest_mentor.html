@@ -1,0 +1,75 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Mentor Weekly Operations - Girls of Steel{% endblock %}
+
+{% block header %}Mentor Weekly Operations Update{% endblock %}
+
+{% block content %}
+<p>Hi {{ adult.preferred_first_name|default:adult.legal_first_name }},</p>
+<p>Here is your weekly summary of upcoming mentoring shifts and outreach events needing staff support for the week ahead.</p>
+
+{% if confirmed_shifts %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #198754; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Your Upcoming Mentoring Shifts
+    </h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            {% for s in confirmed_shifts %}
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 10px 0; vertical-align: top;">
+                    <strong>{{ s.event_name }}</strong>{% if s.program_name %} <span style="color: #6c757d; font-size: 13px;">({{ s.program_name }})</span>{% endif %}<br>
+                    <span style="color: #495057;">{{ s.date|date:"l, F j, Y" }} &bull; {{ s.start_time|time:"g:i A" }} &ndash; {{ s.end_time|time:"g:i A" }}</span><br>
+                    <span style="color: #6c757d; font-size: 14px;">Location: {{ s.location_name }}{% if s.location_address %} ({{ s.location_address }}){% endif %}</span>
+                    {% if s.description %}
+                    <div style="color: #6c757d; font-size: 13px; margin-top: 2px;"><em>{{ s.description }}</em></div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if needs_support_shifts %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #dc3545; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Events Needing Support
+    </h3>
+    <p style="margin-bottom: 8px; color: #495057; font-size: 14px;">The following upcoming outreach shifts are still seeking mentors or student leads:</p>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            {% for s in needs_support_shifts %}
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 10px 0; vertical-align: top;">
+                    <strong>{{ s.event_name }}</strong>{% if s.program_name %} <span style="color: #6c757d; font-size: 13px;">({{ s.program_name }})</span>{% endif %}<br>
+                    <span style="color: #495057;">{{ s.date|date:"l, F j, Y" }} &bull; {{ s.start_time|time:"g:i A" }} &ndash; {{ s.end_time|time:"g:i A" }}</span><br>
+                    <span style="color: #6c757d; font-size: 14px;">Location: {{ s.location_name }}{% if s.location_address %} ({{ s.location_address }}){% endif %}</span><br>
+                    <span style="font-size: 13px; color: #dc3545;">
+                        {% if s.needs_mentors %}<strong>Needs Mentor (0 signed up)</strong>{% endif %}
+                        {% if s.needs_mentors and s.needs_champions %} &bull; {% endif %}
+                        {% if s.needs_champions %}Needs Champion{% endif %}
+                        {% if s.needs_helpers and not s.needs_champions %} &bull; Needs Helpers{% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if attendance_stats.total_hours %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Mentoring Hours Logged
+    </h3>
+    <p style="margin: 4px 0;"><strong>Total Hours:</strong> {{ attendance_stats.total_hours }} hrs</p>
+</div>
+{% endif %}
+
+<div style="margin-top: 24px;">
+    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to volunteer for shifts or view full details.</p>
+</div>
+{% endblock %}

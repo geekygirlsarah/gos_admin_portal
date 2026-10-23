@@ -1,0 +1,70 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Monthly Balance Statement for {{ student.display_name }}{% endblock %}
+
+{% block header %}Monthly Balance Statement{% endblock %}
+
+{% block content %}
+<p>Dear {{ adult.preferred_first_name|default:adult.legal_first_name|default:"Parent/Guardian" }},</p>
+<p>This is your monthly statement of program fees and payments for <strong>{{ student.display_name }}</strong> as of {% now "F j, Y" %}.</p>
+
+<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin: 20px 0;">
+    <div style="font-size: 16px; margin-bottom: 4px;"><strong>Total Balance Due:</strong></div>
+    <div style="font-size: 28px; font-weight: bold; color: {% if total_balance > 0 %}#dc3545{% else %}#198754{% endif %};">
+        ${{ total_balance|floatformat:2 }}
+    </div>
+</div>
+
+{% for pb in program_balances %}
+<div style="margin-top: 24px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; color: #212529; border-bottom: 1px solid #dee2e6; padding-bottom: 6px; margin-bottom: 12px;">
+        {{ pb.program.name }}
+    </h3>
+
+    {% if pb.entries %}
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 12px;">
+        <thead>
+            <tr style="background-color: #f1f3f5; text-align: left; border-bottom: 1px solid #ced4da;">
+                <th style="padding: 8px 6px;">Date</th>
+                <th style="padding: 8px 6px;">Description</th>
+                <th style="padding: 8px 6px; text-align: right;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in pb.entries %}
+            <tr style="border-bottom: 1px solid #e9ecef;">
+                <td style="padding: 8px 6px; color: #6c757d;">{{ entry.date|date:"m/d/Y"|default:"-" }}</td>
+                <td style="padding: 8px 6px;">
+                    {{ entry.name }}
+                    {% if entry.due_date %}<span style="color: #6c757d; font-size: 12px;">(Due: {{ entry.due_date|date:"m/d/Y" }})</span>{% endif %}
+                </td>
+                <td style="padding: 8px 6px; text-align: right; font-weight: {% if entry.type == 'Fee' %}normal{% else %}bold{% endif %}; color: {% if entry.type == 'Payment' %}#198754{% else %}#212529{% endif %};">
+                    {% if entry.type == 'Payment' %}-${{ entry.amount|floatformat:2 }}{% elif entry.type == 'Sliding Scale' %}-${{ pb.total_sliding|floatformat:2 }}{% else %}${{ entry.amount|floatformat:2 }}{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6c757d; font-size: 14px;">No fees or payments recorded for this program.</p>
+    {% endif %}
+
+    <div style="text-align: right; font-size: 15px; margin-top: 8px;">
+        <span>Total Fees: <strong>${{ pb.total_fees|floatformat:2 }}</strong></span>
+        {% if pb.total_sliding %} &bull; <span>Discount: <strong>-${{ pb.total_sliding|floatformat:2 }}</strong></span>{% endif %}
+        &bull; <span>Payments: <strong>-${{ pb.total_payments|floatformat:2 }}</strong></span>
+        &bull; <span style="font-size: 16px;">Program Balance: <strong style="color: {% if pb.balance > 0 %}#dc3545{% else %}#198754{% endif %};">${{ pb.balance|floatformat:2 }}</strong></span>
+    </div>
+</div>
+{% endfor %}
+
+<div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #dee2e6;">
+    <h4 style="font-size: 16px; margin-bottom: 8px;">How to Pay:</h4>
+    <p style="margin: 4px 0; font-size: 14px;">Payments can be made online via credit card through the portal or by check made payable to <strong>Girls of Steel Robotics</strong>.</p>
+    <p style="margin-top: 12px;">
+        <a href="https://portal.girlsofsteel.org/payments/" style="background-color: #0d6efd; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
+            View & Pay Balance Online
+        </a>
+    </p>
+</div>
+{% endblock %}
