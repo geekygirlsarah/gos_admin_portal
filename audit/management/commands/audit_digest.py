@@ -203,6 +203,37 @@ class Command(BaseCommand):
         else:
             self.stdout.write("  No session anomalies detected.\n")
 
+        # --- 6. Email Delivery Issues ---
+        self.stdout.write("\n[6] EMAIL DELIVERY ISSUES")
+        self.stdout.write("-" * 60)
+        try:
+            from programs.models import EmailDeliveryEvent
+
+            email_issues = EmailDeliveryEvent.objects.filter(
+                created_at__gte=since,
+            ).order_by("-created_at")
+            if email_issues:
+                for issue in email_issues:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"  {issue.created_at:%Y-%m-%d %H:%M} "
+                            f"{issue.get_event_type_display()} for {issue.recipient_email} "
+                            f"({issue.reason or 'No reason provided'})"
+                        )
+                    )
+                    all_flagged.append(
+                        {
+                            "category": "email_delivery_issue",
+                            "recipient": issue.recipient_email,
+                            "type": issue.event_type,
+                            "reason": issue.reason,
+                        }
+                    )
+            else:
+                self.stdout.write("  No email delivery issues detected in window.\n")
+        except Exception as exc:
+            self.stdout.write(f"  Could not load email delivery events: {exc}\n")
+
         # --- Summary ---
         self.stdout.write("\n" + "=" * 60)
         total = len(all_flagged)

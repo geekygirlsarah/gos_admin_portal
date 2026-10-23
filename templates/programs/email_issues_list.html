@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load permission_tags %}
+{% block title %}Email Delivery Issues{% endblock %}
+
+{% block content %}
+  {% user_role user as role %}
+
+  <!-- Page Header & Action Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Email Delivery Issues</h1>
+      <div class="text-muted small">Monitor bounced emails, spam complaints, and invalid addresses</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'profile_dashboard' %}">
+        <i class="bi bi-speedometer2 me-1"></i>Dashboard
+      </a>
+    </div>
+  </div>
+
+  <!-- Filter & Search Bar -->
+  <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light">
+    <div class="card-body p-3">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-md-4">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+            <input type="text" name="q" class="form-control border-start-0" placeholder="Search email, name, error..." value="{{ search_query }}">
+          </div>
+        </div>
+        <div class="col-auto">
+          <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="unresolved" {% if status_filter == 'unresolved' %}selected{% endif %}>Unresolved Only ({{ unresolved_count }})</option>
+            <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolved Only</option>
+            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Records</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <select name="type" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="all" {% if type_filter == 'all' %}selected{% endif %}>All Event Types</option>
+            <option value="bounced" {% if type_filter == 'bounced' %}selected{% endif %}>Bounced</option>
+            <option value="complaint" {% if type_filter == 'complaint' %}selected{% endif %}>Spam Complaints</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+          {% if search_query or status_filter != 'unresolved' or type_filter != 'all' %}
+            <a href="{% url 'email_delivery_issues_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Issues Table Card -->
+  {% if issues %}
+    <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Recipient Email</th>
+              <th>Linked Contact</th>
+              <th>Event Type</th>
+              <th>Diagnostic Reason</th>
+              <th>Date Detected</th>
+              <th>Status</th>
+              <th class="text-end pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in issues %}
+              <tr class="{% if not item.resolved %}table-warning table-opacity-10{% endif %}">
+                <td class="ps-3">
+                  <div class="fw-semibold text-dark">{{ item.recipient_email }}</div>
+                  {% if item.message_id %}
+                    <div class="text-muted font-monospace" style="font-size: 11px;">ID: {{ item.message_id }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if item.student %}
+                    <a href="{% url 'student_detail' item.student.pk %}" class="text-decoration-none">
+                      <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill me-1">Student</span>
+                      {{ item.student.display_name }}
+                    </a>
+                  {% elif item.adult %}
+                    <a href="{% url 'adult_detail' item.adult.pk %}" class="text-decoration-none">
+                      <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill me-1">Adult</span>
+                      {{ item.adult.display_name }}
+                    </a>
+                  {% elif item.application %}
+                    <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill me-1">Applicant</span>
+                    {{ item.application.email }}
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if item.event_type == 'complaint' %}
+                    <span class="badge bg-danger rounded-pill px-2 py-1"><i class="bi bi-shield-x me-1"></i>Spam Complaint</span>
+                  {% elif item.is_hard_bounce %}
+                    <span class="badge bg-danger rounded-pill px-2 py-1"><i class="bi bi-x-circle me-1"></i>Hard Bounce</span>
+                  {% elif item.bounce_type == 'soft' %}
+                    <span class="badge bg-warning text-dark rounded-pill px-2 py-1"><i class="bi bi-exclamation-triangle me-1"></i>Soft Bounce</span>
+                  {% else %}
+                    <span class="badge bg-secondary rounded-pill px-2 py-1">{{ item.get_event_type_display }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="text-truncate small" style="max-width: 250px;" title="{{ item.reason }}">
+                    {{ item.reason|default:"No diagnostic error message provided" }}
+                  </div>
+                </td>
+                <td class="text-muted small">
+                  {{ item.created_at|date:"M j, Y g:i A" }}
+                </td>
+                <td>
+                  {% if item.resolved %}
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-1">
+                      <i class="bi bi-check2 me-1"></i>Resolved
+                    </span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark rounded-pill px-2 py-1">
+                      <i class="bi bi-hourglass-split me-1"></i>Active Issue
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="text-end pe-3">
+                  {% if not item.resolved %}
+                    <form method="post" action="{% url 'email_delivery_issue_resolve' item.pk %}" class="d-inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-check-lg me-1"></i>Mark Resolved
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="text-muted small">Resolved by {{ item.resolved_by.username|default:"Admin" }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="card border-0 shadow-sm rounded-3 text-center py-5">
+      <div class="card-body">
+        <div class="rounded-circle bg-light d-inline-flex p-3 text-success mb-3">
+          <i class="bi bi-check-circle fs-2"></i>
+        </div>
+        <h3 class="h5 fw-bold text-dark mb-1">No email delivery issues found</h3>
+        <p class="text-muted small mb-0">All email communications have been delivered successfully.</p>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

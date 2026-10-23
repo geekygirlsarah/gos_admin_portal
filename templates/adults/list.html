@@ -163,6 +163,11 @@
                       {% if a.is_mentor and a.needs_background_check %}
                         <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
                       {% endif %}
+                      {% if a.has_email_delivery_issue %}
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill ms-1" title="Email delivery issue detected">
+                          <i class="bi bi-exclamation-triangle-fill me-1"></i>Delivery Issue
+                        </span>
+                      {% endif %}
                     </div>
                   </div>
                 </td>

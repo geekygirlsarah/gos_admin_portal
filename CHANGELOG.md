@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-23
 
+### Added
+- **toSend Webhook Receiver & Email Delivery Issue Monitoring**: Added an automated webhook receiver (`/api/webhooks/tosend/` and `/programs/webhooks/tosend/`) to capture email delivery failures, permanent/hard bounces, and spam complaints from toSend's API. Webhooks are secured with HMAC-SHA256 signature verification (`TOSEND_WEBHOOK_SECRET`). Incoming events are stored in `EmailDeliveryEvent`, automatically linked to matching Student, Adult, or Application records, and logged in the immutable audit log (`AuditEvent.EMAIL_DELIVERY_FAILED` and `AuditEvent.EMAIL_COMPLAINT`).
+- **Immediate Lead Mentor Alerts for Critical Delivery Issues**: The portal automatically dispatches an immediate email alert to Lead Mentors whenever a hard bounce or spam complaint occurs, providing diagnostic reasons and recipient details so staff can reach out by phone or correct contact info.
+- **Visual Profile Badges & Delivery Warning Banners**: Displayed prominent warning banners on Student and Adult profile detail pages and warning badges on directory rosters when an email delivery issue is detected.
+- **Lead Mentor Command Center & Issue Resolution Tool**: Integrated unresolved delivery issue counts into the Lead Mentor dashboard and added a management view (`EmailDeliveryIssueListView`) allowing Lead Mentors to review, filter, and mark delivery issues as resolved once contact details are updated.
+- **Audit Digest Integration**: Updated `python manage.py audit_digest` to summarize recent email delivery failures and spam complaints alongside security anomalies.
+
 ### Changed
 - **Clear, accessible wording for Email Settings and Custom Domains**: Updated the Email Settings page in Portal Settings to use friendly, non-technical explanations for all email delivery and sender configuration options. Replaced technical references (such as toSend engine and email delivery protocols) with straightforward language clarifying that messages are sent from the system's email address by default and can be customized with a friendly sender name, reply-to address, or custom sender profiles. Added a clear guidance box explaining custom sending domain setup (using verification records with domain registrars without needing changes to existing MX records or email inboxes).
 
