@@ -1,7 +1,13 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Welcome to {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}{% endblock %}
+{% block header %}Application Finalized{% endblock %}
+
+{% block content %}
 <p>Hi {{ application.applicant_name|default:"" }},</p>
 
-<p><strong>Great news</strong> - your Girls of Steel application has been finalized!
-    {% if application.is_mentor %}You are now officially a Girls of Steel mentor!{% else %}You are now officially enrolled in the program.{% endif %}</p>
+<p><strong>Great news</strong> - your {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel" }} application has been finalized!
+    {% if application.is_mentor %}You are now officially a {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel" }} mentor!{% else %}You are now officially enrolled in the program.{% endif %}</p>
 
 <ul>
     {% if application.is_mentor %}
@@ -19,4 +25,5 @@
 
 <p>If you have any questions, just reply to this email.</p>
 
-<p>- Girls of Steel Robotics</p>
+<p>- {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</p>
+{% endblock %}

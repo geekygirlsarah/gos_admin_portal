@@ -1,3 +1,6 @@
+import os
+import uuid
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import redirect, render
@@ -1138,7 +1141,81 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
         action = request.POST.get("action")
         email_cfg = get_organization_email_settings(org)
 
-        if action == "update_email_settings":
+        if action == "update_branding":
+            primary_color = (
+                request.POST.get("primary_color", "").strip()
+                or email_cfg.get("primary_color")
+                or "#4a154b"
+            )
+            secondary_color = (
+                request.POST.get("secondary_color", "").strip()
+                or email_cfg.get("secondary_color")
+                or "#f8f9fa"
+            )
+            header_text_color = (
+                request.POST.get("header_text_color", "").strip()
+                or email_cfg.get("header_text_color")
+                or "#ffffff"
+            )
+            organization_name = (
+                request.POST.get("organization_name", "").strip()
+                or email_cfg.get("organization_name")
+                or org.name
+            )
+            address_line1 = request.POST.get("address_line1", "").strip()
+            address_line2 = request.POST.get("address_line2", "").strip()
+            footer_text = request.POST.get("footer_text", "").strip()
+            contact_name = request.POST.get("contact_name", "").strip()
+            contact_email = request.POST.get("contact_email", "").strip()
+
+            logo_url = request.POST.get("logo_url", "").strip()
+            remove_logo = request.POST.get("remove_logo") in (
+                "1",
+                "true",
+                "on",
+                True,
+            )
+
+            if remove_logo:
+                logo_url = ""
+            elif "logo_file" in request.FILES and request.FILES["logo_file"]:
+                logo_file = request.FILES["logo_file"]
+                try:
+                    from PIL import Image
+
+                    img = Image.open(logo_file)
+                    img.verify()
+                    logo_file.seek(0)
+                    from django.core.files.storage import default_storage
+
+                    ext = os.path.splitext(logo_file.name)[1].lower() or ".png"
+                    filename = f"org_logos/{org.slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
+                    saved_path = default_storage.save(filename, logo_file)
+                    logo_url = default_storage.url(saved_path)
+                except Exception as e:
+                    messages.error(request, f"Invalid logo image file: {e}")
+                    return redirect("/programs/settings/?tab=email")
+            elif not logo_url and "logo_url" not in request.POST:
+                logo_url = email_cfg.get("logo_url", "")
+
+            email_cfg["primary_color"] = primary_color
+            email_cfg["secondary_color"] = secondary_color
+            email_cfg["header_text_color"] = header_text_color
+            email_cfg["organization_name"] = organization_name
+            email_cfg["address_line1"] = address_line1
+            email_cfg["address_line2"] = address_line2
+            email_cfg["footer_text"] = footer_text
+            email_cfg["contact_name"] = contact_name
+            email_cfg["contact_email"] = contact_email
+            email_cfg["logo_url"] = logo_url
+
+            update_organization_email_settings(org, email_cfg)
+            messages.success(
+                request, "Email branding & template settings updated successfully."
+            )
+            return redirect("/programs/settings/?tab=email")
+
+        elif action == "update_email_settings":
             sender_display_name = request.POST.get("sender_display_name", "").strip()
             reply_to_email = request.POST.get("reply_to_email", "").strip()
             notification_from_email = request.POST.get(
