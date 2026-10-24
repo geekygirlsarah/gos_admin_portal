@@ -329,19 +329,19 @@ class PortalEmailSettingsViewTests(TestCase):
         self.assertIn(
             "finance", [c[0] for c in prog_form.fields["from_account"].choices]
         )
-        self.assertEqual(prog_form.fields["from_account"].initial, "finance")
+        self.assertEqual(prog_form.fields["from_account"].initial, "DEFAULT")
 
         balances_form = ProgramEmailBalancesForm(program=program)
         self.assertIn(
             "finance", [c[0] for c in balances_form.fields["from_account"].choices]
         )
-        self.assertEqual(balances_form.fields["from_account"].initial, "finance")
+        self.assertEqual(balances_form.fields["from_account"].initial, "DEFAULT")
 
         app_form = ApplicationEmailForm()
         self.assertIn(
             "finance", [c[0] for c in app_form.fields["from_account"].choices]
         )
-        self.assertEqual(app_form.fields["from_account"].initial, "finance")
+        self.assertEqual(app_form.fields["from_account"].initial, "DEFAULT")
 
     def test_add_sender_account_missing_fields_rejected(self):
         self.client.login(username="lead_user", password=self.password)

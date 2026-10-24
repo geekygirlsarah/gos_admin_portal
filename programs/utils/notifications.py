@@ -8,7 +8,7 @@ import secrets
 import string
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, mailers, send_mail
+from django.core.mail import EmailMultiAlternatives, mailers
 
 LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
@@ -39,7 +39,11 @@ def send_otp_email(email, otp, organization=None):
     )
     reply_to_list = [reply_to] if reply_to else None
 
-    context = {"code": otp}
+    context = {
+        "code": otp,
+        "org_email_settings": org_cfg,
+        "organization": organization,
+    }
     subject = render_to_string("account/email/login_code_subject.txt", context).strip()
     subject = "".join(subject.splitlines())
     text_message = render_to_string("account/email/login_code_message.txt", context)
@@ -166,7 +170,18 @@ def send_templated_notification(
     else:
         reply_to_list = list(reply_to)
 
-    html_message = render_to_string(template_name, context)
+    ctx = dict(context) if context else {}
+    if "org_email_settings" not in ctx:
+        ctx["org_email_settings"] = org_cfg
+    if "organization" not in ctx:
+        if organization is not None:
+            ctx["organization"] = organization
+        else:
+            from organizations.utils import get_default_organization
+
+            ctx["organization"] = get_default_organization()
+
+    html_message = render_to_string(template_name, ctx)
     # Generate a reasonable plain text version from the HTML by stripping tags and unescaping
     plain_message = html.unescape(strip_tags(html_message)).strip()
     # Normalize excessive whitespace/newlines

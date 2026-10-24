@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-23
 
 ### Added
+- **Multi-Tenant Master Email Templates & Branding Customization**: Added an organization-level master email template architecture and visual customization settings under Portal Settings → Email tab:
+  - **Master Email Template (`base_notification.html`)**: Standardized all transactional notifications, application updates, and staff alerts around a responsive master layout shell enclosing modular body content. The shell provides responsive email client compatibility (Outlook, Apple Mail, Gmail), dark-mode styling, and structured organization branding.
+  - **Portal Settings Email Branding Controls**: Organization admins can customize their primary brand colors (with interactive color pickers), header text colors, organization title, upload custom team logo files (PNG, JPG, SVG, WebP) or specify image URLs, manage address lines, configure program contact names/emails, and set custom footer notes/taglines.
+  - **Live Interactive Email Preview**: Added a real-time email preview in the Portal Settings Email tab that immediately updates as admins adjust colors, logos, and organization contact information.
 - **Automated Weekly Email Digest (`send_weekly_digest`)**: Added an automated Sunday morning digest system summarizing the week ahead tailored per role:
   - **Students**: Confirmed outreach shifts with dates, times, venue locations and addresses; open outreach opportunities in enrolled active programs needing Champions or Helpers; attendance hours snapshot; and upcoming travel commitments.
   - **Parents / Guardians**: Student schedules and outreach commitments, open volunteer opportunities, attendance summary, and travel highlights for their enrolled students. Guaranteed delivery ensures at least one guardian per active student receives notifications even if updates are disabled on secondary contacts.

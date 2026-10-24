@@ -1,10 +1,16 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Application Approved{% endblock %}
+{% block header %}Application Approved{% endblock %}
+
+{% block content %}
 <p>Hi {{ application.applicant_name|default:"" }},</p>
 
-<p><strong>Great news</strong> — your Girls of Steel application has been approved!</p>
+<p><strong>Great news</strong> — your {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel" }} application has been approved!</p>
 
 {% if application.is_mentor %}
 <p>
-    Welcome aboard! You're on your way to becoming a Girls of Steel mentor,
+    Welcome aboard! You're on your way to becoming a {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel" }} mentor,
     and our lead mentors will be in touch with your onboarding details.
 </p>
 <ul>
@@ -47,4 +53,5 @@
 
 <p>If you have any questions, just reply to this email.</p>
 
-<p>— Girls of Steel Robotics</p>
+<p>— {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</p>
+{% endblock %}

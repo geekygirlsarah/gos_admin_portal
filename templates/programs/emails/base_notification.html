@@ -9,69 +9,127 @@
         body {
             margin: 0;
             padding: 16px;
-            background: #ffffff;
+            background-color: #f4f6f8;
             color: #212529;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 16px;
+            font-size: 15px;
             line-height: 1.5;
         }
-        .email-container {
-            max-width: 820px;
+        .email-wrapper {
+            max-width: 680px;
             margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        .brand-header {
+            background-color: {{ org_email_settings.primary_color|default:"#4a154b" }};
+            color: {{ org_email_settings.header_text_color|default:"#ffffff" }};
+            padding: 24px;
+            text-align: center;
+        }
+        .brand-header h1 {
+            color: {{ org_email_settings.header_text_color|default:"#ffffff" }};
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .brand-logo {
+            max-height: 60px;
+            max-width: 240px;
+            height: auto;
+            display: block;
+            margin: 0 auto 10px auto;
+        }
+        .email-body {
+            padding: 30px 26px;
+            background-color: #ffffff;
+        }
+        .org-address-block {
+            font-size: 13px;
+            color: #64748b;
+            text-align: right;
+            line-height: 1.4;
         }
         .fw-bold { font-weight: 700; }
         .fw-semibold { font-weight: 600; }
         .text-end { text-align: right !important; }
-        .text-muted { color: #6c757d !important; }
-        .small { font-size: 14px; }
+        .text-muted { color: #64748b !important; }
+        .small { font-size: 13px; }
         .mb-1 { margin-bottom: 4px; }
         .mb-2 { margin-bottom: 8px; }
         .mb-3 { margin-bottom: 16px; }
+        .mt-2 { margin-top: 8px; }
         .mt-4 { margin-top: 24px; }
-        .h4 { font-size: 20px; margin: 0; }
-        .receipt-header {
-            border-bottom: 2px solid #000;
-            margin-bottom: 16px;
-            padding-bottom: 8px;
+        .h4 { font-size: 19px; margin: 0; color: #1e293b; font-weight: 700; }
+        a { color: {{ org_email_settings.primary_color|default:"#0d6efd" }}; text-decoration: underline; }
+        .email-footer {
+            padding: 22px 26px;
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.5;
         }
-        .org-header { margin-bottom: 12px; }
-        a { color: #0d6efd; text-decoration: underline; }
     </style>
 </head>
 <body>
-<div class="email-container">
-    <table class="org-header text-end" style="width: 100%; border: 0;">
-        <tr>
-            <td class="text-end" style="border: 0;">
-                <div class="fw-bold">Girls of Steel Robotics</div>
-                <div>Carnegie Mellon University</div>
-                <div class="mb-2">5000 Forbes Ave</div>
-                <div>Pittsburgh, PA 15213-3890</div>
-            </td>
-        </tr>
-    </table>
-
-    <table class="receipt-header" style="width: 100%; border-bottom: 2px solid #000; margin-bottom: 16px; padding-bottom: 8px;">
-        <tr>
-            <td style="vertical-align: top;">
-                <h1 class="h4 mb-1">{% block header %}Account Update{% endblock %}</h1>
-                <div class="text-muted small">Date: {% timezone "America/New_York" %}{% now 'm/d/Y h:i A' %}{% endtimezone %}</div>
-            </td>
-        </tr>
-    </table>
-
-    <div class="mb-3">
-        {% block content %}
-        {% endblock %}
+<div class="email-wrapper">
+    <!-- Brand Header -->
+    <div class="brand-header">
+        {% if org_email_settings.logo_url %}
+            <img src="{{ org_email_settings.logo_url }}" alt="{{ org_email_settings.organization_name|default:organization.name|default:'Organization' }}" class="brand-logo" />
+        {% endif %}
+        <h1 class="brand-title">{{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</h1>
     </div>
 
-    <hr />
+    <!-- Inner Email Body -->
+    <div class="email-body">
+        {% if org_email_settings.address_line1 or org_email_settings.address_line2 %}
+        <table style="width: 100%; border: 0; margin-bottom: 16px; border-collapse: collapse;" role="presentation">
+            <tr>
+                <td style="border: 0; padding: 0;" align="right">
+                    <div class="org-address-block text-end">
+                        <div class="fw-bold" style="color: #334155;">{{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</div>
+                        {% if org_email_settings.address_line1 %}<div>{{ org_email_settings.address_line1 }}</div>{% endif %}
+                        {% if org_email_settings.address_line2 %}<div>{{ org_email_settings.address_line2 }}</div>{% endif %}
+                    </div>
+                </td>
+            </tr>
+        </table>
+        {% endif %}
 
-    <div class="mt-4">
-        <div><span class="fw-semibold">Program Contacts:</span> Elizabeth Kysel, Sarah Withee</div>
-        <div><span class="fw-semibold">Email address:</span> <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a></div>
-        <div class="mt-2 small text-muted">This is an automated email. For issues, you may reply or email the address above.</div>
-        <div class="mt-2 small text-muted">Thank you for being part of Girls of Steel Robotics!</div>
+        <table style="width: 100%; border-bottom: 2px solid {{ org_email_settings.primary_color|default:'#4a154b' }}; margin-bottom: 20px; padding-bottom: 10px; border-collapse: collapse;" role="presentation">
+            <tr>
+                <td style="vertical-align: top; border: 0; padding: 0 0 10px 0;">
+                    <h1 class="h4 mb-1">{% block header %}Notification{% endblock %}</h1>
+                    <div class="text-muted small">Date: {% timezone "America/New_York" %}{% now 'm/d/Y h:i A' %}{% endtimezone %}</div>
+                </td>
+            </tr>
+        </table>
+
+        <div class="email-main-content mb-3">
+            {% block content %}
+                {{ body_content|safe }}
+            {% endblock %}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="email-footer">
+        {% if org_email_settings.contact_name or org_email_settings.contact_email %}
+        <div>
+            {% if org_email_settings.contact_name %}<span class="fw-semibold">Program Contacts:</span> {{ org_email_settings.contact_name }}<br>{% endif %}
+            {% if org_email_settings.contact_email %}<span class="fw-semibold">Email address:</span> <a href="mailto:{{ org_email_settings.contact_email }}">{{ org_email_settings.contact_email }}</a>{% endif %}
+        </div>
+        {% endif %}
+        <div class="mt-2 text-muted">This is an automated email. For questions, you may reply or contact us at the address above.</div>
+        {% if org_email_settings.footer_text %}
+        <div class="mt-2 text-muted">{{ org_email_settings.footer_text }}</div>
+        {% endif %}
     </div>
 </div>
 </body>

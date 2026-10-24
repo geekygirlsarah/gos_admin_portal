@@ -32,13 +32,19 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _from_email() -> str:
+def _from_email(organization=None) -> str:
+    from organizations.utils import get_organization_email_settings
+
+    org_cfg = get_organization_email_settings(organization)
     email = (
-        getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+        org_cfg.get("notification_from_email")
+        or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
         or getattr(settings, "DEFAULT_FROM_EMAIL", "")
         or "notifications@girlsofsteelrobotics.org"
     )
-    name = getattr(settings, "DEFAULT_FROM_NAME", None)
+    name = org_cfg.get("sender_display_name") or getattr(
+        settings, "DEFAULT_FROM_NAME", None
+    )
     if name and "<" not in email:
         return f'"{name}" <{email}>'
     return email
@@ -46,6 +52,31 @@ def _from_email() -> str:
 
 def _lead_mentor_email() -> str:
     return getattr(settings, "LEAD_MENTOR_NOTIFICATION_EMAIL", LEAD_MENTOR_EMAIL)
+
+
+def _build_app_email_ctx(
+    application: Optional[Application] = None, extra_ctx: Optional[dict] = None
+) -> dict:
+    from organizations.utils import (
+        get_default_organization,
+        get_organization_email_settings,
+    )
+
+    org = (
+        application.organization
+        if (application and application.organization)
+        else get_default_organization()
+    )
+    org_cfg = get_organization_email_settings(org)
+    ctx = {
+        "org_email_settings": org_cfg,
+        "organization": org,
+    }
+    if application:
+        ctx["application"] = application
+    if extra_ctx:
+        ctx.update(extra_ctx)
+    return ctx
 
 
 def _absolute_apply_url(request, application: Application) -> str:
@@ -75,18 +106,25 @@ def _send_html_email(
     text_body: str,
     html_body: Optional[str],
     recipients: List[str],
+    organization=None,
 ) -> None:
     if not recipients:
         return
 
-    reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+    from organizations.utils import get_organization_email_settings
+
+    org_cfg = get_organization_email_settings(organization)
+    reply_to = org_cfg.get("reply_to_email") or getattr(
+        settings, "DEFAULT_REPLY_TO_EMAIL", None
+    )
     reply_to_list = [reply_to] if reply_to else None
+    from_addr = _from_email(organization)
 
     def _do_send(close_connections: bool = False):
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
-            from_email=_from_email(),
+            from_email=from_addr,
             to=recipients,
             reply_to=reply_to_list,
         )
@@ -124,11 +162,13 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         return
 
     resume_url = _absolute_apply_url(request, application)
-    ctx = {
-        "code": code,
-        "application": application,
-        "resume_url": resume_url,
-    }
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "code": code,
+            "resume_url": resume_url,
+        },
+    )
     subject = render_to_string("account/email/login_code_subject.txt", ctx).strip()
     subject = "".join(subject.splitlines())
     text_body = render_to_string("account/email/login_code_message.txt", ctx)
@@ -139,6 +179,7 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
         text_body=text_body,
         html_body=html_body,
         recipients=[application.email],
+        organization=application.organization,
     )
 
 
@@ -464,10 +505,12 @@ def send_parent_handoff_email(
         )
     resume_url = request.build_absolute_uri(path) if request is not None else path
 
-    ctx = {
-        "application": application,
-        "resume_url": resume_url,
-    }
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "resume_url": resume_url,
+        },
+    )
     text_body = render_to_string("applications/email/parent_handoff.txt", ctx)
     html_body = render_to_string("applications/email/parent_handoff.html", ctx)
     _send_html_email(
@@ -475,6 +518,7 @@ def send_parent_handoff_email(
         text_body=text_body,
         html_body=html_body,
         recipients=[parent_email],
+        organization=application.organization,
     )
 
 
@@ -551,10 +595,12 @@ def send_application_submitted_email(application: Application, request=None) -> 
     if not recipients:
         return
     resume_url = _absolute_apply_url(request, application)
-    ctx = {
-        "application": application,
-        "resume_url": resume_url,
-    }
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "resume_url": resume_url,
+        },
+    )
     text_body = render_to_string("applications/email/application_submitted.txt", ctx)
     html_body = render_to_string("applications/email/application_submitted.html", ctx)
     _send_html_email(
@@ -562,6 +608,7 @@ def send_application_submitted_email(application: Application, request=None) -> 
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
+        organization=application.organization,
     )
 
 
@@ -582,10 +629,12 @@ def send_application_approved_email(application: Application, request=None) -> N
 
     path = reverse("apply_resume_link", kwargs={"app_id": application.application_id})
     documents_url = request.build_absolute_uri(path) if request is not None else path
-    ctx = {
-        "application": application,
-        "documents_url": documents_url,
-    }
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "documents_url": documents_url,
+        },
+    )
     text_body = render_to_string("applications/email/application_approved.txt", ctx)
     html_body = render_to_string("applications/email/application_approved.html", ctx)
     if application.is_mentor:
@@ -597,6 +646,7 @@ def send_application_approved_email(application: Application, request=None) -> N
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
+        organization=application.organization,
     )
 
 
@@ -613,10 +663,12 @@ def send_application_declined_email(
     recipients = _collect_applicant_recipients(application)
     if not recipients:
         return
-    ctx = {
-        "application": application,
-        "reason": (reason or "").strip(),
-    }
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "reason": (reason or "").strip(),
+        },
+    )
     text_body = render_to_string("applications/email/application_declined.txt", ctx)
     html_body = render_to_string("applications/email/application_declined.html", ctx)
     _send_html_email(
@@ -624,6 +676,7 @@ def send_application_declined_email(
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
+        organization=application.organization,
     )
 
 
@@ -637,9 +690,7 @@ def send_application_converted_email(application: Application, request=None) -> 
     recipients = _collect_applicant_recipients(application)
     if not recipients:
         return
-    ctx = {
-        "application": application,
-    }
+    ctx = _build_app_email_ctx(application)
     text_body = render_to_string("applications/email/application_converted.txt", ctx)
     html_body = render_to_string("applications/email/application_converted.html", ctx)
     _send_html_email(
@@ -647,6 +698,7 @@ def send_application_converted_email(application: Application, request=None) -> 
         text_body=text_body,
         html_body=html_body,
         recipients=recipients,
+        organization=application.organization,
     )
 
 
@@ -1104,10 +1156,12 @@ def send_lead_notification_email(application: Application, request=None) -> None
     recipient = _lead_mentor_email()
     if not recipient:
         return
-    ctx = {
-        "application": application,
-        "applicant_data": application.data or {},
-    }
+    ctx = _build_app_email_ctx(
+        application,
+        {
+            "applicant_data": application.data or {},
+        },
+    )
     text_body = render_to_string("applications/email/lead_notification.txt", ctx)
     html_body = render_to_string("applications/email/lead_notification.html", ctx)
     _send_html_email(
@@ -1115,4 +1169,5 @@ def send_lead_notification_email(application: Application, request=None) -> None
         text_body=text_body,
         html_body=html_body,
         recipients=[recipient],
+        organization=application.organization,
     )
