@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - **Audit Digest Integration**: Updated `python manage.py audit_digest` to summarize recent email delivery failures and spam complaints alongside security anomalies.
 
 ### Changed
+- **Email template address moved to footer & automated portal disclaimer**: Reorganized the master notification email template (`base_notification.html`) to place the organization's physical address, contact details, and custom footer notes in the email footer rather than at the top letterhead. Added a clear automated notification disclaimer (`This is an automated notification from the [Organization Name] Portal.`) in the footer, improved mobile readability for transactional notifications, and provided an optional letterhead block placeholder for formal receipts.
 - **Clear, accessible wording for Email Settings and Custom Domains**: Updated the Email Settings page in Portal Settings to use friendly, non-technical explanations for all email delivery and sender configuration options. Replaced technical references (such as toSend engine and email delivery protocols) with straightforward language clarifying that messages are sent from the system's email address by default and can be customized with a friendly sender name, reply-to address, or custom sender profiles. Added a clear guidance box explaining custom sending domain setup (using verification records with domain registrars without needing changes to existing MX records or email inboxes).
 
 ## 2026-10-22
