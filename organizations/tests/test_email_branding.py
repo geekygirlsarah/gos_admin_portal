@@ -186,8 +186,40 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("https://example.org/test-logo.png", rendered)
         self.assertIn("Steel City Robotics", rendered)
         self.assertIn("100 Forbes Ave", rendered)
+        self.assertIn("Pittsburgh, PA", rendered)
         self.assertIn("Custom Footer Note", rendered)
         self.assertIn("coach@steelcity.org", rendered)
+        # Address and automated notice should be rendered inside the footer
+        self.assertIn("email-footer", rendered)
+        footer_portion = rendered.split('class="email-footer"')[1]
+        self.assertIn("100 Forbes Ave", footer_portion)
+        self.assertIn(
+            "This is an automated notification from the Steel City Robotics Portal.",
+            footer_portion,
+        )
+
+    def test_base_notification_top_letterhead_block(self):
+        template_str = (
+            '{% extends "programs/emails/base_notification.html" %}'
+            '{% block top_letterhead %}<div id="receipt-letterhead">Invoice #12345</div>{% endblock %}'
+            "{% block content %}<p>Receipt details here</p>{% endblock %}"
+        )
+        from django.template import Context, Template
+
+        template = Template(template_str)
+        rendered = template.render(
+            Context(
+                {
+                    "org_email_settings": {"organization_name": "Test Org"},
+                    "organization": self.org,
+                }
+            )
+        )
+        self.assertIn('<div id="receipt-letterhead">Invoice #12345</div>', rendered)
+        self.assertIn("Receipt details here", rendered)
+        self.assertIn(
+            "This is an automated notification from the Test Org Portal.", rendered
+        )
 
     def test_send_templated_notification_uses_branding(self):
         self.org_settings.data = {

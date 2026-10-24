@@ -1292,11 +1292,6 @@
                                         </div>
                                         <!-- Body Preview -->
                                         <div style="padding: 16px;">
-                                            <div class="text-end mb-2 small text-muted">
-                                                <div id="preview_org_sub" class="fw-bold text-dark" style="font-size: 11px;">{{ email_settings.organization_name|default:'Girls of Steel Robotics' }}</div>
-                                                <div id="preview_addr1" style="font-size: 11px;">{{ email_settings.address_line1 }}</div>
-                                                <div id="preview_addr2" style="font-size: 11px;">{{ email_settings.address_line2 }}</div>
-                                            </div>
                                             <div id="preview_rule" style="border-bottom: 2px solid {{ email_settings.primary_color|default:'#4a154b' }}; padding-bottom: 6px; margin-bottom: 12px;">
                                                 <div class="fw-bold text-dark" style="font-size: 14px;">Notification Title</div>
                                                 <div class="text-muted" style="font-size: 11px;">Date: Today</div>
@@ -1307,8 +1302,16 @@
                                         </div>
                                         <!-- Footer Preview -->
                                         <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 16px; font-size: 11px; color: #64748b;">
+                                            <div class="mb-1">
+                                                <div id="preview_org_sub" class="fw-bold text-dark" style="font-size: 11px;">{{ email_settings.organization_name|default:'Girls of Steel Robotics' }}</div>
+                                                <div id="preview_addr1" style="font-size: 11px;">{{ email_settings.address_line1 }}</div>
+                                                <div id="preview_addr2" style="font-size: 11px;">{{ email_settings.address_line2 }}</div>
+                                            </div>
                                             <div><span class="fw-semibold">Program Contacts:</span> <span id="preview_contact_name">{{ email_settings.contact_name|default:'Elizabeth Kysel, Sarah Withee' }}</span></div>
                                             <div><span class="fw-semibold">Email:</span> <span id="preview_contact_email">{{ email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</span></div>
+                                            <div class="mt-2 text-muted" style="font-size: 10px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                                                This is an automated notification from the <span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal.
+                                            </div>
                                             <div class="mt-1" id="preview_footer_text">{{ email_settings.footer_text }}</div>
                                         </div>
                                     </div>
@@ -1507,6 +1510,7 @@
         var previewOrgTitle = document.getElementById('preview_org_title');
         var previewLogo = document.getElementById('preview_logo');
         var previewOrgSub = document.getElementById('preview_org_sub');
+        var previewOrgAutomated = document.getElementById('preview_org_automated');
         var previewAddr1 = document.getElementById('preview_addr1');
         var previewAddr2 = document.getElementById('preview_addr2');
         var previewRule = document.getElementById('preview_rule');
@@ -1564,6 +1568,7 @@
                 var val = orgNameInput.value || 'Girls of Steel Robotics';
                 if (previewOrgTitle) previewOrgTitle.textContent = val;
                 if (previewOrgSub) previewOrgSub.textContent = val;
+                if (previewOrgAutomated) previewOrgAutomated.textContent = val;
             });
         }
 
