@@ -94,7 +94,7 @@ ruamel.yaml.clib==0.2.15
 safety==3.7.0
 safety-schemas==0.0.16
 semantic-version==2.10.0
-setuptools==83.0.0
+setuptools==84.1.0
 shellingham==1.5.4
 sqlparse==0.6.0
 sse-starlette==3.4.4
