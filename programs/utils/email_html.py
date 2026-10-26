@@ -766,13 +766,39 @@ def normalize_email_html(fragment: str) -> str:
     return _inner_html(wrapper)
 
 
-def wrap_email_document(fragment: str) -> str:
+def wrap_email_document(
+    fragment: str,
+    organization: Any = None,
+    subject: str | None = None,
+    header: str | None = None,
+) -> str:
     """Normalize ``fragment`` and wrap it in a complete HTML email document."""
+    from django.template.loader import render_to_string
+
+    from organizations.utils import (
+        get_default_organization,
+        get_organization_email_settings,
+    )
+
     content = normalize_email_html(fragment)
-    return _EMAIL_DOCUMENT.format(css=EMAIL_BASE_CSS, content=content)
+    org = organization or get_default_organization()
+    org_settings = get_organization_email_settings(org)
+    context = {
+        "body_content": content,
+        "organization": org,
+        "org_email_settings": org_settings,
+        "subject": subject,
+        "header": header or subject or "Notification",
+    }
+    return render_to_string("programs/emails/base_notification.html", context)
 
 
-def build_email_parts(fragment: str) -> tuple[str, str, list[InlineImage]]:
+def build_email_parts(
+    fragment: str,
+    organization: Any = None,
+    subject: str | None = None,
+    header: str | None = None,
+) -> tuple[str, str, list[InlineImage]]:
     """Build the ``(html, text, inline_images)`` parts for a message sent from a fragment.
 
     Wraps the fragment in an email document, inlines CSS with premailer,
@@ -780,7 +806,12 @@ def build_email_parts(fragment: str) -> tuple[str, str, list[InlineImage]]:
     plain-text alternative.
     """
     images = extract_inline_images(fragment)
-    document = wrap_email_document(fragment)
+    document = wrap_email_document(
+        fragment,
+        organization=organization,
+        subject=subject,
+        header=header,
+    )
     try:
         inlined = transform(document)
     except Exception:  # pragma: no cover - premailer is already defensive

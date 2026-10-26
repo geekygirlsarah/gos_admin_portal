@@ -5,7 +5,7 @@
 
 {% block content %}
 <p>Hi {{ application.applicant_name|default:"" }},</p>
-<p>Thanks for applying to <strong>{{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</strong>!</p>
+<p>Thanks for applying to <strong>{{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}</strong>!</p>
 <p>
     {% if not application.is_mentor %}
     <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>

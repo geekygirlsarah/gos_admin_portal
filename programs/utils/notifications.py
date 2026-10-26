@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 import secrets
 import string
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, mailers
+
+logger = logging.getLogger(__name__)
 
 LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
@@ -182,6 +185,13 @@ def send_templated_notification(
             ctx["organization"] = get_default_organization()
 
     html_message = render_to_string(template_name, ctx)
+    try:
+        from premailer import transform
+
+        html_message = transform(html_message)
+    except Exception as exc:
+        logger.debug("Premailer inlining skipped: %s", exc)
+
     # Generate a reasonable plain text version from the HTML by stripping tags and unescaping
     plain_message = html.unescape(strip_tags(html_message)).strip()
     # Normalize excessive whitespace/newlines

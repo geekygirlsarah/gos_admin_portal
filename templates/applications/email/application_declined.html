@@ -6,7 +6,7 @@
 {% block content %}
 <p>Hello {{ application.applicant_name|default:"" }},</p>
 
-<p>Thank you for applying to {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}. After review, we are
+<p>Thank you for applying to {{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}. After review, we are
 unable to approve your application at this time.</p>
 
 <p>
@@ -28,5 +28,5 @@ unable to approve your application at this time.</p>
 <p>If you have questions, please reply to this email or contact us at
 <a href="mailto:{{ org_email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}">{{ org_email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</a>.</p>
 
-<p>— {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</p>
+<p>— {{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}</p>
 {% endblock %}

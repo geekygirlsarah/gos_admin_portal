@@ -1191,12 +1191,17 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
                     ext = os.path.splitext(logo_file.name)[1].lower() or ".png"
                     filename = f"org_logos/{org.slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
                     saved_path = default_storage.save(filename, logo_file)
-                    logo_url = default_storage.url(saved_path)
+                    raw_url = default_storage.url(saved_path)
+                    logo_url = (
+                        request.build_absolute_uri(raw_url) if request else raw_url
+                    )
                 except Exception as e:
                     messages.error(request, f"Invalid logo image file: {e}")
                     return redirect("/programs/settings/?tab=email")
             elif not logo_url and "logo_url" not in request.POST:
                 logo_url = email_cfg.get("logo_url", "")
+            elif logo_url and logo_url.startswith("/") and request:
+                logo_url = request.build_absolute_uri(logo_url)
 
             email_cfg["primary_color"] = primary_color
             email_cfg["secondary_color"] = secondary_color

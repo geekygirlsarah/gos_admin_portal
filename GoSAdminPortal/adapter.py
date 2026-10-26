@@ -274,8 +274,21 @@ class AccountAdapter(DefaultAccountAdapter):
             ).start()
 
     def render_mail(self, template_prefix, email, context, headers=None):
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_email_settings,
+        )
+
+        org = get_default_organization()
+        if "organization" not in context:
+            context["organization"] = org
+        if "org_email_settings" not in context:
+            context["org_email_settings"] = get_organization_email_settings(org)
+
         msg = super().render_mail(template_prefix, email, context, headers=headers)
-        reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", None)
+        reply_to = context["org_email_settings"].get("reply_to_email") or getattr(
+            settings, "DEFAULT_REPLY_TO_EMAIL", None
+        )
         if reply_to and not msg.reply_to:
             msg.reply_to = [reply_to]
         return msg

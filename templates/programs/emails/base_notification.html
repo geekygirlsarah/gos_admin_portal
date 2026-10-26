@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Notification{% endblock %}</title>
+    <title>{% block title %}{{ subject|default:"Notification" }}{% endblock %}</title>
     <style>
         body {
             margin: 0;
@@ -65,6 +65,11 @@
         .mt-2 { margin-top: 8px; }
         .mt-4 { margin-top: 24px; }
         .h4 { font-size: 19px; margin: 0; color: #1e293b; font-weight: 700; }
+        p { margin: 0 0 12px 0; }
+        table { border-collapse: collapse; max-width: 100%; }
+        td, th { padding: 6px; border: 1px solid #dee2e6; vertical-align: top; }
+        table[role="presentation"] td, table[role="presentation"] th, table.borderless td, table.borderless th { border: 0 !important; }
+        img { max-width: 100%; height: auto; }
         a { color: {{ org_email_settings.primary_color|default:"#0d6efd" }}; text-decoration: underline; }
         .email-footer {
             padding: 22px 26px;
@@ -77,29 +82,21 @@
     </style>
 </head>
 <body>
-<div class="email-wrapper">
+<div class="email-wrapper" style="max-width: 680px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
     <!-- Brand Header -->
-    <div class="brand-header">
+    <div class="brand-header" style="background-color: {{ org_email_settings.primary_color|default:'#4a154b' }}; color: {{ org_email_settings.header_text_color|default:'#ffffff' }}; padding: 24px; text-align: center;">
         {% if org_email_settings.logo_url %}
-            <img src="{{ org_email_settings.logo_url }}" alt="{{ org_email_settings.organization_name|default:organization.name|default:'Organization' }}" class="brand-logo" />
+            <img src="{{ org_email_settings.logo_url }}" alt="{{ org_email_settings.organization_name|default:'Organization' }}" class="brand-logo" style="max-height: 60px; max-width: 240px; height: auto; display: block; margin: 0 auto 10px auto; border: 0;" />
         {% endif %}
-        <h1 class="brand-title">{{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}</h1>
+        <h1 class="brand-title" style="color: {{ org_email_settings.header_text_color|default:'#ffffff' }}; margin: 0; font-size: 22px; font-weight: 700; line-height: 1.2; text-align: center; letter-spacing: -0.01em;">{{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}</h1>
     </div>
 
     <!-- Inner Email Body -->
-    <div class="email-body">
+    <div class="email-body" style="padding: 30px 26px; background-color: #ffffff;">
         {% block top_letterhead %}{% endblock %}
+        {% block header_bar %}{% endblock %}
 
-        <table style="width: 100%; border-bottom: 2px solid {{ org_email_settings.primary_color|default:'#4a154b' }}; margin-bottom: 20px; padding-bottom: 10px; border-collapse: collapse;" role="presentation">
-            <tr>
-                <td style="vertical-align: top; border: 0; padding: 0 0 10px 0;">
-                    <h1 class="h4 mb-1">{% block header %}Notification{% endblock %}</h1>
-                    <div class="text-muted small">Date: {% timezone "America/New_York" %}{% now 'm/d/Y h:i A' %}{% endtimezone %}</div>
-                </td>
-            </tr>
-        </table>
-
-        <div class="email-main-content mb-3">
+        <div class="email-main-content mb-3" style="line-height: 1.5;">
             {% block content %}
                 {{ body_content|safe }}
             {% endblock %}
@@ -107,10 +104,10 @@
     </div>
 
     <!-- Footer -->
-    <div class="email-footer">
+    <div class="email-footer" style="padding: 22px 26px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 13px; color: #64748b; line-height: 1.5;">
         <!-- Organization & Physical Address -->
         <div style="font-weight: 600; color: #334155; margin-bottom: 4px;">
-            {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel Robotics" }}
+            {{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}
         </div>
         {% if org_email_settings.address_line1 or org_email_settings.address_line2 %}
         <div style="margin-bottom: 8px;">
@@ -121,12 +118,12 @@
         {% if org_email_settings.contact_name or org_email_settings.contact_email %}
         <div style="margin-bottom: 8px;">
             {% if org_email_settings.contact_name %}<span class="fw-semibold">Program Contacts:</span> {{ org_email_settings.contact_name }}<br>{% endif %}
-            {% if org_email_settings.contact_email %}<span class="fw-semibold">Email address:</span> <a href="mailto:{{ org_email_settings.contact_email }}">{{ org_email_settings.contact_email }}</a>{% endif %}
+            {% if org_email_settings.contact_email %}<span class="fw-semibold">Email address:</span> <a href="mailto:{{ org_email_settings.contact_email }}" style="color: {{ org_email_settings.primary_color|default:'#0d6efd' }}; text-decoration: underline;">{{ org_email_settings.contact_email }}</a>{% endif %}
         </div>
         {% endif %}
 
         <div class="mt-2 text-muted" style="font-size: 12px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
-            This is an automated notification from the {{ org_email_settings.organization_name|default:organization.name|default:"Girls of Steel" }} Portal.
+            This is an automated notification from the {{ org_email_settings.organization_name|default:"Girls of Steel" }} Portal. &bull; Sent on {% timezone "America/New_York" %}{% now 'm/d/Y \a\t g:i A' %}{% endtimezone %}
         </div>
         {% if org_email_settings.footer_text %}
         <div class="mt-2 text-muted" style="font-size: 12px;">{{ org_email_settings.footer_text }}</div>
