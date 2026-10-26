@@ -109,17 +109,23 @@ class ToSendEmailBackend(BaseEmailBackend):
                     else:
                         content_bytes = bytes(content)
                     b64_content = base64.b64encode(content_bytes).decode("ascii")
+                    att_name = str(filename or "attachment")
+                    mimetype_str = str(mimetype or "application/octet-stream")
                     attachments_payload.append(
                         {
-                            "filename": filename or "attachment",
+                            "name": att_name,
+                            "filename": att_name,
                             "content": b64_content,
-                            "content_type": mimetype or "application/octet-stream",
+                            "type": mimetype_str,
+                            "content_type": mimetype_str,
                         }
                     )
                 elif isinstance(att, email.message.Message):
-                    # MIME message format (e.g. MIMEImage, MIMEBase)
+                    # MIME message format (e.g. MIMEImage, MIMEBase, MIMEPart)
                     filename = att.get_filename() or "attachment"
-                    mimetype = att.get_content_type()
+                    mimetype_str = str(
+                        att.get_content_type() or "application/octet-stream"
+                    )
                     payload_bytes = att.get_payload(decode=True)
                     if payload_bytes is None:
                         raw = att.get_payload()
@@ -127,13 +133,19 @@ class ToSendEmailBackend(BaseEmailBackend):
                             raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
                         )
                     b64_content = base64.b64encode(payload_bytes).decode("ascii")
+                    att_name = str(filename or "attachment")
                     att_dict: dict[str, Any] = {
-                        "filename": filename,
+                        "name": att_name,
+                        "filename": att_name,
                         "content": b64_content,
-                        "content_type": mimetype,
+                        "type": mimetype_str,
+                        "content_type": mimetype_str,
                     }
                     if "Content-ID" in att:
                         att_dict["content_id"] = att["Content-ID"]
+                    disposition = att.get_content_disposition()
+                    if disposition:
+                        att_dict["disposition"] = disposition
                     attachments_payload.append(att_dict)
 
         if attachments_payload:

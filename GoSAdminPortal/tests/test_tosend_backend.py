@@ -79,6 +79,20 @@ class ToSendEmailBackendTests(TestCase):
         png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00"
         msg.attach("logo.png", png_bytes, "image/png")
 
+        # MIME part attachment (e.g. inline CID image)
+        from email.message import EmailMessage as MIMEPart
+
+        mime_part = MIMEPart()
+        mime_part.set_content(
+            b"inline_image_bytes",
+            maintype="image",
+            subtype="jpeg",
+            disposition="inline",
+            filename="header.jpg",
+        )
+        mime_part.add_header("Content-ID", "<header-cid-123>")
+        msg.attach(mime_part)
+
         sent = self.backend.send_messages([msg])
         self.assertEqual(sent, 1)
 
@@ -87,10 +101,12 @@ class ToSendEmailBackendTests(TestCase):
         self.assertEqual(payload["html"], "<h1>HTML Body</h1>")
 
         attachments = payload["attachments"]
-        self.assertEqual(len(attachments), 2)
+        self.assertEqual(len(attachments), 3)
 
         pdf_att = attachments[0]
+        self.assertEqual(pdf_att["name"], "document.pdf")
         self.assertEqual(pdf_att["filename"], "document.pdf")
+        self.assertEqual(pdf_att["type"], "application/pdf")
         self.assertEqual(pdf_att["content_type"], "application/pdf")
         self.assertEqual(
             base64.b64decode(pdf_att["content"]).decode("latin1"),
@@ -98,12 +114,21 @@ class ToSendEmailBackendTests(TestCase):
         )
 
         img_att = attachments[1]
+        self.assertEqual(img_att["name"], "logo.png")
         self.assertEqual(img_att["filename"], "logo.png")
+        self.assertEqual(img_att["type"], "image/png")
         self.assertEqual(img_att["content_type"], "image/png")
         self.assertEqual(
             base64.b64decode(img_att["content"]),
             png_bytes,
         )
+
+        mime_att = attachments[2]
+        self.assertEqual(mime_att["name"], "header.jpg")
+        self.assertEqual(mime_att["filename"], "header.jpg")
+        self.assertEqual(mime_att["content_id"], "<header-cid-123>")
+        self.assertEqual(mime_att["type"], "image/jpeg")
+        self.assertEqual(mime_att["content_type"], "image/jpeg")
 
     @mock.patch("requests.post")
     def test_batch_emails_chunking_over_100(self, mock_post):

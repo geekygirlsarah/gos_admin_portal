@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-25
+
+### Fixed
+- **toSend REST API email attachment delivery**: Fixed an issue where emails sent via toSend containing attachments (such as embedded inline images or files) were rejected by the toSend v2 API with HTTP 422 due to missing required `name` and `type` (MIME type) properties on attachment payloads. Serialized attachment payloads now provide both `name` and `type` attributes (alongside `filename`, `content_type`, and `disposition`) across all attachment formats.
+
 ## 2026-10-23
 
 ### Added
