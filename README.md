@@ -27,6 +27,7 @@ All tasks related to the portal are to try to aim for these three goals:
 
 3. Install dependencies
    pip install -r requirements.txt
+   pip install -r requirements-dev.txt  # linters, coverage, safety (local CI)
 
 4. Apply database migrations
    python manage.py migrate

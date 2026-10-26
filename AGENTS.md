@@ -50,7 +50,7 @@ Girls of Steel (GoS) Admin Portal is a Django 6.1 web application for managing:
 
 | Task | Command |
 |------|---------|
-| Install dependencies | `pip install -r requirements.txt` |
+| Install dependencies | `pip install -r requirements.txt` (runtime) then `pip install -r requirements-dev.txt` (linters/CI) |
 | Run migrations | `python manage.py migrate` |
 | Create superuser | `python manage.py createsuperuser` |
 | Seed dev data | `python manage.py seed_db` |

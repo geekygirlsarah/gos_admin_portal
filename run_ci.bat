@@ -3,7 +3,7 @@ echo --- Upgrading Pip ---
 python -m pip install --upgrade pip
 
 echo --- Installing Dependencies ---
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 echo --- Running Linter (flake8) ---
 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
