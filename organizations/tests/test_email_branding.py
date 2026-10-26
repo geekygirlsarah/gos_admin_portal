@@ -56,6 +56,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "Thank you for being part of Girls of Steel Robotics!",
         )
         self.assertEqual(cfg["contact_email"], "leads@girlsofsteelrobotics.org")
+        self.assertIn("portal_url", cfg)
 
     def test_custom_branding_settings(self):
         custom_cfg = {
@@ -63,6 +64,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "secondary_color": "#abcdef",
             "header_text_color": "#fefefe",
             "logo_url": "https://example.com/logo.png",
+            "portal_url": "https://portal.teamhyperion.org",
             "organization_name": "Team Hyperion",
             "address_line1": "123 Tech Way",
             "address_line2": "Suite 400",
@@ -77,6 +79,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(cfg["secondary_color"], "#abcdef")
         self.assertEqual(cfg["header_text_color"], "#fefefe")
         self.assertEqual(cfg["logo_url"], "https://example.com/logo.png")
+        self.assertEqual(cfg["portal_url"], "https://portal.teamhyperion.org")
         self.assertEqual(cfg["organization_name"], "Team Hyperion")
         self.assertEqual(cfg["address_line1"], "123 Tech Way")
         self.assertEqual(cfg["address_line2"], "Suite 400")
@@ -100,6 +103,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "contact_name": "Alex Taylor",
             "contact_email": "leads@robotitans.org",
             "logo_url": "https://example.org/static/logo.png",
+            "portal_url": "https://portal.robotitans.org",
         }
         resp = self.client.post(self.url, post_data)
         self.assertEqual(resp.status_code, 302)
@@ -110,6 +114,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(cfg.get("organization_name"), "RoboTitans")
         self.assertEqual(cfg.get("address_line1"), "456 Innovation Blvd")
         self.assertEqual(cfg.get("logo_url"), "https://example.org/static/logo.png")
+        self.assertEqual(cfg.get("portal_url"), "https://portal.robotitans.org")
 
     def test_portal_settings_upload_logo_file(self):
         self.client.login(
@@ -173,6 +178,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "address_line1": "100 Forbes Ave",
             "address_line2": "Pittsburgh, PA",
             "footer_text": "Custom Footer Note",
+            "portal_url": "https://portal.steelcity.org",
             "contact_name": "Coach Kelly",
             "contact_email": "coach@steelcity.org",
         }
@@ -194,9 +200,41 @@ class OrganizationEmailBrandingTests(TestCase):
         footer_portion = rendered.split('class="email-footer"')[1]
         self.assertIn("100 Forbes Ave", footer_portion)
         self.assertIn(
-            "This is an automated notification from the Steel City Robotics Portal.",
+            '<a href="https://portal.steelcity.org" '
+            'style="color: #7b1fa2; text-decoration: underline;">'
+            "Steel City Robotics Portal</a>",
             footer_portion,
         )
+        self.assertIn(
+            'This is an automated notification from the <a href="https://portal.steelcity.org"',
+            footer_portion,
+        )
+
+    def test_portal_url_derived_from_custom_domain(self):
+        custom_cfg = {
+            "custom_domain": {
+                "enabled": True,
+                "domain": "titanrobotics.org",
+            }
+        }
+        update_organization_email_settings(self.org, custom_cfg)
+        cfg = get_organization_email_settings(self.org)
+        self.assertEqual(cfg["portal_url"], "https://titanrobotics.org")
+
+    def test_base_notification_template_renders_without_link_when_no_portal_url(self):
+        cfg = {
+            "organization_name": "Test Org",
+            "portal_url": "",
+        }
+        context = {
+            "org_email_settings": cfg,
+            "organization": self.org,
+        }
+        rendered = render_to_string("programs/emails/base_notification.html", context)
+        self.assertIn(
+            "This is an automated notification from the Test Org Portal.", rendered
+        )
+        self.assertNotIn("Test Org Portal</a>", rendered)
 
     def test_base_notification_top_letterhead_block(self):
         template_str = (
@@ -210,7 +248,10 @@ class OrganizationEmailBrandingTests(TestCase):
         rendered = template.render(
             Context(
                 {
-                    "org_email_settings": {"organization_name": "Test Org"},
+                    "org_email_settings": {
+                        "organization_name": "Test Org",
+                        "portal_url": "https://testorg.example.com",
+                    },
                     "organization": self.org,
                 }
             )
@@ -218,7 +259,8 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn('<div id="receipt-letterhead">Invoice #12345</div>', rendered)
         self.assertIn("Receipt details here", rendered)
         self.assertIn(
-            "This is an automated notification from the Test Org Portal.", rendered
+            'This is an automated notification from the <a href="https://testorg.example.com"',
+            rendered,
         )
 
     def test_send_templated_notification_uses_branding(self):
@@ -257,6 +299,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertContains(resp, "Email Branding &amp; Template Customization")
         self.assertContains(resp, "Primary Brand Color")
         self.assertContains(resp, "Organization Logo")
+        self.assertContains(resp, "Portal Web Address / URL")
         self.assertContains(resp, "Email Template Live Preview")
 
     def test_wrap_email_document_renders_branding(self):
@@ -268,6 +311,7 @@ class OrganizationEmailBrandingTests(TestCase):
                 "organization_name": "Titan Robotics",
                 "address_line1": "456 Tech Blvd",
                 "contact_email": "info@titanrobotics.org",
+                "portal_url": "https://portal.titanrobotics.org",
             }
         }
         self.org_settings.save()
@@ -284,7 +328,8 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("Team Announcement", html)
         self.assertIn("Important announcement to the team.", html)
         self.assertIn(
-            "This is an automated notification from the Titan Robotics Portal.", html
+            'This is an automated notification from the <a href="https://portal.titanrobotics.org"',
+            html,
         )
 
     def test_build_email_parts_renders_branded_html_and_text(self):
@@ -294,6 +339,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "email_settings": {
                 "organization_name": "Titan Robotics",
                 "address_line1": "456 Tech Blvd",
+                "portal_url": "https://portal.titanrobotics.org",
             }
         }
         self.org_settings.save()
@@ -317,6 +363,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "email_settings": {
                 "primary_color": "#2c3e50",
                 "organization_name": "Apex Robotics",
+                "portal_url": "https://apex.example.com",
             }
         }
         self.org_settings.save()
@@ -337,7 +384,7 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertIn("Apex Robotics", html_body)
         self.assertIn("#2c3e50", html_body)
         self.assertIn(
-            "This is an automated notification from the Apex Robotics Portal.",
+            'This is an automated notification from the <a href="https://apex.example.com"',
             html_body,
         )
 
@@ -349,6 +396,7 @@ class OrganizationEmailBrandingTests(TestCase):
             "email_settings": {
                 "primary_color": "#008080",
                 "organization_name": "Teal Robotics",
+                "portal_url": "https://teal.example.com",
             }
         }
         self.org_settings.save()
@@ -367,13 +415,14 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(len(sent.alternatives), 1)
         html_body, mime = sent.alternatives[0]
         self.assertEqual(mime, "text/html")
-        self.assertIn("Teal Robotics", html_body)
         self.assertIn("Visitor Waiver", html_body)
-        self.assertIn("Jane Doe", html_body)
+        self.assertIn("Jane", html_body)
+        self.assertIn("Teal Robotics", html_body)
         self.assertIn(
-            "This is an automated notification from the Teal Robotics Portal.",
+            'This is an automated notification from the <a href="https://teal.example.com"',
             html_body,
         )
+        self.assertIn("Jane Doe", html_body)
 
     def test_relative_logo_url_resolution(self):
         from django.test import override_settings

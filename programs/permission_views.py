@@ -1167,6 +1167,9 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             footer_text = request.POST.get("footer_text", "").strip()
             contact_name = request.POST.get("contact_name", "").strip()
             contact_email = request.POST.get("contact_email", "").strip()
+            portal_url = request.POST.get("portal_url", "").strip()
+            if portal_url and not portal_url.startswith(("http://", "https://")):
+                portal_url = f"https://{portal_url}"
 
             logo_url = request.POST.get("logo_url", "").strip()
             remove_logo = request.POST.get("remove_logo") in (
@@ -1210,6 +1213,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             email_cfg["address_line1"] = address_line1
             email_cfg["address_line2"] = address_line2
             email_cfg["footer_text"] = footer_text
+            email_cfg["portal_url"] = portal_url
             email_cfg["contact_name"] = contact_name
             email_cfg["contact_email"] = contact_email
             email_cfg["logo_url"] = logo_url

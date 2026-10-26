@@ -1261,6 +1261,11 @@
                                         <input type="email" name="contact_email" id="branding_contact_email" class="form-control form-control-sm" value="{{ email_settings.contact_email }}" placeholder="e.g. leads@girlsofsteelrobotics.org">
                                     </div>
                                     <div class="col-12">
+                                        <label for="branding_portal_url" class="form-label fw-semibold small">Portal Web Address / URL</label>
+                                        <input type="url" name="portal_url" id="branding_portal_url" class="form-control form-control-sm" value="{{ email_settings.portal_url }}" placeholder="e.g. https://portal.girlsofsteelrobotics.org">
+                                        <div class="form-text small">Web address linked in the automated notification footer (defaults to custom domain or site base URL).</div>
+                                    </div>
+                                    <div class="col-12">
                                         <label for="branding_footer_text" class="form-label fw-semibold small">Footer Tagline / Disclaimer</label>
                                         <input type="text" name="footer_text" id="branding_footer_text" class="form-control form-control-sm" value="{{ email_settings.footer_text }}" placeholder="e.g. Thank you for being part of Girls of Steel Robotics!">
                                     </div>
@@ -1306,7 +1311,7 @@
                                             <div><span class="fw-semibold">Program Contacts:</span> <span id="preview_contact_name">{{ email_settings.contact_name|default:'Elizabeth Kysel, Sarah Withee' }}</span></div>
                                             <div><span class="fw-semibold">Email:</span> <span id="preview_contact_email">{{ email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</span></div>
                                             <div class="mt-2 text-muted" style="font-size: 10px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
-                                                This is an automated notification from the <span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal &bull; Sent on Today
+                                                This is an automated notification from the <a href="{{ email_settings.portal_url|default:'#' }}" id="preview_portal_link" style="color: {{ email_settings.primary_color|default:'#0d6efd' }}; text-decoration: underline;"><span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal</a> &bull; Sent on Today
                                             </div>
                                             <div class="mt-1" id="preview_footer_text">{{ email_settings.footer_text }}</div>
                                         </div>
@@ -1500,6 +1505,7 @@
         var addr2Input = document.getElementById('branding_address_line2');
         var contactNameInput = document.getElementById('branding_contact_name');
         var contactEmailInput = document.getElementById('branding_contact_email');
+        var portalUrlInput = document.getElementById('branding_portal_url');
         var footerTextInput = document.getElementById('branding_footer_text');
 
         var previewHeader = document.getElementById('preview_header');
@@ -1510,6 +1516,7 @@
         var previewAddr1 = document.getElementById('preview_addr1');
         var previewAddr2 = document.getElementById('preview_addr2');
         var previewLink = document.getElementById('preview_link');
+        var previewPortalLink = document.getElementById('preview_portal_link');
         var previewContactName = document.getElementById('preview_contact_name');
         var previewContactEmail = document.getElementById('preview_contact_email');
         var previewFooterText = document.getElementById('preview_footer_text');
@@ -1526,6 +1533,9 @@
             }
             if (previewLink) {
                 previewLink.style.color = color;
+            }
+            if (previewPortalLink) {
+                previewPortalLink.style.color = color;
             }
         }
 
@@ -1608,6 +1618,13 @@
         if (contactEmailInput) {
             contactEmailInput.addEventListener('input', function() {
                 if (previewContactEmail) previewContactEmail.textContent = contactEmailInput.value;
+            });
+        }
+        if (portalUrlInput) {
+            portalUrlInput.addEventListener('input', function() {
+                if (previewPortalLink) {
+                    previewPortalLink.href = portalUrlInput.value || '#';
+                }
             });
         }
         if (footerTextInput) {

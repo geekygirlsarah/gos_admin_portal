@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-26
+
+### Added
+- **Portal URL link in automated email footers**: Outgoing automated notifications and transactional emails now link directly to the team's admin portal in the footer notice (`This is an automated notification from the [Team Portal](url).`). Organizations can customize their portal web address under Portal Settings → Email tab, or have it automatically resolve from their configured custom domain or site base URL.
+
 ## 2026-10-25
 
 ### Fixed

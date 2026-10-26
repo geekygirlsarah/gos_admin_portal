@@ -45,6 +45,40 @@ def get_site_base_url() -> str:
     return ""
 
 
+def _resolve_portal_url(raw_cfg: Dict[str, Any], org: Optional[Organization]) -> str:
+    """Resolve the public portal URL from email config, custom domain, or site settings."""
+    portal_url = raw_cfg.get("portal_url") or ""
+    if not portal_url:
+        custom_domain_cfg = raw_cfg.get("custom_domain") or {}
+        if custom_domain_cfg.get("enabled") and custom_domain_cfg.get("domain"):
+            domain_val = str(custom_domain_cfg.get("domain")).strip()
+            if domain_val:
+                portal_url = (
+                    domain_val
+                    if domain_val.startswith(("http://", "https://"))
+                    else f"https://{domain_val}"
+                )
+    if (
+        not portal_url
+        and org
+        and getattr(org, "settings", None)
+        and isinstance(org.settings, dict)
+    ):
+        portal_url = (
+            org.settings.get("portal_url") or org.settings.get("site_url") or ""
+        )
+    if not portal_url:
+        portal_url = get_site_base_url()
+
+    if portal_url:
+        portal_url = str(portal_url).strip()
+        if not portal_url.startswith(("http://", "https://")):
+            portal_url = f"https://{portal_url}"
+        portal_url = portal_url.rstrip("/")
+
+    return portal_url
+
+
 def get_default_organization() -> Optional[Organization]:
     """Return the active or single seeded organization (or None)."""
     try:
@@ -139,6 +173,8 @@ def get_organization_email_settings(
         if "footer_text" in raw_cfg
         else "Thank you for being part of Girls of Steel Robotics!"
     )
+    portal_url = _resolve_portal_url(raw_cfg, org)
+
     contact_name = (
         raw_cfg.get("contact_name")
         if "contact_name" in raw_cfg
@@ -164,6 +200,7 @@ def get_organization_email_settings(
         "address_line1": address_line1,
         "address_line2": address_line2,
         "footer_text": footer_text,
+        "portal_url": portal_url,
         "contact_name": contact_name,
         "contact_email": contact_email,
     }
