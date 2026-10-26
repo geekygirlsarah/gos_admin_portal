@@ -2,6 +2,60 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-26
+
+### Changed
+- **Runtime vs dev Python dependencies**: `requirements.txt` now lists only first-party production packages (Django, gunicorn, etc.). Linters, coverage, safety, and pre-commit live in `requirements-dev.txt`. Production `build.sh` still installs runtime only; local `run_ci` scripts install the dev file.
+- **OSV PR scan is runtime-only**: The GitHub OSV workflow now scans `requirements.txt` only (not `requirements-dev.txt`). Runtime pins include patched `certifi`, `idna`, and `h11`.
+
+### Added
+- **Portal URL link in automated email footers**: Outgoing automated notifications and transactional emails now link directly to the team's admin portal in the footer notice (`This is an automated notification from the [Team Portal](url).`). Organizations can customize their portal web address under Portal Settings → Email tab, or have it automatically resolve from their configured custom domain or site base URL.
+
+### Fixed
+- **PostgreSQL test connection stability during email dispatch**: Synchronous email dispatch used by tests no longer closes the active database connection, preventing subsequent tests and requests from failing with a closed-connection error. Background email workers continue to clean up their own database connections.
+
+## 2026-10-25
+
+### Fixed
+- **toSend REST API email attachment delivery**: Fixed an issue where emails sent via toSend containing attachments (such as embedded inline images or files) were rejected by the toSend v2 API with HTTP 422 due to missing required `name` and `type` (MIME type) properties on attachment payloads. Serialized attachment payloads now provide both `name` and `type` attributes (alongside `filename`, `content_type`, and `disposition`) across all attachment formats.
+
+## 2026-10-23
+
+### Added
+- **Multi-Tenant Master Email Templates & Branding Customization**: Added an organization-level master email template architecture and visual customization settings under Portal Settings → Email tab:
+  - **Master Email Template (`base_notification.html`)**: Standardized all transactional notifications, application updates, and staff alerts around a responsive master layout shell enclosing modular body content. The shell provides responsive email client compatibility (Outlook, Apple Mail, Gmail), dark-mode styling, and structured organization branding.
+  - **Portal Settings Email Branding Controls**: Organization admins can customize their primary brand colors (with interactive color pickers), header text colors, organization title, upload custom team logo files (PNG, JPG, SVG, WebP) or specify image URLs, manage address lines, configure program contact names/emails, and set custom footer notes/taglines.
+  - **Live Interactive Email Preview**: Added a real-time email preview in the Portal Settings Email tab that immediately updates as admins adjust colors, logos, and organization contact information.
+- **Automated Weekly Email Digest (`send_weekly_digest`)**: Added an automated Sunday morning digest system summarizing the week ahead tailored per role:
+  - **Students**: Confirmed outreach shifts with dates, times, venue locations and addresses; open outreach opportunities in enrolled active programs needing Champions or Helpers; attendance hours snapshot; and upcoming travel commitments.
+  - **Parents / Guardians**: Student schedules and outreach commitments, open volunteer opportunities, attendance summary, and travel highlights for their enrolled students. Guaranteed delivery ensures at least one guardian per active student receives notifications even if updates are disabled on secondary contacts.
+  - **Mentors / Staff**: Confirmed mentoring and outreach support shifts, events needing mentors or student leads, and logged mentoring hours.
+  - **Smart Suppression**: Empty digests with no upcoming commitments or attendance activity are automatically suppressed to minimize inbox fatigue.
+- **Automated Monthly Balance Statements (`send_monthly_balances`)**: Added an automated monthly statement dispatched on the 1st of each month to parents and guardians for students with outstanding program fees or balances due across running programs, complete with itemized dues, sliding-scale adjustments, recorded payments, and a direct link to pay online.
+- **toSend Webhook Receiver & Email Delivery Issue Monitoring**: Added an automated webhook receiver (`/api/webhooks/tosend/` and `/programs/webhooks/tosend/`) to capture email delivery failures, permanent/hard bounces, and spam complaints from toSend's API. Webhooks are secured with HMAC-SHA256 signature verification (`TOSEND_WEBHOOK_SECRET`). Incoming events are stored in `EmailDeliveryEvent`, automatically linked to matching Student, Adult, or Application records, and logged in the immutable audit log (`AuditEvent.EMAIL_DELIVERY_FAILED` and `AuditEvent.EMAIL_COMPLAINT`).
+- **Immediate Lead Mentor Alerts for Critical Delivery Issues**: The portal automatically dispatches an immediate email alert to Lead Mentors whenever a hard bounce or spam complaint occurs, providing diagnostic reasons and recipient details so staff can reach out by phone or correct contact info.
+- **Visual Profile Badges & Delivery Warning Banners**: Displayed prominent warning banners on Student and Adult profile detail pages and warning badges on directory rosters when an email delivery issue is detected.
+- **Lead Mentor Command Center & Issue Resolution Tool**: Integrated unresolved delivery issue counts into the Lead Mentor dashboard and added a management view (`EmailDeliveryIssueListView`) allowing Lead Mentors to review, filter, and mark delivery issues as resolved once contact details are updated.
+- **Audit Digest Integration**: Updated `python manage.py audit_digest` to summarize recent email delivery failures and spam complaints alongside security anomalies.
+
+### Changed
+- **Reliable organization logo display in email templates**: Uploaded logo files and relative logo paths now automatically resolve to full absolute URLs and use inline CSS dimensions and styling attributes, ensuring organization logos render reliably in Gmail, Outlook, Apple Mail, and mobile email clients without being stripped or broken.
+- **Clean email message layout & sent timestamp in footer**: Removed the artificial notification title, date, and horizontal divider bar from the top of standard email messages, creating a clean, professional email layout. The sent timestamp is now cleanly positioned alongside the automated portal notice in the footer. Formal receipts and balance statements can continue to utilize custom letterhead blocks when itemized billing headers are needed.
+- **Master template layout & branding unified across all outgoing emails**: Connected staff-composed bulk messaging (`ProgramEmailView`, `ApplicationEmailView`), portal and applicant login verification codes (`login_code_message.html`), guest form submission confirmations, and balance sheet statements (`balance_sheet_email.html`) to the tenant's master branded email template (`base_notification.html`). All outgoing communications now consistently render with organization branding (brand headers, logo, primary theme colors, physical address, and automated portal footer notices).
+- **Email template address moved to footer & automated portal disclaimer**: Reorganized the master notification email template (`base_notification.html`) to place the organization's physical address, contact details, and custom footer notes in the email footer rather than at the top letterhead. Added a clear automated notification disclaimer (`This is an automated notification from the [Organization Name] Portal.`) in the footer, improved mobile readability for transactional notifications, and provided an optional letterhead block placeholder for formal receipts.
+- **Clear, accessible wording for Email Settings and Custom Domains**: Updated the Email Settings page in Portal Settings to use friendly, non-technical explanations for all email delivery and sender configuration options. Replaced technical references (such as toSend engine and email delivery protocols) with straightforward language clarifying that messages are sent from the system's email address by default and can be customized with a friendly sender name, reply-to address, or custom sender profiles. Added a clear guidance box explaining custom sending domain setup (using verification records with domain registrars without needing changes to existing MX records or email inboxes).
+
+## 2026-10-22
+
+### Added
+- **Organization email settings and sender identity management in Portal Settings**: Added a dedicated "Email Settings" tab in Portal Settings for configuring tenant sender branding, primary Reply-To routing, and team broadcast sender identities (e.g. Leads, Info, FLL). Staff can manage custom sender identities with display names and tailored reply-to addresses, ensuring high deliverability across transactional notifications and bulk broadcast features.
+- **toSend REST API email backend integration**: Integrated native support for toSend v2 REST API (`ToSendEmailBackend`) for sending transactional and bulk emails via `POST /v2/emails` and `POST /v2/emails/batch` with automatic chunking of up to 100 messages per HTTP payload. Configurable via `TOSEND_API_KEY` (or `EMAIL_BACKEND=tosend`), with full support for `RedirectEmailBackend` dev routing and per-account sender identities.
+- **In-process background email dispatcher**: Added an asynchronous non-blocking email task dispatcher (`send_messages_in_background`) using a bounded worker thread pool, ensuring database connection safety and eliminating web request timeouts for bulk messaging without requiring external queue infrastructure like Celery or Redis.
+- **Dedicated notification sender identity and Reply-To routing**: Added support for distinct notification and broadcast sender configurations (`NOTIFICATION_FROM_EMAIL`, `DEFAULT_REPLY_TO_EMAIL`, and `DEFAULT_FROM_NAME`). Transactional notices, login OTP codes, and public application verification emails now send from a dedicated notifications identity while attaching Reply-To headers directed to the team or admin email address (`leads@girlsofsteelrobotics.org`). Bulk messaging views allow selecting sender identities with aligned Reply-To addresses.
+
+### Changed
+- **Individual recipient delivery for bulk emails**: Refactored bulk announcements (`ProgramEmailView`), applicant review messaging (`ApplicationEmailView`), and dues balance notices (`ProgramEmailBalancesView`) to construct individual messages per recipient addressed directly in `To:` rather than bundling 125+ recipients into a single `BCC` list. This prevents email provider spam flags, avoids BCC recipient caps, and dispatches in the background with immediate UI confirmation.
+
 ## 2026-10-21
 
 ### Changed

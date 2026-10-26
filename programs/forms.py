@@ -762,22 +762,32 @@ class ProgramEmailForm(forms.Form):
                 "-active", "name"
             )
 
-        # Build sender choices from settings
-        accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+        # Build sender choices from organization settings
+        from organizations.utils import (
+            get_organization_email_settings,
+            get_sender_accounts,
+        )
+
+        accounts = get_sender_accounts()
+        org_cfg = get_organization_email_settings()
         choices = []
         initial_value = None
         if accounts:
+            choices.append(("DEFAULT", "Default configured sender"))
             for acc in accounts:
                 email = acc.get("email") or ""
                 display = acc.get("display_name") or email or "Sender"
                 value = acc.get("key") or email
                 label = f"{display} <{email}>" if email else display
                 choices.append((value, label))
-            if choices:
-                initial_value = choices[0][0]
+            initial_value = "DEFAULT"
         else:
-            default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
-            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            default_email = org_cfg.get("notification_from_email") or getattr(
+                settings, "DEFAULT_FROM_EMAIL", ""
+            )
+            default_name = org_cfg.get("sender_display_name") or getattr(
+                settings, "DEFAULT_FROM_NAME", None
+            )
             if default_name:
                 label = (
                     f"Default ({default_name} <{default_email}>)"
@@ -799,7 +809,10 @@ class ProgramEmailForm(forms.Form):
             ]
             initial_value = "DEFAULT"
         self.fields["from_account"] = forms.ChoiceField(
-            choices=choices, initial=initial_value, label="Send from"
+            choices=choices,
+            initial=initial_value,
+            label="Sender identity",
+            help_text="Select the sender identity and reply-to address.",
         )
         if program is not None:
             self.fields["program"].initial = program
@@ -876,22 +889,32 @@ class ProgramEmailBalancesForm(forms.Form):
     def __init__(self, *args, **kwargs):
         program = kwargs.pop("program", None)
         super().__init__(*args, **kwargs)
-        # Sender choices from settings
-        accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+        # Sender choices from organization settings
+        from organizations.utils import (
+            get_organization_email_settings,
+            get_sender_accounts,
+        )
+
+        accounts = get_sender_accounts()
+        org_cfg = get_organization_email_settings()
         choices = []
         initial_value = None
         if accounts:
+            choices.append(("DEFAULT", "Default configured sender"))
             for acc in accounts:
                 email = acc.get("email") or ""
                 display = acc.get("display_name") or email or "Sender"
                 value = acc.get("key") or email
                 label = f"{display} <{email}>" if email else display
                 choices.append((value, label))
-            if choices:
-                initial_value = choices[0][0]
+            initial_value = "DEFAULT"
         else:
-            default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
-            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            default_email = org_cfg.get("notification_from_email") or getattr(
+                settings, "DEFAULT_FROM_EMAIL", ""
+            )
+            default_name = org_cfg.get("sender_display_name") or getattr(
+                settings, "DEFAULT_FROM_NAME", None
+            )
             if default_name:
                 label = (
                     f"Default ({default_name} <{default_email}>)"
@@ -913,7 +936,10 @@ class ProgramEmailBalancesForm(forms.Form):
             ]
             initial_value = "DEFAULT"
         self.fields["from_account"] = forms.ChoiceField(
-            choices=choices, initial=initial_value, label="Send from"
+            choices=choices,
+            initial=initial_value,
+            label="Sender identity",
+            help_text="Select the sender identity and reply-to address.",
         )
         if program is not None:
             self.fields["program"].initial = program

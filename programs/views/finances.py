@@ -52,6 +52,7 @@ from ..utils import (
     get_student_program_balance,
     redirect_back,
 )
+from ..utils.email_async import send_messages_in_background
 from ..utils.email_html import extract_inline_images, html_to_text, normalize_email_html
 from ..utils.notifications import get_sender_connection
 from .mixins import (
@@ -1051,7 +1052,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
 
         # Build sender connection (reuse logic from get_sender_connection)
         selected = form.cleaned_data.get("from_account")
-        connection, from_email = get_sender_connection(selected)
+        connection, from_email, reply_to = get_sender_connection(
+            selected, organization=program.organization
+        )
 
         # Collect students enrolled in program (active non-graduated students only)
         students_qs = active_students_in_program(program).select_related("school")
@@ -1140,7 +1143,15 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
         message_html = normalize_email_html(default_message or "")
         message_images = extract_inline_images(default_message or "")
 
-        sent_total = 0
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_email_settings,
+        )
+
+        org = program.organization or get_default_organization()
+        org_settings = get_organization_email_settings(org)
+
+        messages_to_send = []
         for dest, data in to_send:
             # Render balance sheet HTML
             ctx = {
@@ -1152,6 +1163,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 "total_payments": data["total_payments"],
                 "balance": data["balance"],
                 "sliding_scale": data["sliding_scale"],
+                "organization": org,
+                "org_email_settings": org_settings,
             }
             # Include optional rich-text message inside the template so styles apply correctly
             ctx["message_html"] = message_html
@@ -1189,21 +1202,22 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 from_email=from_email,
                 to=to_addr,
                 bcc=bcc,
+                reply_to=[reply_to] if reply_to else None,
                 connection=connection,
             )
             email.attach_alternative(inlined_html, "text/html")
             for inline_img in message_images:
                 email.attach(inline_img.to_mime())
-            try:
-                sent = email.send()
-                sent_total += sent
-            except Exception as e:
-                logger.error(
-                    "ProgramEmailBalances: send failed for %s | error=%s",
-                    data["student"],
-                    e,
-                    exc_info=True,
-                )
+            messages_to_send.append(email)
+
+        try:
+            send_messages_in_background(messages_to_send, connection=connection)
+        except Exception as e:
+            logger.error(
+                "ProgramEmailBalances: background dispatch failed | error=%s",
+                e,
+                exc_info=True,
+            )
 
         if test_email:
             messages.success(request, f"Test email sent to {test_email}.")

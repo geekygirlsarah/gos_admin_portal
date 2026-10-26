@@ -82,7 +82,7 @@ class AdultsListView(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
                 )
             )
-            .prefetch_related("students")
+            .prefetch_related("students", "email_delivery_events")
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -289,6 +289,7 @@ class AdultDetailView(
                 "students",
                 "adultstudentrelationship_set",
                 "background_checks",
+                "email_delivery_events",
             )
         )
 

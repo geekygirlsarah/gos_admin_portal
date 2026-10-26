@@ -34,6 +34,7 @@ from programs.constants import (
 )
 from programs.models import Program, RaceEthnicity
 from programs.utils import GroupedProgramChoiceField
+from programs.utils.email_async import send_messages_in_background
 from programs.utils.email_html import build_email_parts
 from programs.utils.notifications import get_sender_connection
 
@@ -495,27 +496,40 @@ class ApplicationEmailForm(forms.Form):
         help_text="Optional: send only to this address for testing.",
     )
     from_account = forms.ChoiceField(
-        required=False, widget=forms.Select(attrs={"class": "form-select"})
+        required=False,
+        label="Sender identity",
+        help_text="Select the sender identity and reply-to address.",
+        widget=forms.Select(attrs={"class": "form-select"}),
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Build sender choices from settings
-        accounts = getattr(settings, "EMAIL_SENDER_ACCOUNTS", []) or []
+        # Build sender choices from organization settings
+        from organizations.utils import (
+            get_organization_email_settings,
+            get_sender_accounts,
+        )
+
+        accounts = get_sender_accounts()
+        org_cfg = get_organization_email_settings()
         choices = []
         initial_value = None
         if accounts:
+            choices.append(("DEFAULT", "Default configured sender"))
             for acc in accounts:
                 email = acc.get("email") or ""
                 display = acc.get("display_name") or email or "Sender"
                 value = acc.get("key") or email
                 label = f"{display} <{email}>" if email else display
                 choices.append((value, label))
-            if choices:
-                initial_value = choices[0][0]
+            initial_value = "DEFAULT"
         else:
-            default_email = getattr(settings, "DEFAULT_FROM_EMAIL", "")
-            default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
+            default_email = org_cfg.get("notification_from_email") or getattr(
+                settings, "DEFAULT_FROM_EMAIL", ""
+            )
+            default_name = org_cfg.get("sender_display_name") or getattr(
+                settings, "DEFAULT_FROM_NAME", None
+            )
             if default_name:
                 label = (
                     f"Default ({default_name} <{default_email}>)"
@@ -1261,7 +1275,11 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             # Sanitize + normalize the fragment, wrap it in an email document
             # and inline CSS so the message renders the way it looked in the
             # compose editor, with a readable plain-text alternative.
-            inlined_html_body, text_body, inline_images = build_email_parts(html_body)
+            inlined_html_body, text_body, inline_images = build_email_parts(
+                html_body,
+                organization=prog.organization if prog else None,
+                subject=subject,
+            )
             test_email = form.cleaned_data.get("test_email")
 
             apps = Application.objects.filter(status__in=statuses)
@@ -1283,23 +1301,27 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
 
             # Determine sender account and SMTP connection
             selected = form.cleaned_data.get("from_account")
-            connection, from_email = get_sender_connection(selected)
+            connection, from_email, reply_to = get_sender_connection(
+                selected, organization=prog.organization if prog else None
+            )
+
+            messages_to_send = []
+            for addr in to_send:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=from_email,
+                    to=[addr],
+                    reply_to=[reply_to] if reply_to else None,
+                    connection=connection,
+                )
+                msg.attach_alternative(inlined_html_body, "text/html")
+                for inline_img in inline_images:
+                    msg.attach(inline_img.to_mime())
+                messages_to_send.append(msg)
 
             try:
-                with connection:
-                    for addr in to_send:
-                        msg = EmailMultiAlternatives(
-                            subject=subject,
-                            body=text_body,
-                            from_email=from_email,
-                            to=[addr],
-                            connection=connection,
-                        )
-                        msg.attach_alternative(inlined_html_body, "text/html")
-                        for inline_img in inline_images:
-                            msg.attach(inline_img.to_mime())
-                        msg.send()
-
+                send_messages_in_background(messages_to_send, connection=connection)
                 messages.success(
                     request,
                     f"Successfully sent email to {len(to_send)} recipient(s).",

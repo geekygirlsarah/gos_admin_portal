@@ -5,7 +5,7 @@ echo "--- Upgrading Pip ---"
 python -m pip install --upgrade pip
 
 echo "--- Installing Dependencies ---"
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 echo "--- Building Frontend Bundle ---"
 npm ci

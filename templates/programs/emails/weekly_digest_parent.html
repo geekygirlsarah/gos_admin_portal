@@ -1,0 +1,92 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Weekly Family Update - Girls of Steel{% endblock %}
+
+{% block header %}Weekly Family Update{% endblock %}
+
+{% block content %}
+<p>Hi {{ adult.preferred_first_name|default:adult.legal_first_name }},</p>
+<p>Here is your weekly summary of upcoming shifts, open events, and attendance hours for your student(s) for the week ahead.</p>
+
+{% for s_data in students_data %}
+<div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 16px; margin-top: 20px; margin-bottom: 24px;">
+    <h2 style="font-size: 20px; margin-top: 0; margin-bottom: 12px; color: #0d6efd; border-bottom: 2px solid #dee2e6; padding-bottom: 6px;">
+        {{ s_data.student.display_name }}
+    </h2>
+
+    {% if s_data.confirmed_shifts %}
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 16px; margin-bottom: 6px; color: #198754;">
+            Confirmed Outreach Shifts
+        </h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+                {% for s in s_data.confirmed_shifts %}
+                <tr style="border-bottom: 1px solid #e9ecef;">
+                    <td style="padding: 8px 0; vertical-align: top;">
+                        <strong>{{ s.event_name }}</strong> &mdash; <span style="background-color: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 12px;">{{ s.role_display }}</span><br>
+                        <span style="color: #495057;">{{ s.date|date:"l, F j, Y" }} &bull; {{ s.start_time|time:"g:i A" }} &ndash; {{ s.end_time|time:"g:i A" }}</span><br>
+                        <span style="color: #6c757d; font-size: 14px;">Location: {{ s.location_name }}{% if s.location_address %} ({{ s.location_address }}){% endif %}</span>
+                        {% if s.description %}
+                        <div style="color: #6c757d; font-size: 13px; margin-top: 2px;"><em>{{ s.description }}</em></div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if s_data.open_opportunities %}
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 16px; margin-bottom: 6px; color: #0d6efd;">
+            Open Outreach Opportunities
+        </h3>
+        <p style="margin-bottom: 6px; color: #495057; font-size: 13px;">Upcoming events still seeking student volunteers:</p>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+                {% for o in s_data.open_opportunities %}
+                <tr style="border-bottom: 1px solid #e9ecef;">
+                    <td style="padding: 6px 0; vertical-align: top;">
+                        <strong>{{ o.event_name }}</strong> &bull; <span style="color: #495057;">{{ o.date|date:"l, F j" }} ({{ o.start_time|time:"g:i A" }}&ndash;{{ o.end_time|time:"g:i A" }})</span><br>
+                        <span style="color: #6c757d; font-size: 13px;">Location: {{ o.location_name }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if s_data.attendance_stats.total_hours %}
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 16px; margin-bottom: 4px; color: #495057;">
+            Attendance Snapshot
+        </h3>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Total Logged Hours:</strong> {{ s_data.attendance_stats.total_hours }} hrs</p>
+    </div>
+    {% endif %}
+
+    {% if s_data.travel_highlights %}
+    <div style="margin-bottom: 8px;">
+        <h3 style="font-size: 16px; margin-bottom: 4px; color: #6f42c1;">
+            Upcoming Travel & Trips
+        </h3>
+        <ul style="margin: 4px 0; padding-left: 20px; font-size: 14px;">
+            {% for t in s_data.travel_highlights %}
+            <li>
+                <strong>{{ t.event_name }}</strong> ({{ t.start_date|date:"M j" }}{% if t.end_date != t.start_date %} &ndash; {{ t.end_date|date:"M j" }}{% endif %}): {{ t.status }}
+                {% if t.requires_permission_form %}<span style="color: #dc3545; font-size: 12px;"> &bull; Permission form required</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<div style="margin-top: 24px;">
+    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to review student schedules or manage permissions.</p>
+</div>
+{% endblock %}

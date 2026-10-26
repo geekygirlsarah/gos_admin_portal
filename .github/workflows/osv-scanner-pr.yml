@@ -23,3 +23,8 @@ jobs:
       # is not enabled here. Keep the inline PR annotations and SARIF artifact,
       # but skip the Security-tab upload.
       upload-sarif: false
+      # Default is `--recursive ./`, which also parses requirements-dev.txt.
+      # Safety/pre-commit transitives (nltk, filelock, virtualenv, …) are not
+      # production deps; scan only the runtime pin file.
+      scan-args: |-
+        --lockfile=requirements.txt

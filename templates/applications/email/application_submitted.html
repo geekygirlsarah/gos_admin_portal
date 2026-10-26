@@ -1,5 +1,11 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Application Submitted{% endblock %}
+{% block header %}Application Submitted{% endblock %}
+
+{% block content %}
 <p>Hi {{ application.applicant_name|default:"" }},</p>
-<p>Thanks for applying to <strong>Girls of Steel Robotics</strong>!</p>
+<p>Thanks for applying to <strong>{{ org_email_settings.organization_name|default:"Girls of Steel Robotics" }}</strong>!</p>
 <p>
     {% if not application.is_mentor %}
     <strong>Student:</strong> {{ application.student_name|default:"(not specified)" }}<br>
@@ -18,5 +24,6 @@
 </p>
 <p style="color:#666;font-size:0.9em">
     Questions? Email
-    <a href="mailto:leads@girlsofsteelrobotics.org">leads@girlsofsteelrobotics.org</a>.
+    <a href="mailto:{{ org_email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}">{{ org_email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</a>.
 </p>
+{% endblock %}

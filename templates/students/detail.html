@@ -44,6 +44,24 @@
     </div>
   </div>
 
+  {% if student.has_email_delivery_issue %}
+    <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center gap-3 mb-4 rounded-3" role="alert">
+      <div class="fs-3 text-danger"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div class="flex-grow-1">
+        <h5 class="alert-heading h6 fw-bold mb-1">Email Delivery Warning</h5>
+        <div class="small">
+          Delivery to this student's email address has encountered issues (bounces or spam complaints).
+          {% for issue in student.email_delivery_issues %}
+            <div><strong>{{ issue.recipient_email }}:</strong> {{ issue.get_event_type_display }} &mdash; {{ issue.reason|default:"Diagnostic details unavailable" }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% if role == 'LeadMentor' %}
+        <a href="{% url 'email_delivery_issues_list' %}?q={{ student.personal_email|default:student.display_name|urlencode }}" class="btn btn-sm btn-outline-danger">Manage Issues</a>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <!-- Profile Hero Banner Card -->
   <div class="card shadow-sm border-0 rounded-3 mb-4 bg-light overflow-hidden">
     <div class="card-body p-4">

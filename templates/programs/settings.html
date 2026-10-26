@@ -29,6 +29,11 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'email' %}active{% endif %}" id="email-tab" data-bs-toggle="pill" data-bs-target="#email" type="button" role="tab" aria-controls="email" aria-selected="{% if active_tab == 'email' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-envelope-at me-1"></i> Email Settings
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
                         <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
                     </button>
@@ -1082,6 +1087,395 @@
             {% endwith %}
             {% endfor %}
         </div>
+
+        <!-- Email Settings Tab -->
+        <div class="tab-pane fade {% if active_tab == 'email' %}show active{% endif %}" id="email" role="tabpanel" aria-labelledby="email-tab">
+            <!-- Organization Email & Notification Identity -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-envelope-at text-primary me-2"></i>Organization Email &amp; Notification Identity</h5>
+                        <p class="text-muted small mb-0">Configure the sender name, reply-to address, and email options used when the portal sends notifications and announcements.</p>
+                    </div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                        <i class="bi bi-check-circle me-1"></i> Email Service Active
+                    </span>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-4" role="alert">
+                        <i class="bi bi-info-circle-fill fs-5 mt-1 text-primary"></i>
+                        <div class="small">
+                            <strong>How email sending works:</strong> By default, messages will be sent from the system's email address, but you can update that with the settings below. Setting a friendly sender name and reply-to address makes sure parents, students, and mentors recognize your messages and can easily reply back to you.
+                        </div>
+                    </div>
+
+                    <form method="post" action="{% url 'portal_email_settings' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_email_settings">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="email_sender_display_name" class="form-label fw-semibold small">Sender Display Name</label>
+                                <input type="text" name="sender_display_name" id="email_sender_display_name" class="form-control" value="{{ email_settings.sender_display_name }}" placeholder="e.g. Girls of Steel Robotics" required>
+                                <div class="form-text">The name people see in their inbox when they receive an email from the portal (e.g. "Girls of Steel Robotics").</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="email_reply_to_email" class="form-label fw-semibold small">Primary Reply-To Email</label>
+                                <input type="email" name="reply_to_email" id="email_reply_to_email" class="form-control" value="{{ email_settings.reply_to_email }}" placeholder="e.g. leads@girlsofsteelrobotics.org" required>
+                                <div class="form-text">Where replies will be sent when someone replies to an automated email or notification.</div>
+                            </div>
+                            <div class="col-md-12">
+                                <label for="email_notification_from_email" class="form-label fw-semibold small">Notification From Address (Optional Override)</label>
+                                <input type="email" name="notification_from_email" id="email_notification_from_email" class="form-control" value="{{ email_settings.notification_from_email }}" placeholder="e.g. notifications@girlsofsteelrobotics.org">
+                                <div class="form-text">The email address notifications are sent from. Leave blank to use the system default email address.</div>
+                            </div>
+
+                            <!-- Custom Domain Branding Section -->
+                            <div class="col-12 mt-4">
+                                <div class="card border rounded-3 bg-light">
+                                    <div class="card-body p-3">
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" name="custom_domain_enabled" id="custom_domain_enabled" {% if email_settings.custom_domain.enabled %}checked{% endif %}>
+                                            <label class="form-check-label fw-semibold" for="custom_domain_enabled">Enable Custom Sending Domain (Advanced)</label>
+                                        </div>
+                                        <p class="text-muted small mb-3">Allows sending messages directly from your organization's own website domain (e.g. yourname@yourteam.org) instead of the default system address.</p>
+
+                                        <div class="alert alert-secondary bg-white border small text-muted mb-3 py-2 px-3">
+                                            <div class="fw-semibold text-dark mb-1"><i class="bi bi-info-circle text-primary me-1"></i> How Custom Domain Setup Works:</div>
+                                            <ul class="mb-0 ps-3">
+                                                <li><strong>No changes to existing email:</strong> You do not need to change your MX records or mailboxes. Your team's day-to-day email and inbox will not be affected.</li>
+                                                <li><strong>Domain verification records:</strong> Your system administrator will provide DNS verification records (TXT or CNAME) to add to your domain registrar (such as GoDaddy, Cloudflare, or Namecheap) to verify domain ownership and ensure messages deliver reliably.</li>
+                                                <li><strong>Default alternative:</strong> If you don't need a custom domain, keeping this disabled will send from the system default email address with zero DNS configuration required.</li>
+                                            </ul>
+                                        </div>
+
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label for="custom_domain_domain" class="form-label fw-semibold small">Domain Name</label>
+                                                <input type="text" name="custom_domain_domain" id="custom_domain_domain" class="form-control form-control-sm" value="{{ email_settings.custom_domain.domain }}" placeholder="e.g. girlsofsteelrobotics.org">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="custom_domain_from_email" class="form-label fw-semibold small">Custom From Address</label>
+                                                <input type="email" name="custom_domain_from_email" id="custom_domain_from_email" class="form-control form-control-sm" value="{{ email_settings.custom_domain.from_email }}" placeholder="e.g. notifications@girlsofsteelrobotics.org">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 d-flex justify-content-end mt-4">
+                                <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                    <i class="bi bi-save me-1"></i> Save Email Settings
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Email Branding & Template Customization Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-palette text-primary me-2"></i>Email Branding &amp; Template Customization</h5>
+                        <p class="text-muted small mb-0">Customize your organization's master email template. Set your brand colors, upload your team logo, and configure header, footer, and address details.</p>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" action="{% url 'portal_email_settings' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_branding">
+                        <div class="row g-4">
+                            <!-- Left Column: Branding Controls -->
+                            <div class="col-lg-7">
+                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-brush text-primary me-1"></i> Brand Colors &amp; Visual Identity</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-sm-6">
+                                        <label for="branding_primary_color" class="form-label fw-semibold small">Primary Brand Color</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="color" class="form-control form-control-color" id="branding_primary_picker" value="{{ email_settings.primary_color|default:'#4a154b' }}" title="Choose primary color">
+                                            <input type="text" name="primary_color" id="branding_primary_color" class="form-control font-monospace" value="{{ email_settings.primary_color|default:'#4a154b' }}" placeholder="#4a154b" required>
+                                        </div>
+                                        <div class="form-text small">Used for header background, accents, and buttons.</div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label for="branding_header_text_color" class="form-label fw-semibold small">Header Text Color</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="color" class="form-control form-control-color" id="branding_header_text_picker" value="{{ email_settings.header_text_color|default:'#ffffff' }}" title="Choose header text color">
+                                            <input type="text" name="header_text_color" id="branding_header_text_color" class="form-control font-monospace" value="{{ email_settings.header_text_color|default:'#ffffff' }}" placeholder="#ffffff" required>
+                                        </div>
+                                        <div class="form-text small">Text color on the primary header bar.</div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="branding_organization_name" class="form-label fw-semibold small">Organization Header Title</label>
+                                    <input type="text" name="organization_name" id="branding_organization_name" class="form-control" value="{{ email_settings.organization_name }}" placeholder="e.g. Girls of Steel Robotics" required>
+                                    <div class="form-text small">Main organization title displayed in the email banner.</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold small">Organization Logo</label>
+                                    {% if email_settings.logo_url %}
+                                    <div class="d-flex align-items-center gap-3 p-2 bg-light border rounded mb-2">
+                                        <img src="{{ email_settings.logo_url }}" alt="Current Logo" style="max-height: 48px; max-width: 150px;" class="bg-white p-1 border rounded">
+                                        <div class="flex-grow-1 small text-truncate">
+                                            <div class="fw-semibold">Current Logo Active</div>
+                                            <span class="text-muted text-break">{{ email_settings.logo_url }}</span>
+                                        </div>
+                                        <div class="form-check form-check-inline ms-auto me-0">
+                                            <input class="form-check-input" type="checkbox" name="remove_logo" id="remove_logo" value="1">
+                                            <label class="form-check-label text-danger small fw-semibold" for="remove_logo">Remove</label>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    <div class="row g-2">
+                                        <div class="col-sm-6">
+                                            <input type="file" name="logo_file" id="branding_logo_file" class="form-control form-control-sm" accept="image/*">
+                                            <div class="form-text small">Upload image file (PNG, JPG, SVG, WebP).</div>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <input type="url" name="logo_url" id="branding_logo_url" class="form-control form-control-sm" value="{{ email_settings.logo_url }}" placeholder="Or paste image URL">
+                                            <div class="form-text small">Or specify a public image web address.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-primary me-1"></i> Organization Address &amp; Contact Info</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-sm-6">
+                                        <label for="branding_address_line1" class="form-label fw-semibold small">Address Line 1</label>
+                                        <input type="text" name="address_line1" id="branding_address_line1" class="form-control form-control-sm" value="{{ email_settings.address_line1 }}" placeholder="e.g. Carnegie Mellon University">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label for="branding_address_line2" class="form-label fw-semibold small">Address Line 2 (City, State, Zip)</label>
+                                        <input type="text" name="address_line2" id="branding_address_line2" class="form-control form-control-sm" value="{{ email_settings.address_line2 }}" placeholder="e.g. 5000 Forbes Ave, Pittsburgh, PA 15213">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label for="branding_contact_name" class="form-label fw-semibold small">Program Contacts Display Name</label>
+                                        <input type="text" name="contact_name" id="branding_contact_name" class="form-control form-control-sm" value="{{ email_settings.contact_name }}" placeholder="e.g. Elizabeth Kysel, Sarah Withee">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label for="branding_contact_email" class="form-label fw-semibold small">Program Contact Email</label>
+                                        <input type="email" name="contact_email" id="branding_contact_email" class="form-control form-control-sm" value="{{ email_settings.contact_email }}" placeholder="e.g. leads@girlsofsteelrobotics.org">
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="branding_portal_url" class="form-label fw-semibold small">Portal Web Address / URL</label>
+                                        <input type="url" name="portal_url" id="branding_portal_url" class="form-control form-control-sm" value="{{ email_settings.portal_url }}" placeholder="e.g. https://portal.girlsofsteelrobotics.org">
+                                        <div class="form-text small">Web address linked in the automated notification footer (defaults to custom domain or site base URL).</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="branding_footer_text" class="form-label fw-semibold small">Footer Tagline / Disclaimer</label>
+                                        <input type="text" name="footer_text" id="branding_footer_text" class="form-control form-control-sm" value="{{ email_settings.footer_text }}" placeholder="e.g. Thank you for being part of Girls of Steel Robotics!">
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-end mt-4">
+                                    <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                                        <i class="bi bi-save me-1"></i> Save Branding Settings
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Right Column: Live Email Preview -->
+                            <div class="col-lg-5">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-eye text-primary me-1"></i> Email Template Live Preview</h6>
+                                    <span class="badge bg-light text-muted border small">Preview</span>
+                                </div>
+                                <div class="border rounded-3 shadow-sm overflow-hidden" style="background-color: #f4f6f8; padding: 12px;">
+                                    <div class="bg-white border rounded shadow-sm overflow-hidden" style="font-size: 13px;">
+                                        <!-- Header Preview -->
+                                        <div id="preview_header" style="background-color: {{ email_settings.primary_color|default:'#4a154b' }}; color: {{ email_settings.header_text_color|default:'#ffffff' }}; padding: 16px; text-align: center;">
+                                            {% if email_settings.logo_url %}
+                                            <img id="preview_logo" src="{{ email_settings.logo_url }}" alt="Logo" style="max-height: 40px; max-width: 160px; display: block; margin: 0 auto 6px auto;">
+                                            {% else %}
+                                            <img id="preview_logo" src="" alt="Logo" style="max-height: 40px; max-width: 160px; display: none; margin: 0 auto 6px auto;">
+                                            {% endif %}
+                                            <h5 id="preview_org_title" class="mb-0 fw-bold" style="color: {{ email_settings.header_text_color|default:'#ffffff' }}; font-size: 16px;">{{ email_settings.organization_name|default:'Girls of Steel Robotics' }}</h5>
+                                        </div>
+                                        <!-- Body Preview -->
+                                        <div style="padding: 16px;">
+                                            <p class="mb-2 text-dark">Hi Jane,</p>
+                                            <p class="mb-2 text-muted" style="line-height: 1.4;">This is a preview showing how your email messages and notifications are rendered inside your organization's master layout shell.</p>
+                                            <p class="mb-0"><a href="#" id="preview_link" style="color: {{ email_settings.primary_color|default:'#0d6efd' }}; font-weight: 500;">View in Portal &rarr;</a></p>
+                                        </div>
+                                        <!-- Footer Preview -->
+                                        <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 16px; font-size: 11px; color: #64748b;">
+                                            <div class="mb-1">
+                                                <div id="preview_org_sub" class="fw-bold text-dark" style="font-size: 11px;">{{ email_settings.organization_name|default:'Girls of Steel Robotics' }}</div>
+                                                <div id="preview_addr1" style="font-size: 11px;">{{ email_settings.address_line1 }}</div>
+                                                <div id="preview_addr2" style="font-size: 11px;">{{ email_settings.address_line2 }}</div>
+                                            </div>
+                                            <div><span class="fw-semibold">Program Contacts:</span> <span id="preview_contact_name">{{ email_settings.contact_name|default:'Elizabeth Kysel, Sarah Withee' }}</span></div>
+                                            <div><span class="fw-semibold">Email:</span> <span id="preview_contact_email">{{ email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</span></div>
+                                            <div class="mt-2 text-muted" style="font-size: 10px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                                                This is an automated notification from the <a href="{{ email_settings.portal_url|default:'#' }}" id="preview_portal_link" style="color: {{ email_settings.primary_color|default:'#0d6efd' }}; text-decoration: underline;"><span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal</a> &bull; Sent on Today
+                                            </div>
+                                            <div class="mt-1" id="preview_footer_text">{{ email_settings.footer_text }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Sender Identities & Reply-To Routing Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-people text-primary me-2"></i>Sender Identities &amp; Reply-To Profiles</h5>
+                        <p class="text-muted small mb-0">Manage team sender profiles for announcements (e.g. Leads, Info, FLL). Staff members can select from these profiles when composing messages so replies go to the right team members.</p>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success fw-semibold" data-bs-toggle="collapse" data-bs-target="#addSenderAccountCollapse" aria-expanded="false" aria-controls="addSenderAccountCollapse">
+                        <i class="bi bi-plus-lg me-1"></i> Add Identity
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <!-- Collapsible Add Identity Form -->
+                    <div class="collapse p-4 border-bottom bg-light" id="addSenderAccountCollapse">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-person-plus me-1 text-success"></i> Add New Sender Identity</h6>
+                        <form method="post" action="{% url 'portal_email_settings' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_sender_account">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label for="new_identity_key" class="form-label fw-semibold small">Key Identifier</label>
+                                    <input type="text" name="key" id="new_identity_key" class="form-control form-control-sm" placeholder="e.g. leads" required pattern="[a-z0-9_-]+" title="Lowercase letters, numbers, hyphens, and underscores only">
+                                    <div class="form-text small">Short internal code (e.g. "leads", "info", "fll").</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="new_identity_display_name" class="form-label fw-semibold small">Display Name</label>
+                                    <input type="text" name="display_name" id="new_identity_display_name" class="form-control form-control-sm" placeholder="e.g. Girls of Steel Lead Mentors" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="new_identity_email" class="form-label fw-semibold small">Sender Email Address</label>
+                                    <input type="email" name="email" id="new_identity_email" class="form-control form-control-sm" placeholder="e.g. leads@girlsofsteelrobotics.org" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="new_identity_reply_to" class="form-label fw-semibold small">Reply-To Address</label>
+                                    <input type="email" name="reply_to" id="new_identity_reply_to" class="form-control form-control-sm" placeholder="Optional (defaults to sender email)">
+                                </div>
+                                <div class="col-12 d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#addSenderAccountCollapse">Cancel</button>
+                                    <button type="submit" class="btn btn-sm btn-success px-3 fw-semibold">
+                                        <i class="bi bi-plus-lg me-1"></i> Add Identity
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Identities Table -->
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 15%;">Key</th>
+                                    <th style="width: 30%;">Display Name</th>
+                                    <th style="width: 25%;">Sender Email</th>
+                                    <th style="width: 20%;">Reply-To Address</th>
+                                    <th class="text-end" style="width: 10%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account in email_settings.sender_accounts %}
+                                <tr>
+                                    <td><span class="badge bg-secondary font-monospace">{{ account.key }}</span></td>
+                                    <td class="fw-semibold text-dark">{{ account.display_name }}</td>
+                                    <td class="text-muted small">{{ account.email }}</td>
+                                    <td class="text-muted small">{{ account.reply_to|default:account.email }}</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editAccountModal_{{ account.key }}" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal_{{ account.key }}" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+
+                                        <!-- Edit Modal -->
+                                        <div class="modal fade" id="editAccountModal_{{ account.key }}" tabindex="-1" aria-labelledby="editAccountModalLabel_{{ account.key }}" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered text-start">
+                                                <div class="modal-content">
+                                                    <form method="post" action="{% url 'portal_email_settings' %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="update_sender_account">
+                                                        <input type="hidden" name="key" value="{{ account.key }}">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title" id="editAccountModalLabel_{{ account.key }}">Edit Sender Identity: {{ account.key }}</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <div class="mb-3">
+                                                                <label class="form-label fw-semibold small">Key Identifier</label>
+                                                                <input type="text" class="form-control" value="{{ account.key }}" disabled>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label for="edit_display_name_{{ account.key }}" class="form-label fw-semibold small">Display Name</label>
+                                                                <input type="text" name="display_name" id="edit_display_name_{{ account.key }}" class="form-control" value="{{ account.display_name }}" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label for="edit_email_{{ account.key }}" class="form-label fw-semibold small">Sender Email Address</label>
+                                                                <input type="email" name="email" id="edit_email_{{ account.key }}" class="form-control" value="{{ account.email }}" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label for="edit_reply_to_{{ account.key }}" class="form-label fw-semibold small">Reply-To Address</label>
+                                                                <input type="email" name="reply_to" id="edit_reply_to_{{ account.key }}" class="form-control" value="{{ account.reply_to }}">
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Delete Modal -->
+                                        <div class="modal fade" id="deleteAccountModal_{{ account.key }}" tabindex="-1" aria-labelledby="deleteAccountModalLabel_{{ account.key }}" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered text-start">
+                                                <div class="modal-content">
+                                                    <form method="post" action="{% url 'portal_email_settings' %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="delete_sender_account">
+                                                        <input type="hidden" name="key" value="{{ account.key }}">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title text-danger" id="deleteAccountModalLabel_{{ account.key }}">Delete Sender Identity</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            Are you sure you want to delete the sender identity <strong>{{ account.display_name }} ({{ account.key }})</strong>?
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" class="btn btn-danger">Delete Identity</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-3 d-block mb-2 text-secondary"></i>
+                                        No custom sender identities configured. Outgoing bulk messages will use the default organization identity.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -1097,5 +1491,147 @@
             tab.show();
         }
     }
+
+    // Email Branding live preview sync
+    (function() {
+        var primaryPicker = document.getElementById('branding_primary_picker');
+        var primaryInput = document.getElementById('branding_primary_color');
+        var headerTextPicker = document.getElementById('branding_header_text_picker');
+        var headerTextInput = document.getElementById('branding_header_text_color');
+        var orgNameInput = document.getElementById('branding_organization_name');
+        var logoUrlInput = document.getElementById('branding_logo_url');
+        var logoFileInput = document.getElementById('branding_logo_file');
+        var addr1Input = document.getElementById('branding_address_line1');
+        var addr2Input = document.getElementById('branding_address_line2');
+        var contactNameInput = document.getElementById('branding_contact_name');
+        var contactEmailInput = document.getElementById('branding_contact_email');
+        var portalUrlInput = document.getElementById('branding_portal_url');
+        var footerTextInput = document.getElementById('branding_footer_text');
+
+        var previewHeader = document.getElementById('preview_header');
+        var previewOrgTitle = document.getElementById('preview_org_title');
+        var previewLogo = document.getElementById('preview_logo');
+        var previewOrgSub = document.getElementById('preview_org_sub');
+        var previewOrgAutomated = document.getElementById('preview_org_automated');
+        var previewAddr1 = document.getElementById('preview_addr1');
+        var previewAddr2 = document.getElementById('preview_addr2');
+        var previewLink = document.getElementById('preview_link');
+        var previewPortalLink = document.getElementById('preview_portal_link');
+        var previewContactName = document.getElementById('preview_contact_name');
+        var previewContactEmail = document.getElementById('preview_contact_email');
+        var previewFooterText = document.getElementById('preview_footer_text');
+
+        function updateColors() {
+            var color = (primaryInput && primaryInput.value) || '#4a154b';
+            var headerTextColor = (headerTextInput && headerTextInput.value) || '#ffffff';
+            if (previewHeader) {
+                previewHeader.style.backgroundColor = color;
+                previewHeader.style.color = headerTextColor;
+            }
+            if (previewOrgTitle) {
+                previewOrgTitle.style.color = headerTextColor;
+            }
+            if (previewLink) {
+                previewLink.style.color = color;
+            }
+            if (previewPortalLink) {
+                previewPortalLink.style.color = color;
+            }
+        }
+
+        if (primaryPicker && primaryInput) {
+            primaryPicker.addEventListener('input', function() {
+                primaryInput.value = primaryPicker.value;
+                updateColors();
+            });
+            primaryInput.addEventListener('input', function() {
+                if (/^#[0-9A-Fa-f]{6}$/.test(primaryInput.value)) {
+                    primaryPicker.value = primaryInput.value;
+                }
+                updateColors();
+            });
+        }
+
+        if (headerTextPicker && headerTextInput) {
+            headerTextPicker.addEventListener('input', function() {
+                headerTextInput.value = headerTextPicker.value;
+                updateColors();
+            });
+            headerTextInput.addEventListener('input', function() {
+                if (/^#[0-9A-Fa-f]{6}$/.test(headerTextInput.value)) {
+                    headerTextPicker.value = headerTextInput.value;
+                }
+                updateColors();
+            });
+        }
+
+        if (orgNameInput) {
+            orgNameInput.addEventListener('input', function() {
+                var val = orgNameInput.value || 'Girls of Steel Robotics';
+                if (previewOrgTitle) previewOrgTitle.textContent = val;
+                if (previewOrgSub) previewOrgSub.textContent = val;
+                if (previewOrgAutomated) previewOrgAutomated.textContent = val;
+            });
+        }
+
+        if (logoUrlInput) {
+            logoUrlInput.addEventListener('input', function() {
+                if (previewLogo) {
+                    if (logoUrlInput.value) {
+                        previewLogo.src = logoUrlInput.value;
+                        previewLogo.style.display = 'block';
+                    } else if (!logoFileInput || !logoFileInput.files.length) {
+                        previewLogo.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        if (logoFileInput) {
+            logoFileInput.addEventListener('change', function() {
+                if (logoFileInput.files && logoFileInput.files[0] && previewLogo) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewLogo.src = e.target.result;
+                        previewLogo.style.display = 'block';
+                    };
+                    reader.readAsDataURL(logoFileInput.files[0]);
+                }
+            });
+        }
+
+        if (addr1Input) {
+            addr1Input.addEventListener('input', function() {
+                if (previewAddr1) previewAddr1.textContent = addr1Input.value;
+            });
+        }
+        if (addr2Input) {
+            addr2Input.addEventListener('input', function() {
+                if (previewAddr2) previewAddr2.textContent = addr2Input.value;
+            });
+        }
+        if (contactNameInput) {
+            contactNameInput.addEventListener('input', function() {
+                if (previewContactName) previewContactName.textContent = contactNameInput.value;
+            });
+        }
+        if (contactEmailInput) {
+            contactEmailInput.addEventListener('input', function() {
+                if (previewContactEmail) previewContactEmail.textContent = contactEmailInput.value;
+            });
+        }
+        if (portalUrlInput) {
+            portalUrlInput.addEventListener('input', function() {
+                if (previewPortalLink) {
+                    previewPortalLink.href = portalUrlInput.value || '#';
+                }
+            });
+        }
+        if (footerTextInput) {
+            footerTextInput.addEventListener('input', function() {
+                if (previewFooterText) previewFooterText.textContent = footerTextInput.value;
+            });
+        }
+    })();
 </script>
 {% endblock %}

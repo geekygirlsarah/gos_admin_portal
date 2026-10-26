@@ -23,6 +23,7 @@ from django.views.generic import RedirectView, TemplateView
 from django.views.static import serve
 
 from GoSAdminPortal import views as portal_views
+from programs.views.email_issues import tosend_webhook_view
 from programs.views.mentor_agreement import mentor_agreement_view
 
 handler404 = "GoSAdminPortal.views.handler404"
@@ -39,6 +40,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("programs/", include("programs.urls")),
     path("api/v1/", include("api.urls")),
+    path("api/webhooks/tosend/", tosend_webhook_view, name="api_tosend_webhook"),
     path("profile/", include("portal.urls")),
     path("mentor-agreement/", mentor_agreement_view, name="mentor_agreement"),
     # Public application flow (new wizard lives in the `applications` app)

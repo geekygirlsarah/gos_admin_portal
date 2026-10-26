@@ -1,0 +1,97 @@
+{% extends "programs/emails/base_notification.html" %}
+
+{% block title %}Weekly Update for {{ student.display_name }}{% endblock %}
+
+{% block header %}Weekly Update - {{ student.display_name }}{% endblock %}
+
+{% block content %}
+<p>Hi {{ student.preferred_first_name|default:student.legal_first_name }},</p>
+<p>Here is your weekly summary of upcoming shifts, open events, and attendance hours for the week ahead.</p>
+
+{% if confirmed_shifts %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #198754; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Your Upcoming Outreach Shifts
+    </h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            {% for s in confirmed_shifts %}
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 10px 0; vertical-align: top;">
+                    <strong>{{ s.event_name }}</strong> &mdash; <span style="background-color: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 13px;">{{ s.role_display }}</span><br>
+                    <span style="color: #495057;">{{ s.date|date:"l, F j, Y" }} &bull; {{ s.start_time|time:"g:i A" }} &ndash; {{ s.end_time|time:"g:i A" }}</span><br>
+                    <span style="color: #6c757d; font-size: 14px;">Location: {{ s.location_name }}{% if s.location_address %} ({{ s.location_address }}){% endif %}</span>
+                    {% if s.description %}
+                    <div style="color: #6c757d; font-size: 13px; margin-top: 2px;"><em>{{ s.description }}</em></div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if open_opportunities %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #0d6efd; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Open Outreach Opportunities
+    </h3>
+    <p style="margin-bottom: 8px; color: #495057; font-size: 14px;">The following upcoming events still need student signups:</p>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            {% for o in open_opportunities %}
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 10px 0; vertical-align: top;">
+                    <strong>{{ o.event_name }}</strong>{% if o.program_name %} <span style="color: #6c757d; font-size: 13px;">({{ o.program_name }})</span>{% endif %}<br>
+                    <span style="color: #495057;">{{ o.date|date:"l, F j, Y" }} &bull; {{ o.start_time|time:"g:i A" }} &ndash; {{ o.end_time|time:"g:i A" }}</span><br>
+                    <span style="color: #6c757d; font-size: 14px;">Location: {{ o.location_name }}{% if o.location_address %} ({{ o.location_address }}){% endif %}</span><br>
+                    <span style="font-size: 13px; color: #198754;">
+                        {% if o.needs_champions %}Needs Champion ({{ o.open_champion_slots }} open){% endif %}
+                        {% if o.needs_champions and o.needs_helpers %} &bull; {% endif %}
+                        {% if o.needs_helpers %}Needs Helpers ({{ o.open_helper_slots }} open){% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if attendance_stats.total_hours %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Attendance Snapshot
+    </h3>
+    <p style="margin: 4px 0;"><strong>Total Logged Hours:</strong> {{ attendance_stats.total_hours }} hrs</p>
+    {% if attendance_stats.by_program %}
+    <ul style="margin-top: 4px; padding-left: 20px; color: #495057;">
+        {% for bp in attendance_stats.by_program %}
+        <li>{{ bp.program.name }}: {{ bp.total_hours }} hrs</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if travel_highlights %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #6f42c1; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Upcoming Travel & Trips
+    </h3>
+    <ul style="margin-top: 4px; padding-left: 20px; color: #495057;">
+        {% for t in travel_highlights %}
+        <li>
+            <strong>{{ t.event_name }}</strong> ({{ t.start_date|date:"M j" }}{% if t.end_date != t.start_date %} &ndash; {{ t.end_date|date:"M j" }}{% endif %}): {{ t.status }}
+            {% if t.requires_permission_form %}<span style="color: #dc3545; font-size: 13px;"> &bull; Permission form required</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div style="margin-top: 24px;">
+    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to view full schedules or sign up for shifts.</p>
+</div>
+{% endblock %}

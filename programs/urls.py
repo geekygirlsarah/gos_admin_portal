@@ -7,6 +7,7 @@ from attendance.views import AttendanceImportView, student_attendance_view
 from .permission_views import (
     PortalAgreementView,
     PortalCrewView,
+    PortalEmailSettingsView,
     PortalKioskView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
@@ -98,6 +99,11 @@ from .views import (
     StudentUpdateView,
 )
 from .views.andrew_ids import andrew_id_management_view
+from .views.email_issues import (
+    EmailDeliveryIssueListView,
+    EmailDeliveryIssueResolveView,
+    tosend_webhook_view,
+)
 
 urlpatterns = [
     # Programs
@@ -663,8 +669,28 @@ urlpatterns = [
         name="portal_agreements",
     ),
     path(
+        "settings/email/",
+        PortalEmailSettingsView.as_view(),
+        name="portal_email_settings",
+    ),
+    path(
         "andrew-ids/",
         andrew_id_management_view,
         name="andrew_id_management",
+    ),
+    path(
+        "webhooks/tosend/",
+        tosend_webhook_view,
+        name="tosend_webhook",
+    ),
+    path(
+        "email-issues/",
+        EmailDeliveryIssueListView.as_view(),
+        name="email_delivery_issues_list",
+    ),
+    path(
+        "email-issues/<int:pk>/resolve/",
+        EmailDeliveryIssueResolveView.as_view(),
+        name="email_delivery_issue_resolve",
     ),
 ]

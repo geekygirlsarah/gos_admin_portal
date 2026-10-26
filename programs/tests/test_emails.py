@@ -157,7 +157,7 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertEqual(len(mail.outbox[0].alternatives), 1)
         html_content, mimetype = mail.outbox[0].alternatives[0]
         self.assertEqual(mimetype, "text/html")
-        self.assertIn("New Fee Added</h1>", html_content)
+        self.assertIn("A new fee has been added", html_content)
         self.assertIn("$50.00", html_content)
 
     def test_payment_added_sends_email(self):
@@ -292,3 +292,71 @@ class AutoEmailNotificationsTest(TestCase):
         html_content, _ = email.alternatives[0]
         self.assertIn("Programs currently covered:", html_content)
         self.assertIn("Test Program", html_content)
+
+    def test_notification_emails_have_reply_to_and_sender_identity(self):
+        from programs.utils.notifications import (
+            get_sender_connection,
+            send_otp_email,
+            send_templated_notification,
+        )
+
+        with override_settings(
+            NOTIFICATION_FROM_EMAIL="notifications@girlsofsteelrobotics.org",
+            DEFAULT_FROM_NAME="Girls of Steel Notifications",
+            DEFAULT_REPLY_TO_EMAIL="leads@girlsofsteelrobotics.org",
+        ):
+            mail.outbox = []
+            send_otp_email("user@example.com", "123456")
+            self.assertEqual(len(mail.outbox), 1)
+            otp_msg = mail.outbox[0]
+            self.assertEqual(otp_msg.to, ["user@example.com"])
+            self.assertEqual(otp_msg.reply_to, ["leads@girlsofsteelrobotics.org"])
+            self.assertIn("notifications@girlsofsteelrobotics.org", otp_msg.from_email)
+
+            mail.outbox = []
+            fee = Fee.objects.create(name="F", amount=10, program=self.program)
+            mail.outbox = []
+            send_templated_notification(
+                "Test Notice",
+                "programs/emails/fee_added.html",
+                {
+                    "student": self.student,
+                    "fee": fee,
+                    "program": self.program,
+                    "balance": 10,
+                },
+                ["recipient@example.com"],
+            )
+            self.assertEqual(len(mail.outbox), 1)
+            notice_msg = mail.outbox[0]
+            self.assertEqual(notice_msg.to, ["recipient@example.com"])
+            self.assertEqual(notice_msg.reply_to, ["leads@girlsofsteelrobotics.org"])
+
+    def test_get_sender_connection_resolves_sender_and_reply_to(self):
+        from programs.utils.notifications import get_sender_connection
+
+        with override_settings(
+            NOTIFICATION_FROM_EMAIL="notifications@girlsofsteelrobotics.org",
+            DEFAULT_REPLY_TO_EMAIL="leads@girlsofsteelrobotics.org",
+        ):
+            # Default connection
+            conn, from_email, reply_to = get_sender_connection("DEFAULT")
+            self.assertIn("notifications@girlsofsteelrobotics.org", from_email)
+            self.assertEqual(reply_to, "leads@girlsofsteelrobotics.org")
+
+        # Configured account
+        with override_settings(
+            EMAIL_SENDER_ACCOUNTS=[
+                {
+                    "key": "fll",
+                    "display_name": "Girls of Steel FLL",
+                    "email": "fll@girlsofsteelrobotics.org",
+                    "reply_to": "fll-leads@girlsofsteelrobotics.org",
+                }
+            ]
+        ):
+            conn, from_email, reply_to = get_sender_connection("fll")
+            self.assertEqual(
+                from_email, '"Girls of Steel FLL" <fll@girlsofsteelrobotics.org>'
+            )
+            self.assertEqual(reply_to, "fll-leads@girlsofsteelrobotics.org")

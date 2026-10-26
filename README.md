@@ -27,6 +27,7 @@ All tasks related to the portal are to try to aim for these three goals:
 
 3. Install dependencies
    pip install -r requirements.txt
+   pip install -r requirements-dev.txt  # linters, coverage, safety (local CI)
 
 4. Apply database migrations
    python manage.py migrate
@@ -83,9 +84,10 @@ Outgoing email is configured through Django 6.1's `MAILERS` setting. The default
 ### Email Configuration & Local Safety
 To prevent accidental emails to real students or parents during testing or development:
 - **Default (Safe Console Mode)**: In development (`DEBUG=True`), all outgoing emails (including OTP login codes) print directly to the terminal where `python manage.py runserver` is running. Zero emails are sent over the network.
+- **toSend REST API (`TOSEND_API_KEY`)**: Set `TOSEND_API_KEY="ts_..."` (or `EMAIL_BACKEND=tosend`) to route all transactional and bulk emails through the toSend v2 REST API (`https://api.tosend.com/v2/`), utilizing automatic batching and individual delivery.
 - **Reroute to a test address (`EMAIL_REDIRECT_TO`)**: Set `EMAIL_REDIRECT_TO="your-email@example.com"` to deliver all outgoing emails to your own inbox while preserving the intended recipients in the subject line (e.g. `[DEV to: student@school.edu] Subject`).
 - **Disable outgoing emails**: Set `EMAILS_ENABLED=False` or `DISABLE_OUTGOING_EMAILS=True` to silently black-hole all outgoing emails.
-- **Backend aliases (`EMAIL_BACKEND`)**: Set `EMAIL_BACKEND=console`, `smtp`, `dummy`, `locmem`, `filebased`, or `redirect`.
+- **Backend aliases (`EMAIL_BACKEND`)**: Set `EMAIL_BACKEND=console`, `smtp`, `dummy`, `locmem`, `filebased`, `redirect`, or `tosend`.
 - **Database Sanitization (`anonymize_emails`)**: When loading production database dumps into local development, run `python manage.py anonymize_emails --domain example.com --force` to scrub all real email addresses across Students, Adults, Users, and Applications (`--dry-run` to preview).
 
 **Recommended in production:**
