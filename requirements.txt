@@ -34,7 +34,7 @@ dparse==0.6.4
 et_xmlfile==2.0.0
 exceptiongroup==1.2.2
 face==26.0.0
-filelock==3.29.3
+filelock==4.2.1
 flake8==7.3.0
 glom==25.12.0
 gunicorn==26.0.0
