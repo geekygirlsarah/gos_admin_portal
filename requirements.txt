@@ -34,7 +34,7 @@ dparse==0.6.4
 et_xmlfile==2.0.0
 exceptiongroup==1.2.2
 face==26.0.0
-filelock==4.2.4
+filelock==3.32.7
 flake8==7.3.0
 glom==25.12.0
 gunicorn==26.0.0
@@ -104,7 +104,7 @@ tblib==3.0.0
 tenacity==9.1.4
 tomlkit==0.15.0
 tqdm==4.68.2
-typer==0.26.7
+typer==0.25.1
 typing-inspection==0.4.2
 typing_extensions==4.16.0
 tzdata==2026.2
