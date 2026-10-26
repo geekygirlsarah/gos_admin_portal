@@ -33,16 +33,17 @@ def _dispatch_worker(
     email_messages: Sequence[EmailMessage],
     connection: BaseEmailBackend | None = None,
     on_complete: Callable[[int, Exception | None], None] | None = None,
+    manage_connections: bool = True,
 ) -> int:
-    """Worker function executed inside the background thread.
+    """Dispatch messages and optionally manage thread-local DB connections.
 
-    Manages Django database connections before and after sending, logs results,
-    and invokes the optional completion callback.
+    Logs results and invokes the optional completion callback.
     """
     sent_count = 0
     err: Exception | None = None
     try:
-        close_old_connections()
+        if manage_connections:
+            close_old_connections()
         backend = connection or get_connection()
         sent_count = backend.send_messages(email_messages)
         logger.info(
@@ -59,7 +60,8 @@ def _dispatch_worker(
             exc_info=True,
         )
     finally:
-        close_old_connections()
+        if manage_connections:
+            close_old_connections()
         if on_complete:
             try:
                 on_complete(sent_count, err)
@@ -88,7 +90,9 @@ def send_messages_in_background(
     """
     is_sync = sync if sync is not None else getattr(settings, "TESTING", False)
     if is_sync:
-        sent = _dispatch_worker(email_messages, connection, on_complete)
+        sent = _dispatch_worker(
+            email_messages, connection, on_complete, manage_connections=False
+        )
         future: Future[int] = Future()
         future.set_result(sent)
         return future

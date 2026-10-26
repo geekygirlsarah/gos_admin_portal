@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **Portal URL link in automated email footers**: Outgoing automated notifications and transactional emails now link directly to the team's admin portal in the footer notice (`This is an automated notification from the [Team Portal](url).`). Organizations can customize their portal web address under Portal Settings → Email tab, or have it automatically resolve from their configured custom domain or site base URL.
 
+### Fixed
+- **PostgreSQL test connection stability during email dispatch**: Synchronous email dispatch used by tests no longer closes the active database connection, preventing subsequent tests and requests from failing with a closed-connection error. Background email workers continue to clean up their own database connections.
+
 ## 2026-10-25
 
 ### Fixed

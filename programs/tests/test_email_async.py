@@ -77,6 +77,20 @@ class EmailAsyncTests(SimpleTestCase):
         # Verify close_old_connections was called at least twice (at start and in finally)
         self.assertGreaterEqual(mock_close.call_count, 2)
 
+    @mock.patch("programs.utils.email_async.close_old_connections")
+    def test_sync_dispatch_does_not_close_database_connections(self, mock_close):
+        backend = LocmemBackend()
+        messages = [
+            EmailMessage("Subj", "Body", "from@example.com", ["to@example.com"])
+        ]
+
+        future = send_messages_in_background(messages, connection=backend, sync=True)
+
+        sent = future.result(timeout=5)
+        self.assertEqual(sent, 1)
+        self.assertEqual(len(mail.outbox), 1)
+        mock_close.assert_not_called()
+
     def test_callback_exception_does_not_crash_worker(self):
         backend = LocmemBackend()
         messages = [
