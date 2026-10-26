@@ -1154,7 +1154,11 @@ class ProgramEmailView(LoginRequiredMixin, View):
             # and inline CSS, so the message renders the way it looked in the
             # compose editor. Also builds a readable plain-text alternative and
             # extracts inline CID image attachments.
-            inlined_html_body, text_body, inline_images = build_email_parts(html_body)
+            inlined_html_body, text_body, inline_images = build_email_parts(
+                html_body,
+                organization=prog.organization if prog else None,
+                subject=subject,
+            )
 
             if prog:
                 enrollments = Enrollment.objects.filter(
@@ -1204,7 +1208,9 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
             # Determine sender connection (selected sender account, or default)
             selected = form.cleaned_data.get("from_account")
-            connection, from_email, reply_to = get_sender_connection(selected)
+            connection, from_email, reply_to = get_sender_connection(
+                selected, organization=prog.organization if prog else None
+            )
 
             messages_to_send = []
             for addr in to_send:

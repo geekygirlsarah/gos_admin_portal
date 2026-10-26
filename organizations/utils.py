@@ -5,6 +5,46 @@ from django.conf import settings
 from .models import Organization, OrganizationSettings
 
 
+def get_site_base_url() -> str:
+    """Return the base URL (including scheme and host) for the site."""
+    site_url = (
+        getattr(settings, "SITE_URL", None)
+        or getattr(settings, "BASE_URL", None)
+        or getattr(settings, "CANONICAL_DOMAIN", None)
+        or ""
+    )
+    if site_url:
+        return str(site_url).rstrip("/")
+
+    import os
+
+    env_url = (
+        os.getenv("SITE_URL")
+        or os.getenv("BASE_URL")
+        or os.getenv("CANONICAL_DOMAIN")
+        or os.getenv("RENDER_EXTERNAL_URL")
+    )
+    if env_url:
+        return env_url.rstrip("/")
+
+    render_host = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+    if render_host:
+        return f"https://{render_host}"
+
+    allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
+    valid_hosts = [
+        h
+        for h in allowed_hosts
+        if h
+        and not h.startswith(".")
+        and h not in ("*", "localhost", "127.0.0.1", "0.0.0.0")  # nosec B104
+    ]
+    if valid_hosts:
+        return f"https://{valid_hosts[0]}"
+
+    return ""
+
+
 def get_default_organization() -> Optional[Organization]:
     """Return the active or single seeded organization (or None)."""
     try:
@@ -12,17 +52,28 @@ def get_default_organization() -> Optional[Organization]:
 
         return _default_organization()
     except Exception:
-        return Organization.objects.filter(is_active=True).first()
+        try:
+            return Organization.objects.filter(is_active=True).first()
+        except Exception:
+            return None
 
 
 def get_organization_email_settings(
     organization: Optional[Organization] = None,
 ) -> Dict[str, Any]:
     """Retrieve structured email settings for an organization with platform fallbacks."""
-    org = organization or get_default_organization()
+    org = None
+    try:
+        org = organization or get_default_organization()
+    except Exception:
+        org = None
+
     org_settings = None
     if org:
-        org_settings = OrganizationSettings.objects.filter(organization=org).first()
+        try:
+            org_settings = OrganizationSettings.objects.filter(organization=org).first()
+        except Exception:
+            org_settings = None
 
     raw_cfg = (
         org_settings.data.get("email_settings", {})
@@ -64,6 +115,10 @@ def get_organization_email_settings(
     secondary_color = raw_cfg.get("secondary_color") or "#f8f9fa"
     header_text_color = raw_cfg.get("header_text_color") or "#ffffff"
     logo_url = raw_cfg.get("logo_url") or ""
+    if logo_url and logo_url.startswith("/"):
+        base_url = get_site_base_url()
+        if base_url:
+            logo_url = f"{base_url}{logo_url}"
     organization_name = (
         raw_cfg.get("organization_name")
         or (org.name if org else default_name)

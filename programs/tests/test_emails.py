@@ -157,7 +157,7 @@ class AutoEmailNotificationsTest(TestCase):
         self.assertEqual(len(mail.outbox[0].alternatives), 1)
         html_content, mimetype = mail.outbox[0].alternatives[0]
         self.assertEqual(mimetype, "text/html")
-        self.assertIn("New Fee Added</h1>", html_content)
+        self.assertIn("A new fee has been added", html_content)
         self.assertIn("$50.00", html_content)
 
     def test_payment_added_sends_email(self):

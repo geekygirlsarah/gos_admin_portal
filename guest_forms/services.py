@@ -85,10 +85,20 @@ def send_submission_confirmation_email(submission) -> None:
         )
         return
 
+    from organizations.utils import (
+        get_default_organization,
+        get_organization_email_settings,
+    )
+
+    org = get_default_organization()
+    org_settings = get_organization_email_settings(org)
+
     ctx = {
         "submission": submission,
         "guest_form": submission.guest_form,
         "participant_name": submission.participant_name,
+        "organization": org,
+        "org_email_settings": org_settings,
     }
     subject = f"Your {submission.guest_form.name} was received"
     text_body = render_to_string("guest_forms/email/submission_confirmation.txt", ctx)

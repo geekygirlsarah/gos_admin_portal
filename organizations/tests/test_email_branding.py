@@ -258,3 +258,151 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertContains(resp, "Primary Brand Color")
         self.assertContains(resp, "Organization Logo")
         self.assertContains(resp, "Email Template Live Preview")
+
+    def test_wrap_email_document_renders_branding(self):
+        from programs.utils.email_html import wrap_email_document
+
+        self.org_settings.data = {
+            "email_settings": {
+                "primary_color": "#112233",
+                "organization_name": "Titan Robotics",
+                "address_line1": "456 Tech Blvd",
+                "contact_email": "info@titanrobotics.org",
+            }
+        }
+        self.org_settings.save()
+
+        html = wrap_email_document(
+            "<p>Important announcement to the team.</p>",
+            organization=self.org,
+            subject="Team Announcement",
+        )
+        self.assertIn("Titan Robotics", html)
+        self.assertIn("#112233", html)
+        self.assertIn("456 Tech Blvd", html)
+        self.assertIn("info@titanrobotics.org", html)
+        self.assertIn("Team Announcement", html)
+        self.assertIn("Important announcement to the team.", html)
+        self.assertIn(
+            "This is an automated notification from the Titan Robotics Portal.", html
+        )
+
+    def test_build_email_parts_renders_branded_html_and_text(self):
+        from programs.utils.email_html import build_email_parts
+
+        self.org_settings.data = {
+            "email_settings": {
+                "organization_name": "Titan Robotics",
+                "address_line1": "456 Tech Blvd",
+            }
+        }
+        self.org_settings.save()
+
+        inlined_html, text_doc, images = build_email_parts(
+            "<p>Welcome to the season kickoff!</p>",
+            organization=self.org,
+            subject="Season Kickoff",
+        )
+        self.assertIn("Titan Robotics", inlined_html)
+        self.assertIn("456 Tech Blvd", inlined_html)
+        self.assertIn("Season Kickoff", inlined_html)
+        self.assertIn("Welcome to the season kickoff!", inlined_html)
+        self.assertIn("Titan Robotics", text_doc)
+        self.assertIn("Welcome to the season kickoff!", text_doc)
+
+    def test_login_code_email_renders_branding(self):
+        from allauth.account.adapter import get_adapter
+
+        self.org_settings.data = {
+            "email_settings": {
+                "primary_color": "#2c3e50",
+                "organization_name": "Apex Robotics",
+            }
+        }
+        self.org_settings.save()
+
+        adapter = get_adapter()
+        adapter.send_mail(
+            "account/email/login_code",
+            "student@example.com",
+            {"code": "842109"},
+        )
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertEqual(len(sent.alternatives), 1)
+        html_body, mime = sent.alternatives[0]
+        self.assertEqual(mime, "text/html")
+        self.assertIn("842109", html_body)
+        self.assertIn("Apex Robotics", html_body)
+        self.assertIn("#2c3e50", html_body)
+        self.assertIn(
+            "This is an automated notification from the Apex Robotics Portal.",
+            html_body,
+        )
+
+    def test_guest_form_confirmation_email_renders_branding(self):
+        from guest_forms.models import GuestForm, GuestFormSubmission
+        from guest_forms.services import send_submission_confirmation_email
+
+        self.org_settings.data = {
+            "email_settings": {
+                "primary_color": "#008080",
+                "organization_name": "Teal Robotics",
+            }
+        }
+        self.org_settings.save()
+
+        gf = GuestForm.objects.create(name="Visitor Waiver", slug="visitor-waiver")
+        sub = GuestFormSubmission.objects.create(
+            guest_form=gf,
+            participant_first_name="Jane",
+            participant_last_name="Doe",
+            email="visitor@example.com",
+        )
+        send_submission_confirmation_email(sub)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertEqual(len(sent.alternatives), 1)
+        html_body, mime = sent.alternatives[0]
+        self.assertEqual(mime, "text/html")
+        self.assertIn("Teal Robotics", html_body)
+        self.assertIn("Visitor Waiver", html_body)
+        self.assertIn("Jane Doe", html_body)
+        self.assertIn(
+            "This is an automated notification from the Teal Robotics Portal.",
+            html_body,
+        )
+
+    def test_relative_logo_url_resolution(self):
+        from django.test import override_settings
+
+        self.org_settings.data = {
+            "email_settings": {
+                "logo_url": "/media/org_logos/my_logo.png",
+            }
+        }
+        self.org_settings.save()
+
+        with override_settings(SITE_URL="https://portal.girlsofsteel.org"):
+            cfg = get_organization_email_settings(self.org)
+            self.assertEqual(
+                cfg["logo_url"],
+                "https://portal.girlsofsteel.org/media/org_logos/my_logo.png",
+            )
+
+    def test_footer_renders_sent_date_and_clean_body(self):
+        cfg = {
+            "organization_name": "Nova Robotics",
+        }
+        context = {
+            "org_email_settings": cfg,
+            "organization": self.org,
+            "body_content": "<p>Hello team!</p>",
+        }
+        rendered = render_to_string("programs/emails/base_notification.html", context)
+        self.assertIn("Sent on", rendered)
+        self.assertIn("Hello team!", rendered)
+        # Ensure the old top date bar table is not present
+        self.assertNotIn("Date: ", rendered.split("email-main-content")[0])

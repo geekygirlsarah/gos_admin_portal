@@ -104,10 +104,20 @@ def notify_lead_mentors_of_delivery_issue(event: EmailDeliveryEvent) -> None:
     else:
         event_description = f"{event.get_event_type_display()} ({event.bounce_type or 'General Delivery Failure'})"
 
+    from organizations.utils import (
+        get_default_organization,
+        get_organization_email_settings,
+    )
+
+    org = get_default_organization()
+    org_settings = get_organization_email_settings(org)
+
     context = {
         "event": event,
         "person_label": person_label,
         "event_description": event_description,
+        "organization": org,
+        "org_email_settings": org_settings,
     }
 
     try:

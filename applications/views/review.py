@@ -1275,7 +1275,11 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             # Sanitize + normalize the fragment, wrap it in an email document
             # and inline CSS so the message renders the way it looked in the
             # compose editor, with a readable plain-text alternative.
-            inlined_html_body, text_body, inline_images = build_email_parts(html_body)
+            inlined_html_body, text_body, inline_images = build_email_parts(
+                html_body,
+                organization=prog.organization if prog else None,
+                subject=subject,
+            )
             test_email = form.cleaned_data.get("test_email")
 
             apps = Application.objects.filter(status__in=statuses)
@@ -1297,7 +1301,9 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
 
             # Determine sender account and SMTP connection
             selected = form.cleaned_data.get("from_account")
-            connection, from_email, reply_to = get_sender_connection(selected)
+            connection, from_email, reply_to = get_sender_connection(
+                selected, organization=prog.organization if prog else None
+            )
 
             messages_to_send = []
             for addr in to_send:

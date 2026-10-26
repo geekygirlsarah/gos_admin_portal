@@ -1052,7 +1052,9 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
 
         # Build sender connection (reuse logic from get_sender_connection)
         selected = form.cleaned_data.get("from_account")
-        connection, from_email, reply_to = get_sender_connection(selected)
+        connection, from_email, reply_to = get_sender_connection(
+            selected, organization=program.organization
+        )
 
         # Collect students enrolled in program (active non-graduated students only)
         students_qs = active_students_in_program(program).select_related("school")
@@ -1141,6 +1143,14 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
         message_html = normalize_email_html(default_message or "")
         message_images = extract_inline_images(default_message or "")
 
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_email_settings,
+        )
+
+        org = program.organization or get_default_organization()
+        org_settings = get_organization_email_settings(org)
+
         messages_to_send = []
         for dest, data in to_send:
             # Render balance sheet HTML
@@ -1153,6 +1163,8 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 "total_payments": data["total_payments"],
                 "balance": data["balance"],
                 "sliding_scale": data["sliding_scale"],
+                "organization": org,
+                "org_email_settings": org_settings,
             }
             # Include optional rich-text message inside the template so styles apply correctly
             ctx["message_html"] = message_html

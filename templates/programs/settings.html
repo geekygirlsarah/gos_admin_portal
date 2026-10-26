@@ -1292,10 +1292,6 @@
                                         </div>
                                         <!-- Body Preview -->
                                         <div style="padding: 16px;">
-                                            <div id="preview_rule" style="border-bottom: 2px solid {{ email_settings.primary_color|default:'#4a154b' }}; padding-bottom: 6px; margin-bottom: 12px;">
-                                                <div class="fw-bold text-dark" style="font-size: 14px;">Notification Title</div>
-                                                <div class="text-muted" style="font-size: 11px;">Date: Today</div>
-                                            </div>
                                             <p class="mb-2 text-dark">Hi Jane,</p>
                                             <p class="mb-2 text-muted" style="line-height: 1.4;">This is a preview showing how your email messages and notifications are rendered inside your organization's master layout shell.</p>
                                             <p class="mb-0"><a href="#" id="preview_link" style="color: {{ email_settings.primary_color|default:'#0d6efd' }}; font-weight: 500;">View in Portal &rarr;</a></p>
@@ -1310,7 +1306,7 @@
                                             <div><span class="fw-semibold">Program Contacts:</span> <span id="preview_contact_name">{{ email_settings.contact_name|default:'Elizabeth Kysel, Sarah Withee' }}</span></div>
                                             <div><span class="fw-semibold">Email:</span> <span id="preview_contact_email">{{ email_settings.contact_email|default:'leads@girlsofsteelrobotics.org' }}</span></div>
                                             <div class="mt-2 text-muted" style="font-size: 10px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
-                                                This is an automated notification from the <span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal.
+                                                This is an automated notification from the <span id="preview_org_automated">{{ email_settings.organization_name|default:'Girls of Steel' }}</span> Portal &bull; Sent on Today
                                             </div>
                                             <div class="mt-1" id="preview_footer_text">{{ email_settings.footer_text }}</div>
                                         </div>
@@ -1513,7 +1509,6 @@
         var previewOrgAutomated = document.getElementById('preview_org_automated');
         var previewAddr1 = document.getElementById('preview_addr1');
         var previewAddr2 = document.getElementById('preview_addr2');
-        var previewRule = document.getElementById('preview_rule');
         var previewLink = document.getElementById('preview_link');
         var previewContactName = document.getElementById('preview_contact_name');
         var previewContactEmail = document.getElementById('preview_contact_email');
@@ -1528,9 +1523,6 @@
             }
             if (previewOrgTitle) {
                 previewOrgTitle.style.color = headerTextColor;
-            }
-            if (previewRule) {
-                previewRule.style.borderBottomColor = color;
             }
             if (previewLink) {
                 previewLink.style.color = color;
