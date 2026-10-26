@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Runtime vs dev Python dependencies**: `requirements.txt` now lists only first-party production packages (Django, gunicorn, etc.). Linters, coverage, safety, and pre-commit live in `requirements-dev.txt`. Production `build.sh` still installs runtime only; local `run_ci` scripts install the dev file.
+- **OSV PR scan is runtime-only**: The GitHub OSV workflow now scans `requirements.txt` only (not `requirements-dev.txt`). Runtime pins include patched `certifi`, `idna`, and `h11`.
 
 ### Added
 - **Portal URL link in automated email footers**: Outgoing automated notifications and transactional emails now link directly to the team's admin portal in the footer notice (`This is an automated notification from the [Team Portal](url).`). Organizations can customize their portal web address under Portal Settings → Email tab, or have it automatically resolve from their configured custom domain or site base URL.

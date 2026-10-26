@@ -26,3 +26,7 @@ defusedxml==0.7.1
 python3-openid==3.2.0
 requests==2.34.2
 python-dotenv==1.2.4
+# Transitives OSV treats as declared mins (requests/uvicorn). Pin patched versions.
+certifi==2026.10.19
+idna==3.15
+h11==0.16.0
