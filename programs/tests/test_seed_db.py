@@ -28,3 +28,24 @@ class SeedOrdersFeatureTests(TestCase):
             p for p in programs if p.name == f"Girls of Steel FRC {this_year}"
         )
         self.assertTrue(flagship.has_feature("orders"))
+
+
+class SeedCalendarsTests(TestCase):
+    def test_seed_calendars_creates_feeds_and_events(self):
+        from calendar_feeds.models import CalendarEvent, CalendarFeed
+        from programs.management.commands.seed_db import Command, _seed_calendars
+
+        cmd = Command()
+        today = date.today()
+        this_year = today.year
+        features = cmd._seed_features()
+        programs = cmd._seed_programs(this_year, features, today)
+
+        _seed_calendars(programs, today)
+
+        self.assertTrue(CalendarFeed.objects.filter(slug="gos-public").exists())
+        self.assertTrue(CalendarFeed.objects.filter(slug="team-meetings").exists())
+        self.assertTrue(CalendarFeed.objects.filter(slug="mentors-calendar").exists())
+        self.assertTrue(CalendarFeed.objects.filter(slug="outreach-feed").exists())
+        self.assertTrue(CalendarFeed.objects.filter(slug="travel-feed").exists())
+        self.assertTrue(CalendarEvent.objects.exists())

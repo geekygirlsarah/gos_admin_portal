@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def sync_outreach_shift(shift, feed):
     """Sync a single OutreachShift to a CalendarEvent on the given feed."""
-    from .models import CalendarEvent
+    from calendar_feeds.models import CalendarEvent
 
     event = shift.event
 
@@ -56,7 +56,7 @@ def sync_outreach_shift(shift, feed):
 
 def remove_outreach_shift(shift, feed):
     """Remove a CalendarEvent for a deleted OutreachShift."""
-    from .models import CalendarEvent
+    from calendar_feeds.models import CalendarEvent
 
     count, _ = CalendarEvent.objects.filter(
         feed=feed,

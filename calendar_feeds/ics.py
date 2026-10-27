@@ -1,10 +1,12 @@
 import logging
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.http import HttpResponse
+from django.utils import timezone
 from django.views import View
 
-from .models import CalendarFeed
+from .models import CalendarFeed, UserCalendarToken
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +21,21 @@ def _escape(text):
     )
 
 
+def _to_localtime(dt):
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt, timezone.get_current_timezone())
+
+
 def _dt_lines(start, end):
+    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
+    local_start = _to_localtime(start)
+    local_end = _to_localtime(end)
     return [
-        f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}",
-        f"DTEND:{end.strftime('%Y%m%dT%H%M%S')}",
+        f"DTSTART;TZID={tz_name}:{local_start.strftime('%Y%m%dT%H%M%S')}",
+        f"DTEND;TZID={tz_name}:{local_end.strftime('%Y%m%dT%H%M%S')}",
     ]
 
 
@@ -36,8 +49,16 @@ def _exdate_list(event):
 
 
 def _exception_lines(event, exc):
+    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     lines = ["BEGIN:VEVENT", f"UID:{event.uid}"]
-    lines.append(f"RECURRENCE-ID:{exc.original_date.strftime('%Y%m%d')}")
+    if event.all_day:
+        lines.append(f"RECURRENCE-ID;VALUE=DATE:{exc.original_date.strftime('%Y%m%d')}")
+    else:
+        local_start = _to_localtime(event.start_datetime)
+        time_str = local_start.strftime("%H%M%S")
+        lines.append(
+            f"RECURRENCE-ID;TZID={tz_name}:{exc.original_date.strftime('%Y%m%d')}T{time_str}"
+        )
     lines.extend(_dt_lines(exc.new_start_datetime, exc.new_end_datetime))
     lines.append(f"SUMMARY:{_escape(exc.new_title or event.title)}")
     if exc.new_location or event.location:
@@ -50,8 +71,10 @@ def _vevent_lines(event):
     lines = ["BEGIN:VEVENT", f"UID:{event.uid}"]
 
     if event.all_day:
-        dtstart = event.start_datetime.date().strftime("%Y%m%d")
-        dtend = (event.end_datetime.date() + timedelta(days=1)).strftime("%Y%m%d")
+        local_start = _to_localtime(event.start_datetime)
+        local_end = _to_localtime(event.end_datetime)
+        dtstart = local_start.date().strftime("%Y%m%d")
+        dtend = (local_end.date() + timedelta(days=1)).strftime("%Y%m%d")
         lines.append(f"DTSTART;VALUE=DATE:{dtstart}")
         lines.append(f"DTEND;VALUE=DATE:{dtend}")
     else:
@@ -79,11 +102,13 @@ def _vevent_lines(event):
 
 def _build_ics_response(events, feed_name="GoS Calendar"):
     """Build an ICS HTTP response from a list of CalendarEvent objects."""
+    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
         "PRODID:-//GoS Admin Portal//calendar_feeds//EN",
         f"X-WR-CALNAME:{feed_name}",
+        f"X-WR-TIMEZONE:{tz_name}",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ]
@@ -131,18 +156,36 @@ class PublicICSFeedView(View):
 
 
 class FeedICSView(View):
-    """ICS feed for a specific calendar feed."""
+    """ICS feed for a specific calendar feed.
 
-    def get(self, request, slug):
+    Supports session-authenticated users and tokenized requests (via URL parameter
+    or `?token=` query parameter).
+    """
+
+    def get(self, request, slug, token=None):
         feed = CalendarFeed.objects.filter(slug=slug, is_active=True).first()
         if not feed:
             return HttpResponse("Feed not found", status=404)
 
         # Check access
         if not feed.is_public:
-            if not request.user.is_authenticated:
-                return HttpResponse("Authentication required", status=401)
-            if not feed.user_can_read(request.user):
+            target_user = None
+            if request.user.is_authenticated:
+                target_user = request.user
+            else:
+                token_val = token or request.GET.get("token")
+                if token_val:
+                    try:
+                        token_obj = UserCalendarToken.objects.select_related(
+                            "user"
+                        ).get(token=token_val)
+                        target_user = token_obj.user
+                    except (UserCalendarToken.DoesNotExist, ValueError):
+                        return HttpResponse("Invalid token", status=401)
+                else:
+                    return HttpResponse("Authentication required", status=401)
+
+            if not target_user or not feed.user_can_read(target_user):
                 return HttpResponse("Access denied", status=403)
 
         today = date.today()
@@ -150,6 +193,51 @@ class FeedICSView(View):
         end = today + timedelta(days=365)
 
         instances = feed.get_events_for_date_range(start, end)
-        events = [inst["event"] for inst in instances]
+        seen_pks = set()
+        events = []
+        for inst in instances:
+            ev = inst["event"]
+            if ev.pk not in seen_pks:
+                seen_pks.add(ev.pk)
+                events.append(ev)
 
         return _build_ics_response(events, feed_name=feed.name)
+
+
+class PersonalICSFeedView(View):
+    """Unified Personal ICS feed for a specific user token.
+
+    Aggregates all events across all feeds the user is permitted to read.
+    """
+
+    def get(self, request, token):
+        try:
+            token_obj = UserCalendarToken.objects.select_related("user").get(
+                token=token
+            )
+        except (UserCalendarToken.DoesNotExist, ValueError):
+            return HttpResponse("Feed not found", status=404)
+
+        user = token_obj.user
+        feeds = CalendarFeed.objects.filter(is_active=True)
+        today = date.today()
+        start = today - timedelta(days=30)
+        end = today + timedelta(days=365)
+
+        all_events = []
+        for feed in feeds:
+            if not feed.user_can_read(user):
+                continue
+            instances = feed.get_events_for_date_range(start, end)
+            for inst in instances:
+                all_events.append(inst["event"])
+
+        # Deduplicate by PK
+        seen_pks = set()
+        unique_events = []
+        for event in all_events:
+            if event.pk not in seen_pks:
+                seen_pks.add(event.pk)
+                unique_events.append(event)
+
+        return _build_ics_response(unique_events, feed_name="Girls of Steel Calendar")

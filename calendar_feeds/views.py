@@ -5,6 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
 from django.views.generic import ListView
 
@@ -12,14 +13,13 @@ from audit.service import log_deletion
 from programs.permission_views import LeadMentorRequiredMixin
 
 from .forms import (
-    DEFAULT_ACL_INITIAL,
     CalendarEventForm,
     CalendarFeedACLInlineFormSet,
     CalendarFeedForm,
     EventExceptionForm,
 )
-from .ics import FeedICSView, PublicICSFeedView  # noqa: F401
-from .models import CalendarEvent, CalendarFeed, EventException
+from .ics import FeedICSView, PersonalICSFeedView, PublicICSFeedView  # noqa: F401
+from .models import CalendarEvent, CalendarFeed, EventException, UserCalendarToken
 
 
 class CalendarView(View):
@@ -46,18 +46,48 @@ class CalendarView(View):
 
         feeds = CalendarFeed.objects.filter(is_active=True)
         visible_feeds = [f for f in feeds if f.user_can_read(request.user)]
+        writable_feeds = [f for f in visible_feeds if f.user_can_write(request.user)]
 
         # Get the selected feed IDs from query params
         selected = request.GET.getlist("feed")
         if not selected:
             selected = [str(f.pk) for f in visible_feeds]
 
+        personal_ics_url = None
+        user_token = None
+        if request.user.is_authenticated:
+            token_obj = UserCalendarToken.for_user(request.user)
+            user_token = token_obj.token
+            personal_ics_url = request.build_absolute_uri(
+                reverse("calendar_feeds:ics_personal", kwargs={"token": user_token})
+            )
+
+        public_ics_url = request.build_absolute_uri(
+            reverse("calendar_feeds:ics_public")
+        )
+
         context = {
             "feeds": visible_feeds,
+            "writable_feeds": writable_feeds,
             "selected_feed_pks": [int(pk) for pk in selected],
             "can_create_feed": user_is_mentor_or_lead(request.user),
+            "personal_ics_url": personal_ics_url,
+            "public_ics_url": public_ics_url,
+            "user_token": user_token,
         }
         return render(request, "calendar_feeds/calendar_view.html", context)
+
+
+class RegenerateCalendarTokenView(LoginRequiredMixin, View):
+    """Regenerate the user's personal calendar subscription token."""
+
+    def post(self, request):
+        token_obj = UserCalendarToken.for_user(request.user)
+        token_obj.regenerate()
+        messages.success(
+            request, "Your calendar subscription link has been regenerated."
+        )
+        return redirect("calendar_feeds:calendar_view")
 
 
 class CalendarEventsAPIView(View):
@@ -119,9 +149,7 @@ class FeedListView(LeadMentorRequiredMixin, ListView):
 class FeedCreateView(LeadMentorRequiredMixin, View):
     def get(self, request):
         form = CalendarFeedForm()
-        acl_formset = CalendarFeedACLInlineFormSet(
-            prefix="acls", initial=DEFAULT_ACL_INITIAL
-        )
+        acl_formset = CalendarFeedACLInlineFormSet(prefix="acls")
         return render(
             request,
             "calendar_feeds/feed_form.html",
@@ -137,6 +165,14 @@ class FeedCreateView(LeadMentorRequiredMixin, View):
                 feed = form.save()
                 acl_formset.instance = feed
                 acl_formset.save()
+            if feed.source_type == CalendarFeed.SOURCE_OUTREACH:
+                from .sources.outreach import initial_sync
+
+                initial_sync(feed)
+            elif feed.source_type == CalendarFeed.SOURCE_TRAVEL:
+                from .sources.travel import initial_sync
+
+                initial_sync(feed)
             messages.success(request, f"Calendar feed '{feed.name}' created.")
             return redirect("calendar_feeds:feed_list")
 
@@ -169,6 +205,14 @@ class FeedUpdateView(LeadMentorRequiredMixin, View):
             with transaction.atomic():
                 form.save()
                 acl_formset.save()
+            if feed.source_type == CalendarFeed.SOURCE_OUTREACH:
+                from .sources.outreach import initial_sync
+
+                initial_sync(feed)
+            elif feed.source_type == CalendarFeed.SOURCE_TRAVEL:
+                from .sources.travel import initial_sync
+
+                initial_sync(feed)
             messages.success(request, f"Calendar feed '{feed.name}' updated.")
             return redirect("calendar_feeds:feed_list")
 

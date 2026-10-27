@@ -50,8 +50,8 @@ def make_student_user(username="student", password="password123"):  # nosec B107
     return user, student
 
 
-def make_program(name="Test Program", *, features=None):
-    program = Program.objects.create(name=name, active=True)
+def make_program(name="Test Program", *, features=None, active=True, **kwargs):
+    program = Program.objects.create(name=name, active=active, **kwargs)
     if features:
         for key, display in features:
             program.features.get_or_create(key=key, defaults={"name": display})

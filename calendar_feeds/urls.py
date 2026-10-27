@@ -66,9 +66,24 @@ urlpatterns = [
         name="ics_public",
     ),
     path(
+        "my/<uuid:token>/feed.ics",
+        views.PersonalICSFeedView.as_view(),
+        name="ics_personal",
+    ),
+    path(
+        "my/regenerate-token/",
+        views.RegenerateCalendarTokenView.as_view(),
+        name="regenerate_token",
+    ),
+    path(
         "<slug:slug>/feed.ics",
         views.FeedICSView.as_view(),
         name="ics_feed",
+    ),
+    path(
+        "<slug:slug>/<uuid:token>/feed.ics",
+        views.FeedICSView.as_view(),
+        name="ics_feed_token",
     ),
     # JSON API for FullCalendar
     path(
