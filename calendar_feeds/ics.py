@@ -1,7 +1,9 @@
 import logging
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.http import HttpResponse
+from django.utils import timezone
 from django.views import View
 
 from .models import CalendarFeed, UserCalendarToken
@@ -19,10 +21,21 @@ def _escape(text):
     )
 
 
+def _to_localtime(dt):
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt, timezone.get_current_timezone())
+
+
 def _dt_lines(start, end):
+    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
+    local_start = _to_localtime(start)
+    local_end = _to_localtime(end)
     return [
-        f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}",
-        f"DTEND:{end.strftime('%Y%m%dT%H%M%S')}",
+        f"DTSTART;TZID={tz_name}:{local_start.strftime('%Y%m%dT%H%M%S')}",
+        f"DTEND;TZID={tz_name}:{local_end.strftime('%Y%m%dT%H%M%S')}",
     ]
 
 
@@ -36,8 +49,16 @@ def _exdate_list(event):
 
 
 def _exception_lines(event, exc):
+    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     lines = ["BEGIN:VEVENT", f"UID:{event.uid}"]
-    lines.append(f"RECURRENCE-ID:{exc.original_date.strftime('%Y%m%d')}")
+    if event.all_day:
+        lines.append(f"RECURRENCE-ID;VALUE=DATE:{exc.original_date.strftime('%Y%m%d')}")
+    else:
+        local_start = _to_localtime(event.start_datetime)
+        time_str = local_start.strftime("%H%M%S")
+        lines.append(
+            f"RECURRENCE-ID;TZID={tz_name}:{exc.original_date.strftime('%Y%m%d')}T{time_str}"
+        )
     lines.extend(_dt_lines(exc.new_start_datetime, exc.new_end_datetime))
     lines.append(f"SUMMARY:{_escape(exc.new_title or event.title)}")
     if exc.new_location or event.location:
@@ -50,8 +71,10 @@ def _vevent_lines(event):
     lines = ["BEGIN:VEVENT", f"UID:{event.uid}"]
 
     if event.all_day:
-        dtstart = event.start_datetime.date().strftime("%Y%m%d")
-        dtend = (event.end_datetime.date() + timedelta(days=1)).strftime("%Y%m%d")
+        local_start = _to_localtime(event.start_datetime)
+        local_end = _to_localtime(event.end_datetime)
+        dtstart = local_start.date().strftime("%Y%m%d")
+        dtend = (local_end.date() + timedelta(days=1)).strftime("%Y%m%d")
         lines.append(f"DTSTART;VALUE=DATE:{dtstart}")
         lines.append(f"DTEND;VALUE=DATE:{dtend}")
     else:
@@ -79,11 +102,13 @@ def _vevent_lines(event):
 
 def _build_ics_response(events, feed_name="GoS Calendar"):
     """Build an ICS HTTP response from a list of CalendarEvent objects."""
+    tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
         "PRODID:-//GoS Admin Portal//calendar_feeds//EN",
         f"X-WR-CALNAME:{feed_name}",
+        f"X-WR-TIMEZONE:{tz_name}",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ]

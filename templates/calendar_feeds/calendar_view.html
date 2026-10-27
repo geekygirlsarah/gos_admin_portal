@@ -48,15 +48,9 @@
         </a>
         {% endif %}
 
-        {% if user.is_authenticated and personal_ics_url %}
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#subscribeModal">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#subscribeModal" title="Subscribe to calendar feed">
             <i class="bi bi-calendar-plus"></i> Subscribe (ICS)
         </button>
-        {% else %}
-        <a href="{% url 'calendar_feeds:ics_public' %}" class="btn btn-outline-secondary btn-sm" title="Subscribe to public ICS feed">
-            <i class="bi bi-calendar-plus"></i> Subscribe (ICS)
-        </a>
-        {% endif %}
     </div>
 </div>
 
@@ -112,7 +106,6 @@
     </div>
 </div>
 
-{% if user.is_authenticated and personal_ics_url %}
 <!-- Subscribe Modal -->
 <div class="modal fade" id="subscribeModal" tabindex="-1" aria-labelledby="subscribeModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -122,6 +115,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                {% if user.is_authenticated and personal_ics_url %}
                 <div class="mb-4">
                     <h6 class="fw-bold mb-2">Personal Unified Feed</h6>
                     <p class="text-muted small mb-2">
@@ -137,6 +131,23 @@
                         <i class="bi bi-check-circle"></i> Link copied to clipboard!
                     </div>
                 </div>
+                {% else %}
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">Public Calendar Feed</h6>
+                    <p class="text-muted small mb-2">
+                        Subscribe to all public Girls of Steel team meetings, workshops, and community events directly in your calendar app.
+                    </p>
+                    <div class="input-group mb-2">
+                        <input type="text" id="personalIcsInput" class="form-control font-monospace form-control-sm" value="{{ public_ics_url }}" readonly>
+                        <button class="btn btn-outline-primary btn-sm" type="button" id="copyIcsBtn">
+                            <i class="bi bi-clipboard"></i> Copy Link
+                        </button>
+                    </div>
+                    <div id="copyAlert" class="small text-success" style="display: none;">
+                        <i class="bi bi-check-circle"></i> Link copied to clipboard!
+                    </div>
+                </div>
+                {% endif %}
 
                 <div class="card bg-light mb-4">
                     <div class="card-body py-2">
@@ -149,6 +160,7 @@
                     </div>
                 </div>
 
+                {% if user.is_authenticated and personal_ics_url %}
                 <div class="border-top pt-3 d-flex justify-content-between align-items-center">
                     <div>
                         <span class="text-muted small">Need a public-only link?</span>
@@ -161,6 +173,18 @@
                         </button>
                     </form>
                 </div>
+                {% else %}
+                <div class="border-top pt-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Want a direct file download?</span>
+                        <a href="{% url 'calendar_feeds:ics_public' %}" class="small ms-1"><i class="bi bi-download"></i> Download .ics File</a>
+                    </div>
+                    <div>
+                        <span class="text-muted small">Team member or parent?</span>
+                        <a href="{% url 'account_login' %}?next={% url 'calendar_feeds:calendar_view' %}" class="small ms-1">Log in for personal feed</a>
+                    </div>
+                </div>
+                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
@@ -168,7 +192,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 {% endblock %}
 

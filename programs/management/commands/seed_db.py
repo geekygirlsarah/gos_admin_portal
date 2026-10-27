@@ -1017,7 +1017,7 @@ def _seed_calendars(programs, today):
                 "Mentor strategy sessions, registration deadlines, and planning meetings."
             ),
             "color": "#6f42c1",
-            "visibility": CalendarFeed.VISIBILITY_INVITE_ONLY,
+            "visibility": CalendarFeed.VISIBILITY_MEMBERS,
             "source_type": CalendarFeed.SOURCE_MANUAL,
             "is_active": True,
         },

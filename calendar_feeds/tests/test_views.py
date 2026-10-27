@@ -36,7 +36,11 @@ class CalendarViewTests(TestCase):
         self.assertNotIn("Private", feed_names)
 
     def test_lead_mentor_sees_all(self):
-        make_feed(name="Invite Only", visibility=CalendarFeed.VISIBILITY_INVITE_ONLY)
+        make_feed(
+            name="Members Only",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+            acls={"Mentor": (False, False)},
+        )
         make_feed(name="Public", visibility=CalendarFeed.VISIBILITY_ANONYMOUS)
         self.client.login(username="lead", password="password123")  # nosec B106
         resp = self.client.get(self.url)
@@ -46,19 +50,19 @@ class CalendarViewTests(TestCase):
     def test_mentor_with_acl_can_read(self):
         make_feed(
             name="Members",
-            visibility=CalendarFeed.VISIBILITY_INVITE_ONLY,
-            acls={"Mentor": (True, True)},
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+            acls={"Mentor": (True, True), "Parent": (False, False)},
         )
         self.client.login(username="mentor", password="password123")  # nosec B106
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.context["feeds"]), 1)
 
-    def test_parent_without_acl_cannot_see_invite_only(self):
+    def test_parent_without_acl_cannot_see_restricted_feed(self):
         make_feed(
             name="Mentors Only",
-            visibility=CalendarFeed.VISIBILITY_INVITE_ONLY,
-            acls={"Mentor": (True, True)},
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+            acls={"Mentor": (True, True), "Parent": (False, False)},
         )
         self.client.login(username="parent", password="password123")  # nosec B106
         resp = self.client.get(self.url)

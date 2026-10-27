@@ -26,7 +26,7 @@ class CalendarViewUITests(TestCase):
         )
         self.mentor_feed = make_feed(
             name="Mentors Feed",
-            visibility=CalendarFeed.VISIBILITY_INVITE_ONLY,
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
             source_type=CalendarFeed.SOURCE_MANUAL,
             acls={"Mentor": (True, True), "Parent": (False, False)},
         )
@@ -43,6 +43,14 @@ class CalendarViewUITests(TestCase):
         self.assertEqual(resp.context["writable_feeds"], [])
         self.assertFalse(resp.context["can_create_feed"])
         self.assertIsNone(resp.context.get("personal_ics_url"))
+        self.assertIsNotNone(resp.context.get("public_ics_url"))
+        self.assertIn("/calendar/feed.ics", resp.context["public_ics_url"])
+        self.assertContains(resp, 'data-bs-target="#subscribeModal"')
+        self.assertContains(resp, "Public Calendar Feed")
+        self.assertContains(resp, "How to Subscribe")
+        self.assertContains(resp, "Apple Calendar")
+        self.assertContains(resp, "Google Calendar")
+        self.assertContains(resp, "Outlook")
 
     def test_mentor_user_view_context_has_writable_feeds_and_token_url(self):
         self.client.login(username="mentor", password="password123")  # nosec B106

@@ -63,13 +63,13 @@ class PersonalICSFeedViewTests(TestCase):
         )
         self.mentor_feed = make_feed(
             name="Mentors Feed",
-            visibility=CalendarFeed.VISIBILITY_INVITE_ONLY,
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
             slug="mentors",
             acls={"Mentor": (True, True)},
         )
         self.student_feed = make_feed(
             name="Students Feed",
-            visibility=CalendarFeed.VISIBILITY_INVITE_ONLY,
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
             slug="students",
             acls={"Student": (True, False)},
         )
@@ -118,7 +118,7 @@ class FeedICSViewTokenAuthTests(TestCase):
 
         self.mentor_feed = make_feed(
             name="Private Mentors Feed",
-            visibility=CalendarFeed.VISIBILITY_INVITE_ONLY,
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
             slug="private-mentors",
             acls={"Mentor": (True, True)},
         )

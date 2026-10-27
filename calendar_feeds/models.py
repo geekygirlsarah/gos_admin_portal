@@ -10,23 +10,19 @@ from django.utils.text import slugify
 class CalendarFeed(models.Model):
     VISIBILITY_ANONYMOUS = "anonymous"
     VISIBILITY_MEMBERS = "members"
-    VISIBILITY_INVITE_ONLY = "invite_only"
     VISIBILITY_CHOICES = [
         (VISIBILITY_ANONYMOUS, "Public (no login required)"),
         (VISIBILITY_MEMBERS, "Members (logged-in users)"),
-        (VISIBILITY_INVITE_ONLY, "Invite Only (ACL-controlled)"),
     ]
 
     SOURCE_MANUAL = "manual"
     SOURCE_OUTREACH = "outreach"
     SOURCE_TRAVEL = "travel"
-    SOURCE_PROGRAM_HOURS = "program_hours"
     SOURCE_CUSTOM = "custom"
     SOURCE_CHOICES = [
         (SOURCE_MANUAL, "Manually managed"),
         (SOURCE_OUTREACH, "Outreach events (auto-synced)"),
         (SOURCE_TRAVEL, "Travel events (auto-synced)"),
-        (SOURCE_PROGRAM_HOURS, "Program hours (auto-synced)"),
         (SOURCE_CUSTOM, "Custom source"),
     ]
 

@@ -16,6 +16,34 @@ from calendar_feeds.tests.factories import (
 )
 
 
+class CalendarFeedVisibilityChoicesTests(TestCase):
+    def test_visibility_choices_only_contains_anonymous_and_members(self):
+        visibility_keys = [k for k, _ in CalendarFeed.VISIBILITY_CHOICES]
+        self.assertNotIn("invite_only", visibility_keys)
+        self.assertEqual(
+            visibility_keys,
+            [
+                CalendarFeed.VISIBILITY_ANONYMOUS,
+                CalendarFeed.VISIBILITY_MEMBERS,
+            ],
+        )
+
+
+class CalendarFeedSourceChoicesTests(TestCase):
+    def test_source_choices_does_not_contain_program_hours(self):
+        source_keys = [k for k, _ in CalendarFeed.SOURCE_CHOICES]
+        self.assertNotIn("program_hours", source_keys)
+        self.assertEqual(
+            source_keys,
+            [
+                CalendarFeed.SOURCE_MANUAL,
+                CalendarFeed.SOURCE_OUTREACH,
+                CalendarFeed.SOURCE_TRAVEL,
+                CalendarFeed.SOURCE_CUSTOM,
+            ],
+        )
+
+
 class CalendarFeedSlugTests(TestCase):
     def test_slug_auto_generated_from_name(self):
         feed = CalendarFeed.objects.create(name="Student Leadership")
@@ -51,7 +79,9 @@ class CalendarFeedReadAccessTests(TestCase):
         self.assertFalse(feed.user_can_read(AnonymousUser()))
 
     def test_lead_mentor_bypasses_acl(self):
-        feed = make_feed(visibility=CalendarFeed.VISIBILITY_INVITE_ONLY, acls={})
+        feed = make_feed(
+            visibility=CalendarFeed.VISIBILITY_MEMBERS, acls={"Mentor": (False, False)}
+        )
         self.assertTrue(feed.user_can_read(self.lead))
 
     def test_mentor_with_read_acl_can_read(self):

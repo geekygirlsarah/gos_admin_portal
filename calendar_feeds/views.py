@@ -62,12 +62,17 @@ class CalendarView(View):
                 reverse("calendar_feeds:ics_personal", kwargs={"token": user_token})
             )
 
+        public_ics_url = request.build_absolute_uri(
+            reverse("calendar_feeds:ics_public")
+        )
+
         context = {
             "feeds": visible_feeds,
             "writable_feeds": writable_feeds,
             "selected_feed_pks": [int(pk) for pk in selected],
             "can_create_feed": user_is_mentor_or_lead(request.user),
             "personal_ics_url": personal_ics_url,
+            "public_ics_url": public_ics_url,
             "user_token": user_token,
         }
         return render(request, "calendar_feeds/calendar_view.html", context)
