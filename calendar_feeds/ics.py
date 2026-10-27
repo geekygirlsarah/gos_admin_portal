@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from django.http import HttpResponse
 from django.views import View
 
-from .models import CalendarFeed
+from .models import CalendarFeed, UserCalendarToken
 
 logger = logging.getLogger(__name__)
 
@@ -131,18 +131,36 @@ class PublicICSFeedView(View):
 
 
 class FeedICSView(View):
-    """ICS feed for a specific calendar feed."""
+    """ICS feed for a specific calendar feed.
 
-    def get(self, request, slug):
+    Supports session-authenticated users and tokenized requests (via URL parameter
+    or `?token=` query parameter).
+    """
+
+    def get(self, request, slug, token=None):
         feed = CalendarFeed.objects.filter(slug=slug, is_active=True).first()
         if not feed:
             return HttpResponse("Feed not found", status=404)
 
         # Check access
         if not feed.is_public:
-            if not request.user.is_authenticated:
-                return HttpResponse("Authentication required", status=401)
-            if not feed.user_can_read(request.user):
+            target_user = None
+            if request.user.is_authenticated:
+                target_user = request.user
+            else:
+                token_val = token or request.GET.get("token")
+                if token_val:
+                    try:
+                        token_obj = UserCalendarToken.objects.select_related(
+                            "user"
+                        ).get(token=token_val)
+                        target_user = token_obj.user
+                    except (UserCalendarToken.DoesNotExist, ValueError):
+                        return HttpResponse("Invalid token", status=401)
+                else:
+                    return HttpResponse("Authentication required", status=401)
+
+            if not target_user or not feed.user_can_read(target_user):
                 return HttpResponse("Access denied", status=403)
 
         today = date.today()
@@ -150,6 +168,51 @@ class FeedICSView(View):
         end = today + timedelta(days=365)
 
         instances = feed.get_events_for_date_range(start, end)
-        events = [inst["event"] for inst in instances]
+        seen_pks = set()
+        events = []
+        for inst in instances:
+            ev = inst["event"]
+            if ev.pk not in seen_pks:
+                seen_pks.add(ev.pk)
+                events.append(ev)
 
         return _build_ics_response(events, feed_name=feed.name)
+
+
+class PersonalICSFeedView(View):
+    """Unified Personal ICS feed for a specific user token.
+
+    Aggregates all events across all feeds the user is permitted to read.
+    """
+
+    def get(self, request, token):
+        try:
+            token_obj = UserCalendarToken.objects.select_related("user").get(
+                token=token
+            )
+        except (UserCalendarToken.DoesNotExist, ValueError):
+            return HttpResponse("Feed not found", status=404)
+
+        user = token_obj.user
+        feeds = CalendarFeed.objects.filter(is_active=True)
+        today = date.today()
+        start = today - timedelta(days=30)
+        end = today + timedelta(days=365)
+
+        all_events = []
+        for feed in feeds:
+            if not feed.user_can_read(user):
+                continue
+            instances = feed.get_events_for_date_range(start, end)
+            for inst in instances:
+                all_events.append(inst["event"])
+
+        # Deduplicate by PK
+        seen_pks = set()
+        unique_events = []
+        for event in all_events:
+            if event.pk not in seen_pks:
+                seen_pks.add(event.pk)
+                unique_events.append(event)
+
+        return _build_ics_response(unique_events, feed_name="Girls of Steel Calendar")

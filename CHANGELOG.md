@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-27
+
+### Added
+- **Active and Upcoming Program Grouping for Calendar Feeds**: Calendar feed creation and editing forms now automatically group programs into Active, Upcoming, and Past optgroups. By default, active and upcoming programs are shown while past/archived programs are collapsed and accessible via the standard "Show past & archived programs" checkbox toggle.
+- **Calendar Feeds Visual & Theme Standardization**: Modernized calendar feed and event management pages (event creation/edit, feed creation/edit, feed management list, access control permissions, and recurring exception forms) to match the portal's standard Bootstrap 5 theme with breadcrumb navigation, card headers, and responsive tables.
+- **Personal Tokenized Calendar Subscriptions (ICS)**: Added secure personalized ICS calendar feeds (`/calendar/my/<token>/feed.ics`) and tokenized individual feed endpoints (`/calendar/<slug>/<token>/feed.ics`). Students, parents, and mentors can subscribe directly in Apple Calendar (iPhone/Mac), Google Calendar, or Outlook to automatically sync all meetings, outreach shifts, workshops, and competition trips they are authorized to view without interactive browser login.
+- **Calendar Subscription Modal & Link Regeneration**: Added a subscription dialog on the main calendar view with one-click clipboard copying, setup instructions for major calendar apps, and the ability to regenerate private subscription tokens on demand.
+- **One-Click Google Calendar Event Links**: Event details on the web calendar view now feature an "Add to Google Calendar" button, allowing quick one-off additions of specific meetings or trips to personal Google calendars.
+- **Event Creation from Main Calendar View**: Added an "+ Add Event" button and feed selector directly on the main calendar page for mentors and staff who have write permissions on active calendar feeds.
+- **Friendly Recurrence Builder for Recurring Events**: Enhanced the calendar event creation and edit forms with an intuitive recurrence builder (daily, weekly with day-of-week checkboxes, monthly, and interval / end-date / count controls) that automatically constructs valid RFC-5545 iCalendar rules (`rrule_ical`).
+- **Automated Competition & Travel Trip Calendar Synchronization**: Added automated background sync for travel events and departures (`TravelEvent` / `TravelDeparture`). Trips and travel itineraries automatically populate and update on matching travel calendar feeds.
+- **Initial Feed Synchronization on Creation**: Creating or editing source-managed calendar feeds (such as Outreach or Travel feeds) now automatically triggers initial data synchronization for all existing program records.
+- **Development Calendar Seeding**: Added default calendar feeds (Public Events, Team Meetings, Mentors & Staff, Outreach, and Competitions & Travel) and sample events to `seed_db` for streamlined local development and testing.
+
 ## 2026-10-26
 
 ### Changed

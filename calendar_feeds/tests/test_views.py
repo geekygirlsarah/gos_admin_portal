@@ -13,6 +13,7 @@ from calendar_feeds.tests.factories import (
     make_lead_mentor_user,
     make_mentor_user,
     make_parent_user,
+    make_program,
     make_student_user,
 )
 
@@ -113,6 +114,37 @@ class FeedCreateViewTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
 
+    def test_create_renders_grouped_programs(self):
+        today = timezone.localdate()
+        make_program(
+            "Active Season",
+            start_date=today - timedelta(days=10),
+            end_date=today + timedelta(days=50),
+            active=True,
+        )
+        make_program(
+            "Upcoming Season",
+            start_date=today + timedelta(days=60),
+            end_date=today + timedelta(days=120),
+            active=True,
+        )
+        make_program(
+            "Past Season",
+            start_date=today - timedelta(days=200),
+            end_date=today - timedelta(days=100),
+            active=False,
+        )
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode("utf-8")
+        self.assertIn("Active Programs", content)
+        self.assertIn("Upcoming Programs", content)
+        self.assertIn("Past / Archived Programs", content)
+        self.assertIn("Active Season", content)
+        self.assertIn("Upcoming Season", content)
+        self.assertIn("Past Season", content)
+
     def test_non_lead_redirected_home(self):
         self.client.login(username="mentor", password="password123")  # nosec B106
         resp = self.client.get(self.url)
@@ -158,6 +190,34 @@ class FeedUpdateViewTests(TestCase):
         self.feed = make_feed(name="Original Name")
         self.url = reverse("calendar_feeds:feed_edit", args=[self.feed.pk])
         self.lead = make_lead_mentor_user()
+
+    def test_edit_renders_grouped_programs(self):
+        today = timezone.localdate()
+        make_program(
+            "Active Season",
+            start_date=today - timedelta(days=10),
+            end_date=today + timedelta(days=50),
+            active=True,
+        )
+        make_program(
+            "Upcoming Season",
+            start_date=today + timedelta(days=60),
+            end_date=today + timedelta(days=120),
+            active=True,
+        )
+        make_program(
+            "Past Season",
+            start_date=today - timedelta(days=200),
+            end_date=today - timedelta(days=100),
+            active=False,
+        )
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode("utf-8")
+        self.assertIn("Active Programs", content)
+        self.assertIn("Upcoming Programs", content)
+        self.assertIn("Past / Archived Programs", content)
 
     def test_update_feed(self):
         self.client.login(username="lead", password="password123")  # nosec B106

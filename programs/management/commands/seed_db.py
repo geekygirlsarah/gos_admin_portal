@@ -49,6 +49,7 @@ class Command(BaseCommand):
         self._seed_vendors()
         self._seed_shipping_carriers()
         _seed_orders(programs)
+        _seed_calendars(programs, today)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded database"))
 
@@ -952,4 +953,156 @@ def _seed_clearances(adult, paca, patch, fbi, expires):
                 "cleared": cleared,
                 "obtained_date": expires if cleared else None,
             },
+        )
+
+
+def _seed_calendars(programs, today):
+    """Seed default calendar feeds and initial events for development."""
+    from datetime import datetime, time, timedelta
+
+    from django.utils import timezone
+
+    from calendar_feeds.models import CalendarEvent, CalendarFeed, CalendarFeedACL
+    from calendar_feeds.sources.outreach import initial_sync as outreach_sync
+    from calendar_feeds.sources.travel import initial_sync as travel_sync
+
+    flagship = next(
+        (p for p in programs if p.active), programs[0] if programs else None
+    )
+
+    # 1. Public Feed
+    public_feed, _ = CalendarFeed.objects.update_or_create(
+        slug="gos-public",
+        defaults={
+            "name": "Girls of Steel Public Events",
+            "description": "Public workshops, open houses, and community demos.",
+            "color": "#198754",
+            "visibility": CalendarFeed.VISIBILITY_ANONYMOUS,
+            "source_type": CalendarFeed.SOURCE_MANUAL,
+            "is_active": True,
+        },
+    )
+
+    # 2. General Team Meetings Feed
+    team_feed, _ = CalendarFeed.objects.update_or_create(
+        slug="team-meetings",
+        defaults={
+            "name": "Team Meetings & Workshops",
+            "description": (
+                "General team meetings, build sessions, and workspace open hours."
+            ),
+            "color": "#0d6efd",
+            "visibility": CalendarFeed.VISIBILITY_MEMBERS,
+            "source_type": CalendarFeed.SOURCE_MANUAL,
+            "program": flagship,
+            "is_active": True,
+        },
+    )
+    for role, (r, w) in [
+        ("Mentor", (True, True)),
+        ("Parent", (True, False)),
+        ("Student", (True, False)),
+        ("Alumni", (False, False)),
+    ]:
+        CalendarFeedACL.objects.update_or_create(
+            feed=team_feed, role=role, defaults={"can_read": r, "can_write": w}
+        )
+
+    # 3. Mentors & Leadership Feed
+    mentor_feed, _ = CalendarFeed.objects.update_or_create(
+        slug="mentors-calendar",
+        defaults={
+            "name": "Mentors & Staff Calendar",
+            "description": (
+                "Mentor strategy sessions, registration deadlines, and planning meetings."
+            ),
+            "color": "#6f42c1",
+            "visibility": CalendarFeed.VISIBILITY_INVITE_ONLY,
+            "source_type": CalendarFeed.SOURCE_MANUAL,
+            "is_active": True,
+        },
+    )
+    for role, (r, w) in [
+        ("Mentor", (True, True)),
+        ("Parent", (False, False)),
+        ("Student", (False, False)),
+        ("Alumni", (False, False)),
+    ]:
+        CalendarFeedACL.objects.update_or_create(
+            feed=mentor_feed, role=role, defaults={"can_read": r, "can_write": w}
+        )
+
+    # 4. Outreach Feed
+    outreach_feed, _ = CalendarFeed.objects.update_or_create(
+        slug="outreach-feed",
+        defaults={
+            "name": "Outreach Events",
+            "description": "Auto-synced outreach shifts and community demos.",
+            "color": "#20c997",
+            "visibility": CalendarFeed.VISIBILITY_MEMBERS,
+            "source_type": CalendarFeed.SOURCE_OUTREACH,
+            "program": flagship,
+            "is_active": True,
+        },
+    )
+    outreach_sync(outreach_feed)
+
+    # 5. Travel & Competitions Feed
+    travel_feed, _ = CalendarFeed.objects.update_or_create(
+        slug="travel-feed",
+        defaults={
+            "name": "Competitions & Travel",
+            "description": "Auto-synced competition trips and departures.",
+            "color": "#fd7e14",
+            "visibility": CalendarFeed.VISIBILITY_MEMBERS,
+            "source_type": CalendarFeed.SOURCE_TRAVEL,
+            "program": flagship,
+            "is_active": True,
+        },
+    )
+    travel_sync(travel_feed)
+
+    # Add sample recurring team meeting if no events on team_feed
+    if not team_feed.events.exists():
+        start_time = timezone.make_aware(
+            datetime.combine(today + timedelta(days=2), time(18, 0)),
+            timezone.UTC,
+        )
+        CalendarEvent.objects.create(
+            feed=team_feed,
+            title="Weekly Team Build Session",
+            description="All students and mentors assemble in the shop for subsystem builds.",
+            start_datetime=start_time,
+            end_datetime=start_time + timedelta(hours=2, minutes=30),
+            location="Robotics Lab, Room 102",
+            rrule_ical="FREQ=WEEKLY;BYDAY=TH;COUNT=20",
+        )
+
+    if not public_feed.events.exists():
+        pub_start = timezone.make_aware(
+            datetime.combine(today + timedelta(days=10), time(10, 0)),
+            timezone.UTC,
+        )
+        CalendarEvent.objects.create(
+            feed=public_feed,
+            title="Girls of Steel Annual Open House",
+            description="Public STEM demos, robot showcase, and team Q&A for prospective students and families.",
+            start_datetime=pub_start,
+            end_datetime=pub_start + timedelta(hours=4),
+            location="Main Hall & Maker Space",
+        )
+
+    if not mentor_feed.events.exists():
+        m_start = timezone.make_aware(
+            datetime.combine(today + timedelta(days=4), time(19, 0)),
+            timezone.UTC,
+        )
+        CalendarEvent.objects.create(
+            feed=mentor_feed,
+            title="Monthly Mentor Strategy & Alignment",
+            description="Curriculum planning, student progress reviews, and season logistics.",
+            start_datetime=m_start,
+            end_datetime=m_start + timedelta(hours=1, minutes=30),
+            location="Conference Room B / Zoom",
+            rrule_ical="FREQ=MONTHLY;COUNT=12",
         )

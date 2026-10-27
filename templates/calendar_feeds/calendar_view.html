@@ -18,15 +18,45 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="mb-0">Calendar</h1>
-    <div>
+    <div class="d-flex gap-2">
+        {% if writable_feeds %}
+            {% if writable_feeds|length == 1 %}
+            <a href="{% url 'calendar_feeds:event_create' writable_feeds.0.pk %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg"></i> Add Event
+            </a>
+            {% else %}
+            <div class="btn-group">
+                <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-plus-lg"></i> Add Event
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {% for wf in writable_feeds %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'calendar_feeds:event_create' wf.pk %}">
+                            <span class="color-dot me-1" style="background-color: {{ wf.color }};"></span> {{ wf.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        {% endif %}
+
         {% if can_create_feed %}
         <a href="{% url 'calendar_feeds:feed_list' %}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-gear"></i> Manage Feeds
         </a>
         {% endif %}
+
+        {% if user.is_authenticated and personal_ics_url %}
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#subscribeModal">
+            <i class="bi bi-calendar-plus"></i> Subscribe (ICS)
+        </button>
+        {% else %}
         <a href="{% url 'calendar_feeds:ics_public' %}" class="btn btn-outline-secondary btn-sm" title="Subscribe to public ICS feed">
             <i class="bi bi-calendar-plus"></i> Subscribe (ICS)
         </a>
+        {% endif %}
     </div>
 </div>
 
@@ -67,13 +97,78 @@
                 <p id="eventDetailDescription"></p>
                 <p><strong>Feed:</strong> <span id="eventDetailFeed"></span></p>
             </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <div>
+                    <a id="eventDetailGCalBtn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-google me-1"></i> Add to Google Calendar
+                    </a>
+                </div>
+                <div>
+                    <a id="eventDetailEditBtn" href="#" class="btn btn-primary btn-sm">Edit</a>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if user.is_authenticated and personal_ics_url %}
+<!-- Subscribe Modal -->
+<div class="modal fade" id="subscribeModal" tabindex="-1" aria-labelledby="subscribeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="subscribeModalLabel"><i class="bi bi-calendar2-week me-2"></i> Subscribe to Calendar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">Personal Unified Feed</h6>
+                    <p class="text-muted small mb-2">
+                        This private link automatically aggregates all team meetings, workshops, outreach shifts, and competition trips you have permission to view.
+                    </p>
+                    <div class="input-group mb-2">
+                        <input type="text" id="personalIcsInput" class="form-control font-monospace form-control-sm" value="{{ personal_ics_url }}" readonly>
+                        <button class="btn btn-outline-primary btn-sm" type="button" id="copyIcsBtn">
+                            <i class="bi bi-clipboard"></i> Copy Link
+                        </button>
+                    </div>
+                    <div id="copyAlert" class="small text-success" style="display: none;">
+                        <i class="bi bi-check-circle"></i> Link copied to clipboard!
+                    </div>
+                </div>
+
+                <div class="card bg-light mb-4">
+                    <div class="card-body py-2">
+                        <h6 class="fw-bold mb-2 small text-uppercase text-secondary">How to Subscribe</h6>
+                        <ul class="small mb-0 ps-3">
+                            <li><strong>Apple Calendar (iPhone/Mac):</strong> Open Calendar &rarr; File &rarr; New Calendar Subscription &rarr; Paste link.</li>
+                            <li><strong>Google Calendar:</strong> Other calendars (<code>+</code>) &rarr; From URL &rarr; Paste link.</li>
+                            <li><strong>Outlook:</strong> Add calendar &rarr; Subscribe from web &rarr; Paste link.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="border-top pt-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Need a public-only link?</span>
+                        <a href="{% url 'calendar_feeds:ics_public' %}" class="small ms-1">Public Feed (.ics)</a>
+                    </div>
+                    <form method="post" action="{% url 'calendar_feeds:regenerate_token' %}" onsubmit="return confirm('Regenerating your link will invalidate previous subscriptions on your devices. Continue?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-arrow-repeat"></i> Regenerate Private Link
+                        </button>
+                    </form>
+                </div>
+            </div>
             <div class="modal-footer">
-                <a id="eventDetailEditBtn" href="#" class="btn btn-primary btn-sm">Edit</a>
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
 </div>
+{% endif %}
 
 {% endblock %}
 
@@ -121,7 +216,11 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         eventClick: function(info) {
             var props = info.event.extendedProps;
-            document.getElementById('eventDetailTitle').textContent = info.event.title;
+            var title = info.event.title || '';
+            var desc = props.description || '';
+            var loc = props.location || '';
+
+            document.getElementById('eventDetailTitle').textContent = title;
             document.getElementById('eventDetailFeed').textContent = props.feed_name || '';
 
             var when = '';
@@ -134,7 +233,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('eventDetailWhen').textContent = when;
 
             var locRow = document.getElementById('eventDetailLocationRow');
-            var loc = props.location || '';
             if (loc) {
                 locRow.style.display = '';
                 document.getElementById('eventDetailLocation').textContent = loc;
@@ -143,7 +241,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             var descRow = document.getElementById('eventDetailDescRow');
-            var desc = props.description || '';
             if (desc) {
                 descRow.style.display = '';
                 document.getElementById('eventDetailDescription').textContent = desc;
@@ -159,6 +256,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 editBtn.style.display = 'none';
             }
 
+            // Build Google Calendar Add Link
+            var gcalBtn = document.getElementById('eventDetailGCalBtn');
+            if (gcalBtn && info.event.start) {
+                var formatGCalTime = function(d) {
+                    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                };
+                var formatGCalDateOnly = function(d) {
+                    var y = d.getFullYear();
+                    var m = String(d.getMonth() + 1).padStart(2, '0');
+                    var day = String(d.getDate()).padStart(2, '0');
+                    return y + m + day;
+                };
+
+                var gcalDates = '';
+                if (info.event.allDay) {
+                    var gStart = formatGCalDateOnly(info.event.start);
+                    var endD = info.event.end ? new Date(info.event.end) : new Date(info.event.start);
+                    if (!info.event.end) {
+                        endD.setDate(endD.getDate() + 1);
+                    }
+                    var gEnd = formatGCalDateOnly(endD);
+                    gcalDates = gStart + '/' + gEnd;
+                } else {
+                    var startUtc = formatGCalTime(info.event.start);
+                    var endUtc = info.event.end ? formatGCalTime(info.event.end) : startUtc;
+                    gcalDates = startUtc + '/' + endUtc;
+                }
+
+                var gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+                    '&text=' + encodeURIComponent(title) +
+                    '&dates=' + gcalDates +
+                    '&details=' + encodeURIComponent(desc) +
+                    '&location=' + encodeURIComponent(loc);
+                gcalBtn.href = gcalUrl;
+                gcalBtn.style.display = '';
+            } else if (gcalBtn) {
+                gcalBtn.style.display = 'none';
+            }
+
             eventDetailModal.show();
         },
         editable: false,
@@ -172,6 +308,23 @@ document.addEventListener('DOMContentLoaded', function() {
             calendar.refetchEvents();
         });
     });
+
+    // Copy ICS link helper
+    var copyBtn = document.getElementById('copyIcsBtn');
+    var icsInput = document.getElementById('personalIcsInput');
+    var copyAlert = document.getElementById('copyAlert');
+    if (copyBtn && icsInput) {
+        copyBtn.addEventListener('click', function() {
+            icsInput.select();
+            icsInput.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(icsInput.value).then(function() {
+                if (copyAlert) {
+                    copyAlert.style.display = '';
+                    setTimeout(function() { copyAlert.style.display = 'none'; }, 3000);
+                }
+            });
+        });
+    }
 });
 </script>
 {% endblock %}

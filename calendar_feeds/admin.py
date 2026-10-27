@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import CalendarEvent, CalendarFeed, CalendarFeedACL, EventException
+from .models import (
+    CalendarEvent,
+    CalendarFeed,
+    CalendarFeedACL,
+    EventException,
+    UserCalendarToken,
+)
 
 
 class CalendarFeedACLInline(admin.TabularInline):
@@ -62,3 +68,10 @@ class EventExceptionAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("change_type",)
+
+
+@admin.register(UserCalendarToken)
+class UserCalendarTokenAdmin(admin.ModelAdmin):
+    list_display = ("user", "token", "created_at", "updated_at")
+    search_fields = ("user__username", "user__email", "token")
+    readonly_fields = ("token", "created_at", "updated_at")

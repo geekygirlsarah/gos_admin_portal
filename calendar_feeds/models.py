@@ -91,20 +91,23 @@ class CalendarFeed(models.Model):
         — Lead Mentors always bypass the ACL. A role with no matching ACL row
         (or a row with ``can_read=False``) cannot see the feed.
         """
-        from programs.permission_views import (
-            get_user_role,
-            user_is_mentor_or_lead,
-        )
-
-        if not user.is_authenticated:
-            return self.is_public
-
-        if user_is_mentor_or_lead(user):
+        if self.is_public:
             return True
 
+        if not user.is_authenticated:
+            return False
+
+        from programs.permission_views import get_user_role
+
         role = get_user_role(user)
+        if role == "LeadMentor":
+            return True
+
         if role is None:
-            return self.is_public
+            return False
+
+        if not self.acls.exists() and self.visibility == self.VISIBILITY_MEMBERS:
+            return True
 
         return self.acls.filter(role=role, can_read=True).exists()
 
@@ -115,21 +118,18 @@ class CalendarFeed(models.Model):
         edits happen in the originating app. Lead Mentors always get write.
         Everyone else needs a matching ACL row with ``can_write=True``.
         """
-        from programs.permission_views import (
-            get_user_role,
-            user_is_mentor_or_lead,
-        )
-
         if not user.is_authenticated:
             return False
 
         if self.is_source_managed:
             return False
 
-        if user_is_mentor_or_lead(user):
-            return True
+        from programs.permission_views import get_user_role
 
         role = get_user_role(user)
+        if role == "LeadMentor":
+            return True
+
         if role is None:
             return False
 
@@ -330,3 +330,38 @@ class EventException(models.Model):
                 raise ValidationError("Moved events must have new start and end times.")
             if self.new_end_datetime <= self.new_start_datetime:
                 raise ValidationError("New end time must be after new start time.")
+
+
+class UserCalendarToken(models.Model):
+    """Personal calendar subscription token for a user.
+
+    Allows external calendar clients (Google Calendar, Apple Calendar, Outlook)
+    to subscribe to an ICS feed containing all events the user is authorized
+    to view, without requiring interactive session login.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="calendar_token",
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Calendar Token"
+        verbose_name_plural = "User Calendar Tokens"
+
+    def __str__(self):
+        return f"Calendar token for {self.user} ({self.token})"
+
+    def regenerate(self):
+        self.token = uuid.uuid4()
+        self.save(update_fields=["token", "updated_at"])
+        return self.token
+
+    @classmethod
+    def for_user(cls, user):
+        token_obj, _ = cls.objects.get_or_create(user=user)
+        return token_obj

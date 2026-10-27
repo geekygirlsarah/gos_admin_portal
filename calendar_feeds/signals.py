@@ -29,6 +29,88 @@ def remove_outreach_shift_from_calendar(sender, instance, **kwargs):
         logger.debug("Failed to remove outreach shift calendar event", exc_info=True)
 
 
+@receiver(post_save, sender="travel.TravelEvent")
+def sync_travel_event_to_calendar(sender, instance, created, **kwargs):
+    """Sync a TravelEvent to a CalendarEvent when the trip is saved."""
+    try:
+        from .models import CalendarFeed
+        from .sources.travel import sync_travel_event
+
+        feed = CalendarFeed.objects.filter(
+            source_type="travel",
+            program=instance.program,
+        ).first()
+        if not feed:
+            feed = CalendarFeed.objects.filter(
+                source_type="travel",
+                program__isnull=True,
+            ).first()
+
+        if feed:
+            sync_travel_event(instance, feed)
+    except Exception:
+        logger.debug("Failed to sync travel event to calendar", exc_info=True)
+
+
+@receiver(post_delete, sender="travel.TravelEvent")
+def remove_travel_event_from_calendar(sender, instance, **kwargs):
+    """Remove the CalendarEvent when a TravelEvent is deleted."""
+    try:
+        from .sources.travel import remove_travel_event
+
+        remove_travel_event(instance)
+    except Exception:
+        logger.debug("Failed to remove travel event from calendar", exc_info=True)
+
+
+@receiver(post_save, sender="travel.TravelDeparture")
+def sync_travel_departure_to_calendar(sender, instance, created, **kwargs):
+    """Update the parent TravelEvent's CalendarEvent when a departure is saved."""
+    try:
+        from .models import CalendarFeed
+        from .sources.travel import sync_travel_event
+
+        event = instance.event
+        feed = CalendarFeed.objects.filter(
+            source_type="travel",
+            program=event.program,
+        ).first()
+        if not feed:
+            feed = CalendarFeed.objects.filter(
+                source_type="travel",
+                program__isnull=True,
+            ).first()
+
+        if feed:
+            sync_travel_event(event, feed)
+    except Exception:
+        logger.debug("Failed to sync travel departure to calendar", exc_info=True)
+
+
+@receiver(post_delete, sender="travel.TravelDeparture")
+def remove_travel_departure_from_calendar(sender, instance, **kwargs):
+    """Update the parent TravelEvent's CalendarEvent when a departure is deleted."""
+    try:
+        from .models import CalendarFeed
+        from .sources.travel import sync_travel_event
+
+        event = instance.event
+        feed = CalendarFeed.objects.filter(
+            source_type="travel",
+            program=event.program,
+        ).first()
+        if not feed:
+            feed = CalendarFeed.objects.filter(
+                source_type="travel",
+                program__isnull=True,
+            ).first()
+
+        if feed:
+            sync_travel_event(event, feed)
+    except Exception:
+        logger.debug("Failed to update travel event on departure delete", exc_info=True)
+
+
 def _do_sync_outreach_shift(shift):
     """Create or update a CalendarEvent for an OutreachShift."""
     from datetime import datetime, time
