@@ -114,6 +114,23 @@ class FeedCreateViewTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
 
+    def test_get_renders_access_control_table_with_all_roles(self):
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.context["acl_formset"].forms), 4)
+        content = resp.content.decode("utf-8")
+        self.assertIn("Mentor", content)
+        self.assertIn("Parent", content)
+        self.assertIn("Student", content)
+        self.assertIn("Alumni", content)
+        # Verify role is rendered as hidden input + plain text label (no select dropdown)
+        self.assertNotIn('<select name="acls-0-role"', content)
+        self.assertIn('type="hidden" name="acls-0-role" value="Mentor"', content)
+        # Verify delete column and DELETE checkboxes are not present
+        self.assertNotIn(">Delete</th>", content)
+        self.assertNotIn("acls-0-DELETE", content)
+
     def test_create_renders_grouped_programs(self):
         today = timezone.localdate()
         make_program(
@@ -190,6 +207,21 @@ class FeedUpdateViewTests(TestCase):
         self.feed = make_feed(name="Original Name")
         self.url = reverse("calendar_feeds:feed_edit", args=[self.feed.pk])
         self.lead = make_lead_mentor_user()
+
+    def test_edit_renders_access_control_table_when_no_acls_in_db(self):
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.context["acl_formset"].forms), 4)
+        content = resp.content.decode("utf-8")
+        self.assertIn("Mentor", content)
+        self.assertIn("Parent", content)
+        self.assertIn("Student", content)
+        self.assertIn("Alumni", content)
+        self.assertNotIn('<select name="acls-0-role"', content)
+        self.assertIn('type="hidden" name="acls-0-role" value="Mentor"', content)
+        self.assertNotIn(">Delete</th>", content)
+        self.assertNotIn("acls-0-DELETE", content)
 
     def test_edit_renders_grouped_programs(self):
         today = timezone.localdate()
@@ -388,3 +420,62 @@ class EventExceptionListViewTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.context["exceptions"]), 1)
+
+
+class FeedACLUpdateViewTests(TestCase):
+    def setUp(self):
+        self.feed = make_feed(name="Feed Without ACLs")
+        self.url = reverse("calendar_feeds:feed_acl_update", args=[self.feed.pk])
+        self.lead = make_lead_mentor_user()
+        self.mentor = make_mentor_user()
+
+    def test_lead_can_access_and_sees_all_roles(self):
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.context["acl_formset"].forms), 4)
+        content = resp.content.decode("utf-8")
+        self.assertIn("Mentor", content)
+        self.assertIn("Parent", content)
+        self.assertIn("Student", content)
+        self.assertIn("Alumni", content)
+        self.assertNotIn('<select name="acls-0-role"', content)
+        self.assertIn('type="hidden" name="acls-0-role" value="Mentor"', content)
+        self.assertNotIn(">Delete</th>", content)
+        self.assertNotIn("acls-0-DELETE", content)
+
+    def test_non_lead_redirected(self):
+        self.client.login(username="mentor", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse("home"))
+
+    def test_update_acls_post(self):
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.post(
+            self.url,
+            {
+                "acls-TOTAL_FORMS": "4",
+                "acls-INITIAL_FORMS": "0",
+                "acls-MIN_NUM_FORMS": "0",
+                "acls-MAX_NUM_FORMS": "1000",
+                "acls-0-role": "Mentor",
+                "acls-0-can_read": "on",
+                "acls-0-can_write": "on",
+                "acls-1-role": "Parent",
+                "acls-1-can_read": "on",
+                "acls-2-role": "Student",
+                "acls-2-can_read": "on",
+                "acls-3-role": "Alumni",
+                "acls-3-can_read": "on",
+                "acls-3-can_write": "on",
+            },
+        )
+        self.assertRedirects(resp, reverse("calendar_feeds:feed_list"))
+        self.assertEqual(self.feed.acls.count(), 4)
+        mentor_acl = self.feed.acls.get(role="Mentor")
+        self.assertTrue(mentor_acl.can_read)
+        self.assertTrue(mentor_acl.can_write)
+        alumni_acl = self.feed.acls.get(role="Alumni")
+        self.assertTrue(alumni_acl.can_read)
+        self.assertTrue(alumni_acl.can_write)

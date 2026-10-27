@@ -67,12 +67,55 @@ DEFAULT_ACL_INITIAL = [
 ]
 
 
+class CalendarFeedACLForm(forms.ModelForm):
+    class Meta:
+        model = CalendarFeedACL
+        fields = ["role", "can_read", "can_write"]
+        widgets = {
+            "role": forms.HiddenInput(),
+            "can_read": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "can_write": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+
+class BaseCalendarFeedACLInlineFormSet(forms.BaseInlineFormSet):
+    """Inline formset that pre-populates all standard roles (Mentor, Parent, Student, Alumni)
+    when creating a new feed or when editing a feed that is missing ACL rows for any roles.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            if self.instance and self.instance.pk:
+                existing_roles = set(self.get_queryset().values_list("role", flat=True))
+            else:
+                existing_roles = set()
+            self._missing_roles = [
+                d for d in DEFAULT_ACL_INITIAL if d["role"] not in existing_roles
+            ]
+            self.extra = len(self._missing_roles)
+        else:
+            self._missing_roles = []
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        if not self.is_bound and index is not None:
+            initial_count = self.initial_form_count()
+            if index >= initial_count:
+                extra_idx = index - initial_count
+                if extra_idx < len(self._missing_roles):
+                    kwargs["initial"] = self._missing_roles[extra_idx]
+        return kwargs
+
+
 CalendarFeedACLInlineFormSet = forms.inlineformset_factory(
     CalendarFeed,
     CalendarFeedACL,
+    form=CalendarFeedACLForm,
+    formset=BaseCalendarFeedACLInlineFormSet,
     fields=["role", "can_read", "can_write"],
     extra=0,
-    can_delete=True,
+    can_delete=False,
 )
 
 

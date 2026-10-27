@@ -13,7 +13,6 @@ from audit.service import log_deletion
 from programs.permission_views import LeadMentorRequiredMixin
 
 from .forms import (
-    DEFAULT_ACL_INITIAL,
     CalendarEventForm,
     CalendarFeedACLInlineFormSet,
     CalendarFeedForm,
@@ -145,9 +144,7 @@ class FeedListView(LeadMentorRequiredMixin, ListView):
 class FeedCreateView(LeadMentorRequiredMixin, View):
     def get(self, request):
         form = CalendarFeedForm()
-        acl_formset = CalendarFeedACLInlineFormSet(
-            prefix="acls", initial=DEFAULT_ACL_INITIAL
-        )
+        acl_formset = CalendarFeedACLInlineFormSet(prefix="acls")
         return render(
             request,
             "calendar_feeds/feed_form.html",

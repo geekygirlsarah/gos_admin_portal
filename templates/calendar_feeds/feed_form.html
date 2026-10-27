@@ -118,27 +118,42 @@
                             <p class="text-muted small mb-3">Configure which roles can read and write events on this feed. Lead Mentors always have full administrative access.</p>
                             
                             {{ acl_formset.management_form }}
+                            {% if acl_formset.non_form_errors %}
+                            <div class="alert alert-danger mb-3">
+                                {% for error in acl_formset.non_form_errors %}
+                                <div>{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                             <div class="table-responsive rounded border">
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light">
                                         <tr>
                                             <th>Role</th>
-                                            <th class="text-center" style="width: 120px;">Can Read</th>
-                                            <th class="text-center" style="width: 120px;">Can Write</th>
-                                            <th class="text-center" style="width: 100px;">Delete</th>
+                                            <th class="text-center" style="width: 140px;">Can Read</th>
+                                            <th class="text-center" style="width: 140px;">Can Write</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for acl_form in acl_formset %}
                                         <tr>
-                                            <td class="fw-medium">{{ acl_form.role }}</td>
-                                            <td class="text-center">{{ acl_form.can_read }}</td>
-                                            <td class="text-center">{{ acl_form.can_write }}</td>
-                                            <td class="text-center">
+                                            <td class="fw-medium">
                                                 {{ acl_form.id }}
-                                                {% if acl_form.instance.pk %}
-                                                {{ acl_form.DELETE }}
-                                                {% endif %}
+                                                {{ acl_form.role }}
+                                                <span class="text-dark">{{ acl_form.role.value }}</span>
+                                                {% for error in acl_form.role.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center">
+                                                    {{ acl_form.can_read }}
+                                                </div>
+                                                {% for error in acl_form.can_read.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center">
+                                                    {{ acl_form.can_write }}
+                                                </div>
+                                                {% for error in acl_form.can_write.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
                                             </td>
                                         </tr>
                                         {% endfor %}

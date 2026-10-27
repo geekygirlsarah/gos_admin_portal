@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-27
 
+### Fixed
+- **Calendar Feed Creation Subscription Token Constraint**: Resolved a database integrity error (`NOT NULL constraint failed: calendar_feeds_calendarfeed.subscription_token`) when creating new calendar feeds. An automated idempotent schema migration (`0003_drop_subscription_token`) drops the obsolete legacy `subscription_token` column and index from databases migrated during early prototype development, aligning the schema with the tokenized `UserCalendarToken` architecture.
+- **Calendar Feed Access Control (per role) Form Initialization**: Resolved an issue where creating a new calendar feed or editing a feed without saved permissions displayed an empty "Access control (per role)" table with no interactive inputs. The ACL formset now dynamically initializes form rows for all four system roles (`Mentor`, `Parent`, `Student`, `Alumni`) with recommended default permissions on new feeds and ensures all roles remain visible and configurable when editing existing feeds.
+- **Calendar Feed Access Control (per role) Table Presentation**: Streamlined the access control table on calendar feed creation, edit, and permissions pages. Roles are now clearly printed as standard text labels with hidden form inputs rather than redundant dropdown selectors, and the non-functional deletion column and checkboxes have been removed since all standard roles are permanently present and managed via their read/write permission toggles.
+
 ### Added
 - **Active and Upcoming Program Grouping for Calendar Feeds**: Calendar feed creation and editing forms now automatically group programs into Active, Upcoming, and Past optgroups. By default, active and upcoming programs are shown while past/archived programs are collapsed and accessible via the standard "Show past & archived programs" checkbox toggle.
 - **Calendar Feeds Visual & Theme Standardization**: Modernized calendar feed and event management pages (event creation/edit, feed creation/edit, feed management list, access control permissions, and recurring exception forms) to match the portal's standard Bootstrap 5 theme with breadcrumb navigation, card headers, and responsive tables.

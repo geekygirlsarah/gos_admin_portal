@@ -1,6 +1,6 @@
 """Tests for CalendarEventForm recurrence builder."""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from django.test import TestCase
 from django.utils import timezone
