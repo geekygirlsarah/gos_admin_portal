@@ -54,6 +54,17 @@ from .mixins import (
     SortableListViewMixin,
     StudentQuerysetRoleMixin,
 )
+from .portal_settings import (
+    PortalAgreementView,
+    PortalCrewView,
+    PortalEmailSettingsView,
+    PortalKioskView,
+    PortalPermissionsUpdateView,
+    PortalSettingsView,
+    PortalSlidingScaleSettingsView,
+    PortalSubteamView,
+    PortalTeamView,
+)
 from .programs import (
     ProgramAssignmentView,
     ProgramCreateView,
@@ -126,6 +137,15 @@ __all__ = [
     "ParentListView",
     "ParentMergeView",
     "ParentUpdateView",
+    "PortalAgreementView",
+    "PortalCrewView",
+    "PortalEmailSettingsView",
+    "PortalKioskView",
+    "PortalPermissionsUpdateView",
+    "PortalSettingsView",
+    "PortalSlidingScaleSettingsView",
+    "PortalSubteamView",
+    "PortalTeamView",
     "ProgramAssignmentView",
     "ProgramCreateView",
     "ProgramDetailView",

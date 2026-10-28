@@ -4,17 +4,6 @@ from django.views.generic import TemplateView
 
 from attendance.views import AttendanceImportView, student_attendance_view
 
-from .permission_views import (
-    PortalAgreementView,
-    PortalCrewView,
-    PortalEmailSettingsView,
-    PortalKioskView,
-    PortalPermissionsUpdateView,
-    PortalSettingsView,
-    PortalSlidingScaleSettingsView,
-    PortalSubteamView,
-    PortalTeamView,
-)
 from .views import (
     AdultCreateView,
     AdultDetailView,
@@ -35,6 +24,15 @@ from .views import (
     ParentListView,
     ParentMergeView,
     ParentUpdateView,
+    PortalAgreementView,
+    PortalCrewView,
+    PortalEmailSettingsView,
+    PortalKioskView,
+    PortalPermissionsUpdateView,
+    PortalSettingsView,
+    PortalSlidingScaleSettingsView,
+    PortalSubteamView,
+    PortalTeamView,
     ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,

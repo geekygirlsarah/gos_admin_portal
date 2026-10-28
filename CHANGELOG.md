@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-28
 
 ### Architecture & Cleanup
+- **Modularized `attendance/views.py` into `attendance/views/` package**: Refactored the monolithic `attendance/views.py` (1,680+ lines) into focused domain submodules (`sessions`, `hours_chart`, `visitors`, `rfid`, `imports`) while preserving complete backward compatibility and re-exports via `attendance/views/__init__.py`.
+- **Modularized `orders/views.py` into `orders/views/` package**: Split `orders/views.py` (1,140+ lines) into modular submodules (`requests`, `orders`, `vendors`, `carriers`, `exports`, `mixins`) with re-exports via `orders/views/__init__.py`.
+- **Decoupled Portal Settings Views from `programs/permission_views.py`**: Extracted portal administration settings views into `programs/views/portal_settings.py` to cleanly separate authorization logic/mixins from UI form handling views.
 - **Modularized `programs/models.py` into `programs/models/` package**: Refactored the monolithic `programs/models.py` (2,500+ lines) into domain-focused submodules (`adults`, `agreements`, `communication`, `enrollments`, `fields`, `finances`, `geocoding`, `groups`, `permissions`, `programs`, `schools`, `students`) while maintaining complete backward-compatible re-exports and API parity via `programs/models/__init__.py`.
 - **Removed Orphaned Review Templates**: Deleted legacy `templates/programs/application_review_detail.html` and `templates/programs/application_review_list.html` which were superseded by the dedicated `applications` app review workflow.
 
