@@ -1,9 +1,12 @@
+import mimetypes
+import os
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import HttpResponseRedirect, QueryDict
+from django.http import FileResponse, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -45,7 +48,10 @@ from ..models import (
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
+    can_user_read,
     get_user_role,
+    user_is_mentor_or_lead,
+    user_is_parent,
 )
 from ..utils import get_safe_url, redirect_back, transfer_user_account
 from .mixins import (
@@ -978,3 +984,50 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
             f"All enrollments, records, and relationships were transferred.",
         )
         return super().form_valid(form)
+
+
+class StudentDocumentDownloadView(LoginRequiredMixin, View):
+    """Download/view a signed StudentDocument.
+
+    Accessible to LeadMentors, Mentors who can view the student/program,
+    linked Parents of the student, and the Student themselves.
+    """
+
+    def get(self, request, pk):
+        student_doc = get_object_or_404(StudentDocument, pk=pk)
+        student = student_doc.student
+        user = request.user
+
+        role = get_user_role(user)
+        has_access = False
+
+        if role == "LeadMentor" or user.is_superuser:
+            has_access = True
+        elif user_is_parent(user):
+            adult = getattr(user, "adult_profile", None)
+            if (
+                adult
+                and adult.is_parent
+                and adult.students.filter(pk=student.pk).exists()
+            ):
+                has_access = True
+        elif hasattr(user, "student_profile") and user.student_profile == student:
+            has_access = True
+        elif user_is_mentor_or_lead(user):
+            if can_user_read(user, "students", student) or can_user_read(
+                user, "programs", student_doc.program_document.program
+            ):
+                has_access = True
+
+        if not has_access:
+            messages.error(request, "You do not have permission to view this document.")
+            return redirect("home")
+
+        filename = os.path.basename(student_doc.file.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        content_type = content_type or "application/octet-stream"
+
+        response = FileResponse(student_doc.file.open("rb"), content_type=content_type)
+        disposition = "attachment" if request.GET.get("download") else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response

@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 
+from programs.models import EncryptedFileField
+
 
 def _signout_upload_to(instance, filename):
     """Signature images land at MEDIA_ROOT/digital_signouts/<config_id>/<filename>."""
@@ -382,7 +384,7 @@ class DigitalSignout(models.Model):
         blank=True,
         help_text="Name the parent/guardian entered.",
     )
-    signature = models.FileField(
+    signature = EncryptedFileField(
         upload_to=_signout_upload_to,
         blank=True,
         help_text="PNG image of the drawn signature.",

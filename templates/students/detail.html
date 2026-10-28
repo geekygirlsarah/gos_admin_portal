@@ -405,7 +405,7 @@
                       <div class="fw-semibold text-dark">{{ doc.program_document.name }}</div>
                       <div class="small text-muted">Uploaded {{ doc.uploaded_at|date:'M j, Y' }}</div>
                     </div>
-                    <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                    <a href="{% url 'student_document_download' doc.id %}" target="_blank" class="btn btn-sm btn-outline-primary">
                       <i class="bi bi-download me-1"></i>View File
                     </a>
                   </div>

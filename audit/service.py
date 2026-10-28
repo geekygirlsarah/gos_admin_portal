@@ -24,6 +24,56 @@ from .models import AuditLog
 
 logger = logging.getLogger("audit")
 
+SENSITIVE_AUDIT_EXACT_KEYS = {
+    "password",
+    "password_hash",
+    "raw_password",
+    "user_password",
+    "passwords",
+    "secret",
+    "secret_key",
+    "token",
+    "otp",
+    "auth_token",
+    "access_token",
+    "api_key",
+    "fernet_key",
+    "file_encryption_key",
+    "encryption_key",
+    "allergies",
+    "dietary_restrictions",
+    "medical_notes",
+    "ssn",
+    "tax_return",
+}
+
+
+def _is_sensitive_key(key: str) -> bool:
+    key_lower = str(key).lower()
+    if key_lower in SENSITIVE_AUDIT_EXACT_KEYS:
+        return True
+    for part in ("password", "secret", "token", "otp", "api_key"):
+        if part in key_lower:
+            return True
+    return False
+
+
+def sanitize_audit_data(data):
+    """Recursively redact sensitive keys in audit dictionary/list structures."""
+    if isinstance(data, dict):
+        sanitized = {}
+        for k, v in data.items():
+            if _is_sensitive_key(k):
+                sanitized[k] = "[REDACTED]"
+            else:
+                sanitized[k] = sanitize_audit_data(v)
+        return sanitized
+    if isinstance(data, list):
+        return [sanitize_audit_data(item) for item in data]
+    if isinstance(data, tuple):
+        return tuple(sanitize_audit_data(item) for item in data)
+    return data
+
 
 def _get_ip(request) -> str | None:
     if not request:
@@ -88,8 +138,8 @@ def log_event(
             resource_type=type(resource).__name__,
             resource_id=str(resource.pk),
             resource_repr=str(resource),
-            before=before,
-            after=after,
+            before=sanitize_audit_data(before),
+            after=sanitize_audit_data(after),
             ip_address=_get_ip(request),
             session_id=_get_session_id(request),
             outcome=outcome,

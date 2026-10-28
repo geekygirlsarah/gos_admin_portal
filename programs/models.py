@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import models
+from django.db.models.fields.files import FieldFile
 from django.utils import timezone
 from PIL import ImageFile
 
@@ -87,6 +88,23 @@ def _get_legacy_fernet():
     return Fernet(key)
 
 
+class EncryptedFieldFile(FieldFile):
+    def save(self, name, content, save=True):
+        if not getattr(content, "_encrypted", False):
+            fernet = get_fernet()
+            if hasattr(content, "seek"):
+                content.seek(0)
+            data = content.read()
+            try:
+                fernet.decrypt(data)
+                encrypted = data
+            except (InvalidToken, TypeError):
+                encrypted = fernet.encrypt(data)
+            content = ContentFile(encrypted, name=name)
+            content._encrypted = True
+        return super().save(name, content, save=save)
+
+
 class EncryptedFileField(models.FileField):
     """
     A FileField that transparently encrypts file content on save (via pre_save)
@@ -94,14 +112,23 @@ class EncryptedFileField(models.FileField):
     encryption with the key from settings.FILE_ENCRYPTION_KEY.
     """
 
+    attr_class = EncryptedFieldFile
+
     def pre_save(self, model_instance, add):
         # Encrypt before super() so the storage backend writes ciphertext, not plaintext.
         file = getattr(model_instance, self.attname)
         if file and not file._committed and not getattr(file, "_encrypted", False):
             fernet = get_fernet()
-            plaintext = file.read()
-            encrypted = fernet.encrypt(plaintext)
+            if hasattr(file, "seek"):
+                file.seek(0)
+            data = file.read()
+            try:
+                fernet.decrypt(data)
+                encrypted = data
+            except (InvalidToken, TypeError):
+                encrypted = fernet.encrypt(data)
             file.file = ContentFile(encrypted, name=file.name)
+            file.file._encrypted = True
             file._encrypted = True
         return super().pre_save(model_instance, add)
 
@@ -2099,7 +2126,7 @@ class StudentDocument(models.Model):
         on_delete=models.CASCADE,
         related_name="student_submissions",
     )
-    file = models.FileField(
+    file = EncryptedFileField(
         upload_to=_student_document_upload_to,
         max_length=255,
     )

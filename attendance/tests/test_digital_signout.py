@@ -825,3 +825,71 @@ class DigitalSignoutUnlockEndpointTests(TestCase):
         self.assertEqual(response.status_code, 302)
         cookie = self.client.cookies.get(cookie_name)
         self.assertTrue(cookie is None or not cookie.value)
+
+
+class DigitalSignoutSignatureEncryptionAndEndpointTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.program = make_program("Signout Sig Program")
+        self.config = DigitalSignoutConfig.objects.create(
+            label="Sig Station", program=self.program
+        )
+        self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
+        Enrollment.objects.create(student=self.student, program=self.program)
+
+        from django.core.files.base import ContentFile
+
+        from attendance.signout_views import _upload_signature_bytes
+
+        self.signout = DigitalSignout(
+            program=self.program,
+            config=self.config,
+            student=self.student,
+            signed_by_name="Jane Guardian",
+        )
+        _upload_signature_bytes(self.signout, TINY_PNG)
+        self.signout.save()
+
+        self.lead_user = make_lead_mentor_user()
+        self.mentor_user = make_mentor_user()
+        self.parent_user = make_parent_user()
+
+        self.url = reverse(
+            "program_digital_signout_signature",
+            kwargs={"program_id": self.program.pk, "pk": self.signout.pk},
+        )
+
+    def test_signature_file_is_encrypted_on_storage(self):
+        from django.core.files.storage import default_storage
+
+        with default_storage.open(self.signout.signature.name, "rb") as fh:
+            raw_bytes = fh.read()
+        self.assertNotEqual(raw_bytes, TINY_PNG)
+
+        with self.signout.signature.open("rb") as fh:
+            decrypted = fh.read()
+        self.assertEqual(decrypted, TINY_PNG)
+
+    def test_signature_view_unauthenticated_redirected(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
+
+    def test_signature_view_lead_mentor_access(self):
+        self.client.force_login(self.lead_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertEqual(b"".join(response.streaming_content), TINY_PNG)
+
+    def test_signature_view_mentor_access(self):
+        self.client.force_login(self.mentor_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertEqual(b"".join(response.streaming_content), TINY_PNG)
+
+    def test_signature_view_parent_denied(self):
+        self.client.force_login(self.parent_user)
+        response = self.client.get(self.url)
+        self.assertIn(response.status_code, (302, 403))

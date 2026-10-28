@@ -38,6 +38,7 @@ from .views import (
     ProgramAssignmentView,
     ProgramCreateView,
     ProgramDetailView,
+    ProgramDigitalSignoutSignatureView,
     ProgramDigitalSignoutView,
     ProgramDocumentCreateView,
     ProgramDocumentDeleteView,
@@ -89,6 +90,7 @@ from .views import (
     StudentConvertToAlumniView,
     StudentCreateView,
     StudentDetailView,
+    StudentDocumentDownloadView,
     StudentEmergencyContactsView,
     StudentImportView,
     StudentListView,
@@ -175,6 +177,11 @@ urlpatterns = [
         "<int:pk>/digital-signout/",
         login_required(ProgramDigitalSignoutView.as_view()),
         name="program_digital_signout",
+    ),
+    path(
+        "<int:program_id>/digital-signout/signatures/<int:pk>/",
+        login_required(ProgramDigitalSignoutSignatureView.as_view()),
+        name="program_digital_signout_signature",
     ),
     # List pages
     path(
@@ -288,6 +295,11 @@ urlpatterns = [
         "students/<int:pk>/",
         login_required(StudentDetailView.as_view()),
         name="student_detail",
+    ),
+    path(
+        "students/documents/<int:pk>/",
+        login_required(StudentDocumentDownloadView.as_view()),
+        name="student_document_download",
     ),
     path(
         "students/<int:pk>/attendance/",

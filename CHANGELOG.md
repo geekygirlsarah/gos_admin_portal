@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-27
 
+### Security
+- **Student Signed Document and Digital Sign-out Signature Encryption at Rest**: Student signed document uploads (`StudentDocument.file`) and digital sign-out signature images (`DigitalSignout.signature`) are now encrypted at rest in storage using symmetric Fernet encryption (`EncryptedFileField`) with key management tied to `FILE_ENCRYPTION_KEY`.
+- **Authenticated Access Endpoints for Sensitive Documents and Signatures**: Direct media storage links for signed student waivers and digital sign-out signatures have been replaced with authenticated endpoints (`student_document_download` and `program_digital_signout_signature`) with strict role-based and relationship-based access controls (Lead Mentors, authorized Mentors, linked Parents, and the Student themselves).
+- **Audit Trail Sensitive Data Sanitization**: Added automatic recursive redaction across the audit logging service (`audit/service.py`), ensuring that sensitive keys (such as passwords, secret tokens, API keys, and medical/allergy information) are sanitized and replaced with `[REDACTED]` in `before` and `after` audit log snapshot payloads.
+
 ### Removed
 - **Redundant Invite-Only Calendar Feed Visibility**: Removed the redundant `"invite_only"` calendar feed visibility setting in favor of two distinct visibility tiers: **Public (no login required)** and **Members (logged-in users)**. Feed access for portal members continues to be configured via role-based access permissions (`Mentor`, `Parent`, `Student`, `Alumni`), ensuring full privacy control without confusing duplicate settings.
 - **Program Hours Auto-Synced Calendar Feed Choice**: Removed the unused `"Program hours (auto-synced)"` source choice (`program_hours`) from calendar feed models and forms. Scheduled workshops and meeting hours are managed using manual calendar feeds with recurring events.
