@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-28
 
+### UI Refresh
+- **Modernized Schools Directory (`templates/schools/list.html`)**: Refreshed the master schools directory with Bootstrap 5 cards, navigation pills between schools and districts, summary KPI metric cards (Total Schools, In District, Unassigned, Districts), sorted table with action icons, and an informative empty state.
+- **Modernized School Districts Management (`templates/schools/district_list.html`)**: Enhanced school districts listing with summary KPI metric cards, navigation pills, badge-based school counts, and action buttons for editing and deleting districts.
+- **Modernized Data Imports Dashboard (`templates/imports/dashboard.html`)**: Redesigned the imports dashboard with a guidance banner, category-specific card headers and accent borders, file upload inputs, overwrite controls, and direct CSV sample template downloads across students, parents, relationships, mentors, schools, and attendance imports.
+- **Modernized Schools Forms & Modals**: Refreshed school and district create/edit forms (`schools/form.html`, `schools/district_form.html`), district delete confirmation (`schools/district_confirm_delete.html`), and school merge interface (`schools/merge.html`) with consistent card layouts, clear help banners, and styled action buttons.
+
 ### Architecture & Cleanup
 - **Modularized `attendance/views.py` into `attendance/views/` package**: Refactored the monolithic `attendance/views.py` (1,680+ lines) into focused domain submodules (`sessions`, `hours_chart`, `visitors`, `rfid`, `imports`) while preserving complete backward compatibility and re-exports via `attendance/views/__init__.py`.
 - **Modularized `orders/views.py` into `orders/views/` package**: Split `orders/views.py` (1,140+ lines) into modular submodules (`requests`, `orders`, `vendors`, `carriers`, `exports`, `mixins`) with re-exports via `orders/views/__init__.py`.

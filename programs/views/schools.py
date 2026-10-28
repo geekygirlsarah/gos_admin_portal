@@ -29,6 +29,18 @@ class SchoolListView(LoginRequiredMixin, SortableListViewMixin, ListView):
     def get_queryset(self):
         return self.apply_sorting(super().get_queryset().select_related("district"))
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["total_schools_count"] = School.objects.count()
+        context["districts_count"] = SchoolDistrict.objects.count()
+        context["assigned_schools_count"] = School.objects.filter(
+            district__isnull=False
+        ).count()
+        context["unassigned_schools_count"] = School.objects.filter(
+            district__isnull=True
+        ).count()
+        return context
+
 
 class SchoolCreateView(
     LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, CreateView
@@ -147,6 +159,7 @@ class DistrictListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["districts_count"] = SchoolDistrict.objects.count()
         context["school_count"] = School.objects.filter(district__isnull=False).count()
         context["unspecified_school_count"] = School.objects.filter(
             district__isnull=True

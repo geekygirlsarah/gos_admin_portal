@@ -2,58 +2,175 @@
 {% load sorting_tags %}
 {% block title %}Schools{% endblock %}
 {% block nav_schools_active %} active{% endblock %}
+
 {% block content %}
-  <div class="row mb-3">
-    <div class="col d-flex align-items-center justify-content-between">
-      <h1 class="h3 m-0">Schools</h1>
-      <div class="d-flex gap-2">
-        {% if perms.programs.add_school %}
-          <a class="btn btn-primary" href="{% url 'school_create' %}">+ Add School</a>
-        {% endif %}
-        {% if perms.programs.change_school %}
-          <a class="btn btn-outline-primary" href="{% url 'school_merge' %}">Merge Schools</a>
-        {% endif %}
-        <a class="btn btn-outline-secondary" href="{% url 'school_district_list' %}">Manage Districts</a>
+  <!-- Page Header & Action Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Schools</h1>
+      <div class="text-muted small">Master directory of educational institutions attended by students</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if perms.programs.add_school %}
+        <a class="btn btn-primary" href="{% url 'school_create' %}">
+          <i class="bi bi-plus-lg me-1"></i>Add School
+        </a>
+      {% endif %}
+      {% if perms.programs.change_school %}
+        <a class="btn btn-outline-primary" href="{% url 'school_merge' %}">
+          <i class="bi bi-arrows-collapse me-1"></i>Merge Schools
+        </a>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="{% url 'school_district_list' %}">
+        <i class="bi bi-diagram-3 me-1"></i>Manage Districts
+      </a>
+    </div>
+  </div>
+
+  <!-- Directory Navigation Pills -->
+  <ul class="nav nav-pills gap-2 mb-4">
+    <li class="nav-item">
+      <a class="nav-link active rounded-pill px-3 py-1" href="{% url 'school_list' %}">
+        <i class="bi bi-building me-1"></i>All Schools
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link rounded-pill px-3 py-1 text-secondary bg-light" href="{% url 'school_district_list' %}">
+        <i class="bi bi-diagram-3 me-1"></i>School Districts
+      </a>
+    </li>
+  </ul>
+
+  <!-- Summary KPI Metric Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-primary rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Total Schools</span>
+            <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-building"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ total_schools_count|default:schools|length }}</h3>
+          <div class="text-muted small">Registered in system</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-success rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">In District</span>
+            <div class="rounded-circle bg-success bg-opacity-10 p-2 text-success d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-check2-circle"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ assigned_schools_count|default:0 }}</h3>
+          <div class="text-muted small">Assigned to a district</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-warning rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Unassigned</span>
+            <div class="rounded-circle bg-warning bg-opacity-10 p-2 text-warning d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-question-circle"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ unassigned_schools_count|default:0 }}</h3>
+          <div class="text-muted small">Private / no district</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card shadow-sm h-100 border-0 border-top border-3 border-info rounded-3 bg-light">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="text-muted small fw-semibold text-uppercase">Districts</span>
+            <div class="rounded-circle bg-info bg-opacity-10 p-2 text-info d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+              <i class="bi bi-diagram-3"></i>
+            </div>
+          </div>
+          <h3 class="h4 mb-0 fw-bold text-dark">{{ districts_count|default:0 }}</h3>
+          <div class="text-muted small">Active school districts</div>
+        </div>
       </div>
     </div>
   </div>
-    <div class="row mb-3">
-        <p class="text-muted">These are all the schools in the system.</p>
-    </div>
+
+  <!-- Schools Table Card -->
   {% if schools %}
-    <div class="table-responsive">
-      <table class="table table-hover align-middle">
-        <thead>
-          <tr>
-            <th><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">Name{% sort_icon 'name' %}</a></th>
-            <th><a href="{% sort_url 'district' %}" class="text-decoration-none text-dark">District{% sort_icon 'district' %}</a></th>
-            <th>Street</th>
-            <th><a href="{% sort_url 'city' %}" class="text-decoration-none text-dark">City{% sort_icon 'city' %}</a></th>
-            <th><a href="{% sort_url 'state' %}" class="text-decoration-none text-dark">State{% sort_icon 'state' %}</a></th>
-            <th>ZIP</th>
-            <th class="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in schools %}
+    <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
             <tr>
-              <td>{{ s.name }}</td>
-              <td>{{ s.district|default:'—' }}</td>
-              <td>{{ s.street_address|default:'—' }}</td>
-              <td>{{ s.city|default:'—' }}</td>
-              <td>{{ s.state|default:'—' }}</td>
-              <td>{{ s.zip_code|default:'—' }}</td>
-              <td class="text-end">
-                {% if perms.programs.change_school %}
-                  <a class="btn btn-sm btn-outline-primary" href="{% url 'school_edit' s.pk %}?next={{ request.path }}">Edit</a>
-                {% endif %}
-              </td>
+              <th class="ps-3"><a href="{% sort_url 'name' %}" class="text-decoration-none text-dark">School Name{% sort_icon 'name' %}</a></th>
+              <th><a href="{% sort_url 'district' %}" class="text-decoration-none text-dark">District{% sort_icon 'district' %}</a></th>
+              <th>Street Address</th>
+              <th><a href="{% sort_url 'city' %}" class="text-decoration-none text-dark">City{% sort_icon 'city' %}</a></th>
+              <th><a href="{% sort_url 'state' %}" class="text-decoration-none text-dark">State{% sort_icon 'state' %}</a></th>
+              <th>ZIP</th>
+              <th class="pe-3 text-end">Actions</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for s in schools %}
+              <tr>
+                <td class="ps-3">
+                  <div class="fw-semibold text-dark">
+                    <i class="bi bi-building text-primary me-2"></i>{{ s.name }}
+                  </div>
+                </td>
+                <td>
+                  {% if s.district %}
+                    <span class="badge bg-light text-dark border">
+                      <i class="bi bi-diagram-3 text-muted me-1"></i>{{ s.district.name }}
+                    </span>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+                <td>{{ s.street_address|default:'<span class="text-muted small">—</span>' }}</td>
+                <td>{{ s.city|default:'<span class="text-muted small">—</span>' }}</td>
+                <td>
+                  {% if s.state %}
+                    <span class="badge bg-light text-secondary border">{{ s.state }}</span>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+                <td>{{ s.zip_code|default:'<span class="text-muted small">—</span>' }}</td>
+                <td class="pe-3 text-end">
+                  {% if perms.programs.change_school %}
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'school_edit' s.pk %}?next={{ request.path }}">
+                      <i class="bi bi-pencil me-1"></i>Edit
+                    </a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   {% else %}
-    <div class="alert alert-info">No schools found.</div>
+    <div class="card border-0 shadow-sm rounded-3 text-center py-5">
+      <div class="card-body">
+        <div class="rounded-circle bg-light d-inline-flex p-3 text-muted mb-3">
+          <i class="bi bi-building-x fs-2"></i>
+        </div>
+        <h3 class="h5 fw-bold text-dark mb-1">No Schools Found</h3>
+        <p class="text-muted small mb-3">No educational institutions have been added yet.</p>
+        {% if perms.programs.add_school %}
+          <a class="btn btn-primary" href="{% url 'school_create' %}">
+            <i class="bi bi-plus-lg me-1"></i>Add First School
+          </a>
+        {% endif %}
+      </div>
+    </div>
   {% endif %}
 {% endblock %}
