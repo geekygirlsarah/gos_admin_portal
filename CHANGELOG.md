@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-28
 
+### Testing & Quality
+- **Modularized Model Test Suites (`programs/tests/test_models/`)**: Refactored the monolithic `programs/tests/test_models.py` into focused domain test suites (`test_programs`, `test_students`, `test_adults`, `test_finances`, `test_permissions`) mirroring the modular `programs/models/` package architecture.
+- **Expanded Multi-Role Test Suite (`programs/tests/test_multi_role.py`)**: Added comprehensive test coverage for complex multi-role user scenarios (Parent+Mentor, Parent+Alumni, Mentor+Alumni, Parent+Mentor+Alumni, LeadMentor+Adult), role priority resolution, helper flag checks, object-level finance scoping, and active/inactive mentor transitions.
+- **Expanded Financial Edge Cases Suite (`programs/tests/test_financial_edge_cases.py`)**: Added exhaustive test coverage for half-down rounding precision, fee assignment applicability filters, sliding scale date window boundaries, cross-program isolation, overpayments and account credits, zero-dollar fee cases, and model clean validations.
+
 ### UI Refresh
 - **Modernized Schools Directory (`templates/schools/list.html`)**: Refreshed the master schools directory with Bootstrap 5 cards, navigation pills between schools and districts, summary KPI metric cards (Total Schools, In District, Unassigned, Districts), sorted table with action icons, and an informative empty state.
 - **Modernized School Districts Management (`templates/schools/district_list.html`)**: Enhanced school districts listing with summary KPI metric cards, navigation pills, badge-based school counts, and action buttons for editing and deleting districts.

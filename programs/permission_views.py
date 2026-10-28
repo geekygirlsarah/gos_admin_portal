@@ -29,6 +29,9 @@ def get_user_role(user):
     Determines the role of a user for permission purposes.
     Returns 'LeadMentor', 'Mentor', 'Parent', 'Student', or None.
     """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+
     if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
         return "LeadMentor"
 
