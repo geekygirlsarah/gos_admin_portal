@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-28
+
+### Architecture & Cleanup
+- **Modularized `programs/models.py` into `programs/models/` package**: Refactored the monolithic `programs/models.py` (2,500+ lines) into domain-focused submodules (`adults`, `agreements`, `communication`, `enrollments`, `fields`, `finances`, `geocoding`, `groups`, `permissions`, `programs`, `schools`, `students`) while maintaining complete backward-compatible re-exports and API parity via `programs/models/__init__.py`.
+- **Removed Orphaned Review Templates**: Deleted legacy `templates/programs/application_review_detail.html` and `templates/programs/application_review_list.html` which were superseded by the dedicated `applications` app review workflow.
+
 ## 2026-10-27
 
 ### Security
