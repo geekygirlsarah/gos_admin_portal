@@ -13,9 +13,9 @@ from ..forms import AdultForm, ParentMergeForm
 from ..models import (
     Adult,
     AdultStudentRelationship,
-    BackgroundCheckType,
     Program,
 )
+from ..models.adults import get_active_background_check_types
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
@@ -222,9 +222,7 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         # its prefetches once per section.
         mentors = list(ctx.get("mentors") or ctx.get("object_list") or [])
         org = getattr(self.request, "organization", None)
-        active_types = list(
-            BackgroundCheckType.objects.for_organization(org).filter(is_active=True)
-        )
+        active_types = get_active_background_check_types(org)
         ctx["active_mentors"] = [m for m in mentors if m.mentor_active]
         ctx["inactive_mentors"] = [m for m in mentors if not m.mentor_active]
         ctx["active_mentors_count"] = len(ctx["active_mentors"])

@@ -3,6 +3,7 @@ import datetime
 import pghistory
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.core.signals import request_finished, request_started
 from django.db import models
 from django.utils import timezone
 
@@ -29,11 +30,17 @@ def get_active_background_check_types(org=None):
             .order_by("display_order", "name")
         )
         _ACTIVE_CHECK_TYPES_CACHE[org_id] = types
+        if org_id is not None and None not in _ACTIVE_CHECK_TYPES_CACHE:
+            _ACTIVE_CHECK_TYPES_CACHE[None] = types
     return _ACTIVE_CHECK_TYPES_CACHE[org_id]
 
 
-def clear_active_background_check_types_cache():
+def clear_active_background_check_types_cache(*args, **kwargs):
     _ACTIVE_CHECK_TYPES_CACHE.clear()
+
+
+request_started.connect(clear_active_background_check_types_cache)
+request_finished.connect(clear_active_background_check_types_cache)
 
 
 @pghistory.track()
