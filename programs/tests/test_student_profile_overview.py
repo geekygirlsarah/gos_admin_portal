@@ -1,7 +1,7 @@
 from datetime import date, time, timedelta
 
 from django.contrib.auth.models import Group, User
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -16,7 +16,11 @@ from programs.models import (
     Student,
 )
 
+TEST_FILE_KEY = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
+TEST_TOSEND_KEY = "ts_test_key_12345"
 
+
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class StudentProfileOverviewTests(TestCase):
     def setUp(self):
         self.client = Client()

@@ -1,11 +1,8 @@
-import os
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from programs.models import (
@@ -20,7 +17,11 @@ from programs.models import (
 
 User = get_user_model()
 
+TEST_FILE_KEY = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
+TEST_TOSEND_KEY = "ts_test_key_12345"
 
+
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class StudentDocumentEncryptionTests(TestCase):
     def setUp(self):
         self.program = Program.objects.create(name="Doc Program")
@@ -53,6 +54,7 @@ class StudentDocumentEncryptionTests(TestCase):
         self.assertEqual(decrypted, content)
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class StudentDocumentDownloadViewTests(TestCase):
     def setUp(self):
         self.client = Client()

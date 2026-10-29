@@ -5,7 +5,7 @@ import json
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -29,6 +29,9 @@ from .base import (
     make_student,
 )
 
+TEST_FILE_KEY = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
+TEST_TOSEND_KEY = "ts_test_key_12345"
+
 # A tiny valid 1x1 PNG (bytes) for signature upload tests.
 TINY_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
@@ -45,6 +48,7 @@ def _unlock(client, config_id):
     client.cookies[f"signout_unlocked_{config_id}"] = "1"
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class DigitalSignoutParentPickerTests(TestCase):
     """Parent/guardian dropdown: populated per student + records chosen name."""
 
@@ -86,6 +90,7 @@ class DigitalSignoutParentPickerTests(TestCase):
         self.assertEqual(signout.signed_by_name, "Jane Parent")
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class AttendancePresenceTests(TestCase):
     """StudentPresence model + Who's Here Today mentor/tablet behavior."""
 
@@ -377,6 +382,7 @@ class DigitalSignoutPageTests(TestCase):
         self.assertIn(response.status_code, [302, 404])
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class DigitalSignoutSubmissionTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -568,6 +574,7 @@ class DigitalSignoutManagementTests(TestCase):
         self.assertTrue(cookie is None or not cookie.value)
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class DigitalSignoutUndoTests(TestCase):
     """Dimming already-signed-out students + undoing a sign-out."""
 
@@ -708,6 +715,7 @@ class DecodeSignatureTests(TestCase):
             _decode_signature(data_url)
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class DigitalSignoutUnlockEndpointTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -827,6 +835,7 @@ class DigitalSignoutUnlockEndpointTests(TestCase):
         self.assertTrue(cookie is None or not cookie.value)
 
 
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY, TOSEND_API_KEY=TEST_TOSEND_KEY)
 class DigitalSignoutSignatureEncryptionAndEndpointTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -836,8 +845,6 @@ class DigitalSignoutSignatureEncryptionAndEndpointTests(TestCase):
         )
         self.student = make_student(preferred_first_name="Ada", last_name="Lovelace")
         Enrollment.objects.create(student=self.student, program=self.program)
-
-        from django.core.files.base import ContentFile
 
         from attendance.signout_views import _upload_signature_bytes
 
