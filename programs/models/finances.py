@@ -320,9 +320,9 @@ class SlidingScale(models.Model):
 
 
 def _tax_form_upload_to(instance, filename):
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    return f"tax_forms/{sanitize_upload_filename(filename)}"
+    return build_upload_path("tax_forms", instance=instance, filename=filename)
 
 
 class TaxForm(models.Model):

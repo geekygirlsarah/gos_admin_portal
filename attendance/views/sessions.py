@@ -487,98 +487,58 @@ def _session_person_type(session):
     return "Visitor"
 
 
+_ATTENDANCE_EXPORT_HEADERS = [
+    "Person",
+    "Type",
+    "Program",
+    "Check-in",
+    "Check-out",
+    "Duration (minutes)",
+    "Visitor Team #",
+]
+
+
+def _attendance_export_row(s):
+    return [
+        _session_person_label(s),
+        _session_person_type(s),
+        s.program.name if s.program else "",
+        (
+            timezone.localtime(s.check_in).strftime("%Y-%m-%d %H:%M")
+            if s.check_in
+            else ""
+        ),
+        (
+            timezone.localtime(s.check_out).strftime("%Y-%m-%d %H:%M")
+            if s.check_out
+            else ""
+        ),
+        s.duration_minutes,
+        s.visitor_team_number or "",
+    ]
+
+
 def _export_attendance_csv(sessions):
-    import csv
+    from programs.utils.spreadsheets import export_csv_response
 
-    from django.http import HttpResponse
-
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="attendance_entries.csv"'
-    writer = csv.writer(response)
-    writer.writerow(
-        [
-            "Person",
-            "Type",
-            "Program",
-            "Check-in",
-            "Check-out",
-            "Duration (minutes)",
-            "Visitor Team #",
-        ]
+    rows = (_attendance_export_row(s) for s in sessions.iterator(chunk_size=500))
+    return export_csv_response(
+        filename="attendance_entries.csv",
+        headers=_ATTENDANCE_EXPORT_HEADERS,
+        rows=rows,
     )
-    for s in sessions.iterator(chunk_size=500):
-        writer.writerow(
-            [
-                _session_person_label(s),
-                _session_person_type(s),
-                s.program.name if s.program else "",
-                (
-                    timezone.localtime(s.check_in).strftime("%Y-%m-%d %H:%M")
-                    if s.check_in
-                    else ""
-                ),
-                (
-                    timezone.localtime(s.check_out).strftime("%Y-%m-%d %H:%M")
-                    if s.check_out
-                    else ""
-                ),
-                s.duration_minutes,
-                s.visitor_team_number or "",
-            ]
-        )
-    return response
 
 
 def _export_attendance_excel(sessions):
-    from io import BytesIO
+    from programs.utils.spreadsheets import export_xlsx_response
 
-    from django.http import HttpResponse
-    from openpyxl import Workbook
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Attendance Entries"
-    ws.append(
-        [
-            "Person",
-            "Type",
-            "Program",
-            "Check-in",
-            "Check-out",
-            "Duration (minutes)",
-            "Visitor Team #",
-        ]
+    rows = (_attendance_export_row(s) for s in sessions.iterator(chunk_size=500))
+    return export_xlsx_response(
+        filename="attendance_entries.xlsx",
+        headers=_ATTENDANCE_EXPORT_HEADERS,
+        rows=rows,
+        sheet_title="Attendance Entries",
     )
-    for s in sessions.iterator(chunk_size=500):
-        ws.append(
-            [
-                _session_person_label(s),
-                _session_person_type(s),
-                s.program.name if s.program else "",
-                (
-                    timezone.localtime(s.check_in).strftime("%Y-%m-%d %H:%M")
-                    if s.check_in
-                    else ""
-                ),
-                (
-                    timezone.localtime(s.check_out).strftime("%Y-%m-%d %H:%M")
-                    if s.check_out
-                    else ""
-                ),
-                s.duration_minutes,
-                s.visitor_team_number or "",
-            ]
-        )
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    response = HttpResponse(
-        buffer.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    response["Content-Disposition"] = 'attachment; filename="attendance_entries.xlsx"'
-    return response
 
 
 class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):

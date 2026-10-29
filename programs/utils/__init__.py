@@ -20,6 +20,11 @@ from .balances import (
     program_overlaps_sliding_window,
 )
 from .colors import get_contrast_color
+from .files import (
+    build_upload_path,
+    sanitize_upload_filename,
+    scoped_upload_path_builder,
+)
 from .geocoding import normalize_address, resolve_address_points
 from .grades import calculate_grade, calculate_graduation_year, format_grade
 from .images import normalize_image_field
@@ -29,6 +34,13 @@ from .imports import (
     row_val,
     row_val_bool,
     row_val_date,
+)
+from .merges import (
+    carry_over_missing_fields,
+    perform_parent_merge,
+    perform_school_merge,
+    perform_student_merge,
+    perform_visitor_merge,
 )
 from .notifications import (
     LEAD_MENTOR_EMAIL,
@@ -43,6 +55,7 @@ from .programs import (
     get_grouped_program_choices,
     group_programs_by_status,
 )
+from .spreadsheets import export_csv_response, export_xlsx_response
 from .students import (
     active_students,
     active_students_in_program,
@@ -58,6 +71,10 @@ from .urls import (
 __all__ = [
     # images
     "normalize_image_field",
+    # files
+    "build_upload_path",
+    "sanitize_upload_filename",
+    "scoped_upload_path_builder",
     # accounts
     "transfer_user_account",
     # alumni
@@ -68,12 +85,21 @@ __all__ = [
     "active_mentors",
     "active_parents",
     "active_alumni",
+    # merges
+    "carry_over_missing_fields",
+    "perform_parent_merge",
+    "perform_school_merge",
+    "perform_student_merge",
+    "perform_visitor_merge",
     # imports (csv/xlsx helpers + academic year)
     "get_academic_year_ending",
     "row_raw",
     "row_val",
     "row_val_bool",
     "row_val_date",
+    # spreadsheets
+    "export_csv_response",
+    "export_xlsx_response",
     # grades
     "calculate_grade",
     "calculate_graduation_year",
@@ -106,7 +132,6 @@ __all__ = [
     "get_grouped_program_choices",
     "GroupedProgramModelChoiceIterator",
     "GroupedProgramChoiceField",
-    # students
     "active_students",
     "active_students_in_program",
     "students_in_running_programs",

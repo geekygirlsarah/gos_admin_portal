@@ -40,17 +40,20 @@ class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             elif not selected_names:
                 messages.error(request, "Select at least one visitor name to merge.")
             else:
-                visitor_sessions = AttendanceSession.objects.filter(
-                    student__isnull=True,
-                    adult__isnull=True,
-                    visitor_name__in=selected_names,
+                from programs.utils.merges import perform_visitor_merge
+
+                sample = (
+                    AttendanceSession.objects.filter(
+                        student__isnull=True,
+                        adult__isnull=True,
+                        visitor_name__in=selected_names,
+                    ).first()
+                    or AttendanceEvent.objects.filter(
+                        student__isnull=True,
+                        adult__isnull=True,
+                        visitor_name__in=selected_names,
+                    ).first()
                 )
-                visitor_events = AttendanceEvent.objects.filter(
-                    student__isnull=True,
-                    adult__isnull=True,
-                    visitor_name__in=selected_names,
-                )
-                sample = visitor_sessions.first() or visitor_events.first()
                 if sample is not None:
                     log_event(
                         event=AuditEvent.RECORDS_MERGED,
@@ -63,8 +66,7 @@ class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                             f"'{target_name}'."
                         ),
                     )
-                visitor_sessions.update(visitor_name=target_name)
-                visitor_events.update(visitor_name=target_name)
+                perform_visitor_merge(selected_names, target_name)
 
                 messages.success(
                     request,

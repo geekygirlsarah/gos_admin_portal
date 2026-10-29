@@ -452,13 +452,12 @@ class Application(models.Model):
 
 def _application_doc_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/application_documents/<application_id>/<filename>."""
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
     aid = (
         instance.application.application_id if instance.application_id else "unassigned"
     )
-    filename = sanitize_upload_filename(filename)
-    return f"application_documents/{aid}/{filename}"
+    return build_upload_path(f"application_documents/{aid}", filename=filename)
 
 
 class ApplicationDocumentSubmission(models.Model):

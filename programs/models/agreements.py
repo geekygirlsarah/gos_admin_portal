@@ -2,11 +2,15 @@ from django.db import models
 
 
 def _mentor_agreement_upload_to(instance, filename):
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    slug = instance.slug or "unassigned"
-    filename = sanitize_upload_filename(filename)
-    return f"mentor_agreements/{slug}/{filename}"
+    return build_upload_path(
+        "mentor_agreements",
+        instance=instance,
+        filename=filename,
+        id_attr="slug",
+        default_id="unassigned",
+    )
 
 
 class MentorAgreement(models.Model):
@@ -120,11 +124,15 @@ class MentorAgreementAcceptance(models.Model):
 
 def _agreement_submission_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/agreement_submissions/<adult_id>/<filename>."""
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    adult_id = instance.adult_id or "unassigned"
-    filename = sanitize_upload_filename(filename)
-    return f"agreement_submissions/{adult_id}/{filename}"
+    return build_upload_path(
+        "agreement_submissions",
+        instance=instance,
+        filename=filename,
+        id_attr="adult_id",
+        default_id="unassigned",
+    )
 
 
 class MentorAgreementSubmission(models.Model):

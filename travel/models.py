@@ -9,7 +9,15 @@ from programs.models import Adult, Student
 
 
 def _permission_form_upload_to(instance, filename):
-    return f"travel/permission_forms/{instance.program_id}/{filename}"
+    from programs.utils.files import build_upload_path
+
+    return build_upload_path(
+        "travel/permission_forms",
+        instance=instance,
+        filename=filename,
+        id_attr="program_id",
+        default_id="unassigned",
+    )
 
 
 class TravelEvent(models.Model):

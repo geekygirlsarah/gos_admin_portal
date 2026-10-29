@@ -19,18 +19,22 @@ logger = logging.getLogger(__name__)
 
 
 def _student_photo_upload_to(instance, filename):
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    return f"photos/students/{sanitize_upload_filename(filename)}"
+    return build_upload_path("photos/students", instance=instance, filename=filename)
 
 
 def _student_document_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/student_documents/<student_id>/<filename>."""
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    sid = instance.student_id or "unassigned"
-    filename = sanitize_upload_filename(filename)
-    return f"student_documents/{sid}/{filename}"
+    return build_upload_path(
+        "student_documents",
+        instance=instance,
+        filename=filename,
+        id_attr="student_id",
+        default_id="unassigned",
+    )
 
 
 @pghistory.track()

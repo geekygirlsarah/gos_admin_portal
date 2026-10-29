@@ -24,18 +24,23 @@ class EmergencyContactRelationship(models.TextChoices):
 
 def _guest_form_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/guest_forms/<slug>/<filename>."""
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    filename = sanitize_upload_filename(filename)
-    return f"guest_forms/{instance.slug}/{filename}"
+    return build_upload_path(
+        "guest_forms",
+        instance=instance,
+        filename=filename,
+        id_attr="slug",
+        default_id="unassigned",
+    )
 
 
 def _guest_submission_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/guest_form_submissions/<guest_form_slug>/<filename>."""
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    filename = sanitize_upload_filename(filename)
-    return f"guest_form_submissions/{instance.guest_form.slug}/{filename}"
+    slug = instance.guest_form.slug if instance.guest_form_id else "unassigned"
+    return build_upload_path(f"guest_form_submissions/{slug}", filename=filename)
 
 
 class GuestForm(models.Model):

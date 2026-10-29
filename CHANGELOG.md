@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-28
 
+### Utilities & DRY
+- **Shared Spreadsheet Generation (`programs/utils/spreadsheets.py`)**: Extracted unified CSV and Excel (.xlsx) export utilities (`export_csv_response` and `export_xlsx_response`) with built-in styling, auto-column-width fitting, and currency formatting. Refactored roster exports (`ProgramStudentExportView`), attendance exports (`AllAttendanceView`), order request exports (`_OrderExportMixin`), and audit log exports (`AuditLogAdmin`) across apps to eliminate duplicate file construction boilerplate.
+- **Standardized File Upload Paths (`programs/utils/files.py`)**: Introduced `build_upload_path` and `scoped_upload_path_builder` utilities for clean, standardized path generation across all model `FileField` and `ImageField` definitions (photos, signed waivers, tax forms, program documents, mentor agreements, guest permissions, and digital signout signatures).
+- **Consolidated Record Merge Services (`programs/utils/merges.py`)**: Extracted atomic merge helper workflows (`perform_parent_merge`, `perform_student_merge`, `perform_school_merge`, `perform_visitor_merge`, and `carry_over_missing_fields`) consolidating relationship reassignment, duplicate cleanup, and field carryover across `ParentMergeView`, `StudentMergeView`, `SchoolMergeView`, `VisitorManagementView`, and the `find_duplicate_parents` management command.
+
 ### Testing & Quality
 - **Modularized Model Test Suites (`programs/tests/test_models/`)**: Refactored the monolithic `programs/tests/test_models.py` into focused domain test suites (`test_programs`, `test_students`, `test_adults`, `test_finances`, `test_permissions`) mirroring the modular `programs/models/` package architecture.
 - **Expanded Multi-Role Test Suite (`programs/tests/test_multi_role.py`)**: Added comprehensive test coverage for complex multi-role user scenarios (Parent+Mentor, Parent+Alumni, Mentor+Alumni, Parent+Mentor+Alumni, LeadMentor+Adult), role priority resolution, helper flag checks, object-level finance scoping, and active/inactive mentor transitions.

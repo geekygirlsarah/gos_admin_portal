@@ -37,9 +37,9 @@ class AdultStudentRelationship(models.Model):
 
 
 def _adult_photo_upload_to(instance, filename):
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    return f"photos/adults/{sanitize_upload_filename(filename)}"
+    return build_upload_path("photos/adults", instance=instance, filename=filename)
 
 
 @pghistory.track()

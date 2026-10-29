@@ -228,11 +228,15 @@ class Program(models.Model):
 
 def _program_document_upload_to(instance, filename):
     """Files land at MEDIA_ROOT/program_documents/<program_id>/<filename>."""
-    from programs.utils.files import sanitize_upload_filename
+    from programs.utils.files import build_upload_path
 
-    pid = instance.program_id or "unassigned"
-    filename = sanitize_upload_filename(filename)
-    return f"program_documents/{pid}/{filename}"
+    return build_upload_path(
+        "program_documents",
+        instance=instance,
+        filename=filename,
+        id_attr="program_id",
+        default_id="unassigned",
+    )
 
 
 class ProgramDocument(models.Model):

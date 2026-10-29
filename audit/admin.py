@@ -1,4 +1,3 @@
-import csv
 import json
 
 from django.contrib import admin
@@ -51,31 +50,31 @@ class _LeadMentorOnly:
 
 
 def _build_csv_response(queryset) -> HttpResponse:
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="audit_log.csv"'
-    writer = csv.writer(response)
-    writer.writerow(
-        [
-            "timestamp",
-            "event",
-            "actor_id",
-            "actor_username",
-            "resource_type",
-            "resource_id",
-            "resource_repr",
-            "before",
-            "after",
-            "ip_address",
-            "session_id",
-            "outcome",
-            "notes",
-        ]
-    )
-    for entry in (
-        queryset.select_related("actor").order_by("-timestamp").iterator(chunk_size=500)
-    ):
-        writer.writerow(
-            [
+    from programs.utils.spreadsheets import export_csv_response
+
+    headers = [
+        "timestamp",
+        "event",
+        "actor_id",
+        "actor_username",
+        "resource_type",
+        "resource_id",
+        "resource_repr",
+        "before",
+        "after",
+        "ip_address",
+        "session_id",
+        "outcome",
+        "notes",
+    ]
+
+    def _rows():
+        for entry in (
+            queryset.select_related("actor")
+            .order_by("-timestamp")
+            .iterator(chunk_size=500)
+        ):
+            yield [
                 entry.timestamp.isoformat(),
                 entry.event,
                 entry.actor_id or "",
@@ -90,8 +89,12 @@ def _build_csv_response(queryset) -> HttpResponse:
                 entry.outcome,
                 entry.notes,
             ]
-        )
-    return response
+
+    return export_csv_response(
+        filename="audit_log.csv",
+        headers=headers,
+        rows=_rows(),
+    )
 
 
 # ---------------------------------------------------------------------------

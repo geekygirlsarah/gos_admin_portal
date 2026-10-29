@@ -36,144 +36,82 @@ def _item_export_row(item):
     }
 
 
+_ORDER_ITEMS_EXPORT_HEADERS = [
+    "Program",
+    "Item",
+    "Quantity",
+    "Unit Price",
+    "Total",
+    "Link",
+    "Order",
+    "Vendor",
+    "Vendor Website",
+    "Requested By",
+    "Requested On",
+    "Notes",
+    "Team",
+    "Crew",
+    "Subteam",
+    "Status",
+    "Ordered On",
+]
+
+
+def _order_item_export_values(item):
+    row = _item_export_row(item)
+    return [
+        row["program"],
+        row["item_name"],
+        row["quantity"],
+        row["unit_price"],
+        row["total"],
+        row["url"],
+        row["order"],
+        row["vendor"],
+        row["vendor_url"],
+        row["requested_by"],
+        row["requested_on"],
+        row["notes"],
+        row["team"],
+        row["crew"],
+        row["subteam"],
+        row["status"],
+        row["ordered_on"],
+    ]
+
+
 def _export_items_csv(items):
-    import csv
+    from programs.utils.spreadsheets import export_csv_response
 
-    from django.http import HttpResponse
-
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="order_requests.csv"'
-    writer = csv.writer(response)
-    writer.writerow(
-        [
-            "Program",
-            "Item",
-            "Quantity",
-            "Unit Price",
-            "Total",
-            "Link",
-            "Order",
-            "Vendor",
-            "Vendor Website",
-            "Requested By",
-            "Requested On",
-            "Notes",
-            "Team",
-            "Crew",
-            "Subteam",
-            "Status",
-            "Ordered On",
-        ]
+    rows = (_order_item_export_values(item) for item in items.iterator(chunk_size=500))
+    return export_csv_response(
+        filename="order_requests.csv",
+        headers=_ORDER_ITEMS_EXPORT_HEADERS,
+        rows=rows,
     )
-    for item in items.iterator(chunk_size=500):
-        row = _item_export_row(item)
-        writer.writerow(
-            [
-                row["program"],
-                row["item_name"],
-                row["quantity"],
-                row["unit_price"],
-                row["total"],
-                row["url"],
-                row["order"],
-                row["vendor"],
-                row["vendor_url"],
-                row["requested_by"],
-                row["requested_on"],
-                row["notes"],
-                row["team"],
-                row["crew"],
-                row["subteam"],
-                row["status"],
-                row["ordered_on"],
-            ]
-        )
-    return response
 
 
 def _export_items_xlsx(items):
-    from io import BytesIO
-
-    from django.http import HttpResponse
-    from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Order Requests"
-    ws.append(
-        [
-            "Program",
-            "Item",
-            "Quantity",
-            "Unit Price",
-            "Total",
-            "Link",
-            "Order",
-            "Vendor",
-            "Vendor Website",
-            "Requested By",
-            "Requested On",
-            "Notes",
-            "Team",
-            "Crew",
-            "Subteam",
-            "Status",
-            "Ordered On",
-        ]
-    )
+    from programs.utils.spreadsheets import export_xlsx_response
 
+    rows = (_order_item_export_values(item) for item in items.iterator(chunk_size=500))
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(
         start_color="333333", end_color="333333", fill_type="solid"
     )
-    for cell in ws[1]:
-        cell.font = header_font
-        cell.fill = header_fill
 
-    for item in items.iterator(chunk_size=500):
-        row = _item_export_row(item)
-        ws.append(
-            [
-                row["program"],
-                row["item_name"],
-                row["quantity"],
-                row["unit_price"],
-                row["total"],
-                row["url"],
-                row["order"],
-                row["vendor"],
-                row["vendor_url"],
-                row["requested_by"],
-                row["requested_on"],
-                row["notes"],
-                row["team"],
-                row["crew"],
-                row["subteam"],
-                row["status"],
-                row["ordered_on"],
-            ]
-        )
-
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or "")) for cell in col)
-        col_letter = col[0].column_letter
-        ws.column_dimensions[col_letter].width = max(max_len + 2, 12)
-
-    for row in ws.iter_rows(min_row=2, max_col=17):
-        for cell in row:
-            if cell.column in (4, 5) and cell.value not in ("", None):
-                cell.number_format = "$#,##0.00"
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    response = HttpResponse(
-        buffer.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    return export_xlsx_response(
+        filename="order_requests.xlsx",
+        headers=_ORDER_ITEMS_EXPORT_HEADERS,
+        rows=rows,
+        sheet_title="Order Requests",
+        header_font=header_font,
+        header_fill=header_fill,
+        auto_fit_columns=True,
+        currency_columns=(4, 5),
     )
-    response["Content-Disposition"] = 'attachment; filename="order_requests.xlsx"'
-    return response
 
 
 class _OrderExportMixin:

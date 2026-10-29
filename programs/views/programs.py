@@ -30,9 +30,7 @@ from ..models import (
     Team,
 )
 from ..permission_views import (
-    LeadMentorRequiredMixin,
     MentorOrLeadMentorRequiredMixin,
-    PassUserToFormMixin,
     TeamAssignmentPermissionMixin,
     can_user_read,
     can_user_write,
@@ -42,7 +40,6 @@ from ..utils import (
     active_students_in_program,
     get_safe_url,
     get_student_balance_data,
-    redirect_back,
     resolve_address_points,
 )
 from ..utils.email_async import send_messages_in_background
@@ -50,7 +47,6 @@ from ..utils.email_html import build_email_parts
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
-    DynamicWritePermissionMixin,
     LogFormSaveMixin,
     StudentQuerysetRoleMixin,
     logger,
@@ -1752,44 +1748,24 @@ def _student_export_row(enrollment, program, groups, can_view_sliding, is_lead=F
 
 
 def _students_xlsx_response(program, headers, rows):
-    from io import BytesIO
+    from programs.utils.spreadsheets import export_xlsx_response
 
-    from django.http import HttpResponse
-    from openpyxl import Workbook
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Students"
-    ws.append(headers)
-    for row in rows:
-        ws.append(row)
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-
-    filename = f"{program.name} - Students.xlsx"
-    response = HttpResponse(
-        buffer.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    return export_xlsx_response(
+        filename=f"{program.name} - Students.xlsx",
+        headers=headers,
+        rows=rows,
+        sheet_title="Students",
     )
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
 
 
 def _students_csv_response(program, headers, rows):
-    import csv
+    from programs.utils.spreadsheets import export_csv_response
 
-    from django.http import HttpResponse
-
-    filename = f"{program.name} - Students.csv"
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    writer = csv.writer(response)
-    writer.writerow(headers)
-    for row in rows:
-        writer.writerow(row)
-    return response
+    return export_csv_response(
+        filename=f"{program.name} - Students.csv",
+        headers=headers,
+        rows=rows,
+    )
 
 
 class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
