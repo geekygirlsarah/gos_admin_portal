@@ -306,3 +306,91 @@ def notify_mentor_outreach_reminder(mentor_signup):
     except Exception:
         logger.exception("Failed to send outreach mentor reminder to %s", recipient)
         return False
+
+
+def notify_student_event_deleted(signup):
+    """Send outreach event cancellation email to a student (champion or helper)."""
+    recipient = student_recipient_email(signup.student)
+    if not recipient:
+        return False
+
+    context = _base_signup_context(signup)
+    event_name = signup.shift.event.name
+    subject = f"Cancelled: Outreach event {event_name}"
+
+    try:
+        send_templated_notification(
+            subject=subject,
+            template_name="outreach/emails/event_cancelled.html",
+            context=context,
+            recipient_list=[recipient],
+            organization=getattr(signup.shift.event, "organization", None),
+        )
+        return True
+    except Exception:
+        logger.exception("Failed to send outreach event cancellation to %s", recipient)
+        return False
+
+
+def notify_mentor_event_deleted(mentor_signup):
+    """Send outreach event cancellation email to a mentor."""
+    recipient = adult_recipient_email(mentor_signup.adult)
+    if not recipient:
+        return False
+
+    context = _base_mentor_signup_context(mentor_signup)
+    event_name = mentor_signup.shift.event.name
+    subject = f"Cancelled: Outreach event {event_name}"
+
+    try:
+        send_templated_notification(
+            subject=subject,
+            template_name="outreach/emails/mentor_event_cancelled.html",
+            context=context,
+            recipient_list=[recipient],
+            organization=getattr(mentor_signup.shift.event, "organization", None),
+        )
+        return True
+    except Exception:
+        logger.exception(
+            "Failed to send outreach mentor event cancellation to %s", recipient
+        )
+        return False
+
+
+def notify_outreach_event_deleted(event):
+    """Notify all champions, helpers, and mentors when an outreach event is deleted."""
+    if not event:
+        return 0
+
+    shifts = list(
+        event.shifts.all().prefetch_related(
+            "signups__student__user",
+            "mentor_signups__adult__user",
+        )
+    )
+    sent_count = 0
+    notified_students = set()
+    notified_mentors = set()
+
+    for shift in shifts:
+        for signup in shift.signups.all():
+            student = signup.student
+            if not student or student.pk in notified_students:
+                continue
+            if notify_student_event_deleted(signup):
+                notified_students.add(student.pk)
+                sent_count += 1
+
+        for mentor_signup in shift.mentor_signups.all():
+            adult = mentor_signup.adult
+            if not adult or adult.pk in notified_mentors:
+                continue
+            if notify_mentor_event_deleted(mentor_signup):
+                notified_mentors.add(adult.pk)
+                sent_count += 1
+
+    return sent_count
+
+
+notify_outreach_event_cancelled = notify_outreach_event_deleted

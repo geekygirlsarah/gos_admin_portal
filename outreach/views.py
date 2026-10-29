@@ -458,6 +458,14 @@ class OutreachEventDeleteView(
     def audit_snapshot(self, obj):
         return {"name": obj.name, "program_id": obj.program_id}
 
+    def form_valid(self, form):
+        from outreach.services import notify_outreach_event_deleted
+
+        event = self.get_object()
+        notify_outreach_event_deleted(event)
+        messages.success(self.request, f"Event '{event.name}' deleted.")
+        return super().form_valid(form)
+
     def dispatch(self, request, *args, **kwargs):
         # Initialize program via mixin logic first
         self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))

@@ -1,0 +1,46 @@
+{% extends "programs/emails/base_notification.html" %}
+{% block title %}Cancelled: {{ event.name }}{% endblock %}
+{% block header %}Outreach Event Cancelled{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <p>Hi {{ adult.display_name }},</p>
+    <p>The outreach event <strong>{{ event.name }}</strong>{% if shift.date %} scheduled for <strong>{{ shift.date|date:"l, F j, Y" }}</strong>{% endif %} has been cancelled.</p>
+
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 16px 0;">
+        <table style="width: 100%; border-collapse: collapse; border: 0;" class="borderless" role="presentation">
+            <tr>
+                <td style="padding: 4px 8px; font-weight: 600; width: 110px; color: #475569; border: 0;">Role:</td>
+                <td style="padding: 4px 8px; border: 0;"><strong>Mentor Support</strong></td>
+            </tr>
+            {% if shift.date %}
+            <tr>
+                <td style="padding: 4px 8px; font-weight: 600; color: #475569; border: 0;">Date:</td>
+                <td style="padding: 4px 8px; border: 0;">{{ shift.date|date:"l, F j, Y" }}</td>
+            </tr>
+            {% endif %}
+            {% if shift.start_time and shift.end_time %}
+            <tr>
+                <td style="padding: 4px 8px; font-weight: 600; color: #475569; border: 0;">Time:</td>
+                <td style="padding: 4px 8px; border: 0;">{{ shift.start_time|time:"g:i A" }} &ndash; {{ shift.end_time|time:"g:i A" }}</td>
+            </tr>
+            {% endif %}
+            {% if event.location_name or event.location_address %}
+            <tr>
+                <td style="padding: 4px 8px; font-weight: 600; color: #475569; border: 0;">Location:</td>
+                <td style="padding: 4px 8px; border: 0;">
+                    {% if event.location_name %}<strong>{{ event.location_name }}</strong><br>{% endif %}
+                    {% if event.location_address %}<span class="text-muted">{{ event.location_address }}</span>{% endif %}
+                </td>
+            </tr>
+            {% endif %}
+            {% if event.description %}
+            <tr>
+                <td style="padding: 4px 8px; font-weight: 600; color: #475569; border: 0;">Details:</td>
+                <td style="padding: 4px 8px; border: 0;">{{ event.description }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
+<p class="small text-muted">Log in to the <a href="{{ outreach_link|default:org_email_settings.portal_url }}">{{ org_email_settings.organization_name|default:"Girls of Steel" }} Portal</a> to view upcoming outreach events.</p>
+{% endblock %}
