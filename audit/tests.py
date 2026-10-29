@@ -880,17 +880,22 @@ class AuditSanitizationTests(TestCase):
         )
 
     def test_log_event_sanitizes_sensitive_keys(self):
+        old_pass = "old_secret_password"  # nosec B105
+        tok = "tok_abcdef"  # nosec B105
+        h = "pbkdf2_sha256$..."  # nosec B105
+        topsec = "topsecret"  # nosec B105
+        new_pass = "new_secret_password"  # nosec B105
         before_data = {
             "username": "old_user",
-            "password": "old_secret_password",
+            "password": old_pass,
             "api_key": "key_12345678",
-            "token": "tok_abcdef",
+            "token": tok,
             "allergies": "Severe peanut allergy",
             "dietary_restrictions": "Gluten free",
             "medical_notes": "Carries EpiPen",
             "nested": {
-                "password_hash": "pbkdf2_sha256$...",
-                "secret_key": "topsecret",
+                "password_hash": h,
+                "secret_key": topsec,
                 "normal_field": "keep_me",
             },
             "list_data": [
@@ -900,7 +905,7 @@ class AuditSanitizationTests(TestCase):
         }
         after_data = {
             "username": "new_user",
-            "password": "new_secret_password",
+            "password": new_pass,
             "safe_field": 42,
         }
 
@@ -937,9 +942,10 @@ class AuditSanitizationTests(TestCase):
         self.assertEqual(log.after["safe_field"], 42)
 
     def test_log_deletion_sanitizes_sensitive_keys(self):
+        del_pass = "secret"  # nosec B105
         log_deletion(
             resource=self.user,
-            before={"password": "secret", "user": "audit_sec_user"},
+            before={"password": del_pass, "user": "audit_sec_user"},
         )
         log = AuditLog.objects.filter(
             event=AuditEvent.RECORD_DELETED, resource_id=str(self.user.pk)

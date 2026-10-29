@@ -9,14 +9,14 @@ from calendar_feeds.models import CalendarEvent, CalendarFeed, CalendarFeedACL
 from programs.models import Adult, Enrollment, Program, Student
 
 
-def make_lead_mentor_user(username="lead", password="password123"):  # nosec B107
+def make_lead_mentor_user(username="lead", password="password123"):  # nosec B106, B107
     user = User.objects.create_user(username=username, password=password)  # nosec B106
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
     return user
 
 
-def make_mentor_user(username="mentor", password="password123"):  # nosec B107
+def make_mentor_user(username="mentor", password="password123"):  # nosec B106, B107
     user = User.objects.create_user(username=username, password=password)  # nosec B106
     Adult.objects.create(
         user=user,
@@ -28,7 +28,7 @@ def make_mentor_user(username="mentor", password="password123"):  # nosec B107
     return user
 
 
-def make_parent_user(username="parent", password="password123"):  # nosec B107
+def make_parent_user(username="parent", password="password123"):  # nosec B106, B107
     user = User.objects.create_user(username=username, password=password)  # nosec B106
     Adult.objects.create(
         user=user,
@@ -39,7 +39,7 @@ def make_parent_user(username="parent", password="password123"):  # nosec B107
     return user
 
 
-def make_student_user(username="student", password="password123"):  # nosec B107
+def make_student_user(username="student", password="password123"):  # nosec B106, B107
     user = User.objects.create_user(username=username, password=password)  # nosec B106
     student = Student.objects.create(
         user=user,
