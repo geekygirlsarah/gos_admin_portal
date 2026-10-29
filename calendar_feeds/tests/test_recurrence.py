@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from calendar_feeds.models import CalendarEvent, EventException
 from calendar_feeds.tests.factories import make_event, make_feed
-from calendar_feeds.utils import expand_events_for_range
+from calendar_feeds.utils import expand_events_for_range, normalize_rrule_until
 
 
 def utc_dt(*args):
@@ -253,3 +253,56 @@ class InvalidRecurrenceTests(TestCase):
         instances = expand_events_for_range(feed, date(2026, 9, 1), date(2026, 9, 30))
         self.assertEqual(len(instances), 1)
         self.assertEqual(instances[0]["title"], "Good Event")
+
+
+class UntilNormalizationTests(TestCase):
+    """Ensure naive UNTIL strings in RRULEs are normalized to UTC format."""
+
+    def test_normalize_rrule_until_helper(self):
+        self.assertEqual(normalize_rrule_until(""), "")
+        self.assertIsNone(normalize_rrule_until(None))
+        self.assertEqual(
+            normalize_rrule_until("FREQ=DAILY;COUNT=5"), "FREQ=DAILY;COUNT=5"
+        )
+        self.assertEqual(
+            normalize_rrule_until("FREQ=WEEKLY;UNTIL=20261029"),
+            "FREQ=WEEKLY;UNTIL=20261029T235959Z",
+        )
+        self.assertEqual(
+            normalize_rrule_until("FREQ=WEEKLY;UNTIL=20261029T120000"),
+            "FREQ=WEEKLY;UNTIL=20261029T120000Z",
+        )
+        self.assertEqual(
+            normalize_rrule_until("FREQ=WEEKLY;UNTIL=20261029T235959Z"),
+            "FREQ=WEEKLY;UNTIL=20261029T235959Z",
+        )
+
+    def test_expand_recurring_with_date_only_until(self):
+        feed = make_feed()
+        start = utc_dt(2026, 9, 1, 10, 0)
+        CalendarEvent.objects.create(
+            feed=feed,
+            title="Weekly Class",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=1),
+            rrule_ical="FREQ=WEEKLY;BYDAY=TU;UNTIL=20260915",
+        )
+        instances = expand_events_for_range(feed, date(2026, 9, 1), date(2026, 9, 30))
+        self.assertEqual(len(instances), 3)
+        dates = [i["date"] for i in instances]
+        self.assertEqual(dates, [date(2026, 9, 1), date(2026, 9, 8), date(2026, 9, 15)])
+
+    def test_expand_recurring_with_naive_datetime_until(self):
+        feed = make_feed()
+        start = utc_dt(2026, 9, 1, 10, 0)
+        CalendarEvent.objects.create(
+            feed=feed,
+            title="Weekly Class",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=1),
+            rrule_ical="FREQ=WEEKLY;BYDAY=TU;UNTIL=20260915T235959",
+        )
+        instances = expand_events_for_range(feed, date(2026, 9, 1), date(2026, 9, 30))
+        self.assertEqual(len(instances), 3)
+        dates = [i["date"] for i in instances]
+        self.assertEqual(dates, [date(2026, 9, 1), date(2026, 9, 8), date(2026, 9, 15)])

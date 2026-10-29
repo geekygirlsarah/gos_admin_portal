@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.constants import (
     MENTOR_ROLE_CHOICES,
     PHONE_TYPE_CHOICES,
@@ -52,6 +53,8 @@ class Adult(models.Model):
         related_name="adults",
         help_text="Organization that owns this adult (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     # Role flags
     is_parent = models.BooleanField(
         default=False,
@@ -413,6 +416,8 @@ class BackgroundCheck(models.Model):
         related_name="background_checks",
         help_text="Organization that owns this background check (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     adult = models.ForeignKey(
         Adult,
         on_delete=models.CASCADE,

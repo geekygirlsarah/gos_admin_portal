@@ -1,6 +1,8 @@
 import pghistory
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 @pghistory.track()
 class Enrollment(models.Model):
@@ -12,6 +14,7 @@ class Enrollment(models.Model):
         related_name="enrollments",
         help_text="Organization that owns this enrollment (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     student = models.ForeignKey("Student", on_delete=models.CASCADE)
     program = models.ForeignKey("Program", on_delete=models.CASCADE)
     team = models.ForeignKey(

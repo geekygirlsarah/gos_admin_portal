@@ -65,7 +65,7 @@ class AdultsListView(
     def get_queryset(self):
 
         qs = (
-            Adult.objects.all()
+            Adult.objects.for_organization(getattr(self.request, "organization", None))
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -120,7 +120,7 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_queryset(self):
         qs = (
-            active_parents()
+            active_parents(getattr(self.request, "organization", None))
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -186,7 +186,8 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_queryset(self):
         qs = (
-            Adult.objects.filter(is_mentor=True)
+            Adult.objects.for_organization(getattr(self.request, "organization", None))
+            .filter(is_mentor=True)
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -238,7 +239,7 @@ class AlumniListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_queryset(self):
         qs = (
-            active_alumni()
+            active_alumni(getattr(self.request, "organization", None))
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"

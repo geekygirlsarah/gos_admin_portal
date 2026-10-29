@@ -4,6 +4,8 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 from .fields import EncryptedFileField
 
 
@@ -16,6 +18,7 @@ class Fee(models.Model):
         related_name="fees",
         help_text="Organization that owns this fee (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
         "Program", on_delete=models.CASCADE, related_name="fees"
     )
@@ -50,6 +53,7 @@ class Payment(models.Model):
         related_name="payments",
         help_text="Organization that owns this payment (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     PAID_VIA_CHOICES = [
         ("check", "Check"),
@@ -208,6 +212,8 @@ class SlidingScale(models.Model):
         related_name="sliding_scales",
         help_text="Organization that owns this sliding-scale application (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     student = models.ForeignKey(
         "Student", on_delete=models.CASCADE, related_name="sliding_scales"
     )
@@ -355,6 +361,8 @@ class FeeAssignment(models.Model):
         related_name="fee_assignments",
         help_text="Organization that owns this fee assignment (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     student = models.ForeignKey(
         "Student", on_delete=models.CASCADE, related_name="fee_assignments"
     )

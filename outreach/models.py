@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import F
 from django.db.models.functions import Coalesce, Lower
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.models import Adult, Student
 
 
@@ -23,6 +24,7 @@ class OutreachLocation(models.Model):
         related_name="outreach_locations",
         help_text="Organization that owns this saved location (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     name = models.CharField(max_length=255)
     address = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -50,6 +52,7 @@ class OutreachEvent(models.Model):
         related_name="outreach_events",
         help_text="Organization that owns this event (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
         "programs.Program",
         on_delete=models.CASCADE,
@@ -151,6 +154,7 @@ class OutreachShift(models.Model):
         related_name="outreach_shifts",
         help_text="Organization that owns this shift (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     event = models.ForeignKey(
         OutreachEvent, on_delete=models.CASCADE, related_name="shifts"
     )
@@ -225,6 +229,7 @@ class OutreachSignup(models.Model):
         related_name="outreach_signups",
         help_text="Organization that owns this signup (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     student = models.ForeignKey(
         Student, on_delete=models.CASCADE, related_name="outreach_signups"
     )
@@ -335,6 +340,7 @@ class OutreachMentorSignup(models.Model):
         related_name="outreach_mentor_signups",
         help_text="Organization that owns this mentor signup (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     adult = models.ForeignKey(
         Adult,
         on_delete=models.CASCADE,

@@ -7,14 +7,27 @@ Usage:
     python manage.py send_weekly_digest --dry-run
 """
 
+import datetime
 import logging
 
 from django.core.management.base import BaseCommand
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from programs.services.digest import get_weekly_digest_recipients
 from programs.utils.notifications import send_templated_notification
 
 logger = logging.getLogger(__name__)
+
+
+def _format_ordinal_date(d: datetime.date) -> str:
+    """Format a date with ordinal suffix, e.g. 'November 1st'."""
+    day = d.day
+    if 10 <= (day % 100) <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    return f"{d.strftime('%B')} {day}{suffix}"
 
 
 class Command(BaseCommand):
@@ -26,6 +39,12 @@ class Command(BaseCommand):
             type=int,
             default=7,
             help="Number of days ahead to look for shifts and events (default: 7)",
+        )
+        parser.add_argument(
+            "--date",
+            type=str,
+            default=None,
+            help="Explicit as-of date (YYYY-MM-DD) for calculating digest updates",
         )
         parser.add_argument(
             "--dry-run",
@@ -58,17 +77,31 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         days_ahead = options["days_ahead"]
+        date_str = options.get("date")
         dry_run = options["dry_run"]
         role = options["role"]
         email_filter = options["email"]
         user_id_filter = options["user_id"]
         force = options["force"]
 
+        target_date = None
+        if date_str:
+            target_date = parse_date(date_str)
+            if not target_date:
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"Invalid date format: {date_str}. Use YYYY-MM-DD."
+                    )
+                )
+                return
+
         self.stdout.write(
-            f"Collecting weekly digest data (role={role}, days_ahead={days_ahead})..."
+            f"Collecting weekly digest data (role={role}, days_ahead={days_ahead}, reference_date={target_date})..."
         )
 
-        recipients = get_weekly_digest_recipients(role=role, days_ahead=days_ahead)
+        recipients = get_weekly_digest_recipients(
+            role=role, days_ahead=days_ahead, reference_date=target_date
+        )
 
         # Apply optional filters
         if email_filter:
@@ -104,14 +137,17 @@ class Command(BaseCommand):
             recip_email = r["email"]
             data = r["data"]
 
+            ref_date = data.get("reference_date") or target_date or timezone.localdate()
+            date_str = _format_ordinal_date(ref_date)
+
             if recip_role == "student":
-                subject = f"Weekly Update for {r['recipient_obj'].display_name}"
+                subject = f"Your Girls of Steel Portal Update for {date_str}"
                 template_name = "programs/emails/weekly_digest_student.html"
             elif recip_role == "parent":
-                subject = "Weekly Family Update - Girls of Steel"
+                subject = f"Your Girls of Steel Family Update for {date_str}"
                 template_name = "programs/emails/weekly_digest_parent.html"
             else:  # mentor
-                subject = "Mentor Weekly Operations Update - Girls of Steel"
+                subject = f"Your Girls of Steel Mentor Update for {date_str}"
                 template_name = "programs/emails/weekly_digest_mentor.html"
 
             if dry_run:

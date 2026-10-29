@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.models import EncryptedFileField
 
 
@@ -37,6 +38,7 @@ class KioskConfig(models.Model):
         related_name="kiosk_configs",
         help_text="Organization that owns this kiosk config (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
         "programs.Program",
         on_delete=models.PROTECT,
@@ -68,6 +70,7 @@ class KioskDevice(models.Model):
         related_name="kiosk_devices",
         help_text="Organization that owns this device (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey("programs.Program", on_delete=models.PROTECT)
     api_key = models.CharField(max_length=64, unique=True)
     is_active = models.BooleanField(default=True)
@@ -91,6 +94,7 @@ class RFIDCard(models.Model):
         related_name="rfid_cards",
         help_text="Organization that owns this card (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     student = models.ForeignKey(
         "programs.Student",
         on_delete=models.CASCADE,
@@ -147,6 +151,7 @@ class AttendanceEvent(models.Model):
         related_name="attendance_events",
         help_text="Organization this attendance event belongs to (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     adult = models.ForeignKey(
         "programs.Adult", on_delete=models.PROTECT, null=True, blank=True
     )
@@ -193,6 +198,7 @@ class AttendanceSession(models.Model):
         related_name="attendance_sessions",
         help_text="Organization this attendance session belongs to (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     adult = models.ForeignKey(
         "programs.Adult", on_delete=models.PROTECT, null=True, blank=True
     )
@@ -284,6 +290,7 @@ class DigitalSignoutConfig(models.Model):
         related_name="signout_configs",
         help_text="Organization that owns this sign-out station (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
         "programs.Program",
         on_delete=models.PROTECT,
@@ -334,6 +341,7 @@ class StudentPresence(models.Model):
         related_name="student_presences",
         help_text="Organization that owns this presence record (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     date = models.DateField(default=timezone.localdate)
     status = models.CharField(max_length=8, choices=STATUS_CHOICES)
     marked_by = models.ForeignKey(
@@ -369,6 +377,7 @@ class DigitalSignout(models.Model):
         related_name="digital_signouts",
         help_text="Organization that owns this sign-out (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     config = models.ForeignKey(
         DigitalSignoutConfig,
         on_delete=models.PROTECT,

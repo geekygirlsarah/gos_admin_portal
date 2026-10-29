@@ -102,3 +102,33 @@ class CalendarEventFormRecurrenceTests(TestCase):
         self.assertEqual(form.initial.get("repeat_days"), ["TU", "TH"])
         self.assertEqual(form.initial.get("repeat_end_type"), "count")
         self.assertEqual(form.initial.get("repeat_count"), 15)
+
+    def test_custom_rrule_with_naive_date_until_normalized(self):
+        form_data = {
+            "title": "Custom Repeat Event",
+            "start_datetime": "2026-10-01T18:00",
+            "end_datetime": "2026-10-01T19:00",
+            "recurrence_type": "custom",
+            "rrule_ical": "FREQ=WEEKLY;BYDAY=TU;UNTIL=20261215",
+        }
+        form = CalendarEventForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data["rrule_ical"],
+            "FREQ=WEEKLY;BYDAY=TU;UNTIL=20261215T235959Z",
+        )
+
+    def test_custom_rrule_with_naive_datetime_until_normalized(self):
+        form_data = {
+            "title": "Custom Repeat Event",
+            "start_datetime": "2026-10-01T18:00",
+            "end_datetime": "2026-10-01T19:00",
+            "recurrence_type": "custom",
+            "rrule_ical": "FREQ=WEEKLY;BYDAY=TU;UNTIL=20261215T180000",
+        }
+        form = CalendarEventForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data["rrule_ical"],
+            "FREQ=WEEKLY;BYDAY=TU;UNTIL=20261215T180000Z",
+        )

@@ -22,6 +22,7 @@ from premailer import transform
 from audit.events import AuditEvent
 from audit.mixins import SensitiveDataViewMixin
 from audit.service import log_event
+from organizations.mixins import OrganizationScopeMixin
 from programs.constants import RELATIONSHIP_CHOICES
 
 from ..forms import BackgroundChecksForm

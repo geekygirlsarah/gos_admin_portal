@@ -633,7 +633,10 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
 
     def get_queryset(self):
         return (
-            SlidingScale.objects.filter(status=SlidingScale.STATUS_PENDING)
+            SlidingScale.objects.for_organization(
+                getattr(self.request, "organization", None)
+            )
+            .filter(status=SlidingScale.STATUS_PENDING)
             .select_related("student", "applied_by")
             .order_by("created_at")
         )
@@ -643,7 +646,10 @@ class SlidingScaleReviewListView(LoginRequiredMixin, LeadMentorRequiredMixin, Li
         today = timezone.localdate()
 
         decided_qs = (
-            SlidingScale.objects.exclude(status=SlidingScale.STATUS_PENDING)
+            SlidingScale.objects.for_organization(
+                getattr(self.request, "organization", None)
+            )
+            .exclude(status=SlidingScale.STATUS_PENDING)
             .select_related("student", "applied_by", "reviewed_by")
             .order_by(
                 F("date").desc(nulls_last=True),

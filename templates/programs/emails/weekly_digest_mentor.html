@@ -6,7 +6,27 @@
 
 {% block content %}
 <p>Hi {{ adult.preferred_first_name|default:adult.legal_first_name }},</p>
-<p>Here is your weekly summary of upcoming mentoring shifts and outreach events needing staff support for the week ahead.</p>
+<p>Here is your weekly summary of upcoming mentoring shifts, team operations, volunteer attendance, and team events for the week ahead.</p>
+
+{% if action_items.has_action_items %}
+<div style="background-color: #fff3cd; border: 1px solid #ffe69c; border-radius: 6px; padding: 14px 16px; margin-top: 16px; margin-bottom: 20px;">
+    <h3 style="font-size: 16px; margin-top: 0; margin-bottom: 6px; color: #664d03;">
+        Mentor Action Items
+    </h3>
+    <ul style="margin: 4px 0; padding-left: 20px; color: #664d03; font-size: 14px;">
+        {% if action_items.has_pending_agreements %}
+        <li>
+            <strong>Pending Agreement:</strong> You have active mentor agreement(s) that require review and acceptance.
+        </li>
+        {% endif %}
+        {% if action_items.needs_background_check %}
+        <li>
+            <strong>Clearances Required:</strong> Your PA background clearances are due or missing. Please ensure your clearances are updated.
+        </li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
 
 {% if confirmed_shifts %}
 <div style="margin-top: 20px; margin-bottom: 24px;">
@@ -29,6 +49,22 @@
             {% endfor %}
         </tbody>
     </table>
+</div>
+{% endif %}
+
+{% if travel_highlights %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #6f42c1; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Your Travel & Trip Commitments
+    </h3>
+    <ul style="margin: 4px 0; padding-left: 20px; font-size: 14px; color: #495057;">
+        {% for t in travel_highlights %}
+        <li>
+            <strong>{{ t.event_name }}</strong> ({{ t.start_date|date:"M j" }}{% if t.end_date != t.start_date %} &ndash; {{ t.end_date|date:"M j" }}{% endif %})
+            {% if t.is_driver %}<span style="background-color: #e2d9f3; color: #59359a; padding: 1px 6px; border-radius: 4px; font-size: 12px; margin-left: 4px;">Registered Driver</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
 </div>
 {% endif %}
 
@@ -60,12 +96,53 @@
 </div>
 {% endif %}
 
-{% if attendance_stats.total_hours %}
+{% if attendance_stats.total_hours or attendance_stats.recent_hours %}
 <div style="margin-top: 20px; margin-bottom: 24px;">
     <h3 style="font-size: 18px; margin-bottom: 8px; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
         Mentoring Hours Logged
     </h3>
-    <p style="margin: 4px 0;"><strong>Total Hours:</strong> {{ attendance_stats.total_hours }} hrs</p>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            <tr>
+                <td style="padding: 6px 0; font-size: 14px; color: #495057;"><strong>Total Hours:</strong></td>
+                <td style="padding: 6px 0; font-size: 14px; color: #212529; text-align: right;"><strong>{{ attendance_stats.total_hours }} hrs</strong></td>
+            </tr>
+            <tr>
+                <td style="padding: 6px 0; font-size: 14px; color: #495057;"><strong>Average Hours / Week:</strong></td>
+                <td style="padding: 6px 0; font-size: 14px; color: #212529; text-align: right;">{{ attendance_stats.avg_hours_per_week }} hrs/wk</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px 0; font-size: 14px; color: #495057;"><strong>Past {{ days_ahead }} Days:</strong></td>
+                <td style="padding: 6px 0; font-size: 14px; color: #212529; text-align: right;">{{ attendance_stats.recent_days }} day{{ attendance_stats.recent_days|pluralize }} logged ({{ attendance_stats.recent_hours }} hrs)</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if calendar_events %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #0d6efd; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Upcoming Team & Calendar Events
+    </h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            {% for ce in calendar_events %}
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 8px 0; vertical-align: top;">
+                    <strong>{{ ce.title }}</strong>{% if ce.feed_name %} <span style="color: #6c757d; font-size: 12px;">({{ ce.feed_name }})</span>{% endif %}<br>
+                    <span style="color: #495057; font-size: 14px;">
+                        {{ ce.date|date:"l, F j" }}
+                        {% if not ce.all_day and ce.start_time %} &bull; {{ ce.start_time|time:"g:i A" }}{% if ce.end_time %} &ndash; {{ ce.end_time|time:"g:i A" }}{% endif %}{% else %} &bull; All Day{% endif %}
+                    </span>
+                    {% if ce.location %}
+                    <br><span style="color: #6c757d; font-size: 13px;">Location: {{ ce.location }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endif %}
 

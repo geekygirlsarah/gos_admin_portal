@@ -7,6 +7,7 @@ from programs.models import Program
 from programs.utils import GroupedProgramChoiceField
 
 from .models import CalendarEvent, CalendarFeed, CalendarFeedACL, EventException
+from .utils import normalize_rrule_until
 
 RECURRENCE_CHOICES = [
     ("none", "Does not repeat"),
@@ -282,14 +283,17 @@ class CalendarEventForm(forms.ModelForm):
             cleaned_data["rrule_ical"] = ""
         elif rec_type == "custom":
             if rrule_raw:
+                rrule_normalized = normalize_rrule_until(rrule_raw)
                 try:
                     from dateutil.rrule import rrulestr
 
                     start_dt = cleaned_data.get("start_datetime") or timezone.now()
-                    rrulestr(rrule_raw, dtstart=start_dt)
+                    rrulestr(rrule_normalized, dtstart=start_dt)
                 except Exception as e:
                     self.add_error("rrule_ical", f"Invalid RFC-5545 RRULE: {e}")
-            cleaned_data["rrule_ical"] = rrule_raw
+                cleaned_data["rrule_ical"] = rrule_normalized
+            else:
+                cleaned_data["rrule_ical"] = ""
         elif rec_type in ("daily", "weekly", "monthly"):
             freq_map = {
                 "daily": "DAILY",

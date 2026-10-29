@@ -4,8 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-29
 
+### Fixed
+- **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
+
 ### Added
+- **Multi-Tenant Scoping by Default for New Features (Phase 3)**:
+  - Added `OrganizationScopeMixin` in `organizations/mixins.py` (and re-exported via `programs/views/mixins.py`) that automatically scopes class-based view querysets to `request.organization` and assigns `request.organization` on newly created model instances in `form_valid()`.
+  - Added `OrganizationFormMixin` and `limit_choices_to_organization` helper in `organizations/forms.py` (and re-exported via `programs/forms.py`) to automatically restrict `ModelChoiceField` and `ModelMultipleChoiceField` querysets to the current organization.
+  - Added comprehensive test suite in `organizations/tests/test_phase3.py` verifying view query filtering, instance creation auto-tagging, form field choice restrictions, and un-scoped fallback behaviors.
+  - Documented development patterns and guidelines across `AGENTS.md` for new models, views, and forms.
+- **Multi-Tenant Scoping via OrganizationManager and OrganizationQuerySet (Phase 2)**:
+  - Implemented `OrganizationQuerySet` and `OrganizationManager` (`objects = OrganizationManager.from_queryset(OrganizationQuerySet)()`) in `organizations/models.py` with `.for_organization(organization)` filtering.
+  - Applied the manager across all models carrying an `organization` foreign key across `programs` (Program, Student, Adult, Enrollment, Fee, Payment, SlidingScale, FeeAssignment, BackgroundCheck), `applications` (Application, ApplicationDocumentSubmission), `attendance` (KioskConfig, KioskDevice, RFIDCard, AttendanceEvent, AttendanceSession, DigitalSignoutConfig, StudentPresence, DigitalSignout), and `outreach` (OutreachLocation, OutreachEvent, OutreachShift, OutreachSignup, OutreachMentorSignup).
+  - Updated views and utility functions (`active_students`, `active_parents`, `active_mentors`, `active_alumni`, `students_in_running_programs`, student/adult directory views, dashboard KPIs, review queue, and attendance entries) to scope queries cleanly by `request.organization`.
+  - Added full test coverage for manager/queryset organization filtering and multi-tenant view isolation in `organizations/tests/test_organization.py`.
 - **Outreach Event Cancellation Email Notifications (`outreach/services.py`, `templates/outreach/emails/`, `outreach/views.py`)**: When an outreach event is deleted/cancelled, automated notification emails are dispatched to all registered champions, helpers, and supporting mentors with event details, scheduled dates/times, venue location, role labels, and links to upcoming events in the portal.
+- **Enhanced Weekly Digest Metrics & Content (`send_weekly_digest`, `programs/services/digest.py`, `templates/programs/emails/`)**:
+  - **Attendance Averages & Recent Activity**: Surfaced total logged hours, average weekly hours (matching the attendance chart season-to-date calculation), and days/hours logged in the past X days (`--days-ahead`, default 7) with multi-program breakdowns.
+  - **Career & Season Outreach Summary**: Added career/season outreach totals including total completed hours, completed events count, and number of events championed.
+  - **Calendar Integration**: Added upcoming team and organization-wide calendar events for the next X days from active calendar feeds visible to students, parents, and mentors.
+  - **Action Items & Alerts**: Added actionable reminders for outstanding program balances due, missing/unsubmitted program documents, and PA background clearance alerts for students reaching age 17 and mentors.
+  - **Mentor Operational Enhancements**: Added pending mentor agreement alerts, background clearance status, and travel/trip chaperone/driver commitments to mentor digests.
+  - **Strict Parent Opt-In Enforcement**: Guaranteed that parents and guardians only receive weekly digests if they have explicitly opted in via `email_updates=True` on their profile, eliminating fallback overrides to protect family inbox preferences.
+  - **Exclusion of Inactive/Unenrolled Students Without Content**: Ensured that the parent digest excludes linked students who are not participating in active programs and have no upcoming shifts, attendance, or action items, preventing empty student cards from cluttering family emails.
+  - **Date-Formatted Subject Lines & As-Of Date Control**: Updated email subject lines to include the target date with ordinal formatting and team branding (e.g. `Your Girls of Steel Portal Update for November 1st`, `Your Girls of Steel Family Update for November 1st`, and `Your Girls of Steel Mentor Update for November 1st`) rather than individual names, and added `--date YYYY-MM-DD` option to `send_weekly_digest` for custom as-of date runs.
 
 ### Changed
 - **Smart Filtering & Paid-Off Program Suppression for Monthly Balance Notices (`send_monthly_balances`, `programs/services/balances_digest.py`)**: Enhanced monthly balance statement command (`send_monthly_balances`) to avoid sending reminders to parents with a $0 balance unless they had a recent transaction (such as a payment or fee) within the past month (configurable via `--days-back` and `--date`). Statements also automatically exclude older, fully-paid-off programs with no recent activity so notices focus solely on programs with outstanding balances or recent transactions.

@@ -1,9 +1,36 @@
 import logging
+import re
 from datetime import time, timedelta
 
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_rrule_until(rrule_str):
+    """Normalize any naive UNTIL parameter in an RFC-5545 RRULE to UTC format.
+
+    RFC-5545 and python-dateutil require UNTIL to be specified in UTC with a
+    trailing 'Z' when DTSTART is timezone-aware (as is standard in Django with USE_TZ=True).
+    Converts naive DATE format (UNTIL=YYYYMMDD) to end-of-day UTC (UNTIL=YYYYMMDDT235959Z)
+    and naive DATETIME format (UNTIL=YYYYMMDDTHHMMSS) to UTC (UNTIL=YYYYMMDDTHHMMSSZ).
+    """
+    if not rrule_str or "until=" not in rrule_str.lower():
+        return rrule_str
+
+    # Match UNTIL=YYYYMMDD without time or Z, and append T235959Z
+    rrule_str = re.sub(
+        r"(?i)\bUNTIL=(\d{8})(?!T)",
+        r"UNTIL=\1T235959Z",
+        rrule_str,
+    )
+    # Match UNTIL=YYYYMMDDTHHMMSS without trailing Z, and append Z
+    rrule_str = re.sub(
+        r"(?i)\bUNTIL=(\d{8}T\d{6})(?!Z)",
+        r"UNTIL=\1Z",
+        rrule_str,
+    )
+    return rrule_str
 
 
 def expand_events_for_range(feed, start_date, end_date):
@@ -53,7 +80,8 @@ def _expand_recurring(event, start_date, end_date):
     try:
         from dateutil.rrule import rrulestr
 
-        rrule = rrulestr(event.rrule_ical, dtstart=event.start_datetime)
+        rrule_str = normalize_rrule_until(event.rrule_ical)
+        rrule = rrulestr(rrule_str, dtstart=event.start_datetime)
         occurrence_iter = rrule.between(range_start, range_end, inc=True)
 
         for occurrence in occurrence_iter:
