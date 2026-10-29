@@ -881,9 +881,9 @@ class AuditSanitizationTests(TestCase):
 
     def test_log_event_sanitizes_sensitive_keys(self):
         old_pass = "old_secret_password"  # nosec B105
-        tok = "tok_abcdef"  # nosec B105
-        h = "pbkdf2_sha256$..."  # nosec B105
-        topsec = "topsecret"  # nosec B105
+        tok = "tok_abcdef"
+        h = "pbkdf2_sha256$..."
+        topsec = "topsecret"
         new_pass = "new_secret_password"  # nosec B105
         before_data = {
             "username": "old_user",

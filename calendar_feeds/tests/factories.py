@@ -10,14 +10,14 @@ from programs.models import Adult, Enrollment, Program, Student
 
 
 def make_lead_mentor_user(username="lead", password="password123"):  # nosec B106, B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+    user = User.objects.create_user(username=username, password=password)
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
     return user
 
 
 def make_mentor_user(username="mentor", password="password123"):  # nosec B106, B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+    user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
         user=user,
         legal_first_name="Mentor",
@@ -29,7 +29,7 @@ def make_mentor_user(username="mentor", password="password123"):  # nosec B106, 
 
 
 def make_parent_user(username="parent", password="password123"):  # nosec B106, B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+    user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
         user=user,
         legal_first_name="Parent",
@@ -40,7 +40,7 @@ def make_parent_user(username="parent", password="password123"):  # nosec B106, 
 
 
 def make_student_user(username="student", password="password123"):  # nosec B106, B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+    user = User.objects.create_user(username=username, password=password)
     student = Student.objects.create(
         user=user,
         legal_first_name="Test",
