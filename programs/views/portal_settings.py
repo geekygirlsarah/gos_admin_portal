@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -19,6 +19,7 @@ from organizations.utils import (
 from programs.constants import TEAM_TYPES
 from programs.forms import MentorAgreementForm
 from programs.models import (
+    BackgroundCheckType,
     Crew,
     MentorAgreement,
     Program,
@@ -107,6 +108,10 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         org = getattr(request, "organization", None) or get_default_organization()
         email_settings = get_organization_email_settings(org)
 
+        bg_types = BackgroundCheckType.objects.for_organization(org).order_by(
+            "display_order", "name"
+        )
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -124,6 +129,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "mentor_agreement_slugs": MentorAgreement.objects.values_list(
                 "slug", flat=True
             ).distinct(),
+            "background_check_types": bg_types,
             "organization": org,
             "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
@@ -767,3 +773,249 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             return redirect("/programs/settings/?tab=email")
 
         return redirect("/programs/settings/?tab=email")
+
+
+def _parse_cutoff_date(post_data, min_age):
+    """Parses cutoff month and day (or full date) from POST data if min_age is configured."""
+    if min_age is None:
+        return None
+    cutoff_month_raw = post_data.get("student_min_age_cutoff_month")
+    cutoff_day_raw = post_data.get("student_min_age_cutoff_day")
+    if cutoff_month_raw and cutoff_day_raw:
+        try:
+            m = max(1, min(12, int(cutoff_month_raw)))
+            d = max(1, min(31, int(cutoff_day_raw)))
+            return date(2000, m, d)
+        except (ValueError, TypeError):
+            return date(2000, 9, 1)
+    cutoff_date_raw = (post_data.get("student_min_age_cutoff_date") or "").strip()
+    if cutoff_date_raw:
+        try:
+            return datetime.strptime(cutoff_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            return date(2000, 9, 1)
+    return date(2000, 9, 1)
+
+
+class PortalBackgroundCheckTypeView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add / update / toggle / delete actions for BackgroundCheckTypes."""
+
+    def post(self, request):
+        action = request.POST.get("action")
+        org = getattr(request, "organization", None) or get_default_organization()
+
+        if action == "add_type":
+            name = request.POST.get("name", "").strip()
+            if not name:
+                messages.error(request, "Name is required.")
+                return redirect("/programs/settings/?tab=background_checks")
+
+            description = request.POST.get("description", "").strip()
+            try:
+                validity_years = int(request.POST.get("validity_years", 5))
+            except (ValueError, TypeError):
+                validity_years = 5
+
+            applies_to_students = request.POST.get("applies_to_students") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            applies_to_mentors = request.POST.get("applies_to_mentors") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            applies_to_lead_mentors = request.POST.get("applies_to_lead_mentors") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            applies_to_parents = request.POST.get("applies_to_parents") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            applies_to_alumni = request.POST.get("applies_to_alumni") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+
+            student_min_age_by_date_raw = (
+                request.POST.get("student_min_age_by_date")
+                or request.POST.get("student_min_age")
+                or ""
+            ).strip()
+            student_min_age_by_date = (
+                int(student_min_age_by_date_raw)
+                if student_min_age_by_date_raw.isdigit()
+                else None
+            )
+
+            student_min_age_cutoff_date = _parse_cutoff_date(
+                request.POST, student_min_age_by_date
+            )
+
+            student_min_age_during_program_raw = request.POST.get(
+                "student_min_age_during_program", ""
+            ).strip()
+            student_min_age_during_program = (
+                int(student_min_age_during_program_raw)
+                if student_min_age_during_program_raw.isdigit()
+                else None
+            )
+
+            try:
+                display_order = int(request.POST.get("display_order", 0))
+            except (ValueError, TypeError):
+                display_order = 0
+
+            is_active = request.POST.get("is_active", "on") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+
+            bct = BackgroundCheckType.objects.create(
+                organization=org,
+                name=name,
+                description=description,
+                validity_years=validity_years,
+                applies_to_students=applies_to_students,
+                applies_to_mentors=applies_to_mentors,
+                applies_to_lead_mentors=applies_to_lead_mentors,
+                applies_to_parents=applies_to_parents,
+                applies_to_alumni=applies_to_alumni,
+                student_min_age_by_date=student_min_age_by_date,
+                student_min_age_cutoff_date=student_min_age_cutoff_date,
+                student_min_age_during_program=student_min_age_during_program,
+                display_order=display_order,
+                is_active=is_active,
+            )
+            messages.success(request, f"Background check type '{bct.name}' created.")
+            return redirect("/programs/settings/?tab=background_checks")
+
+        elif action == "update_type":
+            type_id = request.POST.get("type_id")
+            bct = BackgroundCheckType.objects.filter(id=type_id).first()
+            if not bct:
+                messages.error(request, "Background check type not found.")
+                return redirect("/programs/settings/?tab=background_checks")
+
+            name = request.POST.get("name", "").strip()
+            if not name:
+                messages.error(request, "Name is required.")
+                return redirect("/programs/settings/?tab=background_checks")
+
+            bct.name = name
+            bct.description = request.POST.get("description", "").strip()
+            try:
+                bct.validity_years = int(request.POST.get("validity_years", 5))
+            except (ValueError, TypeError):
+                pass
+
+            bct.applies_to_students = request.POST.get("applies_to_students") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            bct.applies_to_mentors = request.POST.get("applies_to_mentors") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            bct.applies_to_lead_mentors = request.POST.get(
+                "applies_to_lead_mentors"
+            ) in ("on", "true", "1", True)
+            bct.applies_to_parents = request.POST.get("applies_to_parents") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+            bct.applies_to_alumni = request.POST.get("applies_to_alumni") in (
+                "on",
+                "true",
+                "1",
+                True,
+            )
+
+            student_min_age_by_date_raw = (
+                request.POST.get("student_min_age_by_date")
+                or request.POST.get("student_min_age")
+                or ""
+            ).strip()
+            bct.student_min_age_by_date = (
+                int(student_min_age_by_date_raw)
+                if student_min_age_by_date_raw.isdigit()
+                else None
+            )
+
+            bct.student_min_age_cutoff_date = _parse_cutoff_date(
+                request.POST, bct.student_min_age_by_date
+            )
+
+            student_min_age_during_program_raw = request.POST.get(
+                "student_min_age_during_program", ""
+            ).strip()
+            bct.student_min_age_during_program = (
+                int(student_min_age_during_program_raw)
+                if student_min_age_during_program_raw.isdigit()
+                else None
+            )
+
+            try:
+                bct.display_order = int(request.POST.get("display_order", 0))
+            except (ValueError, TypeError):
+                pass
+
+            if "is_active" in request.POST:
+                bct.is_active = request.POST.get("is_active") in (
+                    "on",
+                    "true",
+                    "1",
+                    True,
+                )
+
+            bct.save()
+            messages.success(request, f"Background check type '{bct.name}' updated.")
+            return redirect("/programs/settings/?tab=background_checks")
+
+        elif action == "toggle_active":
+            type_id = request.POST.get("type_id")
+            bct = BackgroundCheckType.objects.filter(id=type_id).first()
+            if bct:
+                bct.is_active = not bct.is_active
+                bct.save(update_fields=["is_active", "updated_at"])
+                state = "activated" if bct.is_active else "deactivated"
+                messages.success(request, f"Clearance type '{bct.name}' {state}.")
+            return redirect("/programs/settings/?tab=background_checks")
+
+        elif action == "delete_type":
+            type_id = request.POST.get("type_id")
+            bct = BackgroundCheckType.objects.filter(id=type_id).first()
+            if bct:
+                log_deletion(
+                    resource=bct,
+                    request=request,
+                    before={
+                        "name": bct.name,
+                        "validity_years": bct.validity_years,
+                        "organization_id": bct.organization_id,
+                    },
+                    notes="Background check type deleted from Portal Settings.",
+                )
+                bct.delete()
+                messages.success(request, "Background check type deleted.")
+            return redirect("/programs/settings/?tab=background_checks")
+
+        return redirect("/programs/settings/?tab=background_checks")

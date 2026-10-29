@@ -333,7 +333,7 @@ class StudentDetailView(
             .prefetch_related(
                 "adults",
                 "adultstudentrelationship_set",
-                "background_checks",
+                "background_checks__check_type",
                 "race_ethnicities",
                 Prefetch(
                     "signed_documents",

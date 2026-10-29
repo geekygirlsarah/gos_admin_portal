@@ -10,7 +10,12 @@ from audit.mixins import SensitiveDataViewMixin
 
 from ..constants import RELATIONSHIP_CHOICES
 from ..forms import AdultForm, ParentMergeForm
-from ..models import Adult, AdultStudentRelationship, Program
+from ..models import (
+    Adult,
+    AdultStudentRelationship,
+    BackgroundCheckType,
+    Program,
+)
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
@@ -71,7 +76,11 @@ class AdultsListView(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
                 )
             )
-            .prefetch_related("students", "email_delivery_events")
+            .prefetch_related(
+                "students",
+                "email_delivery_events",
+                "background_checks__check_type",
+            )
         )
         program_id = self.kwargs.get("program_id")
         if program_id:
@@ -195,7 +204,7 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
             )
             .prefetch_related(
                 "students__enrollment_set__program",
-                "background_checks",
+                "background_checks__check_type",
             )
         )
         program_id = self.kwargs.get("program_id")
@@ -212,12 +221,16 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         # Calling .filter() here would re-execute the whole list query and
         # its prefetches once per section.
         mentors = list(ctx.get("mentors") or ctx.get("object_list") or [])
+        org = getattr(self.request, "organization", None)
+        active_types = list(
+            BackgroundCheckType.objects.for_organization(org).filter(is_active=True)
+        )
         ctx["active_mentors"] = [m for m in mentors if m.mentor_active]
         ctx["inactive_mentors"] = [m for m in mentors if not m.mentor_active]
         ctx["active_mentors_count"] = len(ctx["active_mentors"])
         ctx["inactive_mentors_count"] = len(ctx["inactive_mentors"])
         ctx["bg_checks_needed_count"] = sum(
-            1 for m in mentors if m.needs_background_check()
+            1 for m in mentors if m.needs_background_check(active_types=active_types)
         )
         return ctx
 
@@ -278,7 +291,7 @@ class AdultDetailView(
             .prefetch_related(
                 "students",
                 "adultstudentrelationship_set",
-                "background_checks",
+                "background_checks__check_type",
                 "email_delivery_events",
             )
         )

@@ -634,47 +634,47 @@ class Student(models.Model):
             return min(years)
         return timezone.now().year
 
-    def requires_background_check(self) -> bool:
-        """Whether the student must hold PA background clearances.
+    def requires_background_check(self, active_types=None) -> bool:
+        """Whether the student must hold background clearances based on active check types."""
+        from .adults import get_active_background_check_types
 
-        Per the university's rule, a student needs clearances if they will be
-        17 years old on Sept 1 of the current academic year (the academic year
-        is considered to start on Sept 1). Returns False if no DOB is set.
-        """
-        dob = self.date_of_birth
-        if not dob:
-            return False
-        if isinstance(dob, str):
-            try:
-                dob = datetime.datetime.strptime(dob, "%Y-%m-%d").date()
-            except ValueError:
-                return False
-        today = timezone.localdate()
-        if (today.month, today.day) >= (9, 1):
-            academic_year = today.year
-        else:
-            academic_year = today.year - 1
-        # The oldest someone can be born and still be 17 on Sept 1 of the
-        # academic year is Sept 1, 17 years prior to that academic year.
-        oldest_dob = datetime.date(academic_year - 17, 9, 1)
-        return dob <= oldest_dob
+        if active_types is None:
+            active_types = [
+                t
+                for t in get_active_background_check_types(
+                    getattr(self, "organization", None)
+                )
+                if t.applies_to_students
+            ]
+        return any(t.applies_to_student(self) for t in active_types)
 
-    def needs_background_check(self) -> bool:
+    def needs_background_check(self, active_types=None) -> bool:
         """Whether the student requires clearances AND is missing at least one.
 
-        The requirement is always derived from date of birth; only the
+        The requirement is derived from active check types; only the
         clearance records themselves are stored state. Returns False if the
         student does not require clearances.
         """
-        from .adults import BackgroundCheckType
+        from .adults import get_active_background_check_types
 
-        if not self.requires_background_check():
+        if active_types is None:
+            active_types = [
+                t
+                for t in get_active_background_check_types(
+                    getattr(self, "organization", None)
+                )
+                if t.applies_to_students
+            ]
+        if not self.requires_background_check(active_types=active_types):
             return False
-        required_types = set(BackgroundCheckType.values)
-        valid_types = {
-            bc.check_type for bc in self.background_checks.all() if bc.is_valid
+        required_types = [t for t in active_types if t.applies_to_student(self)]
+        if not required_types:
+            return False
+        valid_type_ids = {
+            bc.check_type_id for bc in self.background_checks.all() if bc.is_valid
         }
-        return not required_types.issubset(valid_types)
+        required_type_ids = {t.id for t in required_types}
+        return not required_type_ids.issubset(valid_type_ids)
 
 
 class StudentDocument(models.Model):

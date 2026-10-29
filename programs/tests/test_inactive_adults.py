@@ -146,7 +146,10 @@ class InactiveAdultTest(TestCase):
         # Add clearances for active mentor
         from programs.models import BackgroundCheck, BackgroundCheckType
 
-        for check_type in BackgroundCheckType.values:
+        active_types = BackgroundCheckType.objects.filter(
+            is_active=True, applies_to_mentors=True
+        )
+        for check_type in active_types:
             BackgroundCheck.objects.create(
                 adult=self.active_mentor,
                 check_type=check_type,

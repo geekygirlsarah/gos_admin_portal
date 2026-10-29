@@ -150,27 +150,43 @@ def needs_bg(student):
 
 
 @register.filter
-def background_check_status(student):
-    """Return the status of all three PA clearance types for a student.
+def background_check_status(person):
+    """Return the status of active background clearance types for a student or adult.
 
     Each entry is a dict with ``check_type``, ``display`` (label),
-    ``on_file`` (whether a row exists), ``is_valid``, and ``expiration_date``.
+    ``on_file`` (whether a valid cleared row exists), ``is_valid``,
+    ``obtained_date``, ``expiration_date``, and ``required``.
     Types with no record on file are still listed so templates can display
     every required clearance.
     """
-    from programs.models import BackgroundCheckType
+    from programs.models import Student
+    from programs.models.adults import get_active_background_check_types
 
-    existing = {c.check_type: c for c in student.background_checks.all()}
+    if not person or not getattr(person, "pk", None):
+        return []
+
+    org = getattr(person, "organization", None)
+    active_types = get_active_background_check_types(org)
+    existing = {c.check_type_id: c for c in person.background_checks.all()}
+    is_student = isinstance(person, Student)
+
     statuses = []
-    for value in BackgroundCheckType.values:
-        check = existing.get(value)
+    for t in active_types:
+        check = existing.get(t.id)
+        is_req = (
+            t.applies_to_student(person) if is_student else t.applies_to_adult(person)
+        )
         statuses.append(
             {
-                "check_type": value,
-                "display": BackgroundCheckType(value).label,
-                "on_file": check is not None,
+                "check_type": t.name,
+                "type_id": t.id,
+                "display": t.name,
+                "name": t.name,
+                "on_file": check is not None and check.cleared,
                 "is_valid": bool(check.is_valid) if check else False,
+                "obtained_date": check.obtained_date if check else None,
                 "expiration_date": check.expiration_date if check else None,
+                "required": is_req,
             }
         )
     return statuses

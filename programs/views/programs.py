@@ -494,8 +494,20 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
         )
 
         if "background-checks" in program.feature_keys:
+            from programs.models import BackgroundCheckType
+
+            org = getattr(self.request, "organization", None) or getattr(
+                program, "organization", None
+            )
+            active_types = list(
+                BackgroundCheckType.objects.for_organization(org).filter(
+                    is_active=True, applies_to_students=True
+                )
+            )
             ctx["bg_checks_needed_count"] = sum(
-                1 for e in active_enrollments_list if e.student.needs_background_check()
+                1
+                for e in active_enrollments_list
+                if e.student.needs_background_check(active_types=active_types)
             )
         else:
             ctx["bg_checks_needed_count"] = 0

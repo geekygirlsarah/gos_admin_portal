@@ -160,7 +160,7 @@
                       {% if not a.login_enabled %}
                         <span class="badge bg-secondary ms-1">Login Disabled</span>
                       {% endif %}
-                      {% if a.is_mentor and a.needs_background_check %}
+                      {% if a.requires_background_check and a.needs_background_check %}
                         <span class="badge bg-danger ms-1" title="Missing or expired background checks">BG Check Needed</span>
                       {% endif %}
                       {% if a.has_email_delivery_issue %}

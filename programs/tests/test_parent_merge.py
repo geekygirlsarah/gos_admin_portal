@@ -515,6 +515,17 @@ class ParentMergeTest(TestCase):
         self.assertEqual(sponsored_student.andrew_id_sponsor, keep)
 
     def test_merge_transfers_and_merges_background_checks(self):
+        from programs.models import BackgroundCheckType
+
+        bct_sp, _ = BackgroundCheckType.objects.get_or_create(
+            name="PA State Police Criminal History (PATCH)",
+            defaults={"validity_years": 5},
+        )
+        bct_fbi, _ = BackgroundCheckType.objects.get_or_create(
+            name="FBI Fingerprint (Act 114)",
+            defaults={"validity_years": 5},
+        )
+
         keep = self._parent("Jane", "Doe")
         source = self._parent("Janet", "Doe")
 
@@ -522,13 +533,13 @@ class ParentMergeTest(TestCase):
         today = timezone.localdate()
         BackgroundCheck.objects.create(
             adult=source,
-            check_type="fbi",
+            check_type=bct_fbi,
             cleared=True,
             obtained_date=today,
         )
         BackgroundCheck.objects.create(
             adult=source,
-            check_type="state_police",
+            check_type=bct_sp,
             cleared=True,
             obtained_date=today,
         )
@@ -536,7 +547,7 @@ class ParentMergeTest(TestCase):
         # Keep already has an uncleared state_police check without obtained date
         BackgroundCheck.objects.create(
             adult=keep,
-            check_type="state_police",
+            check_type=bct_sp,
             cleared=False,
             obtained_date=None,
         )
@@ -547,11 +558,11 @@ class ParentMergeTest(TestCase):
         )
 
         self.assertEqual(BackgroundCheck.objects.filter(adult=keep).count(), 2)
-        sp_check = BackgroundCheck.objects.get(adult=keep, check_type="state_police")
+        sp_check = BackgroundCheck.objects.get(adult=keep, check_type=bct_sp)
         self.assertTrue(sp_check.cleared)
         self.assertEqual(sp_check.obtained_date, today)
 
-        fbi_check = BackgroundCheck.objects.get(adult=keep, check_type="fbi")
+        fbi_check = BackgroundCheck.objects.get(adult=keep, check_type=bct_fbi)
         self.assertTrue(fbi_check.cleared)
         self.assertEqual(fbi_check.obtained_date, today)
 
