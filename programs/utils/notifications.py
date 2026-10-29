@@ -139,6 +139,7 @@ def send_templated_notification(
     from_email=None,
     reply_to=None,
     organization=None,
+    attachments=None,
 ):
     """
     Renders an HTML template and sends it as an email with a plain-text fallback
@@ -206,4 +207,10 @@ def send_templated_notification(
             reply_to=reply_to_list,
         )
         msg.attach_alternative(html_message, "text/html")
+        if attachments:
+            for attachment in attachments:
+                if isinstance(attachment, tuple):
+                    msg.attach(*attachment)
+                else:
+                    msg.attach(attachment)
         msg.send()

@@ -409,9 +409,12 @@ class OutreachEventCreateView(
             try:
                 student = user.student_profile
                 first_shift = self.object.first_shift
-                OutreachSignup.objects.create(
+                signup = OutreachSignup.objects.create(
                     student=student, shift=first_shift, role=OutreachSignup.CHAMPION
                 )
+                from outreach.services import notify_outreach_signup
+
+                notify_outreach_signup(signup)
                 messages.success(
                     self.request,
                     "Event created and you have been signed up as a champion for the first shift!",
@@ -492,6 +495,9 @@ class OutreachShiftSignupView(LoginRequiredMixin, OutreachProgramMixin, View):
         try:
             signup.clean()
             signup.save()
+            from outreach.services import notify_outreach_signup
+
+            notify_outreach_signup(signup)
             messages.success(request, f"Successfully signed up as a {role}!")
         except Exception as e:
             messages.error(request, str(e))
@@ -563,6 +569,9 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
             adult=adult, shift=shift
         )
         if created:
+            from outreach.services import notify_mentor_outreach_signup
+
+            notify_mentor_outreach_signup(signup)
             messages.success(
                 request,
                 f"Thanks! You are signed up to support {shift.event.name} on {localize(shift.date)}.",

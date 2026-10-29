@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-28
 
+### Fixed
+- **Dynamic Organization Portal & Outreach Links in Emails (`outreach/services.py`, `templates/outreach/emails/`)**: Replaced hardcoded portal URLs with dynamic absolute links derived from the tenant's configured organization domain / portal settings (`portal_url`), falling back to the active site domain and branding name for multi-organization compatibility.
+
+### Added
+- **Outreach Sign-up Confirmation Emails with iCalendar (.ics) Attachment (`outreach/services.py`, `templates/outreach/emails/`)**: When students sign up as Champions or Helpers (directly or when added by mentors/staff), or when mentors volunteer to support an outreach shift, they automatically receive a confirmation email with event details, shift times, venue location, attendee roster (champions, helpers, supporting mentors), a direct link to the Girls of Steel Portal, child-friendly calendar invite messaging, and an attached standard `.ics` calendar file.
+- **Automated Daily Outreach Reminder Command (`send_outreach_reminders`)**: Added a management command (`python manage.py send_outreach_reminders`) that finds outreach events happening the next day (or on a configured `--days-ahead` / `--date`) and sends automated reminder emails with complete event details, team attendee rosters, portal login links, and attached calendar invites to all signed-up students and supporting mentors.
+- **Email Attachments Support in `send_templated_notification` (`programs/utils/notifications.py`)**: Enhanced `send_templated_notification` with an optional `attachments` parameter for seamless file attachment dispatch across all notification services.
+
 ### Utilities & DRY
 - **Shared Spreadsheet Generation (`programs/utils/spreadsheets.py`)**: Extracted unified CSV and Excel (.xlsx) export utilities (`export_csv_response` and `export_xlsx_response`) with built-in styling, auto-column-width fitting, and currency formatting. Refactored roster exports (`ProgramStudentExportView`), attendance exports (`AllAttendanceView`), order request exports (`_OrderExportMixin`), and audit log exports (`AuditLogAdmin`) across apps to eliminate duplicate file construction boilerplate.
 - **Standardized File Upload Paths (`programs/utils/files.py`)**: Introduced `build_upload_path` and `scoped_upload_path_builder` utilities for clean, standardized path generation across all model `FileField` and `ImageField` definitions (photos, signed waivers, tax forms, program documents, mentor agreements, guest permissions, and digital signout signatures).
