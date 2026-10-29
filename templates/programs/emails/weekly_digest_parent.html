@@ -6,13 +6,102 @@
 
 {% block content %}
 <p>Hi {{ adult.preferred_first_name|default:adult.legal_first_name }},</p>
-<p>Here is your weekly summary of upcoming shifts, open events, and attendance hours for your student(s) for the week ahead.</p>
+<p>Here is your weekly summary of upcoming shifts, attendance progress, open opportunities, and team events for your student(s) for the week ahead.</p>
 
 {% for s_data in students_data %}
 <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 16px; margin-top: 20px; margin-bottom: 24px;">
     <h2 style="font-size: 20px; margin-top: 0; margin-bottom: 12px; color: #0d6efd; border-bottom: 2px solid #dee2e6; padding-bottom: 6px;">
         {{ s_data.student.display_name }}
     </h2>
+
+    {% if s_data.action_items.has_action_items %}
+    <div style="background-color: #fff3cd; border: 1px solid #ffe69c; border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+        <h4 style="font-size: 15px; margin-top: 0; margin-bottom: 6px; color: #664d03;">
+            Action Items & Reminders
+        </h4>
+        <ul style="margin: 4px 0; padding-left: 20px; color: #664d03; font-size: 13px;">
+            {% if s_data.action_items.total_balance_due > 0 %}
+            <li>
+                <strong>Program Balance Due:</strong> ${{ s_data.action_items.total_balance_due|floatformat:2 }}
+                {% if s_data.action_items.program_balances %}
+                <span>({% for pb in s_data.action_items.program_balances %}{{ pb.program.name }}: ${{ pb.balance|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %})</span>
+                {% endif %}
+            </li>
+            {% endif %}
+            {% if s_data.action_items.missing_documents %}
+            <li>
+                <strong>Missing Documents:</strong>
+                {% for doc in s_data.action_items.missing_documents %}{{ doc.name }} ({{ doc.program.name }}){% if not forloop.last %}, {% endif %}{% endfor %}
+            </li>
+            {% endif %}
+            {% if s_data.action_items.needs_background_check %}
+            <li>
+                <strong>Clearances Needed:</strong> Student has reached age 17 and requires PA background clearances for team participation.
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if s_data.attendance_stats.total_hours or s_data.attendance_stats.recent_hours %}
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 16px; margin-bottom: 4px; color: #495057;">
+            Attendance Snapshot
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tbody>
+                <tr>
+                    <td style="padding: 4px 0; color: #495057;"><strong>Total Logged Hours:</strong></td>
+                    <td style="padding: 4px 0; color: #212529; text-align: right;"><strong>{{ s_data.attendance_stats.total_hours }} hrs</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #495057;"><strong>Average Hours / Week:</strong></td>
+                    <td style="padding: 4px 0; color: #212529; text-align: right;">{{ s_data.attendance_stats.avg_hours_per_week }} hrs/wk</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #495057;"><strong>Past {{ days_ahead }} Days:</strong></td>
+                    <td style="padding: 4px 0; color: #212529; text-align: right;">{{ s_data.attendance_stats.recent_days }} day{{ s_data.attendance_stats.recent_days|pluralize }} logged ({{ s_data.attendance_stats.recent_hours }} hrs)</td>
+                </tr>
+            </tbody>
+        </table>
+        {% if s_data.attendance_stats.by_program|length > 1 %}
+        <div style="margin-top: 6px; font-size: 12px; color: #6c757d;">
+            <strong>By Program:</strong>
+            <ul style="margin: 2px 0; padding-left: 20px;">
+                {% for bp in s_data.attendance_stats.by_program %}
+                <li>{{ bp.program.name }}: {{ bp.total_hours }} hrs (avg {{ bp.avg_hours_per_week }} hrs/wk, {{ bp.recent_days }} day{{ bp.recent_days|pluralize }} in past {{ days_ahead }} days)</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if s_data.outreach_summary.total_hours or s_data.outreach_summary.completed_events %}
+    <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 16px; margin-bottom: 4px; color: #198754;">
+            Outreach Progress
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tbody>
+                <tr>
+                    <td style="padding: 4px 0; color: #495057;"><strong>Completed Outreach Hours:</strong></td>
+                    <td style="padding: 4px 0; color: #212529; text-align: right;"><strong>{{ s_data.outreach_summary.total_hours }} hrs</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; color: #495057;"><strong>Completed Events:</strong></td>
+                    <td style="padding: 4px 0; color: #212529; text-align: right;">{{ s_data.outreach_summary.completed_events }} event{{ s_data.outreach_summary.completed_events|pluralize }}</td>
+                </tr>
+                {% if s_data.outreach_summary.championed_count %}
+                <tr>
+                    <td style="padding: 4px 0; color: #495057;"><strong>Events Championed:</strong></td>
+                    <td style="padding: 4px 0; color: #212529; text-align: right;">{{ s_data.outreach_summary.championed_count }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 
     {% if s_data.confirmed_shifts %}
     <div style="margin-bottom: 16px;">
@@ -59,15 +148,6 @@
     </div>
     {% endif %}
 
-    {% if s_data.attendance_stats.total_hours %}
-    <div style="margin-bottom: 16px;">
-        <h3 style="font-size: 16px; margin-bottom: 4px; color: #495057;">
-            Attendance Snapshot
-        </h3>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Total Logged Hours:</strong> {{ s_data.attendance_stats.total_hours }} hrs</p>
-    </div>
-    {% endif %}
-
     {% if s_data.travel_highlights %}
     <div style="margin-bottom: 8px;">
         <h3 style="font-size: 16px; margin-bottom: 4px; color: #6f42c1;">
@@ -86,7 +166,48 @@
 </div>
 {% endfor %}
 
+{% if chaperone_signups %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #6f42c1; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Your Chaperone Commitments
+    </h3>
+    <ul style="margin: 4px 0; padding-left: 20px; font-size: 14px; color: #495057;">
+        {% for cs in chaperone_signups %}
+        <li>
+            <strong>{{ cs.event_name }}</strong> ({{ cs.start_date|date:"M j" }}{% if cs.end_date != cs.start_date %} &ndash; {{ cs.end_date|date:"M j" }}{% endif %})
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if calendar_events %}
+<div style="margin-top: 20px; margin-bottom: 24px;">
+    <h3 style="font-size: 18px; margin-bottom: 8px; color: #0d6efd; border-bottom: 1px solid #dee2e6; padding-bottom: 4px;">
+        Upcoming Team & Calendar Events
+    </h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <tbody>
+            {% for ce in calendar_events %}
+            <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 8px 0; vertical-align: top;">
+                    <strong>{{ ce.title }}</strong>{% if ce.feed_name %} <span style="color: #6c757d; font-size: 12px;">({{ ce.feed_name }})</span>{% endif %}<br>
+                    <span style="color: #495057; font-size: 14px;">
+                        {{ ce.date|date:"l, F j" }}
+                        {% if not ce.all_day and ce.start_time %} &bull; {{ ce.start_time|time:"g:i A" }}{% if ce.end_time %} &ndash; {{ ce.end_time|time:"g:i A" }}{% endif %}{% else %} &bull; All Day{% endif %}
+                    </span>
+                    {% if ce.location %}
+                    <br><span style="color: #6c757d; font-size: 13px;">Location: {{ ce.location }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <div style="margin-top: 24px;">
-    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to review student schedules or manage permissions.</p>
+    <p>Please log in to the <a href="https://portal.girlsofsteel.org/">Girls of Steel Portal</a> to review student schedules or manage permissions and balances.</p>
 </div>
 {% endblock %}

@@ -65,7 +65,7 @@ Girls of Steel (GoS) Admin Portal is a Django 6.1 web application for managing:
 | Build frontend bundle | `npm ci && npm run build` (esbuild; emits `programs/static_built/email-editor.js` — run before `collectstatic`) |
 | Run frontend JS tests | `npm run test:js` (vitest + jsdom, see `frontend/__tests__/`) |
 | Run all tests | `python manage.py test` |
-| Run weekly digest | `python manage.py send_weekly_digest --days-ahead 7` (`--role student/parent/mentor`, `--dry-run`) |
+| Run weekly digest | `python manage.py send_weekly_digest --days-ahead 7` (`--role student/parent/mentor`, `--date YYYY-MM-DD`, `--dry-run`) |
 | Run outreach reminders | `python manage.py send_outreach_reminders` (`--days-ahead 1`, `--date YYYY-MM-DD`, `--dry-run`) |
 | Run monthly balances | `python manage.py send_monthly_balances` (`--all-balances`, `--days-back 30`, `--date YYYY-MM-DD`, `--student-id <pk>`, `--dry-run`) |
 | Run audit digest | `python manage.py audit_digest --days 7` |
