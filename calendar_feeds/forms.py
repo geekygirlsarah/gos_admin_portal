@@ -250,7 +250,7 @@ class CalendarEventForm(forms.ModelForm):
         if "INTERVAL" in parts:
             try:
                 self.initial["repeat_interval"] = int(parts["INTERVAL"])
-            except ValueError:  # nosec B110
+            except ValueError:
                 pass
 
         if "UNTIL" in parts:
@@ -262,13 +262,13 @@ class CalendarEventForm(forms.ModelForm):
                     m = int(until_str[4:6])
                     d = int(until_str[6:8])
                     self.initial["repeat_until"] = date(y, m, d)
-            except (ValueError, TypeError):  # nosec B110
+            except (ValueError, TypeError):
                 pass
         elif "COUNT" in parts:
             self.initial["repeat_end_type"] = "count"
             try:
                 self.initial["repeat_count"] = int(parts["COUNT"])
-            except ValueError:  # nosec B110
+            except ValueError:
                 pass
         else:
             self.initial["repeat_end_type"] = "never"

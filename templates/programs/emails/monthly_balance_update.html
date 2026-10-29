@@ -1,12 +1,12 @@
 {% extends "programs/emails/base_notification.html" %}
 
-{% block title %}Monthly Balance Statement for {{ student.display_name }}{% endblock %}
+{% block title %}Monthly Balance Statement for {{ student.display_name }} - {{ statement_date|date:"F Y" }}{% endblock %}
 
 {% block header %}Monthly Balance Statement{% endblock %}
 
 {% block content %}
 <p>Dear {{ adult.preferred_first_name|default:adult.legal_first_name|default:"Parent/Guardian" }},</p>
-<p>This is your monthly statement of program fees and payments for <strong>{{ student.display_name }}</strong> as of {% now "F j, Y" %}.</p>
+<p>This is your monthly statement of program fees and payments for <strong>{{ student.display_name }}</strong> as of {{ statement_date|date:"F j, Y" }}.</p>
 
 <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin: 20px 0;">
     <div style="font-size: 16px; margin-bottom: 4px;"><strong>Total Balance Due:</strong></div>

@@ -1,34 +1,65 @@
 {% extends 'base.html' %}
-{% block title %}Delete District{% endblock %}
+{% block title %}Delete District: {{ district.name }}{% endblock %}
 {% block nav_schools_active %} active{% endblock %}
+
 {% block content %}
-  <div class="row mb-3">
-    <div class="col">
-      <a class="link-secondary" href="{% url 'school_district_list' %}">← Back to Districts</a>
+  <!-- Page Header & Back Navigation -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Delete District</h1>
+      <div class="text-muted small">Confirm deletion of school district</div>
+    </div>
+    <div>
+      <a class="btn btn-outline-secondary" href="{% url 'school_district_list' %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Districts
+      </a>
     </div>
   </div>
-  <div class="row">
-    <div class="col-lg-6">
-      <h1 class="h3 mb-3">Delete District</h1>
-      <p>Are you sure you want to delete the district <strong>{{ district.name }}</strong>?</p>
-      {% if schools %}
-        <div class="alert alert-warning">
-          The following {{ schools|length }} school{{ schools|length|pluralize }} will be
-          unassigned from this district (they will not be deleted):
-          <ul class="mb-0 mt-2">
-            {% for s in schools %}
-              <li>{{ s.name }}</li>
-            {% endfor %}
-          </ul>
+
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0 border-top border-3 border-danger rounded-3">
+        <div class="card-header bg-white border-bottom py-3 px-4">
+          <div class="fw-bold text-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Confirm Deletion
+          </div>
         </div>
-      {% endif %}
-      <form method="post">
-        {% csrf_token %}
-        <div class="d-flex gap-2">
-          <button class="btn btn-danger" type="submit">Delete District</button>
-          <a class="btn btn-secondary" href="{% url 'school_district_list' %}">Cancel</a>
+        <div class="card-body p-4">
+          <p class="mb-3 text-dark">
+            Are you sure you want to delete the school district <strong class="text-danger">{{ district.name }}</strong>?
+          </p>
+
+          {% if schools %}
+            <div class="alert alert-warning border shadow-sm rounded-3 mb-4">
+              <div class="fw-semibold mb-2">
+                <i class="bi bi-info-circle-fill me-1"></i>Affected Schools ({{ schools|length }})
+              </div>
+              <div class="text-muted small mb-2">
+                The following school{{ schools|length|pluralize }} will be unassigned from this district (they will remain in the system and will not be deleted):
+              </div>
+              <ul class="list-group list-group-flush rounded-2 border">
+                {% for s in schools %}
+                  <li class="list-group-item list-group-item-light py-2 px-3 small">
+                    <i class="bi bi-building text-primary me-2"></i>{{ s.name }}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2 pt-2 border-top">
+              <button class="btn btn-danger" type="submit">
+                <i class="bi bi-trash me-1"></i>Delete District
+              </button>
+              <a class="btn btn-outline-secondary" href="{% url 'school_district_list' %}">
+                Cancel
+              </a>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 {% endblock %}

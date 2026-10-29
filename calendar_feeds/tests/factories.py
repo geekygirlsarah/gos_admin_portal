@@ -9,15 +9,15 @@ from calendar_feeds.models import CalendarEvent, CalendarFeed, CalendarFeedACL
 from programs.models import Adult, Enrollment, Program, Student
 
 
-def make_lead_mentor_user(username="lead", password="password123"):  # nosec B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+def make_lead_mentor_user(username="lead", password="password123"):  # nosec B106, B107
+    user = User.objects.create_user(username=username, password=password)
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
     return user
 
 
-def make_mentor_user(username="mentor", password="password123"):  # nosec B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+def make_mentor_user(username="mentor", password="password123"):  # nosec B106, B107
+    user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
         user=user,
         legal_first_name="Mentor",
@@ -28,8 +28,8 @@ def make_mentor_user(username="mentor", password="password123"):  # nosec B107
     return user
 
 
-def make_parent_user(username="parent", password="password123"):  # nosec B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+def make_parent_user(username="parent", password="password123"):  # nosec B106, B107
+    user = User.objects.create_user(username=username, password=password)
     Adult.objects.create(
         user=user,
         legal_first_name="Parent",
@@ -39,8 +39,8 @@ def make_parent_user(username="parent", password="password123"):  # nosec B107
     return user
 
 
-def make_student_user(username="student", password="password123"):  # nosec B107
-    user = User.objects.create_user(username=username, password=password)  # nosec B106
+def make_student_user(username="student", password="password123"):  # nosec B106, B107
+    user = User.objects.create_user(username=username, password=password)
     student = Student.objects.create(
         user=user,
         legal_first_name="Test",
@@ -111,8 +111,9 @@ def make_event(
 ):
     if start_datetime is None:
         start_datetime = timezone.make_aware(
-            timezone.datetime.now() + timedelta(days=3),
-            timezone.UTC,
+            timezone.datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+            + timedelta(days=3),
+            timezone.get_current_timezone(),
         )
     if end_datetime is None:
         end_datetime = start_datetime + timedelta(hours=1)

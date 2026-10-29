@@ -871,3 +871,85 @@ class ConfirmDialogCoverageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "js-confirm")
         self.assertContains(response, "delete-team-")
+
+
+class AuditSanitizationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="audit_sec_user", email="sec@example.com"
+        )
+
+    def test_log_event_sanitizes_sensitive_keys(self):
+        old_pass = "old_secret_password"  # nosec B105
+        tok = "tok_abcdef"
+        h = "pbkdf2_sha256$..."
+        topsec = "topsecret"
+        new_pass = "new_secret_password"  # nosec B105
+        before_data = {
+            "username": "old_user",
+            "password": old_pass,
+            "api_key": "key_12345678",
+            "token": tok,
+            "allergies": "Severe peanut allergy",
+            "dietary_restrictions": "Gluten free",
+            "medical_notes": "Carries EpiPen",
+            "nested": {
+                "password_hash": h,
+                "secret_key": topsec,
+                "normal_field": "keep_me",
+            },
+            "list_data": [
+                {"otp": "123456", "item": "safe"},
+                "just_a_string",
+            ],
+        }
+        after_data = {
+            "username": "new_user",
+            "password": new_pass,
+            "safe_field": 42,
+        }
+
+        log_event(
+            event=AuditEvent.CONTACT_INFO_UPDATED,
+            resource=self.user,
+            before=before_data,
+            after=after_data,
+        )
+
+        log = AuditLog.objects.filter(
+            event=AuditEvent.CONTACT_INFO_UPDATED, resource_id=str(self.user.pk)
+        ).first()
+        self.assertIsNotNone(log)
+
+        # Sensitive keys should be redacted
+        self.assertEqual(log.before["password"], "[REDACTED]")
+        self.assertEqual(log.before["api_key"], "[REDACTED]")
+        self.assertEqual(log.before["token"], "[REDACTED]")
+        self.assertEqual(log.before["allergies"], "[REDACTED]")
+        self.assertEqual(log.before["dietary_restrictions"], "[REDACTED]")
+        self.assertEqual(log.before["medical_notes"], "[REDACTED]")
+        self.assertEqual(log.before["nested"]["password_hash"], "[REDACTED]")
+        self.assertEqual(log.before["nested"]["secret_key"], "[REDACTED]")
+        self.assertEqual(log.before["list_data"][0]["otp"], "[REDACTED]")
+        self.assertEqual(log.after["password"], "[REDACTED]")
+
+        # Safe keys should remain untouched
+        self.assertEqual(log.before["username"], "old_user")
+        self.assertEqual(log.before["nested"]["normal_field"], "keep_me")
+        self.assertEqual(log.before["list_data"][0]["item"], "safe")
+        self.assertEqual(log.before["list_data"][1], "just_a_string")
+        self.assertEqual(log.after["username"], "new_user")
+        self.assertEqual(log.after["safe_field"], 42)
+
+    def test_log_deletion_sanitizes_sensitive_keys(self):
+        del_pass = "secret"  # nosec B105
+        log_deletion(
+            resource=self.user,
+            before={"password": del_pass, "user": "audit_sec_user"},
+        )
+        log = AuditLog.objects.filter(
+            event=AuditEvent.RECORD_DELETED, resource_id=str(self.user.pk)
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.before["password"], "[REDACTED]")
+        self.assertEqual(log.before["user"], "audit_sec_user")

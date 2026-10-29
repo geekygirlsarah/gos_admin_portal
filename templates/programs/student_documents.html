@@ -100,7 +100,7 @@
                 <td class="text-center">
                   {% with submission=row.submissions|get_item:doc.id %}
                     {% if submission and submission.file %}
-                      <a href="{{ submission.file.url }}" target="_blank" class="text-decoration-none" title="Uploaded {{ submission.uploaded_at|date:'Y-m-d' }}">
+                      <a href="{% url 'student_document_download' submission.id %}" target="_blank" class="text-decoration-none" title="Uploaded {{ submission.uploaded_at|date:'Y-m-d' }}">
                         <i class="bi bi-file-earmark-check-fill text-success fs-4"></i>
                       </a>
                     {% else %}

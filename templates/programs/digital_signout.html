@@ -105,7 +105,7 @@
                 <td>{{ s.signed_at|date:"M j, Y g:i A" }}</td>
                 <td>{{ s.student.display_name|default:"Unknown" }}</td>
                 <td>{{ s.signed_by_name|default:"" }}</td>
-                <td>{% if s.signature %}<a href="{{ s.signature.url }}" target="_blank" rel="noopener"><img src="{{ s.signature.url }}" alt="Signature of {{ s.signed_by_name|default:'parent' }}" style="max-height: 48px; max-width: 160px; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></a>{% endif %}</td>
+                <td>{% if s.signature %}<a href="{% url 'program_digital_signout_signature' program.id s.pk %}" target="_blank" rel="noopener"><img src="{% url 'program_digital_signout_signature' program.id s.pk %}" alt="Signature of {{ s.signed_by_name|default:'parent' }}" style="max-height: 48px; max-width: 160px; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></a>{% endif %}</td>
               </tr>
               {% endfor %}
             </tbody>

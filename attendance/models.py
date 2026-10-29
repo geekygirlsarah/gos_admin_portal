@@ -1,13 +1,20 @@
 from django.db import models
 from django.utils import timezone
 
+from programs.models import EncryptedFileField
+
 
 def _signout_upload_to(instance, filename):
     """Signature images land at MEDIA_ROOT/digital_signouts/<config_id>/<filename>."""
-    config_id = (
-        instance.config_id if getattr(instance, "config_id", None) else "unknown"
+    from programs.utils.files import build_upload_path
+
+    return build_upload_path(
+        "digital_signouts",
+        instance=instance,
+        filename=filename,
+        id_attr="config_id",
+        default_id="unknown",
     )
-    return f"digital_signouts/{config_id}/{filename}"
 
 
 class KioskConfig(models.Model):
@@ -382,7 +389,7 @@ class DigitalSignout(models.Model):
         blank=True,
         help_text="Name the parent/guardian entered.",
     )
-    signature = models.FileField(
+    signature = EncryptedFileField(
         upload_to=_signout_upload_to,
         blank=True,
         help_text="PNG image of the drawn signature.",

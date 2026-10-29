@@ -197,25 +197,34 @@ class OutreachManageSignupsForm(forms.Form):
         champions = self.cleaned_data["champions"]
         helpers = self.cleaned_data["helpers"]
 
+        # Track existing student signups and their roles
+        existing_signups = {s.student_id: s.role for s in self.shift.signups.all()}
+
         # Remove old signups not in the new lists
         all_new_student_ids = [s.id for s in champions] + [s.id for s in helpers]
         self.shift.signups.exclude(student_id__in=all_new_student_ids).delete()
 
+        from outreach.services import notify_outreach_signup
+
         # Update or create champions
         for student in champions:
-            OutreachSignup.objects.update_or_create(
+            signup, created = OutreachSignup.objects.update_or_create(
                 shift=self.shift,
                 student=student,
                 defaults={"role": OutreachSignup.CHAMPION},
             )
+            if created or existing_signups.get(student.id) != OutreachSignup.CHAMPION:
+                notify_outreach_signup(signup)
 
         # Update or create helpers
         for student in helpers:
-            OutreachSignup.objects.update_or_create(
+            signup, created = OutreachSignup.objects.update_or_create(
                 shift=self.shift,
                 student=student,
                 defaults={"role": OutreachSignup.HELPER},
             )
+            if created or existing_signups.get(student.id) != OutreachSignup.HELPER:
+                notify_outreach_signup(signup)
 
 
 class OutreachManageMentorSignupsForm(forms.Form):
@@ -262,7 +271,17 @@ class OutreachManageMentorSignupsForm(forms.Form):
 
     def save(self):
         mentors = self.cleaned_data["mentors"]
+        existing_adult_ids = set(
+            self.shift.mentor_signups.values_list("adult_id", flat=True)
+        )
         all_new_adult_ids = [adult.id for adult in mentors]
         self.shift.mentor_signups.exclude(adult_id__in=all_new_adult_ids).delete()
+
+        from outreach.services import notify_mentor_outreach_signup
+
         for adult in mentors:
-            OutreachMentorSignup.objects.get_or_create(shift=self.shift, adult=adult)
+            signup, created = OutreachMentorSignup.objects.get_or_create(
+                shift=self.shift, adult=adult
+            )
+            if created or adult.id not in existing_adult_ids:
+                notify_mentor_outreach_signup(signup)

@@ -1,168 +1,251 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Imports{% endblock %}
+{% block title %}Data Imports{% endblock %}
+
 {% block content %}
-  <div class="row mb-3">
-    <div class="col"><h1 class="h3">Data Imports</h1></div>
+  <!-- Page Header -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Data Imports</h1>
+      <div class="text-muted small">Bulk import and synchronize records across students, parents, mentors, schools, and attendance</div>
+    </div>
   </div>
 
-  <p class="text-muted">Upload CSV or XLSX files to import records. Use the sample templates to format your data.</p>
-
-  <div class="row g-4">
-    {% if perms.programs.add_student %}
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title">Students</h5>
-          <p class="card-text">Import students with optional school and graduation year.</p>
-          <form id="student-import-form" action="{% url 'student_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
-            {% csrf_token %}
-            <div class="d-flex gap-2">
-              <input type="file" name="file" id="student-import-file" class="form-control" accept=".csv,.xlsx" />
-              <button type="submit" class="btn btn-primary">Import</button>
-            </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" value="1" id="student-overwrite" name="overwrite" />
-              <label class="form-check-label" for="student-overwrite">Overwrite existing data</label>
-            </div>
-          </form>
-          <div class="mt-2"><a href="{% url 'students_sample_csv' %}">Download CSV Template</a></div>
-        </div>
+  <!-- Guidance Info Banner -->
+  <div class="alert alert-light border shadow-sm rounded-3 d-flex gap-3 align-items-start mb-4 p-3">
+    <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;">
+      <i class="bi bi-info-circle-fill fs-5"></i>
+    </div>
+    <div>
+      <div class="fw-semibold text-dark mb-1">Import Guidelines &amp; Best Practices</div>
+      <div class="text-muted small">
+        Upload formatted CSV or Excel (.xlsx) files to create or update records in bulk. Download the sample template for each import type to ensure your column headers match system requirements. Check "Overwrite existing data" when updating existing profiles.
       </div>
     </div>
+  </div>
+
+  <!-- Import Cards Grid -->
+  <div class="row g-4 mb-4">
+    {% if perms.programs.add_student %}
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm border-0 border-top border-3 border-primary rounded-3 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-people-fill text-primary me-2"></i>Students
+              </h2>
+              <span class="badge bg-light text-secondary border">CSV &middot; XLSX</span>
+            </div>
+            <p class="text-muted small mb-3">Import student profiles with optional school assignment, graduation year, contact, and demographic details.</p>
+            <form id="student-import-form" action="{% url 'student_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+              {% csrf_token %}
+              <div class="input-group mb-2">
+                <input type="file" name="file" id="student-import-file" class="form-control" accept=".csv,.xlsx" required />
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="student-overwrite" name="overwrite" />
+                <label class="form-check-label text-muted small" for="student-overwrite">Overwrite existing student data</label>
+              </div>
+            </form>
+            <div class="pt-2 border-top">
+              <a class="btn btn-sm btn-outline-secondary w-100" href="{% url 'students_sample_csv' %}">
+                <i class="bi bi-download me-1"></i>Download CSV Template
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     {% endif %}
 
     {% if perms.programs.add_adult %}
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title">Parents</h5>
-          <p class="card-text">Import parent/guardian contacts.</p>
-          <form id="parent-import-form" action="{% url 'parent_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
-            {% csrf_token %}
-            <div class="d-flex gap-2">
-              <input type="file" name="file" id="parent-import-file" class="form-control" accept=".csv,.xlsx" />
-              <button type="submit" class="btn btn-primary">Import</button>
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm border-0 border-top border-3 border-info rounded-3 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-person-heart text-info me-2"></i>Parents / Guardians
+              </h2>
+              <span class="badge bg-light text-secondary border">CSV &middot; XLSX</span>
             </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" value="1" id="parent-overwrite" name="overwrite" />
-              <label class="form-check-label" for="parent-overwrite">Overwrite existing data</label>
+            <p class="text-muted small mb-3">Import parent and guardian contact records with phone numbers, emails, addresses, and emergency notes.</p>
+            <form id="parent-import-form" action="{% url 'parent_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+              {% csrf_token %}
+              <div class="input-group mb-2">
+                <input type="file" name="file" id="parent-import-file" class="form-control" accept=".csv,.xlsx" required />
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="parent-overwrite" name="overwrite" />
+                <label class="form-check-label text-muted small" for="parent-overwrite">Overwrite existing parent data</label>
+              </div>
+            </form>
+            <div class="pt-2 border-top">
+              <a class="btn btn-sm btn-outline-secondary w-100" href="{% url 'parents_sample_csv' %}">
+                <i class="bi bi-download me-1"></i>Download CSV Template
+              </a>
             </div>
-          </form>
-          <div class="mt-2"><a href="{% url 'parents_sample_csv' %}">Download CSV Template</a></div>
+          </div>
         </div>
       </div>
-    </div>
     {% endif %}
 
     {% if perms.programs.change_student %}
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title">Student-Parent Relationships</h5>
-          <p class="card-text">Link existing students to parent/guardian contacts and set relationship types. Safe to re-run; idempotent.</p>
-          <form id="relationships-import-form" action="{% url 'relationship_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
-            {% csrf_token %}
-            <div class="d-flex gap-2">
-              <input type="file" name="file" id="relationships-import-file" class="form-control" accept=".csv,.xlsx" />
-              <button type="submit" class="btn btn-primary">Import</button>
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm border-0 border-top border-3 border-secondary rounded-3 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-link-45deg text-secondary me-2"></i>Student-Parent Relationships
+              </h2>
+              <span class="badge bg-light text-secondary border">CSV &middot; XLSX</span>
             </div>
-            <div class="d-flex gap-3 mt-2">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
-                <label class="form-check-label" for="relationships-dry-run">Dry run</label>
+            <p class="text-muted small mb-3">Link existing students to parent contacts and set relationship types. Safe to re-run and idempotent.</p>
+            <form id="relationships-import-form" action="{% url 'relationship_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+              {% csrf_token %}
+              <div class="input-group mb-2">
+                <input type="file" name="file" id="relationships-import-file" class="form-control" accept=".csv,.xlsx" required />
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" value="1" id="relationships-overwrite" name="overwrite" />
-                <label class="form-check-label" for="relationships-overwrite">Overwrite existing data</label>
+              <div class="d-flex flex-wrap gap-3 mb-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="1" id="relationships-dry-run" name="dry_run" />
+                  <label class="form-check-label text-muted small" for="relationships-dry-run">Dry run (preview only)</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="1" id="relationships-overwrite" name="overwrite" />
+                  <label class="form-check-label text-muted small" for="relationships-overwrite">Overwrite existing links</label>
+                </div>
               </div>
+            </form>
+            <div class="pt-2 border-top">
+              <a class="btn btn-sm btn-outline-secondary w-100" href="{% url 'relationships_sample_csv' %}">
+                <i class="bi bi-download me-1"></i>Download CSV Template
+              </a>
             </div>
-          </form>
-          <div class="mt-2"><a href="{% url 'relationships_sample_csv' %}">Download CSV Template</a></div>
+          </div>
         </div>
       </div>
-    </div>
     {% endif %}
 
     {% if perms.programs.add_adult %}
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title">Mentors</h5>
-          <p class="card-text">Import mentors with emails and roles.</p>
-          <form id="mentor-import-form" action="{% url 'mentor_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
-            {% csrf_token %}
-            <div class="d-flex gap-2">
-              <input type="file" name="file" id="mentor-import-file" class="form-control" accept=".csv,.xlsx" />
-              <button type="submit" class="btn btn-primary">Import</button>
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm border-0 border-top border-3 border-warning rounded-3 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-person-badge text-warning me-2"></i>Mentors &amp; Volunteers
+              </h2>
+              <span class="badge bg-light text-secondary border">CSV &middot; XLSX</span>
             </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" value="1" id="mentor-overwrite" name="overwrite" />
-              <label class="form-check-label" for="mentor-overwrite">Overwrite existing data</label>
+            <p class="text-muted small mb-3">Import mentors, alumni, and volunteers with emails, phone numbers, Andrew IDs, and mentor roles.</p>
+            <form id="mentor-import-form" action="{% url 'mentor_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+              {% csrf_token %}
+              <div class="input-group mb-2">
+                <input type="file" name="file" id="mentor-import-file" class="form-control" accept=".csv,.xlsx" required />
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="mentor-overwrite" name="overwrite" />
+                <label class="form-check-label text-muted small" for="mentor-overwrite">Overwrite existing mentor data</label>
+              </div>
+            </form>
+            <div class="pt-2 border-top">
+              <a class="btn btn-sm btn-outline-secondary w-100" href="{% url 'mentors_sample_csv' %}">
+                <i class="bi bi-download me-1"></i>Download CSV Template
+              </a>
             </div>
-          </form>
-          <div class="mt-2"><a href="{% url 'mentors_sample_csv' %}">Download CSV Template</a></div>
+          </div>
         </div>
       </div>
-    </div>
     {% endif %}
 
     {% if perms.programs.add_school %}
-    <div class="col-12 col-lg-6">
-      <div class="card h-100">
-        <div class="card-body d-flex flex-column">
-          <h5 class="card-title">Schools</h5>
-          <p class="card-text">Import schools with district and address details.</p>
-          <form id="school-import-form" action="{% url 'school_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
-            {% csrf_token %}
-            <div class="d-flex gap-2">
-              <input type="file" name="file" id="school-import-file" class="form-control" accept=".csv,.xlsx" />
-              <button type="submit" class="btn btn-primary">Import</button>
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm border-0 border-top border-3 border-success rounded-3 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-building text-success me-2"></i>Schools
+              </h2>
+              <span class="badge bg-light text-secondary border">CSV &middot; XLSX</span>
             </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" value="1" id="school-overwrite" name="overwrite" />
-              <label class="form-check-label" for="school-overwrite">Overwrite existing data</label>
+            <p class="text-muted small mb-3">Import educational institutions with school district mapping, street address, city, state, and ZIP.</p>
+            <form id="school-import-form" action="{% url 'school_import' %}" method="post" enctype="multipart/form-data" class="mt-auto">
+              {% csrf_token %}
+              <div class="input-group mb-2">
+                <input type="file" name="file" id="school-import-file" class="form-control" accept=".csv,.xlsx" required />
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="school-overwrite" name="overwrite" />
+                <label class="form-check-label text-muted small" for="school-overwrite">Overwrite existing school data</label>
+              </div>
+            </form>
+            <div class="pt-2 border-top">
+              <a class="btn btn-sm btn-outline-secondary w-100" href="{% url 'schools_sample_csv' %}">
+                <i class="bi bi-download me-1"></i>Download CSV Template
+              </a>
             </div>
-          </form>
-          <div class="mt-2"><a href="{% url 'schools_sample_csv' %}">Download CSV Template</a></div>
+          </div>
         </div>
       </div>
-    </div>
     {% endif %}
 
-      {% if perms.programs.change_student %}
-          <div class="col-12 col-lg-6">
-              <div class="card h-100">
-                  <div class="card-body d-flex flex-column">
-                      <h5 class="card-title">Attendance</h5>
-                      <p class="card-text">Import attendance sessions from legacy attendance system by CSV export. Requires selecting a Program.</p>
-                      <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">{% csrf_token %} <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
-                          <div class="row g-2 align-items-start">
-                              <div class="col-12">
-                                  <label for="attendance-program" class="form-label">Program</label>
-                                  <select id="attendance-program" name="program_id" class="form-select" required>
-                                      <option value="">Select a program…</option>
-                                      {% for p in attendance_programs|default:programs %}
-                                        <option value="{{ p.id }}">{{ p.name }}{% if p.start_date or p.end_date %} ({% if p.start_date %}{{ p.start_date|date:"Y-m-d" }}{% else %}TBD{% endif %} - {% if p.end_date %}{{ p.end_date|date:"Y-m-d" }}{% else %}TBD{% endif %}){% endif %}</option>
-                                      {% endfor %}
-                                  </select>
-                              </div>
-                              <div class="col-12 d-flex gap-2">
-                                  <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" />
-                                  <button type="submit" class="btn btn-primary">Import</button>
-                              </div>
-                          </div>
-                          <div class="form-check mt-2">
-                              <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
-                              <label class="form-check-label" for="attendance-overwrite">Overwrite existing data</label>
-                          </div>
-                          <div class="form-text mt-2">Times should be in UTC (e.g., 2025-09-01T20:15:00Z). If time_out is blank, an open session will be created. Use visitor_team_number for visitor rows only.</div>
-                          <div class="mt-2"><a href="{% url 'attendance_sample_csv' %}">Download CSV Template</a></div>
-                      </form>
-                  </div>
+    {% if perms.programs.change_student %}
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm border-0 border-top border-3 border-danger rounded-3 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-clock-history text-danger me-2"></i>Attendance Sessions
+              </h2>
+              <span class="badge bg-light text-secondary border">CSV only</span>
+            </div>
+            <p class="text-muted small mb-3">Import check-in and check-out attendance records from legacy tracking systems for a specific program.</p>
+            <form method="post" action="{% url 'attendance_import' %}" enctype="multipart/form-data" class="mt-auto">
+              {% csrf_token %}
+              <div class="mb-2">
+                <label for="attendance-program" class="form-label text-muted small fw-semibold mb-1">Target Program</label>
+                <select id="attendance-program" name="program_id" class="form-select" required>
+                  <option value="">Select a program&hellip;</option>
+                  {% for p in attendance_programs|default:programs %}
+                    <option value="{{ p.id }}">{{ p.name }}{% if p.start_date or p.end_date %} ({% if p.start_date %}{{ p.start_date|date:"Y-m-d" }}{% else %}TBD{% endif %} - {% if p.end_date %}{{ p.end_date|date:"Y-m-d" }}{% else %}TBD{% endif %}){% endif %}</option>
+                  {% endfor %}
+                </select>
               </div>
+              <div class="input-group mb-2">
+                <input type="file" name="file" id="attendance-import-file" class="form-control" accept=".csv" required />
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" value="1" id="attendance-overwrite" name="overwrite" />
+                <label class="form-check-label text-muted small" for="attendance-overwrite">Overwrite existing attendance data</label>
+              </div>
+              <div class="text-muted small fst-italic mb-3">
+                Times should be in UTC (e.g. 2026-10-28T14:30:00Z). Blank check_out creates an open session.
+              </div>
+            </form>
+            <div class="pt-2 border-top">
+              <a class="btn btn-sm btn-outline-secondary w-100" href="{% url 'attendance_sample_csv' %}">
+                <i class="bi bi-download me-1"></i>Download CSV Template
+              </a>
+            </div>
           </div>
-      {% endif %}
-
+        </div>
+      </div>
+    {% endif %}
   </div>
 {% endblock %}

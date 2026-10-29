@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.db import transaction
 from django.db.models import Count
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
@@ -8,7 +7,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, FormView, ListView, UpdateView, View
 
 from ..forms import SchoolDistrictForm, SchoolForm, SchoolMergeForm
-from ..models import School, SchoolDistrict, Student
+from ..models import School, SchoolDistrict
 from ..utils import get_safe_url
 from .mixins import LogFormSaveMixin, SortableListViewMixin
 
@@ -28,6 +27,18 @@ class SchoolListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_queryset(self):
         return self.apply_sorting(super().get_queryset().select_related("district"))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["total_schools_count"] = School.objects.count()
+        context["districts_count"] = SchoolDistrict.objects.count()
+        context["assigned_schools_count"] = School.objects.filter(
+            district__isnull=False
+        ).count()
+        context["unassigned_schools_count"] = School.objects.filter(
+            district__isnull=True
+        ).count()
+        return context
 
 
 class SchoolCreateView(
@@ -91,44 +102,29 @@ class SchoolMergeView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
     def form_valid(self, form):
         from audit.events import AuditEvent
         from audit.service import log_event
+        from programs.utils.merges import perform_school_merge
 
         keep = form.cleaned_data["keep"]
         source = form.cleaned_data["source"]
-        source_pk, source_name = source.pk, source.name
-        with transaction.atomic():
-            contact_fields = [
-                "district",
-                "street_address",
-                "city",
-                "state",
-                "zip_code",
-            ]
-            changed = False
-            for field in contact_fields:
-                if not getattr(keep, field) and getattr(source, field):
-                    setattr(keep, field, getattr(source, field))
-                    changed = True
-            if changed:
-                keep.save()
-            Student.objects.filter(school=source).update(school=keep)
-            source.delete()
+
+        meta = perform_school_merge(keep, source)
 
         log_event(
             request=self.request,
             event=AuditEvent.RECORDS_MERGED,
             resource=keep,
-            before={"source_name": source_name, "source_pk": source_pk},
-            after={"keep_name": keep.name, "keep_pk": keep.pk},
+            before={"source_name": meta["source_name"], "source_pk": meta["source_pk"]},
+            after={"keep_name": meta["keep_name"], "keep_pk": meta["keep_pk"]},
             notes=(
-                f'School "{source_name}" (pk={source_pk}) merged into '
-                f'"{keep.name}" (pk={keep.pk}). All students were reassigned.'
+                f'School "{meta["source_name"]}" (pk={meta["source_pk"]}) merged into '
+                f'"{meta["keep_name"]}" (pk={meta["keep_pk"]}). All students were reassigned.'
             ),
         )
 
         messages.success(
             self.request,
-            f'Merged "{source.name}" into "{keep.name}". '
-            f"All students were moved to {keep.name}.",
+            f'Merged "{meta["source_name"]}" into "{meta["keep_name"]}". '
+            f"All students were moved to {meta['keep_name']}.",
         )
         return super().form_valid(form)
 
@@ -147,6 +143,7 @@ class DistrictListView(LoginRequiredMixin, SortableListViewMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["districts_count"] = SchoolDistrict.objects.count()
         context["school_count"] = School.objects.filter(district__isnull=False).count()
         context["unspecified_school_count"] = School.objects.filter(
             district__isnull=True

@@ -6,6 +6,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.core.mail import EmailMultiAlternatives
 from django.db.models import Count, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -29,9 +30,7 @@ from ..models import (
     Team,
 )
 from ..permission_views import (
-    LeadMentorRequiredMixin,
     MentorOrLeadMentorRequiredMixin,
-    PassUserToFormMixin,
     TeamAssignmentPermissionMixin,
     can_user_read,
     can_user_write,
@@ -41,7 +40,6 @@ from ..utils import (
     active_students_in_program,
     get_safe_url,
     get_student_balance_data,
-    redirect_back,
     resolve_address_points,
 )
 from ..utils.email_async import send_messages_in_background
@@ -49,7 +47,6 @@ from ..utils.email_html import build_email_parts
 from ..utils.notifications import get_sender_connection
 from .mixins import (
     DynamicReadPermissionMixin,
-    DynamicWritePermissionMixin,
     LogFormSaveMixin,
     StudentQuerysetRoleMixin,
     logger,
@@ -1576,6 +1573,31 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
         )
 
 
+class ProgramDigitalSignoutSignatureView(LoginRequiredMixin, View):
+    """Serve a decrypted signature PNG image for authorized staff."""
+
+    def get(self, request, program_id, pk):
+        program = get_object_or_404(Program, pk=program_id)
+        role = get_user_role(request.user)
+        if role not in ("LeadMentor", "Mentor") or not can_user_read(
+            request.user, "programs", program
+        ):
+            messages.error(
+                request, "You do not have permission to access that section."
+            )
+            return redirect("home")
+
+        signout = get_object_or_404(DigitalSignout, pk=pk, program=program)
+        if not signout.signature:
+            raise Http404("No signature image recorded.")
+
+        response = FileResponse(signout.signature.open("rb"), content_type="image/png")
+        response["Content-Disposition"] = (
+            f'inline; filename="signature_{signout.pk}.png"'
+        )
+        return response
+
+
 class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     template_name = "programs/schools.html"
     section = "programs"
@@ -1726,44 +1748,24 @@ def _student_export_row(enrollment, program, groups, can_view_sliding, is_lead=F
 
 
 def _students_xlsx_response(program, headers, rows):
-    from io import BytesIO
+    from programs.utils.spreadsheets import export_xlsx_response
 
-    from django.http import HttpResponse
-    from openpyxl import Workbook
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Students"
-    ws.append(headers)
-    for row in rows:
-        ws.append(row)
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-
-    filename = f"{program.name} - Students.xlsx"
-    response = HttpResponse(
-        buffer.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    return export_xlsx_response(
+        filename=f"{program.name} - Students.xlsx",
+        headers=headers,
+        rows=rows,
+        sheet_title="Students",
     )
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
 
 
 def _students_csv_response(program, headers, rows):
-    import csv
+    from programs.utils.spreadsheets import export_csv_response
 
-    from django.http import HttpResponse
-
-    filename = f"{program.name} - Students.csv"
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    writer = csv.writer(response)
-    writer.writerow(headers)
-    for row in rows:
-        writer.writerow(row)
-    return response
+    return export_csv_response(
+        filename=f"{program.name} - Students.csv",
+        headers=headers,
+        rows=rows,
+    )
 
 
 class ProgramStudentExportView(LoginRequiredMixin, DynamicReadPermissionMixin, View):

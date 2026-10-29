@@ -1,77 +1,111 @@
 {% extends 'base.html' %}
 {% block title %}Merge Schools{% endblock %}
 {% block nav_schools_active %} active{% endblock %}
+
 {% block content %}
-  <div class="row mb-3">
-    <div class="col">
-      <a class="link-secondary" href="{% url 'school_list' %}">← Back</a>
+  <!-- Page Header & Back Navigation -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Merge Duplicate Schools</h1>
+      <div class="text-muted small">Consolidate duplicate school entries and reassign student associations</div>
+    </div>
+    <div>
+      <a class="btn btn-outline-secondary" href="{% url 'school_list' %}">
+        <i class="bi bi-arrow-left me-1"></i>Back to Schools
+      </a>
     </div>
   </div>
-  <div class="row">
-    <div class="col">
-      <h1 class="h3 mb-3">Merge Schools</h1>
-      <p class="text-muted">
-        Combine two schools that are actually the same place (e.g. "Plum SHS" vs
-        "Plum Senior High School"). Pick the school to <strong>keep</strong> and the
-        school to <strong>merge</strong>. The kept school's address and contact info
-        are preserved; any missing fields are copied over from the school being
-        merged, and all its students are moved to the kept school.
-      </p>
 
-      <form method="post">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
-        {% endif %}
-        {% if form.keep.errors %}
-          <div class="alert alert-danger">Keep: {{ form.keep.errors }}</div>
-        {% endif %}
-        {% if form.source.errors %}
-          <div class="alert alert-danger">Merge: {{ form.source.errors }}</div>
-        {% endif %}
+  <!-- Guidance Info Banner -->
+  <div class="alert alert-light border shadow-sm rounded-3 d-flex gap-3 align-items-start mb-4 p-3">
+    <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px;">
+      <i class="bi bi-arrows-collapse fs-5"></i>
+    </div>
+    <div>
+      <div class="fw-semibold text-dark mb-1">How School Merging Works</div>
+      <div class="text-muted small">
+        Select one school to <strong>keep</strong> (the target record) and one school to <strong>merge</strong> (the source record). The surviving school retains its existing address and contact fields, while any missing fields are automatically backfilled from the merged school. All enrolled students are safely reassigned to the kept school before the source entry is removed.
+      </div>
+    </div>
+  </div>
 
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
-            <thead>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+    {% endif %}
+    {% if form.keep.errors %}
+      <div class="alert alert-danger mb-3"><strong>Keep selection:</strong> {{ form.keep.errors }}</div>
+    {% endif %}
+    {% if form.source.errors %}
+      <div class="alert alert-danger mb-3"><strong>Merge selection:</strong> {{ form.source.errors }}</div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+      <div class="card-header bg-white border-bottom py-3 px-4">
+        <div class="fw-bold text-dark">
+          <i class="bi bi-building text-primary me-2"></i>Select Schools to Merge
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="text-center py-3" style="width: 100px;">
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">Keep</span>
+              </th>
+              <th class="text-center py-3" style="width: 100px;">
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1">Merge</span>
+              </th>
+              <th>School Name</th>
+              <th>District</th>
+              <th>Address</th>
+              <th>City</th>
+              <th>State</th>
+              <th>ZIP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in schools %}
               <tr>
-                <th class="text-center">Keep</th>
-                <th class="text-center">Merge</th>
-                <th>Name</th>
-                <th>District</th>
-                <th>Address</th>
-                <th>City</th>
-                <th>State</th>
-                <th>ZIP</th>
+                <td class="text-center">
+                  <input class="form-check-input" type="radio" name="keep" value="{{ s.pk }}"
+                         id="keep-{{ s.pk }}" {% if form.keep.value|stringformat:'s' == s.pk|stringformat:'s' %}checked{% endif %}>
+                </td>
+                <td class="text-center">
+                  <input class="form-check-input" type="radio" name="source" value="{{ s.pk }}"
+                         id="source-{{ s.pk }}" {% if form.source.value|stringformat:'s' == s.pk|stringformat:'s' %}checked{% endif %}>
+                </td>
+                <td>
+                  <label class="form-check-label fw-semibold text-dark" for="keep-{{ s.pk }}">
+                    {{ s.name }}
+                  </label>
+                </td>
+                <td>
+                  {% if s.district %}
+                    <span class="badge bg-light text-dark border">{{ s.district.name }}</span>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+                <td>{{ s.street_address|default:'<span class="text-muted small">—</span>' }}</td>
+                <td>{{ s.city|default:'<span class="text-muted small">—</span>' }}</td>
+                <td>{{ s.state|default:'<span class="text-muted small">—</span>' }}</td>
+                <td>{{ s.zip_code|default:'<span class="text-muted small">—</span>' }}</td>
               </tr>
-            </thead>
-            <tbody>
-              {% for s in schools %}
-                <tr>
-                  <td class="text-center">
-                    <input class="form-check-input" type="radio" name="keep" value="{{ s.pk }}"
-                           id="keep-{{ s.pk }}" {% if form.keep.value|stringformat:'s' == s.pk|stringformat:'s' %}checked{% endif %}>
-                  </td>
-                  <td class="text-center">
-                    <input class="form-check-input" type="radio" name="source" value="{{ s.pk }}"
-                           id="source-{{ s.pk }}" {% if form.source.value|stringformat:'s' == s.pk|stringformat:'s' %}checked{% endif %}>
-                  </td>
-                  <td><label class="form-check-label" for="keep-{{ s.pk }}">{{ s.name }}</label></td>
-                  <td>{{ s.district|default:'—' }}</td>
-                  <td>{{ s.street_address|default:'—' }}</td>
-                  <td>{{ s.city|default:'—' }}</td>
-                  <td>{{ s.state|default:'—' }}</td>
-                  <td>{{ s.zip_code|default:'—' }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Merge Schools</button>
-          <a class="btn btn-secondary" href="{% url 'school_list' %}">Cancel</a>
-        </div>
-      </form>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary" type="submit">
+        <i class="bi bi-arrows-collapse me-1"></i>Merge Schools
+      </button>
+      <a class="btn btn-outline-secondary" href="{% url 'school_list' %}">
+        Cancel
+      </a>
+    </div>
+  </form>
 {% endblock %}
