@@ -1,5 +1,6 @@
 import mimetypes
 import os
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -319,7 +320,7 @@ class StudentDetailView(
                     "enrollment_set",
                     queryset=Enrollment.objects.select_related(
                         "program", "team", "crew", "subteam"
-                    ),
+                    ).prefetch_related("program__features"),
                 ),
                 "email_delivery_events",
             )
@@ -343,6 +344,117 @@ class StudentDetailView(
                     keys.add(f.key)
         ctx["program_feature_keys"] = keys
         ctx["enrollments"] = enrollments
+
+        # Active vs other enrollments
+        active_enrollments = []
+        other_enrollments = []
+        for e in enrollments:
+            if e.program.active and e.active:
+                active_enrollments.append(e)
+            else:
+                other_enrollments.append(e)
+        ctx["active_enrollments"] = active_enrollments
+        ctx["other_enrollments"] = other_enrollments
+
+        # Attendance stats aggregation (only if any program has attendance feature)
+        has_attendance = "attendance" in keys
+        if has_attendance:
+            from django.db.models import Case, F, IntegerField, Sum, When
+
+            now = timezone.now()
+            start_of_week = (now - timedelta(days=now.weekday())).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            from attendance.models import AttendanceSession
+
+            sessions_qs = AttendanceSession.objects.filter(student=student)
+            rows = list(
+                sessions_qs.values("program_id").annotate(
+                    total=Sum("duration_minutes"),
+                    week_total=Sum(
+                        Case(
+                            When(
+                                check_in__gte=start_of_week,
+                                then=F("duration_minutes"),
+                            ),
+                            default=0,
+                            output_field=IntegerField(),
+                        )
+                    ),
+                )
+            )
+            program_stats = {}
+            total_mins = 0
+            week_mins = 0
+            for row in rows:
+                p_total = row["total"] or 0
+                p_week = row["week_total"] or 0
+                total_mins += p_total
+                week_mins += p_week
+                program_stats[row["program_id"]] = {
+                    "total_hours": round(p_total / 60.0, 1),
+                    "week_hours": round(p_week / 60.0, 1),
+                }
+
+            ctx["attendance_total_hours"] = round(total_mins / 60.0, 1)
+            ctx["attendance_week_hours"] = round(week_mins / 60.0, 1)
+            for e in enrollments:
+                e.has_attendance = "attendance" in [
+                    f.key for f in e.program.features.all()
+                ]
+                e.attendance_stats = program_stats.get(
+                    e.program_id, {"total_hours": 0.0, "week_hours": 0.0}
+                )
+        else:
+            ctx["attendance_total_hours"] = 0.0
+            ctx["attendance_week_hours"] = 0.0
+            for e in enrollments:
+                e.has_attendance = False
+                e.attendance_stats = {"total_hours": 0.0, "week_hours": 0.0}
+
+        # Outreach stats & upcoming signups
+        has_outreach = "outreach" in keys
+        ctx["has_outreach_feature"] = has_outreach
+        if has_outreach:
+            from outreach.models import OutreachSignup
+            from outreach.utils import compute_outreach_stats
+
+            outreach_signups = list(
+                OutreachSignup.objects.filter(student=student)
+                .select_related("shift", "shift__event", "shift__event__program")
+                .order_by("shift__date", "shift__start_time")
+            )
+            ctx["outreach_stats"] = compute_outreach_stats(outreach_signups)
+            ctx["upcoming_outreach_signups"] = [
+                s for s in outreach_signups if not s.shift.is_past
+            ]
+        else:
+            ctx["outreach_stats"] = {
+                "total_outreach_hours": 0.0,
+                "pending_outreach_hours": 0.0,
+                "championed_count": 0,
+            }
+            ctx["upcoming_outreach_signups"] = []
+
+        # Badges earned
+        if "badges" in keys:
+            try:
+                from badges.models import StudentBadge
+
+                badges_earned = list(
+                    StudentBadge.objects.filter(student=student).select_related(
+                        "badge", "awarded_by"
+                    )
+                )
+                ctx["badges_earned"] = badges_earned
+                ctx["badges_count"] = len(badges_earned)
+            except ImportError:
+                ctx["badges_earned"] = []
+                ctx["badges_count"] = 0
+        else:
+            ctx["badges_earned"] = []
+            ctx["badges_count"] = 0
+
         return ctx
 
 

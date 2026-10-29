@@ -37,6 +37,37 @@ class StudentModelTests(TestCase):
         self.assertEqual(s2.display_name, "Alex Smith")
         self.assertEqual(s2.full_name, "Alex Smith")
 
+    def test_student_member_since_year(self):
+        from datetime import date
+
+        from django.utils import timezone
+
+        from programs.models import Enrollment, Program
+
+        # Case 1: Fresh student without enrollments uses creation year
+        s = Student.objects.create(legal_first_name="Fresh", last_name="Student")
+        self.assertEqual(s.member_since_year, s.created_at.year)
+
+        # Case 2: Student enrolled in a program starting earlier uses earliest program start year
+        prog_older = Program.objects.create(
+            name="Past Program", start_date=date(2022, 9, 1)
+        )
+        prog_newer = Program.objects.create(
+            name="Current Program", start_date=date(2025, 1, 1)
+        )
+        Enrollment.objects.create(student=s, program=prog_newer)
+        Enrollment.objects.create(student=s, program=prog_older)
+
+        # Uncached check
+        s_fresh = Student.objects.get(pk=s.pk)
+        self.assertEqual(s_fresh.member_since_year, 2022)
+
+        # Prefetched check
+        s_prefetched = Student.objects.prefetch_related("enrollment_set__program").get(
+            pk=s.pk
+        )
+        self.assertEqual(s_prefetched.member_since_year, 2022)
+
 
 class DemographicModelTests(TestCase):
     def test_race_ethnicity_match_from_text(self):

@@ -192,16 +192,9 @@
                   </span>
                 </td>
                 <td class="text-end pe-3">
-                  <div class="d-inline-flex gap-1">
-                    {% if can_view_attendance %}
-                      <a class="btn btn-sm btn-outline-secondary" href="{% url 'student_attendance' s.pk %}">
-                        <i class="bi bi-calendar-check me-1"></i>Attendance
-                      </a>
-                    {% endif %}
-                    <a class="btn btn-sm btn-outline-primary" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
-                      View Profile
-                    </a>
-                  </div>
+                  <a class="btn btn-sm btn-outline-primary" href="{% url 'student_detail' s.pk %}?next={{ request.path }}">
+                    View Profile
+                  </a>
                 </td>
               </tr>
             {% endfor %}

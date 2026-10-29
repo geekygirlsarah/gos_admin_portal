@@ -121,18 +121,18 @@ class StudentAdultDirectoryUITests(TestCase):
         content = resp.content.decode()
         # Hero profile checks
         self.assertIn("Janey Doe", content)
-        self.assertIn("Legal: Jane Doe", content)
+        self.assertIn("Jane Doe", content)
         self.assertIn("Carnegie Mellon High", content)
         self.assertIn("Class of 2027", content)
         self.assertIn("mailto:janey@example.com", content)
         self.assertIn("tel:412-555-0101", content)
 
         # Section headers
+        self.assertIn("Program Attendance", content)
         self.assertIn("Parents &amp; Emergency Contacts", content)
         self.assertIn("Contact &amp; Address", content)
         self.assertIn("Health &amp; Medical", content)
         self.assertIn("Peanuts", content)
-        self.assertIn("Program Enrollments &amp; Teams", content)
         self.assertIn("Girls of Steel FRC", content)
 
     def test_adults_list_kpis_and_tabs(self):

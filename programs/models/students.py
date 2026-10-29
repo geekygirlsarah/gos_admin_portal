@@ -592,6 +592,45 @@ class Student(models.Model):
 
         return format_grade(self.current_grade)
 
+    @property
+    def member_since_year(self) -> int:
+        """Return the inception year when the student joined/participated.
+
+        Derived from the earliest program start date, earliest enrollment
+        creation date, or student record creation date.
+        """
+        years: list[int] = []
+        if self.created_at:
+            years.append(self.created_at.year)
+
+        if (
+            hasattr(self, "_prefetched_objects_cache")
+            and "enrollment_set" in self._prefetched_objects_cache
+        ):
+            for enr in self.enrollment_set.all():
+                if enr.program and enr.program.start_date:
+                    years.append(enr.program.start_date.year)
+                elif enr.created_at:
+                    years.append(enr.created_at.year)
+        elif self.pk:
+            min_prog_date = (
+                self.programs.filter(start_date__isnull=False)
+                .aggregate(min_date=models.Min("start_date"))
+                .get("min_date")
+            )
+            if min_prog_date:
+                years.append(min_prog_date.year)
+
+            min_enr_created = self.enrollment_set.aggregate(
+                min_created=models.Min("created_at")
+            ).get("min_created")
+            if min_enr_created:
+                years.append(min_enr_created.year)
+
+        if years:
+            return min(years)
+        return timezone.now().year
+
     def requires_background_check(self) -> bool:
         """Whether the student must hold PA background clearances.
 
