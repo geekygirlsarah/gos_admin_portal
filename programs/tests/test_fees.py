@@ -186,18 +186,36 @@ class UtilsAndModelEdgeTests(TestCase):
         at least one valid clearance of the three types."""
         from unittest.mock import patch
 
+        from organizations.models import Organization
         from programs.models import BackgroundCheck, BackgroundCheckType, timezone
 
+        org = Organization.objects.create(name="Org Fees", slug="org-fees")
+        bct1 = BackgroundCheckType.objects.create(
+            organization=org,
+            name="Check 1",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        bct2 = BackgroundCheckType.objects.create(
+            organization=org,
+            name="Check 2",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
         student = Student.objects.create(
+            organization=org,
             legal_first_name="A",
             last_name="B",
             date_of_birth=date(2008, 8, 1),
         )
         with patch.object(timezone, "localdate", return_value=date(2026, 8, 1)):
             self.assertTrue(student.needs_background_check())
-            # Provide all three valid clearances.
-            for check_type in BackgroundCheckType.values:
+            # Provide all valid clearances for student's organization.
+            for check_type in [bct1, bct2]:
                 BackgroundCheck.objects.create(
+                    organization=org,
                     student=student,
                     check_type=check_type,
                     cleared=True,
@@ -205,9 +223,7 @@ class UtilsAndModelEdgeTests(TestCase):
                 )
             self.assertFalse(student.needs_background_check())
             # Expire one → needs again.
-            expired = BackgroundCheck.objects.get(
-                student=student, check_type=BackgroundCheckType.FBI
-            )
+            expired = BackgroundCheck.objects.filter(student=student).first()
             expired.obtained_date = date(2020, 1, 1)
             expired.save()
             self.assertTrue(student.needs_background_check())

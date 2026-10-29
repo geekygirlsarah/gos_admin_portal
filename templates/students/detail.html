@@ -656,9 +656,9 @@
               <div class="small mb-2">
                 {% if requires_bg %}
                   {% if user.pk == student.user.pk %}
-                    <span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>You need PA background clearances</span> (17 or older on Sept 1 of the current academic year).
+                    <span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>You need background clearances</span> based on organization requirements.
                   {% else %}
-                    <span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>This student requires PA background clearances</span> (17 or older on Sept 1 of the current academic year).
+                    <span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>This student requires background clearances</span> based on organization requirements.
                   {% endif %}
                 {% else %}
                   <span class="text-muted"><i class="bi bi-check-circle me-1 text-success"></i>{% if user.pk == student.user.pk %}Not needed for your age.{% else %}Not needed for this student's age.{% endif %}</span>
@@ -672,21 +672,33 @@
                 {% endif %}
                 <div class="list-group list-group-flush rounded border small">
                   {% for item in student|background_check_status %}
+                    {% if item.required or item.on_file %}
                     <div class="list-group-item d-flex justify-content-between align-items-center p-2">
-                      <span class="fw-semibold">{{ item.display }}</span>
                       <div>
+                        <span class="fw-semibold">{{ item.display }}</span>
+                        {% if not item.required %}
+                          <span class="text-muted small ms-1">(Optional)</span>
+                        {% endif %}
+                        {% if item.obtained_date %}
+                          <span class="text-muted d-block" style="font-size: 11px;">Obtained: {{ item.obtained_date|date:'M j, Y' }}</span>
+                        {% endif %}
+                      </div>
+                      <div class="text-end">
                         {% if item.on_file %}
                           <span class="badge {% if item.is_valid %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
-                            {{ item.is_valid|yesno:"Valid,Not Valid" }}
+                            {{ item.is_valid|yesno:"Valid,Expired" }}
                           </span>
                           {% if item.expiration_date %}
-                            <span class="text-muted d-block text-end" style="font-size: 10px;">Exp: {{ item.expiration_date|date:'M j, Y' }}</span>
+                            <span class="text-muted d-block" style="font-size: 10px;">Exp: {{ item.expiration_date|date:'M j, Y' }}</span>
+                          {% else %}
+                            <span class="text-muted d-block" style="font-size: 10px;">No Expiry</span>
                           {% endif %}
                         {% else %}
                           <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill">Missing</span>
                         {% endif %}
                       </div>
                     </div>
+                    {% endif %}
                   {% endfor %}
                 </div>
               {% endif %}

@@ -575,25 +575,36 @@ class StudentMergeTest(TestCase):
         self.assertEqual(doc.student, keep)
 
     def test_merge_transfers_and_merges_background_checks(self):
+        from programs.models import BackgroundCheckType
+
+        bct_sp, _ = BackgroundCheckType.objects.get_or_create(
+            name="PA State Police Criminal History (PATCH)",
+            defaults={"validity_years": 5},
+        )
+        bct_fbi, _ = BackgroundCheckType.objects.get_or_create(
+            name="FBI Fingerprint (Act 114)",
+            defaults={"validity_years": 5},
+        )
+
         keep = self._student("Jane", "Doe")
         source = self._student("Janet", "Doe")
         today = timezone.localdate()
 
         BackgroundCheck.objects.create(
             student=keep,
-            check_type="state_police",
+            check_type=bct_sp,
             cleared=False,
             obtained_date=None,
         )
         BackgroundCheck.objects.create(
             student=source,
-            check_type="state_police",
+            check_type=bct_sp,
             cleared=True,
             obtained_date=today,
         )
         BackgroundCheck.objects.create(
             student=source,
-            check_type="fbi",
+            check_type=bct_fbi,
             cleared=True,
             obtained_date=today,
         )
@@ -604,11 +615,11 @@ class StudentMergeTest(TestCase):
         )
 
         self.assertEqual(BackgroundCheck.objects.filter(student=keep).count(), 2)
-        sp = BackgroundCheck.objects.get(student=keep, check_type="state_police")
+        sp = BackgroundCheck.objects.get(student=keep, check_type=bct_sp)
         self.assertTrue(sp.cleared)
         self.assertEqual(sp.obtained_date, today)
         self.assertTrue(
-            BackgroundCheck.objects.filter(student=keep, check_type="fbi").exists()
+            BackgroundCheck.objects.filter(student=keep, check_type=bct_fbi).exists()
         )
 
     def test_merge_transfers_rfid_cards(self):

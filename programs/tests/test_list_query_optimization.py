@@ -238,7 +238,7 @@ class StudentDetailQueryOptimizationTest(TestCase):
         )
         self.student.save()
 
-        for check_type in BackgroundCheckType.values:
+        for check_type in BackgroundCheckType.objects.filter(is_active=True):
             BackgroundCheck.objects.create(
                 student=self.student,
                 check_type=check_type,
@@ -258,7 +258,7 @@ class StudentDetailQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            14,
+            16,
             "student_detail is performing an N+1 query pattern",
         )
 
@@ -281,7 +281,7 @@ class AdultDetailQueryOptimizationTest(TestCase):
                 legal_first_name=f"Student{i}", last_name="Zebra"
             )
             AdultStudentRelationship.objects.create(adult=self.adult, student=student)
-        for check_type in BackgroundCheckType.values:
+        for check_type in BackgroundCheckType.objects.filter(is_active=True):
             BackgroundCheck.objects.create(
                 adult=self.adult,
                 check_type=check_type,
@@ -297,6 +297,6 @@ class AdultDetailQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            10,
+            12,
             "adult_detail is performing an N+1 query pattern",
         )

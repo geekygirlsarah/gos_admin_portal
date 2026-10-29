@@ -940,20 +940,71 @@ def _seed_orders(programs):
 
 def _seed_clearances(adult, paca, patch, fbi, expires):
     """Create BackgroundCheck rows for an adult, one per type."""
+    from organizations.models import Organization
+
+    org = (
+        getattr(adult, "organization", None)
+        or Organization.objects.filter(slug="gos").first()
+    )
+
+    types = {
+        "patch": BackgroundCheckType.objects.filter(
+            organization=org, name__icontains="State Police"
+        ).first(),
+        "paca": BackgroundCheckType.objects.filter(
+            organization=org, name__icontains="Child Abuse"
+        ).first(),
+        "fbi": BackgroundCheckType.objects.filter(
+            organization=org, name__icontains="FBI"
+        ).first(),
+    }
+    if not all(types.values()):
+        for item in BackgroundCheckType.DEFAULT_PA_TYPES:
+            bct, _ = BackgroundCheckType.objects.get_or_create(
+                organization=org,
+                name=item["name"],
+                defaults={
+                    "description": item["description"],
+                    "validity_years": item["validity_years"],
+                    "applies_to_students": item["applies_to_students"],
+                    "applies_to_mentors": item["applies_to_mentors"],
+                    "applies_to_lead_mentors": item["applies_to_lead_mentors"],
+                    "applies_to_parents": item["applies_to_parents"],
+                    "applies_to_alumni": item["applies_to_alumni"],
+                    "student_min_age_by_date": item.get("student_min_age_by_date"),
+                    "student_min_age_cutoff_date": item.get(
+                        "student_min_age_cutoff_date"
+                    ),
+                    "student_min_age_during_program": item.get(
+                        "student_min_age_during_program"
+                    ),
+                    "display_order": item["display_order"],
+                    "is_active": True,
+                },
+            )
+            if "State Police" in item["name"]:
+                types["patch"] = bct
+            elif "Child Abuse" in item["name"]:
+                types["paca"] = bct
+            elif "FBI" in item["name"]:
+                types["fbi"] = bct
+
     mappings = [
-        (BackgroundCheckType.STATE_POLICE, patch),
-        (BackgroundCheckType.CHILD_ABUSE, paca),
-        (BackgroundCheckType.FBI, fbi),
+        (types["patch"], patch),
+        (types["paca"], paca),
+        (types["fbi"], fbi),
     ]
-    for check_type, cleared in mappings:
-        BackgroundCheck.objects.update_or_create(
-            check_type=check_type,
-            adult=adult,
-            defaults={
-                "cleared": cleared,
-                "obtained_date": expires if cleared else None,
-            },
-        )
+    for check_type_obj, cleared in mappings:
+        if check_type_obj:
+            BackgroundCheck.objects.update_or_create(
+                check_type=check_type_obj,
+                adult=adult,
+                defaults={
+                    "organization": org,
+                    "cleared": cleared,
+                    "obtained_date": expires if cleared else None,
+                },
+            )
 
 
 def _seed_calendars(programs, today):

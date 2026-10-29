@@ -8,20 +8,40 @@ from programs.models import Adult, BackgroundCheck, BackgroundCheckType, Student
 
 
 class BackgroundChecksFormTests(TestCase):
+    def setUp(self):
+        self.bct_fbi = BackgroundCheckType.objects.create(
+            name="FBI Fingerprint (Act 114)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        self.bct_sp = BackgroundCheckType.objects.create(
+            name="PA State Police Criminal History (PATCH)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        self.bct_ca = BackgroundCheckType.objects.create(
+            name="PA Child Abuse History (Act 151)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+
     def test_fields_exist_for_each_check_type(self):
         form = BackgroundChecksForm()
-        for check_type in BackgroundCheckType.values:
-            self.assertIn(f"cleared_{check_type}", form.fields)
-            self.assertIn(f"obtained_{check_type}", form.fields)
+        for bct in [self.bct_fbi, self.bct_sp, self.bct_ca]:
+            self.assertIn(f"cleared_{bct.id}", form.fields)
+            self.assertIn(f"obtained_{bct.id}", form.fields)
 
     def test_save_creates_rows_for_cleared_types(self):
         student = Student.objects.create(legal_first_name="A", last_name="B")
         form = BackgroundChecksForm(
             data={
-                "cleared_state_police": "on",
-                "obtained_state_police": "2021-01-01",
-                "cleared_child_abuse": "on",
-                "obtained_child_abuse": "2021-06-01",
+                f"cleared_{self.bct_sp.id}": "on",
+                f"obtained_{self.bct_sp.id}": "2021-01-01",
+                f"cleared_{self.bct_ca.id}": "on",
+                f"obtained_{self.bct_ca.id}": "2021-06-01",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)
@@ -30,18 +50,18 @@ class BackgroundChecksFormTests(TestCase):
         self.assertEqual(checks.count(), 2)
         for check in checks:
             self.assertTrue(check.cleared)
-        sp = checks.get(check_type=BackgroundCheckType.STATE_POLICE)
+        sp = checks.get(check_type=self.bct_sp)
         self.assertEqual(sp.obtained_date, datetime.date(2021, 1, 1))
 
     def test_save_removes_rows_when_cleared_is_false(self):
         student = Student.objects.create(legal_first_name="A", last_name="B")
         existing = BackgroundCheck.objects.create(
             student=student,
-            check_type=BackgroundCheckType.FBI,
+            check_type=self.bct_fbi,
             cleared=True,
             obtained_date=datetime.date(2020, 1, 1),
         )
-        form = BackgroundChecksForm(data={"obtained_fbi": ""})
+        form = BackgroundChecksForm(data={f"obtained_{self.bct_fbi.id}": ""})
         self.assertTrue(form.is_valid(), form.errors)
         form.save(student=student)
         self.assertFalse(student.background_checks.filter(pk=existing.pk).exists())
@@ -50,16 +70,14 @@ class BackgroundChecksFormTests(TestCase):
         adult = Adult.objects.create(legal_first_name="C", last_name="D")
         form = BackgroundChecksForm(
             data={
-                "cleared_fbi": "on",
-                "obtained_fbi": "2022-03-03",
+                f"cleared_{self.bct_fbi.id}": "on",
+                f"obtained_{self.bct_fbi.id}": "2022-03-03",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)
         form.save(adult=adult)
         self.assertEqual(adult.background_checks.count(), 1)
-        self.assertTrue(
-            adult.background_checks.get(check_type=BackgroundCheckType.FBI).cleared
-        )
+        self.assertTrue(adult.background_checks.get(check_type=self.bct_fbi).cleared)
 
     def test_requires_exactly_one_holder(self):
         student = Student.objects.create(legal_first_name="A", last_name="B")
@@ -73,6 +91,19 @@ class BackgroundChecksFormTests(TestCase):
 class BackgroundChecksViewTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group, User
+
+        self.bct_fbi = BackgroundCheckType.objects.create(
+            name="FBI Fingerprint (Act 114)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        self.bct_sp = BackgroundCheckType.objects.create(
+            name="PA State Police Criminal History (PATCH)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
 
         self.user = User.objects.create_user(
             username="lead", password="pass12345"  # nosec B106
@@ -96,16 +127,16 @@ class BackgroundChecksViewTests(TestCase):
                 "legal_first_name": "A",
                 "last_name": "B",
                 "date_of_birth": "2008-01-01",
-                "cleared_fbi": "on",
-                "obtained_fbi": "2021-01-01",
-                "cleared_state_police": "on",
-                "obtained_state_police": "2021-02-01",
+                f"cleared_{self.bct_fbi.id}": "on",
+                f"obtained_{self.bct_fbi.id}": "2021-01-01",
+                f"cleared_{self.bct_sp.id}": "on",
+                f"obtained_{self.bct_sp.id}": "2021-02-01",
             },
         )
         self.assertIn(resp.status_code, [200, 302])
         checks = student.background_checks.all()
         self.assertEqual(checks.count(), 2)
-        self.assertTrue(checks.get(check_type="fbi").cleared)
+        self.assertTrue(checks.get(check_type=self.bct_fbi).cleared)
 
     def test_adult_edit_saves_background_checks_for_lead_mentor(self):
         from django.urls import reverse
@@ -117,18 +148,31 @@ class BackgroundChecksViewTests(TestCase):
             {
                 "legal_first_name": "C",
                 "last_name": "D",
-                "cleared_fbi": "on",
-                "obtained_fbi": "2021-03-01",
+                f"cleared_{self.bct_fbi.id}": "on",
+                f"obtained_{self.bct_fbi.id}": "2021-03-01",
             },
         )
         self.assertIn(resp.status_code, [200, 302])
         self.assertEqual(adult.background_checks.count(), 1)
-        self.assertTrue(adult.background_checks.get(check_type="fbi").cleared)
+        self.assertTrue(adult.background_checks.get(check_type=self.bct_fbi).cleared)
 
 
 class BackgroundCheckStatusTagTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User
+
+        self.bct_fbi = BackgroundCheckType.objects.create(
+            name="FBI Fingerprint (Act 114)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        self.bct_sp = BackgroundCheckType.objects.create(
+            name="PA State Police Criminal History (PATCH)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
 
         self.student_user = User.objects.create_user(
             username="student", password="pass12345"  # nosec B106
@@ -140,7 +184,7 @@ class BackgroundCheckStatusTagTests(TestCase):
             date_of_birth=datetime.date(2000, 1, 1),
         )
 
-    def test_status_lists_all_three_check_types(self):
+    def test_status_lists_all_check_types(self):
         from django.template import Context, Template
 
         tpl = Template(
@@ -148,19 +192,16 @@ class BackgroundCheckStatusTagTests(TestCase):
             "{{ s.check_type }}:{{ s.on_file }};{% endfor %}"
         )
         html = tpl.render(Context({"student": self.student}))
-        for value in BackgroundCheckType.values:
-            self.assertIn(f"{value}:False;", html)
+        self.assertIn("FBI Fingerprint (Act 114):False;", html)
+        self.assertIn("PA State Police Criminal History (PATCH):False;", html)
 
     def test_status_reflects_on_file_valid_check(self):
         from django.template import Context, Template
 
         BackgroundCheck.objects.create(
             student=self.student,
-            check_type=BackgroundCheckType.FBI,
+            check_type=self.bct_fbi,
             cleared=True,
-            # Clearances are valid for 5 years (expiration = obtained + 5y), so
-            # anchor this to today rather than a fixed year that would silently
-            # flip is_valid to False once that year passes.
             obtained_date=timezone.localdate() - datetime.timedelta(days=30),
         )
         tpl = Template(
@@ -170,8 +211,8 @@ class BackgroundCheckStatusTagTests(TestCase):
             "{% endfor %}"
         )
         html = tpl.render(Context({"student": self.student}))
-        self.assertIn("fbi:True:True;", html)
-        self.assertIn("state_police:False:False;", html)
+        self.assertIn("FBI Fingerprint (Act 114):True:True;", html)
+        self.assertIn("PA State Police Criminal History (PATCH):False:False;", html)
 
 
 class StudentDetailBackgroundCheckViewTests(TestCase):
@@ -179,6 +220,25 @@ class StudentDetailBackgroundCheckViewTests(TestCase):
         from django.contrib.auth.models import User
 
         from programs.models import Enrollment, Program, ProgramFeature
+
+        self.bct_fbi = BackgroundCheckType.objects.create(
+            name="FBI Fingerprint (Act 114)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        self.bct_sp = BackgroundCheckType.objects.create(
+            name="PA State Police Criminal History (PATCH)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
+        self.bct_ca = BackgroundCheckType.objects.create(
+            name="PA Child Abuse History (Act 151)",
+            validity_years=5,
+            applies_to_students=True,
+            student_min_age=17,
+        )
 
         self.student_user = User.objects.create_user(
             username="student", password="pass12345"  # nosec B106
@@ -200,9 +260,6 @@ class StudentDetailBackgroundCheckViewTests(TestCase):
     def test_not_required_shows_not_needed_message(self):
         from django.urls import reverse
 
-        # Clearances are only required for students 17+ as of Sept 1 of the current
-        # academic year, so pin this to a 12-year-old: a hardcoded DOB would
-        # eventually cross that threshold and flip the expected message.
         self.student.date_of_birth = timezone.localdate() - datetime.timedelta(
             days=12 * 365
         )
@@ -218,8 +275,8 @@ class StudentDetailBackgroundCheckViewTests(TestCase):
         url = reverse("student_detail", args=[self.student.pk])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
-        content = resp.content.decode()
-        for value in BackgroundCheckType.values:
-            self.assertIn(BackgroundCheckType(value).label, content, f"missing {value}")
+        self.assertContains(resp, "FBI Fingerprint (Act 114)")
+        self.assertContains(resp, "PA State Police Criminal History (PATCH)")
+        self.assertContains(resp, "PA Child Abuse History (Act 151)")
         self.assertContains(resp, "Missing")
         self.assertNotContains(resp, "Not needed for your age")

@@ -25,6 +25,7 @@ from .views import (
     ParentMergeView,
     ParentUpdateView,
     PortalAgreementView,
+    PortalBackgroundCheckTypeView,
     PortalCrewView,
     PortalEmailSettingsView,
     PortalKioskView,
@@ -677,6 +678,11 @@ urlpatterns = [
         "settings/agreements/",
         PortalAgreementView.as_view(),
         name="portal_agreements",
+    ),
+    path(
+        "settings/background-checks/",
+        PortalBackgroundCheckTypeView.as_view(),
+        name="portal_background_check_types",
     ),
     path(
         "settings/email/",

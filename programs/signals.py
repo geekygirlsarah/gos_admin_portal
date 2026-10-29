@@ -291,25 +291,17 @@ def notify_parents_on_fee_assignment(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender="programs.Enrollment")
 def flag_clearance_due_on_enrollment(sender, instance, created, **kwargs):
-    """Auto-flag an enrollment when the enrolled student requires PA clearances
+    """Auto-flag an enrollment when the enrolled student requires clearances
     but is missing at least one valid clearance.
 
-    The requirement is always derived from the student's date of birth; only
-    the clearance records themselves are stored state.
+    The requirement is derived dynamically from active background check types;
+    only the clearance records themselves are stored state.
     """
-    from .models import BackgroundCheckType
-
     student = instance.student
-    if not student or not student.requires_background_check():
-        if instance.clearance_due:
-            sender.objects.filter(pk=instance.pk).update(clearance_due=False)
+    if not student:
         return
 
-    required_types = set(BackgroundCheckType.values)
-    valid_types = {
-        bc.check_type for bc in student.background_checks.all() if bc.is_valid
-    }
-    needs = not required_types.issubset(valid_types)
+    needs = student.needs_background_check()
     if needs != instance.clearance_due:
         sender.objects.filter(pk=instance.pk).update(clearance_due=needs)
 

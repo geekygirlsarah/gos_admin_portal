@@ -1129,23 +1129,172 @@ class ProgramDocumentForm(forms.ModelForm):
             self.fields["program"].required = True
 
 
-class BackgroundChecksForm(forms.Form):
-    """Inline editor for a holder's PA background clearances.
+class BackgroundCheckTypeForm(forms.ModelForm):
+    """Form for creating / editing a BackgroundCheckType from Portal Settings."""
 
-    Presents one row per clearance type (``cleared_<type>`` checkbox and
-    ``obtained_<type>`` date). Saving creates/updates/deletes the matching
-    ``BackgroundCheck`` rows for exactly one student or adult.
-    """
+    MONTH_CHOICES = [
+        (1, "January"),
+        (2, "February"),
+        (3, "March"),
+        (4, "April"),
+        (5, "May"),
+        (6, "June"),
+        (7, "July"),
+        (8, "August"),
+        (9, "September"),
+        (10, "October"),
+        (11, "November"),
+        (12, "December"),
+    ]
+    DAY_CHOICES = [(d, str(d)) for d in range(1, 32)]
+
+    student_min_age_cutoff_month = forms.TypedChoiceField(
+        choices=MONTH_CHOICES,
+        coerce=int,
+        required=False,
+        initial=9,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    student_min_age_cutoff_day = forms.TypedChoiceField(
+        choices=DAY_CHOICES,
+        coerce=int,
+        required=False,
+        initial=1,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta:
+        model = BackgroundCheckType
+        fields = [
+            "name",
+            "description",
+            "validity_years",
+            "applies_to_students",
+            "applies_to_mentors",
+            "applies_to_lead_mentors",
+            "applies_to_parents",
+            "applies_to_alumni",
+            "student_min_age_by_date",
+            "student_min_age_cutoff_date",
+            "student_min_age_during_program",
+            "is_active",
+            "display_order",
+        ]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. PA State Police Criminal History",
+                }
+            ),
+            "description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                    "placeholder": "Instructions or details for obtaining this clearance...",
+                }
+            ),
+            "validity_years": forms.NumberInput(
+                attrs={"class": "form-control", "min": 0}
+            ),
+            "student_min_age_by_date": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": 0,
+                    "placeholder": "e.g. 17",
+                }
+            ),
+            "student_min_age_cutoff_date": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
+            "student_min_age_during_program": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": 0,
+                    "placeholder": "e.g. 18",
+                }
+            ),
+            "display_order": forms.NumberInput(
+                attrs={"class": "form-control", "min": 0}
+            ),
+            "applies_to_students": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "applies_to_mentors": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "applies_to_lead_mentors": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "applies_to_parents": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "applies_to_alumni": forms.CheckboxInput(
+                attrs={"class": "form-check-input"}
+            ),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for check_type in BackgroundCheckType.values:
-            self.fields[f"cleared_{check_type}"] = forms.BooleanField(
+        if (
+            self.instance
+            and self.instance.pk
+            and self.instance.student_min_age_cutoff_date
+        ):
+            self.fields["student_min_age_cutoff_month"].initial = (
+                self.instance.student_min_age_cutoff_date.month
+            )
+            self.fields["student_min_age_cutoff_day"].initial = (
+                self.instance.student_min_age_cutoff_date.day
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        min_age_by_date = cleaned_data.get("student_min_age_by_date")
+        if min_age_by_date is not None:
+            if not cleaned_data.get("student_min_age_cutoff_date"):
+                month = cleaned_data.get("student_min_age_cutoff_month") or 9
+                day = cleaned_data.get("student_min_age_cutoff_day") or 1
+                try:
+                    cleaned_data["student_min_age_cutoff_date"] = datetime.date(
+                        2000, int(month), int(day)
+                    )
+                except (ValueError, TypeError):
+                    cleaned_data["student_min_age_cutoff_date"] = datetime.date(
+                        2000, 9, 1
+                    )
+        else:
+            cleaned_data["student_min_age_cutoff_date"] = None
+        return cleaned_data
+
+
+class BackgroundChecksForm(forms.Form):
+    """Inline editor for a holder's background clearances.
+
+    Presents one row per active clearance type (``cleared_<id>`` checkbox and
+    ``obtained_<id>`` date). Saving creates/updates/deletes the matching
+    ``BackgroundCheck`` rows for exactly one student or adult.
+    """
+
+    def __init__(self, *args, organization=None, holder=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        org = organization
+        if org is None and holder is not None:
+            org = getattr(holder, "organization", None)
+
+        self.check_types = list(
+            BackgroundCheckType.objects.for_organization(org)
+            .filter(is_active=True)
+            .order_by("display_order", "name")
+        )
+        for ct in self.check_types:
+            self.fields[f"cleared_{ct.id}"] = forms.BooleanField(
                 required=False,
                 label="Cleared",
                 widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
             )
-            self.fields[f"obtained_{check_type}"] = forms.DateField(
+            self.fields[f"obtained_{ct.id}"] = forms.DateField(
                 required=False,
                 label="Obtained",
                 widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
@@ -1156,27 +1305,29 @@ class BackgroundChecksForm(forms.Form):
         """Return per-type (label, cleared_field, obtained_field) tuples."""
         return [
             (
-                BackgroundCheckType(check_type).label,
-                self[f"cleared_{check_type}"],
-                self[f"obtained_{check_type}"],
+                ct.name,
+                self[f"cleared_{ct.id}"],
+                self[f"obtained_{ct.id}"],
             )
-            for check_type in BackgroundCheckType.values
+            for ct in self.check_types
         ]
 
     def _existing_rows(self, student, adult):
         return {
-            bc.check_type: bc
+            bc.check_type_id: bc
             for bc in BackgroundCheck.objects.filter(
                 student=student if student else None,
                 adult=adult if adult else None,
-            )
+            ).select_related("check_type")
         }
 
     def initial_from_holder(self, student=None, adult=None):
         """Pre-populate the form from a holder's existing clearances."""
-        for check_type, check in self._existing_rows(student, adult).items():
-            self.fields[f"cleared_{check_type}"].initial = check.cleared
-            self.fields[f"obtained_{check_type}"].initial = check.obtained_date
+        for check_type_id, check in self._existing_rows(student, adult).items():
+            if f"cleared_{check_type_id}" in self.fields:
+                self.fields[f"cleared_{check_type_id}"].initial = check.cleared
+            if f"obtained_{check_type_id}" in self.fields:
+                self.fields[f"obtained_{check_type_id}"].initial = check.obtained_date
 
     def save(self, student=None, adult=None):
         if bool(student) == bool(adult):
@@ -1185,12 +1336,16 @@ class BackgroundChecksForm(forms.Form):
             )
         if not self.is_valid():
             raise ValueError("Cannot save an invalid background check form.")
+
         existing = self._existing_rows(student, adult)
         cleaned = self.cleaned_data
-        for check_type in BackgroundCheckType.values:
-            cleared = cleaned.get(f"cleared_{check_type}")
-            obtained = cleaned.get(f"obtained_{check_type}")
-            row = existing.get(check_type)
+        holder = student or adult
+        org = getattr(holder, "organization", None)
+
+        for ct in self.check_types:
+            cleared = cleaned.get(f"cleared_{ct.id}")
+            obtained = cleaned.get(f"obtained_{ct.id}")
+            row = existing.get(ct.id)
             if not cleared:
                 if row is not None:
                     row.delete()
@@ -1199,10 +1354,13 @@ class BackgroundChecksForm(forms.Form):
                 row = BackgroundCheck(
                     student=student if student else None,
                     adult=adult if adult else None,
-                    check_type=check_type,
+                    check_type=ct,
+                    organization=org,
                 )
             row.cleared = True
             row.obtained_date = obtained
+            if org and not row.organization_id:
+                row.organization = org
             row.save()
 
 

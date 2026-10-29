@@ -56,6 +56,7 @@ from .mixins import (
 )
 from .portal_settings import (
     PortalAgreementView,
+    PortalBackgroundCheckTypeView,
     PortalCrewView,
     PortalEmailSettingsView,
     PortalKioskView,
@@ -138,6 +139,7 @@ __all__ = [
     "ParentMergeView",
     "ParentUpdateView",
     "PortalAgreementView",
+    "PortalBackgroundCheckTypeView",
     "PortalCrewView",
     "PortalEmailSettingsView",
     "PortalKioskView",

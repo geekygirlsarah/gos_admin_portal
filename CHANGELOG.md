@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-29
 
+### Added
+- **Month and Day Dropdowns for Student Clearance Age Cutoff Date (`templates/programs/settings.html`, `programs/forms.py`, `programs/views/portal_settings.py`, `programs/models/adults.py`)**:
+  - Replaced the full date picker input with clean, intuitive Month (January–December) and Day (1–31) select dropdowns for configuring annual student clearance cutoff dates in Portal Settings.
+  - Eliminated confusing year displays and date picker widgets when setting annual birthday cutoff rules (e.g. Age 17 by September 1).
+- **Configurable Student Age Criteria for Background Clearances (`programs/models/adults.py`, `programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/forms.py`, `programs/migrations/0124_backgroundchecktype_age_criteria.py`)**:
+  - Expanded student clearance applicability beyond fixed Sept 1 cutoffs to support both "Minimum age by cutoff date" (with customizable annual cutoff date) and "Minimum age during program enrollment" (evaluating whether an actively enrolled student reaches or turns the target age during an active program).
+  - Organizations can configure either rule individually or combine both with OR logic in Portal Settings → Clearances.
+  - Updated Portal Settings modals and clearance type badges to display the active age criteria clearly.
+- **Multi-Tenant Dynamic Background Clearance Requirements (`programs/models/adults.py`, `programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/forms.py`)**:
+  - Replaced hardcoded state clearance types with an organization-scoped, configurable `BackgroundCheckType` model supporting custom validity duration (years), applicable roles (students, mentors, lead mentors, parents, alumni), minimum student age requirements on Sept 1 of the academic year, and active status toggling.
+  - Added a dedicated "Clearances" tab in Portal Settings (`/programs/settings/?tab=background_checks`) enabling Lead Mentors to create, edit, activate/deactivate, and delete clearance types.
+  - Converted `BackgroundCheck` records to reference `BackgroundCheckType` foreign keys, with database migration `0123_background_check_type` migrating all prior student and adult clearances cleanly.
+  - Updated Student and Adult profile cards (`templates/students/detail.html`, `templates/adults/detail.html`) and list badges (`templates/adults/list.html`, `templates/mentors/list.html`) to dynamically evaluate and display compliance status across all active clearance requirements.
+  - Optimized queries and added cached clearance lookups across roster and list views to prevent N+1 queries.
+
 ### Fixed
 - **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
 

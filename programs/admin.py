@@ -6,6 +6,7 @@ from .models import (
     Adult,
     AdultStudentRelationship,
     BackgroundCheck,
+    BackgroundCheckType,
     EmailDeliveryEvent,
     Enrollment,
     Fee,
@@ -52,6 +53,34 @@ class ProgramDocumentAdmin(admin.ModelAdmin):
     list_filter = ("program", "is_required", "is_active")
     search_fields = ("name", "program__name")
     autocomplete_fields = ("program",)
+
+
+@admin.register(BackgroundCheckType)
+class BackgroundCheckTypeAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "organization",
+        "validity_years",
+        "applies_to_students",
+        "applies_to_mentors",
+        "applies_to_lead_mentors",
+        "applies_to_parents",
+        "applies_to_alumni",
+        "student_min_age_by_date",
+        "student_min_age_cutoff_date",
+        "student_min_age_during_program",
+        "is_active",
+        "display_order",
+    )
+    list_filter = (
+        "is_active",
+        "applies_to_students",
+        "applies_to_mentors",
+        "applies_to_lead_mentors",
+        "applies_to_parents",
+        "applies_to_alumni",
+    )
+    search_fields = ("name", "description")
 
 
 @admin.register(BackgroundCheck)

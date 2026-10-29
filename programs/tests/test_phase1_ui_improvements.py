@@ -133,8 +133,13 @@ class Phase1UIImprovementsTests(TestCase):
         # Student Jane is 18 in 2026, so requires BG check and doesn't have one
         self.assertContains(response, "BG Check Needed")
 
-        # Now give student all 3 cleared BG checks
-        for c_type in ["state_police", "child_abuse", "fbi"]:
+        # Now give student all cleared BG checks
+        from programs.models import BackgroundCheckType
+
+        active_types = BackgroundCheckType.objects.filter(
+            is_active=True, applies_to_students=True
+        )
+        for c_type in active_types:
             BackgroundCheck.objects.create(
                 student=self.student,
                 check_type=c_type,

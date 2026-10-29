@@ -1,6 +1,9 @@
+import datetime
+
 import pghistory
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.core.signals import request_finished, request_started
 from django.db import models
 from django.utils import timezone
 
@@ -14,6 +17,30 @@ from programs.constants import (
 from programs.validators import validate_phone_number, validate_zip_code
 
 from .fields import sync_linked_user
+
+_ACTIVE_CHECK_TYPES_CACHE = {}
+
+
+def get_active_background_check_types(org=None):
+    org_id = org.id if org else None
+    if org_id not in _ACTIVE_CHECK_TYPES_CACHE:
+        types = list(
+            BackgroundCheckType.objects.for_organization(org)
+            .filter(is_active=True)
+            .order_by("display_order", "name")
+        )
+        _ACTIVE_CHECK_TYPES_CACHE[org_id] = types
+        if org_id is not None and None not in _ACTIVE_CHECK_TYPES_CACHE:
+            _ACTIVE_CHECK_TYPES_CACHE[None] = types
+    return _ACTIVE_CHECK_TYPES_CACHE[org_id]
+
+
+def clear_active_background_check_types_cache(*args, **kwargs):
+    _ACTIVE_CHECK_TYPES_CACHE.clear()
+
+
+request_started.connect(clear_active_background_check_types_cache)
+request_finished.connect(clear_active_background_check_types_cache)
 
 
 @pghistory.track()
@@ -309,21 +336,28 @@ class Adult(models.Model):
             s.attached_rel = rels.get(s.pk, "parent")
         return students
 
-    def requires_background_check(self) -> bool:
-        """Whether the adult must hold PA background clearances.
-        Currently, all mentors/volunteers require them.
-        """
-        return self.is_mentor
+    def requires_background_check(self, active_types=None) -> bool:
+        """Whether the adult must hold any background clearances based on active check types."""
+        if active_types is None:
+            active_types = get_active_background_check_types(
+                getattr(self, "organization", None)
+            )
+        return any(t.applies_to_adult(self) for t in active_types)
 
-    def needs_background_check(self) -> bool:
+    def needs_background_check(self, active_types=None) -> bool:
         """Whether the adult requires clearances AND is missing at least one valid check."""
-        if not self.requires_background_check():
+        if active_types is None:
+            active_types = get_active_background_check_types(
+                getattr(self, "organization", None)
+            )
+        required_types = [t for t in active_types if t.applies_to_adult(self)]
+        if not required_types:
             return False
-        required_types = set(BackgroundCheckType.values)
-        valid_types = {
-            bc.check_type for bc in self.background_checks.all() if bc.is_valid
+        valid_type_ids = {
+            bc.check_type_id for bc in self.background_checks.all() if bc.is_valid
         }
-        return not required_types.issubset(valid_types)
+        required_type_ids = {t.id for t in required_types}
+        return not required_type_ids.issubset(valid_type_ids)
 
     def clean(self):
         super().clean()
@@ -379,10 +413,273 @@ class Adult(models.Model):
         return active.filter(id__in=accepted_ids).count() == active.count()
 
 
-class BackgroundCheckType(models.TextChoices):
-    STATE_POLICE = "state_police", "PA State Police Criminal History (PATCH)"
-    CHILD_ABUSE = "child_abuse", "PA Child Abuse History (Act 151)"
-    FBI = "fbi", "FBI Fingerprint (Act 114)"
+class BackgroundCheckType(models.Model):
+    # Constants for backward compatibility with migrations/constants
+    STATE_POLICE = "state_police"
+    CHILD_ABUSE = "child_abuse"
+    FBI = "fbi"
+
+    DEFAULT_PA_TYPES = [
+        {
+            "name": "PA State Police Criminal History (PATCH)",
+            "description": "Pennsylvania State Police criminal history check.",
+            "validity_years": 5,
+            "applies_to_students": True,
+            "applies_to_mentors": True,
+            "applies_to_lead_mentors": True,
+            "applies_to_parents": False,
+            "applies_to_alumni": False,
+            "student_min_age_by_date": 17,
+            "student_min_age_cutoff_date": datetime.date(2000, 9, 1),
+            "student_min_age_during_program": 18,
+            "display_order": 1,
+        },
+        {
+            "name": "PA Child Abuse History (Act 151)",
+            "description": "Pennsylvania Department of Human Services child abuse clearance.",
+            "validity_years": 5,
+            "applies_to_students": True,
+            "applies_to_mentors": True,
+            "applies_to_lead_mentors": True,
+            "applies_to_parents": False,
+            "applies_to_alumni": False,
+            "student_min_age_by_date": 17,
+            "student_min_age_cutoff_date": datetime.date(2000, 9, 1),
+            "student_min_age_during_program": 18,
+            "display_order": 2,
+        },
+        {
+            "name": "FBI Fingerprint (Act 114)",
+            "description": "Federal Bureau of Investigation fingerprint background check.",
+            "validity_years": 5,
+            "applies_to_students": True,
+            "applies_to_mentors": True,
+            "applies_to_lead_mentors": True,
+            "applies_to_parents": False,
+            "applies_to_alumni": False,
+            "student_min_age_by_date": 17,
+            "student_min_age_cutoff_date": datetime.date(2000, 9, 1),
+            "student_min_age_during_program": 18,
+            "display_order": 3,
+        },
+    ]
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="background_check_types",
+        help_text="Organization that owns this background check type.",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    name = models.CharField(
+        max_length=200,
+        help_text="Name of the background check / clearance type.",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description or instructions for obtaining this clearance.",
+    )
+    validity_years = models.PositiveIntegerField(
+        default=5,
+        help_text="Duration in years this clearance remains valid (0 for non-expiring).",
+    )
+    applies_to_students = models.BooleanField(
+        default=True,
+        help_text="Whether this check is required for students.",
+    )
+    applies_to_mentors = models.BooleanField(
+        default=True,
+        help_text="Whether this check is required for mentors.",
+    )
+    applies_to_lead_mentors = models.BooleanField(
+        default=True,
+        help_text="Whether this check is required for lead mentors.",
+    )
+    applies_to_parents = models.BooleanField(
+        default=False,
+        help_text="Whether this check is required for parents.",
+    )
+    applies_to_alumni = models.BooleanField(
+        default=False,
+        help_text="Whether this check is required for alumni.",
+    )
+    student_min_age_by_date = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="For students: minimum age reached by the specified cutoff date (e.g. 17).",
+    )
+    student_min_age_cutoff_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Cutoff date (month and day used annually) for the minimum age requirement (e.g. Sept 1).",
+    )
+    student_min_age_during_program = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="For students: minimum age reached during an active program enrollment (e.g. 18).",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this background check type is actively required.",
+    )
+    display_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Order in which this check is displayed in forms and lists.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+        verbose_name = "Background Check Type"
+        verbose_name_plural = "Background Check Types"
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def student_min_age(self):
+        """Compatibility property returning the primary minimum age constraint if set."""
+        return self.student_min_age_by_date or self.student_min_age_during_program
+
+    @student_min_age.setter
+    def student_min_age(self, value):
+        self.student_min_age_by_date = value
+
+    @property
+    def student_min_age_cutoff_month(self):
+        """Cutoff month (1-12) or 9 (September) as default."""
+        if self.student_min_age_cutoff_date:
+            return self.student_min_age_cutoff_date.month
+        return 9
+
+    @property
+    def student_min_age_cutoff_day(self):
+        """Cutoff day (1-31) or 1 as default."""
+        if self.student_min_age_cutoff_date:
+            return self.student_min_age_cutoff_date.day
+        return 1
+
+    def save(self, *args, **kwargs):
+        clear_active_background_check_types_cache()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        clear_active_background_check_types_cache()
+        super().delete(*args, **kwargs)
+
+    def applies_to_student(self, student) -> bool:
+        """Whether this check type applies to the given student based on configured criteria."""
+        if not self.is_active or not self.applies_to_students:
+            return False
+
+        has_by_date_rule = self.student_min_age_by_date is not None
+        has_during_program_rule = self.student_min_age_during_program is not None
+
+        # If no age criteria configured, applies to all students
+        if not has_by_date_rule and not has_during_program_rule:
+            return True
+
+        dob = getattr(student, "date_of_birth", None)
+        if not dob:
+            return False
+        if isinstance(dob, str):
+            try:
+                dob = datetime.datetime.strptime(dob, "%Y-%m-%d").date()
+            except ValueError:
+                return False
+
+        today = timezone.localdate()
+
+        # Criterion 1: Minimum age by [date]
+        if has_by_date_rule:
+            cutoff_month = (
+                self.student_min_age_cutoff_date.month
+                if self.student_min_age_cutoff_date
+                else 9
+            )
+            cutoff_day = (
+                self.student_min_age_cutoff_date.day
+                if self.student_min_age_cutoff_date
+                else 1
+            )
+            if (today.month, today.day) >= (cutoff_month, cutoff_day):
+                academic_year = today.year
+            else:
+                academic_year = today.year - 1
+            oldest_dob = datetime.date(
+                academic_year - self.student_min_age_by_date, cutoff_month, cutoff_day
+            )
+            if dob <= oldest_dob:
+                return True
+
+        # Criterion 2: Minimum age during program enrollment
+        if has_during_program_rule:
+            target_age = self.student_min_age_during_program
+            try:
+                birthday = dob.replace(year=dob.year + target_age)
+            except ValueError:
+                birthday = dob.replace(month=2, day=28, year=dob.year + target_age)
+
+            if (
+                hasattr(student, "_prefetched_objects_cache")
+                and "enrollment_set" in student._prefetched_objects_cache
+            ):
+                enrollments = [
+                    e
+                    for e in student.enrollment_set.all()
+                    if e.active and e.program and e.program.active
+                ]
+            else:
+                enrollments = list(
+                    student.enrollment_set.select_related("program").filter(
+                        active=True, program__active=True
+                    )
+                )
+
+            for enr in enrollments:
+                prog = enr.program
+                if prog.end_date:
+                    if birthday <= prog.end_date:
+                        return True
+                elif prog.start_date:
+                    prog_end_approx = prog.start_date.replace(
+                        year=prog.start_date.year + 1
+                    )
+                    if birthday <= prog_end_approx:
+                        return True
+                else:
+                    if birthday <= today or (today.year - dob.year) >= target_age:
+                        return True
+
+        return False
+
+    def applies_to_adult(self, adult) -> bool:
+        """Whether this check type applies to the given adult based on their role."""
+        if not self.is_active:
+            return False
+
+        is_lead = False
+        user = getattr(adult, "user", None)
+        if user:
+            if (
+                getattr(user, "is_superuser", False)
+                or user.groups.filter(name="LeadMentor").exists()
+            ):
+                is_lead = True
+
+        if is_lead and self.applies_to_lead_mentors:
+            return True
+        if adult.is_mentor and self.applies_to_mentors:
+            return True
+        if adult.is_parent and self.applies_to_parents:
+            return True
+        if adult.is_alumni and self.applies_to_alumni:
+            return True
+        return False
 
 
 # PA clearances are valid for 5 years for both adults and students.
@@ -390,15 +687,12 @@ CLEARANCE_VALIDITY_YEARS = 5
 
 
 class BackgroundCheck(models.Model):
-    """A single PA background clearance held by a student or an adult.
+    """A single background clearance held by a student or an adult.
 
     One row per check type per person. Both ``student`` and ``adult`` are
-    nullable but exactly one must be set. The university holds the actual
-    forms/reports, so we only track clearance status and (when known) the
-    expiration/obtained dates. Clearances are valid for 5 years; a student
-    becoming an alumni may have both a student and an adult record, so we do
-    not enforce a unique-per-type constraint at the database level (the
-    application logic keeps at most one row per type per person).
+    nullable but exactly one must be set. The university/org holds the actual
+    forms/reports, so we track clearance status and (when known) the
+    expiration/obtained dates.
     """
 
     student = models.ForeignKey(
@@ -425,7 +719,11 @@ class BackgroundCheck(models.Model):
         blank=True,
         related_name="background_checks",
     )
-    check_type = models.CharField(max_length=20, choices=BackgroundCheckType.choices)
+    check_type = models.ForeignKey(
+        BackgroundCheckType,
+        on_delete=models.CASCADE,
+        related_name="checks",
+    )
     cleared = models.BooleanField(
         default=False,
         help_text="Whether this clearance has been obtained and passed.",
@@ -437,22 +735,40 @@ class BackgroundCheck(models.Model):
     )
 
     class Meta:
-        ordering = ["check_type"]
+        ordering = ["check_type__display_order", "check_type__name"]
 
     def __str__(self):
         holder = self.student or self.adult
         return f"{self.get_check_type_display()} for {holder}"
 
+    def get_check_type_display(self):
+        """Compatibility method for templates/code expecting get_check_type_display()."""
+        if self.check_type_id and self.check_type:
+            return self.check_type.name
+        return ""
+
     @property
     def expiration_date(self):
         """When this clearance expires.
 
-        PA clearances are valid for 5 years from the date obtained, so the
-        expiration date is always derived from ``obtained_date``.
+        Derived from ``obtained_date`` and the check type's ``validity_years``.
         """
         if not self.obtained_date:
             return None
-        return self.obtained_date + relativedelta(years=CLEARANCE_VALIDITY_YEARS)
+        validity_years = 5
+        if self.check_type_id and self.check_type:
+            validity_years = self.check_type.validity_years
+        if not validity_years or validity_years <= 0:
+            return None
+        return self.obtained_date + relativedelta(years=validity_years)
+
+    @property
+    def date_acquired(self):
+        return self.obtained_date
+
+    @date_acquired.setter
+    def date_acquired(self, value):
+        self.obtained_date = value
 
     def clean(self):
         from django.core.exceptions import ValidationError
