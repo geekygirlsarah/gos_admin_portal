@@ -1,10 +1,10 @@
 # Dev/CI tools. Production (build.sh) installs requirements.txt only.
 -r requirements.txt
-pre-commit==4.2.0
-bandit==1.9.2
+pre-commit==4.7.0
+bandit==1.9.4
 black==26.10.1
-flake8==7.3.0
-isort==7.0.0
-coverage==7.6.12
+flake8==7.4.1
+isort==9.0.2
+coverage==7.17.0
 safety==3.8.1
 tblib==3.0.0

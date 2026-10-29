@@ -6,10 +6,10 @@ django-allauth==65.21.0
 django-formtools==2.7
 django-pghistory==3.9.2
 django-pgtrigger==4.17.0
-gunicorn==26.0.0
+gunicorn==26.2.0
 uvicorn==0.54.0
 whitenoise==6.12.0
-psycopg[binary]==3.3.4
+psycopg[binary]==3.3.6
 dj-database-url==3.1.2
 dj-config-url==0.1.1
 pillow==13.0.0
@@ -18,8 +18,8 @@ openpyxl==3.1.5
 markdown==3.11.2
 nh3==0.3.7
 premailer==3.10.0
-python-dateutil==2.9.0
-cryptography==50.0.0
+python-dateutil==3.0.0
+cryptography==50.0.2
 Authlib==1.9.1
 joserfc==1.7.7
 defusedxml==0.7.1
@@ -27,6 +27,6 @@ python3-openid==3.2.0
 requests==2.34.2
 python-dotenv==1.2.4
 # Transitives OSV treats as declared mins (requests/uvicorn). Pin patched versions.
-certifi==2026.10.19
-idna==3.15
+certifi==2026.10.23
+idna==3.20
 h11==0.16.0
