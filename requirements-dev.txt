@@ -7,3 +7,4 @@ flake8==7.3.0
 isort==7.0.0
 coverage==7.6.12
 safety==3.8.1
+tblib==3.0.0

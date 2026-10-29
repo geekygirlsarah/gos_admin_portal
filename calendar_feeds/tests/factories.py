@@ -111,8 +111,9 @@ def make_event(
 ):
     if start_datetime is None:
         start_datetime = timezone.make_aware(
-            timezone.datetime.now() + timedelta(days=3),
-            timezone.UTC,
+            timezone.datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+            + timedelta(days=3),
+            timezone.get_current_timezone(),
         )
     if end_datetime is None:
         end_datetime = start_datetime + timedelta(hours=1)
