@@ -113,21 +113,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from programs.models import EmailDeliveryEvent, Program, SlidingScale
             from programs.utils import students_in_running_programs
 
+            org = getattr(self.request, "organization", None)
             active_programs_count = (
-                Program.objects.for_organization(
-                    getattr(self.request, "organization", None)
-                )
-                .filter(active=True)
+                Program.objects.for_organization(org).filter(active=True).count()
+            )
+            active_students_count = students_in_running_programs(org).count()
+            pending_apps_count = (
+                Application.objects.for_organization(org)
+                .filter(status=Application.Status.SUBMITTED)
                 .count()
             )
-            active_students_count = students_in_running_programs().count()
-            pending_apps_count = Application.objects.filter(
-                status=Application.Status.SUBMITTED
-            ).count()
             pending_orders_count = OrderItem.objects.filter(order__isnull=True).count()
-            pending_sliding_count = SlidingScale.objects.filter(
-                status=SlidingScale.STATUS_PENDING
-            ).count()
+            pending_sliding_count = (
+                SlidingScale.objects.for_organization(org)
+                .filter(status=SlidingScale.STATUS_PENDING)
+                .count()
+            )
             pending_email_issues_count = EmailDeliveryEvent.objects.filter(
                 resolved=False,
                 event_type__in=[

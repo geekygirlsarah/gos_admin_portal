@@ -1,6 +1,29 @@
 from django.db import models
 
 
+class OrganizationQuerySet(models.QuerySet):
+    """Queryset helpers for organization (multi-tenant) scoping.
+
+    ``for_organization`` filters rows belonging to the given organization.
+    While records may still be unscoped during transitions (organization__isnull=True),
+    it keeps them visible alongside the matching org, or returns all records if
+    organization is None.
+    """
+
+    def for_organization(self, organization):
+        if organization is None:
+            return self
+        return self.filter(
+            models.Q(organization=organization) | models.Q(organization__isnull=True)
+        )
+
+
+class OrganizationManager(models.Manager.from_queryset(OrganizationQuerySet)):
+    """Manager providing multi-tenant organization scoping."""
+
+    pass
+
+
 class Organization(models.Model):
     """A tenant/organization that owns portal data.
 

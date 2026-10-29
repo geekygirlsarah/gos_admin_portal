@@ -15,6 +15,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.utils import timezone
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.constants import (
     APP_ID_ALPHABET,
     APP_ID_LENGTH,
@@ -138,6 +139,7 @@ class Application(models.Model):
         related_name="applications",
         help_text="Organization this application is submitted to (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     class Type(models.TextChoices):
         STUDENT = "student", "Student"
@@ -481,6 +483,8 @@ class ApplicationDocumentSubmission(models.Model):
         related_name="application_document_submissions",
         help_text="Organization that owns this submission (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     document = models.ForeignKey(
         "programs.ProgramDocument",
         on_delete=models.CASCADE,

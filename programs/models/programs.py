@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 class ProgramFeature(models.Model):
     """Toggleable capability that can be enabled per Program.
@@ -28,23 +30,10 @@ class ProgramFeature(models.Model):
         return self.name
 
 
-class ProgramQuerySet(models.QuerySet):
-    """Program queryset helpers for organization (multi-tenant) scoping.
+class ProgramQuerySet(OrganizationQuerySet):
+    """Program queryset helpers for organization (multi-tenant) scoping."""
 
-    Phase 1 adds the nullable ``organization`` FK without enforcing scoping.
-    ``for_organization`` therefore keeps rows that aren't organization-scoped
-    yet (``organization__isnull=True``) visible alongside the matching org, so
-    existing and freshly created un-tagged records behave exactly as before.
-    A ``None`` organization (e.g. none resolved on the request) returns
-    everything.
-    """
-
-    def for_organization(self, organization):
-        if organization is None:
-            return self
-        return self.filter(
-            models.Q(organization=organization) | models.Q(organization__isnull=True)
-        )
+    pass
 
 
 class Program(models.Model):

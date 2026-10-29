@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.constants import (
     PHONE_TYPE_CHOICES,
     STATE_CHOICES,
@@ -47,6 +48,8 @@ class Student(models.Model):
         related_name="students",
         help_text="Organization that owns this student (multi-tenant; null until backfilled).",
     )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     # Optional link to a User so students can self-manage later if desired
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

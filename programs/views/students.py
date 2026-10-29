@@ -79,7 +79,11 @@ class StudentListView(
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+        )
         program_id = self.kwargs.get("program_id")
         if program_id:
             qs = qs.filter(enrollment__program_id=program_id).distinct()
@@ -123,7 +127,11 @@ class StudentPhotoListView(LoginRequiredMixin, StudentQuerysetRoleMixin, ListVie
     paginate_by = 48
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+        )
 
         qs = self.filter_students_by_role(qs)
 
@@ -149,7 +157,12 @@ class StudentEmergencyContactsView(
     default_sort_field = "name"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(graduated=False)
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+            .filter(graduated=False)
+        )
 
         qs = self.filter_students_by_role(qs)
 
@@ -181,7 +194,12 @@ class StudentsByGradeView(LoginRequiredMixin, StudentQuerysetRoleMixin, ListView
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(graduated=False)
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+            .filter(graduated=False)
+        )
 
         qs = self.filter_students_by_role(qs)
 
@@ -247,7 +265,12 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
     context_object_name = "students"
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(graduated=False)
+        qs = (
+            super()
+            .get_queryset()
+            .for_organization(getattr(self.request, "organization", None))
+            .filter(graduated=False)
+        )
 
         role = get_user_role(self.request.user)
         if role == "Parent":

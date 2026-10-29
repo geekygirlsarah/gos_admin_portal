@@ -1,5 +1,7 @@
 from django.utils import timezone
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 from .adults import (
     CLEARANCE_VALIDITY_YEARS,
     Adult,
@@ -74,6 +76,8 @@ __all__ = [
     "MentorAgreement",
     "MentorAgreementAcceptance",
     "MentorAgreementSubmission",
+    "OrganizationManager",
+    "OrganizationQuerySet",
     "Payment",
     "Program",
     "ProgramDocument",

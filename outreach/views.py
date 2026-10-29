@@ -92,7 +92,11 @@ class OutreachLocationPickerMixin:
         context = super().get_context_data(**kwargs)
         context["can_add_location"] = user_is_mentor_or_lead(self.request.user)
         context["locations_data"] = list(
-            OutreachLocation.objects.order_by("name").values("id", "name", "address")
+            OutreachLocation.objects.for_organization(
+                getattr(self.request, "organization", None)
+            )
+            .order_by("name")
+            .values("id", "name", "address")
         )
         context["location_create_url"] = reverse(
             "outreach:location_create", kwargs={"program_id": self.program.id}
@@ -110,7 +114,9 @@ class OutreachLocationListView(
     context_object_name = "locations"
 
     def get_queryset(self):
-        return OutreachLocation.objects.order_by("name")
+        return OutreachLocation.objects.for_organization(
+            getattr(self.request, "organization", None)
+        ).order_by("name")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

@@ -7,17 +7,17 @@ from django.db.models import Q
 from ..models import Student
 
 
-def active_students():
+def active_students(organization=None):
     """Return a queryset of students who are still active (not graduated).
 
     A student is considered inactive once marked ``graduated=True``. This is
     the student-level equivalent of the old ``active`` flag and is used to
     keep inactive students out of dropdowns/selection lists.
     """
-    return Student.objects.filter(graduated=False)
+    return Student.objects.for_organization(organization).filter(graduated=False)
 
 
-def active_students_in_program(program):
+def active_students_in_program(program, organization=None):
     """Return students with an active enrollment in ``program``.
 
     A student is considered active in a program when their ``Enrollment`` has
@@ -25,14 +25,14 @@ def active_students_in_program(program):
     dropped out (enrollment marked inactive) or graduated are excluded. This
     mirrors how the program detail page splits active vs. inactive students.
     """
-    return Student.objects.filter(
+    return Student.objects.for_organization(organization).filter(
         enrollment__program=program,
         enrollment__active=True,
         graduated=False,
     )
 
 
-def students_in_running_programs():
+def students_in_running_programs(organization=None):
     """Return students with an active enrollment in a currently running program.
 
     A "running" program is one whose :attr:`Program.status` resolves to
@@ -45,7 +45,8 @@ def students_in_running_programs():
 
     today = timezone.localdate()
     return (
-        Student.objects.filter(
+        Student.objects.for_organization(organization)
+        .filter(
             graduated=False,
             enrollment__active=True,
             enrollment__program__active=True,

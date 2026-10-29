@@ -438,13 +438,15 @@ def _attendance_date_bounds(params):
     return None, None
 
 
-def _filter_attendance_sessions(params):
+def _filter_attendance_sessions(params, organization=None):
     """Build the AttendanceSession queryset filtered by GET params.
 
     Returns (sessions, range_start, range_end) where range_start/range_end are
     the inclusive/exclusive datetime bounds used (None when no date filter).
     """
-    sessions = AttendanceSession.objects.select_related("student", "adult", "program")
+    sessions = AttendanceSession.objects.for_organization(organization).select_related(
+        "student", "adult", "program"
+    )
 
     program_id = params.get("program_id")
     if program_id and program_id.isdigit():
@@ -547,7 +549,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         sort = params.get("sort", "check_in")
         direction = params.get("dir", "desc")
 
-        sessions, range_start, range_end = _filter_attendance_sessions(params)
+        sessions, range_start, range_end = _filter_attendance_sessions(
+            params, getattr(request, "organization", None)
+        )
 
         # Sorting logic
         if sort == "person":

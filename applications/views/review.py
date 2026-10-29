@@ -564,7 +564,8 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
     template_name = "applications/review/list.html"
 
     def get(self, request):
-        qs = Application.objects.select_related("program").all()
+        org = getattr(request, "organization", None)
+        qs = Application.objects.for_organization(org).select_related("program")
         status = (request.GET.get("status") or "").strip()
         applicant_type = (request.GET.get("type") or "").strip()
         program_id = (request.GET.get("program") or "").strip()
@@ -704,7 +705,7 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
             grouped = [g for g in grouped if g["apps"]]
 
         # KPI summary metrics across applications (or filtered program)
-        kpi_base = Application.objects.all()
+        kpi_base = Application.objects.for_organization(org)
         if program_id.isdigit():
             kpi_base = kpi_base.filter(program_id=int(program_id))
 
