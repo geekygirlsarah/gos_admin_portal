@@ -135,5 +135,5 @@ jobs:
 #        coverage report
     - name: Run Tests
       run: |
-        uv pip install tblib
+        pip install tblib
         python manage.py test --noinput --parallel
