@@ -18,6 +18,7 @@ from outreach.models import (
 from outreach.services import (
     generate_shift_ics,
     notify_mentor_outreach_signup,
+    notify_outreach_event_deleted,
     notify_outreach_signup,
 )
 from outreach.tests.factories import create_outreach_event
@@ -323,3 +324,93 @@ class OutreachNotificationsTest(TestCase):
         self.assertIn(
             'Log in to the <a href="https://robotics.example.com/programs/', html_body
         )
+
+    def test_event_deletion_notifies_champions_helpers_and_mentors(self):
+        # Setup champion, helper, and mentor
+        OutreachSignup.objects.create(
+            student=self.student1, shift=self.shift, role=OutreachSignup.CHAMPION
+        )
+        OutreachSignup.objects.create(
+            student=self.student2, shift=self.shift, role=OutreachSignup.HELPER
+        )
+        OutreachMentorSignup.objects.create(adult=self.mentor_adult, shift=self.shift)
+
+        mail.outbox.clear()
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("outreach:event_delete", args=[self.program.id, self.event.pk])
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(OutreachEvent.objects.filter(pk=self.event.pk).exists())
+
+        # Should send 3 notification emails
+        self.assertEqual(len(mail.outbox), 3)
+
+        recipients = {email.to[0] for email in mail.outbox}
+        self.assertEqual(
+            recipients,
+            {"student1@example.com", "student2@example.com", "mentor@example.com"},
+        )
+
+        for email in mail.outbox:
+            self.assertIn("Cancelled", email.subject)
+            self.assertIn("Robotics Workshop", email.subject)
+            self.assertIn("Robotics Workshop", email.body)
+            self.assertIn("Carnegie Mellon University", email.body)
+            self.assertIn("Log in to the Girls of Steel Portal", email.body)
+
+        # Verify role and specific greetings in each email
+        student1_mail = next(e for e in mail.outbox if e.to == ["student1@example.com"])
+        self.assertIn("Jane Doe", student1_mail.body)
+        self.assertIn("Champion", student1_mail.body)
+
+        student2_mail = next(e for e in mail.outbox if e.to == ["student2@example.com"])
+        self.assertIn("Alice Smith", student2_mail.body)
+        self.assertIn("Helper", student2_mail.body)
+
+        mentor_mail = next(e for e in mail.outbox if e.to == ["mentor@example.com"])
+        self.assertIn("Mentor Bob", mentor_mail.body)
+        self.assertIn("Mentor Support", mentor_mail.body)
+
+    def test_event_deletion_with_no_signups_sends_no_emails(self):
+        mail.outbox.clear()
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("outreach:event_delete", args=[self.program.id, self.event.pk])
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(OutreachEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_event_deletion_deduplicates_multi_shift_signups(self):
+        # Create second shift on the event
+        shift2 = OutreachShift.objects.create(
+            event=self.event,
+            date=self.shift_date,
+            start_time=time(14, 0),
+            end_time=time(17, 0),
+            max_champions=2,
+            max_helpers=5,
+        )
+        # Student1 signed up on shift 1 and shift 2
+        OutreachSignup.objects.create(
+            student=self.student1, shift=self.shift, role=OutreachSignup.CHAMPION
+        )
+        OutreachSignup.objects.create(
+            student=self.student1, shift=shift2, role=OutreachSignup.HELPER
+        )
+        # Mentor signed up on shift 1 and shift 2
+        OutreachMentorSignup.objects.create(adult=self.mentor_adult, shift=self.shift)
+        OutreachMentorSignup.objects.create(adult=self.mentor_adult, shift=shift2)
+
+        mail.outbox.clear()
+
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("outreach:event_delete", args=[self.program.id, self.event.pk])
+        resp = self.client.post(url)
+        self.assertEqual(resp.status_code, 302)
+
+        # Exactly 2 emails: 1 for student1, 1 for mentor_adult
+        self.assertEqual(len(mail.outbox), 2)
+        recipients = {email.to[0] for email in mail.outbox}
+        self.assertEqual(recipients, {"student1@example.com", "mentor@example.com"})

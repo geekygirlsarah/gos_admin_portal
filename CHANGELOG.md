@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-29
 
+### Added
+- **Outreach Event Cancellation Email Notifications (`outreach/services.py`, `templates/outreach/emails/`, `outreach/views.py`)**: When an outreach event is deleted/cancelled, automated notification emails are dispatched to all registered champions, helpers, and supporting mentors with event details, scheduled dates/times, venue location, role labels, and links to upcoming events in the portal.
+
 ### Changed
 - **Smart Filtering & Paid-Off Program Suppression for Monthly Balance Notices (`send_monthly_balances`, `programs/services/balances_digest.py`)**: Enhanced monthly balance statement command (`send_monthly_balances`) to avoid sending reminders to parents with a $0 balance unless they had a recent transaction (such as a payment or fee) within the past month (configurable via `--days-back` and `--date`). Statements also automatically exclude older, fully-paid-off programs with no recent activity so notices focus solely on programs with outstanding balances or recent transactions.
 - **Dynamic Month/Year in Monthly Balance Statement Subject & Header (`send_monthly_balances`, `templates/programs/emails/monthly_balance_update.html`)**: Appended the statement month and year (e.g. `Monthly Balance Statement for Jane Doe - October 2026`) to monthly balance notification emails to ensure unique conversation threading across billing cycles and prevent email clients (like Gmail) from folding repeated statement content.
