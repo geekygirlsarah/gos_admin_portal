@@ -133,6 +133,12 @@ class PortalSettingsLeadMentorViewTests(TestCase):
     def setUp(self):
         self.gos = Organization.objects.get(slug="gos")
 
+        self.admin_user = get_user_model().objects.create_superuser(
+            username="sysadmin",
+            email="admin@example.com",
+            password="adminpassword123",  # nosec B106
+        )
+
         self.lead_user = User.objects.create_user(
             username="lead_coach",
             email="lead@example.com",
@@ -174,7 +180,7 @@ class PortalSettingsLeadMentorViewTests(TestCase):
         self.client = Client()
 
     def test_lead_mentors_tab_rendered(self):
-        """Settings page displays current lead mentors and candidates on the lead_mentors tab."""
+        """Settings page displays current lead mentors and candidates on the lead_mentors tab with updated columns."""
         self.client.force_login(self.lead_user)
         response = self.client.get(reverse("portal_settings") + "?tab=lead_mentors")
         self.assertEqual(response.status_code, 200)
@@ -185,6 +191,28 @@ class PortalSettingsLeadMentorViewTests(TestCase):
         self.assertContains(response, "Lead Mentor Security &amp; Authority")
         self.assertNotContains(response, "server-level superuser or staff")
 
+        # Table columns verification: Name, Email, Assigned On, Last Logged In, Actions (no Username column)
+        self.assertContains(response, "Assigned On")
+        self.assertContains(response, "Last Logged In")
+        self.assertNotContains(response, '<th style="width: 20%;">Username</th>')
+        self.assertNotContains(response, "<th>Username</th>")
+
+        # Verify no "Admin" badges are displayed even if a superuser is a member
+        UserOrganizationMembership.objects.create(
+            user=self.admin_user,
+            organization=self.gos,
+            role="LeadMentor",
+            is_active=True,
+        )
+        response = self.client.get(reverse("portal_settings") + "?tab=lead_mentors")
+        self.assertContains(response, "admin@example.com")
+        self.assertNotContains(response, 'title="Superuser / System Admin"')
+        self.assertNotContains(
+            response,
+            '<span class="badge bg-dark-subtle text-dark ms-1" title="Superuser / System Admin">Admin</span>',
+        )
+        self.assertNotContains(response, "Admin</span>")
+
         # Verify prominent placement: security callout box is positioned before the user table
         content = response.content.decode("utf-8")
         security_box_pos = content.find("Lead Mentor Security &amp; Authority")
@@ -192,6 +220,42 @@ class PortalSettingsLeadMentorViewTests(TestCase):
         self.assertGreater(security_box_pos, -1)
         self.assertGreater(user_table_pos, -1)
         self.assertLess(security_box_pos, user_table_pos)
+
+    def test_user_organization_membership_display_name_resolution(self):
+        """Membership correctly resolves display name across Adult profiles, Student profiles, or User fallbacks."""
+        # 1. Adult profile resolution
+        membership = UserOrganizationMembership.objects.filter(
+            user=self.lead_user,
+            organization=self.gos,
+            role="LeadMentor",
+        ).first()
+        self.assertEqual(membership.user_display_name, "Lead Coach")
+
+        # 2. User with no profile falls back to full name or email/username
+        user_no_profile = get_user_model().objects.create_user(
+            username="standalone_user",
+            email="standalone@example.com",
+            first_name="Stand",
+            last_name="Alone",
+        )
+        membership_no_profile = UserOrganizationMembership.objects.create(
+            user=user_no_profile,
+            organization=self.gos,
+            role="LeadMentor",
+        )
+        self.assertEqual(membership_no_profile.user_display_name, "Stand Alone")
+
+        # 3. User with only email / username
+        user_bare = get_user_model().objects.create_user(
+            username="bare_user",
+            email="bare@example.com",
+        )
+        membership_bare = UserOrganizationMembership.objects.create(
+            user=user_bare,
+            organization=self.gos,
+            role="LeadMentor",
+        )
+        self.assertEqual(membership_bare.user_display_name, "bare@example.com")
 
     def test_add_lead_mentor_action(self):
         """Lead mentor can promote an eligible user to Lead Mentor."""

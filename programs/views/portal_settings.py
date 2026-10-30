@@ -126,8 +126,12 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             UserOrganizationMembership.objects.filter(
                 organization=org, role="LeadMentor", is_active=True
             )
-            .select_related("user", "invited_by")
-            .order_by("user__first_name", "user__last_name", "user__username")
+            .select_related(
+                "user", "user__adult_profile", "user__student_profile", "invited_by"
+            )
+            .order_by(
+                "user__first_name", "user__last_name", "user__email", "user__username"
+            )
         )
         lead_mentor_user_ids = set(
             lead_mentor_memberships.values_list("user_id", flat=True)
@@ -136,7 +140,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         eligible_lead_mentor_users = (
             User.objects.filter(is_active=True)
             .exclude(id__in=lead_mentor_user_ids)
-            .order_by("first_name", "last_name", "username")
+            .select_related("adult_profile", "student_profile")
+            .order_by("first_name", "last_name", "email", "username")
         )
 
         context = {
@@ -1103,7 +1108,19 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 resource=target_user,
                 notes=f"User {target_user} assigned as Lead Mentor for organization '{org.name}'.",
             )
-            target_name = target_user.get_full_name() or target_user.username
+            target_name = (
+                (
+                    getattr(target_user, "adult_profile", None)
+                    and target_user.adult_profile.display_name
+                )
+                or (
+                    getattr(target_user, "student_profile", None)
+                    and target_user.student_profile.display_name
+                )
+                or target_user.get_full_name()
+                or target_user.email
+                or target_user.username
+            )
             messages.success(
                 request,
                 f"Successfully assigned {target_name} as Lead Mentor for {org.name}.",
@@ -1131,7 +1148,8 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 if active_count <= 1:
                     messages.error(
                         request,
-                        "Cannot remove the only Lead Mentor. Assign another Lead Mentor first to prevent organization lockout.",
+                        "Cannot remove the only Lead Mentor. Assign another Lead Mentor first to prevent "
+                        "organization lockout.",
                     )
                     return redirect("/programs/settings/?tab=lead_mentors")
 
@@ -1152,7 +1170,19 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     resource=target_user,
                     notes=f"Removed Lead Mentor role for user {target_user} in organization '{org.name}'.",
                 )
-                target_name = target_user.get_full_name() or target_user.username
+                target_name = (
+                    (
+                        getattr(target_user, "adult_profile", None)
+                        and target_user.adult_profile.display_name
+                    )
+                    or (
+                        getattr(target_user, "student_profile", None)
+                        and target_user.student_profile.display_name
+                    )
+                    or target_user.get_full_name()
+                    or target_user.email
+                    or target_user.username
+                )
                 messages.success(
                     request,
                     f"Removed Lead Mentor role from {target_name}.",

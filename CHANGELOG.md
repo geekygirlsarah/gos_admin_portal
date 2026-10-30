@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Organization-Scoped Lead Mentor Role & Management (`programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/permission_views.py`, `organizations/migrations/0004_convert_lead_mentors_to_memberships.py`)**:
   - Invented an organization-level Lead Mentor role decoupled from Django server-level `superuser` and `staff` flags, reserving `is_superuser` and `is_staff` for system administrators.
   - Added a dedicated "Lead Mentors" tab in Portal Settings (`/programs/settings/?tab=lead_mentors`) displaying active Lead Mentors and providing an interface to assign and revoke Lead Mentor status.
+  - Refined the Lead Mentors table to present Name (via profile-aware user lookups), Email, Assigned On, and Last Logged In timestamps, removing the internal username column and server-level "Admin" badges for a uniform, organization-focused roster.
   - Positioned the "Lead Mentor Security & Authority" information callout box prominently at the top of the Lead Mentors management tab above the active roster.
   - Built safety confirmation workflow for Lead Mentor assignment with a 3-second delay countdown and explicit confirmation acknowledgement before granting full administrative access.
   - Added self-removal lockout protection preventing the sole remaining Lead Mentor from accidentally stripping their own administrative access.

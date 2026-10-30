@@ -362,6 +362,20 @@ class UserOrganizationMembership(models.Model):
     def __str__(self):
         return f"{self.user} - {self.organization} ({self.get_role_display()})"
 
+    @property
+    def user_display_name(self):
+        """Fetch the best display name for the associated user across Adult/Student profiles or User fields."""
+        if not self.user:
+            return ""
+        if hasattr(self.user, "adult_profile") and self.user.adult_profile:
+            return self.user.adult_profile.display_name
+        if hasattr(self.user, "student_profile") and self.user.student_profile:
+            return self.user.student_profile.display_name
+        full_name = self.user.get_full_name()
+        if full_name:
+            return full_name
+        return self.user.email or self.user.username
+
 
 class OrganizationInvitation(models.Model):
     """Invitation for a user to join an organization with a pre-assigned role."""
