@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-30
 
 ### Added
+- **Momentum Marketing Home Page & Subdomain Routing**:
+  - Implemented public marketing landing page on the root platform domain (`momentumteam.app`, `www.momentumteam.app`, and explicit `/landing/`, `/about/` routes) presenting platform overview, core feature pillars (applications, kiosk attendance, badging, purchase orders, outreach, and travel), active team directory, and direct portal login controls.
+  - Enhanced homepage copy using marketing taglines, core value propositions ("Build season is chaotic enough", "Parents as partners, not unpaid finance dept", "Attendance hours are real data, not vibes", "Orders deserve a system", "Visible mentor coverage"), detailed operational module deep-dives, and an FAQ accordion, while strictly omitting tentative pricing/tiers.
+  - Configured organization resolution (`organizations/utils.py`, `GoSAdminPortal/middleware.py`) to keep the root domain un-scoped (`request.organization = None`) to serve the public marketing page, while routing subdomains (e.g., `gos.momentumteam.app`) and CNAME aliases (e.g., `portal.girlsofsteelrobotics.org`) directly to their respective tenant organization.
+  - Enhanced marketing landing page accessibility matching WCAG AAA standards with solid high-contrast buttons, pilot preview / coming-soon status notices, and a real-time searchable, scrollable team portal directory that scales cleanly as organization counts grow.
+  - Added dedicated team portal login buttons on the marketing page and in the navbar for anonymous visitors.
+  - Updated `ALLOWED_HOSTS` with default wildcard support for `momentumteam.app` and `girlsofsteelrobotics.org` subdomains.
+  - Added comprehensive automated test suite in `organizations/tests/test_marketing_home.py`.
 - **Multi-Tenant Platform Admin Dashboard & Impersonation (Phase 7)**:
   - Added dedicated platform administration portal (`/platform-admin/`) strictly restricted to active superusers via `SuperuserRequiredMixin`.
   - Added Executive Overview Dashboard (`PlatformDashboardView`) presenting real-time tenant counts, user totals, active program rosters, health summaries, and recent platform audit logs.

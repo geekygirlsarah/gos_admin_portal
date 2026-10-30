@@ -120,11 +120,17 @@ if not DEBUG:
     SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-ALLOWED_HOSTS = ["localhost", ".localhost", "127.0.0.1"]
+ALLOWED_HOSTS = [
+    "localhost",
+    ".localhost",
+    "127.0.0.1",
+]
 if os.getenv("ALLOWED_HOSTS"):
-    ALLOWED_HOSTS.extend(os.getenv("ALLOWED_HOSTS").split(","))
+    ALLOWED_HOSTS.extend(
+        [h.strip() for h in os.getenv("ALLOWED_HOSTS").split(",") if h.strip()]
+    )
 
-MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
+MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "localhost")
 
 
 # Application definition
@@ -465,9 +471,13 @@ HEALTH_SMTP_CHECK_INTERVAL = int(os.getenv("HEALTH_SMTP_CHECK_INTERVAL", "300"))
 # Shorter cooldown after a failure so recovery is detected quickly.
 HEALTH_SMTP_FAILURE_COOLDOWN = int(os.getenv("HEALTH_SMTP_FAILURE_COOLDOWN", "30"))
 
-# True while running `manage.py test`; used to silence audit logs, speed up
+# True while running `manage.py test`; used to silence console/audit logs, speed up
 # password hashing, and disable rate limiting (see APPLY_RATE_LIMIT_ENABLED below).
-TESTING = "test" in sys.argv
+TESTING = (
+    "test" in sys.argv
+    or any("pytest" in arg for arg in sys.argv)
+    or os.getenv("DJANGO_TESTING", "").lower() in ("1", "true", "yes")
+)
 
 # Use fast MD5 hasher during test runs to significantly reduce test execution time.
 if TESTING:
@@ -641,10 +651,15 @@ ADMINS = ADMIN_EMAILS
 MANAGERS = list(ADMINS)
 
 # Logging configuration: verbose console + email admins on server errors when DEBUG=False
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", LOG_LEVEL)
+# Silence console output during tests by default so test runner output stays clean.
+if TESTING:
+    LOG_LEVEL = os.getenv("TEST_LOG_LEVEL", "CRITICAL")
+    DJANGO_LOG_LEVEL = os.getenv("DJANGO_TEST_LOG_LEVEL", LOG_LEVEL)
+else:
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", LOG_LEVEL)
 
-# Silence audit console output while running unit tests so test results stay clean.
+# Silence console and audit output while running unit tests so test results stay clean.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

@@ -2,6 +2,7 @@ import datetime
 import logging
 
 import cssutils
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import (
     LoginRequiredMixin,
@@ -52,7 +53,9 @@ from ..permission_views import (
 )
 from ..utils import get_safe_url, redirect_back
 
-cssutils.log.setLevel(logging.WARNING)
+cssutils.log.setLevel(
+    logging.CRITICAL if getattr(settings, "TESTING", False) else logging.WARNING
+)
 
 logger = logging.getLogger("programs.email")
 forms_logger = logging.getLogger("programs.forms")

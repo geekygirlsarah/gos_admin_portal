@@ -22,7 +22,7 @@ from programs.models import (
 class SeedDbCommandTest(TestCase):
     def test_seed_db_command(self):
         """The seed command should create a large, varied modern dataset."""
-        call_command("seed_db")
+        call_command("seed_db", stdout=StringIO())
 
         today = date.today()
 
@@ -77,7 +77,7 @@ class SeedDbCommandTest(TestCase):
 
     def test_seed_db_command_is_idempotent(self):
         """Running the command twice should not duplicate seeded entities."""
-        call_command("seed_db")
+        call_command("seed_db", stdout=StringIO())
         first_counts = {
             "programs": Program.objects.count(),
             "schools": School.objects.count(),
@@ -89,7 +89,7 @@ class SeedDbCommandTest(TestCase):
             "sliding_scales": SlidingScale.objects.count(),
         }
 
-        call_command("seed_db")
+        call_command("seed_db", stdout=StringIO())
         second_counts = {
             "programs": Program.objects.count(),
             "schools": School.objects.count(),

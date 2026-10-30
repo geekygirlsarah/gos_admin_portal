@@ -133,7 +133,7 @@ def navbar_context(request):
     - navbar_program_students: students enrolled in the current program (for scoped nav)
     - navbar_program_parents: adults who are parents of enrolled students (for scoped nav)
     """
-    if not request.user.is_authenticated:
+    if not hasattr(request, "user") or not request.user.is_authenticated:
         return {}
 
     role = get_user_role(request.user)

@@ -40,6 +40,8 @@ EXEMPT_URL_NAMES = {
     "mentor_agreement",
     "tosend_webhook",
     "api_tosend_webhook",
+    "landing",
+    "about",
 }
 
 EXEMPT_PATH_PREFIXES = (
@@ -71,11 +73,11 @@ class LoginRequiredMiddleware:
         # loads the session from the DB, and exempt file paths (e.g. a photo
         # grid's concurrent /media/ GETs) must stay DB-free — that pattern
         # exhausted Postgres connection slots in production.
-        if self._is_exempt(request.path) or request.user.is_authenticated:
+        if self._is_exempt(request.path, request) or request.user.is_authenticated:
             return self.get_response(request)
         return redirect(settings.LOGIN_URL + f"?next={request.get_full_path()}")
 
-    def _is_exempt(self, path):
+    def _is_exempt(self, path, request=None):
         # Allow exempt prefixes
         for prefix in EXEMPT_PATH_PREFIXES:
             if prefix and path.startswith(prefix):
@@ -89,6 +91,14 @@ class LoginRequiredMiddleware:
             try:
                 match = resolve(candidate)
                 if match.view_name in EXEMPT_URL_NAMES:
+                    return True
+                # The root URL on the root platform (request.organization is None)
+                # serves the public marketing landing page.
+                if (
+                    match.view_name == "home"
+                    and request is not None
+                    and getattr(request, "organization", None) is None
+                ):
                     return True
             except Resolver404:
                 # The candidate doesn't resolve to any known URL. Do NOT treat

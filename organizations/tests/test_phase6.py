@@ -11,6 +11,7 @@ Verifies:
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import RequestFactory, TestCase, override_settings
@@ -189,10 +190,33 @@ class OrganizationResolutionMiddlewareTests(TestCase):
         org = resolve_organization_from_request(request)
         self.assertEqual(org, self.momentum)
 
-    def test_resolve_fallback_to_default_gos(self):
-        """Unmatched or root host falls back to the default organization."""
+    def test_resolve_root_domain_returns_none_for_marketing(self):
+        """Root domains ('momentumteam.app', 'www.momentumteam.app', 'localhost:8000') resolve to None (marketing site)."""
         request = self.rf.get("/", HTTP_HOST="momentumteam.app")
         org = resolve_organization_from_request(request)
+        self.assertIsNone(org)
+
+        request_www = self.rf.get("/", HTTP_HOST="www.momentumteam.app")
+        org_www = resolve_organization_from_request(request_www)
+        self.assertIsNone(org_www)
+
+        request_local = self.rf.get("/", HTTP_HOST="localhost:8000")
+        org_local = resolve_organization_from_request(request_local)
+        self.assertIsNone(org_local)
+
+    def test_resolve_gos_subdomain_and_cname(self):
+        """'gos.momentumteam.app' and 'portal.girlsofsteelrobotics.org' resolve to gos."""
+        request_sub = self.rf.get("/", HTTP_HOST="gos.momentumteam.app")
+        org_sub = resolve_organization_from_request(request_sub)
+        self.assertEqual(org_sub, self.gos)
+
+        request_cname = self.rf.get("/", HTTP_HOST="portal.girlsofsteelrobotics.org")
+        org_cname = resolve_organization_from_request(request_cname)
+        self.assertEqual(org_cname, self.gos)
+
+    def test_resolve_fallback_when_no_request(self):
+        """When request is None, falls back to default organization."""
+        org = resolve_organization_from_request(None)
         self.assertEqual(org, self.gos)
 
     def test_organization_middleware_attaches_request_organization(self):
@@ -205,9 +229,13 @@ class OrganizationResolutionMiddlewareTests(TestCase):
         middleware(req_momentum)
         self.assertEqual(req_momentum.organization, self.momentum)
 
-        req_default = self.rf.get("/", HTTP_HOST="localhost:8000")
-        middleware(req_default)
-        self.assertEqual(req_default.organization, self.gos)
+        req_gos_local = self.rf.get("/", HTTP_HOST="gos.localhost:8000")
+        middleware(req_gos_local)
+        self.assertEqual(req_gos_local.organization, self.gos)
+
+        req_root = self.rf.get("/", HTTP_HOST="localhost:8000")
+        middleware(req_root)
+        self.assertIsNone(req_root.organization)
 
 
 class OrgScopedUserRoleTests(TestCase):
@@ -309,7 +337,16 @@ class InvitationViewTests(TestCase):
 
 class MomentumDomainUtilsTests(TestCase):
     def test_get_organization_url_momentum_default(self):
-        """get_organization_url returns subdomain.momentumteam.app by default."""
+        """get_organization_url returns subdomain.root_domain based on MOMENTUM_ROOT_DOMAIN."""
+        org = Organization.objects.create(
+            name="RoboBuilders", slug="robobuilders", subdomain="robobuilders"
+        )
+        url = get_organization_url(org)
+        self.assertEqual(url, f"https://robobuilders.{settings.MOMENTUM_ROOT_DOMAIN}")
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_get_organization_url_momentum_prod_domain(self):
+        """get_organization_url returns subdomain.momentumteam.app when configured."""
         org = Organization.objects.create(
             name="RoboBuilders", slug="robobuilders", subdomain="robobuilders"
         )

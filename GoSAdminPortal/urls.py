@@ -69,10 +69,12 @@ urlpatterns = [
         TemplateView.as_view(template_name="non_discrimination.html"),
         name="non_discrimination_policy",
     ),
-    # Root redirects to the dashboard (home)
+    path("landing/", portal_views.landing, name="landing"),
+    path("about/", portal_views.landing, name="about"),
+    # Root URL (Marketing landing page for root platform; redirect to dashboard/login for tenant sites)
     path(
         "",
-        RedirectView.as_view(url=reverse_lazy("profile_dashboard"), permanent=False),
+        portal_views.home,
         name="home",
     ),
 ]

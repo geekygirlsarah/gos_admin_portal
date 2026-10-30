@@ -90,3 +90,45 @@ def handler500(request):
     extends ``base.html``.
     """
     return HttpResponse(render_to_string("500.html"), status=500)
+
+
+def home(request):
+    """Root URL view handler.
+
+    If request is scoped to an organization (e.g. gos.momentumteam.app or custom domain),
+    redirects authenticated users to their profile dashboard (or anonymous users to login).
+
+    If request is on the root platform (momentumteam.app / www) without an organization
+    context, renders the Momentum marketing home page.
+    """
+    if getattr(request, "organization", None) is not None:
+        if request.user.is_authenticated:
+            return redirect("profile_dashboard")
+        return redirect(settings.LOGIN_URL + "?next=/profile/")
+
+    from organizations.models import Organization
+
+    active_orgs = Organization.objects.filter(is_active=True).order_by("name")
+    return render(
+        request,
+        "marketing/landing.html",
+        {
+            "is_root_platform": True,
+            "active_organizations": active_orgs,
+        },
+    )
+
+
+def landing(request):
+    """Explicit marketing landing page for Momentum."""
+    from organizations.models import Organization
+
+    active_orgs = Organization.objects.filter(is_active=True).order_by("name")
+    return render(
+        request,
+        "marketing/landing.html",
+        {
+            "is_root_platform": True,
+            "active_organizations": active_orgs,
+        },
+    )
