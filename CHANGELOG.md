@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 - **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
 
 ### Added
+- **Multi-Tenant Permission System Scope (Phase 5)**:
+  - Added nullable `organization` foreign key and `OrganizationManager` (`OrganizationQuerySet`) to `RolePermission`, with `unique_together = ("organization", "role", "section")` and database migration backfilling existing permissions to the default GoS organization.
+  - Enhanced `can_user_read`, `can_user_write`, and `can_user_delete` in `programs/permission_views.py` to accept an `org` parameter and query `RolePermission.objects.for_organization(org)` (prioritizing org-scoped overrides over unscoped fallback records) while inferring `org` from `obj.organization` or `obj.program.organization` when omitted.
+  - Preserved global `get_user_role` mapping while isolating role permission evaluation per organization.
+  - Updated `DynamicPermissionMixin` and `_can_edit_bg` in `programs/views/mixins.py` to pass `request.organization` to permission checks.
+  - Updated template tags `{% can_read %}`, `{% can_write %}`, `{% can_delete %}` (`programs/templatetags/permission_tags.py`) to automatically evaluate within `request.organization` context.
+  - Updated Portal Settings (`PortalSettingsView`, `PortalPermissionsUpdateView`) in `programs/views/portal_settings.py` to initialize and update role permissions scoped to the active organization.
+  - Added comprehensive test suite in `programs/tests/test_scoped_permissions.py` covering model scoping, custom organization overrides, view mixins, template tags, and settings management.
 - **Extract Hardcoded Organization Constants to OrganizationSettings (Phase 4)**:
   - Extracted hardcoded GoS constants (organization name, "Champion" and "Helper" outreach labels, "Lead Mentor" label, default clearance types, sliding scale calculation configuration, email settings, and feature flags) into `OrganizationSettings` and `DEFAULT_ORGANIZATION_SETTINGS` with `SettingsDict` dot-attribute dictionary access.
   - Enabled dynamic template and view access via `request.organization.settings.<key>` and `request.organization.name`, falling back gracefully to defaults.

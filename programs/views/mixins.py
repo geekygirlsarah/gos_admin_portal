@@ -76,9 +76,10 @@ class DynamicPermissionMixin(UserPassesTestMixin):
                 return False
             except Exception:  # nosec B110
                 pass
+        org = getattr(self.request, "organization", None)
         if self.permission_type == "write":
-            return can_user_write(self.request.user, self.section, obj)
-        return can_user_read(self.request.user, self.section, obj)
+            return can_user_write(self.request.user, self.section, obj, org=org)
+        return can_user_read(self.request.user, self.section, obj, org=org)
 
     def handle_no_permission(self):
         model_name = "record"
@@ -115,7 +116,10 @@ class BackgroundChecksInlineMixin:
         return holder_kwargs
 
     def _can_edit_bg(self):
-        return can_user_write(self.request.user, "background_checks", self.object)
+        org = getattr(self.request, "organization", None)
+        return can_user_write(
+            self.request.user, "background_checks", self.object, org=org
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

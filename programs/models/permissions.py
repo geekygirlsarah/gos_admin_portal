@@ -1,11 +1,23 @@
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 class RolePermission(models.Model):
     """
     Dynamic permission settings for Mentors and Parents.
     Lead Mentors can customize read/write access for each role to each section.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="role_permissions",
+        help_text="Organization that owns this role permission (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     SECTION_CHOICES = [
         ("student_info", "Student - Info (General)"),
@@ -48,7 +60,7 @@ class RolePermission(models.Model):
     can_write = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ("role", "section")
+        unique_together = ("organization", "role", "section")
         verbose_name = "Role Permission"
         verbose_name_plural = "Role Permissions"
 

@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.db import models
 from django.shortcuts import redirect
 
 from .models import (
@@ -22,6 +23,17 @@ ORDERS_SECTIONS = {
     "orders-manage": "manage",
     "orders-shipping": "shipping",
 }
+
+
+def _get_role_permission(role, section, org=None):
+    return (
+        RolePermission.objects.for_organization(org)
+        .filter(role=role, section=section)
+        .order_by(
+            models.Case(models.When(organization__isnull=False, then=0), default=1)
+        )
+        .first()
+    )
 
 
 def get_user_role(user):
@@ -120,7 +132,12 @@ def user_is_mentor_or_lead(user):
     return user_is_mentor(user)
 
 
-def can_user_read(user, section, obj=None):
+def can_user_read(user, section, obj=None, org=None):
+    if org is None and obj is not None:
+        org = getattr(obj, "organization", None)
+        if org is None and hasattr(obj, "program"):
+            org = getattr(obj.program, "organization", None)
+
     role = get_user_role(user)
     if role == "LeadMentor":
         return True
@@ -137,9 +154,7 @@ def can_user_read(user, section, obj=None):
         if role not in ("Student", "Mentor"):
             return False
         if section == "orders-view":
-            perm = RolePermission.objects.filter(
-                role=role, section="orders-view"
-            ).first()
+            perm = _get_role_permission(role, "orders-view", org=org)
             return perm.can_read if perm else True
         return True
 
@@ -166,10 +181,10 @@ def can_user_read(user, section, obj=None):
     # is a parent, even if they also hold mentor/alumni flags (get_user_role
     # would report those roles instead).
     if is_parent and section in ["payments", "sliding_scale", "fees"]:
-        perm = RolePermission.objects.filter(role="Parent", section=section).first()
+        perm = _get_role_permission("Parent", section, org=org)
         can_read_section = perm.can_read if perm else True
     else:
-        perm = RolePermission.objects.filter(role=role, section=section).first()
+        perm = _get_role_permission(role, section, org=org)
         # Default to True for read, except for attendance for mentors
         default_read = True
         if role == "Mentor" and section == "attendance":
@@ -298,7 +313,12 @@ def can_user_read(user, section, obj=None):
     return can_read_section
 
 
-def can_user_write(user, section, obj=None):
+def can_user_write(user, section, obj=None, org=None):
+    if org is None and obj is not None:
+        org = getattr(obj, "organization", None)
+        if org is None and hasattr(obj, "program"):
+            org = getattr(obj.program, "organization", None)
+
     role = get_user_role(user)
     if role == "LeadMentor":
         return True
@@ -388,7 +408,7 @@ def can_user_write(user, section, obj=None):
             # orders, add shipping, or use the (view-only) section's write
             # column.
             return False
-        perm = RolePermission.objects.filter(role=role, section=section).first()
+        perm = _get_role_permission(role, section, org=org)
         if section == "orders-view":
             # Viewing only; the write column mirrors view permission.
             return perm.can_write if perm else True
@@ -445,7 +465,7 @@ def can_user_write(user, section, obj=None):
                 return True
 
     # Section specific write permission
-    perm = RolePermission.objects.filter(role=role, section=section).first()
+    perm = _get_role_permission(role, section, org=org)
     can_write_section = perm.can_write if perm else False
 
     # Only Lead Mentors can write to payments/fees/sliding scale
@@ -502,7 +522,7 @@ def can_user_write(user, section, obj=None):
     return can_write_section
 
 
-def can_user_delete(user, section, obj=None):
+def can_user_delete(user, section, obj=None, org=None):
     """
     Returns True if the user may delete records in the given section.
 
@@ -513,6 +533,11 @@ def can_user_delete(user, section, obj=None):
     - All other roles follow the same object-level write restrictions but
       deletion is denied if the role cannot write to the section at all.
     """
+    if org is None and obj is not None:
+        org = getattr(obj, "organization", None)
+        if org is None and hasattr(obj, "program"):
+            org = getattr(obj.program, "organization", None)
+
     role = get_user_role(user)
     if role == "LeadMentor":
         return True
@@ -536,7 +561,7 @@ def can_user_delete(user, section, obj=None):
         return False
 
     # For all other sections/roles, delete tracks write permission
-    return can_user_write(user, section, obj=obj)
+    return can_user_write(user, section, obj=obj, org=org)
 
 
 class LeadMentorRequiredMixin(UserPassesTestMixin):
@@ -572,7 +597,10 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
             program = Program.objects.get(pk=pk)
         except Program.DoesNotExist:
             return False
-        return can_user_write(user, "team_assignments", program)
+        org = getattr(self.request, "organization", None) or getattr(
+            program, "organization", None
+        )
+        return can_user_write(user, "team_assignments", program, org=org)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:

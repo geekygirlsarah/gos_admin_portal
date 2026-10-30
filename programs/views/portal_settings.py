@@ -44,10 +44,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/settings.html"
 
     def get(self, request):
+        org = getattr(request, "organization", None) or get_default_organization()
         sections = RolePermission.SECTION_CHOICES
         roles = RolePermission.ROLE_CHOICES
 
-        # Ensure all combinations exist
+        # Ensure all combinations exist for this organization
         for role_code, role_name in roles:
             for section_code, section_name in sections:
                 # Orders content is scoped to students/mentors by default, so the
@@ -61,10 +62,13 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_write": orders_ok,
                     }
                 RolePermission.objects.get_or_create(
-                    role=role_code, section=section_code, defaults=defaults
+                    organization=org,
+                    role=role_code,
+                    section=section_code,
+                    defaults=defaults,
                 )
 
-        permissions = RolePermission.objects.all()
+        permissions = RolePermission.objects.for_organization(org)
 
         # Group permissions by section for the new table layout
         grouped_permissions = []
@@ -167,7 +171,8 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     """Handles the 'update_permissions' action from the settings page."""
 
     def post(self, request):
-        permissions = RolePermission.objects.all()
+        org = getattr(request, "organization", None) or get_default_organization()
+        permissions = RolePermission.objects.for_organization(org)
         for perm in permissions:
             perm_key = f"perm_{perm.id}"
             if perm_key in request.POST:
@@ -186,6 +191,8 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 write_key = f"write_{perm.id}"
                 perm.can_read = read_key in request.POST
                 perm.can_write = write_key in request.POST
+            if org and perm.organization is None:
+                perm.organization = org
             perm.save()
         messages.success(request, "Permissions updated successfully.")
         return redirect("/programs/settings/?tab=permissions")
