@@ -1,6 +1,7 @@
 import secrets
 from decimal import Decimal
 
+from django.apps import apps
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -460,9 +461,54 @@ class OrganizationInvitation(models.Model):
             return False
         return timezone.now() <= self.expires_at
 
+    def matches_user(self, user):
+        """Check if the given user matches the invitation's recipient email."""
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+
+        target_email = (self.email or "").strip().lower()
+        if not target_email:
+            return False
+
+        return target_email in self._candidate_user_emails(user)
+
+    def _candidate_user_emails(self, user):
+        """Collect all known email addresses associated with a user account."""
+        emails = set()
+        if user.email:
+            emails.add(user.email.strip().lower())
+
+        if apps.is_installed("allauth.account"):
+            from allauth.account.models import EmailAddress
+
+            for addr in EmailAddress.objects.filter(user=user).values_list(
+                "email", flat=True
+            ):
+                if addr:
+                    emails.add(addr.strip().lower())
+
+        for profile_attr in ("adult_profile", "student_profile"):
+            profile = getattr(user, profile_attr, None)
+            if profile:
+                for email_attr in ("personal_email", "andrew_email"):
+                    val = getattr(profile, email_attr, None)
+                    if val:
+                        emails.add(val.strip().lower())
+
+        return emails
+
     def accept(self, user):
         if not self.is_valid():
             raise ValueError("Invitation is no longer valid or has expired.")
+        if not self.matches_user(user):
+            user_identifier = (
+                getattr(user, "email", None)
+                or getattr(getattr(user, "adult_profile", None), "personal_email", None)
+                or getattr(user, "username", "another user")
+            )
+            raise ValueError(
+                f"This invitation was sent to '{self.email}'. You are currently signed in as '{user_identifier}'."
+            )
         membership, _ = UserOrganizationMembership.objects.get_or_create(
             user=user,
             organization=self.organization,
@@ -471,7 +517,17 @@ class OrganizationInvitation(models.Model):
         )
         if not membership.is_active:
             membership.is_active = True
-            membership.save(update_fields=["is_active", "updated_at"])
+            membership.invited_by = self.invited_by
+            membership.save(update_fields=["is_active", "invited_by", "updated_at"])
+        if (
+            self.role == "LeadMentor"
+            and hasattr(user, "adult_profile")
+            and user.adult_profile
+        ):
+            adult = user.adult_profile
+            if not adult.is_mentor:
+                adult.is_mentor = True
+                adult.save(update_fields=["is_mentor"])
         self.status = self.STATUS_ACCEPTED
         self.accepted_at = timezone.now()
         self.accepted_by = user

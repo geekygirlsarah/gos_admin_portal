@@ -1,0 +1,44 @@
+{% extends "emails/base_organization_email.html" %}
+
+{% block content %}
+<div style="font-size: 15px; line-height: 1.6; color: #334155;">
+    <h2 style="font-size: 20px; font-weight: 700; color: #1e293b; margin-top: 0; margin-bottom: 16px;">
+        You're invited to join {{ organization.name }}!
+    </h2>
+
+    <p style="margin-bottom: 16px;">
+        {% if inviter_name %}
+            <strong>{{ inviter_name }}</strong> has invited you to join <strong>{{ organization.name }}</strong> as a <strong>{{ role_display }}</strong> on the team portal.
+        {% else %}
+            You have been invited to join <strong>{{ organization.name }}</strong> as a <strong>{{ role_display }}</strong> on the team portal.
+        {% endif %}
+    </p>
+
+    {% if invitation.role == "LeadMentor" %}
+    <div style="background-color: #f8fafc; border-left: 4px solid #0d6efd; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px;">
+        <p style="margin: 0; font-size: 14px; color: #475569;">
+            <strong>Lead Mentor Role:</strong> As a Lead Mentor, you will have administrative access to manage team settings, student and adult records, program rosters, and finances for {{ organization.name }}.
+        </p>
+    </div>
+    {% endif %}
+
+    <p style="margin-bottom: 24px;">
+        To accept this invitation and access the portal, please click the button below:
+    </p>
+
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{{ invitation_url }}" style="background-color: {{ org_email_settings.primary_color|default:'#0d6efd' }}; color: #ffffff; padding: 12px 28px; text-decoration: none; font-weight: 600; font-size: 15px; border-radius: 6px; display: inline-block;">
+            Accept Invitation &amp; Join Team
+        </a>
+    </div>
+
+    <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">
+        This invitation is valid for 14 days and will expire on <strong>{{ expires_at|date:"F j, Y, g:i A" }}</strong>.
+    </p>
+
+    <p style="font-size: 12px; color: #94a3b8; word-break: break-all; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+        If the button above does not work, copy and paste this link into your browser:<br>
+        <a href="{{ invitation_url }}" style="color: {{ org_email_settings.primary_color|default:'#0d6efd' }};">{{ invitation_url }}</a>
+    </p>
+</div>
+{% endblock %}

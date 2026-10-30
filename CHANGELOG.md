@@ -5,12 +5,16 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-30
 
 ### Added
-- **Organization-Scoped Lead Mentor Role & Management (`programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/permission_views.py`, `organizations/migrations/0004_convert_lead_mentors_to_memberships.py`)**:
+- **Organization-Scoped Lead Mentor Role & Management (`programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/permission_views.py`, `organizations/migrations/0004_convert_lead_mentors_to_memberships.py`, `organizations/services.py`, `templates/organizations/emails/invitation.html`)**:
   - Invented an organization-level Lead Mentor role decoupled from Django server-level `superuser` and `staff` flags, reserving `is_superuser` and `is_staff` for system administrators.
   - Added a dedicated "Lead Mentors" tab in Portal Settings (`/programs/settings/?tab=lead_mentors`) displaying active Lead Mentors and providing an interface to assign and revoke Lead Mentor status.
+  - Added direct email invitation workflow (`Invite by Email`) alongside existing user assignment (`Assign Existing User`), enabling Lead Mentors to invite new leadership directly by email address with automated templated invitation notifications and tokenized acceptance links.
+  - Unified the "Assign Existing User" workflow with the invitation acceptance flow, dispatching a formal Lead Mentor invitation email with role details and authority explanation that the selected user must review and accept before administrative access is enabled.
+  - Added recipient email verification on invitation acceptance (`OrganizationInvitation.matches_user`), ensuring only the intended recipient can accept an invitation and preventing other logged-in users from consuming tokens, with account mismatch notices and a direct "Sign Out & Switch Account" action.
+  - Added "Pending Lead Mentor Invitations" management table tracking pending invitations, 14-day expiration timestamps, inviter attribution, and controls to resend (with a fresh 14-day extension) or revoke pending invitations.
   - Refined the Lead Mentors table to present Name (via profile-aware user lookups), Email, Assigned On, and Last Logged In timestamps, removing the internal username column and server-level "Admin" badges for a uniform, organization-focused roster.
   - Positioned the "Lead Mentor Security & Authority" information callout box prominently at the top of the Lead Mentors management tab above the active roster.
-  - Built safety confirmation workflow for Lead Mentor assignment with a 3-second delay countdown and explicit confirmation acknowledgement before granting full administrative access.
+  - Built safety confirmation workflow for Lead Mentor assignment and email invitations with a 3-second delay countdown and explicit confirmation acknowledgement before granting full administrative access.
   - Added self-removal lockout protection preventing the sole remaining Lead Mentor from accidentally stripping their own administrative access.
   - Added data migration `0004_convert_lead_mentors_to_memberships.py` converting all existing staff and superuser accounts to organization Lead Mentors for Girls of Steel.
   - Added `user_is_lead_mentor(user, org=None)` helper and integrated organization-level Lead Mentor role detection across all permission mixins, clearance models, Andrew ID management, forms, audit admin, and dashboards.

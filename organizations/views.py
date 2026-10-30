@@ -1,8 +1,10 @@
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
+
+from audit.events import AuditEvent
+from audit.service import log_event
 
 from .models import OrganizationInvitation
 
@@ -25,12 +27,15 @@ class AcceptInvitationView(View):
             login_url = f"/accounts/login/?next={request.path}"
             return redirect(login_url)
 
+        email_matches = invitation.matches_user(request.user)
+
         return render(
             request,
             self.template_name,
             {
                 "invitation": invitation,
                 "organization": invitation.organization,
+                "email_matches": email_matches,
             },
         )
 
@@ -39,8 +44,39 @@ class AcceptInvitationView(View):
         if not request.user.is_authenticated:
             return redirect(f"/accounts/login/?next={request.path}")
 
+        if not invitation.matches_user(request.user):
+            user_display = (
+                request.user.email
+                or getattr(
+                    getattr(request.user, "adult_profile", None),
+                    "personal_email",
+                    None,
+                )
+                or request.user.username
+            )
+            messages.error(
+                request,
+                f"This invitation was sent to {invitation.email}, but you are currently signed in as {user_display}. "
+                "Please sign in with the invited email address to accept.",
+            )
+            return render(
+                request,
+                self.template_name,
+                {
+                    "invitation": invitation,
+                    "organization": invitation.organization,
+                    "email_matches": False,
+                },
+            )
+
         try:
-            membership = invitation.accept(request.user)
+            invitation.accept(request.user)
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=request.user,
+                notes=f"User {request.user} accepted invitation for role {invitation.role} in {invitation.organization.name}.",
+            )
             messages.success(
                 request,
                 f"You have joined {invitation.organization.name} as {invitation.get_role_display()}!",

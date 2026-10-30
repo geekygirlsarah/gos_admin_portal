@@ -221,9 +221,14 @@
                         <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-person-badge text-primary me-2"></i>Organization Lead Mentors</h5>
                         <p class="text-muted small mb-0">Manage Lead Mentors who hold full administrative access to {{ organization.name|default:"the organization" }}.</p>
                     </div>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLeadMentorModal">
-                        <i class="bi bi-person-plus me-1"></i> Assign Lead Mentor
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addLeadMentorModal">
+                            <i class="bi bi-person-check me-1"></i> Assign Existing User
+                        </button>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#inviteLeadMentorModal">
+                            <i class="bi bi-envelope-plus me-1"></i> Invite by Email
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -305,13 +310,140 @@
                 </div>
             </div>
 
+            <!-- Pending Lead Mentor Invitations Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark">
+                            <i class="bi bi-envelope-paper text-warning me-2"></i>Pending Lead Mentor Invitations
+                            {% if pending_lead_mentor_invitations %}
+                            <span class="badge bg-warning text-dark ms-1">{{ pending_lead_mentor_invitations|length }}</span>
+                            {% endif %}
+                        </h5>
+                        <p class="text-muted small mb-0">Invitations sent by email waiting to be accepted. Invitations automatically expire after 14 days.</p>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 30%;">Email</th>
+                                    <th style="width: 20%;">Sent On</th>
+                                    <th style="width: 20%;">Expires</th>
+                                    <th style="width: 15%;">Invited By</th>
+                                    <th class="text-end" style="width: 15%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for inv in pending_lead_mentor_invitations %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold text-dark">
+                                            {{ inv.email }}
+                                            {% if inv.is_valid %}
+                                            <span class="badge bg-warning-subtle text-warning-emphasis ms-1">Pending</span>
+                                            {% else %}
+                                            <span class="badge bg-danger-subtle text-danger ms-1">Expired</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="small text-muted">{{ inv.created_at|date:"M j, Y" }}</td>
+                                    <td class="small text-muted">{{ inv.expires_at|date:"M j, Y" }}</td>
+                                    <td class="small text-muted">
+                                        {% if inv.invited_by %}
+                                        {{ inv.invited_by.adult_profile.display_name|default:inv.invited_by.get_full_name|default:inv.invited_by.email }}
+                                        {% else %}
+                                        —
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex justify-content-end gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#resendInvitationModal{{ inv.id }}">
+                                                <i class="bi bi-arrow-repeat me-1"></i> Resend
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#revokeInvitationModal{{ inv.id }}">
+                                                <i class="bi bi-x-circle me-1"></i> Revoke
+                                            </button>
+                                        </div>
+
+                                        <!-- Resend Invitation Modal -->
+                                        <div class="modal fade text-start" id="resendInvitationModal{{ inv.id }}" tabindex="-1" aria-labelledby="resendInvitationModalLabel{{ inv.id }}" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-primary text-white">
+                                                        <h5 class="modal-title" id="resendInvitationModalLabel{{ inv.id }}">
+                                                            <i class="bi bi-arrow-repeat me-1"></i> Resend Lead Mentor Invitation
+                                                        </h5>
+                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <form method="post" action="{% url 'portal_lead_mentors' %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="resend_invitation">
+                                                        <input type="hidden" name="invitation_id" value="{{ inv.id }}">
+                                                        <div class="modal-body">
+                                                            <p class="mb-2">Resend the Lead Mentor invitation to <strong>{{ inv.email }}</strong>?</p>
+                                                            <p class="small text-muted mb-0">This will extend the invitation's expiration date by 14 days and send a new notification email with their secure acceptance link.</p>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" class="btn btn-primary">Resend Invitation</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Revoke Invitation Modal -->
+                                        <div class="modal fade text-start" id="revokeInvitationModal{{ inv.id }}" tabindex="-1" aria-labelledby="revokeInvitationModalLabel{{ inv.id }}" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-danger text-white">
+                                                        <h5 class="modal-title" id="revokeInvitationModalLabel{{ inv.id }}">
+                                                            <i class="bi bi-x-circle me-1"></i> Revoke Lead Mentor Invitation
+                                                        </h5>
+                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <form method="post" action="{% url 'portal_lead_mentors' %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="revoke_invitation">
+                                                        <input type="hidden" name="invitation_id" value="{{ inv.id }}">
+                                                        <div class="modal-body">
+                                                            <p class="mb-2">Are you sure you want to revoke the Lead Mentor invitation for <strong>{{ inv.email }}</strong>?</p>
+                                                            <div class="alert alert-warning py-2 small mb-0">
+                                                                <i class="bi bi-shield-exclamation me-1"></i> The recipient will no longer be able to use the invitation link to join as a Lead Mentor.
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" class="btn btn-danger">Confirm Revoke</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <em>No pending Lead Mentor invitations.</em>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Add Lead Mentor Modal with 3-second safety confirmation -->
             <div class="modal fade" id="addLeadMentorModal" tabindex="-1" aria-labelledby="addLeadMentorModalLabel" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header bg-dark text-white">
                             <h5 class="modal-title" id="addLeadMentorModalLabel">
-                                <i class="bi bi-shield-plus me-1"></i> Assign New Lead Mentor
+                                <i class="bi bi-shield-plus me-1"></i> Assign Existing User as Lead Mentor
                             </h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
@@ -329,27 +461,73 @@
                                         </option>
                                         {% endfor %}
                                     </select>
-                                    <div class="form-text">Choose the user account to grant Lead Mentor access.</div>
+                                    <div class="form-text">An invitation email will be sent for the user to review and accept before Lead Mentor access is enabled.</div>
                                 </div>
 
                                 <div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
                                     <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
                                     <div>
                                         <div class="fw-bold">Security Warning: FULL Access</div>
-                                        <div class="small">Assigning a user as a lead coach gives them <strong>FULL access</strong> to all organizational records, programs, finances, sensitive notes, clearances, and administrative settings. Are you sure you want to do this?</div>
+                                        <div class="small">Assigning a user as a Lead Mentor will grant them <strong>FULL access</strong> to all organizational records, programs, finances, sensitive notes, clearances, and administrative settings once they accept the invitation. Are you sure you want to do this?</div>
                                     </div>
                                 </div>
 
                                 <div class="form-check mb-2">
                                     <input class="form-check-input" type="checkbox" id="confirmLeadMentorAccess" required>
                                     <label class="form-check-label small fw-semibold" for="confirmLeadMentorAccess">
-                                        I confirm that I want to grant this user FULL Lead Mentor access.
+                                        I confirm that I want to invite this user with FULL Lead Mentor access.
                                     </label>
                                 </div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                                 <button type="submit" class="btn btn-danger fw-semibold" id="confirmAddLeadMentorBtn" disabled>
+                                    Please wait (3s)...
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invite Lead Mentor by Email Modal with 3-second safety confirmation -->
+            <div class="modal fade" id="inviteLeadMentorModal" tabindex="-1" aria-labelledby="inviteLeadMentorModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-dark text-white">
+                            <h5 class="modal-title" id="inviteLeadMentorModalLabel">
+                                <i class="bi bi-envelope-plus me-1"></i> Invite Lead Mentor by Email
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form method="post" action="{% url 'portal_lead_mentors' %}" id="inviteLeadMentorForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="invite_lead_mentor">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="invite_lead_mentor_email" class="form-label fw-semibold">Email Address</label>
+                                    <input type="email" name="email" id="invite_lead_mentor_email" class="form-control" placeholder="mentor@example.com" required>
+                                    <div class="form-text">An invitation email will be sent with a secure login link valid for 14 days.</div>
+                                </div>
+
+                                <div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+                                    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+                                    <div>
+                                        <div class="fw-bold">Security Warning: FULL Access</div>
+                                        <div class="small">Inviting a user as a Lead Mentor will grant them <strong>FULL access</strong> to all organizational records, programs, finances, sensitive notes, clearances, and administrative settings upon accepting the invite. Are you sure you want to do this?</div>
+                                    </div>
+                                </div>
+
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="confirmInviteLeadMentorAccess" required>
+                                    <label class="form-check-label small fw-semibold" for="confirmInviteLeadMentorAccess">
+                                        I confirm that I want to invite this person with FULL Lead Mentor access.
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-danger fw-semibold" id="confirmInviteLeadMentorBtn" disabled>
                                     Please wait (3s)...
                                 </button>
                             </div>
@@ -2223,56 +2401,61 @@
         }
     })();
 
-    // Safety delay for assigning Lead Mentor
+    // Safety delay for assigning / inviting Lead Mentor
     (function() {
-        var modal = document.getElementById('addLeadMentorModal');
-        var confirmBtn = document.getElementById('confirmAddLeadMentorBtn');
-        var confirmCheck = document.getElementById('confirmLeadMentorAccess');
-        var timerInterval = null;
+        function setupSafetyModal(modalId, confirmBtnId, confirmCheckId, actionText) {
+            var modal = document.getElementById(modalId);
+            var confirmBtn = document.getElementById(confirmBtnId);
+            var confirmCheck = document.getElementById(confirmCheckId);
+            var timerInterval = null;
 
-        if (modal && confirmBtn && confirmCheck) {
-            function updateConfirmBtnState() {
-                if (!timerInterval && confirmCheck.checked) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Yes, Grant Full Lead Mentor Access';
-                } else if (!timerInterval) {
-                    confirmBtn.disabled = true;
-                    confirmBtn.textContent = 'Yes, Grant Full Lead Mentor Access';
+            if (modal && confirmBtn && confirmCheck) {
+                function updateConfirmBtnState() {
+                    if (!timerInterval && confirmCheck.checked) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = actionText;
+                    } else if (!timerInterval) {
+                        confirmBtn.disabled = true;
+                        confirmBtn.textContent = actionText;
+                    }
                 }
-            }
 
-            modal.addEventListener('shown.bs.modal', function() {
-                var secondsLeft = 3;
-                confirmBtn.disabled = true;
-                confirmCheck.checked = false;
-                confirmBtn.textContent = 'Please wait (' + secondsLeft + 's)...';
+                modal.addEventListener('shown.bs.modal', function() {
+                    var secondsLeft = 3;
+                    confirmBtn.disabled = true;
+                    confirmCheck.checked = false;
+                    confirmBtn.textContent = 'Please wait (' + secondsLeft + 's)...';
 
-                if (timerInterval) clearInterval(timerInterval);
-                timerInterval = setInterval(function() {
-                    secondsLeft--;
-                    if (secondsLeft > 0) {
-                        confirmBtn.textContent = 'Please wait (' + secondsLeft + 's)...';
-                    } else {
+                    if (timerInterval) clearInterval(timerInterval);
+                    timerInterval = setInterval(function() {
+                        secondsLeft--;
+                        if (secondsLeft > 0) {
+                            confirmBtn.textContent = 'Please wait (' + secondsLeft + 's)...';
+                        } else {
+                            clearInterval(timerInterval);
+                            timerInterval = null;
+                            updateConfirmBtnState();
+                        }
+                    }, 1000);
+                });
+
+                modal.addEventListener('hidden.bs.modal', function() {
+                    if (timerInterval) {
                         clearInterval(timerInterval);
                         timerInterval = null;
-                        updateConfirmBtnState();
                     }
-                }, 1000);
-            });
+                    confirmBtn.disabled = true;
+                    confirmCheck.checked = false;
+                });
 
-            modal.addEventListener('hidden.bs.modal', function() {
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                    timerInterval = null;
-                }
-                confirmBtn.disabled = true;
-                confirmCheck.checked = false;
-            });
-
-            confirmCheck.addEventListener('change', function() {
-                updateConfirmBtnState();
-            });
+                confirmCheck.addEventListener('change', function() {
+                    updateConfirmBtnState();
+                });
+            }
         }
+
+        setupSafetyModal('addLeadMentorModal', 'confirmAddLeadMentorBtn', 'confirmLeadMentorAccess', 'Yes, Send Lead Mentor Invitation');
+        setupSafetyModal('inviteLeadMentorModal', 'confirmInviteLeadMentorBtn', 'confirmInviteLeadMentorAccess', 'Yes, Send Lead Mentor Invitation');
     })();
 </script>
 {% endblock %}

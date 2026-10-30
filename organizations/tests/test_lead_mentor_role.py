@@ -11,12 +11,17 @@ Verifies:
 """
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from audit.events import AuditEvent
 from audit.models import AuditLog
-from organizations.models import Organization, UserOrganizationMembership
+from organizations.models import (
+    Organization,
+    OrganizationInvitation,
+    UserOrganizationMembership,
+)
 from programs.models import Adult
 from programs.permission_views import (
     get_user_role,
@@ -257,8 +262,9 @@ class PortalSettingsLeadMentorViewTests(TestCase):
         )
         self.assertEqual(membership_bare.user_display_name, "bare@example.com")
 
-    def test_add_lead_mentor_action(self):
-        """Lead mentor can promote an eligible user to Lead Mentor."""
+    def test_add_lead_mentor_action_sends_invitation_email(self):
+        """Assigning an existing user sends a Lead Mentor invitation email and requires acceptance."""
+        mail.outbox.clear()
         self.client.force_login(self.lead_user)
         url = reverse("portal_lead_mentors")
         response = self.client.post(
@@ -270,15 +276,33 @@ class PortalSettingsLeadMentorViewTests(TestCase):
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lead Mentor invitation sent to Candidate Mentor")
 
-        # Check membership was created
-        membership = UserOrganizationMembership.objects.filter(
+        # Check membership was NOT immediately created as active
+        active_lead = UserOrganizationMembership.objects.filter(
             user=self.candidate_user,
             organization=self.gos,
             role="LeadMentor",
             is_active=True,
+        ).exists()
+        self.assertFalse(active_lead)
+
+        # Verify invitation created
+        invite = OrganizationInvitation.objects.filter(
+            organization=self.gos,
+            email=self.candidate_user.email,
+            role="LeadMentor",
+            status=OrganizationInvitation.STATUS_PENDING,
         ).first()
-        self.assertIsNotNone(membership)
+        self.assertIsNotNone(invite)
+        self.assertEqual(invite.invited_by, self.lead_user)
+
+        # Verify email was dispatched
+        self.assertEqual(len(mail.outbox), 1)
+        sent_email = mail.outbox[0]
+        self.assertIn(self.candidate_user.email, sent_email.to)
+        self.assertIn("Lead Mentor", sent_email.subject)
+        self.assertIn(invite.token, sent_email.body)
 
         # Verify audit log
         audit_entry = AuditLog.objects.filter(
@@ -286,6 +310,118 @@ class PortalSettingsLeadMentorViewTests(TestCase):
             actor=self.lead_user,
         ).first()
         self.assertIsNotNone(audit_entry)
+
+    def test_add_lead_mentor_acceptance_activates_role(self):
+        """When the assigned existing user accepts the invitation, their Lead Mentor role is activated."""
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        self.client.post(
+            url,
+            {
+                "action": "add_lead_mentor",
+                "user_id": self.candidate_user.id,
+            },
+            follow=True,
+        )
+        invite = OrganizationInvitation.objects.get(
+            organization=self.gos,
+            email=self.candidate_user.email,
+            role="LeadMentor",
+            status=OrganizationInvitation.STATUS_PENDING,
+        )
+
+        # Candidate logs in and accepts the invitation
+        self.client.force_login(self.candidate_user)
+        accept_url = reverse(
+            "organizations:accept_invitation", kwargs={"token": invite.token}
+        )
+        # Check acceptance page details
+        get_res = self.client.get(accept_url)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, "Lead Mentor Authority")
+
+        # Accept
+        post_res = self.client.post(accept_url, follow=True)
+        self.assertEqual(post_res.status_code, 200)
+
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, OrganizationInvitation.STATUS_ACCEPTED)
+        self.assertTrue(user_is_lead_mentor(self.candidate_user, org=self.gos))
+
+    def test_add_lead_mentor_existing_pending_invitation_refreshes_and_resends(self):
+        """Assigning an existing user who already has a pending invitation refreshes expiry and resends."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email=self.candidate_user.email,
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        mail.outbox.clear()
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "add_lead_mentor",
+                "user_id": self.candidate_user.id,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lead Mentor invitation sent")
+        self.assertEqual(len(mail.outbox), 1)
+        invite.refresh_from_db()
+        self.assertTrue(invite.is_valid())
+        self.assertEqual(
+            OrganizationInvitation.objects.filter(
+                organization=self.gos,
+                email=self.candidate_user.email,
+                role="LeadMentor",
+            ).count(),
+            1,
+        )
+
+    def test_add_lead_mentor_already_active_lead_mentor_error(self):
+        """Assigning a user who is already an active Lead Mentor returns an error."""
+        UserOrganizationMembership.objects.create(
+            user=self.candidate_user,
+            organization=self.gos,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "add_lead_mentor",
+                "user_id": self.candidate_user.id,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already an active Lead Mentor")
+
+    def test_add_lead_mentor_missing_email_error(self):
+        """Assigning a user without an email address returns an error message."""
+        no_email_user = User.objects.create_user(
+            username="no_email_user",
+            email="",
+            first_name="No",
+            last_name="Email",
+        )
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "add_lead_mentor",
+                "user_id": no_email_user.id,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "does not have a valid email address")
 
     def test_remove_lead_mentor_action(self):
         """Lead mentor can demote another Lead Mentor."""
@@ -373,6 +509,281 @@ class PortalSettingsLeadMentorViewTests(TestCase):
         r4 = self.client.post(url, {"action": "unknown_action"}, follow=True)
         self.assertEqual(r4.status_code, 200)
         self.assertContains(r4, "Unknown action")
+
+    def test_invite_lead_mentor_by_email(self):
+        """Lead mentor can invite a new user by email with 14-day expiry and notification email."""
+        mail.outbox.clear()
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "invite_lead_mentor",
+                "email": "newlead@example.com",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Successfully sent Lead Mentor invitation to newlead@example.com"
+        )
+
+        # Verify invitation row created
+        invite = OrganizationInvitation.objects.filter(
+            organization=self.gos,
+            email="newlead@example.com",
+            role="LeadMentor",
+            status=OrganizationInvitation.STATUS_PENDING,
+        ).first()
+        self.assertIsNotNone(invite)
+        self.assertEqual(invite.invited_by, self.lead_user)
+        self.assertTrue(invite.is_valid())
+
+        # Verify notification email sent
+        self.assertEqual(len(mail.outbox), 1)
+        sent_email = mail.outbox[0]
+        self.assertIn("newlead@example.com", sent_email.to)
+        self.assertIn(
+            "Invitation to join Girls of Steel as Lead Mentor", sent_email.subject
+        )
+        self.assertIn(invite.token, sent_email.body)
+
+    def test_invite_lead_mentor_already_active_lead_mentor(self):
+        """Inviting someone who is already an active Lead Mentor returns an error."""
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "invite_lead_mentor",
+                "email": "lead@example.com",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already an active Lead Mentor")
+        self.assertEqual(
+            OrganizationInvitation.objects.filter(email="lead@example.com").count(), 0
+        )
+
+    def test_invite_lead_mentor_existing_pending_invitation_refreshes_and_resends(self):
+        """Inviting an email that already has a pending invitation refreshes its 14-day expiry and resends."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="pending@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        mail.outbox.clear()
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "invite_lead_mentor",
+                "email": "pending@example.com",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "resent Lead Mentor invitation")
+        self.assertEqual(len(mail.outbox), 1)
+        invite.refresh_from_db()
+        self.assertTrue(invite.is_valid())
+        self.assertEqual(
+            OrganizationInvitation.objects.filter(email="pending@example.com").count(),
+            1,
+        )
+
+    def test_resend_lead_mentor_invitation(self):
+        """Lead mentor can resend an existing pending invitation from the pending invitations list."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="resendme@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        mail.outbox.clear()
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "resend_invitation",
+                "invitation_id": invite.id,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Resent Lead Mentor invitation to resendme@example.com"
+        )
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_revoke_lead_mentor_invitation(self):
+        """Lead mentor can revoke a pending invitation."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="revokeme@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        self.client.force_login(self.lead_user)
+        url = reverse("portal_lead_mentors")
+        response = self.client.post(
+            url,
+            {
+                "action": "revoke_invitation",
+                "invitation_id": invite.id,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Revoked Lead Mentor invitation for revokeme@example.com"
+        )
+
+        invite.refresh_from_db()
+        self.assertFalse(invite.is_valid())
+        self.assertEqual(invite.status, OrganizationInvitation.STATUS_DECLINED)
+
+    def test_pending_invitations_table_and_buttons_rendered_on_settings(self):
+        """Settings page displays pending invitations and both Assign & Invite header buttons."""
+        OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="waiting@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        self.client.force_login(self.lead_user)
+        response = self.client.get(reverse("portal_settings") + "?tab=lead_mentors")
+        self.assertEqual(response.status_code, 200)
+
+        # Header buttons
+        self.assertContains(response, "Assign Existing User")
+        self.assertContains(response, "Invite by Email")
+
+        # Pending invitations table
+        self.assertContains(response, "Pending Lead Mentor Invitations")
+        self.assertContains(response, "waiting@example.com")
+        self.assertContains(response, "Resend")
+        self.assertContains(response, "Revoke")
+
+    def test_accept_lead_mentor_invitation_flow(self):
+        """Invited user accepts email invite and is granted LeadMentor role in the organization."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="invitedcoach@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        new_coach = User.objects.create_user(
+            username="invitedcoach",
+            email="invitedcoach@example.com",
+            first_name="Invited",
+            last_name="Coach",
+            password="password123",  # nosec B106
+        )
+        self.client.force_login(new_coach)
+        accept_url = reverse(
+            "organizations:accept_invitation", kwargs={"token": invite.token}
+        )
+        res = self.client.post(accept_url, follow=True)
+        self.assertEqual(res.status_code, 200)
+
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, OrganizationInvitation.STATUS_ACCEPTED)
+        self.assertTrue(user_is_lead_mentor(new_coach, org=self.gos))
+
+    def test_accept_invitation_mismatched_user_rejected_and_not_consumed(self):
+        """User logged in with a different email cannot accept an invitation sent to someone else."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="intended@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        wrong_user = User.objects.create_user(
+            username="wronguser",
+            email="wrong@example.com",
+            first_name="Wrong",
+            last_name="Person",
+            password="password123",  # nosec B106
+        )
+        self.client.force_login(wrong_user)
+        accept_url = reverse(
+            "organizations:accept_invitation", kwargs={"token": invite.token}
+        )
+
+        # GET should warn about account mismatch and hide/disable accept button
+        get_res = self.client.get(accept_url)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, "intended@example.com")
+        self.assertContains(get_res, "wrong@example.com")
+        self.assertContains(get_res, "Sign Out & Switch Account")
+        self.assertContains(get_res, "Account Mismatch")
+
+        # POST should fail to accept and not create membership or consume the invite
+        post_res = self.client.post(accept_url, follow=True)
+        self.assertEqual(post_res.status_code, 200)
+        self.assertContains(
+            post_res, "This invitation was sent to intended@example.com"
+        )
+
+        # Verify invite is STILL pending and not accepted
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, OrganizationInvitation.STATUS_PENDING)
+        self.assertIsNone(invite.accepted_at)
+        self.assertIsNone(invite.accepted_by)
+
+        # Verify wrong user was NOT granted LeadMentor role
+        self.assertFalse(user_is_lead_mentor(wrong_user, org=self.gos))
+        self.assertFalse(
+            UserOrganizationMembership.objects.filter(
+                user=wrong_user, organization=self.gos
+            ).exists()
+        )
+
+    def test_invitation_accept_method_validates_user_email(self):
+        """OrganizationInvitation.accept raises ValueError if called with a mismatched user."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="intended@example.com",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        wrong_user = User.objects.create_user(
+            username="wronguser2",
+            email="wrong2@example.com",
+            password="password123",  # nosec B106
+        )
+        with self.assertRaises(ValueError) as ctx:
+            invite.accept(wrong_user)
+        self.assertIn("intended@example.com", str(ctx.exception))
+        self.assertEqual(invite.status, OrganizationInvitation.STATUS_PENDING)
+
+    def test_invitation_accept_case_insensitive_and_profile_email_matching(self):
+        """Invitation email matching is case-insensitive and checks linked Adult profile emails."""
+        invite = OrganizationInvitation.objects.create(
+            organization=self.gos,
+            email="Mentor.User@Example.COM",
+            role="LeadMentor",
+            invited_by=self.lead_user,
+        )
+        user_with_adult = User.objects.create_user(
+            username="mentorwithadult",
+            email="",  # empty user email
+            password="password123",  # nosec B106
+        )
+        Adult.objects.create(
+            user=user_with_adult,
+            legal_first_name="Mentor",
+            last_name="User",
+            personal_email="mentor.user@example.com",
+        )
+        membership = invite.accept(user_with_adult)
+        self.assertEqual(membership.user, user_with_adult)
+        self.assertEqual(invite.status, OrganizationInvitation.STATUS_ACCEPTED)
 
     def test_org_lead_mentor_has_full_feature_access(self):
         """Org Lead Mentor can access admin/lead-mentor views without superuser or staff flag."""

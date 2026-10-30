@@ -1,12 +1,13 @@
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.files.storage import default_storage
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views import View
 
 from audit.service import log_deletion
@@ -118,7 +119,10 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         from django.contrib.auth import get_user_model
 
-        from organizations.models import UserOrganizationMembership
+        from organizations.models import (
+            OrganizationInvitation,
+            UserOrganizationMembership,
+        )
 
         User = get_user_model()
 
@@ -144,6 +148,16 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             .order_by("first_name", "last_name", "email", "username")
         )
 
+        pending_lead_mentor_invitations = (
+            OrganizationInvitation.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                status=OrganizationInvitation.STATUS_PENDING,
+            )
+            .select_related("invited_by")
+            .order_by("-created_at")
+        )
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -164,6 +178,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "background_check_types": bg_types,
             "lead_mentor_memberships": lead_mentor_memberships,
             "eligible_lead_mentor_users": eligible_lead_mentor_users,
+            "pending_lead_mentor_invitations": pending_lead_mentor_invitations,
             "organization": org,
             "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
@@ -1066,7 +1081,11 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         from audit.events import AuditEvent
         from audit.service import log_event
-        from organizations.models import UserOrganizationMembership
+        from organizations.models import (
+            OrganizationInvitation,
+            UserOrganizationMembership,
+        )
+        from organizations.services import send_invitation_email
 
         User = get_user_model()
         org = getattr(request, "organization", None) or get_default_organization()
@@ -1085,29 +1104,6 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 messages.error(request, "Selected user was not found or is inactive.")
                 return redirect("/programs/settings/?tab=lead_mentors")
 
-            membership, created = UserOrganizationMembership.objects.update_or_create(
-                user=target_user,
-                organization=org,
-                role="LeadMentor",
-                defaults={
-                    "is_active": True,
-                    "invited_by": request.user,
-                },
-            )
-
-            # Ensure Adult profile if exists has is_mentor=True
-            if hasattr(target_user, "adult_profile"):
-                adult = target_user.adult_profile
-                if not adult.is_mentor:
-                    adult.is_mentor = True
-                    adult.save(update_fields=["is_mentor"])
-
-            log_event(
-                request=request,
-                event=AuditEvent.ROLE_CHANGED,
-                resource=target_user,
-                notes=f"User {target_user} assigned as Lead Mentor for organization '{org.name}'.",
-            )
             target_name = (
                 (
                     getattr(target_user, "adult_profile", None)
@@ -1121,9 +1117,71 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 or target_user.email
                 or target_user.username
             )
+
+            if not target_user.email or "@" not in target_user.email:
+                messages.error(
+                    request,
+                    f"Selected user '{target_name}' does not have a valid email address configured.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            email = target_user.email.strip().lower()
+
+            # Check if this user is already an active Lead Mentor in this organization
+            active_lead = UserOrganizationMembership.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+                user=target_user,
+            ).first()
+            if active_lead:
+                messages.error(
+                    request,
+                    f"A user with email '{email}' is already an active Lead Mentor for {org.name}.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Check if there is already a pending invitation for this email
+            existing_invite = OrganizationInvitation.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                email__iexact=email,
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if existing_invite:
+                existing_invite.expires_at = timezone.now() + timedelta(days=14)
+                existing_invite.invited_by = request.user
+                existing_invite.save(update_fields=["expires_at", "invited_by"])
+                send_invitation_email(existing_invite, request=request)
+                log_event(
+                    request=request,
+                    event=AuditEvent.ROLE_CHANGED,
+                    resource=existing_invite,
+                    notes=f"Refreshed and resent Lead Mentor invitation to {target_name} ({email}) for organization '{org.name}'.",
+                )
+                messages.success(
+                    request,
+                    f"Lead Mentor invitation sent to {target_name} ({email}). Their Lead Mentor access will be enabled once they accept the invitation (valid for 14 days).",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.create(
+                organization=org,
+                email=email,
+                role="LeadMentor",
+                invited_by=request.user,
+                expires_at=timezone.now() + timedelta(days=14),
+            )
+            send_invitation_email(invitation, request=request)
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=f"Sent Lead Mentor invitation to {target_name} ({email}) for organization '{org.name}'.",
+            )
             messages.success(
                 request,
-                f"Successfully assigned {target_name} as Lead Mentor for {org.name}.",
+                f"Lead Mentor invitation sent to {target_name} ({email}). Their Lead Mentor access will be enabled once they accept the invitation (valid for 14 days).",
             )
             return redirect("/programs/settings/?tab=lead_mentors")
 
@@ -1190,6 +1248,125 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             else:
                 messages.warning(request, "User is not an active Lead Mentor.")
 
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "invite_lead_mentor":
+            email = (request.POST.get("email") or "").strip().lower()
+            if not email or "@" not in email:
+                messages.error(request, "Please enter a valid email address.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Check if this user is already an active Lead Mentor in this organization
+            active_lead = UserOrganizationMembership.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+                user__email__iexact=email,
+            ).first()
+            if active_lead:
+                messages.error(
+                    request,
+                    f"A user with email '{email}' is already an active Lead Mentor for {org.name}.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Check if there is already a pending invitation for this email
+            existing_invite = OrganizationInvitation.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                email__iexact=email,
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if existing_invite:
+                existing_invite.expires_at = timezone.now() + timedelta(days=14)
+                existing_invite.invited_by = request.user
+                existing_invite.save(update_fields=["expires_at", "invited_by"])
+                send_invitation_email(existing_invite, request=request)
+                log_event(
+                    request=request,
+                    event=AuditEvent.ROLE_CHANGED,
+                    resource=existing_invite,
+                    notes=f"Refreshed and resent Lead Mentor invitation to {email} for organization '{org.name}'.",
+                )
+                messages.success(
+                    request,
+                    f"Updated and resent Lead Mentor invitation to {email}. Valid for 14 days.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.create(
+                organization=org,
+                email=email,
+                role="LeadMentor",
+                invited_by=request.user,
+                expires_at=timezone.now() + timedelta(days=14),
+            )
+            send_invitation_email(invitation, request=request)
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=f"Sent Lead Mentor invitation to {email} for organization '{org.name}'.",
+            )
+            messages.success(
+                request,
+                f"Successfully sent Lead Mentor invitation to {email}. The invitation will expire in 14 days.",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "resend_invitation":
+            invitation_id = request.POST.get("invitation_id")
+            if not invitation_id:
+                messages.error(request, "Invitation ID not specified.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.filter(
+                id=invitation_id,
+                organization=org,
+                role="LeadMentor",
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if not invitation:
+                messages.error(request, "Pending invitation not found.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation.expires_at = timezone.now() + timedelta(days=14)
+            invitation.save(update_fields=["expires_at"])
+            send_invitation_email(invitation, request=request)
+            messages.success(
+                request,
+                f"Resent Lead Mentor invitation to {invitation.email}.",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "revoke_invitation":
+            invitation_id = request.POST.get("invitation_id")
+            if not invitation_id:
+                messages.error(request, "Invitation ID not specified.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.filter(
+                id=invitation_id,
+                organization=org,
+                role="LeadMentor",
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if not invitation:
+                messages.error(request, "Pending invitation not found.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation.status = OrganizationInvitation.STATUS_DECLINED
+            invitation.save(update_fields=["status"])
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=f"Revoked Lead Mentor invitation for {invitation.email} in organization '{org.name}'.",
+            )
+            messages.success(
+                request,
+                f"Revoked Lead Mentor invitation for {invitation.email}.",
+            )
             return redirect("/programs/settings/?tab=lead_mentors")
 
         messages.error(request, "Unknown action.")
