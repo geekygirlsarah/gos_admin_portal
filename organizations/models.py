@@ -1,6 +1,9 @@
+import secrets
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 DEFAULT_ORGANIZATION_SETTINGS = {
     "champion_label": "Champion",
@@ -301,3 +304,162 @@ class OrganizationSettings(models.Model):
     @property
     def email_settings(self):
         return self.get_setting("email_settings", {})
+
+
+class UserOrganizationMembership(models.Model):
+    """Association linking a User to an Organization with a specific Role."""
+
+    ROLE_CHOICES = [
+        ("LeadMentor", "Lead Mentor"),
+        ("Mentor", "Mentor"),
+        ("Parent", "Parent"),
+        ("Student", "Student"),
+        ("Alumni", "Alumni"),
+        ("Staff", "Staff"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="organization_memberships",
+        help_text="User belonging to the organization.",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+        help_text="Organization the user is a member of.",
+    )
+    role = models.CharField(
+        max_length=50,
+        choices=ROLE_CHOICES,
+        default="Student",
+        help_text="User's role within this organization.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this membership is currently active.",
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invited_memberships",
+        help_text="User who invited or created this membership.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    class Meta:
+        unique_together = ("user", "organization", "role")
+        verbose_name = "User Organization Membership"
+        verbose_name_plural = "User Organization Memberships"
+        ordering = ["organization", "user", "role"]
+
+    def __str__(self):
+        return f"{self.user} - {self.organization} ({self.get_role_display()})"
+
+
+class OrganizationInvitation(models.Model):
+    """Invitation for a user to join an organization with a pre-assigned role."""
+
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+    STATUS_EXPIRED = "expired"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_DECLINED, "Declined"),
+        (STATUS_EXPIRED, "Expired"),
+    ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+        help_text="Organization the user is invited to.",
+    )
+    email = models.EmailField(
+        help_text="Email address of the invited user.",
+    )
+    role = models.CharField(
+        max_length=50,
+        choices=UserOrganizationMembership.ROLE_CHOICES,
+        default="Mentor",
+        help_text="Role to be granted upon accepting the invitation.",
+    )
+    token = models.CharField(
+        max_length=64,
+        unique=True,
+        editable=False,
+        help_text="Unique secret token used to accept the invitation.",
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_organization_invitations",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        help_text="Date and time when this invitation expires.",
+    )
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accepted_organization_invitations",
+    )
+
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    class Meta:
+        verbose_name = "Organization Invitation"
+        verbose_name_plural = "Organization Invitations"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Invitation for {self.email} to {self.organization} ({self.role})"
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(days=14)
+        super().save(*args, **kwargs)
+
+    def is_valid(self):
+        if self.status != self.STATUS_PENDING:
+            return False
+        return timezone.now() <= self.expires_at
+
+    def accept(self, user):
+        if not self.is_valid():
+            raise ValueError("Invitation is no longer valid or has expired.")
+        membership, _ = UserOrganizationMembership.objects.get_or_create(
+            user=user,
+            organization=self.organization,
+            role=self.role,
+            defaults={"is_active": True, "invited_by": self.invited_by},
+        )
+        if not membership.is_active:
+            membership.is_active = True
+            membership.save(update_fields=["is_active", "updated_at"])
+        self.status = self.STATUS_ACCEPTED
+        self.accepted_at = timezone.now()
+        self.accepted_by = user
+        self.save(update_fields=["status", "accepted_at", "accepted_by"])
+        return membership

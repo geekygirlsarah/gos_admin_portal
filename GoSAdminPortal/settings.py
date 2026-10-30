@@ -123,9 +123,15 @@ if not DEBUG:
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
+    "testserver",
+    ".momentumteam.app",
+    ".girlsofsteelrobotics.org",
+    ".gosadmin.com",
 ]
 if os.getenv("ALLOWED_HOSTS"):
     ALLOWED_HOSTS.extend(os.getenv("ALLOWED_HOSTS").split(","))
+
+MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
 
 
 # Application definition

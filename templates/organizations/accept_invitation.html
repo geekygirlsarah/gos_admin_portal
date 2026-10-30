@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Join {{ organization.name }} | {{ request.organization.name|default:"Portal" }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white text-center py-4">
+                    <h3 class="mb-0">Organization Invitation</h3>
+                </div>
+                <div class="card-body p-4 text-center">
+                    <p class="lead mb-3">
+                        You have been invited to join <strong>{{ organization.name }}</strong> as a <strong>{{ invitation.get_role_display }}</strong>.
+                    </p>
+                    {% if invitation.invited_by %}
+                    <p class="text-muted mb-4">
+                        Invited by {{ invitation.invited_by.get_full_name|default:invitation.invited_by.email }}.
+                    </p>
+                    {% endif %}
+
+                    <form method="post" class="d-grid gap-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle me-2"></i>Accept Invitation & Join Team
+                        </button>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">Decline / Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

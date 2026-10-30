@@ -8,6 +8,16 @@ All notable changes to this project will be documented in this file.
 - **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
 
 ### Added
+- **Multi-Tenant Auth, Onboarding & Dynamic Organization Resolution (Phase 6)**:
+  - Added `UserOrganizationMembership` model connecting users, organizations, and roles (`LeadMentor`, `Mentor`, `Parent`, `Student`, `Alumni`, `Staff`), with `OrganizationManager` (`OrganizationQuerySet`) scoping and unique `(user, organization, role)` constraints.
+  - Added `OrganizationInvitation` model supporting secure invitation tokens, expiration dates, status tracking (`pending`, `accepted`, `declined`, `expired`), and acceptance workflows.
+  - Enhanced `OrganizationMiddleware` and `resolve_organization_from_request` (`organizations/utils.py`) to resolve active tenant organizations dynamically from HTTP headers (`X-Organization`, `X-Org-Slug`, `X-Org-Subdomain`), subdomains (`<subdomain>.momentumteam.app`, `<subdomain>.localhost`), custom domains, and user session memberships, falling back gracefully to the default organization.
+  - Integrated Momentum root domain configuration (`MOMENTUM_ROOT_DOMAIN = "momentumteam.app"`), `get_organization_url` helper, and updated `ALLOWED_HOSTS` wildcards.
+  - Enhanced `get_user_role` and role check helpers (`user_is_parent`, `user_is_mentor`, `user_is_alumni`, `user_is_mentor_or_lead`) in `programs/permission_views.py` to evaluate against `UserOrganizationMembership` when scoped to an organization.
+  - Added invitation review and acceptance view (`AcceptInvitationView` at `/organizations/invitations/<token>/`), exempting invitation paths from mandatory authentication so invited users can land and log in/register cleanly.
+  - Registered `UserOrganizationMembership` and `OrganizationInvitation` in Django Admin (`organizations/admin.py`).
+  - Added database migration `0003_organizationinvitation_userorganizationmembership.py` with data backfill for existing users in the default GoS organization.
+  - Added comprehensive test suite in `organizations/tests/test_phase6.py` verifying memberships, invitations, subdomain routing, org-scoped roles, and invitation acceptance.
 - **Multi-Tenant Permission System Scope (Phase 5)**:
   - Added nullable `organization` foreign key and `OrganizationManager` (`OrganizationQuerySet`) to `RolePermission`, with `unique_together = ("organization", "role", "section")` and database migration backfilling existing permissions to the default GoS organization.
   - Enhanced `can_user_read`, `can_user_write`, and `can_user_delete` in `programs/permission_views.py` to accept an `org` parameter and query `RolePermission.objects.for_organization(org)` (prioritizing org-scoped overrides over unscoped fallback records) while inferring `org` from `obj.organization` or `obj.program.organization` when omitted.
