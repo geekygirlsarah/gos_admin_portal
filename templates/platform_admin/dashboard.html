@@ -1,0 +1,238 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<!-- Executive Metrics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-3 h-100 bg-white">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">Organizations</span>
+                    <span class="p-2 rounded-2 bg-primary bg-opacity-10 text-primary">
+                        <i class="bi bi-buildings fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <h3 class="fw-bold mb-0">{{ total_orgs }}</h3>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">{{ active_orgs }} active</span>
+                    {% if inactive_orgs > 0 %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ inactive_orgs }} inactive</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-3 h-100 bg-white">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">Platform Users</span>
+                    <span class="p-2 rounded-2 bg-success bg-opacity-10 text-success">
+                        <i class="bi bi-people fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <h3 class="fw-bold mb-0">{{ total_users }}</h3>
+                    <span class="text-muted small">({{ active_users }} active accounts)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-3 h-100 bg-white">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">Programs & Rosters</span>
+                    <span class="p-2 rounded-2 bg-info bg-opacity-10 text-info">
+                        <i class="bi bi-diagram-3 fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <h3 class="fw-bold mb-0">{{ active_programs }}</h3>
+                    <span class="text-muted small">active ({{ total_enrollments }} enrollments)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-3 h-100 bg-white">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">Platform Health</span>
+                    <span class="p-2 rounded-2 bg-success bg-opacity-10 text-success">
+                        <i class="bi bi-shield-check fs-5"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Operational</span>
+                    <a href="{% url 'platform_admin:health' %}" class="small text-decoration-none">Run Diagnostics &rarr;</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Row: Org Health Matrix & Quick Support -->
+<div class="row g-4">
+    <!-- Organizations Health & Status Matrix -->
+    <div class="col-xl-8">
+        <div class="card border-0 shadow-sm rounded-3 bg-white">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-heart-pulse text-danger me-2"></i>Organization Health & Readiness</h5>
+                    <p class="text-muted small mb-0">Overview of tenant compliance, staffing, and active program health.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'platform_admin:organization_list' %}" class="btn btn-outline-secondary btn-sm">
+                        View All Orgs &rarr;
+                    </a>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-uppercase text-muted">
+                        <tr>
+                            <th>Organization</th>
+                            <th>Health Status</th>
+                            <th class="text-center">Lead Mentors</th>
+                            <th class="text-center">Members</th>
+                            <th class="text-center">Active Programs</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in org_health_data %}
+                        <tr>
+                            <td>
+                                <div>
+                                    <a href="{% url 'platform_admin:organization_detail' item.org.pk %}" class="fw-bold text-decoration-none text-dark">
+                                        {{ item.org.name }}
+                                    </a>
+                                    {% if item.org.subdomain %}
+                                    <span class="badge bg-light text-secondary border ms-1">{{ item.org.subdomain }}.momentum</span>
+                                    {% endif %}
+                                </div>
+                                <span class="small text-muted">{{ item.org.slug }}</span>
+                                {% if not item.org.is_active %}
+                                <span class="badge bg-secondary ms-1">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.status == 'healthy' %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                    <i class="bi bi-check-circle-fill me-1"></i>Healthy
+                                </span>
+                                {% elif item.status == 'danger' %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1" title="{{ item.issues|join:', ' }}">
+                                    <i class="bi bi-exclamation-octagon-fill me-1"></i>Action Needed
+                                </span>
+                                {% else %}
+                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1" title="{{ item.issues|join:', ' }}">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Attention
+                                </span>
+                                {% endif %}
+                                {% if item.issues %}
+                                <div class="small text-danger mt-1" style="font-size: 0.75rem;">
+                                    {{ item.issues.0 }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if item.lead_mentors_count > 0 %}
+                                <span class="badge bg-dark">{{ item.lead_mentors_count }}</span>
+                                {% else %}
+                                <span class="badge bg-danger">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="fw-semibold">{{ item.total_members }}</span>
+                                <div class="text-muted" style="font-size: 0.75rem;">
+                                    {{ item.mentors_count }}M / {{ item.students_count }}S / {{ item.parents_count }}P
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                {% if item.active_programs_count > 0 %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ item.active_programs_count }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted border">None</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'platform_admin:organization_detail' item.org.pk %}" class="btn btn-outline-secondary" title="View Organization Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'platform_admin:organization_switch_context' item.org.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-primary" title="Switch Portal Context to this Org">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                No organizations registered on the platform yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Support Tools & Recent Audit Log -->
+    <div class="col-xl-4">
+        <!-- Quick Support User Search -->
+        <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-person-gear text-primary me-2"></i>Quick User Support</h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">Lookup any user across organizations to inspect profiles, memberships, or initiate support impersonation.</p>
+                <form method="get" action="{% url 'platform_admin:user_support' %}">
+                    <div class="input-group mb-2">
+                        <input type="text" name="q" class="form-control" placeholder="Email, name, or username...">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </form>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <a href="{% url 'platform_admin:user_support' %}" class="small text-decoration-none">
+                        Browse all users &rarr;
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Audit Log Widget -->
+        <div class="card border-0 shadow-sm rounded-3 bg-white">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-journal-text text-secondary me-2"></i>Platform Audit Activity</h5>
+                <a href="{% url 'platform_admin:audit_logs' %}" class="small text-decoration-none">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush small">
+                    {% for log in recent_audit_logs %}
+                    <div class="list-group-item py-2 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="badge bg-light text-dark border">{{ log.get_event_display }}</span>
+                            <span class="text-muted" style="font-size: 0.75rem;">{{ log.timestamp|timesince }} ago</span>
+                        </div>
+                        <div class="text-truncate">
+                            <strong class="text-dark">{{ log.actor.username|default:"System" }}</strong>: {{ log.notes|default:log.resource_repr|default:"Action performed" }}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-3 text-center text-muted">No audit activity recorded yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-30
 
 ### Added
+- **Multi-Tenant Platform Admin Dashboard & Impersonation (Phase 7)**:
+  - Added dedicated platform administration portal (`/platform-admin/`) strictly restricted to active superusers via `SuperuserRequiredMixin`.
+  - Added Executive Overview Dashboard (`PlatformDashboardView`) presenting real-time tenant counts, user totals, active program rosters, health summaries, and recent platform audit logs.
+  - Added Tenant Organization Management (`PlatformOrganizationListView`, `PlatformOrganizationCreateView`, `PlatformOrganizationDetailView`, `PlatformOrganizationUpdateView`, `PlatformOrganizationToggleStatusView`) supporting custom subdomain configuration, branding, time zone and theme color overrides, active status toggling, and membership management with direct role assignment and invitations.
+  - Added Organization Health & Readiness diagnostics evaluating lead mentor staffing, active program availability, and mentor compliance rates (background clearances and signed agreements).
+  - Added Platform Usage Metrics (`PlatformMetricsView` at `/platform-admin/metrics/`) displaying multi-tenant activity aggregates for attendance hours/sessions, application pipeline volumes, purchase orders, outreach events, and role distributions.
+  - Added System & Tenant Isolation Health Monitor (`PlatformHealthCheckView` at `/platform-admin/health/`) scanning all domain tables across apps for unscoped records (`organization__isnull=True`), probing database connectivity, and flagging tenant compliance issues.
+  - Added Global User Support Directory (`PlatformUserSupportView` at `/platform-admin/users/`) enabling cross-tenant user lookups by name, username, email, phone number, and Andrew ID, with account status toggling.
+  - Added User Support Impersonation workflow (`PlatformImpersonateUserView` at `/platform-admin/impersonate/<id>/` and `PlatformStopImpersonationView` at `/platform-admin/impersonate/stop/`) enabling superusers to troubleshoot user issues directly from their perspective with session protection, audit logging (`USER_IMPERSONATED`, `IMPERSONATION_ENDED`), persistent top warning banners, and one-click exit controls.
+  - Added Cross-Tenant Audit Log Explorer (`PlatformAuditLogView` at `/platform-admin/audit/`) allowing superusers to search and filter platform-wide security, administrative, and access events.
+  - Added comprehensive automated test suite in `organizations/tests/test_platform_admin.py`.
 - **Organization-Scoped Lead Mentor Role & Management (`programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/permission_views.py`, `organizations/migrations/0004_convert_lead_mentors_to_memberships.py`, `organizations/services.py`, `templates/organizations/emails/invitation.html`)**:
   - Invented an organization-level Lead Mentor role decoupled from Django server-level `superuser` and `staff` flags, reserving `is_superuser` and `is_staff` for system administrators.
   - Added a dedicated "Lead Mentors" tab in Portal Settings (`/programs/settings/?tab=lead_mentors`) displaying active Lead Mentors and providing an interface to assign and revoke Lead Mentor status.

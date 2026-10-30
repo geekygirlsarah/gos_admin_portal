@@ -1,0 +1,142 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-people text-danger me-2"></i>Global User Support &amp; Directory</h4>
+            <p class="text-muted small mb-0">Cross-tenant user directory with impersonation capabilities, account management, and profile inspection.</p>
+        </div>
+    </div>
+    <div class="card-body bg-light border-bottom py-3">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-md-4">
+                {{ search_form.q }}
+            </div>
+            <div class="col-md-3">
+                {{ search_form.organization }}
+            </div>
+            <div class="col-md-2">
+                {{ search_form.role }}
+            </div>
+            <div class="col-md-2">
+                {{ search_form.status }}
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-dark w-100">Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-uppercase text-muted">
+                <tr>
+                    <th>User / Account</th>
+                    <th>Contact &amp; ID</th>
+                    <th>Organizations &amp; Roles</th>
+                    <th>Account Status</th>
+                    <th>Last Active</th>
+                    <th class="text-end">Support Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark">
+                            {{ u.get_full_name|default:u.username }}
+                            {% if u.is_superuser %}
+                            <span class="badge bg-danger ms-1">Superuser</span>
+                            {% endif %}
+                        </div>
+                        <span class="small text-muted">{{ u.email }} &bull; @{{ u.username }}</span>
+                    </td>
+                    <td>
+                        <div class="small">
+                            {% if u.adult_profile.phone_number or u.student_profile.phone_number %}
+                            <div><i class="bi bi-telephone text-muted me-1"></i>{{ u.adult_profile.phone_number|default:u.student_profile.phone_number }}</div>
+                            {% endif %}
+                            {% if u.adult_profile.andrew_id or u.student_profile.andrew_id %}
+                            <div><i class="bi bi-person-badge text-muted me-1"></i>{{ u.adult_profile.andrew_id|default:u.student_profile.andrew_id }}</div>
+                            {% endif %}
+                            {% if not u.adult_profile and not u.student_profile %}
+                            <span class="text-muted">No linked profile</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column gap-1">
+                            {% for m in u.organization_memberships.all %}
+                            <div class="small">
+                                <span class="fw-semibold text-dark">{{ m.organization.name }}:</span>
+                                <span class="badge bg-light text-dark border">{{ m.get_role_display }}</span>
+                            </div>
+                            {% empty %}
+                            <span class="small text-muted">No memberships</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if u.is_active %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">
+                        {{ u.last_login|date:"M d, Y"|default:"Never" }}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            {% if not u.is_superuser %}
+                            <form method="post" action="{% url 'platform_admin:impersonate_user' u.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-warning btn-sm fw-semibold" title="Impersonate this user for troubleshooting">
+                                    <i class="bi bi-incognito"></i> Impersonate
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'platform_admin:user_toggle_status' u.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-outline-{% if u.is_active %}secondary{% else %}success{% endif %}" title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                    <i class="bi bi-power"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="badge bg-light text-muted border">Platform Admin</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-people fs-1 d-block mb-2 text-secondary"></i>
+                        No users found matching your search query.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <div class="card-footer bg-white py-3 border-top d-flex justify-content-between align-items-center">
+        <span class="text-muted small">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">&laquo; Previous</a>
+            </li>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next &raquo;</a>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
