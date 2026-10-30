@@ -104,8 +104,8 @@ class BackgroundCheckAdmin(admin.ModelAdmin):
 
 @admin.register(RolePermission)
 class RolePermissionAdmin(admin.ModelAdmin):
-    list_display = ("role", "section", "can_read", "can_write")
-    list_filter = ("role", "section")
+    list_display = ("organization", "role", "section", "can_read", "can_write")
+    list_filter = ("organization", "role", "section")
     list_editable = ("can_read", "can_write")
 
 

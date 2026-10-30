@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.db import models
 from django.shortcuts import redirect
 
 from .models import (
@@ -24,15 +25,62 @@ ORDERS_SECTIONS = {
 }
 
 
-def get_user_role(user):
+def _get_role_permission(role, section, org=None):
+    return (
+        RolePermission.objects.for_organization(org)
+        .filter(role=role, section=section)
+        .order_by(
+            models.Case(models.When(organization__isnull=False, then=0), default=1)
+        )
+        .first()
+    )
+
+
+def get_user_role(user, org=None):
     """
     Determines the role of a user for permission purposes.
-    Returns 'LeadMentor', 'Mentor', 'Parent', 'Student', or None.
+    Returns 'LeadMentor', 'Mentor', 'Parent', 'Student', 'Alumni', or None.
+    If org is provided and user has active UserOrganizationMembership records,
+    resolves role within that organization.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return None
 
-    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+    if user.is_superuser:
+        return "LeadMentor"
+
+    if org is None:
+        try:
+            from organizations.utils import get_default_organization
+
+            org = get_default_organization()
+        except Exception:
+            org = None
+
+    if org is not None:
+        try:
+            from organizations.models import UserOrganizationMembership
+
+            memberships = set(
+                UserOrganizationMembership.objects.filter(
+                    user=user, organization=org, is_active=True
+                ).values_list("role", flat=True)
+            )
+            if memberships:
+                for role_candidate in (
+                    "LeadMentor",
+                    "Mentor",
+                    "Parent",
+                    "Alumni",
+                    "Student",
+                    "Staff",
+                ):
+                    if role_candidate in memberships:
+                        return role_candidate
+        except Exception:  # nosec B110
+            pass
+
+    if user.groups.filter(name="LeadMentor").exists():
         return "LeadMentor"
 
     # Check if the user is linked to an Adult profile
@@ -69,13 +117,27 @@ def get_user_role(user):
     return None
 
 
-def _user_adult_flag(user, field, group_name):
+def _user_adult_flag(user, field, group_name, org=None, role_name=None):
     """True if the user's Adult profile has ``field`` set (or the legacy
-    ``group_name`` group as a fallback). Unlike ``get_user_role`` this ignores
-    role priority, so an Adult who is flagged as several roles at once (e.g. a
-    parent who also mentors) is still recognized for each role they hold."""
+    ``group_name`` group as a fallback, or active UserOrganizationMembership in org)."""
     if user is None or not getattr(user, "is_authenticated", False):
         return False
+
+    if org is not None and role_name:
+        try:
+            from organizations.models import UserOrganizationMembership
+
+            if UserOrganizationMembership.objects.filter(
+                user=user, organization=org, role=role_name, is_active=True
+            ).exists():
+                return True
+            if UserOrganizationMembership.objects.filter(
+                user=user, organization=org, is_active=True
+            ).exists():
+                return False
+        except Exception:  # nosec B110
+            pass
+
     try:
         adult = user.adult_profile
         if getattr(adult, field):
@@ -88,40 +150,90 @@ def _user_adult_flag(user, field, group_name):
     return user.groups.filter(name=group_name).exists()
 
 
-def user_is_parent(user):
+def user_is_lead_mentor(user, org=None):
+    """True if the user is a Lead Mentor (superuser, active LeadMentor
+    UserOrganizationMembership in org, or legacy LeadMentor group)."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    if org is None:
+        try:
+            from organizations.utils import get_default_organization
+
+            org = get_default_organization()
+        except Exception:
+            org = None
+    if org is not None:
+        try:
+            from organizations.models import UserOrganizationMembership
+
+            if UserOrganizationMembership.objects.filter(
+                user=user,
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+            ).exists():
+                return True
+        except Exception:  # nosec B110
+            pass
+    else:
+        try:
+            from organizations.models import UserOrganizationMembership
+
+            if UserOrganizationMembership.objects.filter(
+                user=user,
+                role="LeadMentor",
+                is_active=True,
+            ).exists():
+                return True
+        except Exception:  # nosec B110
+            pass
+    return user.groups.filter(name="LeadMentor").exists()
+
+
+def user_is_parent(user, org=None):
     """True if the user is a parent/guardian, regardless of other Adult flags.
 
     ``get_user_role`` collapses a multi-role Adult to a single role with Mentor
     taking priority, so parent-only features (Payments page, balance sheets)
     must check this helper rather than the role string.
     """
-    return _user_adult_flag(user, "is_parent", "Parent")
+    return _user_adult_flag(user, "is_parent", "Parent", org=org, role_name="Parent")
 
 
-def user_is_mentor(user):
+def user_is_mentor(user, org=None):
     """True if the user serves as a mentor/volunteer, regardless of other
     Adult flags."""
-    return _user_adult_flag(user, "is_mentor", "Mentor")
+    return _user_adult_flag(user, "is_mentor", "Mentor", org=org, role_name="Mentor")
 
 
-def user_is_alumni(user):
+def user_is_alumni(user, org=None):
     """True if the user is a program alumni, regardless of other Adult flags."""
-    return _user_adult_flag(user, "is_alumni", "Alumni")
+    return _user_adult_flag(user, "is_alumni", "Alumni", org=org, role_name="Alumni")
 
 
-def user_is_mentor_or_lead(user):
-    """True if the user is a Lead Mentor (superuser or LeadMentor group) or an
+def user_is_mentor_or_lead(user, org=None):
+    """True if the user is a Lead Mentor (superuser, active LeadMentor
+    UserOrganizationMembership in org, or legacy LeadMentor group) or an
     active mentor. Convenience helper for ``user_is_mentor(user) or
-    get_user_role(user) == "LeadMentor"`` checks."""
-    if user is None:
+    user_is_lead_mentor(user)`` checks."""
+    if user is None or not getattr(user, "is_authenticated", False):
         return False
-    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+    if user.is_superuser:
         return True
-    return user_is_mentor(user)
+    if user_is_lead_mentor(user, org=org):
+        return True
+    return user_is_mentor(user, org=org)
 
 
-def can_user_read(user, section, obj=None):
-    role = get_user_role(user)
+def can_user_read(user, section, obj=None, org=None):
+    if org is None and obj is not None:
+        org = getattr(obj, "organization", None)
+        if org is None and hasattr(obj, "program"):
+            org = getattr(obj.program, "organization", None)
+
+    role = get_user_role(user, org=org)
     if role == "LeadMentor":
         return True
     if role is None:
@@ -137,9 +249,7 @@ def can_user_read(user, section, obj=None):
         if role not in ("Student", "Mentor"):
             return False
         if section == "orders-view":
-            perm = RolePermission.objects.filter(
-                role=role, section="orders-view"
-            ).first()
+            perm = _get_role_permission(role, "orders-view", org=org)
             return perm.can_read if perm else True
         return True
 
@@ -160,16 +270,16 @@ def can_user_read(user, section, obj=None):
             if hasattr(user, "adult_profile") and obj == user.adult_profile:
                 return True
 
-    is_parent = user_is_parent(user)
+    is_parent = user_is_parent(user, org=org)
 
     # Finance sections use the Parent role's permission config for anyone who
     # is a parent, even if they also hold mentor/alumni flags (get_user_role
     # would report those roles instead).
     if is_parent and section in ["payments", "sliding_scale", "fees"]:
-        perm = RolePermission.objects.filter(role="Parent", section=section).first()
+        perm = _get_role_permission("Parent", section, org=org)
         can_read_section = perm.can_read if perm else True
     else:
-        perm = RolePermission.objects.filter(role=role, section=section).first()
+        perm = _get_role_permission(role, section, org=org)
         # Default to True for read, except for attendance for mentors
         default_read = True
         if role == "Mentor" and section == "attendance":
@@ -298,8 +408,13 @@ def can_user_read(user, section, obj=None):
     return can_read_section
 
 
-def can_user_write(user, section, obj=None):
-    role = get_user_role(user)
+def can_user_write(user, section, obj=None, org=None):
+    if org is None and obj is not None:
+        org = getattr(obj, "organization", None)
+        if org is None and hasattr(obj, "program"):
+            org = getattr(obj.program, "organization", None)
+
+    role = get_user_role(user, org=org)
     if role == "LeadMentor":
         return True
     if role == "Student" and section == "outreach":
@@ -388,7 +503,7 @@ def can_user_write(user, section, obj=None):
             # orders, add shipping, or use the (view-only) section's write
             # column.
             return False
-        perm = RolePermission.objects.filter(role=role, section=section).first()
+        perm = _get_role_permission(role, section, org=org)
         if section == "orders-view":
             # Viewing only; the write column mirrors view permission.
             return perm.can_write if perm else True
@@ -445,7 +560,7 @@ def can_user_write(user, section, obj=None):
                 return True
 
     # Section specific write permission
-    perm = RolePermission.objects.filter(role=role, section=section).first()
+    perm = _get_role_permission(role, section, org=org)
     can_write_section = perm.can_write if perm else False
 
     # Only Lead Mentors can write to payments/fees/sliding scale
@@ -502,7 +617,7 @@ def can_user_write(user, section, obj=None):
     return can_write_section
 
 
-def can_user_delete(user, section, obj=None):
+def can_user_delete(user, section, obj=None, org=None):
     """
     Returns True if the user may delete records in the given section.
 
@@ -513,7 +628,12 @@ def can_user_delete(user, section, obj=None):
     - All other roles follow the same object-level write restrictions but
       deletion is denied if the role cannot write to the section at all.
     """
-    role = get_user_role(user)
+    if org is None and obj is not None:
+        org = getattr(obj, "organization", None)
+        if org is None and hasattr(obj, "program"):
+            org = getattr(obj.program, "organization", None)
+
+    role = get_user_role(user, org=org)
     if role == "LeadMentor":
         return True
     if role is None:
@@ -536,15 +656,13 @@ def can_user_delete(user, section, obj=None):
         return False
 
     # For all other sections/roles, delete tracks write permission
-    return can_user_write(user, section, obj=obj)
+    return can_user_write(user, section, obj=obj, org=org)
 
 
 class LeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return (
-            self.request.user.is_superuser
-            or self.request.user.groups.filter(name="LeadMentor").exists()
-        )
+        org = getattr(self.request, "organization", None)
+        return user_is_lead_mentor(self.request.user, org=org)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -572,7 +690,10 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
             program = Program.objects.get(pk=pk)
         except Program.DoesNotExist:
             return False
-        return can_user_write(user, "team_assignments", program)
+        org = getattr(self.request, "organization", None) or getattr(
+            program, "organization", None
+        )
+        return can_user_write(user, "team_assignments", program, org=org)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -585,7 +706,8 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
 
 class MentorOrLeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return user_is_mentor_or_lead(self.request.user)
+        org = getattr(self.request, "organization", None)
+        return user_is_mentor_or_lead(self.request.user, org=org)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -614,6 +736,7 @@ def __getattr__(name):
         "PortalCrewView",
         "PortalEmailSettingsView",
         "PortalKioskView",
+        "PortalLeadMentorView",
         "PortalPermissionsUpdateView",
         "PortalSettingsView",
         "PortalSlidingScaleSettingsView",

@@ -2,9 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
-## 2026-10-29
+## 2026-10-30
 
 ### Added
+- **Organization-Scoped Lead Mentor Role & Management (`programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/permission_views.py`, `organizations/migrations/0004_convert_lead_mentors_to_memberships.py`, `organizations/services.py`, `templates/organizations/emails/invitation.html`)**:
+  - Invented an organization-level Lead Mentor role decoupled from Django server-level `superuser` and `staff` flags, reserving `is_superuser` and `is_staff` for system administrators.
+  - Added a dedicated "Lead Mentors" tab in Portal Settings (`/programs/settings/?tab=lead_mentors`) displaying active Lead Mentors and providing an interface to assign and revoke Lead Mentor status.
+  - Added direct email invitation workflow (`Invite by Email`) alongside existing user assignment (`Assign Existing User`), enabling Lead Mentors to invite new leadership directly by email address with automated templated invitation notifications and tokenized acceptance links.
+  - Unified the "Assign Existing User" workflow with the invitation acceptance flow, dispatching a formal Lead Mentor invitation email with role details and authority explanation that the selected user must review and accept before administrative access is enabled.
+  - Added recipient email verification on invitation acceptance (`OrganizationInvitation.matches_user`), ensuring only the intended recipient can accept an invitation and preventing other logged-in users from consuming tokens, with account mismatch notices and a direct "Sign Out & Switch Account" action.
+  - Added "Pending Lead Mentor Invitations" management table tracking pending invitations, 14-day expiration timestamps, inviter attribution, and controls to resend (with a fresh 14-day extension) or revoke pending invitations.
+  - Refined the Lead Mentors table to present Name (via profile-aware user lookups), Email, Assigned On, and Last Logged In timestamps, removing the internal username column and server-level "Admin" badges for a uniform, organization-focused roster.
+  - Positioned the "Lead Mentor Security & Authority" information callout box prominently at the top of the Lead Mentors management tab above the active roster.
+  - Built safety confirmation workflow for Lead Mentor assignment and email invitations with a 3-second delay countdown and explicit confirmation acknowledgement before granting full administrative access.
+  - Added self-removal lockout protection preventing the sole remaining Lead Mentor from accidentally stripping their own administrative access.
+  - Added data migration `0004_convert_lead_mentors_to_memberships.py` converting all existing staff and superuser accounts to organization Lead Mentors for Girls of Steel.
+  - Added `user_is_lead_mentor(user, org=None)` helper and integrated organization-level Lead Mentor role detection across all permission mixins, clearance models, Andrew ID management, forms, audit admin, and dashboards.
+  - Added comprehensive test suite in `organizations/tests/test_lead_mentor_role.py`.
+
+## 2026-10-29
+
+### Fixed
+- **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
+
+### Added
+- **Multi-Tenant Auth, Onboarding & Dynamic Organization Resolution (Phase 6)**:
+  - Added `UserOrganizationMembership` model connecting users, organizations, and roles (`LeadMentor`, `Mentor`, `Parent`, `Student`, `Alumni`, `Staff`), with `OrganizationManager` (`OrganizationQuerySet`) scoping and unique `(user, organization, role)` constraints.
+  - Added `OrganizationInvitation` model supporting secure invitation tokens, expiration dates, status tracking (`pending`, `accepted`, `declined`, `expired`), and acceptance workflows.
+  - Enhanced `OrganizationMiddleware` and `resolve_organization_from_request` (`organizations/utils.py`) to resolve active tenant organizations dynamically from HTTP headers (`X-Organization`, `X-Org-Slug`, `X-Org-Subdomain`), subdomains (`<subdomain>.momentumteam.app`, `<subdomain>.localhost`), custom domains, and user session memberships, falling back gracefully to the default organization.
+  - Integrated Momentum root domain configuration (`MOMENTUM_ROOT_DOMAIN = "momentumteam.app"`), `get_organization_url` helper, and updated `ALLOWED_HOSTS` wildcards.
+  - Enhanced `get_user_role` and role check helpers (`user_is_parent`, `user_is_mentor`, `user_is_alumni`, `user_is_mentor_or_lead`) in `programs/permission_views.py` to evaluate against `UserOrganizationMembership` when scoped to an organization.
+  - Added invitation review and acceptance view (`AcceptInvitationView` at `/organizations/invitations/<token>/`), exempting invitation paths from mandatory authentication so invited users can land and log in/register cleanly.
+  - Registered `UserOrganizationMembership` and `OrganizationInvitation` in Django Admin (`organizations/admin.py`).
+  - Added database migration `0003_organizationinvitation_userorganizationmembership.py` with data backfill for existing users in the default GoS organization.
+  - Added comprehensive test suite in `organizations/tests/test_phase6.py` verifying memberships, invitations, subdomain routing, org-scoped roles, and invitation acceptance.
+- **Multi-Tenant Permission System Scope (Phase 5)**:
+  - Added nullable `organization` foreign key and `OrganizationManager` (`OrganizationQuerySet`) to `RolePermission`, with `unique_together = ("organization", "role", "section")` and database migration backfilling existing permissions to the default GoS organization.
+  - Enhanced `can_user_read`, `can_user_write`, and `can_user_delete` in `programs/permission_views.py` to accept an `org` parameter and query `RolePermission.objects.for_organization(org)` (prioritizing org-scoped overrides over unscoped fallback records) while inferring `org` from `obj.organization` or `obj.program.organization` when omitted.
+  - Preserved global `get_user_role` mapping while isolating role permission evaluation per organization.
+  - Updated `DynamicPermissionMixin` and `_can_edit_bg` in `programs/views/mixins.py` to pass `request.organization` to permission checks.
+  - Updated template tags `{% can_read %}`, `{% can_write %}`, `{% can_delete %}` (`programs/templatetags/permission_tags.py`) to automatically evaluate within `request.organization` context.
+  - Updated Portal Settings (`PortalSettingsView`, `PortalPermissionsUpdateView`) in `programs/views/portal_settings.py` to initialize and update role permissions scoped to the active organization.
+  - Added comprehensive test suite in `programs/tests/test_scoped_permissions.py` covering model scoping, custom organization overrides, view mixins, template tags, and settings management.
+- **Extract Hardcoded Organization Constants to OrganizationSettings (Phase 4)**:
+  - Extracted hardcoded GoS constants (organization name, "Champion" and "Helper" outreach labels, "Lead Mentor" label, default clearance types, sliding scale calculation configuration, email settings, and feature flags) into `OrganizationSettings` and `DEFAULT_ORGANIZATION_SETTINGS` with `SettingsDict` dot-attribute dictionary access.
+  - Enabled dynamic template and view access via `request.organization.settings.<key>` and `request.organization.name`, falling back gracefully to defaults.
+  - Added helper methods `get_setting` and `set_setting` on `Organization` and `OrganizationSettings`, plus `get_organization_setting` and `get_organization_settings` utilities in `organizations/utils.py`.
+  - Added comprehensive test suite in `organizations/tests/test_phase4.py` verifying fallback behavior, dot-attribute lookups, custom setting overrides, and template rendering.
 - **Month and Day Dropdowns for Student Clearance Age Cutoff Date (`templates/programs/settings.html`, `programs/forms.py`, `programs/views/portal_settings.py`, `programs/models/adults.py`)**:
   - Replaced the full date picker input with clean, intuitive Month (January–December) and Day (1–31) select dropdowns for configuring annual student clearance cutoff dates in Portal Settings.
   - Eliminated confusing year displays and date picker widgets when setting annual birthday cutoff rules (e.g. Age 17 by September 1).
@@ -18,11 +62,6 @@ All notable changes to this project will be documented in this file.
   - Converted `BackgroundCheck` records to reference `BackgroundCheckType` foreign keys, with database migration `0123_background_check_type` migrating all prior student and adult clearances cleanly.
   - Updated Student and Adult profile cards (`templates/students/detail.html`, `templates/adults/detail.html`) and list badges (`templates/adults/list.html`, `templates/mentors/list.html`) to dynamically evaluate and display compliance status across all active clearance requirements.
   - Optimized queries and added cached clearance lookups across roster and list views to prevent N+1 queries.
-
-### Fixed
-- **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
-
-### Added
 - **Multi-Tenant Scoping by Default for New Features (Phase 3)**:
   - Added `OrganizationScopeMixin` in `organizations/mixins.py` (and re-exported via `programs/views/mixins.py`) that automatically scopes class-based view querysets to `request.organization` and assigns `request.organization` on newly created model instances in `form_valid()`.
   - Added `OrganizationFormMixin` and `limit_choices_to_organization` helper in `organizations/forms.py` (and re-exported via `programs/forms.py`) to automatically restrict `ModelChoiceField` and `ModelMultipleChoiceField` querysets to the current organization.

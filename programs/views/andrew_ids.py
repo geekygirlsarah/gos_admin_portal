@@ -26,9 +26,10 @@ def _get_adult_sponsor_choices():
 @login_required
 @require_http_methods(["GET", "POST"])
 def andrew_id_management_view(request):
-    if not (
-        request.user.is_superuser
-        or request.user.groups.filter(name="LeadMentor").exists()
+    from ..permission_views import user_is_lead_mentor
+
+    if not user_is_lead_mentor(
+        request.user, org=getattr(request, "organization", None)
     ):
         messages.error(request, "You do not have permission to manage Andrew IDs.")
         return redirect("home")

@@ -1,12 +1,13 @@
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.files.storage import default_storage
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views import View
 
 from audit.service import log_deletion
@@ -44,10 +45,11 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/settings.html"
 
     def get(self, request):
+        org = getattr(request, "organization", None) or get_default_organization()
         sections = RolePermission.SECTION_CHOICES
         roles = RolePermission.ROLE_CHOICES
 
-        # Ensure all combinations exist
+        # Ensure all combinations exist for this organization
         for role_code, role_name in roles:
             for section_code, section_name in sections:
                 # Orders content is scoped to students/mentors by default, so the
@@ -61,10 +63,13 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                         "can_write": orders_ok,
                     }
                 RolePermission.objects.get_or_create(
-                    role=role_code, section=section_code, defaults=defaults
+                    organization=org,
+                    role=role_code,
+                    section=section_code,
+                    defaults=defaults,
                 )
 
-        permissions = RolePermission.objects.all()
+        permissions = RolePermission.objects.for_organization(org)
 
         # Group permissions by section for the new table layout
         grouped_permissions = []
@@ -112,6 +117,47 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "display_order", "name"
         )
 
+        from django.contrib.auth import get_user_model
+
+        from organizations.models import (
+            OrganizationInvitation,
+            UserOrganizationMembership,
+        )
+
+        User = get_user_model()
+
+        lead_mentor_memberships = (
+            UserOrganizationMembership.objects.filter(
+                organization=org, role="LeadMentor", is_active=True
+            )
+            .select_related(
+                "user", "user__adult_profile", "user__student_profile", "invited_by"
+            )
+            .order_by(
+                "user__first_name", "user__last_name", "user__email", "user__username"
+            )
+        )
+        lead_mentor_user_ids = set(
+            lead_mentor_memberships.values_list("user_id", flat=True)
+        )
+
+        eligible_lead_mentor_users = (
+            User.objects.filter(is_active=True)
+            .exclude(id__in=lead_mentor_user_ids)
+            .select_related("adult_profile", "student_profile")
+            .order_by("first_name", "last_name", "email", "username")
+        )
+
+        pending_lead_mentor_invitations = (
+            OrganizationInvitation.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                status=OrganizationInvitation.STATUS_PENDING,
+            )
+            .select_related("invited_by")
+            .order_by("-created_at")
+        )
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -130,6 +176,9 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "slug", flat=True
             ).distinct(),
             "background_check_types": bg_types,
+            "lead_mentor_memberships": lead_mentor_memberships,
+            "eligible_lead_mentor_users": eligible_lead_mentor_users,
+            "pending_lead_mentor_invitations": pending_lead_mentor_invitations,
             "organization": org,
             "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
@@ -167,7 +216,8 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
     """Handles the 'update_permissions' action from the settings page."""
 
     def post(self, request):
-        permissions = RolePermission.objects.all()
+        org = getattr(request, "organization", None) or get_default_organization()
+        permissions = RolePermission.objects.for_organization(org)
         for perm in permissions:
             perm_key = f"perm_{perm.id}"
             if perm_key in request.POST:
@@ -186,6 +236,8 @@ class PortalPermissionsUpdateView(LoginRequiredMixin, LeadMentorRequiredMixin, V
                 write_key = f"write_{perm.id}"
                 perm.can_read = read_key in request.POST
                 perm.can_write = write_key in request.POST
+            if org and perm.organization is None:
+                perm.organization = org
             perm.save()
         messages.success(request, "Permissions updated successfully.")
         return redirect("/programs/settings/?tab=permissions")
@@ -1019,3 +1071,303 @@ class PortalBackgroundCheckTypeView(LoginRequiredMixin, LeadMentorRequiredMixin,
             return redirect("/programs/settings/?tab=background_checks")
 
         return redirect("/programs/settings/?tab=background_checks")
+
+
+class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/remove actions for Organization Lead Mentors from Portal Settings."""
+
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+
+        from audit.events import AuditEvent
+        from audit.service import log_event
+        from organizations.models import (
+            OrganizationInvitation,
+            UserOrganizationMembership,
+        )
+        from organizations.services import send_invitation_email
+
+        User = get_user_model()
+        org = getattr(request, "organization", None) or get_default_organization()
+        action = request.POST.get("action")
+
+        if action == "add_lead_mentor":
+            user_id = request.POST.get("user_id")
+            if not user_id:
+                messages.error(
+                    request, "Please select a user to assign as Lead Mentor."
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            target_user = User.objects.filter(id=user_id, is_active=True).first()
+            if not target_user:
+                messages.error(request, "Selected user was not found or is inactive.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            target_name = (
+                (
+                    getattr(target_user, "adult_profile", None)
+                    and target_user.adult_profile.display_name
+                )
+                or (
+                    getattr(target_user, "student_profile", None)
+                    and target_user.student_profile.display_name
+                )
+                or target_user.get_full_name()
+                or target_user.email
+                or target_user.username
+            )
+
+            if not target_user.email or "@" not in target_user.email:
+                messages.error(
+                    request,
+                    f"Selected user '{target_name}' does not have a valid email address configured.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            email = target_user.email.strip().lower()
+
+            # Check if this user is already an active Lead Mentor in this organization
+            active_lead = UserOrganizationMembership.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+                user=target_user,
+            ).first()
+            if active_lead:
+                messages.error(
+                    request,
+                    f"A user with email '{email}' is already an active Lead Mentor for {org.name}.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Check if there is already a pending invitation for this email
+            existing_invite = OrganizationInvitation.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                email__iexact=email,
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if existing_invite:
+                existing_invite.expires_at = timezone.now() + timedelta(days=14)
+                existing_invite.invited_by = request.user
+                existing_invite.save(update_fields=["expires_at", "invited_by"])
+                send_invitation_email(existing_invite, request=request)
+                log_event(
+                    request=request,
+                    event=AuditEvent.ROLE_CHANGED,
+                    resource=existing_invite,
+                    notes=f"Refreshed and resent Lead Mentor invitation to {target_name} ({email}) for organization '{org.name}'.",
+                )
+                messages.success(
+                    request,
+                    f"Lead Mentor invitation sent to {target_name} ({email}). Their Lead Mentor access will be enabled once they accept the invitation (valid for 14 days).",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.create(
+                organization=org,
+                email=email,
+                role="LeadMentor",
+                invited_by=request.user,
+                expires_at=timezone.now() + timedelta(days=14),
+            )
+            send_invitation_email(invitation, request=request)
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=f"Sent Lead Mentor invitation to {target_name} ({email}) for organization '{org.name}'.",
+            )
+            messages.success(
+                request,
+                f"Lead Mentor invitation sent to {target_name} ({email}). Their Lead Mentor access will be enabled once they accept the invitation (valid for 14 days).",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "remove_lead_mentor":
+            user_id = request.POST.get("user_id")
+            if not user_id:
+                messages.error(request, "Target user not specified.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            target_user = User.objects.filter(id=user_id).first()
+            if not target_user:
+                messages.error(request, "User not found.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Lockout protection: Cannot remove yourself if you're the sole active Lead Mentor and not superuser
+            if target_user.id == request.user.id and not request.user.is_superuser:
+                active_count = UserOrganizationMembership.objects.filter(
+                    organization=org,
+                    role="LeadMentor",
+                    is_active=True,
+                ).count()
+                if active_count <= 1:
+                    messages.error(
+                        request,
+                        "Cannot remove the only Lead Mentor. Assign another Lead Mentor first to prevent "
+                        "organization lockout.",
+                    )
+                    return redirect("/programs/settings/?tab=lead_mentors")
+
+            membership = UserOrganizationMembership.objects.filter(
+                user=target_user,
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+            ).first()
+
+            if membership:
+                membership.is_active = False
+                membership.save(update_fields=["is_active", "updated_at"])
+
+                log_event(
+                    request=request,
+                    event=AuditEvent.ROLE_CHANGED,
+                    resource=target_user,
+                    notes=f"Removed Lead Mentor role for user {target_user} in organization '{org.name}'.",
+                )
+                target_name = (
+                    (
+                        getattr(target_user, "adult_profile", None)
+                        and target_user.adult_profile.display_name
+                    )
+                    or (
+                        getattr(target_user, "student_profile", None)
+                        and target_user.student_profile.display_name
+                    )
+                    or target_user.get_full_name()
+                    or target_user.email
+                    or target_user.username
+                )
+                messages.success(
+                    request,
+                    f"Removed Lead Mentor role from {target_name}.",
+                )
+            else:
+                messages.warning(request, "User is not an active Lead Mentor.")
+
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "invite_lead_mentor":
+            email = (request.POST.get("email") or "").strip().lower()
+            if not email or "@" not in email:
+                messages.error(request, "Please enter a valid email address.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Check if this user is already an active Lead Mentor in this organization
+            active_lead = UserOrganizationMembership.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+                user__email__iexact=email,
+            ).first()
+            if active_lead:
+                messages.error(
+                    request,
+                    f"A user with email '{email}' is already an active Lead Mentor for {org.name}.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Check if there is already a pending invitation for this email
+            existing_invite = OrganizationInvitation.objects.filter(
+                organization=org,
+                role="LeadMentor",
+                email__iexact=email,
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if existing_invite:
+                existing_invite.expires_at = timezone.now() + timedelta(days=14)
+                existing_invite.invited_by = request.user
+                existing_invite.save(update_fields=["expires_at", "invited_by"])
+                send_invitation_email(existing_invite, request=request)
+                log_event(
+                    request=request,
+                    event=AuditEvent.ROLE_CHANGED,
+                    resource=existing_invite,
+                    notes=f"Refreshed and resent Lead Mentor invitation to {email} for organization '{org.name}'.",
+                )
+                messages.success(
+                    request,
+                    f"Updated and resent Lead Mentor invitation to {email}. Valid for 14 days.",
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.create(
+                organization=org,
+                email=email,
+                role="LeadMentor",
+                invited_by=request.user,
+                expires_at=timezone.now() + timedelta(days=14),
+            )
+            send_invitation_email(invitation, request=request)
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=f"Sent Lead Mentor invitation to {email} for organization '{org.name}'.",
+            )
+            messages.success(
+                request,
+                f"Successfully sent Lead Mentor invitation to {email}. The invitation will expire in 14 days.",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "resend_invitation":
+            invitation_id = request.POST.get("invitation_id")
+            if not invitation_id:
+                messages.error(request, "Invitation ID not specified.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.filter(
+                id=invitation_id,
+                organization=org,
+                role="LeadMentor",
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if not invitation:
+                messages.error(request, "Pending invitation not found.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation.expires_at = timezone.now() + timedelta(days=14)
+            invitation.save(update_fields=["expires_at"])
+            send_invitation_email(invitation, request=request)
+            messages.success(
+                request,
+                f"Resent Lead Mentor invitation to {invitation.email}.",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "revoke_invitation":
+            invitation_id = request.POST.get("invitation_id")
+            if not invitation_id:
+                messages.error(request, "Invitation ID not specified.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation = OrganizationInvitation.objects.filter(
+                id=invitation_id,
+                organization=org,
+                role="LeadMentor",
+                status=OrganizationInvitation.STATUS_PENDING,
+            ).first()
+            if not invitation:
+                messages.error(request, "Pending invitation not found.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            invitation.status = OrganizationInvitation.STATUS_DECLINED
+            invitation.save(update_fields=["status"])
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=f"Revoked Lead Mentor invitation for {invitation.email} in organization '{org.name}'.",
+            )
+            messages.success(
+                request,
+                f"Revoked Lead Mentor invitation for {invitation.email}.",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        messages.error(request, "Unknown action.")
+        return redirect("/programs/settings/?tab=lead_mentors")

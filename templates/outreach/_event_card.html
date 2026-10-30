@@ -56,7 +56,7 @@
 
                 <div class="mb-2 small">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span><strong>Champions:</strong></span>
+                        <span><strong>{{ request.organization.settings.champion_label|default:"Champion" }}s:</strong></span>
                         <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">{{ shift.champions.count }} / {{ shift.max_champions }}</span>
                     </div>
                     <div class="progress mb-2" style="height: 5px;">
@@ -71,7 +71,7 @@
                     {% endif %}
 
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span><strong>Helpers:</strong></span>
+                        <span><strong>{{ request.organization.settings.helper_label|default:"Helper" }}s:</strong></span>
                         <span class="badge bg-info bg-opacity-10 text-dark border border-info border-opacity-25">{{ shift.helpers.count }} / {{ shift.max_helpers }}</span>
                     </div>
                     <div class="progress mb-2" style="height: 5px;">
@@ -137,7 +137,7 @@
                                 <form action="{% url 'outreach:shift_signup' program.id shift.pk %}" method="post">
                                     {% csrf_token %}
                                     <input type="hidden" name="role" value="champion">
-                                    <button type="submit" class="btn btn-success btn-sm w-100">Sign up as Champion</button>
+                                    <button type="submit" class="btn btn-success btn-sm w-100">Sign up as {{ request.organization.settings.champion_label|default:"Champion" }}</button>
                                 </form>
                                 {% endif %}
 
@@ -145,7 +145,7 @@
                                 <form action="{% url 'outreach:shift_signup' program.id shift.pk %}" method="post">
                                     {% csrf_token %}
                                     <input type="hidden" name="role" value="helper">
-                                    <button type="submit" class="btn btn-outline-success btn-sm w-100">Sign up as Helper</button>
+                                    <button type="submit" class="btn btn-outline-success btn-sm w-100">Sign up as {{ request.organization.settings.helper_label|default:"Helper" }}</button>
                                 </form>
                                 {% endif %}
 

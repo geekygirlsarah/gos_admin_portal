@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Join {{ organization.name }} | {{ request.organization.name|default:"Portal" }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white text-center py-4">
+                    <h3 class="mb-0">Organization Invitation</h3>
+                </div>
+                <div class="card-body p-4 text-center">
+                    <p class="lead mb-3">
+                        You have been invited to join <strong>{{ organization.name }}</strong> as a <strong>{{ invitation.get_role_display }}</strong>.
+                    </p>
+                    {% if invitation.invited_by %}
+                    <p class="text-muted mb-4">
+                        Invited by {{ invitation.invited_by.get_full_name|default:invitation.invited_by.email }}.
+                    </p>
+                    {% endif %}
+
+                    {% if not email_matches %}
+                    <div class="alert alert-warning text-start mb-4">
+                        <div class="d-flex gap-2">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 text-warning flex-shrink-0"></i>
+                            <div>
+                                <strong class="d-block mb-1">Account Mismatch</strong>
+                                <span class="small text-muted d-block mb-2">
+                                    This invitation was sent to <strong>{{ invitation.email }}</strong>, but you are currently signed in as <strong>{{ request.user.email|default:request.user.username }}</strong>.
+                                </span>
+                                <span class="small">
+                                    To accept this invitation and join as <strong>{{ invitation.get_role_display }}</strong>, please sign out and sign in with the invited email address.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="post" action="{% url 'account_logout' %}" class="d-grid gap-2 mb-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="/accounts/login/?next={{ request.path }}">
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="bi bi-box-arrow-right me-2"></i>Sign Out & Switch Account
+                        </button>
+                    </form>
+                    <a href="{% url 'home' %}" class="btn btn-outline-secondary">Return to Home</a>
+                    {% else %}
+                    {% if invitation.role == "LeadMentor" %}
+                    <div class="alert alert-info text-start mb-4">
+                        <div class="d-flex gap-2">
+                            <i class="bi bi-shield-check fs-4 text-primary flex-shrink-0"></i>
+                            <div>
+                                <strong class="d-block mb-1">Lead Mentor Authority</strong>
+                                <span class="small text-muted">
+                                    By accepting this invitation, you will be granted administrative access to manage team settings, student and adult records, program rosters, clearances, and finances for <strong>{{ organization.name }}</strong>.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <form method="post" class="d-grid gap-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle me-2"></i>Accept Invitation & Join Team
+                        </button>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">Decline / Cancel</a>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -5,7 +5,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Girls of Steel Portal{% endblock %}</title>
+    <title>{% block title %}{{ request.organization.name|default:"Girls of Steel" }} Portal{% endblock %}</title>
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
@@ -24,7 +24,7 @@
     <div class="container">
         <a class="navbar-brand" href="/">
             <img src="{% static 'img/rosie_icon.png' %}" alt="Rosie Icon" width="30" height="30" class="d-inline-block align-text-top me-2">
-            Girls of Steel Portal
+            {{ request.organization.name|default:"Girls of Steel" }} Portal
         </a>
         {% if user.is_authenticated %}
             <div class="collapse navbar-collapse" id="mainNavbar">
@@ -305,7 +305,7 @@
     <div class="container">
         <div class="row">
             <div class="col-md-6 text-center text-md-start">
-                <span class="text-white-50 me-3">Girls of Steel Robotics is an outreach program of Carnegie Mellon University.</span>
+                <span class="text-white-50 me-3">{{ request.organization.name|default:"Girls of Steel Robotics" }} {% if request.organization.settings.footer_tagline %}{{ request.organization.settings.footer_tagline }}{% else %}is an outreach program of Carnegie Mellon University.{% endif %}</span>
             </div>
             <div class="col-md-6 text-center text-md-end">
                 <a href="{% url 'privacy_policy' %}" class="text-decoration-none text-white-50 me-3">Privacy Policy</a>

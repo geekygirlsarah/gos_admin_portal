@@ -14,6 +14,7 @@ from applications.rate_limiting import (
 logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=1)
 def _default_organization():
     """Return the single hardcoded GoS organization row, or ``None``.
 
@@ -52,6 +53,7 @@ EXEMPT_PATH_PREFIXES = (
     "/programs/webhooks/",  # public webhook endpoints
     "/kiosk/",  # public kiosk attendance sign-in pages
     "/calendar/",  # public calendar + ICS feeds (public feeds only for anon)
+    "/organizations/invitations/",  # public / member invitation links
     "/health/",  # health check endpoint for infrastructure monitoring
     settings.MEDIA_URL,  # uploaded files (e.g., blank program documents linked from /apply/)
     settings.STATIC_URL,
@@ -106,23 +108,24 @@ class LoginRequiredMiddleware:
 class OrganizationMiddleware:
     """Attach the active organization to every request as ``request.organization``.
 
-    Phase 1 (multi-tenant groundwork): there is exactly one organization —
-    Girls of Steel (slug ``gos``) — resolved here via the memoized
-    :func:`_default_organization` helper. Later phases will resolve the
-    organization from the request's hostname/subdomain.
-
-    ``request.organization`` is ``None`` when the GoS row doesn't exist yet,
-    so pages degrade gracefully: scoping helpers (e.g.
-    ``Program.objects.for_organization``) treat ``None`` as "return everything".
+    Resolves the organization from HTTP headers (e.g. X-Organization), request
+    subdomain / hostname, or falls back to the default organization row.
     """
-
-    _resolve = functools.lru_cache(maxsize=1)(_default_organization)
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        request.organization = OrganizationMiddleware._resolve()
+        path = getattr(request, "path", "")
+        if (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL)) or (
+            settings.STATIC_URL and path.startswith(settings.STATIC_URL)
+        ):
+            request.organization = None
+            return self.get_response(request)
+
+        from organizations.utils import resolve_organization_from_request
+
+        request.organization = resolve_organization_from_request(request)
         return self.get_response(request)
 
 

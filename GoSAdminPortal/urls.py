@@ -38,6 +38,7 @@ urlpatterns = [
     path("health/", portal_views.health, name="health"),
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
+    path("organizations/", include("organizations.urls")),
     path("programs/", include("programs.urls")),
     path("api/v1/", include("api.urls")),
     path("api/webhooks/tosend/", tosend_webhook_view, name="api_tosend_webhook"),

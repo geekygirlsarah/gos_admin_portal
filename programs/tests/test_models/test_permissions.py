@@ -5,12 +5,18 @@ from programs.models import RolePermission
 
 class RolePermissionModelTests(TestCase):
     def test_unique_role_section(self):
+        from organizations.models import Organization
+
+        org = Organization.objects.get(slug="gos")
+        RolePermission.objects.filter(
+            organization=org, role="Mentor", section="student_info"
+        ).delete()
         RolePermission.objects.create(
-            role="Mentor", section="student_info", can_read=True
+            organization=org, role="Mentor", section="student_info", can_read=True
         )
         with self.assertRaises(Exception):  # unique_together
             RolePermission.objects.create(
-                role="Mentor", section="student_info", can_read=False
+                organization=org, role="Mentor", section="student_info", can_read=False
             )
 
     def test_str_representation(self):

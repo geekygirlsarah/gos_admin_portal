@@ -1,8 +1,14 @@
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
+from django.db import models
 
-from .models import Organization, OrganizationSettings
+from .models import (
+    DEFAULT_ORGANIZATION_SETTINGS,
+    Organization,
+    OrganizationSettings,
+    SettingsDict,
+)
 
 
 def get_site_base_url() -> str:
@@ -90,6 +96,150 @@ def get_default_organization() -> Optional[Organization]:
             return Organization.objects.filter(is_active=True).first()
         except Exception:
             return None
+
+
+def get_organization_url(organization: Optional[Organization] = None) -> str:
+    """Return the canonical public URL for an organization."""
+    if not organization:
+        return get_site_base_url()
+
+    org_settings = getattr(organization, "settings", {}) or {}
+    if isinstance(org_settings, dict):
+        custom_domain = (
+            org_settings.get("custom_domain") or org_settings.get("domain") or ""
+        )
+        if custom_domain:
+            custom_domain = str(custom_domain).strip()
+            return (
+                custom_domain
+                if custom_domain.startswith(("http://", "https://"))
+                else f"https://{custom_domain}"
+            )
+
+    subdomain = getattr(organization, "subdomain", None) or getattr(
+        organization, "slug", None
+    )
+    root_domain = getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
+    if subdomain and root_domain:
+        return f"https://{subdomain}.{root_domain}"
+
+    return get_site_base_url()
+
+
+def resolve_organization_from_request(request) -> Optional[Organization]:
+    """Resolve the active Organization from request headers, host/subdomain, session, or default fallback."""
+    if request is None:
+        return get_default_organization()
+
+    cached = getattr(request, "_cached_organization", None)
+    if cached is not None:
+        return cached
+
+    meta = getattr(request, "META", {}) or {}
+
+    # 1. Check HTTP headers (e.g. X-Organization, X-Org-Slug, X-Org-Subdomain)
+    header_val = (
+        meta.get("HTTP_X_ORGANIZATION")
+        or meta.get("HTTP_X_ORG_SLUG")
+        or meta.get("HTTP_X_ORG_SUBDOMAIN")
+        or ""
+    )
+    if header_val:
+        header_val = str(header_val).strip()
+        org = Organization.objects.filter(
+            models.Q(slug__iexact=header_val) | models.Q(subdomain__iexact=header_val),
+            is_active=True,
+        ).first()
+        if org:
+            request._cached_organization = org
+            return org
+
+    # 2. Check Host / Subdomain
+    host = meta.get("HTTP_HOST") or meta.get("SERVER_NAME") or ""
+    if not host:
+        try:
+            host = request.get_host()
+        except Exception:
+            host = ""
+    host = host.split(":")[0].strip().lower()
+
+    if host and host not in (
+        "testserver",
+        "localhost",
+        "127.0.0.1",
+        "momentumteam.app",
+        "gosadmin.com",
+        "girlsofsteelrobotics.org",
+    ):
+        parts = host.split(".")
+        if len(parts) >= 2:
+            candidate = parts[0]
+            reserved = {
+                "www",
+                "api",
+                "app",
+                "admin",
+                "mail",
+                "portal",
+                "staging",
+                "dev",
+                "127",
+                "testserver",
+                "localhost",
+            }
+            if candidate not in reserved:
+                org = Organization.objects.filter(
+                    models.Q(subdomain__iexact=candidate)
+                    | models.Q(slug__iexact=candidate),
+                    is_active=True,
+                ).first()
+                if org:
+                    request._cached_organization = org
+                    return org
+        else:
+            org = Organization.objects.filter(
+                models.Q(subdomain__iexact=host) | models.Q(slug__iexact=host),
+                is_active=True,
+            ).first()
+            if org:
+                request._cached_organization = org
+                return org
+
+    # 3. Check session active organization
+    session = getattr(request, "session", None)
+    if session:
+        session_org_id = session.get("active_organization_id")
+        if session_org_id:
+            org = Organization.objects.filter(pk=session_org_id, is_active=True).first()
+            if org:
+                request._cached_organization = org
+                return org
+
+    org = get_default_organization()
+    request._cached_organization = org
+    return org
+
+
+def get_organization_settings(
+    organization: Optional[Organization] = None,
+) -> SettingsDict:
+    """Return the resolved SettingsDict for an organization (or default organization)."""
+    org = organization or get_default_organization()
+    if org is not None:
+        if isinstance(org.settings, SettingsDict):
+            return org.settings
+        return SettingsDict(org.settings)
+    return SettingsDict({})
+
+
+def get_organization_setting(
+    organization: Optional[Organization] = None,
+    key: str = "",
+    default: Any = None,
+) -> Any:
+    """Retrieve a single setting for an organization with platform defaults."""
+    settings = get_organization_settings(organization)
+    return settings.get(key, default)
 
 
 def get_organization_email_settings(

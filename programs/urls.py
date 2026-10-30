@@ -29,6 +29,7 @@ from .views import (
     PortalCrewView,
     PortalEmailSettingsView,
     PortalKioskView,
+    PortalLeadMentorView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,
@@ -648,6 +649,11 @@ urlpatterns = [
         "settings/permissions/update/",
         PortalPermissionsUpdateView.as_view(),
         name="portal_permissions_update",
+    ),
+    path(
+        "settings/lead-mentors/",
+        PortalLeadMentorView.as_view(),
+        name="portal_lead_mentors",
     ),
     path(
         "settings/teams/",
