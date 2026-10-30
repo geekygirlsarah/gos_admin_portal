@@ -2,7 +2,12 @@ from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 
-from .models import Organization, OrganizationSettings
+from .models import (
+    DEFAULT_ORGANIZATION_SETTINGS,
+    Organization,
+    OrganizationSettings,
+    SettingsDict,
+)
 
 
 def get_site_base_url() -> str:
@@ -90,6 +95,28 @@ def get_default_organization() -> Optional[Organization]:
             return Organization.objects.filter(is_active=True).first()
         except Exception:
             return None
+
+
+def get_organization_settings(
+    organization: Optional[Organization] = None,
+) -> SettingsDict:
+    """Return the resolved SettingsDict for an organization (or default organization)."""
+    org = organization or get_default_organization()
+    if org is not None:
+        if isinstance(org.settings, SettingsDict):
+            return org.settings
+        return SettingsDict(org.settings)
+    return SettingsDict({})
+
+
+def get_organization_setting(
+    organization: Optional[Organization] = None,
+    key: str = "",
+    default: Any = None,
+) -> Any:
+    """Retrieve a single setting for an organization with platform defaults."""
+    settings = get_organization_settings(organization)
+    return settings.get(key, default)
 
 
 def get_organization_email_settings(

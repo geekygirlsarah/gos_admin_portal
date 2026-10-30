@@ -4,7 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-29
 
+### Fixed
+- **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
+
 ### Added
+- **Extract Hardcoded Organization Constants to OrganizationSettings (Phase 4)**:
+  - Extracted hardcoded GoS constants (organization name, "Champion" and "Helper" outreach labels, "Lead Mentor" label, default clearance types, sliding scale calculation configuration, email settings, and feature flags) into `OrganizationSettings` and `DEFAULT_ORGANIZATION_SETTINGS` with `SettingsDict` dot-attribute dictionary access.
+  - Enabled dynamic template and view access via `request.organization.settings.<key>` and `request.organization.name`, falling back gracefully to defaults.
+  - Added helper methods `get_setting` and `set_setting` on `Organization` and `OrganizationSettings`, plus `get_organization_setting` and `get_organization_settings` utilities in `organizations/utils.py`.
+  - Added comprehensive test suite in `organizations/tests/test_phase4.py` verifying fallback behavior, dot-attribute lookups, custom setting overrides, and template rendering.
 - **Month and Day Dropdowns for Student Clearance Age Cutoff Date (`templates/programs/settings.html`, `programs/forms.py`, `programs/views/portal_settings.py`, `programs/models/adults.py`)**:
   - Replaced the full date picker input with clean, intuitive Month (January–December) and Day (1–31) select dropdowns for configuring annual student clearance cutoff dates in Portal Settings.
   - Eliminated confusing year displays and date picker widgets when setting annual birthday cutoff rules (e.g. Age 17 by September 1).
@@ -18,11 +26,6 @@ All notable changes to this project will be documented in this file.
   - Converted `BackgroundCheck` records to reference `BackgroundCheckType` foreign keys, with database migration `0123_background_check_type` migrating all prior student and adult clearances cleanly.
   - Updated Student and Adult profile cards (`templates/students/detail.html`, `templates/adults/detail.html`) and list badges (`templates/adults/list.html`, `templates/mentors/list.html`) to dynamically evaluate and display compliance status across all active clearance requirements.
   - Optimized queries and added cached clearance lookups across roster and list views to prevent N+1 queries.
-
-### Fixed
-- **Calendar Feed Recurring Event UNTIL Normalization (`calendar_feeds/utils.py`, `calendar_feeds/forms.py`, `calendar_feeds/migrations/0006_normalize_rrule_until.py`)**: Resolved `ValueError: RRULE UNTIL values must be specified in UTC when DTSTART is timezone-aware` errors during weekly digest generation and calendar feed event expansion by normalizing naive and date-only `UNTIL` parameters in RFC-5545 recurrence rules to standardized UTC timestamps (`UNTIL=YYYYMMDDTHHMMSSZ`), validating custom rules in forms, and sanitizing existing database records with a data migration.
-
-### Added
 - **Multi-Tenant Scoping by Default for New Features (Phase 3)**:
   - Added `OrganizationScopeMixin` in `organizations/mixins.py` (and re-exported via `programs/views/mixins.py`) that automatically scopes class-based view querysets to `request.organization` and assigns `request.organization` on newly created model instances in `form_valid()`.
   - Added `OrganizationFormMixin` and `limit_choices_to_organization` helper in `organizations/forms.py` (and re-exported via `programs/forms.py`) to automatically restrict `ModelChoiceField` and `ModelMultipleChoiceField` querysets to the current organization.
