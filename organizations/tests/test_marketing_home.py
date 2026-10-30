@@ -77,6 +77,18 @@ class MarketingHomePageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "marketing/landing.html")
 
+    def test_localhost_root_domain_gets_marketing_page(self):
+        """Request to root dev host localhost:8000 renders marketing landing page."""
+        response = self.client.get("/", HTTP_HOST="localhost:8000")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "marketing/landing.html")
+
+    def test_localhost_subdomain_anonymous_redirects_to_login(self):
+        """Anonymous request to gos.localhost:8000 redirects to login."""
+        response = self.client.get("/", HTTP_HOST="gos.localhost:8000")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith("/accounts/login/"))
+
     def test_explicit_landing_and_about_urls(self):
         """Explicit /landing/ and /about/ routes render the marketing landing page."""
         for url_name in ("landing", "about"):

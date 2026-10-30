@@ -1,3 +1,4 @@
+from io import StringIO
 from unittest import mock
 
 import requests
@@ -147,7 +148,12 @@ class GeocodeStudentAddressesCommandTests(TestCase):
                 [{"lat": "40.44", "lon": "-79.99"}]
             ),
         ) as mock_get:
-            call_command("geocode_student_addresses", "--program", program.pk)
+            call_command(
+                "geocode_student_addresses",
+                "--program",
+                program.pk,
+                stdout=StringIO(),
+            )
 
         self.assertEqual(mock_get.call_count, 1)
         self.assertTrue(AddressGeocode.objects.filter(found=True).exists())
@@ -157,7 +163,12 @@ class GeocodeStudentAddressesCommandTests(TestCase):
             "programs.utils.geocoding.requests.get",
             side_effect=AssertionError("should not be called again"),
         ):
-            call_command("geocode_student_addresses", "--program", program.pk)
+            call_command(
+                "geocode_student_addresses",
+                "--program",
+                program.pk,
+                stdout=StringIO(),
+            )
 
     def test_command_dry_run_makes_no_requests(self):
         program = Program.objects.create(name="Robot Camp")
@@ -176,7 +187,11 @@ class GeocodeStudentAddressesCommandTests(TestCase):
             side_effect=AssertionError("dry run must not geocode"),
         ):
             call_command(
-                "geocode_student_addresses", "--program", program.pk, "--dry-run"
+                "geocode_student_addresses",
+                "--program",
+                program.pk,
+                "--dry-run",
+                stdout=StringIO(),
             )
         self.assertFalse(AddressGeocode.objects.exists())
 
@@ -199,7 +214,12 @@ class GeocodeStudentAddressesCommandTests(TestCase):
 
         # Normal run should NOT retry it
         with mock.patch("programs.utils.geocoding.requests.get") as mock_get:
-            call_command("geocode_student_addresses", "--program", program.pk)
+            call_command(
+                "geocode_student_addresses",
+                "--program",
+                program.pk,
+                stdout=StringIO(),
+            )
             mock_get.assert_not_called()
 
         # Retry run SHOULD clear and retry it
@@ -210,7 +230,11 @@ class GeocodeStudentAddressesCommandTests(TestCase):
             ),
         ) as mock_get:
             call_command(
-                "geocode_student_addresses", "--program", program.pk, "--retry-missing"
+                "geocode_student_addresses",
+                "--program",
+                program.pk,
+                "--retry-missing",
+                stdout=StringIO(),
             )
             self.assertEqual(mock_get.call_count, 1)
 
