@@ -163,14 +163,61 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
             host = ""
     host = host.split(":")[0].strip().lower()
 
+    root_domain = getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app").lower()
+    root_domains = {
+        root_domain,
+        f"www.{root_domain}",
+        "momentumteam.app",
+        "www.momentumteam.app",
+    }
+
+    # The root platform domain (momentumteam.app / www) serves the marketing site
+    # and has no organization context.
+    if host in root_domains:
+        request._cached_organization = None
+        return None
+
+    # Girls of Steel legacy domains / CNAME targets
+    gos_domains = {
+        "portal.girlsofsteelrobotics.org",
+        "girlsofsteelrobotics.org",
+        "gosadmin.com",
+    }
+    if host in gos_domains:
+        org = Organization.objects.filter(slug="gos", is_active=True).first()
+        if org:
+            request._cached_organization = org
+            return org
+
     if host and host not in (
         "testserver",
         "localhost",
         "127.0.0.1",
-        "momentumteam.app",
-        "gosadmin.com",
-        "girlsofsteelrobotics.org",
     ):
+        # Check active organization custom domain settings
+        for active_org in Organization.objects.filter(is_active=True):
+            org_settings = getattr(active_org, "settings", {}) or {}
+            custom_domain_cfg = org_settings.get("custom_domain") or {}
+            custom_domain_val = ""
+            if isinstance(custom_domain_cfg, dict):
+                custom_domain_val = custom_domain_cfg.get("domain") or ""
+            elif isinstance(custom_domain_cfg, str):
+                custom_domain_val = custom_domain_cfg
+            if not custom_domain_val:
+                custom_domain_val = org_settings.get("domain") or ""
+            if custom_domain_val:
+                clean_custom = (
+                    custom_domain_val.replace("https://", "")
+                    .replace("http://", "")
+                    .split("/")[0]
+                    .split(":")[0]
+                    .strip()
+                    .lower()
+                )
+                if clean_custom and clean_custom == host:
+                    request._cached_organization = active_org
+                    return active_org
+
         parts = host.split(".")
         if len(parts) >= 2:
             candidate = parts[0]

@@ -120,11 +120,17 @@ if not DEBUG:
     SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-ALLOWED_HOSTS = ["localhost", ".localhost", "127.0.0.1"]
+ALLOWED_HOSTS = [
+    "localhost",
+    ".localhost",
+    "127.0.0.1",
+]
 if os.getenv("ALLOWED_HOSTS"):
-    ALLOWED_HOSTS.extend(os.getenv("ALLOWED_HOSTS").split(","))
+    ALLOWED_HOSTS.extend(
+        [h.strip() for h in os.getenv("ALLOWED_HOSTS").split(",") if h.strip()]
+    )
 
-MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
+MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "localhost")
 
 
 # Application definition

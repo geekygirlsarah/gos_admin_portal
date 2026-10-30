@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Momentum | Operations Platform for FIRST® Robotics Teams{% endblock %}
+
+{% block content %}
+<div class="marketing-page">
+    {# ── Hero Section ── #}
+    <div class="p-5 mb-4 bg-gradient rounded-4 text-white shadow-sm" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+        <div class="row align-items-center py-4">
+            <div class="col-lg-8">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge bg-warning text-dark px-3 py-2 rounded-pill text-uppercase fw-bold tracking-wider">
+                        <i class="bi bi-clock-history me-1"></i> Coming Soon &bull; Pilot Preview
+                    </span>
+                    <span class="badge bg-primary px-3 py-2 rounded-pill text-uppercase fw-semibold tracking-wider">
+                        <i class="bi bi-cpu me-1"></i> Multi-Team Operations Platform
+                    </span>
+                </div>
+                <h1 class="display-4 fw-bold mb-3 tracking-tight text-white">
+                    Empower Your Robotics Team with <span class="text-primary">Momentum</span>
+                </h1>
+                <p class="h5 text-light fw-normal mb-3 opacity-90">
+                    From first application to final robot run &mdash; your whole team's operation, in one place.
+                </p>
+                <p class="lead text-white opacity-95 mb-4" style="max-width: 680px;">
+                    The all-in-one operations hub engineered specifically for FIRST® robotics teams. Turn the sprawling mix of spreadsheets, paper sign-up sheets, personal email threads, and group chats into a single, organized web platform for mentors, parents, and students.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="#teams" class="btn btn-primary btn-lg px-4 fw-semibold shadow-sm">
+                        <i class="bi bi-door-open me-2"></i> Access Your Team Portal
+                    </a>
+                    <a href="#features" class="btn btn-light btn-lg px-4 fw-bold text-dark shadow-sm">
+                        <i class="bi bi-grid-3x3-gap me-2"></i> Explore Features
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 d-none d-lg-block text-center">
+                <div class="p-4 bg-dark bg-opacity-50 border border-secondary border-opacity-50 rounded-4 shadow">
+                    <i class="bi bi-rocket-takeoff text-primary" style="font-size: 5rem;"></i>
+                    <h5 class="text-white mt-3 mb-2 fw-bold">Built for Real Build Seasons</h5>
+                    <p class="text-light opacity-90 small mb-0">
+                        Fees, attendance, applications, orders, and travel &mdash; finally under one roof so mentors can focus on coaching the robot.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Pilot Status Notice Banner ── #}
+    <div class="alert alert-info border-0 shadow-sm rounded-4 p-4 mb-5 d-flex align-items-center gap-3" style="background-color: #e0f2fe; color: #0369a1;">
+        <div class="fs-1 text-primary d-none d-sm-block">
+            <i class="bi bi-info-circle-fill"></i>
+        </div>
+        <div>
+            <h5 class="fw-bold mb-1 text-dark">Momentum is Currently in Pilot Access</h5>
+            <p class="mb-0 text-secondary">
+                We are actively testing and expanding our multi-organizational architecture with select pilot teams (including Girls of Steel). General adoption for all FIRST® and competitive robotics teams is <strong>coming soon</strong>!
+            </p>
+        </div>
+    </div>
+
+    {# ── Why Teams Choose Momentum / Core Pillars ── #}
+    <div class="mb-5">
+        <div class="text-center mb-4">
+            <span class="text-primary text-uppercase fw-bold small tracking-wider">Why Teams Switch</span>
+            <h2 class="fw-bold display-6 text-dark mt-1">From Spreadsheets to a Real Team Operating System</h2>
+            <p class="text-secondary lead mx-auto" style="max-width: 700px;">
+                Most robotics teams run out of duct-taped systems: spreadsheets for dues, paper rosters, and frantic emails. Momentum replaces the chaos with purpose-built workflows.
+            </p>
+        </div>
+
+        <div class="row g-4 text-start">
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm p-4 bg-light bg-opacity-50 rounded-4">
+                    <div class="d-inline-flex p-3 rounded-3 bg-primary bg-opacity-10 text-primary mb-3 align-self-start">
+                        <i class="bi bi-tools fs-3"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2 text-dark">Build Season is Chaotic Enough</h4>
+                    <p class="text-secondary mb-0">
+                        Admin overhead shouldn't eat your weekends. Momentum handles operational plumbing so mentors can spend their time in the shop coaching students.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm p-4 bg-light bg-opacity-50 rounded-4">
+                    <div class="d-inline-flex p-3 rounded-3 bg-success bg-opacity-10 text-success mb-3 align-self-start">
+                        <i class="bi bi-wallet2 fs-3"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2 text-dark">Parents as Partners, Not the Unpaid Finance Dept</h4>
+                    <p class="text-secondary mb-0">
+                        Automated monthly balance statements, sliding-scale financial aid, and payment recording eliminate constant &ldquo;how much do I owe?&rdquo; emails.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm p-4 bg-light bg-opacity-50 rounded-4">
+                    <div class="d-inline-flex p-3 rounded-3 bg-warning bg-opacity-10 text-warning mb-3 align-self-start">
+                        <i class="bi bi-graph-up-arrow fs-3"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2 text-dark">Attendance Hours are Real Data, Not Vibes</h4>
+                    <p class="text-secondary mb-0">
+                        Kiosk and RFID check-ins, digital sign-outs, and visual hours charts deliver the exact verified data mentors need for lettering and awards.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm p-4 bg-light bg-opacity-50 rounded-4">
+                    <div class="d-inline-flex p-3 rounded-3 bg-danger bg-opacity-10 text-danger mb-3 align-self-start">
+                        <i class="bi bi-cart3 fs-3"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2 text-dark">Orders & Procurement Deserve a System</h4>
+                    <p class="text-secondary mb-0">
+                        Student parts request pool &rarr; grouped vendor orders (AndyMark, McMaster, REV) &rarr; shipping and delivery tracking. No more ghost orders.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm p-4 bg-light bg-opacity-50 rounded-4">
+                    <div class="d-inline-flex p-3 rounded-3 bg-info bg-opacity-10 text-info mb-3 align-self-start">
+                        <i class="bi bi-people fs-3"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2 text-dark">Mentor Coverage: Visible, Not Tribal</h4>
+                    <p class="text-secondary mb-0">
+                        Outreach shift caps, mentor sign-ups with real capacity math, and phone-first event check-ins ensure no demo or workshop is left understaffed.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm p-4 bg-light bg-opacity-50 rounded-4">
+                    <div class="d-inline-flex p-3 rounded-3 bg-secondary bg-opacity-10 text-secondary mb-3 align-self-start">
+                        <i class="bi bi-shield-lock fs-3"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2 text-dark">Secure & Multi-Tenant Isolation</h4>
+                    <p class="text-secondary mb-0">
+                        Each organization operates in its own isolated workspace with custom subdomains, granular role permissions, encrypted records, and immutable audit logs.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Feature Deep-Dive Grid ── #}
+    <div id="features" class="mb-5 pt-3">
+        <div class="text-center mb-5">
+            <span class="text-primary text-uppercase fw-bold small tracking-wider">Platform Capabilities</span>
+            <h2 class="fw-bold display-6 text-dark mt-1">Comprehensive Team Management Modules</h2>
+            <p class="text-secondary lead mx-auto" style="max-width: 680px;">
+                Engineered around the real operational lifecycle of competitive robotics programs &mdash; whether you have 15 students or 150.
+            </p>
+        </div>
+
+        <div class="row g-4">
+            {# Feature 1: Student & Parent Applications #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-primary bg-opacity-10 text-primary mb-3">
+                            <i class="bi bi-person-lines-fill fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Public Application Wizard</h5>
+                        <p class="text-secondary mb-2">
+                            Multi-step, resumable public application workflow (<code class="text-dark">/apply/</code>) with email OTP authentication, guardian contact collection, and demographic tracking.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Staff review pipeline with direct applicant messaging and automated conversion to student and financial records.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 2: Attendance Kiosk #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-success bg-opacity-10 text-success mb-3">
+                            <i class="bi bi-qr-code-scan fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Kiosk Attendance & Hours Dashboard</h5>
+                        <p class="text-secondary mb-2">
+                            Fast tablet and RFID check-in/out, digital sign-out waivers with guardian signatures, daily presence tracking, and open session monitoring.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Visual student hours dashboard with weekly averages, date/day-of-week filters, and exportable PNG charts for varsity lettering.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 3: Finance & Sliding Scale #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-secondary bg-opacity-10 text-secondary mb-3">
+                            <i class="bi bi-cash-coin fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Fees, Balance Sheets & Sliding Scale</h5>
+                        <p class="text-secondary mb-2">
+                            Per-program fee structures and custom student assignments with itemized balance sheets, payment tracking, and automated monthly balance statements.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Integrated sliding-scale financial aid questionnaire with household size/AGI discounts and structured lead mentor approval.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 4: Order Requests & Vendors #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-warning bg-opacity-10 text-warning mb-3">
+                            <i class="bi bi-cart-check fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Parts Procurement & Vendor Orders</h5>
+                        <p class="text-secondary mb-2">
+                            Students and mentors submit parts requests from robotics suppliers (AndyMark, McMaster-Carr, REV Robotics, WestCoast Products, and more).
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Group unassigned items into vendor purchase orders, log carrier tracking numbers, and export budget CSV/XLSX spreadsheets.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 5: Outreach & Travel #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-danger bg-opacity-10 text-danger mb-3">
+                            <i class="bi bi-bus-front fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Outreach Shifts & Competition Travel</h5>
+                        <p class="text-secondary mb-2">
+                            Coordinate community demonstration events with champion/helper caps, mentor sign-up requirements, and phone-friendly check-in workflows.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Multi-day travel trips with departure options, student signups, parent approvals, and chaperone roster management.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 6: Communications & Calendar #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-info bg-opacity-10 text-info mb-3">
+                            <i class="bi bi-calendar-event fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Communications & Calendar Feeds</h5>
+                        <p class="text-secondary mb-2">
+                            Organization-branded responsive email templates, rich visual editor with image embedding, and automated weekly digests tailored per role.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Auto-synced outreach and travel calendar feeds (ICS) with personal tokenized subscriptions for Google Calendar and Apple Calendar.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 7: Badges & Skill Trees #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-primary bg-opacity-10 text-primary mb-3">
+                            <i class="bi bi-patch-check fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Skill Badges & Progression</h5>
+                        <p class="text-secondary mb-2">
+                            Define safety test requirements, technical milestones, machine tool sign-offs, and leadership badges for your robotics students.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Mentors verify prerequisites and sign off directly in the portal, giving students a visual progression map.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 8: Dynamic Permissions & Role Management #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-secondary bg-opacity-10 text-secondary mb-3">
+                            <i class="bi bi-sliders fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Granular Role Permissions</h5>
+                        <p class="text-secondary mb-2">
+                            Fine-grained, per-section read and write permission toggles for Lead Mentors, Mentors, Student Leaders, Students, and Parents.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Keep financial and emergency data securely scoped while delegating kiosk or order management to student leads.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {# Feature 9: Audit Logging & Data Security #}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4">
+                    <div class="card-body p-4">
+                        <div class="d-inline-flex p-3 rounded-3 bg-dark bg-opacity-10 text-dark mb-3">
+                            <i class="bi bi-file-earmark-lock2 fs-3"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-dark">Integrity & Immutable Audit Logs</h5>
+                        <p class="text-secondary mb-2">
+                            Immutable audit trail capturing model changes, deletions, and administrative actions with full snapshot diffs and user attribution.
+                        </p>
+                        <p class="small text-muted mb-0">
+                            <strong>Key highlight:</strong> Field-level encryption for sensitive health, clearance, and financial records with complete tenant data isolation.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── FAQ Section ── #}
+    <div class="mb-5 pt-2">
+        <div class="text-center mb-4">
+            <span class="text-primary text-uppercase fw-bold small tracking-wider">Frequently Asked Questions</span>
+            <h2 class="fw-bold display-6 text-dark mt-1">Answers for Robotics Teams & Mentors</h2>
+        </div>
+
+        <div class="row g-3 justify-content-center">
+            <div class="col-lg-10">
+                <div class="accordion shadow-sm rounded-4 border-0" id="marketingFaq">
+                    <div class="accordion-item border-0 border-bottom rounded-top-4">
+                        <h2 class="accordion-header" id="faqHeadingOne">
+                            <button class="accordion-button fw-bold text-dark collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseOne" aria-expanded="false" aria-controls="faqCollapseOne">
+                                Do we have to use FIRST® branding, or does FIRST endorse this?
+                            </button>
+                        </h2>
+                        <div id="faqCollapseOne" class="accordion-collapse collapse" aria-labelledby="faqHeadingOne" data-bs-parent="#marketingFaq">
+                            <div class="accordion-body text-secondary">
+                                Momentum is an independent team management platform designed for competitive robotics. Each organization configures its own custom team branding, colors, logos, subdomains, and program structures.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 border-bottom">
+                        <h2 class="accordion-header" id="faqHeadingTwo">
+                            <button class="accordion-button fw-bold text-dark collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseTwo" aria-expanded="false" aria-controls="faqCollapseTwo">
+                                Can parents track dues and see their balance online?
+                            </button>
+                        </h2>
+                        <div id="faqCollapseTwo" class="accordion-collapse collapse" aria-labelledby="faqHeadingTwo" data-bs-parent="#marketingFaq">
+                            <div class="accordion-body text-secondary">
+                                Yes! Parents have self-serve balance visibility for linked students, automated monthly itemized statements, and payment recording. Teams can also configure sliding-scale fee assistance questionnaires with automatic discount calculations.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 border-bottom">
+                        <h2 class="accordion-header" id="faqHeadingThree">
+                            <button class="accordion-button fw-bold text-dark collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseThree" aria-expanded="false" aria-controls="faqCollapseThree">
+                                What happens during intense build season with 50+ students?
+                            </button>
+                        </h2>
+                        <div id="faqCollapseThree" class="accordion-collapse collapse" aria-labelledby="faqHeadingThree" data-bs-parent="#marketingFaq">
+                            <div class="accordion-body text-secondary">
+                                Momentum is engineered specifically for build season volume: kiosk and RFID check-in for rapid shop arrivals, digital guardian sign-outs, real-time presence monitoring, batch application approvals, and automated reminders keep operations fast and friction-free.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 border-bottom">
+                        <h2 class="accordion-header" id="faqHeadingFour">
+                            <button class="accordion-button fw-bold text-dark collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseFour" aria-expanded="false" aria-controls="faqCollapseFour">
+                                How does migration from spreadsheets work?
+                            </button>
+                        </h2>
+                        <div id="faqCollapseFour" class="accordion-collapse collapse" aria-labelledby="faqHeadingFour" data-bs-parent="#marketingFaq">
+                            <div class="accordion-body text-secondary">
+                                Migration follows a structured, phased path: import or populate your student roster, assign program fee structures, launch attendance check-ins, and open your public application wizard for the upcoming season. You can transition off spreadsheets in a single weekend.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 rounded-bottom-4">
+                        <h2 class="accordion-header" id="faqHeadingFive">
+                            <button class="accordion-button fw-bold text-dark collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseFive" aria-expanded="false" aria-controls="faqCollapseFive">
+                                Is our team's data isolated and exportable?
+                            </button>
+                        </h2>
+                        <div id="faqCollapseFive" class="accordion-collapse collapse" aria-labelledby="faqHeadingFive" data-bs-parent="#marketingFaq">
+                            <div class="accordion-body text-secondary">
+                                Absolutely. Each organization's data is fully isolated at the tenant level. All attendance hours, order records, student rosters, and financial balance sheets can be exported to CSV or XLSX formats at any time.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Team Portals / Access Section ── #}
+    <div id="teams" class="mb-5 pt-3">
+        <div class="card border-0 shadow rounded-4 bg-dark text-white p-4 p-md-5">
+            <div class="row align-items-start">
+                <div class="col-lg-7 mb-4 mb-lg-0">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <h2 class="fw-bold mb-0 text-white">Access Your Team Portal</h2>
+                        <span class="badge bg-secondary text-white px-3 py-2 rounded-pill small">
+                            {{ active_organizations|length }} Active {% if active_organizations|length == 1 %}Team{% else %}Teams{% endif %}
+                        </span>
+                    </div>
+                    <p class="text-light opacity-90 lead mb-3">
+                        Select your team to log in, complete registrations, or manage programs. Each organization operates on its own dedicated subdomain.
+                    </p>
+
+                    {# Search input for filtering teams #}
+                    <div class="input-group mb-3">
+                        <span class="input-group-text bg-secondary bg-opacity-25 border-secondary text-white" id="team-search-addon">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text"
+                               id="teamSearchInput"
+                               class="form-control bg-dark text-white border-secondary placeholder-light"
+                               placeholder="Search team by name or subdomain (e.g. Girls of Steel, gos)..."
+                               aria-label="Search teams"
+                               aria-describedby="team-search-addon"
+                               autocomplete="off">
+                        <button class="btn btn-outline-secondary d-none" type="button" id="clearTeamSearchBtn" aria-label="Clear search">
+                            <i class="bi bi-x-lg text-white"></i>
+                        </button>
+                    </div>
+
+                    <div id="teamListContainer" class="list-group rounded-3 mb-2 team-list-scroll">
+                        {% for org in active_organizations %}
+                        <a href="{{ org.get_absolute_url|default:'#' }}"
+                           class="list-group-item list-group-item-action list-group-item-dark d-flex justify-content-between align-items-center py-3 px-4 border-secondary team-item"
+                           data-team-name="{{ org.name|lower }}"
+                           data-team-slug="{{ org.slug|lower }}">
+                            <div>
+                                <h6 class="mb-1 fw-bold text-white">{{ org.name }}</h6>
+                                <small class="text-light opacity-75">{{ org.slug }}.momentumteam.app</small>
+                            </div>
+                            <span class="btn btn-sm btn-primary fw-semibold">
+                                Go to Portal <i class="bi bi-arrow-right ms-1"></i>
+                            </span>
+                        </a>
+                        {% empty %}
+                        <a href="https://gos.momentumteam.app"
+                           class="list-group-item list-group-item-action list-group-item-dark d-flex justify-content-between align-items-center py-3 px-4 border-secondary team-item"
+                           data-team-name="girls of steel robotics"
+                           data-team-slug="gos">
+                            <div>
+                                <h6 class="mb-1 fw-bold text-white">Girls of Steel Robotics</h6>
+                                <small class="text-light opacity-75">gos.momentumteam.app</small>
+                            </div>
+                            <span class="btn btn-sm btn-primary fw-semibold">
+                                Go to Portal <i class="bi bi-arrow-right ms-1"></i>
+                            </span>
+                        </a>
+                        {% endfor %}
+                    </div>
+
+                    <div id="noTeamsFound" class="alert alert-secondary bg-dark border-secondary text-white-50 text-center py-3 d-none mb-0">
+                        <i class="bi bi-search me-1"></i> No matching team portal found. Try searching by team name or subdomain.
+                    </div>
+                </div>
+
+                <div class="col-lg-5 ps-lg-4 text-start">
+                    <div class="p-4 bg-secondary bg-opacity-25 rounded-4 border border-secondary border-opacity-50 mb-3">
+                        <h4 class="fw-bold mb-2 text-white"><i class="bi bi-person-badge me-2 text-primary"></i>Direct Login</h4>
+                        <p class="text-light opacity-90 small mb-3">
+                            Already on your team's network or need to sign in directly?
+                        </p>
+                        <a href="{% url 'account_login' %}" class="btn btn-light text-dark fw-bold w-100 mb-2 shadow-sm">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> General Login
+                        </a>
+                        <p class="text-white-50 small mt-2 mb-0">
+                            Tip: For the fastest experience, bookmark your team's dedicated subdomain.
+                        </p>
+                    </div>
+
+                    <div class="p-3 bg-secondary bg-opacity-15 rounded-3 border border-secondary border-opacity-25">
+                        <div class="d-flex align-items-center gap-2 text-warning mb-1">
+                            <i class="bi bi-stars"></i>
+                            <strong class="text-white small">Interested in Momentum for your team?</strong>
+                        </div>
+                        <p class="text-white-50 small mb-0">
+                            Multi-team onboarding is rolling out in upcoming phases. Contact us to learn more or join our pilot program.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    var searchInput = document.getElementById('teamSearchInput');
+    var clearBtn = document.getElementById('clearTeamSearchBtn');
+    var teamItems = document.querySelectorAll('.team-item');
+    var noResults = document.getElementById('noTeamsFound');
+    var listContainer = document.getElementById('teamListContainer');
+
+    if (!searchInput) return;
+
+    function filterTeams() {
+        var query = searchInput.value.trim().toLowerCase();
+        var visibleCount = 0;
+
+        if (clearBtn) {
+            if (query.length > 0) {
+                clearBtn.classList.remove('d-none');
+            } else {
+                clearBtn.classList.add('d-none');
+            }
+        }
+
+        teamItems.forEach(function(item) {
+            var name = item.getAttribute('data-team-name') || '';
+            var slug = item.getAttribute('data-team-slug') || '';
+            if (!query || name.indexOf(query) !== -1 || slug.indexOf(query) !== -1) {
+                item.classList.remove('d-none');
+                item.classList.add('d-flex');
+                visibleCount++;
+            } else {
+                item.classList.remove('d-flex');
+                item.classList.add('d-none');
+            }
+        });
+
+        if (noResults) {
+            if (visibleCount === 0 && teamItems.length > 0) {
+                noResults.classList.remove('d-none');
+                if (listContainer) listContainer.classList.add('d-none');
+            } else {
+                noResults.classList.add('d-none');
+                if (listContainer) listContainer.classList.remove('d-none');
+            }
+        }
+    }
+
+    searchInput.addEventListener('input', filterTeams);
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            filterTeams();
+            searchInput.focus();
+        });
+    }
+});
+</script>
+{% endblock %}

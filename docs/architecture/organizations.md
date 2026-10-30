@@ -77,11 +77,13 @@ All organization-owned models across apps (`programs`, `applications`, `attendan
 `OrganizationMiddleware` (`GoSAdminPortal/middleware.py`) attaches the resolved tenant to `request.organization` on every request.
 
 Resolution occurs in priority order:
-1. **HTTP Header**: `X-Organization` header (used by API clients and integration tests).
-2. **Subdomain Routing**: `<subdomain>.momentumteam.app` (where root domain defaults to `MOMENTUM_ROOT_DOMAIN = "momentumteam.app"`).
-3. **Custom Domains**: Matches configured custom domain aliases.
-4. **Session**: User session preferences.
-5. **Default Fallback**: The seeded Girls of Steel (`gos`) organization.
+1. **HTTP Header**: `X-Organization`, `X-Org-Slug`, `X-Org-Subdomain` headers (used by API clients and integration tests).
+2. **Root Marketing Domain**: Host matches `MOMENTUM_ROOT_DOMAIN` (default `momentumteam.app`) or `www.momentumteam.app`. Sets `request.organization = None` and serves the public Momentum marketing homepage with team directory and login options.
+3. **Legacy / CNAME Aliases**: Host matches known CNAME aliases (such as `portal.girlsofsteelrobotics.org` or `gosadmin.com`), resolving directly to the `gos` organization.
+4. **Subdomain Routing**: `<subdomain>.momentumteam.app` or `<subdomain>.localhost`, resolving the organization by matching `subdomain` or `slug`.
+5. **Custom Domains**: Matches configured custom domain aliases from active organization settings.
+6. **Session**: User session preferences (`active_organization_id`).
+7. **Default Fallback**: In local/unadorned development environments (`localhost`, `127.0.0.1`, `testserver`), falls back to the default organization row (`gos`).
 
 ---
 

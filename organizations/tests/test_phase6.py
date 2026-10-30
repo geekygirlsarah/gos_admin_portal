@@ -189,9 +189,29 @@ class OrganizationResolutionMiddlewareTests(TestCase):
         org = resolve_organization_from_request(request)
         self.assertEqual(org, self.momentum)
 
-    def test_resolve_fallback_to_default_gos(self):
-        """Unmatched or root host falls back to the default organization."""
+    def test_resolve_root_domain_returns_none_for_marketing(self):
+        """Root domain 'momentumteam.app' and 'www.momentumteam.app' resolve to None (marketing site)."""
         request = self.rf.get("/", HTTP_HOST="momentumteam.app")
+        org = resolve_organization_from_request(request)
+        self.assertIsNone(org)
+
+        request_www = self.rf.get("/", HTTP_HOST="www.momentumteam.app")
+        org_www = resolve_organization_from_request(request_www)
+        self.assertIsNone(org_www)
+
+    def test_resolve_gos_subdomain_and_cname(self):
+        """'gos.momentumteam.app' and 'portal.girlsofsteelrobotics.org' resolve to gos."""
+        request_sub = self.rf.get("/", HTTP_HOST="gos.momentumteam.app")
+        org_sub = resolve_organization_from_request(request_sub)
+        self.assertEqual(org_sub, self.gos)
+
+        request_cname = self.rf.get("/", HTTP_HOST="portal.girlsofsteelrobotics.org")
+        org_cname = resolve_organization_from_request(request_cname)
+        self.assertEqual(org_cname, self.gos)
+
+    def test_resolve_fallback_to_default_gos(self):
+        """Localhost or unadorned dev host falls back to default organization."""
+        request = self.rf.get("/", HTTP_HOST="localhost:8000")
         org = resolve_organization_from_request(request)
         self.assertEqual(org, self.gos)
 

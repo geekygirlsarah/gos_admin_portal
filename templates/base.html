@@ -5,7 +5,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{{ request.organization.name|default:"Girls of Steel" }} Portal{% endblock %}</title>
+    <title>{% block title %}{% if request.organization %}{{ request.organization.name }} Portal{% else %}Momentum | Operations Platform for FIRST® Robotics Teams{% endif %}{% endblock %}</title>
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
@@ -44,8 +44,12 @@
 <nav class="navbar navbar-expand-xl navbar-dark bg-dark mb-4">
     <div class="container">
         <a class="navbar-brand" href="/">
+            {% if request.organization %}
             <img src="{% static 'img/rosie_icon.png' %}" alt="Rosie Icon" width="30" height="30" class="d-inline-block align-text-top me-2">
-            {{ request.organization.name|default:"Girls of Steel" }} Portal
+            {{ request.organization.name }} Portal
+            {% else %}
+            <span class="fw-bold"><i class="bi bi-rocket-takeoff me-2 text-primary"></i>Momentum</span>
+            {% endif %}
         </a>
         {% if user.is_authenticated %}
             <div class="collapse navbar-collapse" id="mainNavbar">
@@ -285,7 +289,12 @@
 
         <div class="d-flex gap-2 align-items-center">
             {% if not user.is_authenticated and "/apply" not in request.path %}
+            {% if request.organization %}
             <a class="btn btn-warning" href="/apply/">Apply to the Program</a>
+            <a class="btn btn-outline-light" href="/accounts/login/">Log In</a>
+            {% else %}
+            <a class="btn btn-outline-light" href="/accounts/login/">Team Log In</a>
+            {% endif %}
             {% endif %}
             {% if user.is_authenticated %}
             {# ── Desktop account dropdown ── #}
@@ -333,7 +342,11 @@
     <div class="container">
         <div class="row">
             <div class="col-md-6 text-center text-md-start">
-                <span class="text-white-50 me-3">{{ request.organization.name|default:"Girls of Steel Robotics" }} {% if request.organization.settings.footer_tagline %}{{ request.organization.settings.footer_tagline }}{% else %}is an outreach program of Carnegie Mellon University.{% endif %}</span>
+                {% if request.organization %}
+                <span class="text-white-50 me-3">{{ request.organization.name }} {% if request.organization.settings.footer_tagline %}{{ request.organization.settings.footer_tagline }}{% else %}is an outreach program of Carnegie Mellon University.{% endif %}</span>
+                {% else %}
+                <span class="text-white-50 me-3">Momentum &mdash; The operations platform for FIRST&reg; robotics teams.</span>
+                {% endif %}
             </div>
             <div class="col-md-6 text-center text-md-end">
                 <a href="{% url 'privacy_policy' %}" class="text-decoration-none text-white-50 me-3">Privacy Policy</a>
