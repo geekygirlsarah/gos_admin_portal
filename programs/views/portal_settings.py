@@ -641,14 +641,30 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             elif "logo_file" in request.FILES and request.FILES["logo_file"]:
                 logo_file = request.FILES["logo_file"]
                 try:
+                    from django.utils.text import slugify
                     from PIL import Image
 
+                    # Open and verify image with Pillow
                     img = Image.open(logo_file)
                     img.verify()
                     logo_file.seek(0)
 
-                    ext = os.path.splitext(logo_file.name)[1].lower() or ".png"
-                    filename = f"org_logos/{org.slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
+                    # Strictly validate image format against allowlist
+                    fmt = (getattr(img, "format", "") or "").upper()
+                    allowed_formats = {
+                        "PNG": ".png",
+                        "JPEG": ".jpg",
+                        "GIF": ".gif",
+                        "WEBP": ".webp",
+                    }
+                    if fmt not in allowed_formats:
+                        raise ValueError(
+                            f"Unsupported image format: {fmt or 'unknown'}"
+                        )
+
+                    ext = allowed_formats[fmt]
+                    safe_slug = slugify(org.slug) or "org"
+                    filename = f"org_logos/{safe_slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
                     saved_path = default_storage.save(filename, logo_file)
                     raw_url = default_storage.url(saved_path)
                     logo_url = (

@@ -1,8 +1,11 @@
 import datetime
+import io
 
 from django.contrib.auth.models import Group, User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from PIL import Image
 
 from programs.models import (
     Adult,
@@ -255,3 +258,49 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, "Sliding Scale Applications")
         self.assertContains(response, "Pending Review")
         self.assertContains(response, "Active Sliding Scales")
+
+    def test_portal_settings_branding_logo_upload_valid_and_path_traversal(self):
+        """Uploading logo validates image format and rejects path traversal or invalid files."""
+        self._login(self.lead_user)
+        url = reverse("portal_email_settings")
+
+        # 1. Valid PNG upload
+        img_byte_arr = io.BytesIO()
+        img = Image.new("RGBA", (100, 100), (255, 0, 0, 0))
+        img.save(img_byte_arr, format="PNG")
+        img_byte_arr.seek(0)
+        valid_file = SimpleUploadedFile(
+            "logo.png", img_byte_arr.getvalue(), content_type="image/png"
+        )
+
+        resp = self.client.post(
+            url,
+            {
+                "action": "update_branding",
+                "organization_name": "Test Org",
+                "logo_file": valid_file,
+            },
+            follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(
+            resp, "Email branding &amp; template settings updated successfully."
+        )
+
+        # 2. Invalid / malicious non-image file with traversal attempts
+        invalid_file = SimpleUploadedFile(
+            "../../etc/passwd.png",
+            b"not a valid image content",
+            content_type="image/png",
+        )
+        resp_invalid = self.client.post(
+            url,
+            {
+                "action": "update_branding",
+                "organization_name": "Test Org",
+                "logo_file": invalid_file,
+            },
+            follow=True,
+        )
+        self.assertEqual(resp_invalid.status_code, 200)
+        self.assertContains(resp_invalid, "Invalid logo image file")
