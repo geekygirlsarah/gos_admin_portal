@@ -24,6 +24,11 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'lead_mentors' %}active{% endif %}" id="lead_mentors-tab" data-bs-toggle="pill" data-bs-target="#lead_mentors" type="button" role="tab" aria-controls="lead_mentors" aria-selected="{% if active_tab == 'lead_mentors' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-person-badge me-1"></i> Lead Mentors
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'agreements' %}active{% endif %}" id="agreements-tab" data-bs-toggle="pill" data-bs-target="#agreements" type="button" role="tab" aria-controls="agreements" aria-selected="{% if active_tab == 'agreements' %}true{% else %}false{% endif %}">
                         <i class="bi bi-file-earmark-check me-1"></i> Agreements
                     </button>
@@ -194,6 +199,157 @@
                         <li><strong>R / W (Read &amp; Write):</strong> Allows creating, updating, and removing records within the section.</li>
                         <li><strong>Data Privacy:</strong> Parents and Students are strictly restricted to their own linked records even if global write permissions are enabled.</li>
                     </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lead Mentors Tab -->
+        <div class="tab-pane fade {% if active_tab == 'lead_mentors' %}show active{% endif %}" id="lead_mentors" role="tabpanel" aria-labelledby="lead_mentors-tab">
+            <!-- Warning / Info Card -->
+            <div class="card border-0 bg-light rounded-3 mb-4">
+                <div class="card-body p-3">
+                    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-shield-lock-fill text-danger me-1"></i> Lead Mentor Security &amp; Authority</h6>
+                    <p class="text-muted small mb-0">
+                        Lead Mentors hold complete administrative authority over organization data, finances, clearances, student and adult records, and system settings for {{ organization.name }}.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-person-badge text-primary me-2"></i>Organization Lead Mentors</h5>
+                        <p class="text-muted small mb-0">Manage Lead Mentors who hold full administrative access to {{ organization.name|default:"the organization" }}.</p>
+                    </div>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLeadMentorModal">
+                        <i class="bi bi-person-plus me-1"></i> Assign Lead Mentor
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 25%;">Name</th>
+                                    <th style="width: 25%;">Email</th>
+                                    <th style="width: 20%;">Username</th>
+                                    <th style="width: 15%;">Assigned On</th>
+                                    <th class="text-end" style="width: 15%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for m in lead_mentor_memberships %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold text-dark">
+                                            {{ m.user.get_full_name|default:m.user.username }}
+                                            {% if m.user == request.user %}
+                                            <span class="badge bg-primary-subtle text-primary ms-1">You</span>
+                                            {% endif %}
+                                            {% if m.user.is_superuser %}
+                                            <span class="badge bg-dark-subtle text-dark ms-1" title="Superuser / System Admin">Admin</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="text-muted">{{ m.user.email|default:"—" }}</td>
+                                    <td><code>{{ m.user.username }}</code></td>
+                                    <td class="small text-muted">{{ m.created_at|date:"M j, Y" }}</td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#removeLeadMentorModal{{ m.user.id }}">
+                                            <i class="bi bi-trash me-1"></i> Remove
+                                        </button>
+
+                                        <!-- Remove Lead Mentor Modal -->
+                                        <div class="modal fade text-start" id="removeLeadMentorModal{{ m.user.id }}" tabindex="-1" aria-labelledby="removeLeadMentorModalLabel{{ m.user.id }}" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-danger text-white">
+                                                        <h5 class="modal-title" id="removeLeadMentorModalLabel{{ m.user.id }}">
+                                                            <i class="bi bi-exclamation-triangle me-1"></i> Remove Lead Mentor
+                                                        </h5>
+                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <form method="post" action="{% url 'portal_lead_mentors' %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="remove_lead_mentor">
+                                                        <input type="hidden" name="user_id" value="{{ m.user.id }}">
+                                                        <div class="modal-body">
+                                                            <p class="mb-2">Are you sure you want to remove <strong>{{ m.user.get_full_name|default:m.user.username }}</strong> ({{ m.user.email }}) as a Lead Mentor for <strong>{{ organization.name }}</strong>?</p>
+                                                            <div class="alert alert-warning py-2 small mb-0">
+                                                                <i class="bi bi-shield-exclamation me-1"></i> This user will immediately lose administrative access to settings, finances, and private records.
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" class="btn btn-danger">Confirm Removal</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <em>No organization-specific Lead Mentors assigned yet.</em>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Lead Mentor Modal with 3-second safety confirmation -->
+            <div class="modal fade" id="addLeadMentorModal" tabindex="-1" aria-labelledby="addLeadMentorModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-dark text-white">
+                            <h5 class="modal-title" id="addLeadMentorModalLabel">
+                                <i class="bi bi-shield-plus me-1"></i> Assign New Lead Mentor
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form method="post" action="{% url 'portal_lead_mentors' %}" id="addLeadMentorForm">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_lead_mentor">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="lead_mentor_user_id" class="form-label fw-semibold">Select User / Mentor</label>
+                                    <select name="user_id" id="lead_mentor_user_id" class="form-select" required>
+                                        <option value="">-- Choose a user --</option>
+                                        {% for u in eligible_lead_mentor_users %}
+                                        <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }} ({{ u.email|default:u.username }})</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">Choose the user account to grant Lead Mentor access.</div>
+                                </div>
+
+                                <div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+                                    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+                                    <div>
+                                        <div class="fw-bold">Security Warning: FULL Access</div>
+                                        <div class="small">Assigning a user as a lead coach gives them <strong>FULL access</strong> to all organizational records, programs, finances, sensitive notes, clearances, and administrative settings. Are you sure you want to do this?</div>
+                                    </div>
+                                </div>
+
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="confirmLeadMentorAccess" required>
+                                    <label class="form-check-label small fw-semibold" for="confirmLeadMentorAccess">
+                                        I confirm that I want to grant this user FULL Lead Mentor access.
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-danger fw-semibold" id="confirmAddLeadMentorBtn" disabled>
+                                    Please wait (3s)...
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2058,6 +2214,58 @@
         if (footerTextInput) {
             footerTextInput.addEventListener('input', function() {
                 if (previewFooterText) previewFooterText.textContent = footerTextInput.value;
+            });
+        }
+    })();
+
+    // Safety delay for assigning Lead Mentor
+    (function() {
+        var modal = document.getElementById('addLeadMentorModal');
+        var confirmBtn = document.getElementById('confirmAddLeadMentorBtn');
+        var confirmCheck = document.getElementById('confirmLeadMentorAccess');
+        var timerInterval = null;
+
+        if (modal && confirmBtn && confirmCheck) {
+            function updateConfirmBtnState() {
+                if (!timerInterval && confirmCheck.checked) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Yes, Grant Full Lead Mentor Access';
+                } else if (!timerInterval) {
+                    confirmBtn.disabled = true;
+                    confirmBtn.textContent = 'Yes, Grant Full Lead Mentor Access';
+                }
+            }
+
+            modal.addEventListener('shown.bs.modal', function() {
+                var secondsLeft = 3;
+                confirmBtn.disabled = true;
+                confirmCheck.checked = false;
+                confirmBtn.textContent = 'Please wait (' + secondsLeft + 's)...';
+
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(function() {
+                    secondsLeft--;
+                    if (secondsLeft > 0) {
+                        confirmBtn.textContent = 'Please wait (' + secondsLeft + 's)...';
+                    } else {
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                        updateConfirmBtnState();
+                    }
+                }, 1000);
+            });
+
+            modal.addEventListener('hidden.bs.modal', function() {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                confirmBtn.disabled = true;
+                confirmCheck.checked = false;
+            });
+
+            confirmCheck.addEventListener('change', function() {
+                updateConfirmBtnState();
             });
         }
     })();

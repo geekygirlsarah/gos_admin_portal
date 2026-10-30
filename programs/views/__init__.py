@@ -60,6 +60,7 @@ from .portal_settings import (
     PortalCrewView,
     PortalEmailSettingsView,
     PortalKioskView,
+    PortalLeadMentorView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,

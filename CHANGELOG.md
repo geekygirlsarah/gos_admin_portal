@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-30
+
+### Added
+- **Organization-Scoped Lead Mentor Role & Management (`programs/views/portal_settings.py`, `templates/programs/settings.html`, `programs/permission_views.py`, `organizations/migrations/0004_convert_lead_mentors_to_memberships.py`)**:
+  - Invented an organization-level Lead Mentor role decoupled from Django server-level `superuser` and `staff` flags, reserving `is_superuser` and `is_staff` for system administrators.
+  - Added a dedicated "Lead Mentors" tab in Portal Settings (`/programs/settings/?tab=lead_mentors`) displaying active Lead Mentors and providing an interface to assign and revoke Lead Mentor status.
+  - Positioned the "Lead Mentor Security & Authority" information callout box prominently at the top of the Lead Mentors management tab above the active roster.
+  - Built safety confirmation workflow for Lead Mentor assignment with a 3-second delay countdown and explicit confirmation acknowledgement before granting full administrative access.
+  - Added self-removal lockout protection preventing the sole remaining Lead Mentor from accidentally stripping their own administrative access.
+  - Added data migration `0004_convert_lead_mentors_to_memberships.py` converting all existing staff and superuser accounts to organization Lead Mentors for Girls of Steel.
+  - Added `user_is_lead_mentor(user, org=None)` helper and integrated organization-level Lead Mentor role detection across all permission mixins, clearance models, Andrew ID management, forms, audit admin, and dashboards.
+  - Added comprehensive test suite in `organizations/tests/test_lead_mentor_role.py`.
+
 ## 2026-10-29
 
 ### Fixed

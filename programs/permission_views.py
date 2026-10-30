@@ -46,8 +46,16 @@ def get_user_role(user, org=None):
     if user is None or not getattr(user, "is_authenticated", False):
         return None
 
-    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+    if user.is_superuser:
         return "LeadMentor"
+
+    if org is None:
+        try:
+            from organizations.utils import get_default_organization
+
+            org = get_default_organization()
+        except Exception:
+            org = None
 
     if org is not None:
         try:
@@ -71,6 +79,9 @@ def get_user_role(user, org=None):
                         return role_candidate
         except Exception:  # nosec B110
             pass
+
+    if user.groups.filter(name="LeadMentor").exists():
+        return "LeadMentor"
 
     # Check if the user is linked to an Adult profile
     try:
@@ -139,6 +150,48 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
     return user.groups.filter(name=group_name).exists()
 
 
+def user_is_lead_mentor(user, org=None):
+    """True if the user is a Lead Mentor (superuser, active LeadMentor
+    UserOrganizationMembership in org, or legacy LeadMentor group)."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    if org is None:
+        try:
+            from organizations.utils import get_default_organization
+
+            org = get_default_organization()
+        except Exception:
+            org = None
+    if org is not None:
+        try:
+            from organizations.models import UserOrganizationMembership
+
+            if UserOrganizationMembership.objects.filter(
+                user=user,
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+            ).exists():
+                return True
+        except Exception:  # nosec B110
+            pass
+    else:
+        try:
+            from organizations.models import UserOrganizationMembership
+
+            if UserOrganizationMembership.objects.filter(
+                user=user,
+                role="LeadMentor",
+                is_active=True,
+            ).exists():
+                return True
+        except Exception:  # nosec B110
+            pass
+    return user.groups.filter(name="LeadMentor").exists()
+
+
 def user_is_parent(user, org=None):
     """True if the user is a parent/guardian, regardless of other Adult flags.
 
@@ -161,31 +214,16 @@ def user_is_alumni(user, org=None):
 
 
 def user_is_mentor_or_lead(user, org=None):
-    """True if the user is a Lead Mentor (superuser or LeadMentor group) or an
+    """True if the user is a Lead Mentor (superuser, active LeadMentor
+    UserOrganizationMembership in org, or legacy LeadMentor group) or an
     active mentor. Convenience helper for ``user_is_mentor(user) or
-    get_user_role(user) == "LeadMentor"`` checks."""
+    user_is_lead_mentor(user)`` checks."""
     if user is None or not getattr(user, "is_authenticated", False):
         return False
-    if user.is_superuser or user.groups.filter(name="LeadMentor").exists():
+    if user.is_superuser:
         return True
-    if org is not None:
-        try:
-            from organizations.models import UserOrganizationMembership
-
-            if UserOrganizationMembership.objects.filter(
-                user=user,
-                organization=org,
-                role__in=["Mentor", "LeadMentor"],
-                is_active=True,
-            ).exists():
-                return True
-            if UserOrganizationMembership.objects.filter(
-                user=user, organization=org, is_active=True
-            ).exists():
-                return False
-        except Exception:  # nosec B110
-            pass
-
+    if user_is_lead_mentor(user, org=org):
+        return True
     return user_is_mentor(user, org=org)
 
 
@@ -623,10 +661,8 @@ def can_user_delete(user, section, obj=None, org=None):
 
 class LeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return (
-            self.request.user.is_superuser
-            or self.request.user.groups.filter(name="LeadMentor").exists()
-        )
+        org = getattr(self.request, "organization", None)
+        return user_is_lead_mentor(self.request.user, org=org)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -670,7 +706,8 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
 
 class MentorOrLeadMentorRequiredMixin(UserPassesTestMixin):
     def test_func(self):
-        return user_is_mentor_or_lead(self.request.user)
+        org = getattr(self.request, "organization", None)
+        return user_is_mentor_or_lead(self.request.user, org=org)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -699,6 +736,7 @@ def __getattr__(name):
         "PortalCrewView",
         "PortalEmailSettingsView",
         "PortalKioskView",
+        "PortalLeadMentorView",
         "PortalPermissionsUpdateView",
         "PortalSettingsView",
         "PortalSlidingScaleSettingsView",

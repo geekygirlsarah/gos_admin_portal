@@ -665,10 +665,9 @@ class BackgroundCheckType(models.Model):
         is_lead = False
         user = getattr(adult, "user", None)
         if user:
-            if (
-                getattr(user, "is_superuser", False)
-                or user.groups.filter(name="LeadMentor").exists()
-            ):
+            from ..permission_views import user_is_lead_mentor
+
+            if user_is_lead_mentor(user, org=getattr(adult, "organization", None)):
                 is_lead = True
 
         if is_lead and self.applies_to_lead_mentors:

@@ -116,6 +116,29 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "display_order", "name"
         )
 
+        from django.contrib.auth import get_user_model
+
+        from organizations.models import UserOrganizationMembership
+
+        User = get_user_model()
+
+        lead_mentor_memberships = (
+            UserOrganizationMembership.objects.filter(
+                organization=org, role="LeadMentor", is_active=True
+            )
+            .select_related("user", "invited_by")
+            .order_by("user__first_name", "user__last_name", "user__username")
+        )
+        lead_mentor_user_ids = set(
+            lead_mentor_memberships.values_list("user_id", flat=True)
+        )
+
+        eligible_lead_mentor_users = (
+            User.objects.filter(is_active=True)
+            .exclude(id__in=lead_mentor_user_ids)
+            .order_by("first_name", "last_name", "username")
+        )
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -134,6 +157,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "slug", flat=True
             ).distinct(),
             "background_check_types": bg_types,
+            "lead_mentor_memberships": lead_mentor_memberships,
+            "eligible_lead_mentor_users": eligible_lead_mentor_users,
             "organization": org,
             "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
@@ -1026,3 +1051,116 @@ class PortalBackgroundCheckTypeView(LoginRequiredMixin, LeadMentorRequiredMixin,
             return redirect("/programs/settings/?tab=background_checks")
 
         return redirect("/programs/settings/?tab=background_checks")
+
+
+class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles add/remove actions for Organization Lead Mentors from Portal Settings."""
+
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+
+        from audit.events import AuditEvent
+        from audit.service import log_event
+        from organizations.models import UserOrganizationMembership
+
+        User = get_user_model()
+        org = getattr(request, "organization", None) or get_default_organization()
+        action = request.POST.get("action")
+
+        if action == "add_lead_mentor":
+            user_id = request.POST.get("user_id")
+            if not user_id:
+                messages.error(
+                    request, "Please select a user to assign as Lead Mentor."
+                )
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            target_user = User.objects.filter(id=user_id, is_active=True).first()
+            if not target_user:
+                messages.error(request, "Selected user was not found or is inactive.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            membership, created = UserOrganizationMembership.objects.update_or_create(
+                user=target_user,
+                organization=org,
+                role="LeadMentor",
+                defaults={
+                    "is_active": True,
+                    "invited_by": request.user,
+                },
+            )
+
+            # Ensure Adult profile if exists has is_mentor=True
+            if hasattr(target_user, "adult_profile"):
+                adult = target_user.adult_profile
+                if not adult.is_mentor:
+                    adult.is_mentor = True
+                    adult.save(update_fields=["is_mentor"])
+
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=target_user,
+                notes=f"User {target_user} assigned as Lead Mentor for organization '{org.name}'.",
+            )
+            target_name = target_user.get_full_name() or target_user.username
+            messages.success(
+                request,
+                f"Successfully assigned {target_name} as Lead Mentor for {org.name}.",
+            )
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        elif action == "remove_lead_mentor":
+            user_id = request.POST.get("user_id")
+            if not user_id:
+                messages.error(request, "Target user not specified.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            target_user = User.objects.filter(id=user_id).first()
+            if not target_user:
+                messages.error(request, "User not found.")
+                return redirect("/programs/settings/?tab=lead_mentors")
+
+            # Lockout protection: Cannot remove yourself if you're the sole active Lead Mentor and not superuser
+            if target_user.id == request.user.id and not request.user.is_superuser:
+                active_count = UserOrganizationMembership.objects.filter(
+                    organization=org,
+                    role="LeadMentor",
+                    is_active=True,
+                ).count()
+                if active_count <= 1:
+                    messages.error(
+                        request,
+                        "Cannot remove the only Lead Mentor. Assign another Lead Mentor first to prevent organization lockout.",
+                    )
+                    return redirect("/programs/settings/?tab=lead_mentors")
+
+            membership = UserOrganizationMembership.objects.filter(
+                user=target_user,
+                organization=org,
+                role="LeadMentor",
+                is_active=True,
+            ).first()
+
+            if membership:
+                membership.is_active = False
+                membership.save(update_fields=["is_active", "updated_at"])
+
+                log_event(
+                    request=request,
+                    event=AuditEvent.ROLE_CHANGED,
+                    resource=target_user,
+                    notes=f"Removed Lead Mentor role for user {target_user} in organization '{org.name}'.",
+                )
+                target_name = target_user.get_full_name() or target_user.username
+                messages.success(
+                    request,
+                    f"Removed Lead Mentor role from {target_name}.",
+                )
+            else:
+                messages.warning(request, "User is not an active Lead Mentor.")
+
+            return redirect("/programs/settings/?tab=lead_mentors")
+
+        messages.error(request, "Unknown action.")
+        return redirect("/programs/settings/?tab=lead_mentors")

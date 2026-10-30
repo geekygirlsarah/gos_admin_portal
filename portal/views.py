@@ -39,9 +39,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context["pending_applications"] = applications_for_user(user)
 
         # ── Role detection & multi-role list ──────────────────────────────────
-        is_lead_mentor = (
-            user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-        )
+        from programs.permission_views import user_is_lead_mentor
+
+        org = getattr(self.request, "organization", None)
+        is_lead_mentor = user_is_lead_mentor(user, org=org)
         context["is_lead_mentor"] = is_lead_mentor
 
         student = getattr(user, "student_profile", None)

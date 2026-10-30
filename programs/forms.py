@@ -297,9 +297,9 @@ class AdultForm(forms.ModelForm):
         # Protect role flags, active status, and students list from non-Lead Mentors/Admins
         # Only apply protection if user is explicitly provided (e.g. from portal views)
         if user is not None:
-            is_privileged = (
-                user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-            )
+            from .permission_views import user_is_lead_mentor
+
+            is_privileged = user_is_lead_mentor(user)
 
             if not is_privileged:
                 protected_fields = [

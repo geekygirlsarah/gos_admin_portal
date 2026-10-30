@@ -14,10 +14,12 @@ from .models import AuditLog
 
 
 def _is_lead_mentor(user) -> bool:
-    """Lead mentors are superusers or members of the 'LeadMentor' group."""
-    return user.is_active and (
-        user.is_superuser or user.groups.filter(name="LeadMentor").exists()
-    )
+    """Lead mentors are superusers, members of the 'LeadMentor' group, or org Lead Mentors."""
+    if not user or not user.is_active:
+        return False
+    from programs.permission_views import user_is_lead_mentor
+
+    return user_is_lead_mentor(user)
 
 
 # ---------------------------------------------------------------------------
