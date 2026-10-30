@@ -1,8 +1,11 @@
+import logging
 import re
 from datetime import date
 
 from programs.models import Adult, Enrollment, Program, Student
 from programs.permission_views import get_user_role
+
+logger = logging.getLogger(__name__)
 
 
 def wizard_context(request):
@@ -268,3 +271,28 @@ def navbar_context(request):
         "navbar_is_alumni": navbar_is_alumni,
         "navbar_is_student": navbar_is_student,
     }
+
+
+def impersonation_context(request):
+    """Provide impersonation state and the original superuser to all templates."""
+    if not hasattr(request, "session"):
+        return {"is_impersonating": False, "impersonator": None}
+
+    impersonator_id = request.session.get("impersonator_id")
+    if impersonator_id:
+        from django.contrib.auth.models import User
+
+        try:
+            impersonator = User.objects.filter(
+                pk=impersonator_id, is_superuser=True
+            ).first()
+            if impersonator:
+                return {
+                    "is_impersonating": True,
+                    "impersonator": impersonator,
+                }
+        except Exception as e:
+            logger.debug(
+                "Failed to resolve impersonator user %s: %s", impersonator_id, e
+            )
+    return {"is_impersonating": False, "impersonator": None}

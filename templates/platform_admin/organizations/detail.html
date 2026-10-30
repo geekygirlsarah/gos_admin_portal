@@ -1,0 +1,402 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<!-- Org Header Card -->
+<div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+    <div class="card-body p-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h3 class="fw-bold text-dark mb-0">{{ organization.name }}</h3>
+                    {% if organization.is_active %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Active</span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">Inactive</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-3 text-muted small">
+                    <span>Slug: <code>{{ organization.slug }}</code></span>
+                    {% if organization.subdomain %}
+                    <span>Subdomain: <code>{{ organization.subdomain }}.momentum</code></span>
+                    {% endif %}
+                    <span>Created: {{ organization.created_at|date:"M d, Y" }}</span>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <form method="post" action="{% url 'platform_admin:organization_switch_context' organization.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-repeat me-1"></i> Switch Portal Context
+                    </button>
+                </form>
+                <a href="{% url 'platform_admin:organization_update' organization.pk %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-pencil me-1"></i> Edit Settings
+                </a>
+                <form method="post" action="{% url 'platform_admin:organization_toggle_status' organization.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-{% if organization.is_active %}warning{% else %}success{% endif %}">
+                        <i class="bi bi-power me-1"></i> {% if organization.is_active %}Deactivate{% else %}Activate{% endif %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Health Diagnostics & Overview Row -->
+<div class="row g-4 mb-4">
+    <!-- Health Diagnostics Card -->
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-heart-pulse text-danger me-2"></i>Tenant Health & Readiness</h5>
+                {% if health.status == 'healthy' %}
+                <span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle-fill me-1"></i>Ready & Healthy</span>
+                {% elif health.status == 'danger' %}
+                <span class="badge bg-danger px-3 py-2"><i class="bi bi-exclamation-octagon-fill me-1"></i>Action Required</span>
+                {% else %}
+                <span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>Attention Needed</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-4">
+                {% if health.issues %}
+                <div class="alert alert-warning mb-4">
+                    <h6 class="fw-bold alert-heading mb-2"><i class="bi bi-exclamation-circle me-1"></i>Health Warnings:</h6>
+                    <ul class="mb-0 ps-3">
+                        {% for issue in health.issues %}
+                        <li>{{ issue }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <div class="p-3 border rounded-3 bg-light">
+                            <span class="text-muted small text-uppercase fw-bold">Lead Mentors</span>
+                            <div class="d-flex align-items-baseline gap-2 mt-1">
+                                <h4 class="fw-bold mb-0 {% if health.lead_mentors_count == 0 %}text-danger{% endif %}">{{ health.lead_mentors_count }}</h4>
+                                <span class="small text-muted">assigned</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="p-3 border rounded-3 bg-light">
+                            <span class="text-muted small text-uppercase fw-bold">Active Programs</span>
+                            <div class="d-flex align-items-baseline gap-2 mt-1">
+                                <h4 class="fw-bold mb-0 {% if health.active_programs_count == 0 %}text-warning{% endif %}">{{ health.active_programs_count }}</h4>
+                                <span class="small text-muted">of {{ health.total_programs_count }} total</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="p-3 border rounded-3 bg-light">
+                            <span class="text-muted small text-uppercase fw-bold">Mentors Agreement Compliance</span>
+                            <div class="d-flex align-items-baseline gap-2 mt-1">
+                                <h4 class="fw-bold mb-0">{{ health.agreed_mentors_count }} / {{ health.mentors_count }}</h4>
+                                <span class="small text-muted">signed</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="p-3 border rounded-3 bg-light">
+                            <span class="text-muted small text-uppercase fw-bold">Clearance Compliance</span>
+                            <div class="d-flex align-items-baseline gap-2 mt-1">
+                                <h4 class="fw-bold mb-0">{{ health.clearances_count }} / {{ health.mentors_count }}</h4>
+                                <span class="small text-muted">verified</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Org Settings Card -->
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-sliders text-primary me-2"></i>Branding & Settings</h5>
+                <a href="{% url 'platform_admin:organization_update' organization.pk %}" class="small text-decoration-none">Edit</a>
+            </div>
+            <div class="card-body p-4">
+                <ul class="list-unstyled mb-0 d-flex flex-column gap-2 small">
+                    <li class="d-flex justify-content-between border-bottom pb-2">
+                        <span class="text-muted">Portal Title:</span>
+                        <span class="fw-semibold text-dark">{{ settings.portal_title|default:"Not set (Uses default)" }}</span>
+                    </li>
+                    <li class="d-flex justify-content-between border-bottom pb-2">
+                        <span class="text-muted">Contact Email:</span>
+                        <span class="fw-semibold text-dark">{{ settings.contact_email|default:"Not set" }}</span>
+                    </li>
+                    <li class="d-flex justify-content-between border-bottom pb-2">
+                        <span class="text-muted">Phone:</span>
+                        <span class="fw-semibold text-dark">{{ settings.phone|default:"Not set" }}</span>
+                    </li>
+                    <li class="d-flex justify-content-between border-bottom pb-2">
+                        <span class="text-muted">Time Zone:</span>
+                        <span class="fw-semibold text-dark">{{ settings.time_zone|default:"America/New_York" }}</span>
+                    </li>
+                    <li class="d-flex justify-content-between border-bottom pb-2">
+                        <span class="text-muted">Branding Color:</span>
+                        <span class="d-flex align-items-center gap-1 fw-semibold">
+                            <span class="d-inline-block rounded-circle" style="width: 14px; height: 14px; background-color: {{ settings.theme_color|default:'#0056b3' }};"></span>
+                            {{ settings.theme_color|default:"#0056b3" }}
+                        </span>
+                    </li>
+                    <li class="d-flex justify-content-between">
+                        <span class="text-muted">Allowed Domains:</span>
+                        <span class="fw-semibold text-dark text-truncate" style="max-width: 200px;">{{ settings.allowed_domains|default:"Any" }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs: Members & Programs -->
+<div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+    <div class="card-header bg-white border-bottom p-0">
+        <ul class="nav nav-tabs border-bottom-0 px-3 pt-2" id="orgTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-semibold" id="members-tab" data-bs-toggle="tab" data-bs-target="#members" type="button" role="tab">
+                    <i class="bi bi-people me-1"></i> Members &amp; Roster ({{ memberships.count }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-semibold" id="programs-tab" data-bs-toggle="tab" data-bs-target="#programs" type="button" role="tab">
+                    <i class="bi bi-diagram-3 me-1"></i> Programs ({{ programs.count }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-semibold" id="invitations-tab" data-bs-toggle="tab" data-bs-target="#invitations" type="button" role="tab">
+                    <i class="bi bi-envelope me-1"></i> Invitations ({{ invitations.count }})
+                </button>
+            </li>
+        </ul>
+    </div>
+    <div class="tab-content" id="orgTabsContent">
+        <!-- Members Tab -->
+        <div class="tab-pane fade show active p-4" id="members" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold text-dark mb-0">Organization User Memberships</h5>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+                    <i class="bi bi-person-plus me-1"></i> Add Member
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-uppercase text-muted">
+                        <tr>
+                            <th>User</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in memberships %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold text-dark">{{ m.user.get_full_name|default:m.user.username }}</div>
+                                <div class="small text-muted">{{ m.user.email }} &bull; @{{ m.user.username }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-dark">{{ m.get_role_display }}</span>
+                            </td>
+                            <td>
+                                {% if m.is_active and m.user.is_active %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="small text-muted">
+                                {{ m.created_at|date:"M d, Y" }}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    {% if not m.user.is_superuser %}
+                                    <form method="post" action="{% url 'platform_admin:impersonate_user' m.user.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-warning btn-sm" title="Log in as this user (Impersonate)">
+                                            <i class="bi bi-incognito"></i> Impersonate
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editMemberModal{{ m.pk }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <form method="post" action="{% url 'platform_admin:organization_member_delete' organization.pk m.pk %}" class="d-inline" onsubmit="return confirm('Remove user from organization?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <!-- Edit Member Modal -->
+                                <div class="modal fade text-start" id="editMemberModal{{ m.pk }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <form method="post" action="{% url 'platform_admin:organization_member_update' organization.pk m.pk %}">
+                                                {% csrf_token %}
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title fw-bold">Edit Membership: {{ m.user.username }}</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-semibold">Role</label>
+                                                        <select name="role" class="form-select">
+                                                            <option value="LeadMentor" {% if m.role == 'LeadMentor' %}selected{% endif %}>Lead Mentor</option>
+                                                            <option value="Mentor" {% if m.role == 'Mentor' %}selected{% endif %}>Mentor</option>
+                                                            <option value="Parent" {% if m.role == 'Parent' %}selected{% endif %}>Parent</option>
+                                                            <option value="Student" {% if m.role == 'Student' %}selected{% endif %}>Student</option>
+                                                            <option value="Alumni" {% if m.role == 'Alumni' %}selected{% endif %}>Alumni</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="form-check form-switch">
+                                                        <input class="form-check-input" type="checkbox" name="is_active" id="active{{ m.pk }}" {% if m.is_active %}checked{% endif %}>
+                                                        <label class="form-check-label" for="active{{ m.pk }}">Active Membership</label>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                No members assigned to this organization yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Programs Tab -->
+        <div class="tab-pane fade p-4" id="programs" role="tabpanel">
+            <h5 class="fw-bold text-dark mb-3">Programs Configured in {{ organization.name }}</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-uppercase text-muted">
+                        <tr>
+                            <th>Program Name</th>
+                            <th>Dates</th>
+                            <th>Status</th>
+                            <th>Enrollments</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in programs %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold text-dark">{{ p.name }}</div>
+                                <span class="small text-muted">{{ p.location|default:"No location set" }}</span>
+                            </td>
+                            <td class="small text-muted">
+                                {{ p.start_date|date:"M Y"|default:"TBD" }} &ndash; {{ p.end_date|date:"M Y"|default:"TBD" }}
+                            </td>
+                            <td>
+                                {% if p.active %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ p.enrollment_count }} enrolled</span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                No programs configured for this organization yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Invitations Tab -->
+        <div class="tab-pane fade p-4" id="invitations" role="tabpanel">
+            <h5 class="fw-bold text-dark mb-3">Sent Invitations</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-uppercase text-muted">
+                        <tr>
+                            <th>Invited Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Invited By</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inv in invitations %}
+                        <tr>
+                            <td class="fw-semibold">{{ inv.email }}</td>
+                            <td><span class="badge bg-dark">{{ inv.get_role_display }}</span></td>
+                            <td><span class="badge bg-info-subtle text-info border border-info-subtle">{{ inv.status }}</span></td>
+                            <td class="small text-muted">{{ inv.invited_by.username|default:"System" }}</td>
+                            <td class="small text-muted">{{ inv.created_at|date:"M d, Y" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                No invitations recorded for this organization.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Member Modal -->
+<div class="modal fade" id="addMemberModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'platform_admin:organization_member_add' organization.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Add Member to {{ organization.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">User Username or Email</label>
+                        {{ member_form.user_identifier }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Role</label>
+                        {{ member_form.role }}
+                    </div>
+                    <div class="form-check form-switch">
+                        {{ member_form.is_active }}
+                        <label class="form-check-label fw-semibold" for="{{ member_form.is_active.id_for_label }}">Active Member</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

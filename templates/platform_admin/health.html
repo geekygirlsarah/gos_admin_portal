@@ -1,0 +1,187 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold text-dark mb-0"><i class="bi bi-heart-pulse text-danger me-2"></i>System &amp; Multi-Tenant Health Diagnostics</h4>
+        <p class="text-muted small mb-0">Automated isolation integrity checks, database connectivity, and platform compliance audits.</p>
+    </div>
+</div>
+
+<!-- System Status Alert / Header -->
+{% if has_isolation_issues or danger_orgs %}
+<div class="alert alert-danger border-danger shadow-sm d-flex align-items-center gap-3 mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-2 flex-shrink-0"></i>
+    <div>
+        <h5 class="fw-bold alert-heading mb-1">Attention Required</h5>
+        <span>One or more tenant health or data isolation anomalies were detected across the platform. Review the diagnostic breakdown below.</span>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-success border-success shadow-sm d-flex align-items-center gap-3 mb-4">
+    <i class="bi bi-check-circle-fill fs-2 flex-shrink-0 text-success"></i>
+    <div>
+        <h5 class="fw-bold alert-heading mb-1 text-success">All Systems Operational &amp; Isolated</h5>
+        <span class="text-dark">Database connectivity is verified, and 100% of domain records are scoped to their respective tenant organizations.</span>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+    <!-- Multi-Tenant Isolation Checks -->
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-shield-check text-primary me-2"></i>Multi-Tenant Data Isolation Audit</h5>
+                {% if not has_isolation_issues %}
+                <span class="badge bg-success"><i class="bi bi-check me-1"></i>Passed</span>
+                {% else %}
+                <span class="badge bg-danger"><i class="bi bi-x me-1"></i>Unscoped Records</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light small text-uppercase text-muted">
+                            <tr>
+                                <th>Domain Model</th>
+                                <th class="text-center">Total Records</th>
+                                <th class="text-center">Unscoped (NULL Org)</th>
+                                <th class="text-end">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for check in isolation_checks %}
+                            <tr>
+                                <td class="fw-semibold text-dark">{{ check.model }}</td>
+                                <td class="text-center">{{ check.total }}</td>
+                                <td class="text-center">
+                                    {% if check.unscoped > 0 %}
+                                    <span class="badge bg-danger">{{ check.unscoped }}</span>
+                                    {% else %}
+                                    <span class="text-muted">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if check.status == 'success' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i>Isolated</span>
+                                    {% else %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-exclamation-octagon me-1"></i>Unscoped</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mentor Compliance & Database Status -->
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-database-check text-info me-2"></i>Infrastructure &amp; Database</h5>
+            </div>
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center p-2 rounded-2 bg-light mb-2">
+                    <span class="fw-semibold">Primary Database Query Probe</span>
+                    {% if db_ok %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected</span>
+                    {% else %}
+                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Failed</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-2 rounded-2 bg-light">
+                    <span class="fw-semibold">Active Tenant Isolation Mode</span>
+                    <span class="badge bg-primary">Organization Scoped</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-3 bg-white">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-shield-lock text-success me-2"></i>Platform Mentor Compliance</h5>
+            </div>
+            <div class="card-body p-3">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1 small">
+                        <span class="fw-semibold">Background Clearances ({{ approved_clearances }} / {{ total_mentors }})</span>
+                        <span class="fw-bold text-dark">{{ clearance_rate }}%</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ clearance_rate }}%;"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="d-flex justify-content-between align-items-center mb-1 small">
+                        <span class="fw-semibold">Signed Agreements ({{ accepted_agreements }} / {{ total_mentors }})</span>
+                        <span class="fw-bold text-dark">{{ agreement_rate }}%</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ agreement_rate }}%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Organizations Needing Action -->
+{% if danger_orgs or warning_orgs %}
+<div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+    <div class="card-header bg-white py-3 border-bottom">
+        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Tenant Organizations Requiring Attention</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-uppercase text-muted">
+                    <tr>
+                        <th>Organization</th>
+                        <th>Status Issue</th>
+                        <th>Recommended Fix</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in danger_orgs %}
+                    <tr>
+                        <td class="fw-bold text-dark">{{ item.org.name }}</td>
+                        <td>
+                            <span class="badge bg-danger">{{ item.issues.0|default:"Missing Lead Mentor" }}</span>
+                        </td>
+                        <td class="small text-muted">
+                            Assign at least one active Lead Mentor to oversee team operations.
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'platform_admin:organization_detail' item.org.pk %}" class="btn btn-outline-danger btn-sm">
+                                Resolve &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% for item in warning_orgs %}
+                    <tr>
+                        <td class="fw-bold text-dark">{{ item.org.name }}</td>
+                        <td>
+                            <span class="badge bg-warning text-dark">{{ item.issues.0 }}</span>
+                        </td>
+                        <td class="small text-muted">
+                            Ensure active programs and mentor compliance documentation are completed.
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'platform_admin:organization_detail' item.org.pk %}" class="btn btn-outline-warning btn-sm">
+                                Review &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

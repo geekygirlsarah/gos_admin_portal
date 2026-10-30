@@ -20,6 +20,27 @@
 </head>
 <body class="d-flex flex-column min-vh-100">
 
+{% if is_impersonating %}
+<div class="bg-warning text-dark py-2 px-3 border-bottom border-dark sticky-top shadow-sm" style="z-index: 1050;">
+    <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-exclamation-triangle-fill fs-5 text-dark"></i>
+            <div>
+                <strong>Impersonation Active:</strong> You are currently logged in as
+                <strong>{{ user.get_full_name|default:user.username }}</strong> (<code>{{ user.email }}</code>).
+                {% if impersonator %}Impersonated by <strong>{{ impersonator.username }}</strong>.{% endif %}
+            </div>
+        </div>
+        <form method="post" action="{% url 'platform_admin:impersonate_stop' %}" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-dark btn-sm fw-bold">
+                <i class="bi bi-box-arrow-right me-1"></i> Exit Impersonation
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <nav class="navbar navbar-expand-xl navbar-dark bg-dark mb-4">
     <div class="container">
         <a class="navbar-brand" href="/">
@@ -249,6 +270,9 @@
 
                 {# ── Mobile account menu ── #}
                 <div class="d-xl-none border-top border-secondary mt-2 pt-2">
+                    {% if user.is_superuser and not is_impersonating %}
+                    <a class="btn btn-outline-danger w-100 mb-1 fw-bold" href="{% url 'platform_admin:dashboard' %}"><i class="bi bi-speedometer2 me-1"></i>Platform Admin</a>
+                    {% endif %}
                     <a class="btn btn-outline-light w-100 mb-1" href="{% url 'profile_dashboard' %}">Dashboard</a>
                     <a class="btn btn-outline-light w-100 mb-1" href="{% url 'my_profile' %}">My Profile</a>
                     {% if user_has_any_badge_program %}
@@ -270,6 +294,10 @@
                     {{ user.get_full_name|default:user.email|default:user.username }}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountMenuDropdown">
+                    {% if user.is_superuser and not is_impersonating %}
+                    <li><a class="dropdown-item text-danger fw-bold" href="{% url 'platform_admin:dashboard' %}"><i class="bi bi-speedometer2 me-2"></i>Platform Admin</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% endif %}
                     <li><a class="dropdown-item" href="{% url 'profile_dashboard' %}">Dashboard</a></li>
                     <li><a class="dropdown-item" href="{% url 'my_profile' %}">My Profile</a></li>
                     {% if user_has_any_badge_program %}

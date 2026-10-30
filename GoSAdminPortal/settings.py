@@ -120,14 +120,7 @@ if not DEBUG:
     SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "testserver",
-    ".momentumteam.app",
-    ".girlsofsteelrobotics.org",
-    ".gosadmin.com",
-]
+ALLOWED_HOSTS = ["localhost", ".localhost", "127.0.0.1"]
 if os.getenv("ALLOWED_HOSTS"):
     ALLOWED_HOSTS.extend(os.getenv("ALLOWED_HOSTS").split(","))
 
@@ -213,6 +206,8 @@ TEMPLATES = [
                 "GoSAdminPortal.context_processors.navbar_context",
                 # Wizard-step template defaults (e.g. `warnings`)
                 "GoSAdminPortal.context_processors.wizard_context",
+                # Superuser impersonation state
+                "GoSAdminPortal.context_processors.impersonation_context",
             ],
         },
     },

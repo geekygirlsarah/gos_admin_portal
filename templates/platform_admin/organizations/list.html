@@ -1,0 +1,154 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-buildings text-danger me-2"></i>Platform Organizations</h4>
+            <p class="text-muted small mb-0">Manage all registered tenant teams, access control, branding, and active statuses.</p>
+        </div>
+        <a href="{% url 'platform_admin:organization_create' %}" class="btn btn-danger">
+            <i class="bi bi-plus-circle me-1"></i> Register New Organization
+        </a>
+    </div>
+    <div class="card-body bg-light border-bottom py-3">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control bg-white" placeholder="Search by name, slug, or subdomain..." value="{{ q }}">
+                </div>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <select name="status" class="form-select bg-white">
+                    <option value="" {% if not status %}selected{% endif %}>All Statuses</option>
+                    <option value="active" {% if status == 'active' %}selected{% endif %}>Active Only</option>
+                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive Only</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-dark w-100">Filter</button>
+            </div>
+            {% if q or status %}
+            <div class="col-md-2">
+                <a href="{% url 'platform_admin:organization_list' %}" class="btn btn-outline-secondary w-100">Reset</a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-uppercase text-muted">
+                <tr>
+                    <th>Organization</th>
+                    <th>Status</th>
+                    <th>Health</th>
+                    <th class="text-center">Lead Mentors</th>
+                    <th class="text-center">Members</th>
+                    <th class="text-center">Programs</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in org_items %}
+                <tr>
+                    <td>
+                        <div>
+                            <a href="{% url 'platform_admin:organization_detail' item.org.pk %}" class="fw-bold text-decoration-none text-dark fs-6">
+                                {{ item.org.name }}
+                            </a>
+                            {% if item.org.subdomain %}
+                            <span class="badge bg-light text-secondary border ms-1">{{ item.org.subdomain }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="small text-muted">Slug: <code>{{ item.org.slug }}</code></span>
+                    </td>
+                    <td>
+                        {% if item.org.is_active %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.health.status == 'healthy' %}
+                        <span class="badge bg-success px-2 py-1"><i class="bi bi-check-circle me-1"></i>Healthy</span>
+                        {% elif item.health.status == 'danger' %}
+                        <span class="badge bg-danger px-2 py-1" title="{{ item.health.issues|join:', ' }}"><i class="bi bi-exclamation-octagon me-1"></i>Action Needed</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark px-2 py-1" title="{{ item.health.issues|join:', ' }}"><i class="bi bi-exclamation-triangle me-1"></i>Attention</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if item.health.lead_mentors_count > 0 %}
+                        <span class="badge bg-dark">{{ item.health.lead_mentors_count }}</span>
+                        {% else %}
+                        <span class="badge bg-danger">0</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <span class="fw-semibold">{{ item.health.total_members }}</span>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            {{ item.health.mentors_count }} Mentors &bull; {{ item.health.students_count }} Students
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ item.health.active_programs_count }} active</span>
+                        <span class="text-muted small">({{ item.health.total_programs_count }} total)</span>
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'platform_admin:organization_detail' item.org.pk %}" class="btn btn-outline-secondary" title="View Organization Details">
+                                <i class="bi bi-eye"></i> Details
+                            </a>
+                            <a href="{% url 'platform_admin:organization_update' item.org.pk %}" class="btn btn-outline-secondary" title="Edit Settings">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="{% url 'platform_admin:organization_toggle_status' item.org.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button type="submit" class="btn btn-outline-{% if item.org.is_active %}warning{% else %}success{% endif %}" title="{% if item.org.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                    <i class="bi bi-power"></i>
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'platform_admin:organization_switch_context' item.org.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-primary" title="Switch Portal Context to this Org">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="bi bi-buildings fs-1 d-block mb-2 text-secondary"></i>
+                        No organizations found matching your search criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <div class="card-footer bg-white py-3 border-top d-flex justify-content-between align-items-center">
+        <span class="text-muted small">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if status %}&status={{ status }}{% endif %}">&laquo; Previous</a>
+            </li>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if status %}&status={{ status }}{% endif %}">Next &raquo;</a>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

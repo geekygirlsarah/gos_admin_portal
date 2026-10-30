@@ -1,0 +1,126 @@
+{% extends "platform_admin/_base.html" %}
+
+{% block admin_content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10 col-xl-8">
+        <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <a href="{% if object %}{% url 'platform_admin:organization_detail' object.pk %}{% else %}{% url 'platform_admin:organization_list' %}{% endif %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-left"></i>
+                    </a>
+                    <h4 class="fw-bold text-dark mb-0">
+                        {% if object %}Edit Organization: {{ object.name }}{% else %}Register New Organization{% endif %}
+                    </h4>
+                </div>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="card-body p-4">
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-4">
+                        {% for error in form.non_field_errors %}
+                        <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">1. Organization Identity & Subdomain</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Organization Name <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                            <div class="form-text small text-muted">Full public title of the organization or team.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">URL Slug <span class="text-danger">*</span></label>
+                            {{ form.slug }}
+                            {% if form.slug.errors %}<div class="text-danger small mt-1">{{ form.slug.errors.0 }}</div>{% endif %}
+                            <div class="form-text small text-muted">Unique internal and URL identifier (e.g. <code>steel-city-robotics</code>).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Subdomain (Optional)</label>
+                            <div class="input-group">
+                                {{ form.subdomain }}
+                                <span class="input-group-text">.momentum</span>
+                            </div>
+                            {% if form.subdomain.errors %}<div class="text-danger small mt-1">{{ form.subdomain.errors.0 }}</div>{% endif %}
+                            <div class="form-text small text-muted">Dedicated tenant subdomain host for this team.</div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center">
+                            <div class="form-check form-switch mt-3">
+                                {{ form.is_active }}
+                                <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">Organization Active</label>
+                                <div class="form-text small text-muted">Inactive organizations block portal access for all non-superuser members.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if form.initial_lead_mentor_email %}
+                    <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">2. Initial Lead Mentor</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold">Lead Mentor Email</label>
+                            {{ form.initial_lead_mentor_email }}
+                            {% if form.initial_lead_mentor_email.errors %}<div class="text-danger small mt-1">{{ form.initial_lead_mentor_email.errors.0 }}</div>{% endif %}
+                            <div class="form-text small text-muted">If an existing user matches this email, they will be assigned immediately. Otherwise, an invitation token will be created.</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">{% if form.initial_lead_mentor_email %}3{% else %}2{% endif %}. Portal Branding & Settings</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Portal Title</label>
+                            {{ form.portal_title }}
+                            {% if form.portal_title.errors %}<div class="text-danger small mt-1">{{ form.portal_title.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Footer Tagline</label>
+                            {{ form.footer_tagline }}
+                            {% if form.footer_tagline.errors %}<div class="text-danger small mt-1">{{ form.footer_tagline.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Contact Email</label>
+                            {{ form.contact_email }}
+                            {% if form.contact_email.errors %}<div class="text-danger small mt-1">{{ form.contact_email.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Contact Phone</label>
+                            {{ form.phone }}
+                            {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Time Zone</label>
+                            {{ form.time_zone }}
+                            {% if form.time_zone.errors %}<div class="text-danger small mt-1">{{ form.time_zone.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Theme Color</label>
+                            <div class="d-flex align-items-center gap-2">
+                                {{ form.theme_color }}
+                            </div>
+                            {% if form.theme_color.errors %}<div class="text-danger small mt-1">{{ form.theme_color.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold">Allowed Email Domains</label>
+                            {{ form.allowed_domains }}
+                            {% if form.allowed_domains.errors %}<div class="text-danger small mt-1">{{ form.allowed_domains.errors.0 }}</div>{% endif %}
+                            <div class="form-text small text-muted">Auto-route incoming users with matching email domains (one domain per line).</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-light py-3 d-flex justify-content-between align-items-center">
+                    <a href="{% if object %}{% url 'platform_admin:organization_detail' object.pk %}{% else %}{% url 'platform_admin:organization_list' %}{% endif %}" class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-danger fw-semibold px-4">
+                        {% if object %}Save Changes{% else %}Create Organization{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

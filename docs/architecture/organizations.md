@@ -6,13 +6,14 @@ This document describes the multi-tenant architecture and tenant-isolation invar
 
 The multi-tenant architecture supports multiple organizations (teams/programs) within a single database instance while guaranteeing strict data isolation, configurable settings, per-tenant permissions, and independent branding.
 
-The multi-tenant implementation spans six structured phases:
+The multi-tenant implementation spans seven structured phases:
 1. **Foundation Models**: `Organization` and `OrganizationSettings`.
 2. **Query Scoping & Managers**: `OrganizationQuerySet` and `OrganizationManager`.
 3. **View & Form Integration**: `OrganizationScopeMixin` and `OrganizationFormMixin`.
 4. **Per-Tenant Configuration**: Dynamic `OrganizationSettings` with dot-access.
 5. **Scoped Permissions**: Tenant-aware `RolePermission` and permission helpers.
 6. **Membership & Routing**: `UserOrganizationMembership`, `OrganizationInvitation`, and dynamic domain routing.
+7. **Platform Administration**: `SuperuserRequiredMixin`, Organization Health Diagnostics, Platform Metrics, User Support, Impersonation, and Cross-Tenant Audit Logging.
 
 ---
 
@@ -95,6 +96,20 @@ Views handling organization-scoped models inherit `OrganizationScopeMixin` (from
 Forms dealing with organization-scoped selections:
 - Inherit `OrganizationFormMixin` (from `organizations.forms` or `programs.forms`).
 - Or explicitly limit choice querysets using `limit_choices_to_organization(form, request.organization)`.
+
+---
+
+## Platform Administration & Superuser Tools (`organizations/platform_views.py`)
+
+Dedicated platform administration endpoints (`/platform-admin/`) are strictly restricted to active superusers via `SuperuserRequiredMixin`:
+- **Overview Dashboard (`/platform-admin/`)**: Aggregates tenant counts, user totals, active program metrics, health summaries, and recent cross-tenant audit activity.
+- **Organization Health & Readiness**: Automated health checks evaluate lead mentor staffing, active program availability, and mentor compliance rates (background checks and agreements).
+- **Tenant Management**: Interface to create, configure, update, activate/deactivate, and switch active organization context.
+- **Platform Usage Metrics (`/platform-admin/metrics/`)**: Multi-tenant metrics for attendance sessions/hours, application pipeline status, purchase orders, outreach, and role distribution.
+- **System & Isolation Diagnostics (`/platform-admin/health/`)**: Scans database tables across all domain apps to detect unscoped (`organization__isnull=True`) records, verify database connectivity, and report compliance bottlenecks.
+- **User Support Directory (`/platform-admin/users/`)**: Global search across all tenants by name, username, email, phone, or Andrew ID, with account status toggling.
+- **Support Impersonation (`/platform-admin/impersonate/<id>/`)**: Enables superusers to log into any regular user account for troubleshooting without knowing their credentials. Safeguards prevent impersonating other superusers, record audit events (`USER_IMPERSONATED` and `IMPERSONATION_ENDED`), display persistent warning banners, and support one-click termination (`/platform-admin/impersonate/stop/`).
+- **Cross-Tenant Audit Log Explorer (`/platform-admin/audit/`)**: Searchable and filterable history of security events, administrative updates, and access records.
 
 ---
 

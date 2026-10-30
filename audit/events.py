@@ -43,3 +43,13 @@ class AuditEvent(models.TextChoices):
     BADGE_CREATED = "BADGE_CREATED", "Badge created"
     BADGE_UPDATED = "BADGE_UPDATED", "Badge updated"
     BADGE_DELETED = "BADGE_DELETED", "Badge deleted"
+
+    # --- Multi-Tenant & Platform Admin ---
+    USER_IMPERSONATED = "USER_IMPERSONATED", "User impersonated by superuser"
+    IMPERSONATION_ENDED = "IMPERSONATION_ENDED", "User impersonation ended"
+    ORGANIZATION_CREATED = "ORGANIZATION_CREATED", "Organization created"
+    ORGANIZATION_UPDATED = "ORGANIZATION_UPDATED", "Organization updated"
+    ORGANIZATION_STATUS_CHANGED = (
+        "ORGANIZATION_STATUS_CHANGED",
+        "Organization status toggled",
+    )
