@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## 2026-10-30
 
 ### Added
+- **Platform Admin Domain Isolation & Dedicated Context Navbar (`organizations/platform_views.py`, `templates/base.html`, `GoSAdminPortal/context_processors.py`, `GoSAdminPortal/middleware.py`)**:
+  - Enforced strict domain boundary isolation in `SuperuserRequiredMixin`: platform admin views (`/platform-admin/`) return HTTP 404 when requested through tenant subdomains (e.g., `team-name.momentumteam.app`), tenant custom domains, or tenant routing headers, ensuring platform management is only accessible via the primary root domain (`momentumteam.app` / `localhost`).
+  - Added dedicated Platform Admin navbar layout in `templates/base.html` that automatically replaces team-specific dropdowns with platform administration items (Overview, Organizations, Usage Metrics, System Health, User Support, Audit Logs, and Django Admin) when browsing platform admin views, preventing cognitive overlap for users holding dual superuser and Lead Mentor roles.
+  - Added "Return to Team Portal" action in the navbar and account dropdowns on platform admin pages, and updated tenant portal navigation to link platform superusers directly to the root domain platform dashboard.
+  - Added `is_platform_admin` and `site_base_url` to `navbar_context` context processor and added `/platform-admin/` to `EXEMPT_PATH_PREFIXES` in middleware.
 - **Momentum Marketing Home Page & Subdomain Routing**:
   - Implemented public marketing landing page on the root platform domain (`momentumteam.app`, `www.momentumteam.app`, and explicit `/landing/`, `/about/` routes) presenting platform overview, core feature pillars (applications, kiosk attendance, badging, purchase orders, outreach, and travel), active team directory, and direct portal login controls.
   - Enhanced homepage copy using marketing taglines, core value propositions ("Build season is chaotic enough", "Parents as partners, not unpaid finance dept", "Attendance hours are real data, not vibes", "Orders deserve a system", "Visible mentor coverage"), detailed operational module deep-dives, and an FAQ accordion, while strictly omitting tentative pricing/tiers.

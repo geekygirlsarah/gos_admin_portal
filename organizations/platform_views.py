@@ -3,6 +3,7 @@
 import logging
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.mixins import UserPassesTestMixin
@@ -10,6 +11,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.db.models import Count, Q, Sum
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -37,6 +39,7 @@ from organizations.platform_forms import (
     PlatformOrganizationForm,
     PlatformUserSearchForm,
 )
+from organizations.utils import get_site_base_url
 from programs.models import (
     Adult,
     BackgroundCheck,
@@ -50,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 
 class SuperuserRequiredMixin(UserPassesTestMixin):
-    """Mixin that restricts view access strictly to active superusers."""
+    """Mixin that restricts view access strictly to active superusers on the root platform domain."""
 
     def test_func(self):
         return bool(
@@ -65,6 +68,50 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
         raise PermissionDenied(
             "Access to the Platform Admin Dashboard is restricted to platform superusers."
         )
+
+    def dispatch(self, request, *args, **kwargs):
+        # Platform admin endpoints must not be accessible via tenant sites / subdomains / custom domains
+        if self.is_tenant_request(request):
+            raise Http404("This page does not exist")
+        return super().dispatch(request, *args, **kwargs)
+
+    @classmethod
+    def is_tenant_request(cls, request):
+        """Return True if the request is routed through a specific team/tenant site."""
+        if getattr(request, "organization", None) is None:
+            return False
+        meta = getattr(request, "META", {})
+        if any(
+            h in meta
+            for h in ("HTTP_X_ORGANIZATION", "HTTP_X_ORG_SLUG", "HTTP_X_ORG_SUBDOMAIN")
+        ):
+            return True
+        host = (
+            (meta.get("HTTP_HOST") or meta.get("SERVER_NAME") or "")
+            .split(":")[0]
+            .strip()
+            .lower()
+        )
+        if not host:
+            try:
+                host = request.get_host().split(":")[0].strip().lower()
+            except Exception:
+                host = ""
+        root_domain = getattr(
+            settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app"
+        ).lower()
+        root_domains = {
+            root_domain,
+            f"www.{root_domain}",
+            "momentumteam.app",
+            "www.momentumteam.app",
+            "localhost",
+            "127.0.0.1",
+            "testserver",
+        }
+        if host in root_domains:
+            return False
+        return True
 
 
 def calculate_org_health(org):
@@ -930,6 +977,11 @@ class PlatformStopImpersonationView(View):
         messages.success(
             request, "Impersonation session ended. Returned to platform administrator."
         )
+        if SuperuserRequiredMixin.is_tenant_request(request):
+            site_base_url = get_site_base_url()
+            dashboard_url = reverse("platform_admin:dashboard")
+            if site_base_url:
+                return redirect(f"{site_base_url}{dashboard_url}")
         return redirect("platform_admin:dashboard")
 
 

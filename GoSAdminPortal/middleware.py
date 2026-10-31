@@ -47,6 +47,7 @@ EXEMPT_URL_NAMES = {
 EXEMPT_PATH_PREFIXES = (
     "/accounts/",
     "/admin/",
+    "/platform-admin/",
     "/apply/",  # public application wizard
     "/guest/",  # public guest permission forms
     "/signout/",  # public digital sign-out pages

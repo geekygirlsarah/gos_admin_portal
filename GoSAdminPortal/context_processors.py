@@ -132,9 +132,29 @@ def navbar_context(request):
     - navbar_role: the user's role string
     - navbar_program_students: students enrolled in the current program (for scoped nav)
     - navbar_program_parents: adults who are parents of enrolled students (for scoped nav)
+    - is_platform_admin: boolean indicating if current URL is under /platform-admin/
+    - site_base_url: primary domain base URL (e.g. https://momentumteam.app)
     """
+    try:
+        from organizations.utils import get_site_base_url
+
+        site_base_url = get_site_base_url()
+    except Exception:
+        site_base_url = ""
+
+    is_platform_admin = bool(
+        (
+            request.resolver_match
+            and getattr(request.resolver_match, "app_name", None) == "platform_admin"
+        )
+        or request.path.startswith("/platform-admin/")
+    )
+
     if not hasattr(request, "user") or not request.user.is_authenticated:
-        return {}
+        return {
+            "site_base_url": site_base_url,
+            "is_platform_admin": is_platform_admin,
+        }
 
     role = get_user_role(request.user)
 
@@ -270,6 +290,8 @@ def navbar_context(request):
         "navbar_is_mentor": navbar_is_mentor,
         "navbar_is_alumni": navbar_is_alumni,
         "navbar_is_student": navbar_is_student,
+        "is_platform_admin": is_platform_admin,
+        "site_base_url": site_base_url,
     }
 
 
