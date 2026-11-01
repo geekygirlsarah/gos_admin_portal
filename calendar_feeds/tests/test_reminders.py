@@ -31,7 +31,7 @@ class SendCalendarRemindersCommandTests(TestCase):
         lead = make_lead_mentor_user()
         lead.email = "lead@example.com"
         lead.save(update_fields=["email"])
-        user, student = make_student_user()
+        user, _ = make_student_user()
         user.email = "student@example.com"
         user.save(update_fields=["email"])
 
@@ -44,8 +44,16 @@ class SendCalendarRemindersCommandTests(TestCase):
             start_datetime=tomorrow,
             end_datetime=tomorrow + timedelta(hours=2),
         )
-        call_command("send_calendar_reminders", stdout=self.out)
+        with self.assertLogs(
+            "calendar_feeds.management.commands.send_calendar_reminders", level="INFO"
+        ) as cm:
+            call_command("send_calendar_reminders", stdout=self.out)
         self.assertGreater(len(mail.outbox), 0)
+        logs = "\n".join(cm.output)
+        self.assertIn("lead@example.com", logs)
+        self.assertIn("student@example.com", logs)
+        self.assertIn(lead.username, logs)
+        self.assertIn(user.username, logs)
 
     def test_future_event_no_reminder(self):
         mail.outbox.clear()
@@ -63,6 +71,9 @@ class SendCalendarRemindersCommandTests(TestCase):
     def test_dry_run_does_not_send(self):
         mail.outbox.clear()
         feed = make_feed(visibility=CalendarFeed.VISIBILITY_ANONYMOUS)
+        user, _ = make_student_user()
+        user.email = "student_dry@example.com"
+        user.save(update_fields=["email"])
         tomorrow = timezone.make_aware(
             timezone.datetime.now() + timedelta(days=1, hours=2)
         )
@@ -72,5 +83,12 @@ class SendCalendarRemindersCommandTests(TestCase):
             start_datetime=tomorrow,
             end_datetime=tomorrow + timedelta(hours=1),
         )
-        call_command("send_calendar_reminders", dry_run=True, stdout=self.out)
+        with self.assertLogs(
+            "calendar_feeds.management.commands.send_calendar_reminders", level="INFO"
+        ) as cm:
+            call_command("send_calendar_reminders", dry_run=True, stdout=self.out)
         self.assertEqual(len(mail.outbox), 0)
+        logs = "\n".join(cm.output)
+        self.assertIn("[DRY RUN]", logs)
+        self.assertIn("student_dry@example.com", logs)
+        self.assertIn(user.username, logs)

@@ -329,21 +329,34 @@ class SendMonthlyBalancesCommandTests(TestCase):
 
     def test_command_dry_run(self):
         mail.outbox.clear()
-        call_command("send_monthly_balances", dry_run=True, stdout=self.out)
+        with self.assertLogs(
+            "programs.management.commands.send_monthly_balances", level="INFO"
+        ) as cm:
+            call_command("send_monthly_balances", dry_run=True, stdout=self.out)
         self.assertEqual(len(mail.outbox), 0)
         output = self.out.getvalue()
+        logs = "\n".join(cm.output)
         self.assertIn("Dry run complete", output)
+        self.assertIn("[DRY RUN]", logs)
+        self.assertIn("parent1@example.com", logs)
 
     def test_command_sends_to_positive_balances_and_recent_transactions_by_default(
         self,
     ):
         mail.outbox.clear()
-        call_command("send_monthly_balances", stdout=self.out)
+        with self.assertLogs(
+            "programs.management.commands.send_monthly_balances", level="INFO"
+        ) as cm:
+            call_command("send_monthly_balances", stdout=self.out)
         self.assertEqual(len(mail.outbox), 2)
         recipients = [m.to[0] for m in mail.outbox]
         self.assertIn("parent1@example.com", recipients)
         self.assertIn("parent2@example.com", recipients)
         self.assertNotIn("parent3@example.com", recipients)
+        logs = "\n".join(cm.output)
+        self.assertIn("parent1@example.com", logs)
+        self.assertIn("parent2@example.com", logs)
+        self.assertIn(self.student1.display_name, logs)
 
     def test_command_all_balances_includes_old_paid_off(self):
         mail.outbox.clear()

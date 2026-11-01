@@ -136,8 +136,7 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
                 )
             )
             .prefetch_related(
-                "students__school",
-                "students__enrollment_set__program",
+                "students",
                 "adultstudentrelationship_set",
             )
         )
@@ -203,7 +202,6 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
                 )
             )
             .prefetch_related(
-                "students__enrollment_set__program",
                 "background_checks__check_type",
             )
         )

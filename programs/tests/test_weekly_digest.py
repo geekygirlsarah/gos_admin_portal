@@ -454,19 +454,32 @@ class SendWeeklyDigestCommandTests(TestCase):
 
     def test_command_dry_run_does_not_send_email(self):
         mail.outbox.clear()
-        call_command("send_weekly_digest", dry_run=True, stdout=self.out)
+        with self.assertLogs(
+            "programs.management.commands.send_weekly_digest", level="INFO"
+        ) as cm:
+            call_command("send_weekly_digest", dry_run=True, stdout=self.out)
         self.assertEqual(len(mail.outbox), 0)
         output = self.out.getvalue()
+        logs = "\n".join(cm.output)
         self.assertIn("Dry run complete", output)
+        self.assertIn("[DRY RUN]", logs)
+        self.assertIn("student@example.com", logs)
 
     def test_command_sends_emails_to_active_users(self):
         mail.outbox.clear()
-        call_command("send_weekly_digest", stdout=self.out)
+        with self.assertLogs(
+            "programs.management.commands.send_weekly_digest", level="INFO"
+        ) as cm:
+            call_command("send_weekly_digest", stdout=self.out)
         # Should send to student, parent, mentor
         self.assertGreaterEqual(len(mail.outbox), 2)
         recipients = [m.to[0] for m in mail.outbox]
         self.assertIn("student@example.com", recipients)
         self.assertIn("parent@example.com", recipients)
+        logs = "\n".join(cm.output)
+        self.assertIn("student@example.com", logs)
+        self.assertIn("student_user", logs)
+        self.assertIn("parent@example.com", logs)
 
     def test_command_filter_by_role(self):
         mail.outbox.clear()

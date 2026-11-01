@@ -6,10 +6,11 @@ Usage:
 """
 
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from calendar_feeds.models import CalendarFeed
 
@@ -69,23 +70,40 @@ class Command(BaseCommand):
                 },
                 recipient_list=[user.email],
             )
+            logger.info(
+                "Sent calendar reminder to user %s <%s>",
+                user.username,
+                user.email,
+            )
             return True
         except Exception:
-            logger.exception("Failed to send calendar reminder to %s", user.email)
+            logger.exception(
+                "Failed to send calendar reminder to user %s <%s>",
+                user.username,
+                user.email,
+            )
             return False
 
     def handle(self, *args, **options):
         days_ahead = options["days_ahead"]
         dry_run = options["dry_run"]
 
-        start = date.today()
+        start = timezone.localdate()
         end = start + timedelta(days=days_ahead)
 
         self.stdout.write(f"Checking for events between {start} and {end}...")
+        logger.info(
+            "Checking for calendar events between %s and %s (days_ahead=%d, dry_run=%s)",
+            start,
+            end,
+            days_ahead,
+            dry_run,
+        )
 
         events_by_feed = self._collect_events(start, end)
         if not events_by_feed:
             self.stdout.write(self.style.SUCCESS("No upcoming events found."))
+            logger.info("No upcoming calendar events found.")
             return
 
         # Collect all users who should receive reminders
@@ -106,12 +124,19 @@ class Command(BaseCommand):
 
             if dry_run:
                 self.stdout.write(f"  Would send to {user.email}:\n{body}\n")
+                logger.info(
+                    "[DRY RUN] Would send calendar reminder to user %s <%s>",
+                    user.username,
+                    user.email,
+                )
             elif self._send(user, feed_events, days_ahead):
                 total_sent += 1
 
         if dry_run:
             self.stdout.write(self.style.WARNING("Dry run complete. No emails sent."))
+            logger.info("Dry run complete for calendar reminders. No emails sent.")
         else:
             self.stdout.write(
                 self.style.SUCCESS(f"Sent {total_sent} reminder email(s).")
             )
+            logger.info("Completed calendar reminders: sent %d email(s)", total_sent)

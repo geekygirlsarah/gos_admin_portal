@@ -98,6 +98,14 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Collecting weekly digest data (role={role}, days_ahead={days_ahead}, reference_date={target_date})..."
         )
+        logger.info(
+            "Collecting weekly digest data (role=%s, days_ahead=%s, reference_date=%s, dry_run=%s, force=%s)",
+            role,
+            days_ahead,
+            target_date,
+            dry_run,
+            force,
+        )
 
         recipients = get_weekly_digest_recipients(
             role=role, days_ahead=days_ahead, reference_date=target_date
@@ -126,16 +134,32 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Found {total_eligible} eligible recipient(s). {len(to_send)} have content to send ({skipped_empty} skipped empty)."
         )
+        logger.info(
+            "Found %d eligible recipient(s). %d have content to send (%d skipped empty).",
+            total_eligible,
+            len(to_send),
+            skipped_empty,
+        )
 
         if not to_send:
             self.stdout.write(self.style.SUCCESS("No emails to send."))
+            logger.info("No weekly digest emails to send.")
             return
 
         total_sent = 0
         for r in to_send:
             recip_role = r["role"]
             recip_email = r["email"]
+            recip_user = r.get("user")
+            recip_obj = r.get("recipient_obj")
             data = r["data"]
+
+            username = recip_user.username if recip_user else "N/A"
+            display_name = (
+                getattr(recip_obj, "display_name", str(recip_obj))
+                if recip_obj
+                else "N/A"
+            )
 
             ref_date = data.get("reference_date") or target_date or timezone.localdate()
             date_str = _format_ordinal_date(ref_date)
@@ -154,6 +178,14 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"  [DRY RUN] Would send {recip_role} digest to {recip_email} (subject: '{subject}')"
                 )
+                logger.info(
+                    "[DRY RUN] Would send %s weekly digest to %s (user: %s) <%s> (subject: '%s')",
+                    recip_role,
+                    display_name,
+                    username,
+                    recip_email,
+                    subject,
+                )
             else:
                 try:
                     send_templated_notification(
@@ -163,9 +195,19 @@ class Command(BaseCommand):
                         recipient_list=[recip_email],
                     )
                     total_sent += 1
+                    logger.info(
+                        "Sent %s weekly digest to %s (user: %s) <%s>",
+                        recip_role,
+                        display_name,
+                        username,
+                        recip_email,
+                    )
                 except Exception:
                     logger.exception(
-                        "Failed to send weekly digest email to %s", recip_email
+                        "Failed to send weekly digest email for %s (user: %s) to %s",
+                        display_name,
+                        username,
+                        recip_email,
                     )
 
         if dry_run:
@@ -174,7 +216,15 @@ class Command(BaseCommand):
                     f"Dry run complete. {len(to_send)} email(s) would be sent."
                 )
             )
+            logger.info(
+                "Dry run complete for weekly digest. %d email(s) would be sent.",
+                len(to_send),
+            )
         else:
             self.stdout.write(
                 self.style.SUCCESS(f"Successfully sent {total_sent} digest email(s).")
+            )
+            logger.info(
+                "Completed weekly digest: successfully sent %d digest email(s)",
+                total_sent,
             )

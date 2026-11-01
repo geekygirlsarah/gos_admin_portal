@@ -442,6 +442,18 @@ class Adult(models.Model):
         # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).
         from programs.utils import normalize_image_field
 
+        if "update_fields" in kwargs and kwargs["update_fields"] is not None:
+            field_map = {
+                "andrew_id": "org_account_id",
+                "andrew_email": "org_email",
+                "andrew_id_expiration": "org_email_expiration",
+                "andrew_id_sponsor": "org_email_sponsor",
+                "andrew_id_sponsor_id": "org_email_sponsor_id",
+            }
+            kwargs["update_fields"] = [
+                field_map.get(f, f) for f in kwargs["update_fields"]
+            ]
+
         normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)
 

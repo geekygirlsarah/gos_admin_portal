@@ -75,6 +75,13 @@ class Command(BaseCommand):
             target_date = timezone.localdate() + timedelta(days=days_ahead)
 
         self.stdout.write(f"Checking for outreach events on {target_date}...")
+        logger.info(
+            "Checking for outreach events on %s (days_ahead=%s, dry_run=%s, email_filter=%s)",
+            target_date,
+            days_ahead,
+            dry_run,
+            email_filter,
+        )
 
         shifts = (
             OutreachShift.objects.filter(date=target_date)
@@ -90,6 +97,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(f"No outreach shifts found for {target_date}.")
             )
+            logger.info("No outreach shifts found for %s", target_date)
             return
 
         total_sent = 0
@@ -110,17 +118,36 @@ class Command(BaseCommand):
                 if email_filter_lower and email.lower() != email_filter_lower:
                     continue
 
+                student_user = getattr(signup.student, "user", None)
+                username = student_user.username if student_user else "N/A"
+
                 if dry_run:
                     self.stdout.write(
                         f"  [DRY RUN] Would send reminder to student "
                         f"{signup.student.display_name} <{email}> for '{event.name}' "
                         f"({signup.get_role_display()})"
                     )
+                    logger.info(
+                        "[DRY RUN] Would send outreach reminder to student %s (user: %s) <%s> for event '%s' (%s)",
+                        signup.student.display_name,
+                        username,
+                        email,
+                        event.name,
+                        signup.get_role_display(),
+                    )
                 else:
                     if notify_outreach_reminder(signup):
                         total_sent += 1
                         self.stdout.write(
                             f"  Sent reminder to {email} for '{event.name}'"
+                        )
+                        logger.info(
+                            "Sent outreach reminder to student %s (user: %s) <%s> for event '%s' (%s)",
+                            signup.student.display_name,
+                            username,
+                            email,
+                            event.name,
+                            signup.get_role_display(),
                         )
 
             # Mentor signups
@@ -131,10 +158,20 @@ class Command(BaseCommand):
                 if email_filter_lower and email.lower() != email_filter_lower:
                     continue
 
+                mentor_user = getattr(mentor_signup.adult, "user", None)
+                username = mentor_user.username if mentor_user else "N/A"
+
                 if dry_run:
                     self.stdout.write(
                         f"  [DRY RUN] Would send reminder to mentor "
                         f"{mentor_signup.adult.display_name} <{email}> for '{event.name}'"
+                    )
+                    logger.info(
+                        "[DRY RUN] Would send outreach reminder to mentor %s (user: %s) <%s> for event '%s'",
+                        mentor_signup.adult.display_name,
+                        username,
+                        email,
+                        event.name,
                     )
                 else:
                     if notify_mentor_outreach_reminder(mentor_signup):
@@ -142,14 +179,26 @@ class Command(BaseCommand):
                         self.stdout.write(
                             f"  Sent reminder to mentor {email} for '{event.name}'"
                         )
+                        logger.info(
+                            "Sent outreach reminder to mentor %s (user: %s) <%s> for event '%s'",
+                            mentor_signup.adult.display_name,
+                            username,
+                            email,
+                            event.name,
+                        )
 
         if dry_run:
             self.stdout.write(
                 self.style.WARNING("Dry run complete. No emails were sent.")
             )
+            logger.info("Dry run complete for outreach reminders. No emails were sent.")
         else:
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Successfully sent {total_sent} outreach reminder email(s)."
                 )
+            )
+            logger.info(
+                "Completed outreach reminders: successfully sent %d email(s)",
+                total_sent,
             )
