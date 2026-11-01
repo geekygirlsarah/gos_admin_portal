@@ -1,4 +1,4 @@
-{% if phone or personal_email or andrew_email %}
+{% if phone or personal_email or org_email or andrew_email %}
   <div class="d-flex flex-wrap gap-1">
     {% if phone %}
       <a class="btn btn-sm btn-outline-primary" href="tel:{{ phone }}"><i class="bi bi-telephone me-1"></i>{{ phone }}</a>
@@ -6,7 +6,9 @@
     {% if personal_email %}
       <a class="btn btn-sm btn-outline-secondary" href="mailto:{{ personal_email }}"><i class="bi bi-envelope me-1"></i>{{ personal_email }}</a>
     {% endif %}
-    {% if andrew_email %}
+    {% if org_email %}
+      <a class="btn btn-sm btn-outline-secondary" href="mailto:{{ org_email }}"><i class="bi bi-envelope-at me-1"></i>{{ org_email }}</a>
+    {% elif andrew_email %}
       <a class="btn btn-sm btn-outline-secondary" href="mailto:{{ andrew_email }}"><i class="bi bi-envelope me-1"></i>{{ andrew_email }}</a>
     {% endif %}
   </div>

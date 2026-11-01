@@ -57,8 +57,8 @@
                             {% if u.adult_profile.phone_number or u.student_profile.phone_number %}
                             <div><i class="bi bi-telephone text-muted me-1"></i>{{ u.adult_profile.phone_number|default:u.student_profile.phone_number }}</div>
                             {% endif %}
-                            {% if u.adult_profile.andrew_id or u.student_profile.andrew_id %}
-                            <div><i class="bi bi-person-badge text-muted me-1"></i>{{ u.adult_profile.andrew_id|default:u.student_profile.andrew_id }}</div>
+                            {% if u.adult_profile.org_account_id or u.student_profile.org_account_id %}
+                            <div><i class="bi bi-person-badge text-muted me-1"></i>{{ u.adult_profile.org_account_id|default:u.student_profile.org_account_id }}</div>
                             {% endif %}
                             {% if not u.adult_profile and not u.student_profile %}
                             <span class="text-muted">No linked profile</span>

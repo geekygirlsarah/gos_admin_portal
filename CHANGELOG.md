@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-31
+
+### Added
+- **Multi-Tenant Institutional Email & Organization Account Customization (`organizations/models.py`, `GoSAdminPortal/adapter.py`, `programs/views/portal_settings.py`, `templates/programs/settings.html`, `templates/account/login.html`)**:
+  - Replaced hardcoded CMU Andrew ID assumptions with customizable institutional / organization email domains (e.g., `@somewhere.pa.k12.us`, `@scienceyrobotics.org`, or `@andrew.cmu.edu`) and customizable account identifier names (e.g., "Andrew ID", "School Account", "Sciencey SSO").
+  - Added organization-level configuration for enabling/disabling institutional accounts (`org_account_enabled`), primary email domain(s) (`org_email_domain`), and account label (`org_account_name`).
+  - Added granular role-based login enforcement toggles (`force_mentor_org_email`, `force_student_org_email`, `force_parent_org_email`, `force_alumni_org_email`) allowing organization administrators to decide whether mentors, students, parents, or alumni must log in using an institutional address or can use their personal email.
+  - Added dedicated "Org Accounts" tab in Portal Settings (`/programs/settings/?tab=org_accounts`) and corresponding Platform Admin form controls allowing lead mentors and platform admins to manage organization account policies.
+  - Enhanced the login interface (`templates/account/login.html`) to dynamically display role-based email requirements based on active organization account settings.
+  - Updated member detail profiles and form views across adults, mentors, and students to render custom account names and respect organization account visibility settings.
+  - Added comprehensive automated test suite in `organizations/tests/test_org_account_customization.py`.
+- **Model Field Renaming & File Reorganization for Organization Emails (`programs/models/`, `programs/views/org_emails.py`, `programs/migrations/0126_rename_andrew_fields_to_org_email.py`, `templates/programs/org_email_management.html`)**:
+  - Renamed institutional account and email fields on `Adult` and `Student` models (`andrew_id` -> `org_account_id`, `andrew_email` -> `org_email`, `andrew_id_expiration` -> `org_email_expiration`, `andrew_id_sponsor` -> `org_email_sponsor`), with backward-compatible model property getters, setters, and constructor kwarg mappings.
+  - Created migration `0126_rename_andrew_fields_to_org_email` to rename the columns cleanly across `Adult` and `Student` tables.
+  - Renamed view module `programs/views/andrew_ids.py` to `programs/views/org_emails.py` (with re-export proxy for backward compatibility) and renamed template `templates/programs/andrew_id_management.html` to `templates/programs/org_email_management.html`.
+  - Added route `org-emails/` in `programs/urls.py` alongside backward-compatible `andrew-ids/` route.
+  - Added validator `validate_org_account_id` in `programs/validators.py`.
+  - Created dedicated automated test suites in `programs/tests/test_org_emails.py` and `programs/tests/test_org_email_extension.py`.
+
 ## 2026-10-30
 
 ### Added

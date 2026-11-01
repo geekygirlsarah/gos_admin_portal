@@ -125,18 +125,18 @@
 </div>
 {% endif %}
 
-{# Andrew ID (CMU) #}
+{# Andrew / Organization ID #}
 {% can_read user 'cmu_andrew' as can_read_cmu %}
-{% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
+{% if can_read_cmu and 'cmu-andrew' in program_feature_keys and org_account_enabled %}
 <div class="card mb-4">
-  <div class="card-header">CMU Andrew ID</div>
+  <div class="card-header">{{ org_account_name|default:"Andrew ID" }}</div>
   <div class="card-body">
     <div class="row g-3">
       {% can_write user 'cmu_andrew' form.instance as can_write_cmu %}
-      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id %}{% else %}{% render_field form.andrew_id readonly=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_email %}{% else %}{% render_field form.andrew_email readonly=True %}{% endif %}</div>
-      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id_expiration %}{% else %}{% render_field form.andrew_id_expiration readonly=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_id_sponsor %}{% else %}{% render_field form.andrew_id_sponsor disabled=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.org_account_id %}{% else %}{% render_field form.org_account_id readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.org_email %}{% else %}{% render_field form.org_email readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.org_email_expiration %}{% else %}{% render_field form.org_email_expiration readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.org_email_sponsor %}{% else %}{% render_field form.org_email_sponsor disabled=True %}{% endif %}</div>
     </div>
   </div>
 </div>

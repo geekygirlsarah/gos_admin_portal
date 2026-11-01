@@ -111,7 +111,7 @@ class EmailDeliveryEvent(models.Model):
 
             student = Student.objects.filter(
                 models.Q(personal_email__iexact=email)
-                | models.Q(andrew_email__iexact=email)
+                | models.Q(org_email__iexact=email)
             ).first()
             if student:
                 self.student = student
@@ -121,7 +121,7 @@ class EmailDeliveryEvent(models.Model):
 
             adult = Adult.objects.filter(
                 models.Q(personal_email__iexact=email)
-                | models.Q(andrew_email__iexact=email)
+                | models.Q(org_email__iexact=email)
             ).first()
             if adult:
                 self.adult = adult

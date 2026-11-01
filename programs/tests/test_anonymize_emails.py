@@ -84,7 +84,7 @@ class AnonymizeEmailsCommandTests(TestCase):
             self.student.personal_email, f"student_{self.student.pk}@example.test"
         )
         self.assertEqual(
-            self.student.andrew_email, f"student_{self.student.pk}_andrew@example.test"
+            self.student.org_email, f"student_{self.student.pk}_org@example.test"
         )
 
         self.adult.refresh_from_db()
@@ -92,7 +92,7 @@ class AnonymizeEmailsCommandTests(TestCase):
             self.adult.personal_email, f"adult_{self.adult.pk}@example.test"
         )
         self.assertEqual(
-            self.adult.andrew_email, f"adult_{self.adult.pk}_andrew@example.test"
+            self.adult.org_email, f"adult_{self.adult.pk}_org@example.test"
         )
 
         self.user.refresh_from_db()

@@ -214,6 +214,8 @@ TEMPLATES = [
                 "GoSAdminPortal.context_processors.wizard_context",
                 # Superuser impersonation state
                 "GoSAdminPortal.context_processors.impersonation_context",
+                # Organization branding & account settings
+                "GoSAdminPortal.context_processors.organization_context",
             ],
         },
     },

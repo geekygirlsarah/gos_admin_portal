@@ -428,3 +428,23 @@ def update_organization_email_settings(
     org_settings.data["email_settings"] = email_settings
     org_settings.save(update_fields=["data", "updated_at"])
     return org_settings
+
+
+def update_organization_settings(
+    organization: Organization,
+    new_settings: Dict[str, Any],
+) -> OrganizationSettings:
+    """Save settings into OrganizationSettings.data and update organization.settings."""
+    org_settings, _ = OrganizationSettings.objects.get_or_create(
+        organization=organization
+    )
+    if not isinstance(org_settings.data, dict):
+        org_settings.data = {}
+    org_settings.data.update(new_settings)
+    org_settings.save(update_fields=["data", "updated_at"])
+
+    if not isinstance(organization.settings, dict):
+        organization.settings = {}
+    organization.settings.update(new_settings)
+    organization.save(update_fields=["settings", "updated_at"])
+    return org_settings

@@ -843,6 +843,55 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
         return redirect("/programs/settings/?tab=email")
 
 
+class PortalOrgAccountSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles updating organization account / institutional email settings from Portal Settings."""
+
+    def post(self, request):
+        from organizations.utils import (
+            get_default_organization,
+            update_organization_settings,
+        )
+
+        org = getattr(request, "organization", None)
+        if not org and request.user.is_authenticated:
+            membership = getattr(request.user, "organization_memberships", None)
+            if membership:
+                active_mem = membership.filter(is_active=True).first()
+                if active_mem:
+                    org = active_mem.organization
+        if not org:
+            org = get_default_organization()
+        if not org:
+            messages.error(request, "No active organization found.")
+            return redirect("/programs/settings/?tab=org_accounts")
+
+        org_account_enabled = request.POST.get("org_account_enabled") == "on"
+        org_account_name = (
+            request.POST.get("org_account_name", "").strip() or "Andrew ID"
+        )
+        org_email_domain = (
+            request.POST.get("org_email_domain", "").strip().lower().lstrip("@")
+        )
+        force_mentor_org_email = request.POST.get("force_mentor_org_email") == "on"
+        force_student_org_email = request.POST.get("force_student_org_email") == "on"
+        force_parent_org_email = request.POST.get("force_parent_org_email") == "on"
+        force_alumni_org_email = request.POST.get("force_alumni_org_email") == "on"
+
+        new_settings = {
+            "org_account_enabled": org_account_enabled,
+            "org_account_name": org_account_name,
+            "org_email_domain": org_email_domain,
+            "force_mentor_org_email": force_mentor_org_email,
+            "force_student_org_email": force_student_org_email,
+            "force_parent_org_email": force_parent_org_email,
+            "force_alumni_org_email": force_alumni_org_email,
+        }
+
+        update_organization_settings(org, new_settings)
+        messages.success(request, "Organization account settings updated successfully.")
+        return redirect("/programs/settings/?tab=org_accounts")
+
+
 def _parse_cutoff_date(post_data, min_age):
     """Parses cutoff month and day (or full date) from POST data if min_age is configured."""
     if min_age is None:

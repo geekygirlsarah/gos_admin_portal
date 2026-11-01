@@ -87,7 +87,7 @@ class StudentForm(forms.ModelForm):
         ]
         widgets = {
             "date_of_birth": forms.DateInput(attrs={"type": "date"}),
-            "andrew_id_expiration": forms.DateInput(attrs={"type": "date"}),
+            "org_email_expiration": forms.DateInput(attrs={"type": "date"}),
             # Render as clear, clickable checkboxes (fixes empty button appearance)
             "race_ethnicities": forms.CheckboxSelectMultiple(),
             "directory_consent": forms.CheckboxInput(
@@ -124,9 +124,20 @@ class StudentForm(forms.ModelForm):
         if "secondary_contact" in self.fields:
             self.fields["secondary_contact"].queryset = qs_adults
 
-        # Sort Andrew ID sponsor by first name (Preferred, then legal if no preferred),
+        # Sort Org Email / Andrew ID sponsor by first name (Preferred, then legal if no preferred),
         # and limit to Mentors only.
-        if "andrew_id_sponsor" in self.fields:
+        if "org_email_sponsor" in self.fields:
+            self.fields["org_email_sponsor"].queryset = Adult.objects.filter(
+                is_mentor=True
+            ).order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
+                Lower("last_name"),
+            )
+        elif "andrew_id_sponsor" in self.fields:
             self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
                 is_mentor=True
             ).order_by(
@@ -326,9 +337,20 @@ class AdultForm(forms.ModelForm):
                 Lower("last_name"),
             )
 
-        # Sort Andrew ID sponsor by first name (Preferred, then legal if no preferred),
+        # Sort Org Email / Andrew ID sponsor by first name (Preferred, then legal if no preferred),
         # and limit to Mentors only.
-        if "andrew_id_sponsor" in self.fields:
+        if "org_email_sponsor" in self.fields:
+            self.fields["org_email_sponsor"].queryset = Adult.objects.filter(
+                is_mentor=True
+            ).order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
+                Lower("last_name"),
+            )
+        elif "andrew_id_sponsor" in self.fields:
             self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
                 is_mentor=True
             ).order_by(
@@ -382,11 +404,11 @@ class AdultForm(forms.ModelForm):
             "discord_username",
             "has_cmu_id_card",
             "has_cmu_building_access",
-            # Andrew ID
-            "andrew_id",
-            "andrew_email",
-            "andrew_id_expiration",
-            "andrew_id_sponsor",
+            # Organization / Institutional account
+            "org_account_id",
+            "org_email",
+            "org_email_expiration",
+            "org_email_sponsor",
             # Alumni-specific
             "college",
             "field_of_study",
@@ -396,7 +418,7 @@ class AdultForm(forms.ModelForm):
             "notes",
         ]
         widgets = {
-            "andrew_id_expiration": forms.DateInput(attrs={"type": "date"}),
+            "org_email_expiration": forms.DateInput(attrs={"type": "date"}),
             "students": DualListboxWidget(
                 available_label="Available Students",
                 selected_label="Selected Students",

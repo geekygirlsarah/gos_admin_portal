@@ -38,6 +38,13 @@ DEFAULT_ORGANIZATION_SETTINGS = {
     "email_settings": {},
     "portal_title": "Girls of Steel Portal",
     "footer_tagline": "is an outreach program of Carnegie Mellon University.",
+    "org_account_enabled": True,
+    "org_account_name": "Andrew ID",
+    "org_email_domain": "andrew.cmu.edu",
+    "force_mentor_org_email": True,
+    "force_student_org_email": False,
+    "force_parent_org_email": False,
+    "force_alumni_org_email": False,
 }
 
 
@@ -156,8 +163,8 @@ class Organization(models.Model):
             instance.settings = SettingsDict(instance.settings)
         return instance
 
-    def refresh_from_db(self, using=None, fields=None):
-        super().refresh_from_db(using=using, fields=fields)
+    def refresh_from_db(self, using=None, fields=None, **kwargs):
+        super().refresh_from_db(using=using, fields=fields, **kwargs)
         if not isinstance(self.settings, SettingsDict):
             self.settings = SettingsDict(self.settings)
 
@@ -173,6 +180,42 @@ class Organization(models.Model):
         self.settings[key] = value
         if save:
             self.save(update_fields=["settings", "updated_at"])
+
+    def is_org_email(self, email: str) -> bool:
+        """Check if the given email belongs to this organization's institutional domain."""
+        if not email or "@" not in email:
+            return False
+        if not self.get_setting("org_account_enabled", True):
+            return False
+        domain_setting = self.get_setting("org_email_domain", "andrew.cmu.edu") or ""
+        if not domain_setting:
+            return False
+        email_domain = email.lower().split("@")[-1].strip()
+        allowed_domains = [
+            d.strip().lower().lstrip("@")
+            for d in domain_setting.replace(";", ",").split(",")
+            if d.strip()
+        ]
+        return any(
+            email_domain == d or email_domain.endswith(f".{d}") for d in allowed_domains
+        )
+
+    def is_role_forced_org_email(self, role: str) -> bool:
+        """Check if members of a specific role are required to use their org email."""
+        if not self.get_setting("org_account_enabled", True):
+            return False
+        if not self.get_setting("org_email_domain", ""):
+            return False
+        role_lower = (role or "").strip().lower()
+        if role_lower in ("mentor", "lead_mentor", "lead mentor"):
+            return bool(self.get_setting("force_mentor_org_email", True))
+        elif role_lower == "student":
+            return bool(self.get_setting("force_student_org_email", False))
+        elif role_lower == "parent":
+            return bool(self.get_setting("force_parent_org_email", False))
+        elif role_lower == "alumni":
+            return bool(self.get_setting("force_alumni_org_email", False))
+        return False
 
 
 class OrganizationSettings(models.Model):

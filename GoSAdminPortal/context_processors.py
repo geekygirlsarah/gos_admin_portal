@@ -318,3 +318,55 @@ def impersonation_context(request):
                 "Failed to resolve impersonator user %s: %s", impersonator_id, e
             )
     return {"is_impersonating": False, "impersonator": None}
+
+
+def organization_context(request):
+    """Provide organization settings and branding variables to templates."""
+    try:
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_setting,
+        )
+
+        org = getattr(request, "organization", None) or get_default_organization()
+    except Exception:
+        org = None
+
+    org_account_enabled = (
+        get_organization_setting(org, "org_account_enabled", True) if org else True
+    )
+    org_account_name = (
+        get_organization_setting(org, "org_account_name", "Andrew ID")
+        if org
+        else "Andrew ID"
+    )
+    org_email_domain = (
+        get_organization_setting(org, "org_email_domain", "andrew.cmu.edu")
+        if org
+        else "andrew.cmu.edu"
+    )
+    force_mentor_org_email = (
+        get_organization_setting(org, "force_mentor_org_email", True) if org else True
+    )
+    force_student_org_email = (
+        get_organization_setting(org, "force_student_org_email", False)
+        if org
+        else False
+    )
+    force_parent_org_email = (
+        get_organization_setting(org, "force_parent_org_email", False) if org else False
+    )
+    force_alumni_org_email = (
+        get_organization_setting(org, "force_alumni_org_email", False) if org else False
+    )
+
+    return {
+        "organization": org,
+        "org_account_enabled": org_account_enabled,
+        "org_account_name": org_account_name,
+        "org_email_domain": org_email_domain,
+        "force_mentor_org_email": force_mentor_org_email,
+        "force_student_org_email": force_student_org_email,
+        "force_parent_org_email": force_parent_org_email,
+        "force_alumni_org_email": force_alumni_org_email,
+    }

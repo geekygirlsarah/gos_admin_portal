@@ -202,8 +202,8 @@ def _transfer_parent_rfid_and_attendance(keep: Any, source: Any) -> None:
     SlidingScale.objects.filter(applied_by=source).update(applied_by=keep)
     AttendanceSession.objects.filter(adult=source).update(adult=keep)
     AttendanceEvent.objects.filter(adult=source).update(adult=keep)
-    Adult.objects.filter(andrew_id_sponsor=source).update(andrew_id_sponsor=keep)
-    Student.objects.filter(andrew_id_sponsor=source).update(andrew_id_sponsor=keep)
+    Adult.objects.filter(org_email_sponsor=source).update(org_email_sponsor=keep)
+    Student.objects.filter(org_email_sponsor=source).update(org_email_sponsor=keep)
 
 
 def _transfer_parent_related_records(keep: Any, source: Any) -> None:
@@ -231,12 +231,12 @@ def _carry_over_missing_parent_fields(keep: Any, source: Any) -> bool:
         keep.student_record = rec
         changed = True
 
-    # 2. Andrew ID sponsor FK
-    if keep.andrew_id_sponsor_id is None and source.andrew_id_sponsor_id is not None:
-        if source.andrew_id_sponsor_id == source.pk:
-            keep.andrew_id_sponsor = keep
+    # 2. Org account ID sponsor FK
+    if keep.org_email_sponsor_id is None and source.org_email_sponsor_id is not None:
+        if source.org_email_sponsor_id == source.pk:
+            keep.org_email_sponsor = keep
         else:
-            keep.andrew_id_sponsor = source.andrew_id_sponsor
+            keep.org_email_sponsor = source.org_email_sponsor
         changed = True
 
     # 3. Photo (ImageField)
@@ -268,6 +268,7 @@ def _carry_over_missing_parent_fields(keep: Any, source: Any) -> bool:
         "is_mentor",
         "is_alumni",
         "student_record",
+        "org_email_sponsor",
         "andrew_id_sponsor",
         "photo",
         "phone_type",
@@ -600,8 +601,8 @@ def _carry_over_missing_student_fields(keep: Any, source: Any) -> bool:
         keep.school = source.school
         changed = True
 
-    if keep.andrew_id_sponsor_id is None and source.andrew_id_sponsor_id is not None:
-        keep.andrew_id_sponsor = source.andrew_id_sponsor
+    if keep.org_email_sponsor_id is None and source.org_email_sponsor_id is not None:
+        keep.org_email_sponsor = source.org_email_sponsor
         changed = True
 
     # 5. M2M race_ethnicities
@@ -615,6 +616,7 @@ def _carry_over_missing_student_fields(keep: Any, source: Any) -> bool:
         "id",
         "user",
         "school",
+        "org_email_sponsor",
         "andrew_id_sponsor",
         "primary_contact_relationship",
         "secondary_contact_relationship",
@@ -651,7 +653,7 @@ def perform_student_merge(keep: Any, source: Any) -> dict[str, Any]:
 
         # Clear unique fields before deleting source
         source.personal_email = None
-        source.andrew_email = None
+        source.org_email = None
         source.delete()
 
     return {

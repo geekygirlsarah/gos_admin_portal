@@ -38,6 +38,25 @@ def validate_zip_code(value):
         )
 
 
+def validate_org_account_id(value):
+    """
+    Validates that an organization account ID starts with a letter and contains only
+    lowercase letters, digits, underscores, periods, or hyphens (at least 2 characters total).
+    """
+    if not value:
+        return
+
+    value = value.strip().lower()
+    if not re.match(r"^[a-z][a-z0-9._-]{1,}$", value):
+        raise ValidationError(
+            _(
+                "Account ID must start with a letter and contain only "
+                "lowercase letters, digits, periods, underscores, or hyphens (at least 2 characters)."
+            ),
+            code="invalid_org_account_id",
+        )
+
+
 def validate_andrew_id(value):
     """
     Validates that an Andrew ID starts with a letter and contains only

@@ -239,7 +239,7 @@ class StudentAdmin(admin.ModelAdmin):
         "last_name",
         "pronouns",
         "graduation_year",
-        "andrew_id",
+        "org_account_id",
         "on_discord",
         "graduated",
         "updated_at",
@@ -253,8 +253,8 @@ class StudentAdmin(admin.ModelAdmin):
         "user__username",
         "user__email",
         "personal_email",
-        "andrew_id",
-        "andrew_email",
+        "org_account_id",
+        "org_email",
         "discord_handle",
         "school__name",
         "city",
@@ -290,11 +290,13 @@ class StudentAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Andrew",
+            "Organization Account",
             {
                 "fields": (
-                    "andrew_id",
-                    "andrew_email",
+                    "org_account_id",
+                    "org_email",
+                    "org_email_expiration",
+                    "org_email_sponsor",
                 )
             },
         ),
@@ -420,8 +422,8 @@ class ParentAdmin(admin.ModelAdmin):
         "preferred_first_name",
         "last_name",
         "personal_email",
-        "andrew_email",
-        "andrew_id",
+        "org_email",
+        "org_account_id",
         "phone_number",
     )
     inlines = [AdultStudentRelationshipInline, BackgroundCheckInline]
@@ -487,14 +489,14 @@ class ParentAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Andrew ID (Mentors/Staff)",
+            "Organization Account (Mentors/Staff)",
             {
                 "classes": ("collapse",),
                 "fields": (
-                    "andrew_id",
-                    "andrew_email",
-                    "andrew_id_expiration",
-                    "andrew_id_sponsor",
+                    "org_account_id",
+                    "org_email",
+                    "org_email_expiration",
+                    "org_email_sponsor",
                 ),
             },
         ),

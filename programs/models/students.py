@@ -97,21 +97,74 @@ class Student(models.Model):
         verbose_name="OK to share name, address, email, and phone for student directory",
     )
 
-    andrew_id = models.CharField(max_length=50, blank=True, null=True)
-    andrew_email = models.EmailField(blank=True, null=True)
-    andrew_id_expiration = models.DateField(
+    org_account_id = models.CharField(max_length=50, blank=True, null=True)
+    org_email = models.EmailField(blank=True, null=True)
+    org_email_expiration = models.DateField(
         blank=True,
         null=True,
-        help_text="Expiration date of this Andrew ID.",
+        help_text="Expiration date of this organization account / email.",
     )
-    andrew_id_sponsor = models.ForeignKey(
+    org_email_sponsor = models.ForeignKey(
         "Adult",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="sponsored_student_andrew_ids",
-        help_text="The Adult (mentor) who sponsored this Andrew ID.",
+        related_name="sponsored_student_org_emails",
+        help_text="The Adult (mentor) who sponsored this organization account.",
     )
+
+    @property
+    def andrew_id(self):
+        return self.org_account_id
+
+    @andrew_id.setter
+    def andrew_id(self, value):
+        self.org_account_id = value
+
+    @property
+    def andrew_email(self):
+        return self.org_email
+
+    @andrew_email.setter
+    def andrew_email(self, value):
+        self.org_email = value
+
+    @property
+    def andrew_id_expiration(self):
+        return self.org_email_expiration
+
+    @andrew_id_expiration.setter
+    def andrew_id_expiration(self, value):
+        self.org_email_expiration = value
+
+    @property
+    def andrew_id_sponsor(self):
+        return self.org_email_sponsor
+
+    @andrew_id_sponsor.setter
+    def andrew_id_sponsor(self, value):
+        self.org_email_sponsor = value
+
+    @property
+    def andrew_id_sponsor_id(self):
+        return self.org_email_sponsor_id
+
+    @andrew_id_sponsor_id.setter
+    def andrew_id_sponsor_id(self, value):
+        self.org_email_sponsor_id = value
+
+    def __init__(self, *args, **kwargs):
+        if "andrew_id" in kwargs:
+            kwargs["org_account_id"] = kwargs.pop("andrew_id")
+        if "andrew_email" in kwargs:
+            kwargs["org_email"] = kwargs.pop("andrew_email")
+        if "andrew_id_expiration" in kwargs:
+            kwargs["org_email_expiration"] = kwargs.pop("andrew_id_expiration")
+        if "andrew_id_sponsor" in kwargs:
+            kwargs["org_email_sponsor"] = kwargs.pop("andrew_id_sponsor")
+        if "andrew_id_sponsor_id" in kwargs:
+            kwargs["org_email_sponsor_id"] = kwargs.pop("andrew_id_sponsor_id")
+        super().__init__(*args, **kwargs)
 
     school = models.ForeignKey(
         "School",
@@ -449,7 +502,7 @@ class Student(models.Model):
             email = self.personal_email.strip().lower()
             # Check other students
             others = Student.objects.filter(
-                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+                Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             )
             if self.pk:
                 others = others.exclude(pk=self.pk)
@@ -462,7 +515,7 @@ class Student(models.Model):
 
             # Check parents/mentors
             if Adult.objects.filter(
-                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+                Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
                     {
@@ -470,27 +523,25 @@ class Student(models.Model):
                     }
                 )
 
-        if self.andrew_email:
-            email = self.andrew_email.strip().lower()
+        if self.org_email:
+            email = self.org_email.strip().lower()
             # Check other students
             others = Student.objects.filter(
-                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+                Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             )
             if self.pk:
                 others = others.exclude(pk=self.pk)
             if others.exists():
                 raise ValidationError(
-                    {"andrew_email": "This email is already in use by another student."}
+                    {"org_email": "This email is already in use by another student."}
                 )
 
             # Check parents/mentors
             if Adult.objects.filter(
-                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+                Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
-                    {
-                        "andrew_email": "This email is already in use by a parent or mentor."
-                    }
+                    {"org_email": "This email is already in use by a parent or mentor."}
                 )
 
     def save(self, *args, **kwargs):

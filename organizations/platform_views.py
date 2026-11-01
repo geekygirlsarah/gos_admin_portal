@@ -777,8 +777,8 @@ class PlatformUserSupportView(SuperuserRequiredMixin, ListView):
                     | Q(last_name__icontains=q)
                     | Q(adult_profile__phone_number__icontains=q)
                     | Q(student_profile__phone_number__icontains=q)
-                    | Q(adult_profile__andrew_id__icontains=q)
-                    | Q(student_profile__andrew_id__icontains=q)
+                    | Q(adult_profile__org_account_id__icontains=q)
+                    | Q(student_profile__org_account_id__icontains=q)
                 ).distinct()
 
             if role:

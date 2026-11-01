@@ -66,7 +66,7 @@ def _completeness_score(adult):
     score = 0
     if _email_key(adult.personal_email):
         score += 3
-    if _email_key(adult.andrew_email):
+    if _email_key(adult.org_email):
         score += 1
     if _phone_key(adult.phone_number):
         score += 2

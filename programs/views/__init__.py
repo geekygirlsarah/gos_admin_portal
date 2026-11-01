@@ -54,6 +54,10 @@ from .mixins import (
     SortableListViewMixin,
     StudentQuerysetRoleMixin,
 )
+from .org_emails import (
+    andrew_id_management_view,
+    org_email_management_view,
+)
 from .portal_settings import (
     PortalAgreementView,
     PortalBackgroundCheckTypeView,
@@ -61,6 +65,7 @@ from .portal_settings import (
     PortalEmailSettingsView,
     PortalKioskView,
     PortalLeadMentorView,
+    PortalOrgAccountSettingsView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,

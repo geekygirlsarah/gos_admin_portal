@@ -147,7 +147,10 @@ class AdultFormAndrewIdSponsorTests(TestCase):
 
     def test_andrew_id_sponsor_queryset_filters_mentors_only(self):
         form = AdultForm()
-        queryset = form.fields["andrew_id_sponsor"].queryset
+        sponsor_field = form.fields.get("org_email_sponsor") or form.fields.get(
+            "andrew_id_sponsor"
+        )
+        queryset = sponsor_field.queryset
         queryset_ids = list(queryset.values_list("id", flat=True))
 
         for m_id in [self.mentor1.id, self.mentor2.id, self.mentor3.id]:
@@ -162,7 +165,10 @@ class AdultFormAndrewIdSponsorTests(TestCase):
 
     def test_andrew_id_sponsor_queryset_sorted_by_preferred_first_name(self):
         form = AdultForm()
-        queryset = form.fields["andrew_id_sponsor"].queryset
+        sponsor_field = form.fields.get("org_email_sponsor") or form.fields.get(
+            "andrew_id_sponsor"
+        )
+        queryset = sponsor_field.queryset
 
         # Expected order: Betty Gamma (Alice->Betty), Charlie Delta, Zebra Alpha
         expected_order = [self.mentor2.id, self.mentor3.id, self.mentor1.id]

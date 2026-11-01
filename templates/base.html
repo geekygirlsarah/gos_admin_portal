@@ -296,7 +296,9 @@
                             <a class="nav-link dropdown-toggle" href="#" id="manageDataAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Manage Data</a>
                             <ul class="dropdown-menu" aria-labelledby="manageDataAdminDropdown">
                                 <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Manage Guest Forms</a></li>
-                                <li><a class="dropdown-item" href="{% url 'andrew_id_management' %}">Manage Andrew IDs</a></li>
+                                {% if org_account_enabled %}
+                                <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Andrew ID" }}s</a></li>
+                                {% endif %}
                             </ul>
                         </li>
                         <li class="nav-item dropdown">

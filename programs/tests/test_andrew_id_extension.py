@@ -1,12 +1,10 @@
 from django.contrib.auth.models import Group, User
-from django.db.models import Value
-from django.db.models.functions import Coalesce, Lower
 from django.test import TestCase
 from django.urls import reverse
 
 from programs.forms import AdultForm, StudentForm
 from programs.models import Adult, Student
-from programs.views.andrew_ids import _get_adult_sponsor_choices
+from programs.views.org_emails import _get_adult_sponsor_choices
 
 
 class AndrewIdExtensionTest(TestCase):
@@ -43,7 +41,7 @@ class AndrewIdExtensionTest(TestCase):
 
     def test_student_form_andrew_id_sponsor_queryset(self):
         form = StudentForm()
-        queryset = form.fields["andrew_id_sponsor"].queryset
+        queryset = form.fields["org_email_sponsor"].queryset
 
         # Filter by mentors only
         mentor_ids = [self.mentor1.id, self.mentor2.id, self.mentor3.id]
@@ -93,6 +91,7 @@ class AndrewIdExtensionTest(TestCase):
 
         self.student.refresh_from_db()
         self.assertEqual(self.student.andrew_id, "stud123")
+        self.assertEqual(self.student.org_account_id, "stud123")
         self.assertEqual(str(self.student.andrew_id_expiration), "2026-12-31")
         self.assertEqual(self.student.andrew_id_sponsor, self.mentor2)
 
@@ -113,5 +112,6 @@ class AndrewIdExtensionTest(TestCase):
 
         self.student.refresh_from_db()
         self.assertIsNone(self.student.andrew_id)
+        self.assertIsNone(self.student.org_account_id)
         self.assertIsNone(self.student.andrew_id_expiration)
         self.assertIsNone(self.student.andrew_id_sponsor)

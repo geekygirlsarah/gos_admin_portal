@@ -1189,20 +1189,20 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 for s in Student.objects.filter(id__in=filtered_student_ids).distinct():
                     if s.personal_email:
                         recipients.add(s.personal_email)
-                    elif s.andrew_email:
-                        recipients.add(s.andrew_email)
+                    elif s.org_email:
+                        recipients.add(s.org_email)
             if "parents" in groups:
                 for parent in Adult.objects.filter(
                     students__id__in=filtered_student_ids,
                     email_updates=True,
                     login_enabled=True,
                 ).distinct():
-                    e = parent.personal_email or parent.andrew_email
+                    e = parent.personal_email or parent.org_email
                     if e:
                         recipients.add(e)
             if "mentors" in groups:
                 for m in Adult.objects.filter(is_mentor=True, mentor_active=True):
-                    e = m.personal_email or m.andrew_email
+                    e = m.personal_email or m.org_email
                     if e:
                         recipients.add(e)
 
@@ -1695,7 +1695,7 @@ def _adult_contact_values(relationship):
     if relationship is None or relationship.adult is None:
         return ["", "", "", "", "", "", "No"]
     adult = relationship.adult
-    email = adult.personal_email or adult.andrew_email or ""
+    email = adult.personal_email or adult.org_email or ""
     return [
         adult.preferred_first_name or adult.legal_first_name,
         adult.last_name,
@@ -1735,7 +1735,7 @@ def _student_export_row(enrollment, program, groups, can_view_sliding, is_lead=F
 
     if "contact" in groups:
         row += [
-            student.personal_email or student.andrew_email or "",
+            student.personal_email or student.org_email or "",
             student.phone_number or "",
             student.school.name if student.school else "",
             student.graduation_year or "",

@@ -333,8 +333,14 @@ class AndrewIdManagementViewTests(TestCase):
         section = section[: section.index("</tr>")]
         self.assertIn('name="action" value="set"', section)
         self.assertIn('value="rstudent"', section)
-        self.assertIn('name="andrew_id_expiration"', section)
-        self.assertIn('name="andrew_id_sponsor"', section)
+        self.assertTrue(
+            'name="org_email_expiration"' in section
+            or 'name="andrew_id_expiration"' in section
+        )
+        self.assertTrue(
+            'name="org_email_sponsor"' in section
+            or 'name="andrew_id_sponsor"' in section
+        )
 
     def test_edit_from_assigned_list_updates_fields(self):
         sponsor = Adult.objects.create(

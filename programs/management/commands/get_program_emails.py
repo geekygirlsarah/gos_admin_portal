@@ -98,8 +98,8 @@ class Command(BaseCommand):
             for s in Student.objects.filter(id__in=filtered_student_ids).distinct():
                 if s.personal_email:
                     recipients.add(s.personal_email)
-                elif s.andrew_email:
-                    recipients.add(s.andrew_email)
+                elif s.org_email:
+                    recipients.add(s.org_email)
 
         if "parents" in groups:
             for parent in Adult.objects.filter(
@@ -107,13 +107,13 @@ class Command(BaseCommand):
                 email_updates=True,
                 login_enabled=True,
             ).distinct():
-                e = parent.personal_email or parent.andrew_email
+                e = parent.personal_email or parent.org_email
                 if e:
                     recipients.add(e)
 
         if "mentors" in groups:
             for m in Adult.objects.filter(is_mentor=True, mentor_active=True):
-                e = m.personal_email or m.andrew_email
+                e = m.personal_email or m.org_email
                 if e:
                     recipients.add(e)
 

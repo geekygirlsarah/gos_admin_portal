@@ -52,6 +52,43 @@ class PlatformOrganizationForm(forms.ModelForm):
         required=False,
         help_text="Allowed email domains for auto-matching, one per line or comma-separated.",
     )
+    org_account_enabled = forms.BooleanField(
+        required=False,
+        initial=True,
+        help_text="Enable organization/school email accounts and identifiers.",
+    )
+    org_account_name = forms.CharField(
+        max_length=100,
+        required=False,
+        initial="Andrew ID",
+        help_text="Display name for org/school accounts (e.g. 'Andrew ID', 'Sciencey SSO').",
+    )
+    org_email_domain = forms.CharField(
+        max_length=255,
+        required=False,
+        initial="andrew.cmu.edu",
+        help_text="Primary email domain(s) for organization accounts (e.g. 'andrew.cmu.edu').",
+    )
+    force_mentor_org_email = forms.BooleanField(
+        required=False,
+        initial=True,
+        help_text="Require mentors to log in using an email matching the organization domain.",
+    )
+    force_student_org_email = forms.BooleanField(
+        required=False,
+        initial=False,
+        help_text="Require students to log in using an email matching the organization domain.",
+    )
+    force_parent_org_email = forms.BooleanField(
+        required=False,
+        initial=False,
+        help_text="Require parents to log in using an email matching the organization domain.",
+    )
+    force_alumni_org_email = forms.BooleanField(
+        required=False,
+        initial=False,
+        help_text="Require alumni to log in using an email matching the organization domain.",
+    )
 
     # Initial Lead Mentor (Creation only)
     initial_lead_mentor_email = forms.EmailField(
@@ -82,6 +119,27 @@ class PlatformOrganizationForm(forms.ModelForm):
             )
             self.fields["theme_color"].initial = settings.get("theme_color", "#0056b3")
             self.fields["allowed_domains"].initial = settings.get("allowed_domains", "")
+            self.fields["org_account_enabled"].initial = settings.get(
+                "org_account_enabled", True
+            )
+            self.fields["org_account_name"].initial = settings.get(
+                "org_account_name", "Andrew ID"
+            )
+            self.fields["org_email_domain"].initial = settings.get(
+                "org_email_domain", "andrew.cmu.edu"
+            )
+            self.fields["force_mentor_org_email"].initial = settings.get(
+                "force_mentor_org_email", True
+            )
+            self.fields["force_student_org_email"].initial = settings.get(
+                "force_student_org_email", False
+            )
+            self.fields["force_parent_org_email"].initial = settings.get(
+                "force_parent_org_email", False
+            )
+            self.fields["force_alumni_org_email"].initial = settings.get(
+                "force_alumni_org_email", False
+            )
             # Hide initial lead mentor field on edit
             self.fields.pop("initial_lead_mentor_email", None)
 
@@ -118,6 +176,13 @@ class PlatformOrganizationForm(forms.ModelForm):
             "time_zone",
             "theme_color",
             "allowed_domains",
+            "org_account_enabled",
+            "org_account_name",
+            "org_email_domain",
+            "force_mentor_org_email",
+            "force_student_org_email",
+            "force_parent_org_email",
+            "force_alumni_org_email",
         ]:
             val = self.cleaned_data.get(key)
             if val is not None:
