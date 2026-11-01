@@ -242,7 +242,8 @@ DATABASES = {
     }
 }
 if os.getenv("DATABASE_URL", None):
-    db_config = dj_database_url.config(conn_max_age=600)
+    conn_max_age = int(os.getenv("CONN_MAX_AGE", "0"))
+    db_config = dj_database_url.config(conn_max_age=conn_max_age)
     db_config["CONNECTION_HEALTH_CHECKS"] = True
     if "test" in sys.argv:
         db_config["CONN_MAX_AGE"] = 0

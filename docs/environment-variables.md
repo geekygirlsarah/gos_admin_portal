@@ -100,7 +100,13 @@ These settings take effect when `DEBUG=False`:
 - **Requirement**: Optional in local development; standard in production.
 - **Default**: `sqlite:///db.sqlite3`
 - **Format**: `postgres://USER:PASSWORD@HOST:PORT/NAME` or standard connection string.
-- **Purpose**: Configures the primary database connection using `dj_database_url`. Includes automatic connection health checks and connection pooling (`conn_max_age=600`).
+- **Purpose**: Configures the primary database connection using `dj_database_url`. Includes automatic connection health checks and configurable connection persistence.
+
+### `CONN_MAX_AGE`
+- **Requirement**: Optional.
+- **Default**: `0` (closes database connections at the end of each request to protect memory on small instances).
+- **Format**: Integer representing seconds (e.g. `0`, `60`, `600`).
+- **Purpose**: Controls persistent database connection lifetime. Setting to `0` prevents idle PostgreSQL connections from lingering in memory on RAM-constrained database instances.
 
 ---
 

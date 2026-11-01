@@ -219,6 +219,35 @@ class OrganizationResolutionMiddlewareTests(TestCase):
         org = resolve_organization_from_request(None)
         self.assertEqual(org, self.gos)
 
+    def test_resolve_from_cache(self):
+        """Repeated lookups for the same host hit cache and return the organization."""
+        from django.core.cache import cache
+
+        cache.clear()
+        request = self.rf.get("/", HTTP_HOST="momentum.momentumteam.app")
+        org1 = resolve_organization_from_request(request)
+        self.assertEqual(org1, self.momentum)
+
+        # A new request object for the same host should find cached value
+        request2 = self.rf.get("/", HTTP_HOST="momentum.momentumteam.app")
+        org2 = resolve_organization_from_request(request2)
+        self.assertEqual(org2, self.momentum)
+
+    def test_organization_save_clears_cache(self):
+        """Saving an organization invalidates the cache."""
+        from django.core.cache import cache
+
+        request = self.rf.get("/", HTTP_HOST="momentum.momentumteam.app")
+        resolve_organization_from_request(request)
+
+        host_key = "org_resolve:host:momentum.momentumteam.app"
+        self.assertIsNotNone(cache.get(host_key))
+
+        # Modifying the organization triggers signal clearing cache
+        self.momentum.name = "Momentum Updated"
+        self.momentum.save()
+        self.assertIsNone(cache.get(host_key))
+
     def test_organization_middleware_attaches_request_organization(self):
         """OrganizationMiddleware dynamically resolves and attaches request.organization."""
         from GoSAdminPortal.middleware import OrganizationMiddleware

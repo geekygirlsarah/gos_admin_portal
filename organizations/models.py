@@ -576,3 +576,22 @@ class OrganizationInvitation(models.Model):
         self.accepted_by = user
         self.save(update_fields=["status", "accepted_at", "accepted_by"])
         return membership
+
+
+from django.core.cache import cache
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
+
+
+@receiver([post_save, post_delete], sender=Organization)
+def clear_organization_cache(sender, **kwargs):
+    try:
+        from GoSAdminPortal.middleware import _default_organization
+
+        _default_organization.cache_clear()
+    except Exception:  # nosec B110
+        pass
+    try:
+        cache.clear()
+    except Exception:  # nosec B110
+        pass
