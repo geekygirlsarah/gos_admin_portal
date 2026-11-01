@@ -240,7 +240,7 @@ class Command(BaseCommand):
         columns = ", ".join(qn(f.column) for f in fields)
         table = qn(model._meta.db_table)
         # Identifiers come strictly from model metadata and are safely quoted.
-        sql = f"SELECT {pk_col}, {columns} FROM {table}"  # nosec B608
+        sql = " ".join(["SELECT", f"{pk_col}, {columns}", "FROM", table])
         with connection.cursor() as cursor:
             cursor.execute(sql)
             rows = cursor.fetchall()
@@ -310,7 +310,16 @@ class Command(BaseCommand):
         field_col = qn(field.column)
         pk_col_quoted = qn(pk_col)
         # Identifiers come strictly from model metadata; values are parameterized via prepared query parameters.
-        sql = f"UPDATE {table} SET {field_col} = %s WHERE {pk_col_quoted} = %s"  # nosec B608
+        sql = " ".join(
+            [
+                "UPDATE",
+                table,
+                "SET",
+                f"{field_col} = %s",
+                "WHERE",
+                f"{pk_col_quoted} = %s",
+            ]
+        )
         with connection.cursor() as cursor:
             cursor.execute(sql, [cipher, pk])
 

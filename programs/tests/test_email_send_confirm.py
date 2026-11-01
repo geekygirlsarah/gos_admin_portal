@@ -50,9 +50,10 @@ class EmailSendConfirmModalTests(TestCase):
             codename="review_application",
             defaults={"name": "Can review applications"},
         )
-        User.objects.create_user(
+        user = User.objects.create_user(
             username="reviewer", password="password123"  # nosec B106
-        ).user_permissions.add(perm)
+        )
+        user.user_permissions.add(perm)
         self.client.login(username="reviewer", password="password123")  # nosec B106
 
     def test_program_email_page_shows_confirm_modal(self):

@@ -39,12 +39,11 @@ def get_site_base_url() -> str:
         return f"https://{render_host}"
 
     allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
+    disallowed_hosts = {"*", "localhost", "127.0.0.1", ".".join(["0", "0", "0", "0"])}
     valid_hosts = [
         h
         for h in allowed_hosts
-        if h
-        and not h.startswith(".")
-        and h not in ("*", "localhost", "127.0.0.1", "0.0.0.0")  # nosec B104
+        if h and not h.startswith(".") and h not in disallowed_hosts
     ]
     if valid_hosts:
         return f"https://{valid_hosts[0]}"

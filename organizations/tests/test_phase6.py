@@ -358,7 +358,7 @@ class InvitationViewTests(TestCase):
         """Visiting an invalid token triggers handler404 redirect to home or 404 status."""
         url = reverse(
             "organizations:accept_invitation",
-            kwargs={"token": "invalid-token"},  # nosec B105
+            kwargs={"token": "invalid-token"},
         )
         response = self.client.get(url)
         self.assertIn(response.status_code, (302, 404))
