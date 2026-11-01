@@ -4,6 +4,8 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 class Vendor(models.Model):
     """A reference-list vendor the team orders from.
@@ -14,7 +16,17 @@ class Vendor(models.Model):
     and type their own; see ``Order.vendor_name`` for the snapshot design.
     """
 
-    name = models.CharField(max_length=255, unique=True, verbose_name="Name")
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vendors",
+        help_text="Organization that owns this vendor (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    name = models.CharField(max_length=255, verbose_name="Name")
     website = models.URLField(max_length=500, blank=True, verbose_name="Website")
     contact_email = models.EmailField(blank=True, verbose_name="Contact email")
     contact_phone = models.CharField(
@@ -26,6 +38,7 @@ class Vendor(models.Model):
         verbose_name = "Vendor"
         verbose_name_plural = "Vendors"
         ordering = ["name"]
+        unique_together = ("organization", "name")
 
     def __str__(self):
         return self.name
@@ -40,7 +53,17 @@ class ShippingCarrier(models.Model):
     page (e.g. UPS: ``https://www.ups.com/track?track=yes&trackNums={number}``).
     """
 
-    name = models.CharField(max_length=255, unique=True, verbose_name="Name")
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="shipping_carriers",
+        help_text="Organization that owns this shipping carrier (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    name = models.CharField(max_length=255, verbose_name="Name")
     tracking_url_template = models.CharField(
         max_length=500,
         blank=True,
@@ -55,6 +78,7 @@ class ShippingCarrier(models.Model):
         verbose_name = "Shipping company"
         verbose_name_plural = "Shipping companies"
         ordering = ["name"]
+        unique_together = ("organization", "name")
 
     def __str__(self):
         return self.name
@@ -88,6 +112,16 @@ class Order(models.Model):
         (STATUS_SHIPPED, "Shipped"),
         (STATUS_RECEIVED, "Received"),
     ]
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        help_text="Organization that owns this order (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     program = models.ForeignKey(
         "programs.Program",
@@ -321,6 +355,16 @@ class OrderItem(models.Model):
         verbose_name="Team",
         help_text="Optional team this item is requested for.",
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        help_text="Organization that owns this order item (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     crew = models.ForeignKey(
         "programs.Crew",
         on_delete=models.SET_NULL,

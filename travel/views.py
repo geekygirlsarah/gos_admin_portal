@@ -83,8 +83,10 @@ class TravelEventListView(
     section = "travel"
 
     def get_queryset(self):
+        org = getattr(self.request, "organization", None)
         signups_qs = (
-            TravelSignup.objects.filter(event__program=self.program)
+            TravelSignup.objects.for_organization(org)
+            .filter(event__program=self.program)
             .select_related("student", "departure", "approved_by", "event")
             .prefetch_related("cost_items")
             .order_by(
@@ -98,7 +100,8 @@ class TravelEventListView(
             )
         )
         mentors_qs = (
-            TravelMentorSignup.objects.filter(event__program=self.program)
+            TravelMentorSignup.objects.for_organization(org)
+            .filter(event__program=self.program)
             .select_related("adult", "departure", "event")
             .order_by(
                 Lower(
@@ -111,7 +114,8 @@ class TravelEventListView(
             )
         )
         chaperones_qs = (
-            TravelParentChaperoneSignup.objects.filter(event__program=self.program)
+            TravelParentChaperoneSignup.objects.for_organization(org)
+            .filter(event__program=self.program)
             .select_related("adult", "departure", "event")
             .order_by(
                 Lower(
@@ -124,7 +128,10 @@ class TravelEventListView(
             )
         )
         return (
-            TravelEvent.objects.filter(program=self.program)
+            TravelEvent.objects.for_organization(
+                getattr(self.request, "organization", None)
+            )
+            .filter(program=self.program)
             .prefetch_related(
                 Prefetch("departures"),
                 Prefetch("cost_options"),
@@ -164,9 +171,11 @@ class TravelEventListView(
         )
         if adult is not None:
             my_chaperones = list(
-                TravelParentChaperoneSignup.objects.filter(
-                    adult=adult, event__program=self.program
-                ).select_related("event", "departure")
+                TravelParentChaperoneSignup.objects.for_organization(
+                    getattr(self.request, "organization", None)
+                )
+                .filter(adult=adult, event__program=self.program)
+                .select_related("event", "departure")
             )
             my_chaperone_event_ids = {s.event_id for s in my_chaperones}
         else:
@@ -217,10 +226,10 @@ class TravelEventListView(
             except Student.DoesNotExist:
                 student = None
             if student is not None:
+                org = getattr(self.request, "organization", None)
                 signups = list(
-                    TravelSignup.objects.filter(
-                        student=student, event__program=self.program
-                    )
+                    TravelSignup.objects.for_organization(org)
+                    .filter(student=student, event__program=self.program)
                     .select_related("event", "departure", "approved_by")
                     .prefetch_related("cost_items")
                 )
@@ -254,11 +263,11 @@ class TravelEventListView(
                 )
             )
             for child in children:
+                org = getattr(self.request, "organization", None)
                 signups = [
                     s
-                    for s in TravelSignup.objects.filter(
-                        student=child, event__program=self.program
-                    )
+                    for s in TravelSignup.objects.for_organization(org)
+                    .filter(student=child, event__program=self.program)
                     .select_related("event", "departure", "approved_by")
                     .prefetch_related("cost_items")
                 ]
@@ -277,10 +286,11 @@ class TravelEventListView(
 
         # ── Mentor / lead mentor view ────────────────────────────────────────
         if user_is_mentor_or_lead(user) and adult is not None:
+            org = getattr(self.request, "organization", None)
             mentor_signups = list(
-                TravelMentorSignup.objects.filter(
-                    adult=adult, event__program=self.program
-                ).select_related("event", "departure")
+                TravelMentorSignup.objects.for_organization(org)
+                .filter(adult=adult, event__program=self.program)
+                .select_related("event", "departure")
             )
             context["my_mentor_signups"] = mentor_signups
             context["mentor_signup_event_ids"] = {s.event_id for s in mentor_signups}
@@ -355,7 +365,8 @@ class TravelEventUpdateView(
     template_name = "travel/event_form.html"
 
     def get_queryset(self):
-        return TravelEvent.objects.filter(program=self.program)
+        org = getattr(self.request, "organization", None)
+        return TravelEvent.objects.for_organization(org).filter(program=self.program)
 
 
 class TravelEventDeleteView(
@@ -365,7 +376,8 @@ class TravelEventDeleteView(
     template_name = "travel/event_confirm_delete.html"
 
     def get_queryset(self):
-        return TravelEvent.objects.filter(program=self.program)
+        org = getattr(self.request, "organization", None)
+        return TravelEvent.objects.for_organization(org).filter(program=self.program)
 
     def audit_snapshot(self, obj):
         return {
@@ -395,7 +407,10 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
     """
 
     def post(self, request, program_id, pk):
-        event = get_object_or_404(TravelEvent, pk=pk, program=self.program)
+        org = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(org), pk=pk, program=self.program
+        )
         if event.is_past:
             messages.error(request, "This trip has already ended.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -404,7 +419,11 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         if student is None:
             return redirect("travel:event_list", program_id=self.program.id)
 
-        existing = TravelSignup.objects.filter(student=student, event=event).first()
+        existing = (
+            TravelSignup.objects.for_organization(org)
+            .filter(student=student, event=event)
+            .first()
+        )
         if existing:
             if existing.status in (TravelSignup.DECLINED, TravelSignup.WITHDRAWN):
                 messages.info(
@@ -422,7 +441,9 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         if departure is None and event.departures.count() == 1:
             departure = event.ordered_departures[0]
 
-        signup = TravelSignup(student=student, event=event, departure=departure)
+        signup = TravelSignup(
+            student=student, event=event, departure=departure, organization=org
+        )
         try:
             signup.save()
             signup.cost_items.set(cost_items)
@@ -481,7 +502,12 @@ class TravelSignupRejoinView(LoginRequiredMixin, TravelProgramMixin, View):
     a Lead Mentor; parents are emailed again for approval."""
 
     def post(self, request, program_id, pk):
-        signup = get_object_or_404(TravelSignup, pk=pk, event__program=self.program)
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
+        )
         if not self._may_act(request.user, signup):
             messages.error(request, "You do not have permission to do that.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -511,7 +537,12 @@ class TravelSignupWithdrawView(LoginRequiredMixin, TravelProgramMixin, View):
     withdraw on a student's behalf (e.g. they told us in person)."""
 
     def post(self, request, program_id, pk):
-        signup = get_object_or_404(TravelSignup, pk=pk, event__program=self.program)
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
+        )
         if not self._may_act(request.user, signup):
             messages.error(request, "You do not have permission to do that.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -559,7 +590,12 @@ class _ParentSignupActionView(LoginRequiredMixin, TravelProgramMixin, View):
 
 class TravelSignupApproveView(_ParentSignupActionView):
     def post(self, request, program_id, pk):
-        signup = get_object_or_404(TravelSignup, pk=pk, event__program=self.program)
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
+        )
         if not self._may_act(request.user, signup):
             messages.error(request, "Only a parent of this student can approve travel.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -600,7 +636,12 @@ class TravelSignupApproveView(_ParentSignupActionView):
 
 class TravelSignupDeclineView(_ParentSignupActionView):
     def post(self, request, program_id, pk):
-        signup = get_object_or_404(TravelSignup, pk=pk, event__program=self.program)
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
+        )
         if not self._may_act(request.user, signup):
             messages.error(request, "Only a parent of this student can decline travel.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -618,7 +659,12 @@ class TravelSignupUndoView(_ParentSignupActionView):
     """Parent rescinds an earlier approve/decline -> back to 'interested'."""
 
     def post(self, request, program_id, pk):
-        signup = get_object_or_404(TravelSignup, pk=pk, event__program=self.program)
+        org = getattr(request, "organization", None)
+        signup = get_object_or_404(
+            TravelSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
+        )
         if not self._may_act(request.user, signup):
             messages.error(
                 request, "Only a parent of this student can update this decision."
@@ -642,7 +688,10 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
     """A mentor volunteers to go on the trip."""
 
     def post(self, request, program_id, pk):
-        event = get_object_or_404(TravelEvent, pk=pk, program=self.program)
+        org = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(org), pk=pk, program=self.program
+        )
         if event.is_past:
             messages.error(request, "This trip has already ended.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -672,9 +721,9 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         if departure is None and event.departures.count() == 1:
             departure = event.ordered_departures[0]
 
-        signup, created = TravelMentorSignup.objects.get_or_create(
-            adult=adult, event=event, defaults={"departure": departure}
-        )
+        signup, created = TravelMentorSignup.objects.for_organization(
+            org
+        ).get_or_create(adult=adult, event=event, defaults={"departure": departure})
         if not created and signup.departure_id != (departure.id if departure else None):
             signup.departure = departure
             signup.save(update_fields=["departure"])
@@ -694,10 +743,15 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
 
 class TravelMentorCancelView(LoginRequiredMixin, TravelProgramMixin, View):
     def post(self, request, program_id, pk):
-        event = get_object_or_404(TravelEvent, pk=pk, program=self.program)
+        org = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(org), pk=pk, program=self.program
+        )
         try:
             adult = request.user.adult_profile
-            signup = TravelMentorSignup.objects.get(adult=adult, event=event)
+            signup = TravelMentorSignup.objects.for_organization(org).get(
+                adult=adult, event=event
+            )
         except Exception:
             messages.error(request, "You are not signed up to go on this trip.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -719,8 +773,11 @@ class TravelMentorDriverToggleView(
     """Lead mentors mark which mentors are driving."""
 
     def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
         signup = get_object_or_404(
-            TravelMentorSignup, pk=pk, event__program=self.program
+            TravelMentorSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
         )
         signup.is_driver = not signup.is_driver
         signup.save(update_fields=["is_driver"])
@@ -752,7 +809,10 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
     else signs up themselves (their linked ``Adult`` is used)."""
 
     def post(self, request, program_id, pk):
-        event = get_object_or_404(TravelEvent, pk=pk, program=self.program)
+        org = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(org), pk=pk, program=self.program
+        )
         if event.is_past:
             messages.error(request, "This trip has already ended.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -762,9 +822,9 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
             return redirect("travel:event_list", program_id=self.program.id)
 
         departure = _resolve_departure_for_event(event, request.POST)
-        signup, created = TravelParentChaperoneSignup.objects.get_or_create(
-            adult=adult, event=event, defaults={"departure": departure}
-        )
+        signup, created = TravelParentChaperoneSignup.objects.for_organization(
+            org
+        ).get_or_create(adult=adult, event=event, defaults={"departure": departure})
         if not created and signup.departure_id != (departure.id if departure else None):
             signup.departure = departure
             signup.save(update_fields=["departure"])
@@ -818,10 +878,15 @@ class TravelParentChaperoneCancelView(LoginRequiredMixin, TravelProgramMixin, Vi
     """A parent backs out of their own chaperone sign-up."""
 
     def post(self, request, program_id, pk):
-        event = get_object_or_404(TravelEvent, pk=pk, program=self.program)
+        org = getattr(request, "organization", None)
+        event = get_object_or_404(
+            TravelEvent.objects.for_organization(org), pk=pk, program=self.program
+        )
         try:
             adult = request.user.adult_profile
-            signup = TravelParentChaperoneSignup.objects.get(adult=adult, event=event)
+            signup = TravelParentChaperoneSignup.objects.for_organization(org).get(
+                adult=adult, event=event
+            )
         except Exception:
             messages.error(request, "You are not signed up to chaperone this trip.")
             return redirect("travel:event_list", program_id=self.program.id)
@@ -845,8 +910,11 @@ class TravelParentChaperoneRemoveView(
     """Lead Mentors remove a parent from a trip's chaperone list."""
 
     def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
         signup = get_object_or_404(
-            TravelParentChaperoneSignup, pk=pk, event__program=self.program
+            TravelParentChaperoneSignup.objects.for_organization(org),
+            pk=pk,
+            event__program=self.program,
         )
         name, event_name = signup.adult.display_name, signup.event.name
         log_deletion(

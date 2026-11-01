@@ -118,11 +118,21 @@ class Payment(models.Model):
 
 
 class SlidingScaleSettings(models.Model):
-    """Singleton row holding the portal-wide sliding scale calculation constants.
+    """Sliding scale calculation constants for an organization.
 
     These are based on the federal poverty guidelines and can be edited by a
     Lead Mentor from the Portal Settings page.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sliding_scale_settings",
+        help_text="Organization that owns these sliding scale settings (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     base_amount = models.DecimalField(
         max_digits=10,
@@ -158,8 +168,11 @@ class SlidingScaleSettings(models.Model):
         return "Sliding Scale Settings"
 
     @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_solo(cls, organization=None):
+        qs = cls.objects.all()
+        if organization is not None:
+            qs = qs.filter(organization=organization)
+        obj, _ = qs.get_or_create(pk=1)
         return obj
 
     def compute_discount_percent(self, family_size, adjusted_gross_income):
@@ -332,6 +345,16 @@ def _tax_form_upload_to(instance, filename):
 
 
 class TaxForm(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tax_forms",
+        help_text="Organization that owns this tax form (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     sliding_scale = models.ForeignKey(
         SlidingScale, on_delete=models.CASCADE, related_name="tax_forms"
     )

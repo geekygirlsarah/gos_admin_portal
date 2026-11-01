@@ -45,6 +45,16 @@ request_finished.connect(clear_active_background_check_types_cache)
 
 @pghistory.track()
 class AdultStudentRelationship(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="adult_student_relationships",
+        help_text="Organization that owns this adult-student relationship (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     adult = models.ForeignKey("Adult", on_delete=models.CASCADE)
     student = models.ForeignKey("Student", on_delete=models.CASCADE)
     relationship_to_student = models.CharField(
@@ -58,7 +68,7 @@ class AdultStudentRelationship(models.Model):
     )
 
     class Meta:
-        unique_together = ("adult", "student")
+        unique_together = ("organization", "adult", "student")
 
     def __str__(self):
         return f"{self.adult} - {self.relationship_to_student} to {self.student}"

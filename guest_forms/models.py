@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.db import models
 from django.utils.text import slugify
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.constants import PHONE_TYPE_CHOICES
 from programs.validators import validate_phone_number
 
@@ -58,10 +59,20 @@ class GuestForm(models.Model):
                 "Can review guest form submissions",
             ),
         ]
+        unique_together = ("organization", "slug")
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guest_forms",
+        help_text="Organization that owns this guest form (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     slug = models.SlugField(
         max_length=100,
-        unique=True,
         blank=True,
         help_text="URL-friendly identifier for direct links (e.g. 'photo-release').",
     )
@@ -112,7 +123,11 @@ class GuestForm(models.Model):
             # Ensure uniqueness
             counter = 1
             original_slug = base_slug
-            while GuestForm.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+            while (
+                GuestForm.objects.filter(organization=self.organization, slug=self.slug)
+                .exclude(pk=self.pk)
+                .exists()
+            ):
                 self.slug = f"{original_slug}-{counter}"
                 counter += 1
         super().save(*args, **kwargs)
@@ -120,6 +135,16 @@ class GuestForm(models.Model):
 
 class GuestFormSubmission(models.Model):
     """A submitted guest form with the guest's information and uploaded file."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guest_form_submissions",
+        help_text="Organization that owns this guest form submission (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     guest_form = models.ForeignKey(
         GuestForm,

@@ -5,6 +5,7 @@ from django.db import models
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.models import Adult, Student
 
 
@@ -27,6 +28,16 @@ class TravelEvent(models.Model):
     might actually leave* is expressed by zero or more :class:`TravelDeparture`
     rows. ``is_past`` is always derived from ``end_date``, never stored.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="travel_events",
+        help_text="Organization that owns this travel event (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     program = models.ForeignKey(
         "programs.Program",
@@ -94,6 +105,16 @@ class TravelDeparture(models.Model):
     """One "when we're leaving" group for a trip (e.g. 'Bus 1 5:00 AM',
     'Saturday flight'). A trip may have one or more of these."""
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="travel_departures",
+        help_text="Organization that owns this travel departure (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     event = models.ForeignKey(
         TravelEvent, on_delete=models.CASCADE, related_name="departures"
     )
@@ -135,6 +156,16 @@ class TravelCostOption(models.Model):
     any added fee). Lead mentors set the price; students check the options
     that apply to them and the signup total is their sum."""
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="travel_cost_options",
+        help_text="Organization that owns this travel cost option (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     event = models.ForeignKey(
         TravelEvent, on_delete=models.CASCADE, related_name="cost_options"
     )
@@ -171,6 +202,16 @@ class TravelSignup(models.Model):
       * ``withdrawn`` -- the student (or a lead mentor on their behalf) backed
         out. Statuses are kept as history; nothing is hard-deleted.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="travel_signups",
+        help_text="Organization that owns this travel signup (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     INTERESTED = "interested"
     APPROVED = "approved"
@@ -349,6 +390,16 @@ class TravelMentorSignup(models.Model):
     """A mentor going on a trip. Any number may sign up; ``is_driver`` is a
     Lead-Mentor-checked flag so mentors who are driving can be identified."""
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="travel_mentor_signups",
+        help_text="Organization that owns this travel mentor signup (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     adult = models.ForeignKey(
         Adult,
         on_delete=models.CASCADE,
@@ -397,6 +448,16 @@ class TravelParentChaperoneSignup(models.Model):
     can add an eligible parent directly rather than waiting for them to sign
     up on their own.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="travel_parent_chaperone_signups",
+        help_text="Organization that owns this travel parent chaperone signup (multi-tenant; null until backfilled).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     adult = models.ForeignKey(
         Adult,

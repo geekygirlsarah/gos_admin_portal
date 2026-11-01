@@ -89,7 +89,7 @@ class OrderItemForm(forms.ModelForm):
             "url": "Link to item",
         }
 
-    def __init__(self, *args, program=None, **kwargs):
+    def __init__(self, *args, program=None, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         if program is None:
@@ -97,19 +97,36 @@ class OrderItemForm(forms.ModelForm):
             if instance and getattr(instance, "program_id", None):
                 program = instance.program
 
-        self.fields["team"].queryset = Team.objects.order_by("team_type", "number")
-        if program:
-            self.fields["crew"].queryset = Crew.objects.filter(
-                program=program
-            ).order_by("name")
-            self.fields["subteam"].queryset = SubTeam.objects.filter(
-                program=program
-            ).order_by("name")
-        else:
-            self.fields["crew"].queryset = Crew.objects.order_by("name")
-            self.fields["subteam"].queryset = SubTeam.objects.order_by("name")
+        org = organization or getattr(
+            getattr(self, "instance", None), "organization_id", None
+        )
 
-        choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]
+        self.fields["team"].queryset = Team.objects.for_organization(org).order_by(
+            "team_type", "number"
+        )
+        if program:
+            self.fields["crew"].queryset = (
+                Crew.objects.for_organization(org)
+                .filter(program=program)
+                .order_by("name")
+            )
+            self.fields["subteam"].queryset = (
+                SubTeam.objects.for_organization(org)
+                .filter(program=program)
+                .order_by("name")
+            )
+        else:
+            self.fields["crew"].queryset = Crew.objects.for_organization(org).order_by(
+                "name"
+            )
+            self.fields["subteam"].queryset = SubTeam.objects.for_organization(
+                org
+            ).order_by("name")
+
+        choices = [
+            (vendor.pk, vendor.name)
+            for vendor in Vendor.objects.for_organization(org).order_by("name")
+        ]
         choices.append((NOT_LISTED_VENDOR, "Not listed — I'll specify below"))
         self.fields["vendor_choice"].choices = [("", "No preference")] + choices
 
@@ -200,13 +217,18 @@ class OrderForm(forms.ModelForm):
             "tax": "Optional — can be entered when placing the order or later.",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["program"].queryset = Program.objects.all()
+        org = organization
+
+        self.fields["program"].queryset = Program.objects.for_organization(org)
         self.fields["program"].initial = self.initial.get("program")
 
-        choices = [(vendor.pk, vendor.name) for vendor in Vendor.objects.all()]
+        choices = [
+            (vendor.pk, vendor.name)
+            for vendor in Vendor.objects.for_organization(org).order_by("name")
+        ]
         choices.append((NOT_LISTED_VENDOR, "Not listed — I'll specify below"))
         self.fields["vendor_choice"].choices = [("", "Select a vendor")] + choices
 
@@ -222,7 +244,8 @@ class OrderForm(forms.ModelForm):
             self.fields["vendor_url"].initial = instance.vendor_url
         else:
             self.fields["items"].queryset = (
-                OrderItem.objects.filter(order__isnull=True)
+                OrderItem.objects.for_organization(org)
+                .filter(order__isnull=True)
                 .select_related("program", "vendor", "requested_by")
                 .order_by("vendor_name", "vendor__name", "-requested_at")
             )

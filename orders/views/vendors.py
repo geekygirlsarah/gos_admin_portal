@@ -21,7 +21,9 @@ class VendorListView(
     context_object_name = "vendors"
 
     def get_queryset(self):
-        return Vendor.objects.order_by("name")
+        return Vendor.objects.for_organization(
+            getattr(self.request, "organization", None)
+        ).order_by("name")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -42,6 +44,7 @@ class VendorCreateView(
         return context
 
     def form_valid(self, form):
+        form.instance.organization = getattr(self.request, "organization", None)
         messages.success(
             self.request,
             f"Vendor '{form.instance.name}' added. Mentors can now pick it when "
@@ -59,6 +62,11 @@ class VendorUpdateView(
     model = Vendor
     form_class = VendorForm
     template_name = "orders/vendor_form.html"
+
+    def get_queryset(self):
+        return Vendor.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -82,6 +90,11 @@ class VendorDeleteView(
 ):
     model = Vendor
     template_name = "orders/vendor_confirm_delete.html"
+
+    def get_queryset(self):
+        return Vendor.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
 
     def audit_snapshot(self, obj):
         return {"name": obj.name, "website": obj.website}
