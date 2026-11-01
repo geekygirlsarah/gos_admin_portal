@@ -2,6 +2,8 @@ import logging
 import re
 from datetime import date
 
+from django.conf import settings
+
 from programs.models import Adult, Enrollment, Program, Student
 from programs.permission_views import get_user_role
 
@@ -325,6 +327,7 @@ def organization_context(request):
     try:
         from organizations.utils import (
             get_default_organization,
+            get_organization_email_settings,
             get_organization_setting,
         )
 
@@ -360,6 +363,20 @@ def organization_context(request):
         get_organization_setting(org, "force_alumni_org_email", False) if org else False
     )
 
+    org_contact_email = None
+    try:
+        if org:
+            email_cfg = get_organization_email_settings(org)
+            org_contact_email = email_cfg.get("contact_email") or email_cfg.get(
+                "reply_to_email"
+            )
+    except Exception:  # nosec B110
+        pass
+    if not org_contact_email:
+        org_contact_email = getattr(
+            settings, "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"
+        )
+
     return {
         "organization": org,
         "org_account_enabled": org_account_enabled,
@@ -369,4 +386,5 @@ def organization_context(request):
         "force_student_org_email": force_student_org_email,
         "force_parent_org_email": force_parent_org_email,
         "force_alumni_org_email": force_alumni_org_email,
+        "org_contact_email": org_contact_email,
     }

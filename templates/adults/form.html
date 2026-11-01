@@ -140,14 +140,23 @@
           </div>
 
           <!-- Parent Section -->
-          <div class="accordion-item {% if not form.is_parent.value %}d-none{% endif %}" id="accordionParent">
+          <div class="accordion-item {% if not form.is_parent.value and not object.is_parent %}d-none{% endif %}" id="accordionParent">
             <h2 class="accordion-header" id="headingParent">
-              <button class="accordion-button {% if not form.is_parent.value %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseParent" aria-expanded="{% if form.is_parent.value %}true{% else %}false{% endif %}" aria-controls="collapseParent">
+              <button class="accordion-button {% if not form.is_parent.value and not object.is_parent %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseParent" aria-expanded="{% if form.is_parent.value or object.is_parent %}true{% else %}false{% endif %}" aria-controls="collapseParent">
                 Parent Details
               </button>
             </h2>
-            <div id="collapseParent" class="accordion-collapse collapse {% if form.is_parent.value %}show{% endif %}" aria-labelledby="headingParent">
+            <div id="collapseParent" class="accordion-collapse collapse {% if form.is_parent.value or object.is_parent %}show{% endif %}" aria-labelledby="headingParent">
               <div class="accordion-body">
+                {% if not form.students and object.is_parent %}
+                <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+                  <i class="bi bi-info-circle-fill me-2 flex-shrink-0"></i>
+                  <div>
+                    You may edit your personal contact details. To link or unlink students from your profile, please reach out to team leadership{% if org_contact_email %} at <a href="mailto:{{ org_contact_email }}?subject=Student%20Link%20Request%20-%20{{ object.display_name|urlencode }}" class="alert-link">{{ org_contact_email }}</a>{% endif %}.
+                  </div>
+                </div>
+                {% endif %}
+
                 {% if form.students %}
                 <div class="card mb-3">
                   <div class="card-header bg-light">Associated Students</div>

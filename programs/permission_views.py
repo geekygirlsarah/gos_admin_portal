@@ -542,9 +542,12 @@ def can_user_write(user, section, obj=None, org=None):
     if section == "background_checks":
         return False
 
-    # Always allow writing own profile and children
+    # Always allow writing own profile and children (except for protected
+    # parent/emergency contact linkages which require Lead Mentor review)
     if obj:
         if isinstance(obj, Student):
+            if section == "parents_emergency":
+                return False
             # Own student profile
             if hasattr(user, "student_profile") and obj == user.student_profile:
                 return True
