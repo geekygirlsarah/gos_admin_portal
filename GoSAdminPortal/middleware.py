@@ -1,4 +1,3 @@
-import functools
 import logging
 
 from django.conf import settings
@@ -14,18 +13,17 @@ from applications.rate_limiting import (
 logger = logging.getLogger(__name__)
 
 
-@functools.lru_cache(maxsize=1)
 def _default_organization():
-    """Return the single hardcoded GoS organization row, or ``None``.
+    """Return the organization from the DEFAULT_ORGANIZATION_SLUG setting, or ``None``.
 
-    Memoized per process so we don't add a database query to every request.
-    Phase 1 has exactly one organization, seeded by the
-    ``organizations.0002_seed_gos_organization`` migration; Phase 2 will
-    resolve the org from the request hostname instead.
+    Resolved per-request (not memoized) so the default can be configured
+    per deployment via the ``DEFAULT_ORGANIZATION_SLUG`` setting.
+    Defaults to ``"gos"`` for backward compatibility.
     """
     from organizations.models import Organization
 
-    return Organization.objects.filter(slug="gos").first()
+    slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
+    return Organization.objects.filter(slug=slug).first()
 
 
 EXEMPT_URL_NAMES = {

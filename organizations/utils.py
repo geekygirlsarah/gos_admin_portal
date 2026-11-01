@@ -85,17 +85,18 @@ def _resolve_portal_url(raw_cfg: Dict[str, Any], org: Optional[Organization]) ->
     return portal_url
 
 
-def get_default_organization() -> Optional[Organization]:
-    """Return the active or single seeded organization (or None)."""
-    try:
-        from GoSAdminPortal.middleware import _default_organization
+def get_default_organization(slug: Optional[str] = None) -> Optional[Organization]:
+    """Return the active organization for the given slug, or None if not found.
 
-        return _default_organization()
-    except Exception:
-        try:
-            return Organization.objects.filter(is_active=True).first()
-        except Exception:
-            return None
+    If ``slug`` is provided, looks up by that slug.
+    If ``slug`` is ``None``, uses the ``DEFAULT_ORGANIZATION_SLUG`` setting.
+    Returns ``None`` when no matching active organization exists (instead of
+    silently falling back to a hardcoded GoS row).
+    """
+    from organizations.models import Organization
+
+    target_slug = slug or getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
+    return Organization.objects.filter(slug__iexact=target_slug, is_active=True).first()
 
 
 def get_organization_url(organization: Optional[Organization] = None) -> str:
@@ -295,9 +296,20 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
                 request._cached_organization = org
                 return org
 
-    org = get_default_organization()
-    request._cached_organization = org
-    return org
+    # 4. Fallback: use the configured DEFAULT_ORGANIZATION_SLUG setting.
+    #    When set to "gos" (the default), behavior is backward-compatible:
+    #    the existing GoS organization is returned. When set to another value
+    #    or left unset, None is returned if no matching organization exists.
+    default_slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
+    org = Organization.objects.filter(slug__iexact=default_slug, is_active=True).first()
+    if org:
+        request._cached_organization = org
+        return org
+
+    # No matching organization found — return None instead of silently
+    # defaulting to GoS.
+    request._cached_organization = None
+    return None
 
 
 def get_organization_settings(

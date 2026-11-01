@@ -132,6 +132,11 @@ if os.getenv("ALLOWED_HOSTS"):
 
 MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "localhost")
 
+# Default organization slug for when no org context exists.
+# Defaults to "gos" for backward compatibility; set to any other value or
+# leave unset to return None when no organization matches the request.
+DEFAULT_ORGANIZATION_SLUG = os.getenv("DEFAULT_ORGANIZATION_SLUG", "gos")
+
 
 # Application definition
 
