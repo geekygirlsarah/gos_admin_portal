@@ -117,6 +117,56 @@ class StudentFormTests(TestCase):
         student.refresh_from_db()
         self.assertEqual(student.user_id, linked_user.pk)
 
+    def test_student_editing_profile_cannot_modify_or_remove_parents(self):
+        from django.contrib.auth.models import Group, User
+
+        from programs.models import AdultStudentRelationship, RolePermission, Student
+
+        RolePermission.objects.update_or_create(
+            role="Student",
+            section="parents_emergency",
+            defaults={"can_read": True, "can_write": False},
+        )
+        student_user = User.objects.create_user(
+            username="student1", password="x"  # nosec B106
+        )
+        group, _ = Group.objects.get_or_create(name="Student")
+        student_user.groups.add(group)
+
+        student = Student.objects.create(
+            legal_first_name="Alex",
+            last_name="Morgan",
+            user=student_user,
+            primary_contact=self.parent1,
+            secondary_contact=self.parent2,
+        )
+
+        form = StudentForm(instance=student, user=student_user)
+        self.assertNotIn("parents", form.fields)
+        self.assertNotIn("primary_contact", form.fields)
+        self.assertNotIn("secondary_contact", form.fields)
+
+        # Even if submitted data attempts to clear contacts/parents, save() preserves them
+        post_data = {
+            "legal_first_name": "Alex",
+            "preferred_first_name": "Lex",
+            "last_name": "Morgan",
+            "date_of_birth": "2012-05-05",
+            "parents": [],
+            "primary_contact": "",
+            "secondary_contact": "",
+        }
+        bound_form = StudentForm(data=post_data, instance=student, user=student_user)
+        self.assertTrue(bound_form.is_valid(), bound_form.errors)
+        bound_form.save()
+
+        student.refresh_from_db()
+        self.assertEqual(student.preferred_first_name, "Lex")
+        self.assertEqual(student.primary_contact, self.parent1)
+        self.assertEqual(student.secondary_contact, self.parent2)
+        adult_ids = set(student.adults.values_list("id", flat=True))
+        self.assertSetEqual(adult_ids, {self.parent1.id, self.parent2.id})
+
 
 class AdultFormAndrewIdSponsorTests(TestCase):
     """Tests for AdultForm.andrew_id_sponsor queryset filtering and ordering.

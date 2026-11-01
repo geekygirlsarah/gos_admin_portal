@@ -135,6 +135,28 @@ class ProfilePermissionsTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
+    def test_student_editing_own_profile_cannot_remove_parents(self):
+        self.student.primary_contact = self.parent
+        self.student.save()
+        self.student_user.user_permissions.add(self.change_student_perm)
+        self.client.login(username="student_user", password="password123")  # nosec B106
+        url = reverse("student_edit", args=[self.student.pk])
+        post_data = {
+            "legal_first_name": "Student",
+            "preferred_first_name": "Stew",
+            "last_name": "One",
+            "date_of_birth": "2008-01-01",
+            "parents": [],
+            "primary_contact": "",
+            "secondary_contact": "",
+        }
+        response = self.client.post(url, post_data)
+        self.assertEqual(response.status_code, 302)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.preferred_first_name, "Stew")
+        self.assertEqual(self.student.primary_contact, self.parent)
+        self.assertIn(self.parent, self.student.adults.all())
+
     def test_student_cannot_edit_other_student_profile(self):
         self.student_user.user_permissions.add(self.change_student_perm)
         self.client.login(username="student_user", password="password123")  # nosec B106

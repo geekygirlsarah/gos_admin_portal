@@ -96,9 +96,21 @@ class StudentForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        kwargs.pop("user", None)
+        user = kwargs.pop("user", None)
         include_user = kwargs.pop("include_user", False)
         super().__init__(*args, **kwargs)
+
+        # Protect parents and primary/secondary contacts from being edited/removed
+        # by non-Lead Mentors/Admins (e.g., Students editing own profile).
+        # Only apply protection if user is explicitly provided (e.g. from portal views).
+        if user is not None:
+            from .permission_views import user_is_lead_mentor
+
+            is_privileged = user_is_lead_mentor(user)
+            if not is_privileged:
+                for field in ["parents", "primary_contact", "secondary_contact"]:
+                    if field in self.fields:
+                        del self.fields[field]
 
         # The 'user' field is a system-managed account link. The portal never
         # renders it, so leaving the field on the form makes a privileged
@@ -117,7 +129,8 @@ class StudentForm(forms.ModelForm):
             Lower("last_name"),
         )
         # Parents (multi-select used for custom picker)
-        self.fields["parents"].queryset = qs_adults
+        if "parents" in self.fields:
+            self.fields["parents"].queryset = qs_adults
         # Primary/Secondary contact fields (FKs)
         if "primary_contact" in self.fields:
             self.fields["primary_contact"].queryset = qs_adults
@@ -151,7 +164,7 @@ class StudentForm(forms.ModelForm):
 
         # When editing, pre-populate parents from the reverse relation
         instance = getattr(self, "instance", None)
-        if instance and instance.pk:
+        if instance and instance.pk and "parents" in self.fields:
             # Start with existing adults
             initial_set = set(instance.adults.all())
             # ALSO include primary/secondary in the initial parents
@@ -236,8 +249,10 @@ class StudentForm(forms.ModelForm):
         # fields) onto the instance; the model setters keep the through row
         # and relationship pointer in sync.
         if hasattr(self, "cleaned_data"):
-            instance.primary_contact = self.cleaned_data.get("primary_contact")
-            instance.secondary_contact = self.cleaned_data.get("secondary_contact")
+            if "primary_contact" in self.fields:
+                instance.primary_contact = self.cleaned_data.get("primary_contact")
+            if "secondary_contact" in self.fields:
+                instance.secondary_contact = self.cleaned_data.get("secondary_contact")
         if commit:
             instance.save()
         # After instance exists, sync the reverse M2M to Parents ensuring Primary/Secondary are included
