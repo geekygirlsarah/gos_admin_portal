@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 from django.conf import settings
 from django.db import models
 
@@ -127,7 +129,7 @@ class EmailDeliveryEvent(models.Model):
                 self.adult = adult
                 updated = True
         if not self.application:
-            try:
+            with suppress(Exception):
                 from applications.models import Application
 
                 app = Application.objects.filter(email__iexact=email).first()
@@ -136,7 +138,5 @@ class EmailDeliveryEvent(models.Model):
                 if app:
                     self.application = app
                     updated = True
-            except Exception:  # nosec B110
-                pass
         if updated and self.pk:
             self.save(update_fields=["student", "adult", "application"])

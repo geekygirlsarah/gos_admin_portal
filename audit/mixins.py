@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 from audit.events import AuditEvent
 from audit.service import log_deletion, log_event
 from programs.permission_views import get_user_role
@@ -24,9 +26,8 @@ def _build_scope_notes(user, obj):
         return ""
 
     # Find the actor's Adult record to get their program affiliations
-    try:
-        adult = user.adult_profile
-    except Exception:
+    adult = getattr(user, "adult_profile", None)
+    if not adult:
         return ""
 
     from programs.models import AdultStudentRelationship
@@ -69,10 +70,8 @@ class SensitiveDataViewMixin:
             # The object being viewed
             obj = getattr(self, "object", None)
             if not obj and hasattr(self, "get_object"):
-                try:
+                with suppress(Exception):
                     obj = self.get_object()
-                except Exception:  # nosec B110
-                    pass
 
             if obj:
                 scope_notes = _build_scope_notes(request.user, obj)

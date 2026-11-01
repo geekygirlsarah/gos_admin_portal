@@ -24,6 +24,7 @@ their converted Application.
 import base64
 import os
 from collections import Counter
+from contextlib import suppress
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.core.files.storage import default_storage
@@ -377,11 +378,9 @@ class Command(BaseCommand):
                 fh.write(encrypted)
         except Exception:  # noqa: BLE001 - keep scanning other files
             # Restore the original ciphertext so a failed rewrite is not data loss.
-            try:
+            with suppress(Exception):
                 with default_storage.open(name, "wb") as fh:
                     fh.write(original_raw)
-            except Exception:  # noqa: BLE001 - restore is best-effort
-                pass  # nosec B110
             raise
 
     # ------------------------------------------------------------------

@@ -77,8 +77,8 @@ class DynamicPermissionMixin(UserPassesTestMixin):
                 # If object doesn't exist, we treat it as a permission failure
                 # so it redirects to dashboard with an error instead of 404ing
                 return False
-            except Exception:  # nosec B110
-                pass
+            except Exception as e:
+                logger.debug("Failed to get object for permission check: %s", e)
         org = getattr(self.request, "organization", None)
         if self.permission_type == "write":
             return can_user_write(self.request.user, self.section, obj, org=org)
@@ -262,9 +262,11 @@ class LogFormSaveMixin:
                         after=after_dict,
                         notes=f"{model_name} {action}ed via form save.",
                     )
-                except Exception:  # nosec B110
+                except Exception:
                     # Never crash the main flow for audit logging
-                    pass
+                    forms_logger.debug(
+                        "Failed to record audit event for %s", model_name, exc_info=True
+                    )
 
             for f, old, new in changes:
                 forms_logger.info(

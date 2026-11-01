@@ -370,8 +370,8 @@ def organization_context(request):
             org_contact_email = email_cfg.get("contact_email") or email_cfg.get(
                 "reply_to_email"
             )
-    except Exception:  # nosec B110
-        pass
+    except Exception as e:
+        logger.debug("Failed to resolve organization email settings: %s", e)
     if not org_contact_email:
         org_contact_email = getattr(
             settings, "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"

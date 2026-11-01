@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.db import models
@@ -58,7 +60,7 @@ def get_user_role(user, org=None):
             org = None
 
     if org is not None:
-        try:
+        with suppress(Exception):
             from organizations.models import UserOrganizationMembership
 
             memberships = set(
@@ -77,8 +79,6 @@ def get_user_role(user, org=None):
                 ):
                     if role_candidate in memberships:
                         return role_candidate
-        except Exception:  # nosec B110
-            pass
 
     if user.groups.filter(name="LeadMentor").exists():
         return "LeadMentor"
@@ -124,7 +124,7 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
         return False
 
     if org is not None and role_name:
-        try:
+        with suppress(Exception):
             from organizations.models import UserOrganizationMembership
 
             if UserOrganizationMembership.objects.filter(
@@ -135,8 +135,6 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
                 user=user, organization=org, is_active=True
             ).exists():
                 return False
-        except Exception:  # nosec B110
-            pass
 
     try:
         adult = user.adult_profile
@@ -165,7 +163,7 @@ def user_is_lead_mentor(user, org=None):
         except Exception:
             org = None
     if org is not None:
-        try:
+        with suppress(Exception):
             from organizations.models import UserOrganizationMembership
 
             if UserOrganizationMembership.objects.filter(
@@ -175,10 +173,8 @@ def user_is_lead_mentor(user, org=None):
                 is_active=True,
             ).exists():
                 return True
-        except Exception:  # nosec B110
-            pass
     else:
-        try:
+        with suppress(Exception):
             from organizations.models import UserOrganizationMembership
 
             if UserOrganizationMembership.objects.filter(
@@ -187,8 +183,6 @@ def user_is_lead_mentor(user, org=None):
                 is_active=True,
             ).exists():
                 return True
-        except Exception:  # nosec B110
-            pass
     return user.groups.filter(name="LeadMentor").exists()
 
 
