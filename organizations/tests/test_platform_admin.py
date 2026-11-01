@@ -3,7 +3,8 @@
 from datetime import timedelta
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -14,6 +15,11 @@ from organizations.models import (
     OrganizationInvitation,
     OrganizationSettings,
     UserOrganizationMembership,
+)
+from organizations.platform_views import (
+    PlatformDashboardView,
+    PlatformMetricsView,
+    PlatformOrganizationListView,
 )
 from programs.models import (
     Adult,
@@ -27,6 +33,17 @@ from programs.models import (
 )
 
 
+@override_settings(
+    ALLOWED_HOSTS=[
+        "localhost",
+        ".localhost",
+        "127.0.0.1",
+        "testserver",
+        "momentumteam.app",
+        ".momentumteam.app",
+        "portal.girlsofsteelrobotics.org",
+    ]
+)
 class PlatformAdminAccessControlTests(TestCase):
     """Test superuser access restrictions across all platform admin endpoints."""
 
@@ -92,6 +109,109 @@ class PlatformAdminAccessControlTests(TestCase):
         for url in urls:
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200, f"Superuser denied for {url}")
+
+    def test_platform_admin_denied_on_tenant_subdomain(self):
+        """Platform admin views must raise Http404 with generic message when requested via tenant subdomain."""
+        factory = RequestFactory()
+        request = factory.get(
+            reverse("platform_admin:dashboard"),
+            HTTP_HOST="steel-city.momentumteam.app",
+        )
+        request.user = self.superuser
+        request.organization = self.org
+        view = PlatformDashboardView.as_view()
+        with self.assertRaises(Http404) as ctx:
+            view(request)
+        self.assertEqual(str(ctx.exception), "This page does not exist")
+
+        # In full test client, handler404 catches Http404 and redirects to home
+        response = self.client.get(
+            reverse("platform_admin:dashboard"),
+            HTTP_HOST="steel-city.momentumteam.app",
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+
+    def test_platform_admin_denied_on_tenant_custom_domain(self):
+        """Platform admin views must raise Http404 when requested via tenant custom domain."""
+        factory = RequestFactory()
+        request = factory.get(
+            reverse("platform_admin:dashboard"),
+            HTTP_HOST="portal.girlsofsteelrobotics.org",
+        )
+        request.user = self.superuser
+        request.organization = self.org
+        view = PlatformDashboardView.as_view()
+        with self.assertRaises(Http404) as ctx:
+            view(request)
+        self.assertEqual(str(ctx.exception), "This page does not exist")
+
+        response = self.client.get(
+            reverse("platform_admin:dashboard"),
+            HTTP_HOST="portal.girlsofsteelrobotics.org",
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+
+    def test_platform_admin_denied_with_tenant_header(self):
+        """Platform admin views must raise Http404 when requested with tenant routing headers."""
+        factory = RequestFactory()
+        request = factory.get(
+            reverse("platform_admin:dashboard"),
+            HTTP_X_ORGANIZATION="steel-city",
+        )
+        request.user = self.superuser
+        request.organization = self.org
+        view = PlatformDashboardView.as_view()
+        with self.assertRaises(Http404) as ctx:
+            view(request)
+        self.assertEqual(str(ctx.exception), "This page does not exist")
+
+        response = self.client.get(
+            reverse("platform_admin:dashboard"),
+            HTTP_X_ORGANIZATION="steel-city",
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+
+    def test_platform_admin_navbar_shows_admin_items_for_lead_mentor_admin(self):
+        """Dual-role users (Superuser + Lead Mentor) see platform admin navbar items on platform pages."""
+        from django.contrib.auth.models import Group
+
+        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
+        self.superuser.groups.add(lm_group)
+        UserOrganizationMembership.objects.create(
+            user=self.superuser,
+            organization=self.org,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(self.superuser)
+
+        # On platform admin dashboard
+        response = self.client.get(reverse("platform_admin:dashboard"))
+        self.assertEqual(response.status_code, 200)
+
+        # Should contain platform admin navigation items
+        self.assertContains(response, "Platform Admin")
+        self.assertContains(response, "Overview")
+        self.assertContains(response, "Organizations")
+        self.assertContains(response, "Usage Metrics")
+        self.assertContains(response, "System Health")
+        self.assertContains(response, "User Support")
+        self.assertContains(response, "Audit Logs")
+        self.assertContains(response, "Django Admin")
+        self.assertContains(response, "Return to Team Portal")
+
+        # Should NOT contain team Lead Mentor dropdowns
+        self.assertNotContains(response, 'id="studentsAdminDropdown"')
+        self.assertNotContains(response, 'id="adultsAdminDropdown"')
+        self.assertNotContains(response, 'id="applicationsAdminDropdown"')
+        self.assertNotContains(response, 'id="manageDataAdminDropdown"')
+
+    def test_team_portal_navbar_links_to_platform_admin_root_domain(self):
+        """Team portal page renders Platform Admin link pointing to the primary root domain."""
+        self.client.force_login(self.superuser)
+        response = self.client.get(reverse("profile_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("platform_admin:dashboard"))
 
 
 class PlatformDashboardAndHealthTests(TestCase):

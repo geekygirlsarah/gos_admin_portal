@@ -87,6 +87,14 @@ class Command(BaseCommand):
             f"Collecting monthly balance statements (positive_only={positive_only}, "
             f"student_id={student_id}, days_back={days_back}, as_of_date={target_date})..."
         )
+        logger.info(
+            "Collecting monthly balance statements (positive_only=%s, student_id=%s, days_back=%s, as_of_date=%s, dry_run=%s)",
+            positive_only,
+            student_id,
+            days_back,
+            target_date,
+            dry_run,
+        )
 
         recipients = get_monthly_balance_recipients(
             positive_only=positive_only,
@@ -101,9 +109,11 @@ class Command(BaseCommand):
             ]
 
         self.stdout.write(f"Found {len(recipients)} balance statement(s) to dispatch.")
+        logger.info("Found %d balance statement(s) to dispatch.", len(recipients))
 
         if not recipients:
             self.stdout.write(self.style.SUCCESS("No balance statements to send."))
+            logger.info("No balance statements to send.")
             return
 
         statement_date = target_date or timezone.localdate()
@@ -115,6 +125,10 @@ class Command(BaseCommand):
             adult = r["adult"]
             recip_email = r["email"]
             data = r["data"]
+
+            adult_user = getattr(adult, "user", None) if adult else None
+            username = adult_user.username if adult_user else "N/A"
+            adult_name = adult.display_name if adult else "N/A"
 
             subject = f"Monthly Balance Statement for {student.display_name} - {month_year_str}"
             template_name = "programs/emails/monthly_balance_update.html"
@@ -135,6 +149,14 @@ class Command(BaseCommand):
                     f"  [DRY RUN] Would send balance statement for {student.display_name} "
                     f"(balance: ${data['total_balance']}) to {recip_email}"
                 )
+                logger.info(
+                    "[DRY RUN] Would send monthly balance statement for student %s to adult %s (user: %s) <%s> (balance: $%s)",
+                    student.display_name,
+                    adult_name,
+                    username,
+                    recip_email,
+                    data["total_balance"],
+                )
             else:
                 try:
                     send_templated_notification(
@@ -144,10 +166,20 @@ class Command(BaseCommand):
                         recipient_list=[recip_email],
                     )
                     total_sent += 1
+                    logger.info(
+                        "Sent monthly balance statement for student %s to adult %s (user: %s) <%s> (balance: $%s)",
+                        student.display_name,
+                        adult_name,
+                        username,
+                        recip_email,
+                        data["total_balance"],
+                    )
                 except Exception:
                     logger.exception(
-                        "Failed to send monthly balance email for %s to %s",
-                        student,
+                        "Failed to send monthly balance email for student %s to adult %s (user: %s) <%s>",
+                        student.display_name,
+                        adult_name,
+                        username,
                         recip_email,
                     )
 
@@ -157,9 +189,17 @@ class Command(BaseCommand):
                     f"Dry run complete. {len(recipients)} balance statement(s) would be sent."
                 )
             )
+            logger.info(
+                "Dry run complete for monthly balances. %d balance statement(s) would be sent.",
+                len(recipients),
+            )
         else:
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Successfully sent {total_sent} balance statement(s)."
                 )
+            )
+            logger.info(
+                "Completed monthly balances: successfully sent %d balance statement(s)",
+                total_sent,
             )

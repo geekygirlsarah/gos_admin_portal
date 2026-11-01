@@ -32,7 +32,7 @@ def find_matching_alumni_adult(student):
     # 2. Emails
     emails = [
         getattr(student, "personal_email", None),
-        getattr(student, "andrew_email", None),
+        getattr(student, "org_email", None) or getattr(student, "andrew_email", None),
     ]
     for e in emails:
         if e:
@@ -45,8 +45,8 @@ def find_matching_alumni_adult(student):
                 ).first()
                 if a:
                     return a
-            # Andrew email match
-            a = Adult.objects.filter(andrew_email__iexact=e).first()
+            # Org / Andrew email match
+            a = Adult.objects.filter(org_email__iexact=e).first()
             if a:
                 return a
 
@@ -91,11 +91,13 @@ def convert_student_to_alumni(student):
             student_record=student,
             photo=student.photo,
         )
-        # Copy Andrew ID details if the student had them
-        if student.andrew_id or student.andrew_email:
-            adult.andrew_id = adult.andrew_id or student.andrew_id or None
-            adult.andrew_email = adult.andrew_email or student.andrew_email or None
-            adult.save(update_fields=["andrew_id", "andrew_email", "updated_at"])
+        # Copy org / Andrew ID details if the student had them
+        if student.org_account_id or student.org_email:
+            adult.org_account_id = (
+                adult.org_account_id or student.org_account_id or None
+            )
+            adult.org_email = adult.org_email or student.org_email or None
+            adult.save(update_fields=["org_account_id", "org_email", "updated_at"])
         created = True
     else:
         changed = False
@@ -106,10 +108,8 @@ def convert_student_to_alumni(student):
             adult.student_record = student
             changed = True
 
-        if not adult.personal_email and (
-            student.personal_email or student.andrew_email
-        ):
-            adult.personal_email = student.personal_email or student.andrew_email
+        if not adult.personal_email and (student.personal_email or student.org_email):
+            adult.personal_email = student.personal_email or student.org_email
             changed = True
 
         # Copy missing fields from student to adult
@@ -130,14 +130,14 @@ def convert_student_to_alumni(student):
                 setattr(adult, adult_field, getattr(student, student_field))
                 changed = True
 
-        # Copy Andrew ID details if student had them and adult doesn't yet
-        if student.andrew_id or student.andrew_email:
+        # Copy org / Andrew ID details if student had them and adult doesn't yet
+        if student.org_account_id or student.org_email:
             access_changed = False
-            if not adult.andrew_id and student.andrew_id:
-                adult.andrew_id = student.andrew_id
+            if not adult.org_account_id and student.org_account_id:
+                adult.org_account_id = student.org_account_id
                 access_changed = True
-            if not adult.andrew_email and student.andrew_email:
-                adult.andrew_email = student.andrew_email
+            if not adult.org_email and student.org_email:
+                adult.org_email = student.org_email
                 access_changed = True
             if access_changed:
                 changed = True

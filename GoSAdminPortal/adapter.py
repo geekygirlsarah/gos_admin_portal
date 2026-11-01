@@ -42,7 +42,7 @@ def _find_or_provision_user_for_email(email):
     # as requested by the user.
     adult_qs = (
         Adult.objects.filter(
-            Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
+            Q(personal_email__iexact=email_lower) | Q(org_email__iexact=email_lower)
         )
         .annotate(
             is_primary_contact=Exists(
@@ -58,29 +58,60 @@ def _find_or_provision_user_for_email(email):
 
     adult_allowed = False
     if adult:
-        # For role allowance, we still need to know whether the personal email
-        # field matched (mentors are handled by address domain below).
-        is_personal = (
+        from organizations.utils import get_default_organization
+
+        adult_org = adult.organization or get_default_organization()
+        is_personal = bool(
             adult.personal_email and adult.personal_email.lower() == email_lower
         )
+        is_org_email = adult_org.is_org_email(email_lower) if adult_org else False
+        matches_org = bool(adult.org_email and adult.org_email.lower() == email_lower)
+
         if adult.is_mentor:
-            # Mentors (and Lead Mentors by extension) must use Andrew email.
-            # We allow any email ending in @andrew.cmu.edu if it matched this adult.
-            adult_allowed = email_lower.endswith("@andrew.cmu.edu")
-        elif (
-            adult.is_parent
-            or adult.is_alumni
-            or (not adult.is_parent and not adult.is_alumni and not adult.is_mentor)
-        ):
+            if adult_org and adult_org.is_role_forced_org_email("mentor"):
+                adult_allowed = is_org_email or matches_org
+            else:
+                adult_allowed = is_personal or is_org_email or matches_org
+        elif adult.is_parent:
+            if adult_org and adult_org.is_role_forced_org_email("parent"):
+                adult_allowed = is_org_email or matches_org
+            else:
+                adult_allowed = is_personal
+        elif adult.is_alumni:
+            if adult_org and adult_org.is_role_forced_org_email("alumni"):
+                adult_allowed = is_org_email or matches_org
+            else:
+                adult_allowed = is_personal
+        else:
             adult_allowed = is_personal
 
     # B. Student check
     # Prefer a Student already linked to a User if multiple exist with this email.
     student_qs = Student.objects.filter(
-        Q(personal_email__iexact=email_lower) | Q(andrew_email__iexact=email_lower)
+        Q(personal_email__iexact=email_lower) | Q(org_email__iexact=email_lower)
     )
     student = student_qs.filter(user__isnull=False).first() or student_qs.first()
-    student_allowed = student is not None
+    student_allowed = False
+    if student:
+        from organizations.utils import get_default_organization
+
+        student_org = student.organization or get_default_organization()
+        is_student_personal = bool(
+            student.personal_email and student.personal_email.lower() == email_lower
+        )
+        is_student_org_email = (
+            student_org.is_org_email(email_lower) if student_org else False
+        )
+        matches_student_org = bool(
+            student.org_email and student.org_email.lower() == email_lower
+        )
+
+        if student_org and student_org.is_role_forced_org_email("student"):
+            student_allowed = is_student_org_email or matches_student_org
+        else:
+            student_allowed = (
+                is_student_personal or is_student_org_email or matches_student_org
+            )
 
     # C. Fallback check
     fallback_allowed = (

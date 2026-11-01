@@ -25,7 +25,7 @@ def student_recipient_email(student):
         return None
     email = (
         student.personal_email
-        or student.andrew_email
+        or student.org_email
         or (student.user.email if getattr(student, "user", None) else None)
     )
     if email and email.strip():
@@ -39,7 +39,7 @@ def adult_recipient_email(adult):
         return None
     email = (
         adult.personal_email
-        or adult.andrew_email
+        or adult.org_email
         or (adult.user.email if getattr(adult, "user", None) else None)
     )
     if email and email.strip():

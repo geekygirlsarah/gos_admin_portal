@@ -104,6 +104,8 @@ Forms dealing with organization-scoped selections:
 ## Platform Administration & Superuser Tools (`organizations/platform_views.py`)
 
 Dedicated platform administration endpoints (`/platform-admin/`) are strictly restricted to active superusers via `SuperuserRequiredMixin`:
+- **Domain-Level Isolation**: Platform admin routes are strictly prohibited from being served through tenant subdomains (e.g. `team-name.momentumteam.app`), tenant custom domains, or tenant routing headers. Requests originating from tenant contexts raise `Http404` to maintain boundary separation between the global platform and individual team portals.
+- **Dedicated Navigation**: When browsing `/platform-admin/` pages, the navbar switches context to display platform administration actions (Overview, Organizations, Usage Metrics, System Health, User Support, Audit Logs, and Django Admin) and a "Return to Team Portal" action, replacing team-specific dropdowns even for users who hold team leadership roles (e.g. Lead Mentor).
 - **Overview Dashboard (`/platform-admin/`)**: Aggregates tenant counts, user totals, active program metrics, health summaries, and recent cross-tenant audit activity.
 - **Organization Health & Readiness**: Automated health checks evaluate lead mentor staffing, active program availability, and mentor compliance rates (background checks and agreements).
 - **Tenant Management**: Interface to create, configure, update, activate/deactivate, and switch active organization context.

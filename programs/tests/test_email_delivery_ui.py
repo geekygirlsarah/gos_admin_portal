@@ -145,6 +145,31 @@ class EmailDeliveryUITests(TestCase):
         self.assertEqual(event.resolved_by, self.lead_user)
         self.assertIsNotNone(event.resolved_at)
 
+    def test_email_delivery_issue_resolve_redirect_safety(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+
+        # Test safe relative next URL
+        event1 = EmailDeliveryEvent.objects.create(
+            recipient_email="safe.redirect@example.com",
+            event_type=EmailDeliveryEvent.EVENT_BOUNCED,
+            reason="Bounce",
+        )
+        resolve_url1 = reverse("email_delivery_issue_resolve", args=[event1.pk])
+        resp1 = self.client.post(
+            f"{resolve_url1}?next=/programs/students/{self.student.pk}/"
+        )
+        self.assertRedirects(resp1, f"/programs/students/{self.student.pk}/")
+
+        # Test malicious external next URL is blocked and falls back to issue list
+        event2 = EmailDeliveryEvent.objects.create(
+            recipient_email="unsafe.redirect@example.com",
+            event_type=EmailDeliveryEvent.EVENT_BOUNCED,
+            reason="Bounce",
+        )
+        resolve_url2 = reverse("email_delivery_issue_resolve", args=[event2.pk])
+        resp2 = self.client.post(f"{resolve_url2}?next=https://malicious.example.com")
+        self.assertRedirects(resp2, reverse("email_delivery_issues_list"))
+
     def test_audit_digest_reports_delivery_issues(self):
         EmailDeliveryEvent.objects.create(
             recipient_email="digest.test@example.com",

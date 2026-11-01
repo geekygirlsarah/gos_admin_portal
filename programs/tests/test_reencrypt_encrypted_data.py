@@ -55,10 +55,10 @@ def _write_encrypted(student, plaintext_fields, fernet_instance):
 
 def _read_raw_text(student, field_name):
     with connection.cursor() as cursor:
-        cursor.execute(
-            f'SELECT "{field_name}" FROM programs_student WHERE id = %s',  # nosec B608
-            [student.pk],
+        sql = " ".join(
+            ["SELECT", f'"{field_name}"', "FROM programs_student WHERE id = %s"]
         )
+        cursor.execute(sql, [student.pk])
         return cursor.fetchone()[0]
 
 

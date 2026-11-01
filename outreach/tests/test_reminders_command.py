@@ -1,6 +1,6 @@
 """Tests for the send_outreach_reminders management command."""
 
-from datetime import date, time, timedelta
+from datetime import time, timedelta
 from io import StringIO
 
 from django.contrib.auth.models import User
@@ -10,7 +10,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from organizations.utils import get_organization_email_settings
-from outreach.models import OutreachMentorSignup, OutreachShift, OutreachSignup
+from outreach.models import OutreachMentorSignup, OutreachSignup
 from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
@@ -125,8 +125,17 @@ class SendOutreachRemindersCommandTest(TestCase):
 
     def test_default_runs_for_tomorrow_events(self):
         out = StringIO()
-        call_command("send_outreach_reminders", stdout=out)
-        output = out.getvalue()
+        with self.assertLogs(
+            "outreach.management.commands.send_outreach_reminders", level="INFO"
+        ) as cm:
+            call_command("send_outreach_reminders", stdout=out)
+        logs = "\n".join(cm.output)
+
+        self.assertIn("student1@example.com", logs)
+        self.assertIn("student2@example.com", logs)
+        self.assertIn("mentor@example.com", logs)
+        self.assertIn("student1", logs)
+        self.assertIn("mentor", logs)
 
         # 3 emails should be sent: student1, student2, mentor
         self.assertEqual(len(mail.outbox), 3)
@@ -164,12 +173,19 @@ class SendOutreachRemindersCommandTest(TestCase):
 
     def test_dry_run_does_not_send_emails(self):
         out = StringIO()
-        call_command("send_outreach_reminders", dry_run=True, stdout=out)
+        with self.assertLogs(
+            "outreach.management.commands.send_outreach_reminders", level="INFO"
+        ) as cm:
+            call_command("send_outreach_reminders", dry_run=True, stdout=out)
         output = out.getvalue()
+        logs = "\n".join(cm.output)
 
         self.assertEqual(len(mail.outbox), 0)
         self.assertIn("DRY RUN", output)
         self.assertIn("Library Science Fair", output)
+        self.assertIn("[DRY RUN]", logs)
+        self.assertIn("student1@example.com", logs)
+        self.assertIn("mentor@example.com", logs)
 
     def test_custom_days_ahead(self):
         out = StringIO()

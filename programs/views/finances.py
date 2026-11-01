@@ -1102,7 +1102,7 @@ class ProgramEmailBalancesView(LoginRequiredMixin, LeadMentorRequiredMixin, View
                 if getattr(adult, "email_updates", False) and getattr(
                     adult, "login_enabled", True
                 ):
-                    email = adult.personal_email or adult.andrew_email
+                    email = adult.personal_email or adult.org_email
                     if email:
                         emails.append(email)
             # Deduplicate while preserving order

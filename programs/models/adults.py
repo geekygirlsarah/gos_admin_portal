@@ -147,31 +147,84 @@ class Adult(models.Model):
         upload_to=_adult_photo_upload_to, blank=True, null=True, max_length=255
     )
 
-    # Andrew ID details (mentors/CMU-affiliated staff only)
-    andrew_id = models.CharField(
+    # Organization email & account details
+    org_account_id = models.CharField(
         max_length=50,
         blank=True,
         null=True,
-        help_text="CMU Andrew ID. Assigned by lead mentors; only applies to mentors/CMU staff.",
+        help_text="Organization / institutional account ID (e.g. username or student ID).",
     )
-    andrew_email = models.EmailField(
+    org_email = models.EmailField(
         blank=True,
         null=True,
-        help_text="CMU Andrew email (andrew_id@andrew.cmu.edu). Assigned by lead mentors.",
+        help_text="Organization / institutional email address.",
     )
-    andrew_id_expiration = models.DateField(
+    org_email_expiration = models.DateField(
         blank=True,
         null=True,
-        help_text="Expiration date of this Andrew ID.",
+        help_text="Expiration date of this organization account / email.",
     )
-    andrew_id_sponsor = models.ForeignKey(
+    org_email_sponsor = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="sponsored_andrew_ids",
-        help_text="The Adult (mentor) who sponsored this Andrew ID.",
+        related_name="sponsored_org_emails",
+        help_text="The Adult (mentor) who sponsored this organization account.",
     )
+
+    @property
+    def andrew_id(self):
+        return self.org_account_id
+
+    @andrew_id.setter
+    def andrew_id(self, value):
+        self.org_account_id = value
+
+    @property
+    def andrew_email(self):
+        return self.org_email
+
+    @andrew_email.setter
+    def andrew_email(self, value):
+        self.org_email = value
+
+    @property
+    def andrew_id_expiration(self):
+        return self.org_email_expiration
+
+    @andrew_id_expiration.setter
+    def andrew_id_expiration(self, value):
+        self.org_email_expiration = value
+
+    @property
+    def andrew_id_sponsor(self):
+        return self.org_email_sponsor
+
+    @andrew_id_sponsor.setter
+    def andrew_id_sponsor(self, value):
+        self.org_email_sponsor = value
+
+    @property
+    def andrew_id_sponsor_id(self):
+        return self.org_email_sponsor_id
+
+    @andrew_id_sponsor_id.setter
+    def andrew_id_sponsor_id(self, value):
+        self.org_email_sponsor_id = value
+
+    def __init__(self, *args, **kwargs):
+        if "andrew_id" in kwargs:
+            kwargs["org_account_id"] = kwargs.pop("andrew_id")
+        if "andrew_email" in kwargs:
+            kwargs["org_email"] = kwargs.pop("andrew_email")
+        if "andrew_id_expiration" in kwargs:
+            kwargs["org_email_expiration"] = kwargs.pop("andrew_id_expiration")
+        if "andrew_id_sponsor" in kwargs:
+            kwargs["org_email_sponsor"] = kwargs.pop("andrew_id_sponsor")
+        if "andrew_id_sponsor_id" in kwargs:
+            kwargs["org_email_sponsor_id"] = kwargs.pop("andrew_id_sponsor_id")
+        super().__init__(*args, **kwargs)
 
     # Discord
     on_discord = models.BooleanField(default=False)
@@ -370,24 +423,36 @@ class Adult(models.Model):
         if self.personal_email:
             email = self.personal_email.strip().lower()
             if Student.objects.filter(
-                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+                Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
                     {"personal_email": "This email is already in use by a student."}
                 )
 
-        if self.andrew_email:
-            email = self.andrew_email.strip().lower()
+        if self.org_email:
+            email = self.org_email.strip().lower()
             if Student.objects.filter(
-                Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+                Q(personal_email__iexact=email) | Q(org_email__iexact=email)
             ).exists():
                 raise ValidationError(
-                    {"andrew_email": "This email is already in use by a student."}
+                    {"org_email": "This email is already in use by a student."}
                 )
 
     def save(self, *args, **kwargs):
         # Normalize newly uploaded photo: RGB JPEG, fixed orientation, in-memory (shared with Student).
         from programs.utils import normalize_image_field
+
+        if "update_fields" in kwargs and kwargs["update_fields"] is not None:
+            field_map = {
+                "andrew_id": "org_account_id",
+                "andrew_email": "org_email",
+                "andrew_id_expiration": "org_email_expiration",
+                "andrew_id_sponsor": "org_email_sponsor",
+                "andrew_id_sponsor_id": "org_email_sponsor_id",
+            }
+            kwargs["update_fields"] = [
+                field_map.get(f, f) for f in kwargs["update_fields"]
+            ]
 
         normalize_image_field(getattr(self, "photo", None), log_prefix="Adult photo")
         super().save(*args, **kwargs)

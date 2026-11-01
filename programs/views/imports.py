@@ -183,8 +183,18 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     "Phone Number",
                 )
                 personal_email = val(d, "personal_email", "Email", "Personal Email")
-                andrew_id = val(d, "andrew_id", "Andrew ID", "AndrewID")
-                andrew_email = val(d, " andrew_email", "Andrew Email")
+                org_account_id = val(
+                    d,
+                    "org_account_id",
+                    "org_id",
+                    "andrew_id",
+                    "Andrew ID",
+                    "AndrewID",
+                    "Account ID",
+                )
+                org_email = val(
+                    d, "org_email", "andrew_email", "Andrew Email", "Org Email"
+                )
                 race_ethnicity = val(
                     d, "race_ethnicity", "Race/Ethnicity", "Race", "Ethnicity"
                 )
@@ -229,8 +239,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         "phone_type": "cell",
                         "can_receive_texts": True,
                         "personal_email": personal_email,
-                        "andrew_id": andrew_id,
-                        "andrew_email": andrew_email,
+                        "org_account_id": org_account_id,
+                        "org_email": org_email,
                         "tshirt_size": tshirt_size,
                         "seen_once": seen_once if seen_once is not None else False,
                         "on_discord": on_discord if on_discord is not None else False,
@@ -256,8 +266,8 @@ class StudentImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                         ("phone_type", "cell"),
                         ("can_receive_texts", True),
                         ("personal_email", personal_email),
-                        ("andrew_id", andrew_id),
-                        ("andrew_email", andrew_email),
+                        ("org_account_id", org_account_id),
+                        ("org_email", org_email),
                         ("tshirt_size", tshirt_size),
                         ("discord_handle", discord_handle),
                     ]:
@@ -607,16 +617,24 @@ class RelationshipImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 return None
 
             def resolve_student(d):
-                # Priority: ID -> Andrew ID -> (First/Legal First + Last + DOB) -> (First/Legal First + Last)
+                # Priority: ID -> Org/Andrew ID -> (First/Legal First + Last + DOB) -> (First/Legal First + Last)
                 sid = val(d, "student_id", "Student ID", "ID")
                 if sid and str(sid).isdigit():
                     st = Student.objects.filter(pk=int(str(sid))).first()
                     if st:
                         return st
 
-                aid = val(d, "andrew_id", "Andrew ID", "AndrewID")
+                aid = val(
+                    d,
+                    "org_account_id",
+                    "org_id",
+                    "andrew_id",
+                    "Andrew ID",
+                    "AndrewID",
+                    "Account ID",
+                )
                 if aid:
-                    st = Student.objects.filter(andrew_id__iexact=aid).first()
+                    st = Student.objects.filter(org_account_id__iexact=aid).first()
                     if st:
                         return st
 
@@ -880,14 +898,20 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
                     errors += 1
                     continue
                 email = val(d, "personal_email", "Email", "Personal Email")
-                andrew_email = val(d, "andrew_email", "Andrew Email")
+                org_email = val(
+                    d, "org_email", "andrew_email", "Andrew Email", "Org Email"
+                )
+                org_account_id = val(
+                    d, "org_account_id", "andrew_id", "Andrew ID", "AndrewID"
+                )
                 role = val(d, "role", "Role") or "mentor"
                 obj, created_flag = Adult.objects.get_or_create(
                     legal_first_name=first,
                     last_name=last,
                     defaults={
                         "personal_email": email,
-                        "andrew_email": andrew_email,
+                        "org_email": org_email,
+                        "org_account_id": org_account_id,
                         "role": role,
                         "is_mentor": True,
                     },
@@ -908,7 +932,8 @@ class MentorImportView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
                     for field, value in [
                         ("personal_email", email),
-                        ("andrew_email", andrew_email),
+                        ("org_email", org_email),
+                        ("org_account_id", org_account_id),
                         ("role", role),
                     ]:
                         if value and getattr(obj, field) != value:

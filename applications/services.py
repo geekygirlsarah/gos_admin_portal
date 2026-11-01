@@ -259,19 +259,19 @@ def get_student_emails(application: Application) -> List[str]:
 
 
 def find_student_by_email(email: str):
-    """Find a Student whose personal_email or andrew_email matches.
+    """Find a Student whose personal_email or org_email matches.
 
     Case-insensitive. Returns the first match or ``None``.
     """
     if not email:
         return None
     return Student.objects.filter(
-        Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+        Q(personal_email__iexact=email) | Q(org_email__iexact=email)
     ).first()
 
 
 def find_adult_by_email(email: str):
-    """Find an Adult whose personal_email or andrew_email (via MentorAndrewAccess) matches.
+    """Find an Adult whose personal_email or org_email matches.
 
     When multiple Adults share the same email (e.g. a mother and father), prefer
     the one who is already a primary_contact for at least one student, since the
@@ -284,7 +284,7 @@ def find_adult_by_email(email: str):
     from programs.models import Student
 
     qs = Adult.objects.filter(
-        Q(personal_email__iexact=email) | Q(andrew_email__iexact=email)
+        Q(personal_email__iexact=email) | Q(org_email__iexact=email)
     )
     # Prefer primary contacts over secondary/unlinked adults.
     is_primary_for = Student.objects.filter(
@@ -337,13 +337,13 @@ def applications_for_user(user):
     match = Q()
     student = getattr(user, "student_profile", None)
     if student is not None:
-        for email in {student.personal_email, student.andrew_email}:
+        for email in {student.personal_email, student.org_email}:
             if email:
                 match |= Q(email__iexact=email)
 
     adult = getattr(user, "adult_profile", None)
     if adult is not None:
-        for email in {adult.personal_email, adult.andrew_email}:
+        for email in {adult.personal_email, adult.org_email}:
             if not email:
                 continue
             match |= Q(email__iexact=email)
@@ -726,16 +726,23 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
     preferred_first = (parent_data.get("preferred_first_name") or "").strip()
     last_name = (parent_data.get("last_name") or "").strip()
 
-    # Andrew ID -> andrew_email
-    andrew_id = (parent_data.get("andrew_id") or "").strip()
-    andrew_email = (parent_data.get("andrew_email_fallback") or "").strip()
-    if andrew_id:
-        if "@" in andrew_id:
-            andrew_email = andrew_id
+    # Organization / institutional identifier -> org_email
+    org_account_id = (
+        parent_data.get("org_account_id") or parent_data.get("andrew_id") or ""
+    ).strip()
+    org_email = (
+        parent_data.get("org_email")
+        or parent_data.get("org_email_fallback")
+        or parent_data.get("andrew_email_fallback")
+        or ""
+    ).strip()
+    if org_account_id and not org_email:
+        if "@" in org_account_id:
+            org_email = org_account_id
         else:
-            andrew_email = f"{andrew_id}@andrew.cmu.edu"
+            org_email = f"{org_account_id}@andrew.cmu.edu"
 
-    if not email and not andrew_email and not (legal_first and last_name):
+    if not email and not org_email and not (legal_first and last_name):
         return None
 
     adult = None
@@ -750,15 +757,15 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
             adult = exact if exact is not None else None
         else:
             adult = qs.first()
-    if adult is None and andrew_email:
-        adult = Adult.objects.filter(andrew_email__iexact=andrew_email).first()
+    if adult is None and org_email:
+        adult = Adult.objects.filter(org_email__iexact=org_email).first()
 
     if adult is None:
         adult = Adult(
             legal_first_name=legal_first or "(unknown)",
             last_name=last_name or "(unknown)",
             personal_email=email or None,
-            andrew_email=andrew_email or None,
+            org_email=org_email or None,
         )
 
     # Fill in any missing fields from the captured data, without
@@ -772,8 +779,8 @@ def _adult_from_data(parent_data: dict, is_parent: bool = True):
     _fill("preferred_first_name", preferred_first)
     _fill("last_name", last_name)
     _fill("personal_email", email)
-    _fill("andrew_email", andrew_email)
-    _fill("andrew_id", andrew_id)
+    _fill("org_email", org_email)
+    _fill("org_account_id", org_account_id)
     _fill("phone_number", parent_data.get("phone_number"))
     _fill("phone_type", parent_data.get("phone_type"))
     if parent_data.get("can_receive_texts") and not adult.can_receive_texts:
@@ -832,7 +839,7 @@ def _student_from_application(application: Application):
     if student is None and candidate_emails:
         q = Q()
         for e in candidate_emails:
-            q |= Q(personal_email__iexact=e) | Q(andrew_email__iexact=e)
+            q |= Q(personal_email__iexact=e) | Q(org_email__iexact=e)
         student = Student.objects.filter(q).first()
 
     if student is None:
@@ -1010,9 +1017,16 @@ def convert_application_to_student(application: Application, request=None):
             if not mentor_data.get("email"):
                 mentor_data["email"] = application.email
 
-            # If the verified email is an Andrew email, also use it as andrew_email fallback
-            if application.email.lower().endswith("@andrew.cmu.edu"):
-                mentor_data["andrew_email_fallback"] = application.email
+            # If the verified email is an organization/Andrew email, also use it as org_email fallback
+            from organizations.utils import get_default_organization
+
+            org = (
+                getattr(application, "organization", None) or get_default_organization()
+            )
+            if (
+                org and org.is_org_email(application.email)
+            ) or application.email.lower().endswith("@andrew.cmu.edu"):
+                mentor_data["org_email_fallback"] = application.email
 
             adult = _adult_from_data(mentor_data, is_parent=False)
             adult.is_mentor = True

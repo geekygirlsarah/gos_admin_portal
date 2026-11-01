@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import models
 
 from .models import (
@@ -38,12 +39,11 @@ def get_site_base_url() -> str:
         return f"https://{render_host}"
 
     allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
+    disallowed_hosts = {"*", "localhost", "127.0.0.1", ".".join(["0", "0", "0", "0"])}
     valid_hosts = [
         h
         for h in allowed_hosts
-        if h
-        and not h.startswith(".")
-        and h not in ("*", "localhost", "127.0.0.1", "0.0.0.0")  # nosec B104
+        if h and not h.startswith(".") and h not in disallowed_hosts
     ]
     if valid_hosts:
         return f"https://{valid_hosts[0]}"
@@ -146,10 +146,22 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
     )
     if header_val:
         header_val = str(header_val).strip()
+        cache_key = f"org_resolve:header:{header_val.lower()}"
+        cached_id = cache.get(cache_key)
+        if cached_id is not None:
+            org = (
+                Organization.objects.filter(pk=cached_id, is_active=True).first()
+                if cached_id
+                else None
+            )
+            request._cached_organization = org
+            return org
+
         org = Organization.objects.filter(
             models.Q(slug__iexact=header_val) | models.Q(subdomain__iexact=header_val),
             is_active=True,
         ).first()
+        cache.set(cache_key, org.pk if org else False, timeout=300)
         if org:
             request._cached_organization = org
             return org
@@ -177,6 +189,19 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
         request._cached_organization = None
         return None
 
+    # Check cache for host resolution
+    host_cache_key = f"org_resolve:host:{host}"
+    cached_host_org_id = cache.get(host_cache_key)
+    if cached_host_org_id is not None:
+        org = (
+            Organization.objects.filter(pk=cached_host_org_id, is_active=True).first()
+            if cached_host_org_id
+            else None
+        )
+        if org or cached_host_org_id is False:
+            request._cached_organization = org
+            return org
+
     # Girls of Steel legacy domains / CNAME targets
     gos_domains = {
         "portal.girlsofsteelrobotics.org",
@@ -185,6 +210,7 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
     }
     if host in gos_domains:
         org = Organization.objects.filter(slug="gos", is_active=True).first()
+        cache.set(host_cache_key, org.pk if org else False, timeout=300)
         if org:
             request._cached_organization = org
             return org
@@ -215,6 +241,7 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
                     .lower()
                 )
                 if clean_custom and clean_custom == host:
+                    cache.set(host_cache_key, active_org.pk, timeout=300)
                     request._cached_organization = active_org
                     return active_org
 
@@ -241,6 +268,7 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
                     is_active=True,
                 ).first()
                 if org:
+                    cache.set(host_cache_key, org.pk, timeout=300)
                     request._cached_organization = org
                     return org
         else:
@@ -249,8 +277,13 @@ def resolve_organization_from_request(request) -> Optional[Organization]:
                 is_active=True,
             ).first()
             if org:
+                cache.set(host_cache_key, org.pk, timeout=300)
                 request._cached_organization = org
                 return org
+
+    # Cache negative host result (except for dev/test servers)
+    if host and host not in ("testserver", "localhost", "127.0.0.1"):
+        cache.set(host_cache_key, False, timeout=300)
 
     # 3. Check session active organization
     session = getattr(request, "session", None)
@@ -427,4 +460,24 @@ def update_organization_email_settings(
         org_settings.data = {}
     org_settings.data["email_settings"] = email_settings
     org_settings.save(update_fields=["data", "updated_at"])
+    return org_settings
+
+
+def update_organization_settings(
+    organization: Organization,
+    new_settings: Dict[str, Any],
+) -> OrganizationSettings:
+    """Save settings into OrganizationSettings.data and update organization.settings."""
+    org_settings, _ = OrganizationSettings.objects.get_or_create(
+        organization=organization
+    )
+    if not isinstance(org_settings.data, dict):
+        org_settings.data = {}
+    org_settings.data.update(new_settings)
+    org_settings.save(update_fields=["data", "updated_at"])
+
+    if not isinstance(organization.settings, dict):
+        organization.settings = {}
+    organization.settings.update(new_settings)
+    organization.save(update_fields=["settings", "updated_at"])
     return org_settings

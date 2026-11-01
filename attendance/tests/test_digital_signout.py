@@ -900,3 +900,10 @@ class DigitalSignoutSignatureEncryptionAndEndpointTests(TestCase):
         self.client.force_login(self.parent_user)
         response = self.client.get(self.url)
         self.assertIn(response.status_code, (302, 403))
+
+    def test_program_digital_signout_page_lazy_loads_signatures(self):
+        self.client.force_login(self.lead_user)
+        url = reverse("program_digital_signout", args=[self.program.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'loading="lazy"')

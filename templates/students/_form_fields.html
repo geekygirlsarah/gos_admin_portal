@@ -125,18 +125,18 @@
 </div>
 {% endif %}
 
-{# Andrew ID (CMU) #}
+{# Andrew / Organization ID #}
 {% can_read user 'cmu_andrew' as can_read_cmu %}
-{% if can_read_cmu and 'cmu-andrew' in program_feature_keys %}
+{% if can_read_cmu and 'cmu-andrew' in program_feature_keys and org_account_enabled %}
 <div class="card mb-4">
-  <div class="card-header">CMU Andrew ID</div>
+  <div class="card-header">{{ org_account_name|default:"Andrew ID" }}</div>
   <div class="card-body">
     <div class="row g-3">
       {% can_write user 'cmu_andrew' form.instance as can_write_cmu %}
-      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id %}{% else %}{% render_field form.andrew_id readonly=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_email %}{% else %}{% render_field form.andrew_email readonly=True %}{% endif %}</div>
-      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.andrew_id_expiration %}{% else %}{% render_field form.andrew_id_expiration readonly=True %}{% endif %}</div>
-      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.andrew_id_sponsor %}{% else %}{% render_field form.andrew_id_sponsor disabled=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.org_account_id %}{% else %}{% render_field form.org_account_id readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.org_email %}{% else %}{% render_field form.org_email readonly=True %}{% endif %}</div>
+      <div class="col-md-4">{% if can_write_cmu %}{% render_field form.org_email_expiration %}{% else %}{% render_field form.org_email_expiration readonly=True %}{% endif %}</div>
+      <div class="col-md-6">{% if can_write_cmu %}{% render_field form.org_email_sponsor %}{% else %}{% render_field form.org_email_sponsor disabled=True %}{% endif %}</div>
     </div>
   </div>
 </div>
@@ -191,19 +191,25 @@
 {% endif %}
 
 {# Parents / Contacts #}
-{% can_read user 'parents_emergency' as can_read_parents %}
+{% can_read user 'parents_emergency' form.instance as can_read_parents %}
 {% if can_read_parents %}
 <div class="card mb-4">
   <div class="card-header">Parents / Emergency Contacts</div>
   <div class="card-body">
     {% can_write user 'parents_emergency' form.instance as can_write_parents %}
+    {% if not can_write_parents %}
+      <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+        <i class="bi bi-info-circle-fill me-2 flex-shrink-0"></i>
+        <div>
+          You may edit your profile information. To add, remove, or modify parent/guardian relationships and emergency contacts, please reach out to team leadership{% if org_contact_email %} at <a href="mailto:{{ org_contact_email }}?subject=Guardian%20Update%20Request%20-%20{{ form.instance.display_name|urlencode }}" class="alert-link">{{ org_contact_email }}</a>{% endif %}.
+        </div>
+      </div>
+    {% endif %}
+    {% if can_write_parents %}
     <div class="mb-4">
-      {% if can_write_parents %}
-        {% render_field form.parents %}
-      {% else %}
-        {% render_field form.parents disabled=True %}
-      {% endif %}
+      {% render_field form.parents %}
     </div>
+    {% endif %}
 
     {# Keep original Django contact fields hidden so we can synchronize values before submit #}
     <div class="d-none">

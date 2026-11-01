@@ -641,14 +641,30 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             elif "logo_file" in request.FILES and request.FILES["logo_file"]:
                 logo_file = request.FILES["logo_file"]
                 try:
+                    from django.utils.text import slugify
                     from PIL import Image
 
+                    # Open and verify image with Pillow
                     img = Image.open(logo_file)
                     img.verify()
                     logo_file.seek(0)
 
-                    ext = os.path.splitext(logo_file.name)[1].lower() or ".png"
-                    filename = f"org_logos/{org.slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
+                    # Strictly validate image format against allowlist
+                    fmt = (getattr(img, "format", "") or "").upper()
+                    allowed_formats = {
+                        "PNG": ".png",
+                        "JPEG": ".jpg",
+                        "GIF": ".gif",
+                        "WEBP": ".webp",
+                    }
+                    if fmt not in allowed_formats:
+                        raise ValueError(
+                            f"Unsupported image format: {fmt or 'unknown'}"
+                        )
+
+                    ext = allowed_formats[fmt]
+                    safe_slug = slugify(org.slug) or "org"
+                    filename = f"org_logos/{safe_slug}_logo_{uuid.uuid4().hex[:8]}{ext}"
                     saved_path = default_storage.save(filename, logo_file)
                     raw_url = default_storage.url(saved_path)
                     logo_url = (
@@ -825,6 +841,55 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             return redirect("/programs/settings/?tab=email")
 
         return redirect("/programs/settings/?tab=email")
+
+
+class PortalOrgAccountSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Handles updating organization account / institutional email settings from Portal Settings."""
+
+    def post(self, request):
+        from organizations.utils import (
+            get_default_organization,
+            update_organization_settings,
+        )
+
+        org = getattr(request, "organization", None)
+        if not org and request.user.is_authenticated:
+            membership = getattr(request.user, "organization_memberships", None)
+            if membership:
+                active_mem = membership.filter(is_active=True).first()
+                if active_mem:
+                    org = active_mem.organization
+        if not org:
+            org = get_default_organization()
+        if not org:
+            messages.error(request, "No active organization found.")
+            return redirect("/programs/settings/?tab=org_accounts")
+
+        org_account_enabled = request.POST.get("org_account_enabled") == "on"
+        org_account_name = (
+            request.POST.get("org_account_name", "").strip() or "Andrew ID"
+        )
+        org_email_domain = (
+            request.POST.get("org_email_domain", "").strip().lower().lstrip("@")
+        )
+        force_mentor_org_email = request.POST.get("force_mentor_org_email") == "on"
+        force_student_org_email = request.POST.get("force_student_org_email") == "on"
+        force_parent_org_email = request.POST.get("force_parent_org_email") == "on"
+        force_alumni_org_email = request.POST.get("force_alumni_org_email") == "on"
+
+        new_settings = {
+            "org_account_enabled": org_account_enabled,
+            "org_account_name": org_account_name,
+            "org_email_domain": org_email_domain,
+            "force_mentor_org_email": force_mentor_org_email,
+            "force_student_org_email": force_student_org_email,
+            "force_parent_org_email": force_parent_org_email,
+            "force_alumni_org_email": force_alumni_org_email,
+        }
+
+        update_organization_settings(org, new_settings)
+        messages.success(request, "Organization account settings updated successfully.")
+        return redirect("/programs/settings/?tab=org_accounts")
 
 
 def _parse_cutoff_date(post_data, min_age):

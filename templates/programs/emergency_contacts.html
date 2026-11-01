@@ -43,7 +43,7 @@
                       {{ row.student.display_name }}
                     </a>
                     <div class="mt-2">
-                      {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email andrew_email=row.student.andrew_email %}
+                      {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email org_email=row.student.org_email %}
                     </div>
                   </td>
                   <td>
@@ -55,7 +55,7 @@
                         {% endif %}
                       </div>
                       <div class="mt-2">
-                        {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email andrew_email=row.primary.andrew_email %}
+                        {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email org_email=row.primary.org_email %}
                       </div>
                     {% else %}
                       <span class="text-muted small">—</span>
@@ -70,7 +70,7 @@
                         {% endif %}
                       </div>
                       <div class="mt-2">
-                        {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email andrew_email=row.secondary.andrew_email %}
+                        {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email org_email=row.secondary.org_email %}
                       </div>
                     {% else %}
                       <span class="text-muted small">—</span>
@@ -86,7 +86,7 @@
                           {% endif %}
                         </div>
                         <div class="mt-1">
-                          {% include "programs/_contact_buttons.html" with phone=entry.adult.phone_number personal_email=entry.adult.personal_email andrew_email=entry.adult.andrew_email %}
+                          {% include "programs/_contact_buttons.html" with phone=entry.adult.phone_number personal_email=entry.adult.personal_email org_email=entry.adult.org_email %}
                         </div>
                       </div>
                     {% empty %}
@@ -116,7 +116,7 @@
                   </h5>
                 </div>
                 <div class="mt-2 mb-2">
-                  {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email andrew_email=row.student.andrew_email %}
+                  {% include "programs/_contact_buttons.html" with phone=row.student.phone_number personal_email=row.student.personal_email org_email=row.student.org_email %}
                 </div>
 
                 {% if row.primary %}
@@ -128,7 +128,7 @@
                       {% endif %}
                     </div>
                     <div class="mt-1">
-                      {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email andrew_email=row.primary.andrew_email %}
+                      {% include "programs/_contact_buttons.html" with phone=row.primary.phone_number personal_email=row.primary.personal_email org_email=row.primary.org_email %}
                     </div>
                   </div>
                 {% endif %}
@@ -142,7 +142,7 @@
                       {% endif %}
                     </div>
                     <div class="mt-1">
-                      {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email andrew_email=row.secondary.andrew_email %}
+                      {% include "programs/_contact_buttons.html" with phone=row.secondary.phone_number personal_email=row.secondary.personal_email org_email=row.secondary.org_email %}
                     </div>
                   </div>
                 {% endif %}
@@ -156,7 +156,7 @@
                       {% endif %}
                     </div>
                     <div class="mt-1">
-                      {% include "programs/_contact_buttons.html" with phone=entry.adult.phone_number personal_email=entry.adult.personal_email andrew_email=entry.adult.andrew_email %}
+                      {% include "programs/_contact_buttons.html" with phone=entry.adult.phone_number personal_email=entry.adult.personal_email org_email=entry.adult.org_email %}
                     </div>
                   </div>
                 {% endfor %}

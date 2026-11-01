@@ -105,7 +105,10 @@ def create_roles_and_permissions(sender, app_config=None, **kwargs):
         assign_default_permissions()
     except Exception:
         # Avoid breaking migrate due to permissions wiring
-        pass  # nosec B110
+        logger.debug(
+            "Failed to assign default roles and permissions on post_migrate",
+            exc_info=True,
+        )
 
 
 @receiver(post_save, sender="programs.Adult")

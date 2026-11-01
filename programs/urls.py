@@ -30,6 +30,7 @@ from .views import (
     PortalEmailSettingsView,
     PortalKioskView,
     PortalLeadMentorView,
+    PortalOrgAccountSettingsView,
     PortalPermissionsUpdateView,
     PortalSettingsView,
     PortalSlidingScaleSettingsView,
@@ -100,11 +101,14 @@ from .views import (
     StudentsBySchoolView,
     StudentUpdateView,
 )
-from .views.andrew_ids import andrew_id_management_view
 from .views.email_issues import (
     EmailDeliveryIssueListView,
     EmailDeliveryIssueResolveView,
     tosend_webhook_view,
+)
+from .views.org_emails import (
+    andrew_id_management_view,
+    org_email_management_view,
 )
 
 urlpatterns = [
@@ -694,6 +698,16 @@ urlpatterns = [
         "settings/email/",
         PortalEmailSettingsView.as_view(),
         name="portal_email_settings",
+    ),
+    path(
+        "settings/org-accounts/",
+        PortalOrgAccountSettingsView.as_view(),
+        name="portal_org_account_settings",
+    ),
+    path(
+        "org-emails/",
+        org_email_management_view,
+        name="org_email_management",
     ),
     path(
         "andrew-ids/",

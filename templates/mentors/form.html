@@ -43,17 +43,19 @@
           </div>
         </div>
 
+        {% if org_account_enabled %}
         <div class="card mb-4">
-          <div class="card-header">CMU Andrew ID</div>
+          <div class="card-header">{{ org_account_name|default:"Andrew ID" }}</div>
           <div class="card-body">
             <div class="row g-3">
-              <div class="col-md-3">{% render_field form.andrew_id %}</div>
-              <div class="col-md-5">{% render_field form.andrew_email %}</div>
-              <div class="col-md-4">{% render_field form.andrew_id_expiration %}</div>
-              <div class="col-md-6">{% render_field form.andrew_id_sponsor %}</div>
+              <div class="col-md-3">{% render_field form.org_account_id %}</div>
+              <div class="col-md-5">{% render_field form.org_email %}</div>
+              <div class="col-md-4">{% render_field form.org_email_expiration %}</div>
+              <div class="col-md-6">{% render_field form.org_email_sponsor %}</div>
             </div>
           </div>
         </div>
+        {% endif %}
 
         <div class="card mb-4">
           <div class="card-header">Discord</div>

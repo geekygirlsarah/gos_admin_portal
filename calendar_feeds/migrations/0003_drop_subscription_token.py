@@ -1,6 +1,8 @@
 # Hand-written migration to idempotently drop the obsolete subscription_token
 # column from calendar_feeds_calendarfeed if present from earlier local dev runs.
 
+from contextlib import suppress
+
 from django.db import migrations
 
 
@@ -31,10 +33,8 @@ def drop_subscription_token_if_exists(apps, schema_editor):
         for name, details in constraints.items():
             if "subscription_token" in details.get("columns", []):
                 if details.get("index") or details.get("unique"):
-                    try:
+                    with suppress(Exception):
                         cursor.execute(f"DROP INDEX IF EXISTS {name}")
-                    except Exception:  # nosec B110
-                        pass
 
         cursor.execute(
             "ALTER TABLE calendar_feeds_calendarfeed DROP COLUMN subscription_token"

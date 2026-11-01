@@ -44,6 +44,11 @@
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'org_accounts' %}active{% endif %}" id="org_accounts-tab" data-bs-toggle="pill" data-bs-target="#org_accounts" type="button" role="tab" aria-controls="org_accounts" aria-selected="{% if active_tab == 'org_accounts' %}true{% else %}false{% endif %}">
+                        <i class="bi bi-person-badge-fill me-1"></i> Org Accounts
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link rounded-2 fw-semibold py-2 {% if active_tab == 'kiosk_configs' %}active{% endif %}" id="kiosk_configs-tab" data-bs-toggle="pill" data-bs-target="#kiosk_configs" type="button" role="tab" aria-controls="kiosk_configs" aria-selected="{% if active_tab == 'kiosk_configs' %}true{% else %}false{% endif %}">
                         <i class="bi bi-tablet me-1"></i> Kiosk Sign-In
                     </button>
@@ -2240,6 +2245,90 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Org Accounts / Institutional Email Settings Tab -->
+        <div class="tab-pane fade {% if active_tab == 'org_accounts' %}show active{% endif %}" id="org_accounts" role="tabpanel" aria-labelledby="org_accounts-tab">
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-person-badge-fill text-primary me-2"></i>Institutional &amp; Organization Accounts</h5>
+                    <p class="text-muted small mb-0">Configure your organization or school email domain, account name, and role login restrictions.</p>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" action="{% url 'portal_org_account_settings' %}">
+                        {% csrf_token %}
+                        <div class="row g-4 mb-4">
+                            <div class="col-12">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" id="id_org_account_enabled" name="org_account_enabled" {% if org_account_enabled %}checked{% endif %}>
+                                    <label class="form-check-label fw-semibold" for="id_org_account_enabled">Enable Organization / School Accounts</label>
+                                    <div class="form-text">When disabled, all members log in with their personal email addresses and institutional account fields are hidden.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_org_account_name" class="form-label fw-semibold">Account / Identifier Name</label>
+                                <input type="text" class="form-control" id="id_org_account_name" name="org_account_name" value="{{ org_account_name|default:'Andrew ID' }}" placeholder="e.g. Andrew ID, School Account, Sciencey SSO">
+                                <div class="form-text">The label displayed across the portal and member profiles (e.g., "Andrew ID", "School Account", "Student ID Email").</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_org_email_domain" class="form-label fw-semibold">Organization / School Email Domain</label>
+                                <input type="text" class="form-control" id="id_org_email_domain" name="org_email_domain" value="{{ org_email_domain|default:'' }}" placeholder="e.g. andrew.cmu.edu, somewhere.pa.k12.us, scienceyrobotics.org">
+                                <div class="form-text">Allowed domain(s) for organization accounts. Separate multiple domains with commas.</div>
+                            </div>
+                        </div>
+
+                        <div class="border-top pt-4">
+                            <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-shield-lock me-2"></i>Role Login Enforcement</h6>
+                            <p class="text-muted small mb-3">Optionally force specific member roles to log in only using their organization/school email addresses. When unchecked, members of that role can log in with either personal or organization emails.</p>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="card border p-3 rounded-2 h-100">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="id_force_mentor_org_email" name="force_mentor_org_email" {% if force_mentor_org_email %}checked{% endif %}>
+                                            <label class="form-check-label fw-semibold" for="id_force_mentor_org_email">Force Mentors to use Org Email</label>
+                                            <div class="form-text">Requires mentors and lead mentors to log in using an address matching the organization domain.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border p-3 rounded-2 h-100">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="id_force_student_org_email" name="force_student_org_email" {% if force_student_org_email %}checked{% endif %}>
+                                            <label class="form-check-label fw-semibold" for="id_force_student_org_email">Force Students to use Org Email</label>
+                                            <div class="form-text">Requires students to log in using their school or organization email address.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border p-3 rounded-2 h-100">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="id_force_parent_org_email" name="force_parent_org_email" {% if force_parent_org_email %}checked{% endif %}>
+                                            <label class="form-check-label fw-semibold" for="id_force_parent_org_email">Force Parents to use Org Email</label>
+                                            <div class="form-text">Requires parents to log in using an address matching the organization domain.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border p-3 rounded-2 h-100">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="id_force_alumni_org_email" name="force_alumni_org_email" {% if force_alumni_org_email %}checked{% endif %}>
+                                            <label class="form-check-label fw-semibold" for="id_force_alumni_org_email">Force Alumni to use Org Email</label>
+                                            <div class="form-text">Requires alumni to log in using an address matching the organization domain.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-top d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i> Save Account Settings
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

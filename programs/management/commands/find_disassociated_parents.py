@@ -65,7 +65,7 @@ def _name_key(adult_or_names):
 
 def _adult_email_keys(adult):
     keys = set()
-    for value in (adult.personal_email, adult.andrew_email):
+    for value in (adult.personal_email, adult.org_email):
         key = _email_key(value)
         if key:
             keys.add(key)
@@ -129,7 +129,7 @@ def _match_linked(student, desc):
 def _adult_records_for_email(email):
     matches = list(Adult.objects.filter(personal_email__iexact=email))
     if not matches:
-        matches = list(Adult.objects.filter(andrew_email__iexact=email))
+        matches = list(Adult.objects.filter(org_email__iexact=email))
     return matches
 
 

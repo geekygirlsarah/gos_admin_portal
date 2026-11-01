@@ -1,4 +1,6 @@
-from django.urls import resolve
+from contextlib import suppress
+
+from django.urls import Resolver404, resolve
 
 
 class ActiveProgramMiddleware:
@@ -8,7 +10,7 @@ class ActiveProgramMiddleware:
     def __call__(self, request):
         if request.user.is_authenticated:
             # If we are visiting a program detail page, set it as active in session
-            try:
+            with suppress(Resolver404, Exception):
                 match = resolve(request.path)
                 view_kwargs = match.kwargs
                 if (
@@ -33,8 +35,6 @@ class ActiveProgramMiddleware:
                     request.session["active_program_id"] = str(
                         view_kwargs["program_id"]
                     )
-            except Exception:  # nosec B110
-                pass
 
             # 2. Auto-select if not set
             if "active_program_id" not in request.session:

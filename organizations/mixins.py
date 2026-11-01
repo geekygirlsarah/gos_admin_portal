@@ -1,6 +1,9 @@
 """View mixins for multi-tenant organization scoping."""
 
 import inspect
+from contextlib import suppress
+
+from django.core.exceptions import FieldDoesNotExist
 
 
 class OrganizationScopeMixin:
@@ -40,32 +43,26 @@ class OrganizationScopeMixin:
                 and hasattr(self, "get_form_class")
                 and callable(self.get_form_class)
             ):
-                try:
+                with suppress(Exception):
                     form_class = self.get_form_class()
-                except Exception:  # nosec B110
-                    form_class = None
             if form_class is not None:
-                try:
+                with suppress(Exception):
                     sig = inspect.signature(form_class.__init__)
                     if "organization" in sig.parameters or any(
                         p.kind == inspect.Parameter.VAR_KEYWORD
                         for p in sig.parameters.values()
                     ):
                         kwargs.setdefault("organization", org)
-                except Exception:  # nosec B110
-                    pass
         return kwargs
 
     def form_valid(self, form):
         """Assign request.organization to newly created model instances if applicable."""
         org = self.get_organization()
         if org and hasattr(form, "instance") and hasattr(form.instance, "_meta"):
-            try:
+            with suppress(FieldDoesNotExist, AttributeError):
                 field = form.instance._meta.get_field("organization")
                 if field and getattr(form.instance, "organization_id", None) is None:
                     form.instance.organization = org
-            except Exception:  # nosec B110
-                pass
         if hasattr(super(), "form_valid"):
             return super().form_valid(form)
         return form

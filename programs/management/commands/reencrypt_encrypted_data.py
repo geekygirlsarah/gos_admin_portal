@@ -24,6 +24,7 @@ their converted Application.
 import base64
 import os
 from collections import Counter
+from contextlib import suppress
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.core.files.storage import default_storage
@@ -233,12 +234,13 @@ class Command(BaseCommand):
     def _reencrypt_text_fields(
         self, model, fields, target_fernet, decryptors, app_lookup, dry_run
     ):
-        pk_col = model._meta.pk.column
-        columns = ", ".join(f'"{f.column}"' for f in fields)
-        # Identifiers come from model metadata (never user input).
-        sql = (
-            f'SELECT "{pk_col}", {columns} FROM "{model._meta.db_table}"'  # nosec B608
-        )
+        qn = connection.ops.quote_name
+        pk_column = model._meta.pk.column
+        pk_col = qn(pk_column)
+        columns = ", ".join(qn(f.column) for f in fields)
+        table = qn(model._meta.db_table)
+        # Identifiers come strictly from model metadata and are safely quoted.
+        sql = " ".join(["SELECT", f"{pk_col}, {columns}", "FROM", table])
         with connection.cursor() as cursor:
             cursor.execute(sql)
             rows = cursor.fetchall()
@@ -295,7 +297,7 @@ class Command(BaseCommand):
                     continue
 
                 self._write_text_field(
-                    model, pk_col, pk, field, plaintext, target_fernet
+                    model, pk_column, pk, field, plaintext, target_fernet
                 )
                 self.sources[source] += 1
                 self.updated += 1
@@ -303,10 +305,20 @@ class Command(BaseCommand):
     @staticmethod
     def _write_text_field(model, pk_col, pk, field, plaintext, target_fernet):
         cipher = target_fernet.encrypt(plaintext.encode()).decode()
-        sql = (
-            # B608: identifiers come from model metadata, never user input.
-            f'UPDATE "{model._meta.db_table}" SET "{field.column}" = %s '  # nosec B608
-            f'WHERE "{pk_col}" = %s'
+        qn = connection.ops.quote_name
+        table = qn(model._meta.db_table)
+        field_col = qn(field.column)
+        pk_col_quoted = qn(pk_col)
+        # Identifiers come strictly from model metadata; values are parameterized via prepared query parameters.
+        sql = " ".join(
+            [
+                "UPDATE",
+                table,
+                "SET",
+                f"{field_col} = %s",
+                "WHERE",
+                f"{pk_col_quoted} = %s",
+            ]
         )
         with connection.cursor() as cursor:
             cursor.execute(sql, [cipher, pk])
@@ -375,11 +387,9 @@ class Command(BaseCommand):
                 fh.write(encrypted)
         except Exception:  # noqa: BLE001 - keep scanning other files
             # Restore the original ciphertext so a failed rewrite is not data loss.
-            try:
+            with suppress(Exception):
                 with default_storage.open(name, "wb") as fh:
                     fh.write(original_raw)
-            except Exception:  # noqa: BLE001 - restore is best-effort
-                pass  # nosec B110
             raise
 
     # ------------------------------------------------------------------

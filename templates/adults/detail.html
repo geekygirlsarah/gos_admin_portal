@@ -86,9 +86,9 @@
                 <i class="bi bi-envelope me-1 text-primary"></i>{{ adult.personal_email }}
               </a>
             {% endif %}
-            {% if adult.andrew_email %}
-              <a href="mailto:{{ adult.andrew_email }}" class="btn btn-sm btn-light border bg-white text-dark py-0 px-2 rounded-pill">
-                <i class="bi bi-envelope-at me-1 text-danger"></i>{{ adult.andrew_email }}
+            {% if adult.org_email %}
+              <a href="mailto:{{ adult.org_email }}" class="btn btn-sm btn-light border bg-white text-dark py-0 px-2 rounded-pill">
+                <i class="bi bi-envelope-at me-1 text-danger"></i>{{ adult.org_email }}
               </a>
             {% endif %}
             {% if adult.phone_number %}
@@ -191,7 +191,7 @@
       {% endif %}
 
       <!-- Professional & Background Info -->
-      {% if adult.employer or adult.college or adult.andrew_id %}
+      {% if adult.employer or adult.college or adult.org_account_id %}
         <div class="card shadow-sm border-0 rounded-3 mb-4">
           <div class="card-header bg-white py-3 border-bottom d-flex align-items-center gap-2">
             <i class="bi bi-briefcase-fill text-secondary"></i>
@@ -211,10 +211,10 @@
                   <div>{{ adult.college }}</div>
                 </div>
               {% endif %}
-              {% if adult.andrew_id %}
+              {% if adult.org_account_id %}
                 <div class="col-md-6">
-                  <div class="text-muted small fw-semibold text-uppercase">CMU Andrew ID</div>
-                  <div><code>{{ adult.andrew_id }}</code></div>
+                  <div class="text-muted small fw-semibold text-uppercase">{{ org_account_name|default:"Account ID" }}</div>
+                  <div><code>{{ adult.org_account_id }}</code></div>
                 </div>
               {% endif %}
             </div>

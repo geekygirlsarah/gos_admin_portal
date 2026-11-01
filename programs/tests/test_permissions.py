@@ -88,6 +88,11 @@ class ProfilePermissionsTests(TestCase):
             defaults={"can_read": True, "can_write": True},
         )
         RolePermission.objects.update_or_create(
+            role="Student",
+            section="parents_emergency",
+            defaults={"can_read": True, "can_write": False},
+        )
+        RolePermission.objects.update_or_create(
             role="Parent",
             section="student_info",
             defaults={"can_read": True, "can_write": True},
@@ -134,6 +139,33 @@ class ProfilePermissionsTests(TestCase):
         url = reverse("student_edit", args=[self.student.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "To add, remove, or modify parent/guardian relationships and emergency contacts, please reach out to team leadership",
+        )
+        self.assertContains(response, "mailto:leads@girlsofsteelrobotics.org")
+
+    def test_student_editing_own_profile_cannot_remove_parents(self):
+        self.student.primary_contact = self.parent
+        self.student.save()
+        self.student_user.user_permissions.add(self.change_student_perm)
+        self.client.login(username="student_user", password="password123")  # nosec B106
+        url = reverse("student_edit", args=[self.student.pk])
+        post_data = {
+            "legal_first_name": "Student",
+            "preferred_first_name": "Stew",
+            "last_name": "One",
+            "date_of_birth": "2008-01-01",
+            "parents": [],
+            "primary_contact": "",
+            "secondary_contact": "",
+        }
+        response = self.client.post(url, post_data)
+        self.assertEqual(response.status_code, 302)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.preferred_first_name, "Stew")
+        self.assertEqual(self.student.primary_contact, self.parent)
+        self.assertIn(self.parent, self.student.adults.all())
 
     def test_student_cannot_edit_other_student_profile(self):
         self.student_user.user_permissions.add(self.change_student_perm)
@@ -160,6 +192,21 @@ class ProfilePermissionsTests(TestCase):
         url = reverse("parent_edit", args=[self.parent.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "To link or unlink students from your profile, please reach out to team leadership",
+        )
+        self.assertContains(response, "mailto:leads@girlsofsteelrobotics.org")
+
+    def test_lead_mentor_editing_student_sees_editable_parents_fields(self):
+        self.client.login(username="lead_mentor", password="password123")  # nosec B106
+        url = reverse("student_edit", args=[self.student.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            "To add, remove, or modify parent/guardian relationships and emergency contacts, please reach out to team leadership",
+        )
 
     def test_parent_cannot_edit_other_adult_profile(self):
         self.parent_user.user_permissions.add(self.change_adult_perm)

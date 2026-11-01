@@ -2,6 +2,8 @@ import logging
 import re
 from datetime import date
 
+from django.conf import settings
+
 from programs.models import Adult, Enrollment, Program, Student
 from programs.permission_views import get_user_role
 
@@ -132,9 +134,29 @@ def navbar_context(request):
     - navbar_role: the user's role string
     - navbar_program_students: students enrolled in the current program (for scoped nav)
     - navbar_program_parents: adults who are parents of enrolled students (for scoped nav)
+    - is_platform_admin: boolean indicating if current URL is under /platform-admin/
+    - site_base_url: primary domain base URL (e.g. https://momentumteam.app)
     """
+    try:
+        from organizations.utils import get_site_base_url
+
+        site_base_url = get_site_base_url()
+    except Exception:
+        site_base_url = ""
+
+    is_platform_admin = bool(
+        (
+            request.resolver_match
+            and getattr(request.resolver_match, "app_name", None) == "platform_admin"
+        )
+        or request.path.startswith("/platform-admin/")
+    )
+
     if not hasattr(request, "user") or not request.user.is_authenticated:
-        return {}
+        return {
+            "site_base_url": site_base_url,
+            "is_platform_admin": is_platform_admin,
+        }
 
     role = get_user_role(request.user)
 
@@ -270,6 +292,8 @@ def navbar_context(request):
         "navbar_is_mentor": navbar_is_mentor,
         "navbar_is_alumni": navbar_is_alumni,
         "navbar_is_student": navbar_is_student,
+        "is_platform_admin": is_platform_admin,
+        "site_base_url": site_base_url,
     }
 
 
@@ -296,3 +320,71 @@ def impersonation_context(request):
                 "Failed to resolve impersonator user %s: %s", impersonator_id, e
             )
     return {"is_impersonating": False, "impersonator": None}
+
+
+def organization_context(request):
+    """Provide organization settings and branding variables to templates."""
+    try:
+        from organizations.utils import (
+            get_default_organization,
+            get_organization_email_settings,
+            get_organization_setting,
+        )
+
+        org = getattr(request, "organization", None) or get_default_organization()
+    except Exception:
+        org = None
+
+    org_account_enabled = (
+        get_organization_setting(org, "org_account_enabled", True) if org else True
+    )
+    org_account_name = (
+        get_organization_setting(org, "org_account_name", "Andrew ID")
+        if org
+        else "Andrew ID"
+    )
+    org_email_domain = (
+        get_organization_setting(org, "org_email_domain", "andrew.cmu.edu")
+        if org
+        else "andrew.cmu.edu"
+    )
+    force_mentor_org_email = (
+        get_organization_setting(org, "force_mentor_org_email", True) if org else True
+    )
+    force_student_org_email = (
+        get_organization_setting(org, "force_student_org_email", False)
+        if org
+        else False
+    )
+    force_parent_org_email = (
+        get_organization_setting(org, "force_parent_org_email", False) if org else False
+    )
+    force_alumni_org_email = (
+        get_organization_setting(org, "force_alumni_org_email", False) if org else False
+    )
+
+    org_contact_email = None
+    try:
+        if org:
+            email_cfg = get_organization_email_settings(org)
+            org_contact_email = email_cfg.get("contact_email") or email_cfg.get(
+                "reply_to_email"
+            )
+    except Exception as e:
+        logger.debug("Failed to resolve organization email settings: %s", e)
+    if not org_contact_email:
+        org_contact_email = getattr(
+            settings, "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"
+        )
+
+    return {
+        "organization": org,
+        "org_account_enabled": org_account_enabled,
+        "org_account_name": org_account_name,
+        "org_email_domain": org_email_domain,
+        "force_mentor_org_email": force_mentor_org_email,
+        "force_student_org_email": force_student_org_email,
+        "force_parent_org_email": force_parent_org_email,
+        "force_alumni_org_email": force_alumni_org_email,
+        "org_contact_email": org_contact_email,
+    }

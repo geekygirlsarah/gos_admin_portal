@@ -21,6 +21,7 @@ from programs.utils.tosend_webhooks import (
     process_tosend_event,
     verify_tosend_signature,
 )
+from programs.utils.urls import get_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -131,4 +132,5 @@ class EmailDeliveryIssueResolveView(LeadMentorRequiredMixin, View):
             f"Delivery issue for {event.recipient_email} marked as resolved.",
         )
         next_url = request.POST.get("next") or request.GET.get("next")
-        return redirect(next_url or "email_delivery_issues_list")
+        safe_url = get_safe_url(request, next_url)
+        return redirect(safe_url or "email_delivery_issues_list")

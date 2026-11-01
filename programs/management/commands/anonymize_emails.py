@@ -73,15 +73,15 @@ class Command(BaseCommand):
                     if student.personal_email != new_personal:
                         student.personal_email = new_personal
                         updated = True
-                if student.andrew_email:
-                    new_andrew = f"student_{student.pk}_andrew@{domain}"
-                    if student.andrew_email != new_andrew:
-                        student.andrew_email = new_andrew
+                if student.org_email:
+                    new_org = f"student_{student.pk}_org@{domain}"
+                    if student.org_email != new_org:
+                        student.org_email = new_org
                         updated = True
                 if updated:
                     student_count += 1
                     if not dry_run:
-                        student.save(update_fields=["personal_email", "andrew_email"])
+                        student.save(update_fields=["personal_email", "org_email"])
 
             # 2. Adults
             for adult in Adult.objects.all():
@@ -91,15 +91,15 @@ class Command(BaseCommand):
                     if adult.personal_email != new_personal:
                         adult.personal_email = new_personal
                         updated = True
-                if adult.andrew_email:
-                    new_andrew = f"adult_{adult.pk}_andrew@{domain}"
-                    if adult.andrew_email != new_andrew:
-                        adult.andrew_email = new_andrew
+                if adult.org_email:
+                    new_org = f"adult_{adult.pk}_org@{domain}"
+                    if adult.org_email != new_org:
+                        adult.org_email = new_org
                         updated = True
                 if updated:
                     adult_count += 1
                     if not dry_run:
-                        adult.save(update_fields=["personal_email", "andrew_email"])
+                        adult.save(update_fields=["personal_email", "org_email"])
 
             # 3. Users & EmailAddress
             for user in User.objects.all():
