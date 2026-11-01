@@ -10,6 +10,7 @@ from django.views.decorators.cache import never_cache
 from guest_forms.forms import GuestFormSubmissionForm
 from guest_forms.models import GuestForm
 from guest_forms.services import send_submission_confirmation_email
+from organizations.models import OrganizationManager, OrganizationQuerySet
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -19,8 +20,11 @@ class GuestFormIndexView(View):
     template_name = "guest_forms/index.html"
 
     def get(self, request):
-        forms = GuestForm.objects.filter(is_active=True).order_by(
-            "display_order", "name"
+        org = getattr(request, "organization", None)
+        forms = (
+            GuestForm.objects.for_organization(org)
+            .filter(is_active=True)
+            .order_by("display_order", "name")
         )
         ctx = {"forms": forms}
         return render(request, self.template_name, ctx)
@@ -33,7 +37,10 @@ class GuestFormDetailView(View):
     template_name = "guest_forms/detail.html"
 
     def get(self, request, slug):
-        guest_form = get_object_or_404(GuestForm, slug=slug, is_active=True)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), slug=slug, is_active=True
+        )
         form = GuestFormSubmissionForm(guest_form=guest_form)
 
         ctx = {
@@ -43,7 +50,10 @@ class GuestFormDetailView(View):
         return render(request, self.template_name, ctx)
 
     def post(self, request, slug):
-        guest_form = get_object_or_404(GuestForm, slug=slug, is_active=True)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), slug=slug, is_active=True
+        )
         form = GuestFormSubmissionForm(
             request.POST, request.FILES, guest_form=guest_form
         )
@@ -77,5 +87,8 @@ class GuestFormSubmittedView(View):
     template_name = "guest_forms/submitted.html"
 
     def get(self, request, slug):
-        guest_form = get_object_or_404(GuestForm, slug=slug, is_active=True)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), slug=slug, is_active=True
+        )
         return render(request, self.template_name, {"guest_form": guest_form})
