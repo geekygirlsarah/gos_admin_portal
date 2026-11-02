@@ -1,5 +1,6 @@
 from io import BytesIO
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -55,7 +56,7 @@ class OrganizationEmailBrandingTests(TestCase):
             cfg["footer_text"],
             "Thank you for being part of Girls of Steel Robotics!",
         )
-        self.assertEqual(cfg["contact_email"], "leads@girlsofsteelrobotics.org")
+        self.assertEqual(cfg["contact_email"], settings.DEFAULT_REPLY_TO_EMAIL)
         self.assertIn("portal_url", cfg)
 
     def test_custom_branding_settings(self):

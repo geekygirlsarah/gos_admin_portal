@@ -1,7 +1,9 @@
 from django.contrib.auth.models import Permission, User
+from django.db import IntegrityError, transaction
 from django.test import Client, TestCase
 from django.urls import reverse
 
+from organizations.models import Organization
 from programs.models import School, SchoolDistrict
 
 
@@ -17,9 +19,15 @@ class DistrictModelTest(TestCase):
         self.assertEqual(list(d.schools.all()), [school])
 
     def test_unique_name(self):
-        SchoolDistrict.objects.create(name="Plum Borough School District")
-        with self.assertRaises(Exception):
-            SchoolDistrict.objects.create(name="Plum Borough School District")
+        # Uniqueness is per organization; NULL organizations never collide.
+        org = Organization.objects.get(slug="gos")
+        SchoolDistrict.objects.create(
+            name="Plum Borough School District", organization=org
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            SchoolDistrict.objects.create(
+                name="Plum Borough School District", organization=org
+            )
 
 
 class DistrictCrudTest(TestCase):

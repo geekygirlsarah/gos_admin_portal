@@ -30,7 +30,7 @@ class EmailSenderNameReproductionTest(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(
             mail.outbox[0].from_email,
-            '"Girls of Steel Admin" <noreply@girlsofsteelrobotics.org>',
+            '"Girls of Steel" <noreply@girlsofsteelrobotics.org>',
         )
 
 
