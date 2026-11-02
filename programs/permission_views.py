@@ -39,11 +39,12 @@ def _get_role_permission(role, section, org=None):
 
 
 def get_user_role(user, org=None):
-    """
-    Determines the role of a user for permission purposes.
+    """Determines the role of a user for permission purposes.
+
     Returns 'LeadMentor', 'Mentor', 'Parent', 'Student', 'Alumni', or None.
-    If org is provided and user has active UserOrganizationMembership records,
-    resolves role within that organization.
+    If org is provided, resolves role within that organization only.
+    Denies (returns None) when user has no active membership in the target org
+    and is not a superuser, rather than falling through to global flags/groups.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return None
@@ -51,18 +52,48 @@ def get_user_role(user, org=None):
     if user.is_superuser:
         return "LeadMentor"
 
-    if org is None:
-        try:
-            from organizations.utils import get_default_organization
+    if org is not None:
+        # Org-scoped lookup: only check membership in the given organization.
+        # If the user has no active UserOrganizationMembership in this org
+        # (and is not superuser), deny rather than falling back to global flags.
+        from organizations.models import UserOrganizationMembership
 
-            org = get_default_organization()
-        except Exception:
-            org = None
+        memberships = UserOrganizationMembership.objects.filter(
+            user=user, organization=org, is_active=True
+        )
+        if not memberships.exists():
+            # User has no membership in this org — deny rather than falling
+            # through to global profile/group checks.
+            return None
+
+        # User has membership in this org — resolve role from memberships
+        role_set = set(memberships.values_list("role", flat=True))
+        for role_candidate in (
+            "LeadMentor",
+            "Mentor",
+            "Parent",
+            "Alumni",
+            "Student",
+            "Staff",
+        ):
+            if role_candidate in role_set:
+                return role_candidate
+
+        # No recognized role in memberships; still return None rather than
+        # falling through to global groups/profiles.
+        return None
+
+    # org is None — fallback to default organization (may return None if no
+    # default is configured), then global profile/group checks as before.
+    try:
+        from organizations.utils import get_default_organization
+
+        org = get_default_organization()
+    except Exception:
+        org = None
 
     if org is not None:
         with suppress(Exception):
-            from organizations.models import UserOrganizationMembership
-
             memberships = set(
                 UserOrganizationMembership.objects.filter(
                     user=user, organization=org, is_active=True
@@ -119,11 +150,19 @@ def get_user_role(user, org=None):
 
 def _user_adult_flag(user, field, group_name, org=None, role_name=None):
     """True if the user's Adult profile has ``field`` set (or the legacy
-    ``group_name`` group as a fallback, or active UserOrganizationMembership in org)."""
+    ``group_name`` group as a fallback, or active UserOrganizationMembership in org).
+
+    When ``org`` is provided, only checks UserOrganizationMembership in that org.
+    If the user has no active membership in the target org, returns ``False``
+    rather than falling through to global profile/group checks.
+    """
     if user is None or not getattr(user, "is_authenticated", False):
         return False
 
     if org is not None and role_name:
+        # Org-scoped check: only validate against UserOrganizationMembership in the
+        # target organization. Deny if no membership exists, rather than falling
+        # through to Adult profile or global groups.
         with suppress(Exception):
             from organizations.models import UserOrganizationMembership
 
@@ -131,10 +170,9 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
                 user=user, organization=org, role=role_name, is_active=True
             ).exists():
                 return True
-            if UserOrganizationMembership.objects.filter(
-                user=user, organization=org, is_active=True
-            ).exists():
-                return False
+            # User has no org membership with this role — deny regardless of
+            # Adult profile or group status.
+            return False
 
     try:
         adult = user.adult_profile
@@ -145,23 +183,41 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
             return True
     except (Adult.DoesNotExist, AttributeError):
         pass
-    return user.groups.filter(name=group_name).exists()
+    return False
 
 
 def user_is_lead_mentor(user, org=None):
     """True if the user is a Lead Mentor (superuser, active LeadMentor
     UserOrganizationMembership in org, or legacy LeadMentor group)."""
+
     if user is None or not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser:
         return True
-    if org is None:
-        try:
-            from organizations.utils import get_default_organization
+    if org is not None:
+        # Org-scoped: only check for active LeadMentor membership in the given org.
+        # Deny if no such membership exists, rather than falling through to
+        # legacy LeadMentor group check.
+        from organizations.models import UserOrganizationMembership
 
-            org = get_default_organization()
-        except Exception:
-            org = None
+        if UserOrganizationMembership.objects.filter(
+            user=user,
+            organization=org,
+            role="LeadMentor",
+            is_active=True,
+        ).exists():
+            return True
+        # No LeadMentor membership in this org — deny, even if the user has
+        # the legacy LeadMentor group or an Adult profile with is_mentor=True.
+        return False
+
+    # org is None — fallback to default organization then legacy group check.
+    try:
+        from organizations.utils import get_default_organization
+
+        org = get_default_organization()
+    except Exception:
+        org = None
     if org is not None:
         with suppress(Exception):
             from organizations.models import UserOrganizationMembership
@@ -173,16 +229,7 @@ def user_is_lead_mentor(user, org=None):
                 is_active=True,
             ).exists():
                 return True
-    else:
-        with suppress(Exception):
-            from organizations.models import UserOrganizationMembership
 
-            if UserOrganizationMembership.objects.filter(
-                user=user,
-                role="LeadMentor",
-                is_active=True,
-            ).exists():
-                return True
     return user.groups.filter(name="LeadMentor").exists()
 
 

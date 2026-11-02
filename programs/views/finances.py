@@ -137,7 +137,7 @@ class ProgramFeeCreateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         ctx["program"] = self.program
         ctx["is_create"] = True
         return ctx
@@ -801,7 +801,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
     template_name = "programs/sliding_scale_apply.html"
 
     def _get_student_for_parent(self, request, student_id):
-        if not user_is_parent(request.user):
+        if not user_is_parent(request.user, org=request.organization):
             messages.error(request, "Only a parent can apply for the sliding scale.")
             return None, redirect("parent_payments")
 
@@ -888,7 +888,7 @@ class SlidingScaleWithdrawView(LoginRequiredMixin, View):
         )
         student = application.student
 
-        if not user_is_parent(request.user):
+        if not user_is_parent(request.user, org=request.organization):
             messages.error(
                 request, "Only a parent can withdraw a sliding scale application."
             )
@@ -935,7 +935,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents (including parents who also mentor)
-        if user_is_parent(request.user):
+        if user_is_parent(request.user, org=request.organization):
             try:
                 adult = request.user.adult_profile
                 if student not in adult.students.all():
@@ -992,7 +992,7 @@ class ProgramStudentBalancePrintView(
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents (including parents who also mentor)
-        if user_is_parent(request.user):
+        if user_is_parent(request.user, org=request.organization):
             try:
                 adult = request.user.adult_profile
                 if student not in adult.students.all():

@@ -29,7 +29,7 @@ def active_program(request):
 
     # 3. If still no program_id, check if user has only one program
     if not program_id:
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=request.organization)
         if role == "Parent":
             enrollments = Enrollment.objects.filter(
                 student__adults__user=request.user

@@ -60,7 +60,7 @@ class TravelProgramMixin:
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
-        is_mentor = user_is_mentor_or_lead(request.user)
+        is_mentor = user_is_mentor_or_lead(request.user, org=request.organization)
         if not self.program.features.filter(key="travel").exists() and not is_mentor:
             raise Http404("Travel is not enabled for this program.")
         return super().dispatch(request, *args, **kwargs)
@@ -695,7 +695,7 @@ class TravelMentorSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         if event.is_past:
             messages.error(request, "This trip has already ended.")
             return redirect("travel:event_list", program_id=self.program.id)
-        if not user_is_mentor_or_lead(request.user):
+        if not user_is_mentor_or_lead(request.user, org=request.organization):
             messages.error(request, "Only mentors can sign up to go on trips.")
             return redirect("travel:event_list", program_id=self.program.id)
         try:

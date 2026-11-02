@@ -272,7 +272,7 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
             .filter(graduated=False)
         )
 
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=self.request.organization)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
@@ -299,7 +299,7 @@ class StudentsBySchoolView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         grouped = {}
         for s in ctx["students"]:
             label = s.school.name if s.school_id else "No School"
@@ -357,7 +357,7 @@ class StudentDetailView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         student = self.object
         enrollments = list(student.enrollment_set.all())
         keys = set()
@@ -500,7 +500,7 @@ class StudentUpdateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
         student = self.object
         # Union of enabled feature keys across all enrolled programs
@@ -579,7 +579,7 @@ class StudentCreateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         ctx["RELATIONSHIP_CHOICES"] = RELATIONSHIP_CHOICES
         return ctx
 

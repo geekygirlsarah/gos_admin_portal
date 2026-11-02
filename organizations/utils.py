@@ -358,18 +358,20 @@ def get_organization_email_settings(
     )
 
     default_name = getattr(settings, "DEFAULT_FROM_NAME", None)
-    default_reply_to = getattr(
-        settings, "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"
-    )
+    # Use platform defaults (settings.py values) as fallbacks; these are
+    # deployment-configurable via environment variables and should not be
+    # GoS-specific.  When an org has its own email_settings they take
+    # precedence; otherwise the platform-level defaults apply.
+    default_reply_to = getattr(settings, "DEFAULT_REPLY_TO_EMAIL", "reply@example.com")
     default_from_email = getattr(settings, "NOTIFICATION_FROM_EMAIL", None) or getattr(
-        settings, "DEFAULT_FROM_EMAIL", "notifications@girlsofsteelrobotics.org"
+        settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"
     )
 
     sender_display_name = (
         raw_cfg.get("sender_display_name")
-        or (org.name if (org and org.slug != "gos") else None)
+        or (org.name if org else None)
         or default_name
-        or (org.name if org else "Girls of Steel Notifications")
+        or "Platform Notifications"
         or "Girls of Steel Notifications"
     )
     reply_to_email = raw_cfg.get("reply_to_email") or default_reply_to

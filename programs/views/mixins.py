@@ -161,7 +161,7 @@ class StudentQuerysetRoleMixin:
         if empty_queryset is None:
             empty_queryset = Student.objects.none()
 
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=self.request.organization)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile

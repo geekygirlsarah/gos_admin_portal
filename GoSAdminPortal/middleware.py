@@ -202,7 +202,7 @@ class MentorAgreementMiddleware:
         # Only apply to users who have a mentor role.
         from programs.permission_views import user_is_mentor
 
-        if not user_is_mentor(request.user):
+        if not user_is_mentor(request.user, org=request.organization):
             return self.get_response(request)
 
         from programs.models import MentorAgreementAcceptance

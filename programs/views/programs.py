@@ -90,7 +90,7 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
             )
         )
 
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=self.request.organization)
         if role == "Mentor":
             # Mentors see all active programs. Current and upcoming ones are
             # fully accessible; past ones are listed read-only (their detail
@@ -104,7 +104,7 @@ class ProgramListView(LoginRequiredMixin, DynamicReadPermissionMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         today = timezone.localdate()
         programs = list(ctx["programs"])
 
@@ -207,7 +207,7 @@ class ProgramStudentPhotoListView(
             "student", "team", "crew", "subteam"
         )
 
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=self.request.organization)
         if role == "Student":
             try:
                 student = self.request.user.student_profile
@@ -240,7 +240,7 @@ class ProgramStudentPhotoListView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["program"] = self.program
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         # Compatibility for the template which expects 'students'
         ctx["students"] = ctx["enrollments"]
         # Split the page's enrollments into active and inactive sections so
@@ -391,7 +391,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         program = self.object
 
         role = ctx["role"]
@@ -713,7 +713,7 @@ class ProgramStudentDocumentsView(
         ctx["total_students"] = total_students
         ctx["complete_students"] = complete_students
         ctx["required_docs_count"] = len(required_doc_ids)
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         return ctx
 
 
@@ -789,7 +789,7 @@ class ProgramEnrollmentUpdateView(
 
         updated_fields = []
         # Only LeadMentors may toggle active status; mentors limited to team/crew/subteam
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=request.organization)
         if active is not None:
             if role != "LeadMentor":
                 # Silently ignore active toggle for non-lead mentors
@@ -1054,7 +1054,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            role = get_user_role(request.user)
+            role = get_user_role(request.user, org=request.organization)
             pk = (
                 kwargs.get("pk")
                 or request.GET.get("program")
@@ -1102,7 +1102,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
         return []
 
     def get(self, request, pk=None):
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=request.organization)
         accessible_programs = self._get_accessible_programs(request.user)
 
         program_id = pk or request.GET.get("program") or request.GET.get("program_id")
@@ -1135,7 +1135,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
         return self._render(form, program, pk=pk)
 
     def post(self, request, pk=None):
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=request.organization)
         program_from_url = get_object_or_404(Program, pk=pk) if pk else None
         form = ProgramEmailForm(
             request.POST, user=request.user, program=program_from_url
@@ -1326,7 +1326,7 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
 
     def get(self, request, pk):
         program = get_object_or_404(Program, pk=pk)
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=request.organization)
         # Active (non-graduated) students enrolled in this program with some
         # address info. Parents and students get the "carpool map" view, so
         # only include students who have consented to directory sharing.
@@ -1410,10 +1410,10 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
                     unlisted.append(name)
         if role in ("Parent", "Student"):
             back_url = reverse("profile_dashboard")
-            back_label = "← Back to Dashboard"
+            back_label = "_ Back to Dashboard"
         else:
             back_url = reverse("program_detail", args=[program.pk])
-            back_label = "← Back to Program"
+            back_label = "_ Back to Program"
         return render(
             request,
             self.template_name,
@@ -1474,7 +1474,7 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             program = get_object_or_404(Program, pk=kwargs.get("pk"))
-            role = get_user_role(request.user)
+            role = get_user_role(request.user, org=request.organization)
             if role not in ("LeadMentor", "Mentor") or not can_user_read(
                 request.user, "programs", program
             ):
@@ -1590,7 +1590,7 @@ class ProgramDigitalSignoutSignatureView(LoginRequiredMixin, View):
 
     def get(self, request, program_id, pk):
         program = get_object_or_404(Program, pk=program_id)
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=request.organization)
         if role not in ("LeadMentor", "Mentor") or not can_user_read(
             request.user, "programs", program
         ):

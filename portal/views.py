@@ -451,7 +451,7 @@ class ParentPaymentsAccessMixin(LoginRequiredMixin):
 
         # Check the parent flag directly rather than the role string so a
         # parent who also mentors (or is an alumni) still reaches Payments.
-        if not user_is_parent(request.user):
+        if not user_is_parent(request.user, org=request.organization):
             messages.error(
                 request, "You do not have permission to access that section."
             )

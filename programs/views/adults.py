@@ -86,7 +86,7 @@ class AdultsListView(
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
 
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=self.request.organization)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
@@ -102,7 +102,7 @@ class AdultsListView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         program_id = self.kwargs.get("program_id")
         if program_id:
             ctx["program"] = get_object_or_404(Program, pk=program_id)
@@ -144,7 +144,7 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         if program_id:
             qs = qs.filter(students__enrollment__program_id=program_id).distinct()
 
-        role = get_user_role(self.request.user)
+        role = get_user_role(self.request.user, org=self.request.organization)
         if role == "Parent":
             try:
                 adult = self.request.user.adult_profile
@@ -302,7 +302,7 @@ class AdultDetailView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         return ctx
 
 
