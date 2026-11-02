@@ -64,6 +64,11 @@ This document covers local development workflows, management commands, deploymen
   ```bash
   python manage.py geocode_student_addresses [--retry-missing]
   ```
+- **Backfill Profile Memberships**:
+  ```bash
+  python manage.py backfill_profile_memberships
+  ```
+  Idempotently creates missing `UserOrganizationMembership` rows for existing Adult/Student profiles so org-scoped permission checks resolve for legacy accounts. Never modifies or reactivates existing rows. Optional at deploy: accounts with no membership rows keep legacy group/profile access until backfilled (see `docs/architecture/permissions.md`).
 
 ---
 

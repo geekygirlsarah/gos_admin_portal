@@ -63,11 +63,13 @@ class PortalSettingsLeadMentorCRUDTests(TestCase):
             personal_email="candidate@example.com",
             is_mentor=True,
         )
-        UserOrganizationMembership.objects.create(
+        # The Adult post_save sync already creates this membership (default
+        # org); get_or_create keeps the fixture explicit without colliding.
+        UserOrganizationMembership.objects.get_or_create(
             user=self.candidate_user,
             organization=self.gos,
             role="Mentor",
-            is_active=True,
+            defaults={"is_active": True},
         )
 
         self.client = Client()

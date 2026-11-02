@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-02
+
+### Fixed
+- **Organization-scoped role resolution for legacy accounts (`programs/permission_views.py`, `programs/signals.py`)**:
+  - Users with no `UserOrganizationMembership` rows (accounts predating per-organization memberships) once again resolve roles from their Adult/Student profile and legacy role groups — including for org-scoped checks — so existing logins are no longer locked out. Users who do have membership rows remain strictly scoped to the organization being checked, so cross-organization access stays denied.
+  - Saving an Adult or Student profile now creates the matching organization memberships automatically (mirroring organizations migration 0003). Deactivating a profile flag (e.g. `mentor_active`, `graduated`) deactivates the matching membership; profile saves never re-activate a membership that a platform admin suspended.
+  - Platform Admin organization health now counts distinct people (not membership rows) for mentors, fixing inflated "mentor(s) missing accepted agreements" numbers for users holding both `LeadMentor` and `Mentor` memberships.
+
+### Added
+- **Backfill command for legacy profiles (`programs/management/commands/backfill_profile_memberships.py`)**: `python manage.py backfill_profile_memberships` idempotently creates missing `UserOrganizationMembership` rows for existing Adult/Student profiles. Optional at deploy; see `docs/operations.md`.
+
 ## 2026-10-31
 
 ### Added

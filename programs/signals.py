@@ -125,6 +125,107 @@ def ensure_user_in_adult_group(sender, instance, created, **kwargs):
         logger.debug("Failed to add user to Adult groups", exc_info=True)
 
 
+def sync_adult_memberships(adult):
+    """Create the memberships implied by an Adult's role flags (idempotent).
+
+    Mirrors the profile sections of organizations migration 0003: Mentor
+    (``is_active`` follows ``mentor_active``), Parent, and Alumni, in the
+    Adult's organization or the default organization when unset.
+
+    Existing rows are never re-activated here: a profile flag flipped off
+    (e.g. ``mentor_active``) deactivates the matching membership so legacy
+    deactivations keep working, but re-activating a membership stays an
+    explicit platform-admin action. Returns the number of memberships
+    created.
+    """
+    if not adult.user_id:
+        return 0
+
+    from organizations.models import UserOrganizationMembership
+    from organizations.utils import get_default_organization
+
+    org_id = adult.organization_id
+    if org_id is None:
+        default_org = get_default_organization()
+        if default_org is None:
+            return 0
+        org_id = default_org.pk
+
+    specs = []
+    if adult.is_mentor:
+        specs.append(("Mentor", adult.mentor_active))
+    if adult.is_parent:
+        specs.append(("Parent", True))
+    if adult.is_alumni:
+        specs.append(("Alumni", True))
+
+    created = 0
+    for role, is_active in specs:
+        membership, was_created = UserOrganizationMembership.objects.get_or_create(
+            user_id=adult.user_id,
+            organization_id=org_id,
+            role=role,
+            defaults={"is_active": is_active},
+        )
+        if was_created:
+            created += 1
+        elif not is_active and membership.is_active:
+            membership.is_active = False
+            membership.save(update_fields=["is_active", "updated_at"])
+    return created
+
+
+def sync_student_memberships(student):
+    """Create the Student membership implied by a Student profile (idempotent).
+
+    Mirroring migration 0003, ``is_active`` follows ``graduated``; existing
+    rows are deactivated (never re-activated) when the flag changes. Returns
+    the number of memberships created.
+    """
+    if not student.user_id:
+        return 0
+
+    from organizations.models import UserOrganizationMembership
+    from organizations.utils import get_default_organization
+
+    org_id = student.organization_id
+    if org_id is None:
+        default_org = get_default_organization()
+        if default_org is None:
+            return 0
+        org_id = default_org.pk
+
+    is_active = not student.graduated
+    membership, was_created = UserOrganizationMembership.objects.get_or_create(
+        user_id=student.user_id,
+        organization_id=org_id,
+        role="Student",
+        defaults={"is_active": is_active},
+    )
+    if was_created:
+        return 1
+    if not is_active and membership.is_active:
+        membership.is_active = False
+        membership.save(update_fields=["is_active", "updated_at"])
+    return 0
+
+
+@receiver(post_save, sender="programs.Adult")
+def sync_adult_org_memberships(sender, instance, **kwargs):
+    try:
+        sync_adult_memberships(instance)
+    except Exception:
+        logger.debug("Failed to sync Adult organization memberships", exc_info=True)
+
+
+@receiver(post_save, sender="programs.Student")
+def sync_student_org_memberships(sender, instance, **kwargs):
+    try:
+        sync_student_memberships(instance)
+    except Exception:
+        logger.debug("Failed to sync Student organization memberships", exc_info=True)
+
+
 @receiver(post_delete, sender="programs.AdultStudentRelationship")
 def audit_guardian_removed(sender, instance, **kwargs):
     """Emit GUARDIAN_REMOVED when a guardian/parent link is deleted."""
@@ -150,10 +251,17 @@ def audit_guardian_removed(sender, instance, **kwargs):
 def mark_adult_as_parent_on_relationship(sender, instance, created, **kwargs):
     """Auto-flag an Adult as a parent whenever a student relationship is made."""
     try:
-        if instance.adult_id and not instance.adult.is_parent:
-            instance.adult.__class__.objects.filter(pk=instance.adult_id).update(
-                is_parent=True
-            )
+        if instance.adult_id:
+            adult = instance.adult
+            if not adult.is_parent:
+                adult.__class__.objects.filter(pk=instance.adult_id).update(
+                    is_parent=True
+                )
+                adult.is_parent = True
+            # The flag flip above uses queryset ``update()`` and therefore
+            # bypasses the Adult post_save receivers; sync the Parent
+            # membership here so link-time parents are recognized org-scoped.
+            sync_adult_memberships(adult)
     except Exception:
         logger.debug("Failed to mark Adult as parent", exc_info=True)
 
