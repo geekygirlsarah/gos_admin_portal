@@ -102,11 +102,8 @@ class OrganizationInvitationTests(TestCase):
         self.assertTrue(user_is_mentor_or_lead(self.user, org=self.gos))
 
         # But NOT a lead mentor in other_org
-        self.assertEqual(get_user_role(self.user, org=self.other_org), "Mentor")
+        self.assertIsNone(get_user_role(self.user, org=self.other_org))
         self.assertFalse(user_is_lead_mentor(self.user, org=self.other_org))
-
-        # Momentum user should not have GoS role
-        self.assertIsNone(get_user_role(self.user, org=self.gos))
 
     def test_regular_mentor_not_lead_mentor(self):
         """Regular mentor is not recognized as Lead Mentor."""

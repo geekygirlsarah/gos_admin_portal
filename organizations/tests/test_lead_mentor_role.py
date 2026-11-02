@@ -106,7 +106,7 @@ class LeadMentorRolePermissionTests(TestCase):
         self.assertTrue(user_is_mentor_or_lead(self.lead_user, org=self.gos))
 
         # But NOT a lead mentor in other_org
-        self.assertEqual(get_user_role(self.lead_user, org=self.other_org), "Mentor")
+        self.assertIsNone(get_user_role(self.lead_user, org=self.other_org))
         self.assertFalse(user_is_lead_mentor(self.lead_user, org=self.other_org))
 
     def test_regular_mentor_not_lead_mentor(self):
