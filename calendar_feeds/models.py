@@ -30,11 +30,9 @@ class CalendarFeed(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="calendar_feeds",
-        help_text="Organization that owns this calendar feed (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this calendar feed (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -168,11 +166,9 @@ class CalendarFeedACL(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="calendar_feed_acls",
-        help_text="Organization that owns this calendar feed ACL (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this calendar feed ACL (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -206,11 +202,9 @@ class CalendarEvent(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="calendar_events",
-        help_text="Organization that owns this calendar event (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this calendar event (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -313,11 +307,9 @@ class EventException(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="calendar_event_exceptions",
-        help_text="Organization that owns this calendar event exception (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this calendar event exception (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

@@ -31,11 +31,9 @@ class TravelEvent(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="travel_events",
-        help_text="Organization that owns this travel event (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this travel event (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -107,11 +105,9 @@ class TravelDeparture(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="travel_departures",
-        help_text="Organization that owns this travel departure (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this travel departure (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -158,11 +154,9 @@ class TravelCostOption(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="travel_cost_options",
-        help_text="Organization that owns this travel cost option (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this travel cost option (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -205,11 +199,9 @@ class TravelSignup(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="travel_signups",
-        help_text="Organization that owns this travel signup (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this travel signup (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -392,11 +384,9 @@ class TravelMentorSignup(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="travel_mentor_signups",
-        help_text="Organization that owns this travel mentor signup (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this travel mentor signup (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -451,11 +441,9 @@ class TravelParentChaperoneSignup(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="travel_parent_chaperone_signups",
-        help_text="Organization that owns this travel parent chaperone signup (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this travel parent chaperone signup (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

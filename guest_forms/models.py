@@ -63,11 +63,9 @@ class GuestForm(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="guest_forms",
-        help_text="Organization that owns this guest form (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this guest form (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -138,11 +136,9 @@ class GuestFormSubmission(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="guest_form_submissions",
-        help_text="Organization that owns this guest form submission (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this guest form submission (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
