@@ -41,7 +41,7 @@ class ActiveProgramMiddleware:
                 from programs.models import Enrollment, Program
                 from programs.permission_views import get_user_role
 
-                role = get_user_role(request.user)
+                role = get_user_role(request.user, org=request.organization)
                 program = None
                 if role == "Parent":
                     enrollments = Enrollment.objects.filter(

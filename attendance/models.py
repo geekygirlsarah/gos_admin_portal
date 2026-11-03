@@ -32,11 +32,9 @@ class KioskConfig(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="kiosk_configs",
-        help_text="Organization that owns this kiosk config (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this kiosk config (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
@@ -64,11 +62,9 @@ class KioskDevice(models.Model):
     name = models.CharField(max_length=100)
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="kiosk_devices",
-        help_text="Organization that owns this device (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this device (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey("programs.Program", on_delete=models.PROTECT)
@@ -88,11 +84,9 @@ class RFIDCard(models.Model):
     uid = models.CharField(max_length=64, unique=True)
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="rfid_cards",
-        help_text="Organization that owns this card (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this card (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     student = models.ForeignKey(
@@ -145,11 +139,9 @@ class AttendanceEvent(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="attendance_events",
-        help_text="Organization this attendance event belongs to (multi-tenant; null until backfilled).",
+        help_text="Organization this attendance event belongs to (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     adult = models.ForeignKey(
@@ -192,11 +184,9 @@ class AttendanceSession(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="attendance_sessions",
-        help_text="Organization this attendance session belongs to (multi-tenant; null until backfilled).",
+        help_text="Organization this attendance session belongs to (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     adult = models.ForeignKey(
@@ -284,11 +274,9 @@ class DigitalSignoutConfig(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="signout_configs",
-        help_text="Organization that owns this sign-out station (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this sign-out station (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
@@ -335,11 +323,9 @@ class StudentPresence(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="student_presences",
-        help_text="Organization that owns this presence record (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this presence record (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     date = models.DateField(default=timezone.localdate)
@@ -371,11 +357,9 @@ class DigitalSignout(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="digital_signouts",
-        help_text="Organization that owns this sign-out (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this sign-out (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     config = models.ForeignKey(

@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 def badge_icon_upload_to(instance, filename):
     from programs.utils.files import sanitize_upload_filename
@@ -20,6 +22,14 @@ class BadgeCategory(models.TextChoices):
 
 
 class Badge(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="badges",
+        help_text="Organization that owns this badge (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     name = models.CharField(max_length=200)
     icon = models.ImageField(upload_to=badge_icon_upload_to, blank=True, null=True)
     category = models.CharField(
@@ -32,7 +42,7 @@ class Badge(models.Model):
     prerequisites = models.ManyToManyField("self", symmetrical=False, blank=True)
 
     class Meta:
-        unique_together = ("name", "level")
+        unique_together = ("organization", "name", "level")
         ordering = ["category", "name", "level"]
 
     def __str__(self):
@@ -40,6 +50,14 @@ class Badge(models.Model):
 
 
 class StudentBadge(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="student_badges",
+        help_text="Organization that owns this badge award (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     student = models.ForeignKey(
         "programs.Student", on_delete=models.CASCADE, related_name="badges"
     )
@@ -53,7 +71,7 @@ class StudentBadge(models.Model):
     awarded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("student", "badge")
+        unique_together = ("organization", "student", "badge")
         ordering = ["-awarded_at"]
 
     def __str__(self):

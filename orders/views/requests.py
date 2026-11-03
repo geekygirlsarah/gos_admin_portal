@@ -25,6 +25,7 @@ class ItemCreateView(
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["program"] = self.program
+        kwargs["organization"] = getattr(self.request, "organization", None)
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -35,6 +36,7 @@ class ItemCreateView(
     def form_valid(self, form):
         form.instance.requested_by = self.request.user
         form.instance.program = self.program
+        form.instance.organization = getattr(self.request, "organization", None)
         messages.success(
             self.request,
             "Item added to the requests list. A mentor will group it into an order.",
@@ -53,12 +55,16 @@ class ItemUpdateView(
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["program"] = self.object.program or self.program
+        kwargs["organization"] = getattr(self.request, "organization", None)
         return kwargs
 
     def get_queryset(self):
+        org = getattr(self.request, "organization", None)
         # Org-wide queryset; creator/unassigned editing is enforced by
         # ``can_user_write('orders-request', obj)`` for non-Lead-Mentors.
-        return OrderItem.objects.select_related("program", "vendor")
+        return OrderItem.objects.for_organization(org).select_related(
+            "program", "vendor"
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -77,7 +83,8 @@ class ItemDeleteView(
     template_name = "orders/item_confirm_delete.html"
 
     def get_queryset(self):
-        return OrderItem.objects.select_related("program")
+        org = getattr(self.request, "organization", None)
+        return OrderItem.objects.for_organization(org).select_related("program")
 
     def audit_snapshot(self, obj):
         return {

@@ -136,9 +136,12 @@ class CalendarFeedWriteAccessTests(TestCase):
 class CalendarFeedACLConstraintTests(TestCase):
     def test_unique_together_feed_role(self):
         feed = make_feed()
-        CalendarFeedACL.objects.create(feed=feed, role="Mentor")
+        from organizations.models import Organization
+
+        gos = Organization.objects.get(slug="gos")
+        CalendarFeedACL.objects.create(feed=feed, role="Mentor", organization=gos)
         with self.assertRaises(Exception):
-            CalendarFeedACL.objects.create(feed=feed, role="Mentor")
+            CalendarFeedACL.objects.create(feed=feed, role="Mentor", organization=gos)
 
 
 class CalendarEventTests(TestCase):

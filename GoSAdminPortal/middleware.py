@@ -1,7 +1,7 @@
-import functools
 import logging
 
 from django.conf import settings
+from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 
@@ -14,18 +14,17 @@ from applications.rate_limiting import (
 logger = logging.getLogger(__name__)
 
 
-@functools.lru_cache(maxsize=1)
 def _default_organization():
-    """Return the single hardcoded GoS organization row, or ``None``.
+    """Return the organization from the DEFAULT_ORGANIZATION_SLUG setting, or ``None``.
 
-    Memoized per process so we don't add a database query to every request.
-    Phase 1 has exactly one organization, seeded by the
-    ``organizations.0002_seed_gos_organization`` migration; Phase 2 will
-    resolve the org from the request hostname instead.
+    Resolved per-request (not memoized) so the default can be configured
+    per deployment via the ``DEFAULT_ORGANIZATION_SLUG`` setting.
+    Defaults to ``"gos"`` for backward compatibility.
     """
     from organizations.models import Organization
 
-    return Organization.objects.filter(slug="gos").first()
+    slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
+    return Organization.objects.filter(slug=slug).first()
 
 
 EXEMPT_URL_NAMES = {
@@ -140,6 +139,42 @@ class OrganizationMiddleware:
         return self.get_response(request)
 
 
+class RootDomainGuardMiddleware:
+    """Keep tenant data unreachable when no organization is resolved.
+
+    The root platform domain has no organization context: it serves the
+    marketing site, auth, and platform-admin tooling only. Every other path
+    holds org-owned data, so it redirects to the landing page rather than
+    letting a view run
+    with ``request.organization = None`` (which would skip tenant scoping).
+    """
+
+    ALLOWED_PREFIXES = (
+        "/accounts/",
+        "/admin/",
+        "/platform-admin/",
+        "/health",
+        "/api/webhooks/",
+        "/landing/",
+        "/about/",
+    )
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path
+        if (
+            getattr(request, "organization", None) is None
+            and path != "/"
+            and not path.startswith(self.ALLOWED_PREFIXES)
+            and not (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL))
+            and not (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+        ):
+            return redirect("home")
+        return self.get_response(request)
+
+
 class ApplyRateLimitMiddleware:
     """Throttle POST requests to the public application wizard (/apply/).
 
@@ -204,7 +239,7 @@ class MentorAgreementMiddleware:
         # Only apply to users who have a mentor role.
         from programs.permission_views import user_is_mentor
 
-        if not user_is_mentor(request.user):
+        if not user_is_mentor(request.user, org=request.organization):
             return self.get_response(request)
 
         from programs.models import MentorAgreementAcceptance

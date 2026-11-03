@@ -23,7 +23,7 @@ class OrderProgramMixin:
 
     def dispatch(self, request, *args, **kwargs):
         self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
-        is_mentor = user_is_mentor_or_lead(request.user)
+        is_mentor = user_is_mentor_or_lead(request.user, org=request.organization)
         if not self.program.features.filter(key="orders").exists() and not is_mentor:
             raise Http404("Order requests are not enabled for this program.")
         return super().dispatch(request, *args, **kwargs)
@@ -43,7 +43,7 @@ class OrderStaffRequiredMixin:
     the grouped orders themselves)."""
 
     def dispatch(self, request, *args, **kwargs):
-        if not user_is_mentor_or_lead(request.user):
+        if not user_is_mentor_or_lead(request.user, org=request.organization):
             messages.error(request, "Only mentors and Lead Mentors can manage orders.")
             return redirect("home")
         return super().dispatch(request, *args, **kwargs)

@@ -4,6 +4,7 @@ portal permissions updates, and get_user_role."""
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.models import Group, Permission, User
 from django.test import TestCase
 from django.urls import reverse
@@ -143,7 +144,7 @@ class ProfilePermissionsTests(TestCase):
             response,
             "To add, remove, or modify parent/guardian relationships and emergency contacts, please reach out to team leadership",
         )
-        self.assertContains(response, "mailto:leads@girlsofsteelrobotics.org")
+        self.assertContains(response, f"mailto:{settings.DEFAULT_REPLY_TO_EMAIL}")
 
     def test_student_editing_own_profile_cannot_remove_parents(self):
         self.student.primary_contact = self.parent
@@ -196,7 +197,7 @@ class ProfilePermissionsTests(TestCase):
             response,
             "To link or unlink students from your profile, please reach out to team leadership",
         )
-        self.assertContains(response, "mailto:leads@girlsofsteelrobotics.org")
+        self.assertContains(response, f"mailto:{settings.DEFAULT_REPLY_TO_EMAIL}")
 
     def test_lead_mentor_editing_student_sees_editable_parents_fields(self):
         self.client.login(username="lead_mentor", password="password123")  # nosec B106

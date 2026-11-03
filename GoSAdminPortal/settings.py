@@ -132,6 +132,11 @@ if os.getenv("ALLOWED_HOSTS"):
 
 MOMENTUM_ROOT_DOMAIN = os.getenv("MOMENTUM_ROOT_DOMAIN", "localhost")
 
+# Default organization slug for when no org context exists.
+# Defaults to "gos" for backward compatibility; set to any other value or
+# leave unset to return None when no organization matches the request.
+DEFAULT_ORGANIZATION_SLUG = os.getenv("DEFAULT_ORGANIZATION_SLUG", "gos")
+
 
 # Application definition
 
@@ -185,6 +190,8 @@ MIDDLEWARE = [
     # Attaches request.organization (single hardcoded GoS org for now).
     "GoSAdminPortal.middleware.OrganizationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # After MessageMiddleware: the custom 404 handler posts a message.
+    "GoSAdminPortal.middleware.RootDomainGuardMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
@@ -458,14 +465,10 @@ MAILERS = {
     },
 }
 
-DEFAULT_FROM_EMAIL = os.getenv(
-    "DEFAULT_FROM_EMAIL", "notifications@girlsofsteelrobotics.org"
-)
-DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Girls of Steel Notifications")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@example.com")
+DEFAULT_FROM_NAME = os.getenv("DEFAULT_FROM_NAME", "Platform Notifications")
 NOTIFICATION_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "").strip() or None
-DEFAULT_REPLY_TO_EMAIL = os.getenv(
-    "DEFAULT_REPLY_TO_EMAIL", "leads@girlsofsteelrobotics.org"
-)
+DEFAULT_REPLY_TO_EMAIL = os.getenv("DEFAULT_REPLY_TO_EMAIL", "reply@example.com")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 # Health check throttling

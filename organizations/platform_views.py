@@ -121,7 +121,15 @@ def calculate_org_health(org):
     ).select_related("user")
 
     lead_mentors_count = memberships.filter(role="LeadMentor").count()
-    mentors_count = memberships.filter(role__in=["LeadMentor", "Mentor"]).count()
+    # Count distinct people, not membership rows: a user can hold both
+    # LeadMentor and Mentor rows (migration 0003 backfills both), while
+    # agreed_count/clearances_count below are people-based.
+    mentors_count = (
+        memberships.filter(role__in=["LeadMentor", "Mentor"])
+        .values("user_id")
+        .distinct()
+        .count()
+    )
     students_count = memberships.filter(role="Student").count()
     parents_count = memberships.filter(role="Parent").count()
     total_members = memberships.count()

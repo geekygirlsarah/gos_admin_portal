@@ -14,9 +14,16 @@ class ProgramFeature(models.Model):
       - 'badges' — show/collect student badges and badge awards
     """
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="program_features",
+        help_text="Organization that owns this program feature (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     key = models.SlugField(
         max_length=50,
-        unique=True,
         help_text="Stable key used in code/templates (e.g., 'discord').",
     )
     name = models.CharField(max_length=100)
@@ -24,6 +31,7 @@ class ProgramFeature(models.Model):
     display_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
+        unique_together = ("organization", "key")
         ordering = ["display_order", "name"]
 
     def __str__(self):
@@ -39,11 +47,9 @@ class ProgramQuerySet(OrganizationQuerySet):
 class Program(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="programs",
-        help_text="Organization that owns this program (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this program (multi-tenant).",
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)

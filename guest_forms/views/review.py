@@ -12,6 +12,7 @@ from audit.events import AuditEvent
 from audit.service import log_event
 from guest_forms.forms import GuestFormForm
 from guest_forms.models import GuestForm, GuestFormSubmission
+from organizations.models import OrganizationManager, OrganizationQuerySet
 
 
 class GuestFormReviewRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
@@ -27,7 +28,12 @@ class GuestFormReviewListView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/review/list.html"
 
     def get(self, request):
-        qs = GuestFormSubmission.objects.select_related("guest_form").all()
+        org = getattr(request, "organization", None)
+        qs = (
+            GuestFormSubmission.objects.for_organization(org)
+            .select_related("guest_form")
+            .all()
+        )
 
         # Filters
         form_type = (request.GET.get("type") or "").strip()
@@ -65,8 +71,10 @@ class GuestFormReviewListView(GuestFormReviewRequiredMixin, View):
         qs = qs.order_by(sort_field)
 
         # Get filter options
-        forms = GuestForm.objects.filter(is_active=True).order_by(
-            "display_order", "name"
+        forms = (
+            GuestForm.objects.for_organization(org)
+            .filter(is_active=True)
+            .order_by("display_order", "name")
         )
 
         ctx = {
@@ -87,8 +95,11 @@ class GuestFormReviewDetailView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/review/detail.html"
 
     def get(self, request, submission_id):
+        org = getattr(request, "organization", None)
         submission = get_object_or_404(
-            GuestFormSubmission.objects.select_related("guest_form"),
+            GuestFormSubmission.objects.for_organization(org).select_related(
+                "guest_form"
+            ),
             pk=submission_id,
         )
         ctx = {"submission": submission}
@@ -101,7 +112,10 @@ class GuestFormManageListView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/manage/list.html"
 
     def get(self, request):
-        forms = GuestForm.objects.order_by("display_order", "name")
+        org = getattr(request, "organization", None)
+        forms = GuestForm.objects.for_organization(org).order_by(
+            "display_order", "name"
+        )
         ctx = {"forms": forms}
         return render(request, self.template_name, ctx)
 
@@ -132,13 +146,19 @@ class GuestFormUpdateView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/manage/form.html"
 
     def get(self, request, form_id):
-        guest_form = get_object_or_404(GuestForm, pk=form_id)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), pk=form_id
+        )
         form = GuestFormForm(instance=guest_form)
         ctx = {"form": form, "is_create": False, "guest_form": guest_form}
         return render(request, self.template_name, ctx)
 
     def post(self, request, form_id):
-        guest_form = get_object_or_404(GuestForm, pk=form_id)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), pk=form_id
+        )
         form = GuestFormForm(request.POST, request.FILES, instance=guest_form)
         if form.is_valid():
             form.save()
@@ -154,12 +174,18 @@ class GuestFormDeleteView(GuestFormReviewRequiredMixin, View):
     template_name = "guest_forms/manage/confirm_delete.html"
 
     def get(self, request, form_id):
-        guest_form = get_object_or_404(GuestForm, pk=form_id)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), pk=form_id
+        )
         ctx = {"guest_form": guest_form}
         return render(request, self.template_name, ctx)
 
     def post(self, request, form_id):
-        guest_form = get_object_or_404(GuestForm, pk=form_id)
+        org = getattr(request, "organization", None)
+        guest_form = get_object_or_404(
+            GuestForm.objects.for_organization(org), pk=form_id
+        )
         name = guest_form.name
         log_event(
             event=AuditEvent.RECORD_DELETED,

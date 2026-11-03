@@ -1,9 +1,18 @@
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.constants import TEAM_TYPES
 
 
 class Team(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="teams",
+        help_text="Organization that owns this team (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     team_type = models.CharField(max_length=20, choices=TEAM_TYPES)
     number = models.IntegerField()
     name = models.CharField(max_length=100, blank=True, null=True)
@@ -12,7 +21,7 @@ class Team(models.Model):
     )
 
     class Meta:
-        unique_together = ("team_type", "number")
+        unique_together = ("organization", "team_type", "number")
         ordering = ["team_type", "number"]
 
     def __str__(self):
@@ -22,6 +31,14 @@ class Team(models.Model):
 
 
 class Crew(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="crews",
+        help_text="Organization that owns this crew (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     name = models.CharField(max_length=100)
     program = models.ForeignKey(
         "Program", on_delete=models.CASCADE, related_name="crews"
@@ -31,7 +48,7 @@ class Crew(models.Model):
     )
 
     class Meta:
-        unique_together = ("name", "program")
+        unique_together = ("organization", "name", "program")
         ordering = ["name"]
 
     def __str__(self):
@@ -39,6 +56,14 @@ class Crew(models.Model):
 
 
 class SubTeam(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="subteams",
+        help_text="Organization that owns this subteam (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     name = models.CharField(max_length=100)
     program = models.ForeignKey(
         "Program", on_delete=models.CASCADE, related_name="subteams"
@@ -48,7 +73,7 @@ class SubTeam(models.Model):
     )
 
     class Meta:
-        unique_together = ("name", "program")
+        unique_together = ("organization", "name", "program")
         ordering = ["name"]
 
     def __str__(self):

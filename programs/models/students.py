@@ -42,11 +42,9 @@ def _student_document_upload_to(instance, filename):
 class Student(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="students",
-        help_text="Organization that owns this student (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this student (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

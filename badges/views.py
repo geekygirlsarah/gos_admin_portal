@@ -66,16 +66,19 @@ class BadgeListView(LoginRequiredMixin, View):
             if not program.has_feature("badges"):
                 raise Http404("Badges are not enabled for this program.")
 
-        badges = Badge.objects.prefetch_related("prerequisites").all()
+        org = getattr(request, "organization", None)
+        badges = (
+            Badge.objects.for_organization(org).prefetch_related("prerequisites").all()
+        )
         student = None
         earned_ids = set()
         student_profile = getattr(request.user, "student_profile", None)
         if student_profile:
             student = student_profile
             earned_ids = set(
-                StudentBadge.objects.filter(student=student).values_list(
-                    "badge_id", flat=True
-                )
+                StudentBadge.objects.for_organization(org)
+                .filter(student=student)
+                .values_list("badge_id", flat=True)
             )
         student_id = request.GET.get("student")
         if student_id:
@@ -120,9 +123,9 @@ class BadgeListView(LoginRequiredMixin, View):
                 "student": student,
                 "show_how": show_how,
                 "awards": (
-                    StudentBadge.objects.filter(student=student).select_related(
-                        "badge", "awarded_by"
-                    )
+                    StudentBadge.objects.for_organization(org)
+                    .filter(student=student)
+                    .select_related("badge", "awarded_by")
                     if student
                     else []
                 ),
@@ -141,13 +144,16 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        org = getattr(self.request, "organization", None)
         role = get_user_role(self.request.user)
         ctx["show_how"] = role in ("LeadMentor", "Mentor")
         ctx["is_lead_mentor"] = role == "LeadMentor"
         ctx["can_award"] = can_user_write(self.request.user, "badge_award")
         ctx["can_manage"] = can_user_write(self.request.user, "badge_manage")
-        ctx["awards"] = StudentBadge.objects.filter(badge=self.object).select_related(
-            "student", "awarded_by", "awarded_by__adult_profile"
+        ctx["awards"] = (
+            StudentBadge.objects.for_organization(org)
+            .filter(badge=self.object)
+            .select_related("student", "awarded_by", "awarded_by__adult_profile")
         )
         # students list for award dropdown - if navigating within a program, only show that program's students, sorted
         import re
@@ -170,7 +176,7 @@ class BadgeDetailView(LoginRequiredMixin, DetailView):
                 raise Http404("Badges are not enabled for this program.")
 
         # also check context processor's current_program via query param fallback
-        qs = S.objects.all()
+        qs = S.objects.for_organization(org)
         if program_id:
             try:
                 qs = qs.filter(
@@ -207,6 +213,7 @@ class BadgeCreateView(LoginRequiredMixin, BadgeManagePermissionMixin, CreateView
     success_url = reverse_lazy("badges:list")
 
     def form_valid(self, form):
+        form.instance.organization = getattr(self.request, "organization", None)
         resp = super().form_valid(form)
         log_event(
             event=AuditEvent.BADGE_CREATED,
@@ -260,11 +267,16 @@ class BadgeDeleteView(LoginRequiredMixin, BadgeManagePermissionMixin, DeleteView
 
 class BadgeAwardView(LoginRequiredMixin, BadgeAwardPermissionMixin, View):
     def post(self, request, pk):
-        badge = get_object_or_404(Badge, pk=pk)
+        org = getattr(request, "organization", None)
+        badge = get_object_or_404(Badge.objects.for_organization(org), pk=pk)
         student_id = request.POST.get("student_id")
-        student = get_object_or_404(Student, pk=student_id)
-        obj, created = StudentBadge.objects.get_or_create(
-            student=student, badge=badge, defaults={"awarded_by": request.user}
+        student = get_object_or_404(
+            Student.objects.for_organization(org), pk=student_id
+        )
+        obj, created = StudentBadge.objects.for_organization(org).get_or_create(
+            student=student,
+            badge=badge,
+            defaults={"awarded_by": request.user, "organization": org},
         )
         if created:
             log_event(
@@ -288,9 +300,14 @@ class BadgeAwardView(LoginRequiredMixin, BadgeAwardPermissionMixin, View):
 
 class BadgeRevokeView(LoginRequiredMixin, BadgeManagePermissionMixin, View):
     def post(self, request, pk):
-        badge = get_object_or_404(Badge, pk=pk)
+        org = getattr(request, "organization", None)
+        badge = get_object_or_404(Badge.objects.for_organization(org), pk=pk)
         student_id = request.POST.get("student_id")
-        sb = get_object_or_404(StudentBadge, badge=badge, student_id=student_id)
+        sb = get_object_or_404(
+            StudentBadge.objects.for_organization(org),
+            badge=badge,
+            student_id=student_id,
+        )
         log_event(
             event=AuditEvent.BADGE_REVOKED,
             resource=sb,

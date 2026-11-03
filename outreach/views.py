@@ -68,7 +68,7 @@ class OutreachLocationAccessMixin(UserPassesTestMixin):
     """
 
     def test_func(self):
-        return user_is_mentor_or_lead(self.request.user)
+        return user_is_mentor_or_lead(self.request.user, org=self.request.organization)
 
     def handle_no_permission(self):
         if self.request.user.is_authenticated:
@@ -90,7 +90,9 @@ class OutreachLocationPickerMixin:
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["can_add_location"] = user_is_mentor_or_lead(self.request.user)
+        context["can_add_location"] = user_is_mentor_or_lead(
+            self.request.user, org=self.request.organization
+        )
         context["locations_data"] = list(
             OutreachLocation.objects.for_organization(
                 getattr(self.request, "organization", None)
@@ -563,7 +565,7 @@ class OutreachShiftMentorSignupView(LoginRequiredMixin, OutreachProgramMixin, Vi
         if shift.is_past:
             messages.error(request, "This shift has ended. You can no longer sign up.")
             return redirect("outreach:event_list", program_id=self.program.id)
-        if not user_is_mentor_or_lead(request.user):
+        if not user_is_mentor_or_lead(request.user, org=request.organization):
             messages.error(
                 request, "Only mentors can sign up to support outreach shifts."
             )
@@ -646,7 +648,9 @@ class OutreachShiftManageSignupsView(
             pk=kwargs.get("shift_pk"),
             event__program=program,
         )
-        if shift.is_past and not user_is_mentor_or_lead(request.user):
+        if shift.is_past and not user_is_mentor_or_lead(
+            request.user, org=request.organization
+        ):
             messages.error(
                 request, "This shift has ended and can no longer be changed."
             )

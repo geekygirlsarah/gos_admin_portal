@@ -167,7 +167,9 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "programs": programs,
             "attendance_programs": attendance_programs,
             "kiosk_configs": kiosk_configs,
-            "sliding_scale_settings": SlidingScaleSettings.get_solo(),
+            "sliding_scale_settings": SlidingScaleSettings.get_solo(
+                request.organization
+            ),
             "pending_sliding_scale_count": SlidingScale.objects.filter(
                 status=SlidingScale.STATUS_PENDING
             ).count(),
@@ -192,7 +194,7 @@ class PortalSlidingScaleSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin
     """Handles updates to the portal-wide sliding scale calculation settings."""
 
     def post(self, request):
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(request.organization)
         fields = [
             "base_amount",
             "additional_member_amount",

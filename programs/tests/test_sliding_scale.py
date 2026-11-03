@@ -5,6 +5,7 @@ import datetime
 from decimal import Decimal
 from unittest import mock
 
+from cryptography.fernet import Fernet
 from django.contrib.auth.models import Group, Permission, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -12,6 +13,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization
 from programs.forms import SlidingScaleForm
 from programs.models import (
     Adult,
@@ -25,7 +27,11 @@ from programs.models import (
 )
 
 
-@override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
+def _gos():
+    return Organization.objects.get(slug="gos")
+
+
+@override_settings(FILE_ENCRYPTION_KEY=Fernet.generate_key().decode())
 class SlidingScaleApplicationTests(TestCase):
     """Covers the parent-facing sliding scale application flow: a Parent
     applies, a Lead Mentor reviews/approves/declines it, uploaded documents
@@ -153,7 +159,7 @@ class SlidingScaleApplicationTests(TestCase):
         self.client.login(username="parent", password="password")  # nosec B106
         response = self.client.get(self.apply_url)
         self.assertEqual(response.status_code, 200)
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(_gos())
         self.assertEqual(response.context["settings_obj"], settings_obj)
         self.assertContains(response, "Estimated")
         self.assertContains(response, str(settings_obj.base_amount))
@@ -186,7 +192,7 @@ class SlidingScaleApplicationTests(TestCase):
         url = reverse("sliding_scale_create")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(_gos())
         self.assertEqual(response.context["settings_obj"], settings_obj)
         self.assertContains(response, "Estimated")
         self.assertContains(response, str(settings_obj.base_amount))
@@ -678,7 +684,7 @@ class SlidingScaleReviewDatePreservationTests(TestCase):
 
 class SlidingScaleSettingsCalculationTests(TestCase):
     def test_default_settings_calculation(self):
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(_gos())
         midpoint_agi = (
             Decimal("23475.00") + (Decimal("62600.00") - Decimal("23475.00")) / 2
         )
@@ -686,23 +692,23 @@ class SlidingScaleSettingsCalculationTests(TestCase):
         self.assertEqual(percent, Decimal("50.00"))
 
     def test_income_at_or_below_low_boundary_gives_full_discount(self):
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(_gos())
         percent = settings_obj.compute_discount_percent(1, Decimal("0.00"))
         self.assertEqual(percent, Decimal("100.00"))
 
     def test_income_at_or_above_high_boundary_gives_no_discount(self):
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(_gos())
         percent = settings_obj.compute_discount_percent(1, Decimal("1000000.00"))
         self.assertEqual(percent, Decimal("0.00"))
 
     def test_settings_are_editable(self):
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(_gos())
         settings_obj.base_amount = Decimal("20000.00")
         settings_obj.additional_member_amount = Decimal("6000.00")
         settings_obj.low_multiplier = Decimal("1.00")
         settings_obj.high_multiplier = Decimal("3.00")
         settings_obj.save()
-        reloaded = SlidingScaleSettings.get_solo()
+        reloaded = SlidingScaleSettings.get_solo(_gos())
         self.assertEqual(reloaded.base_amount, Decimal("20000.00"))
         self.assertEqual(reloaded.additional_member_amount, Decimal("6000.00"))
 

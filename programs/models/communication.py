@@ -3,6 +3,8 @@ from contextlib import suppress
 from django.conf import settings
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 class EmailDeliveryEvent(models.Model):
     """Tracks email delivery events (bounces, complaints) from toSend webhooks."""
@@ -68,6 +70,13 @@ class EmailDeliveryEvent(models.Model):
         on_delete=models.SET_NULL,
         related_name="resolved_email_delivery_events",
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="email_delivery_events",
+        help_text="Organization that owns this email delivery event (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

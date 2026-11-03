@@ -2,14 +2,24 @@ import re
 
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
 from programs.constants import STATE_CHOICES
 from programs.validators import validate_zip_code
 
 
 class SchoolDistrict(models.Model):
-    name = models.CharField(max_length=150, unique=True)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="school_districts",
+        help_text="Organization that owns this school district (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    name = models.CharField(max_length=150)
 
     class Meta:
+        unique_together = ("organization", "name")
         ordering = ["name"]
 
     def __str__(self):
@@ -17,7 +27,15 @@ class SchoolDistrict(models.Model):
 
 
 class School(models.Model):
-    name = models.CharField(max_length=150, unique=True)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="schools",
+        help_text="Organization that owns this school (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    name = models.CharField(max_length=150)
     district = models.ForeignKey(
         SchoolDistrict,
         on_delete=models.SET_NULL,
@@ -36,6 +54,7 @@ class School(models.Model):
     )
 
     class Meta:
+        unique_together = ("organization", "name")
         ordering = ["name"]
 
     def __str__(self):
@@ -45,11 +64,20 @@ class School(models.Model):
 class RaceEthnicity(models.Model):
     """Canonical race/ethnicity options for Students (multi-select)."""
 
-    key = models.SlugField(max_length=50, unique=True)
-    name = models.CharField(max_length=100, unique=True)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="race_ethnicities",
+        help_text="Organization that owns this race/ethnicity option (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
+    key = models.SlugField(max_length=50)
+    name = models.CharField(max_length=100)
     display_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
+        unique_together = ("organization", "key")
         ordering = ["display_order", "name"]
         verbose_name_plural = "Race/Ethnicity Options"
 
@@ -57,7 +85,7 @@ class RaceEthnicity(models.Model):
         return self.name
 
     @classmethod
-    def match_from_text(cls, text: str):
+    def match_from_text(cls, text: str, organization=None):
         """Best-effort mapping from a free-text race/ethnicity string to option queryset.
         Matches by keyword; supports comma/semicolon-separated lists.
         """
@@ -106,4 +134,7 @@ class RaceEthnicity(models.Model):
         if has("other") or (not keys and s.strip()):
             # If text provided but no match, classify as other
             keys.add("other")
-        return cls.objects.filter(key__in=keys)
+        qs = cls.objects.filter(key__in=keys)
+        if organization is not None:
+            qs = qs.filter(organization=organization)
+        return qs

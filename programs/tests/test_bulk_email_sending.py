@@ -1,5 +1,6 @@
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.test import TestCase
@@ -89,7 +90,7 @@ class BulkEmailSendingTests(TestCase):
         for msg in messages_sent:
             self.assertEqual(msg.bcc, [])
             self.assertEqual(msg.subject, "Important Team Notice")
-            self.assertEqual(msg.reply_to, ["leads@girlsofsteelrobotics.org"])
+            self.assertEqual(msg.reply_to, [settings.DEFAULT_REPLY_TO_EMAIL])
 
     @mock.patch("programs.views.programs.send_messages_in_background")
     def test_program_email_test_recipient_only(self, mock_send_bg):

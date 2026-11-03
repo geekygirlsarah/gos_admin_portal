@@ -137,7 +137,7 @@ class ProgramFeeCreateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
-        ctx["role"] = get_user_role(self.request.user)
+        ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         ctx["program"] = self.program
         ctx["is_create"] = True
         return ctx
@@ -473,7 +473,7 @@ class SlidingScaleCreateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["settings_obj"] = SlidingScaleSettings.get_solo()
+        ctx["settings_obj"] = SlidingScaleSettings.get_solo(self.request.organization)
         return ctx
 
     def form_valid(self, form):
@@ -523,7 +523,7 @@ class SlidingScaleUpdateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["settings_obj"] = SlidingScaleSettings.get_solo()
+        ctx["settings_obj"] = SlidingScaleSettings.get_solo(self.request.organization)
         return ctx
 
     def form_valid(self, form):
@@ -714,7 +714,7 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
 
     def get(self, request, pk):
         application = self.get_object()
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(request.organization)
         suggested_percent = settings_obj.compute_discount_percent(
             application.family_size, application.adjusted_gross_income
         )
@@ -801,7 +801,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
     template_name = "programs/sliding_scale_apply.html"
 
     def _get_student_for_parent(self, request, student_id):
-        if not user_is_parent(request.user):
+        if not user_is_parent(request.user, org=request.organization):
             messages.error(request, "Only a parent can apply for the sliding scale.")
             return None, redirect("parent_payments")
 
@@ -834,7 +834,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
             return redirect("parent_payments")
 
         form = SlidingScaleApplicationForm()
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(request.organization)
         return render(
             request,
             self.template_name,
@@ -848,7 +848,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
 
         form = SlidingScaleApplicationForm(request.POST, request.FILES)
         if not form.is_valid():
-            settings_obj = SlidingScaleSettings.get_solo()
+            settings_obj = SlidingScaleSettings.get_solo(request.organization)
             return render(
                 request,
                 self.template_name,
@@ -888,7 +888,7 @@ class SlidingScaleWithdrawView(LoginRequiredMixin, View):
         )
         student = application.student
 
-        if not user_is_parent(request.user):
+        if not user_is_parent(request.user, org=request.organization):
             messages.error(
                 request, "Only a parent can withdraw a sliding scale application."
             )
@@ -935,7 +935,7 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents (including parents who also mentor)
-        if user_is_parent(request.user):
+        if user_is_parent(request.user, org=request.organization):
             try:
                 adult = request.user.adult_profile
                 if student not in adult.students.all():
@@ -992,7 +992,7 @@ class ProgramStudentBalancePrintView(
         student = get_object_or_404(Student, pk=student_id)
 
         # Object level check for Parents (including parents who also mentor)
-        if user_is_parent(request.user):
+        if user_is_parent(request.user, org=request.organization):
             try:
                 adult = request.user.adult_profile
                 if student not in adult.students.all():

@@ -14,6 +14,46 @@ The priority order is:
 5. **`Student`**: A linked `Student` record.
 6. **`Staff` / None**: Unassigned or base staff users.
 
+### Organization Scoping and the Transitional Legacy Fallback
+
+Role and boolean-helper checks (`get_user_role`, `user_is_*`) resolve within an
+organization: the `org` argument when passed, otherwise the default
+organization (`DEFAULT_ORGANIZATION_SLUG`).
+
+Scoping rules:
+
+- **Superusers and the legacy `LeadMentor` group are checked first** and are
+  org-agnostic (the group is legacy by design and predates per-org roles).
+- **Users with any `UserOrganizationMembership` rows are strictly scoped.**
+  When they hold no active membership in the target organization, the role is
+  `None` / the helper is `False` — never a fall-through to global profile or
+  group flags. This is what enforces cross-organization isolation.
+- **Users with no membership rows anywhere** (accounts predating membership
+  sync) fall back to the legacy Adult/Student profile and role-group
+  resolution so existing logins are not locked out while memberships are
+  backfilled. This fallback is **transitional**: once
+  `python manage.py backfill_profile_memberships` has covered every profile,
+  no-row users no longer exist and the fallback can be removed.
+
+### Membership Sync
+
+`programs/signals.py` keeps `UserOrganizationMembership` rows in sync with
+profiles, mirroring the backfill in organizations migration 0003:
+
+- Saving an `Adult` creates `Mentor` (active follows `mentor_active`),
+  `Parent`, and `Alumni` memberships in the Adult's organization (or the
+  default organization when unset).
+- Saving a `Student` creates a `Student` membership (active follows
+  `graduated`).
+- Flipping a flag **off** (e.g. `mentor_active`) deactivates the matching
+  membership; profile saves **never re-activate** a deactivated membership.
+  Reactivation is an explicit platform-admin or invitation action.
+- Existing rows are otherwise untouched (idempotent `get_or_create`).
+
+Profiles created before the sync existed can be backfilled with
+`python manage.py backfill_profile_memberships` (idempotent; see
+`docs/operations.md`).
+
 ### Multi-Role Helpers
 Because an Adult can hold multiple responsibilities simultaneously (e.g., a parent who also mentors), `get_user_role` alone does not convey all capabilities. Always use the boolean helpers in `programs/permission_views.py`:
 - `user_is_parent(user)`: True if the user has any linked students.

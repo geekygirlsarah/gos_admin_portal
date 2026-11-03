@@ -63,9 +63,10 @@ class OrderListView(
 
     def get_export_items(self):
         return (
-            OrderItem.objects.filter(
-                Q(order__isnull=True) | ~Q(order__status=Order.STATUS_RECEIVED)
+            OrderItem.objects.for_organization(
+                getattr(self.request, "organization", None)
             )
+            .filter(Q(order__isnull=True) | ~Q(order__status=Order.STATUS_RECEIVED))
             .select_related(
                 "program",
                 "vendor",
@@ -83,15 +84,18 @@ class OrderListView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
+        org = getattr(self.request, "organization", None)
         pool_items = list(
-            OrderItem.objects.filter(order__isnull=True)
+            OrderItem.objects.for_organization(org)
+            .filter(order__isnull=True)
             .select_related(
                 "program", "vendor", "team", "crew", "subteam", "requested_by"
             )
             .order_by("-requested_at")
         )
         active_orders = list(
-            Order.objects.exclude(status=Order.STATUS_RECEIVED)
+            Order.objects.for_organization(org)
+            .exclude(status=Order.STATUS_RECEIVED)
             .select_related("program", "vendor", "shipping_carrier", "created_by")
             .prefetch_related("items__team", "items__crew", "items__subteam")
             .order_by("-created_at")
@@ -147,8 +151,10 @@ class OrderArchiveView(
     section = "orders-view"
 
     def get_queryset(self):
+        org = getattr(self.request, "organization", None)
         return (
-            Order.objects.filter(status=Order.STATUS_RECEIVED)
+            Order.objects.for_organization(org)
+            .filter(status=Order.STATUS_RECEIVED)
             .select_related(
                 "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
             )
@@ -157,8 +163,10 @@ class OrderArchiveView(
         )
 
     def get_export_items(self):
+        org = getattr(self.request, "organization", None)
         return (
-            OrderItem.objects.filter(order__status=Order.STATUS_RECEIVED)
+            OrderItem.objects.for_organization(org)
+            .filter(order__status=Order.STATUS_RECEIVED)
             .select_related(
                 "program",
                 "vendor",
@@ -216,18 +224,21 @@ class OrderDetailView(
     section = "orders-view"
 
     def get_queryset(self):
-        return Order.objects.select_related(
+        org = getattr(self.request, "organization", None)
+        return Order.objects.for_organization(org).select_related(
             "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
+        org = getattr(self.request, "organization", None)
         context["items"] = self.object.items.select_related(
             "program", "vendor", "team", "crew", "subteam", "requested_by", "order"
         ).all()
         context["available_items"] = (
-            OrderItem.objects.filter(order__isnull=True)
+            OrderItem.objects.for_organization(org)
+            .filter(order__isnull=True)
             .select_related(
                 "program", "vendor", "team", "crew", "subteam", "requested_by"
             )
@@ -260,6 +271,11 @@ class OrderCreateView(
     template_name = "orders/order_form.html"
     section = "orders-manage"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
     def get_initial(self):
         initial = super().get_initial()
         initial["program"] = self.program
@@ -272,6 +288,7 @@ class OrderCreateView(
 
     def form_valid(self, form):
         form.instance.created_by = self.request.user
+        form.instance.organization = getattr(self.request, "organization", None)
         messages.success(
             self.request,
             "Order created. Add items from the detail page or mark it ordered when you're ready.",
@@ -301,9 +318,15 @@ class OrderUpdateView(
     section = "orders-manage"
 
     def get_queryset(self):
+        org = getattr(self.request, "organization", None)
         # Org-wide queryset; creator-only editing is enforced by
         # ``can_user_write('orders-manage', obj)`` for non-Lead-Mentors.
-        return Order.objects.select_related("program", "vendor")
+        return Order.objects.for_organization(org).select_related("program", "vendor")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -332,7 +355,8 @@ class OrderDeleteView(
     template_name = "orders/order_confirm_delete.html"
 
     def get_queryset(self):
-        return Order.objects.all()
+        org = getattr(self.request, "organization", None)
+        return Order.objects.for_organization(org)
 
     def dispatch(self, request, *args, **kwargs):
         if not can_user_delete(request.user, "orders-manage", self.get_object()):
@@ -408,7 +432,8 @@ class OrderMarkOrderedView(
         return redirect("orders:order_list", program_id=self.program.id)
 
     def post(self, request, program_id, pk):
-        order = get_object_or_404(Order, pk=pk)
+        org = getattr(request, "organization", None)
+        order = get_object_or_404(Order.objects.for_organization(org), pk=pk)
         if order.status == Order.STATUS_PENDING:
             return self._mark_as_ordered(request, order)
         if order.status == Order.STATUS_SHIPPED:
@@ -430,7 +455,8 @@ class OrderMarkPendingView(
     """Reopens an order (undoes 'mark ordered'/'mark shipped'/'mark received')."""
 
     def post(self, request, program_id, pk):
-        order = get_object_or_404(Order, pk=pk)
+        org = getattr(request, "organization", None)
+        order = get_object_or_404(Order.objects.for_organization(org), pk=pk)
         if order.status in (
             Order.STATUS_ORDERED,
             Order.STATUS_SHIPPED,
@@ -459,7 +485,8 @@ class OrderMarkShippedView(
     active list until it's received."""
 
     def post(self, request, program_id, pk):
-        order = get_object_or_404(Order, pk=pk)
+        org = getattr(request, "organization", None)
+        order = get_object_or_404(Order.objects.for_organization(org), pk=pk)
         if order.status == Order.STATUS_ORDERED:
             order.status = Order.STATUS_SHIPPED
             order.save(update_fields=["status"])
@@ -482,7 +509,8 @@ class OrderMarkReceivedView(
     """
 
     def post(self, request, program_id, pk):
-        order = get_object_or_404(Order, pk=pk)
+        org = getattr(request, "organization", None)
+        order = get_object_or_404(Order.objects.for_organization(org), pk=pk)
         if order.status == Order.STATUS_SHIPPED:
             order.status = Order.STATUS_RECEIVED
             order.save(update_fields=["status"])
@@ -506,9 +534,13 @@ class OrderShippingUpdateView(
     section = "orders-shipping"
 
     def get_object(self):
-        return get_object_or_404(Order, pk=self.kwargs.get("pk"))
+        org = getattr(self.request, "organization", None)
+        return get_object_or_404(
+            Order.objects.for_organization(org), pk=self.kwargs.get("pk")
+        )
 
     def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
         order = self.get_object()
         if order.status not in (Order.STATUS_ORDERED, Order.STATUS_SHIPPED):
             messages.error(
@@ -544,9 +576,13 @@ class OrderAddItemsView(
     section = "orders-manage"
 
     def get_object(self):
-        return get_object_or_404(Order, pk=self.kwargs.get("pk"))
+        org = getattr(self.request, "organization", None)
+        return get_object_or_404(
+            Order.objects.for_organization(org), pk=self.kwargs.get("pk")
+        )
 
     def post(self, request, program_id, pk):
+        org = getattr(request, "organization", None)
         order = self.get_object()
         if order.status != Order.STATUS_PENDING:
             messages.error(request, "Only pending orders can accept more items.")
@@ -556,7 +592,9 @@ class OrderAddItemsView(
                 pk=order.pk,
             )
         selected = request.POST.getlist("items")
-        items = OrderItem.objects.filter(pk__in=selected, order__isnull=True)
+        items = OrderItem.objects.for_organization(org).filter(
+            pk__in=selected, order__isnull=True
+        )
         count = items.update(order=order)
         if count:
             messages.success(self.request, f"{count} item(s) added to the order.")
@@ -577,9 +615,13 @@ class OrderRemoveItemView(
     section = "orders-manage"
 
     def get_object(self):
-        return get_object_or_404(Order, pk=self.kwargs.get("pk"))
+        org = getattr(self.request, "organization", None)
+        return get_object_or_404(
+            Order.objects.for_organization(org), pk=self.kwargs.get("pk")
+        )
 
     def post(self, request, program_id, pk, item_id):
+        org = getattr(request, "organization", None)
         order = self.get_object()
         if order.status != Order.STATUS_PENDING:
             messages.error(request, "Items can only be removed from pending orders.")
@@ -588,7 +630,9 @@ class OrderRemoveItemView(
                 program_id=self.program.id,
                 pk=order.pk,
             )
-        item = get_object_or_404(OrderItem, pk=item_id, order=order)
+        item = get_object_or_404(
+            OrderItem.objects.for_organization(org), pk=item_id, order=order
+        )
         item.order = None
         item.save(update_fields=["order"])
         messages.success(

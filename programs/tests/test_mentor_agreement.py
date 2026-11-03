@@ -11,9 +11,11 @@ Covers:
 
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from organizations.models import Organization
 from programs.models import (
     Adult,
     MentorAgreement,
@@ -112,8 +114,12 @@ class MentorAgreementModelTests(TestCase):
         self.assertTrue(self.agreement.is_active)
 
     def test_version_unique_per_slug(self):
-        with self.assertRaises(Exception):
+        # Uniqueness is per organization; NULL organizations never collide.
+        org = Organization.objects.get(slug="gos")
+        MentorAgreement.objects.filter(pk=self.agreement.pk).update(organization=org)
+        with self.assertRaises(IntegrityError), transaction.atomic():
             MentorAgreement.objects.create(
+                organization=org,
                 slug="data-access-policy",
                 version=1,
                 title="Duplicate",
@@ -847,13 +853,17 @@ class MentorAgreementSubmissionTests(TestCase):
         self.assertIsNotNone(submission.uploaded_at)
 
     def test_unique_together_constraint(self):
+        # Uniqueness is per organization; NULL organizations never collide.
+        org = Organization.objects.get(slug="gos")
         MentorAgreementSubmission.objects.create(
+            organization=org,
             adult=self.adult,
             agreement=self.agreement,
             file="signed/test.pdf",
         )
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError), transaction.atomic():
             MentorAgreementSubmission.objects.create(
+                organization=org,
                 adult=self.adult,
                 agreement=self.agreement,
                 file="signed/test2.pdf",

@@ -12,7 +12,7 @@ import base64
 from io import BytesIO
 
 from django.core.mail import EmailMultiAlternatives
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 from PIL import Image
 
 from programs.utils.email_html import (
@@ -350,7 +350,7 @@ class HtmlToTextTests(SimpleTestCase):
         self.assertEqual(html_to_text("<p><br></p>"), "")
 
 
-class WrapEmailDocumentTests(SimpleTestCase):
+class WrapEmailDocumentTests(TestCase):
     """Two of the three compose pages emailed a bare HTML fragment."""
 
     def test_fragment_is_wrapped_in_a_full_document(self):
@@ -407,7 +407,7 @@ def _large_png_data_url(width=4000, height=3000):
     return _data_url(b64=base64.b64encode(buf.getvalue()).decode("ascii"))
 
 
-class EmailHtmlEmbeddedImageTests(SimpleTestCase):
+class EmailHtmlEmbeddedImageTests(TestCase):
     """Editors paste images as ``data:`` URLs; emails convert them to CID inline attachments.
 
     The sanitizer must never trust raw ``data:`` URLs (only nh3's allowlist of

@@ -81,11 +81,13 @@ class LeadMentorRolePermissionTests(TestCase):
             is_mentor=True,
             organization=self.gos,
         )
-        UserOrganizationMembership.objects.create(
+        # The Adult post_save sync already creates this membership; get_or_create
+        # keeps the fixture explicit without colliding with the unique constraint.
+        UserOrganizationMembership.objects.get_or_create(
             user=self.mentor_user,
             organization=self.gos,
             role="Mentor",
-            is_active=True,
+            defaults={"is_active": True},
         )
 
         # Superuser (system admin)
@@ -104,7 +106,7 @@ class LeadMentorRolePermissionTests(TestCase):
         self.assertTrue(user_is_mentor_or_lead(self.lead_user, org=self.gos))
 
         # But NOT a lead mentor in other_org
-        self.assertEqual(get_user_role(self.lead_user, org=self.other_org), "Mentor")
+        self.assertIsNone(get_user_role(self.lead_user, org=self.other_org))
         self.assertFalse(user_is_lead_mentor(self.lead_user, org=self.other_org))
 
     def test_regular_mentor_not_lead_mentor(self):
@@ -175,11 +177,13 @@ class PortalSettingsLeadMentorViewTests(TestCase):
             is_mentor=True,
             organization=self.gos,
         )
-        UserOrganizationMembership.objects.create(
+        # The Adult post_save sync already creates this membership; get_or_create
+        # keeps the fixture explicit without colliding with the unique constraint.
+        UserOrganizationMembership.objects.get_or_create(
             user=self.candidate_user,
             organization=self.gos,
             role="Mentor",
-            is_active=True,
+            defaults={"is_active": True},
         )
 
         self.client = Client()

@@ -12,11 +12,9 @@ from .fields import EncryptedFileField
 class Fee(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="fees",
-        help_text="Organization that owns this fee (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this fee (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
@@ -47,11 +45,9 @@ class Fee(models.Model):
 class Payment(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="payments",
-        help_text="Organization that owns this payment (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this payment (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -118,11 +114,19 @@ class Payment(models.Model):
 
 
 class SlidingScaleSettings(models.Model):
-    """Singleton row holding the portal-wide sliding scale calculation constants.
+    """Sliding scale calculation constants for an organization.
 
     These are based on the federal poverty guidelines and can be edited by a
     Lead Mentor from the Portal Settings page.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="sliding_scale_settings",
+        help_text="Organization that owns these sliding scale settings (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     base_amount = models.DecimalField(
         max_digits=10,
@@ -158,8 +162,11 @@ class SlidingScaleSettings(models.Model):
         return "Sliding Scale Settings"
 
     @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_solo(cls, organization):
+        """Return the organization's settings row, creating it on first use."""
+        obj = cls.objects.filter(organization=organization).order_by("pk").first()
+        if obj is None:
+            obj = cls.objects.create(organization=organization)
         return obj
 
     def compute_discount_percent(self, family_size, adjusted_gross_income):
@@ -206,11 +213,9 @@ class SlidingScale(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="sliding_scales",
-        help_text="Organization that owns this sliding-scale application (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this sliding-scale application (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -332,6 +337,14 @@ def _tax_form_upload_to(instance, filename):
 
 
 class TaxForm(models.Model):
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="tax_forms",
+        help_text="Organization that owns this tax form (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     sliding_scale = models.ForeignKey(
         SlidingScale, on_delete=models.CASCADE, related_name="tax_forms"
     )
@@ -355,11 +368,9 @@ class FeeAssignment(models.Model):
     fee = models.ForeignKey("Fee", on_delete=models.CASCADE, related_name="assignments")
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="fee_assignments",
-        help_text="Organization that owns this fee assignment (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this fee assignment (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

@@ -6,6 +6,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 class CalendarFeed(models.Model):
     VISIBILITY_ANONYMOUS = "anonymous"
@@ -26,8 +28,16 @@ class CalendarFeed(models.Model):
         (SOURCE_CUSTOM, "Custom source"),
     ]
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="calendar_feeds",
+        help_text="Organization that owns this calendar feed (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     name = models.CharField(max_length=200)
-    slug = models.SlugField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -54,6 +64,7 @@ class CalendarFeed(models.Model):
 
     class Meta:
         ordering = ["name"]
+        unique_together = ("organization", "slug")
 
     def __str__(self):
         return self.name
@@ -61,11 +72,15 @@ class CalendarFeed(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
-            # Ensure uniqueness
+            # Ensure uniqueness within organization
             base_slug = self.slug
             counter = 1
             while (
-                CalendarFeed.objects.filter(slug=self.slug).exclude(pk=self.pk).exists()
+                CalendarFeed.objects.filter(
+                    organization=self.organization, slug=self.slug
+                )
+                .exclude(pk=self.pk)
+                .exists()
             ):
                 self.slug = f"{base_slug}-{counter}"
                 counter += 1
@@ -149,6 +164,14 @@ class CalendarFeedACL(models.Model):
         ("Alumni", "Alumni"),
     ]
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="calendar_feed_acls",
+        help_text="Organization that owns this calendar feed ACL (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     feed = models.ForeignKey(
         CalendarFeed, on_delete=models.CASCADE, related_name="acls"
     )
@@ -157,7 +180,7 @@ class CalendarFeedACL(models.Model):
     can_write = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ("feed", "role")
+        unique_together = ("organization", "feed", "role")
         verbose_name = "Calendar Feed ACL"
         verbose_name_plural = "Calendar Feed ACLs"
 
@@ -176,6 +199,14 @@ class CalendarEvent(models.Model):
     For manually-managed feeds, these are created/edited via the UI.
     For source-managed feeds, these are synced from the source (e.g. outreach shifts).
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="calendar_events",
+        help_text="Organization that owns this calendar event (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     feed = models.ForeignKey(
         CalendarFeed, on_delete=models.CASCADE, related_name="events"
@@ -273,6 +304,14 @@ class EventException(models.Model):
     For example: moving a single meeting to a different time, or deleting
     one instance of a weekly series.
     """
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="calendar_event_exceptions",
+        help_text="Organization that owns this calendar event exception (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     CHANGE_MOVED = "moved"
     CHANGE_DELETED = "deleted"

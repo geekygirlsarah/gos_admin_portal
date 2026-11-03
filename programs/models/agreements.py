@@ -1,5 +1,7 @@
 from django.db import models
 
+from organizations.models import OrganizationManager, OrganizationQuerySet
+
 
 def _mentor_agreement_upload_to(instance, filename):
     from programs.utils.files import build_upload_path
@@ -42,8 +44,16 @@ class MentorAgreement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="mentor_agreements",
+        help_text="Organization that owns this mentor agreement (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     class Meta:
-        unique_together = ("slug", "version")
+        unique_together = ("organization", "slug", "version")
         ordering = ["-version"]
         verbose_name = "Mentor Agreement"
         verbose_name_plural = "Mentor Agreements"
@@ -53,27 +63,40 @@ class MentorAgreement(models.Model):
 
     def save(self, *args, **kwargs):
         if self.is_active:
-            MentorAgreement.objects.filter(is_active=True, slug=self.slug).exclude(
-                pk=self.pk
-            ).update(is_active=False)
+            MentorAgreement.objects.filter(
+                is_active=True, slug=self.slug, organization=self.organization
+            ).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
 
     @classmethod
-    def get_active(cls, slug=None):
-        """Return the current active agreement, optionally filtered by slug."""
+    def get_active(cls, slug=None, organization=None):
+        """Return the current active agreement, optionally filtered by slug and organization."""
         qs = cls.objects.filter(is_active=True)
+        if organization is not None:
+            qs = qs.filter(organization=organization)
         if slug:
             qs = qs.filter(slug=slug)
         return qs.first()
 
     @classmethod
-    def get_all_active(cls):
-        """Return all active agreements (one per slug)."""
-        return cls.objects.filter(is_active=True)
+    def get_all_active(cls, organization=None):
+        """Return all active agreements (one per slug), optionally filtered by organization."""
+        qs = cls.objects.filter(is_active=True)
+        if organization is not None:
+            qs = qs.filter(organization=organization)
+        return qs
 
 
 class MentorAgreementAcceptance(models.Model):
     """Records that an Adult has accepted a specific MentorAgreement version."""
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="mentor_agreement_acceptances",
+        help_text="Organization that owns this agreement acceptance (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
     adult = models.ForeignKey(
         "Adult",
@@ -100,7 +123,7 @@ class MentorAgreementAcceptance(models.Model):
         return f"{self.adult} accepted {self.agreement}"
 
     @classmethod
-    def has_accepted_for_user(cls, user):
+    def has_accepted_for_user(cls, user, organization=None):
         """Check if a user has accepted all current active agreements.
 
         Returns True if there are no active agreements (graceful degradation)
@@ -109,16 +132,17 @@ class MentorAgreementAcceptance(models.Model):
         """
         from .adults import Adult
 
-        active = MentorAgreement.get_all_active()
+        active = MentorAgreement.get_all_active(organization=organization)
         if not active.exists():
             return True
         try:
             adult = user.adult_profile
         except (AttributeError, Adult.DoesNotExist):
             return False
-        accepted_ids = cls.objects.filter(
-            adult=adult, agreement__in=active
-        ).values_list("agreement_id", flat=True)
+        acceptances = cls.objects.filter(adult=adult, agreement__in=active)
+        if organization is not None:
+            acceptances = acceptances.filter(organization=organization)
+        accepted_ids = acceptances.values_list("agreement_id", flat=True)
         return active.filter(id__in=accepted_ids).count() == active.count()
 
 
@@ -142,6 +166,14 @@ class MentorAgreementSubmission(models.Model):
     One row per (adult, agreement). Re-uploading replaces the file.
     """
 
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.PROTECT,
+        related_name="mentor_agreement_submissions",
+        help_text="Organization that owns this agreement submission (multi-tenant).",
+    )
+    objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
+
     adult = models.ForeignKey(
         "Adult",
         on_delete=models.CASCADE,
@@ -159,7 +191,7 @@ class MentorAgreementSubmission(models.Model):
     uploaded_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("adult", "agreement")
+        unique_together = ("organization", "adult", "agreement")
         ordering = ["-uploaded_at"]
         verbose_name = "Mentor Agreement Submission"
         verbose_name_plural = "Mentor Agreement Submissions"
