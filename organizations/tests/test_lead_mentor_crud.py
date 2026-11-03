@@ -14,6 +14,7 @@ from audit.models import AuditLog
 from organizations.models import (
     Organization,
     OrganizationInvitation,
+    OrganizationSettings,
     UserOrganizationMembership,
 )
 from programs.models import Adult
@@ -165,12 +166,15 @@ class PortalSettingsLeadMentorCRUDTests(TestCase):
             role="LeadMentor",
             invited_by=self.lead_user,
         )
+        pending_user = User.objects.create_user(
+            username="pending_user", email="pending@example.com"
+        )
         mail.outbox.clear()
         self.client.force_login(self.lead_user)
         url = reverse("portal_lead_mentors")
         response = self.client.post(
             url,
-            {"action": "add_lead_mentor", "user_id": "999999"},
+            {"action": "add_lead_mentor", "user_id": pending_user.id},
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
@@ -363,16 +367,19 @@ class PortalSettingsLeadMentorCRUDTests(TestCase):
             role="LeadMentor",
             invited_by=self.lead_user,
         )
+        pending_user = User.objects.create_user(
+            username="pending_user", email="pending@example.com"
+        )
         mail.outbox.clear()
         self.client.force_login(self.lead_user)
         url = reverse("portal_lead_mentors")
         response = self.client.post(
             url,
-            {"action": "add_lead_mentor", "user_id": "pending@example.com"},
+            {"action": "add_lead_mentor", "user_id": pending_user.id},
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "resent Lead Mentor invitation")
+        self.assertContains(response, "Lead Mentor invitation sent")
         self.assertEqual(len(mail.outbox), 1)
         invite.refresh_from_db()
         self.assertTrue(invite.is_valid())
@@ -628,7 +635,9 @@ class PortalSettingsAccessControlTests(TestCase):
         self.org, _ = Organization.objects.get_or_create(
             slug="gos", defaults={"name": "Girls of Steel"}
         )
-        self.org_settings, _ = self.org.settings.get_or_create(organization=self.org)
+        self.org_settings, _ = OrganizationSettings.objects.get_or_create(
+            organization=self.org
+        )
 
         self.client = Client()
 
