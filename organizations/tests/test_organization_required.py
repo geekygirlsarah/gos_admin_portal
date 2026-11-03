@@ -13,6 +13,18 @@ STRICT_MODELS = [
     "badges.StudentBadge",
 ]
 
+# Membership/settings cascade with the org; audit events keep history (DO_NOTHING).
+NON_PROTECT_MODELS = {
+    "organizations.OrganizationSettings",
+    "organizations.UserOrganizationMembership",
+    "organizations.OrganizationInvitation",
+    "programs.AdultStudentRelationshipEvent",
+    "programs.AdultEvent",
+    "programs.EnrollmentEvent",
+    "programs.StudentEvent",
+    "applications.ApplicationEvent",
+}
+
 
 class OrganizationRequiredTests(TestCase):
     """Org-owned models must always belong to exactly one organization."""
@@ -35,6 +47,8 @@ class OrganizationRequiredTests(TestCase):
                 continue
             with self.subTest(model=model._meta.label):
                 self.assertFalse(field.null)
+                if model._meta.label in NON_PROTECT_MODELS:
+                    continue
                 self.assertIs(field.remote_field.on_delete, PROTECT)
 
     def test_order_without_organization_rejected(self):
