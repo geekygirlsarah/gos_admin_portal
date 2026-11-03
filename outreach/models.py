@@ -18,11 +18,9 @@ class OutreachLocation(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="outreach_locations",
-        help_text="Organization that owns this saved location (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this saved location (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     name = models.CharField(max_length=255)
@@ -46,11 +44,9 @@ class OutreachLocation(models.Model):
 class OutreachEvent(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="outreach_events",
-        help_text="Organization that owns this event (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this event (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     program = models.ForeignKey(
@@ -148,11 +144,9 @@ class OutreachEvent(models.Model):
 class OutreachShift(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="outreach_shifts",
-        help_text="Organization that owns this shift (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this shift (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     event = models.ForeignKey(
@@ -223,11 +217,9 @@ class OutreachSignup(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="outreach_signups",
-        help_text="Organization that owns this signup (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this signup (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     student = models.ForeignKey(
@@ -334,11 +326,9 @@ class OutreachMentorSignup(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="outreach_mentor_signups",
-        help_text="Organization that owns this mentor signup (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this mentor signup (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     adult = models.ForeignKey(

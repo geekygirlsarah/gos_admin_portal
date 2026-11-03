@@ -133,11 +133,9 @@ class Application(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="applications",
-        help_text="Organization this application is submitted to (multi-tenant; null until backfilled).",
+        help_text="Organization this application is submitted to (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -477,11 +475,9 @@ class ApplicationDocumentSubmission(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="application_document_submissions",
-        help_text="Organization that owns this submission (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this submission (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
