@@ -473,7 +473,7 @@ class SlidingScaleCreateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["settings_obj"] = SlidingScaleSettings.get_solo()
+        ctx["settings_obj"] = SlidingScaleSettings.get_solo(self.request.organization)
         return ctx
 
     def form_valid(self, form):
@@ -523,7 +523,7 @@ class SlidingScaleUpdateView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["settings_obj"] = SlidingScaleSettings.get_solo()
+        ctx["settings_obj"] = SlidingScaleSettings.get_solo(self.request.organization)
         return ctx
 
     def form_valid(self, form):
@@ -714,7 +714,7 @@ class SlidingScaleReviewDecideView(LoginRequiredMixin, LeadMentorRequiredMixin, 
 
     def get(self, request, pk):
         application = self.get_object()
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(request.organization)
         suggested_percent = settings_obj.compute_discount_percent(
             application.family_size, application.adjusted_gross_income
         )
@@ -834,7 +834,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
             return redirect("parent_payments")
 
         form = SlidingScaleApplicationForm()
-        settings_obj = SlidingScaleSettings.get_solo()
+        settings_obj = SlidingScaleSettings.get_solo(request.organization)
         return render(
             request,
             self.template_name,
@@ -848,7 +848,7 @@ class SlidingScaleApplyView(LoginRequiredMixin, View):
 
         form = SlidingScaleApplicationForm(request.POST, request.FILES)
         if not form.is_valid():
-            settings_obj = SlidingScaleSettings.get_solo()
+            settings_obj = SlidingScaleSettings.get_solo(request.organization)
             return render(
                 request,
                 self.template_name,

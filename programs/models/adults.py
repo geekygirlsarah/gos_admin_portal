@@ -47,11 +47,9 @@ request_finished.connect(clear_active_background_check_types_cache)
 class AdultStudentRelationship(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="adult_student_relationships",
-        help_text="Organization that owns this adult-student relationship (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this adult-student relationship (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -84,11 +82,9 @@ def _adult_photo_upload_to(instance, filename):
 class Adult(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="adults",
-        help_text="Organization that owns this adult (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this adult (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -541,9 +537,7 @@ class BackgroundCheckType(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="background_check_types",
         help_text="Organization that owns this background check type.",
     )
@@ -778,11 +772,9 @@ class BackgroundCheck(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="background_checks",
-        help_text="Organization that owns this background check (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this background check (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

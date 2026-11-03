@@ -11,11 +11,9 @@ class RolePermission(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="role_permissions",
-        help_text="Organization that owns this role permission (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this role permission (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

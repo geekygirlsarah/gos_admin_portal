@@ -46,11 +46,9 @@ class MentorAgreement(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="mentor_agreements",
-        help_text="Organization that owns this mentor agreement (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this mentor agreement (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -94,11 +92,9 @@ class MentorAgreementAcceptance(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="mentor_agreement_acceptances",
-        help_text="Organization that owns this agreement acceptance (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this agreement acceptance (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -172,11 +168,9 @@ class MentorAgreementSubmission(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="mentor_agreement_submissions",
-        help_text="Organization that owns this agreement submission (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this agreement submission (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

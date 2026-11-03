@@ -10,11 +10,9 @@ from programs.validators import validate_zip_code
 class SchoolDistrict(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="school_districts",
-        help_text="Organization that owns this school district (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this school district (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -31,11 +29,9 @@ class SchoolDistrict(models.Model):
 class School(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="schools",
-        help_text="Organization that owns this school (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this school (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -70,11 +66,9 @@ class RaceEthnicity(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="race_ethnicities",
-        help_text="Organization that owns this race/ethnicity option (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this race/ethnicity option (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

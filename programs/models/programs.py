@@ -16,11 +16,9 @@ class ProgramFeature(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="program_features",
-        help_text="Organization that owns this program feature (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this program feature (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -49,11 +47,9 @@ class ProgramQuerySet(OrganizationQuerySet):
 class Program(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="programs",
-        help_text="Organization that owns this program (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this program (multi-tenant).",
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)

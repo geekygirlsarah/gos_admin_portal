@@ -72,11 +72,9 @@ class EmailDeliveryEvent(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="email_delivery_events",
-        help_text="Organization that owns this email delivery event (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this email delivery event (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

@@ -7,11 +7,9 @@ from programs.constants import TEAM_TYPES
 class Team(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="teams",
-        help_text="Organization that owns this team (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this team (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -35,11 +33,9 @@ class Team(models.Model):
 class Crew(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="crews",
-        help_text="Organization that owns this crew (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this crew (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -62,11 +58,9 @@ class Crew(models.Model):
 class SubTeam(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="subteams",
-        help_text="Organization that owns this subteam (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this subteam (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

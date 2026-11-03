@@ -8,11 +8,9 @@ from organizations.models import OrganizationManager, OrganizationQuerySet
 class Enrollment(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="enrollments",
-        help_text="Organization that owns this enrollment (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this enrollment (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
     student = models.ForeignKey("Student", on_delete=models.CASCADE)

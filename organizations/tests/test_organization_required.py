@@ -26,6 +26,17 @@ class OrganizationRequiredTests(TestCase):
                 self.assertFalse(field.null)
                 self.assertIs(field.remote_field.on_delete, PROTECT)
 
+    def test_every_organization_fk_is_required_and_protected(self):
+        from django.apps import apps
+
+        for model in apps.get_models():
+            field = {f.name: f for f in model._meta.fields}.get("organization")
+            if field is None or field.related_model is not Organization:
+                continue
+            with self.subTest(model=model._meta.label):
+                self.assertFalse(field.null)
+                self.assertIs(field.remote_field.on_delete, PROTECT)
+
     def test_order_without_organization_rejected(self):
         from orders.models import Order
 
