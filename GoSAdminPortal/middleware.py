@@ -1,6 +1,7 @@
 import logging
 
 from django.conf import settings
+from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 
@@ -135,6 +136,42 @@ class OrganizationMiddleware:
         from organizations.utils import resolve_organization_from_request
 
         request.organization = resolve_organization_from_request(request)
+        return self.get_response(request)
+
+
+class RootDomainGuardMiddleware:
+    """Keep tenant data unreachable when no organization is resolved.
+
+    The root platform domain has no organization context: it serves the
+    marketing site, auth, and platform-admin tooling only. Every other path
+    holds org-owned data, so it redirects to the landing page rather than
+    letting a view run
+    with ``request.organization = None`` (which would skip tenant scoping).
+    """
+
+    ALLOWED_PREFIXES = (
+        "/accounts/",
+        "/admin/",
+        "/platform-admin/",
+        "/health",
+        "/api/webhooks/",
+        "/landing/",
+        "/about/",
+    )
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path
+        if (
+            getattr(request, "organization", None) is None
+            and path != "/"
+            and not path.startswith(self.ALLOWED_PREFIXES)
+            and not (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL))
+            and not (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+        ):
+            return redirect("home")
         return self.get_response(request)
 
 

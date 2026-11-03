@@ -190,6 +190,8 @@ MIDDLEWARE = [
     # Attaches request.organization (single hardcoded GoS org for now).
     "GoSAdminPortal.middleware.OrganizationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # After MessageMiddleware: the custom 404 handler posts a message.
+    "GoSAdminPortal.middleware.RootDomainGuardMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
