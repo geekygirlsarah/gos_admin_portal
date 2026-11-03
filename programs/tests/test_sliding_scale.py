@@ -5,6 +5,7 @@ import datetime
 from decimal import Decimal
 from unittest import mock
 
+from cryptography.fernet import Fernet
 from django.contrib.auth.models import Group, Permission, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -26,11 +27,11 @@ from programs.models import (
 )
 
 
-@override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 def _gos():
     return Organization.objects.get(slug="gos")
 
 
+@override_settings(FILE_ENCRYPTION_KEY=Fernet.generate_key().decode())
 class SlidingScaleApplicationTests(TestCase):
     """Covers the parent-facing sliding scale application flow: a Parent
     applies, a Lead Mentor reviews/approves/declines it, uploaded documents
