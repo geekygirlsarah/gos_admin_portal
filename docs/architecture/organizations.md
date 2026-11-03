@@ -68,7 +68,7 @@ All organization-owned models across apps (`programs`, `applications`, `attendan
 
 ### Scoping Rules (`.for_organization(org)`)
 - `Model.objects.for_organization(None)`: Returns all rows (unfiltered, used by superusers/system admin).
-- `Model.objects.for_organization(org)`: Returns records where `organization == org` **plus** legacy unscoped rows (`organization__isnull=True`) to maintain visibility during multi-tenant transitions.
+- `Model.objects.for_organization(org)`: Returns only records where `organization == org`. Unscoped rows (`organization__isnull=True`) are hidden from every tenant (migration `organizations/0006` backfills existing ones to GoS). `for_organization(None)` (superusers / root domain) returns everything. Under the test runner, new instances created without an organization are assigned the seeded `gos` org by a transitional shim (`GoSAdminPortal/test_runner.py`); new tests should set `organization=` explicitly.
 
 ---
 

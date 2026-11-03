@@ -187,18 +187,18 @@ class LeadMentorRolePermissionTests(TestCase):
         from orders.models import Order
 
         # Create a record with no organization
-        order_no_org = Order.objects.create(
-            status="pending",
-        )
+        order_no_org = Order.objects.create(status="pending")
+        Order.objects.filter(pk=order_no_org.pk).update(organization=None)
         # for_organization(momentum) should not include it
-        orders = Order.objects.for_organization(self.momentum)
-        self.assertNotIn(order_no_org, orders)
+        self.assertNotIn(order_no_org, Order.objects.for_organization(self.momentum))
         # But records with momentum org should be included
         order_with_momentum = Order.objects.create(
             status="pending",
             organization=self.momentum,
         )
-        self.assertIn(order_with_momentum, orders)
+        self.assertIn(
+            order_with_momentum, Order.objects.for_organization(self.momentum)
+        )
 
     def test_travel_no_cross_org_records(self):
         """Travel views must not return records from other orgs."""

@@ -196,6 +196,7 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         qs = (
             Adult.objects.for_organization(getattr(self.request, "organization", None))
             .filter(is_mentor=True)
+            .select_related("organization")
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"

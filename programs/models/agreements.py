@@ -143,9 +143,10 @@ class MentorAgreementAcceptance(models.Model):
             adult = user.adult_profile
         except (AttributeError, Adult.DoesNotExist):
             return False
-        accepted_ids = cls.objects.filter(
-            adult=adult, agreement__in=active, organization=organization
-        ).values_list("agreement_id", flat=True)
+        acceptances = cls.objects.filter(adult=adult, agreement__in=active)
+        if organization is not None:
+            acceptances = acceptances.filter(organization=organization)
+        accepted_ids = acceptances.values_list("agreement_id", flat=True)
         return active.filter(id__in=accepted_ids).count() == active.count()
 
 

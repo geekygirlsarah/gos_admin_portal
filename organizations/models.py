@@ -91,18 +91,16 @@ class SettingsDict(dict):
 class OrganizationQuerySet(models.QuerySet):
     """Queryset helpers for organization (multi-tenant) scoping.
 
-    ``for_organization`` filters rows belonging to the given organization.
-    While records may still be unscoped during transitions (organization__isnull=True),
-    it keeps them visible alongside the matching org, or returns all records if
-    organization is None.
+    ``for_organization`` returns only rows belonging to the given organization.
+    Unscoped rows (organization__isnull=True) are not visible to any tenant;
+    migration 0006 backfills them to the GoS org. ``organization=None``
+    (superuser / root-domain requests) returns all records.
     """
 
     def for_organization(self, organization):
         if organization is None:
             return self
-        return self.filter(
-            models.Q(organization=organization) | models.Q(organization__isnull=True)
-        )
+        return self.filter(organization=organization)
 
 
 class OrganizationManager(models.Manager.from_queryset(OrganizationQuerySet)):

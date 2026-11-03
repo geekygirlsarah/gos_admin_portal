@@ -339,7 +339,8 @@ class PlatformDashboardAndHealthTests(TestCase):
         self.assertFalse(response.context["has_isolation_issues"])
 
         # Create an unscoped program to trigger isolation warning
-        unscoped_prog = Program.objects.create(name="Unscoped", organization=None)
+        unscoped_prog = Program.objects.create(name="Unscoped")
+        Program.objects.filter(pk=unscoped_prog.pk).update(organization=None)
         response_unscoped = self.client.get(reverse("platform_admin:health"))
         self.assertTrue(response_unscoped.context["has_isolation_issues"])
 

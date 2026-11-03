@@ -297,6 +297,6 @@ class AdultDetailQueryOptimizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLess(
             _count_queries(fetch),
-            14,
+            16,  # fixed overhead incl. the adult's organization lookup
             "adult_detail is performing an N+1 query pattern",
         )
