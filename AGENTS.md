@@ -24,6 +24,7 @@ Portal" or "GoS Admin Portal") to a multi-organizational portal ("Momentum").
   implementations.
 - Do not silently weaken permissions, tenant isolation, audit behavior,
   validation, or encryption to make a test pass.
+- All code should be reviewed before being committed. Do not commit or push code yourself.
 
 ## Decision-making
 
