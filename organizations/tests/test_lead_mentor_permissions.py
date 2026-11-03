@@ -182,15 +182,13 @@ class LeadMentorRolePermissionTests(TestCase):
         # Should return Mentor when checking against momentum
         self.assertEqual(get_user_role(self.momentum_user, org=self.momentum), "Mentor")
 
-    def test_for_organization_excludes_null_scoped(self):
-        """for_organization should exclude records with organization__isnull=True."""
+    def test_for_organization_excludes_other_orgs(self):
+        """for_organization returns only the given org's orders."""
         from orders.models import Order
 
-        # Create a record with no organization
-        order_no_org = Order.objects.create(status="pending")
-        Order.objects.filter(pk=order_no_org.pk).update(organization=None)
-        # for_organization(momentum) should not include it
-        self.assertNotIn(order_no_org, Order.objects.for_organization(self.momentum))
+        order_gos = Order.objects.create(status="pending", organization=self.gos)
+        # for_organization(momentum) should not include another org's order
+        self.assertNotIn(order_gos, Order.objects.for_organization(self.momentum))
         # But records with momentum org should be included
         order_with_momentum = Order.objects.create(
             status="pending",

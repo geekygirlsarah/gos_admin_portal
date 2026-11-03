@@ -18,11 +18,9 @@ class Vendor(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="vendors",
-        help_text="Organization that owns this vendor (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this vendor (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -55,11 +53,9 @@ class ShippingCarrier(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="shipping_carriers",
-        help_text="Organization that owns this shipping carrier (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this shipping carrier (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -115,11 +111,9 @@ class Order(models.Model):
 
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="orders",
-        help_text="Organization that owns this order (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this order (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -357,11 +351,9 @@ class OrderItem(models.Model):
     )
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="order_items",
-        help_text="Organization that owns this order item (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this order item (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 

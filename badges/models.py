@@ -24,11 +24,9 @@ class BadgeCategory(models.TextChoices):
 class Badge(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="badges",
-        help_text="Organization that owns this badge (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this badge (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
@@ -54,11 +52,9 @@ class Badge(models.Model):
 class StudentBadge(models.Model):
     organization = models.ForeignKey(
         "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="student_badges",
-        help_text="Organization that owns this badge award (multi-tenant; null until backfilled).",
+        help_text="Organization that owns this badge award (multi-tenant).",
     )
     objects = OrganizationManager.from_queryset(OrganizationQuerySet)()
 
