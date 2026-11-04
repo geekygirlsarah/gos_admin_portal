@@ -294,12 +294,18 @@ class PortalEmailSettingsViewTests(TestCase):
             resp,
             "By default, messages will be sent from the system's email address, but you can update that with the settings below.",
         )
-        # Check for custom domain setup explanation
-        self.assertContains(resp, "How Custom Domain Setup Works")
+        # Custom sender domains are not activated by these saved preferences.
+        self.assertContains(resp, "Custom sending domains need administrator setup")
         self.assertContains(
-            resp, "You do not need to change your MX records or mailboxes"
+            resp,
+            "These fields record your requested sender domain and address; "
+            "they do not configure DNS or change how messages are sent.",
         )
-        self.assertContains(resp, "DNS verification records")
+        self.assertContains(
+            resp, "No DNS records or delivery status are provided here."
+        )
+        self.assertNotContains(resp, "Email Service Active")
+        self.assertNotContains(resp, "DNS verification records")
         # Ensure technical jargon and references to toSend or SMTP are removed from the settings UI
         content = resp.content.decode("utf-8")
         self.assertNotIn("toSend", content)

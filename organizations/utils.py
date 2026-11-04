@@ -53,18 +53,8 @@ def get_site_base_url() -> str:
 
 
 def _resolve_portal_url(raw_cfg: Dict[str, Any], org: Optional[Organization]) -> str:
-    """Resolve the public portal URL from email config, custom domain, or site settings."""
+    """Resolve the public portal URL without using the email sending domain."""
     portal_url = raw_cfg.get("portal_url") or ""
-    if not portal_url:
-        custom_domain_cfg = raw_cfg.get("custom_domain") or {}
-        if custom_domain_cfg.get("enabled") and custom_domain_cfg.get("domain"):
-            domain_val = str(custom_domain_cfg.get("domain")).strip()
-            if domain_val:
-                portal_url = (
-                    domain_val
-                    if domain_val.startswith(("http://", "https://"))
-                    else f"https://{domain_val}"
-                )
     if (
         not portal_url
         and org
@@ -74,6 +64,8 @@ def _resolve_portal_url(raw_cfg: Dict[str, Any], org: Optional[Organization]) ->
         portal_url = (
             org.settings.get("portal_url") or org.settings.get("site_url") or ""
         )
+    if not portal_url and org:
+        portal_url = get_organization_url(org)
     if not portal_url:
         portal_url = get_site_base_url()
 
@@ -129,6 +121,18 @@ def get_organization_url(organization: Optional[Organization] = None) -> str:
     if subdomain and root_domain:
         return f"https://{subdomain}.{root_domain}"
 
+    return get_site_base_url()
+
+
+def get_organization_momentum_url(organization: Optional[Organization] = None) -> str:
+    """Return the organization's Momentum subdomain URL, regardless of aliases."""
+    if organization:
+        subdomain = getattr(organization, "subdomain", None) or getattr(
+            organization, "slug", None
+        )
+        root_domain = getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
+        if subdomain and root_domain:
+            return f"https://{subdomain}.{root_domain}"
     return get_site_base_url()
 
 

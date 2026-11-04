@@ -15,6 +15,7 @@ from organizations.models import Organization
 from organizations.utils import (
     get_default_organization,
     get_organization_email_settings,
+    get_organization_momentum_url,
     update_organization_email_settings,
 )
 from programs.constants import TEAM_TYPES
@@ -182,6 +183,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "eligible_lead_mentor_users": eligible_lead_mentor_users,
             "pending_lead_mentor_invitations": pending_lead_mentor_invitations,
             "organization": org,
+            "momentum_portal_url": get_organization_momentum_url(org),
             "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
@@ -674,7 +676,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
                     )
                 except Exception as e:
                     messages.error(request, f"Invalid logo image file: {e}")
-                    return redirect("/programs/settings/?tab=email")
+                    return redirect("/programs/settings/?tab=branding")
             elif not logo_url and "logo_url" not in request.POST:
                 logo_url = email_cfg.get("logo_url", "")
             elif logo_url and logo_url.startswith("/") and request:
@@ -696,7 +698,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             messages.success(
                 request, "Email branding & template settings updated successfully."
             )
-            return redirect("/programs/settings/?tab=email")
+            return redirect("/programs/settings/?tab=branding")
 
         elif action == "update_email_settings":
             sender_display_name = request.POST.get("sender_display_name", "").strip()

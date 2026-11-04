@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-11-04
 
+### Changed
+- Portal settings now show each organization's Momentum address separately from email sender settings, and email branding has its own tab. Custom sending-domain preferences are clearly identified as requests that do not configure DNS or change delivery.
+
 ### Fixed
 - Tenant routing now uses Django-validated hostnames, ignores organization-routing headers, constrains subdomains to the configured root or `.localhost`, and returns 404 for unresolved non-platform hosts instead of applying session/default organization fallbacks.
 - Cached host mappings are checked against the organization's current active state and domain configuration before reuse.

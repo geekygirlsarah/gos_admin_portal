@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import render_to_string
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
@@ -211,7 +211,11 @@ class OrganizationEmailBrandingTests(TestCase):
             footer_portion,
         )
 
-    def test_portal_url_derived_from_custom_domain(self):
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_email_sending_domain_does_not_determine_portal_url(self):
+        self.org.subdomain = "titanrobotics"
+        self.org.settings = {}
+        self.org.save(update_fields=["subdomain"])
         custom_cfg = {
             "custom_domain": {
                 "enabled": True,
@@ -220,7 +224,7 @@ class OrganizationEmailBrandingTests(TestCase):
         }
         update_organization_email_settings(self.org, custom_cfg)
         cfg = get_organization_email_settings(self.org)
-        self.assertEqual(cfg["portal_url"], "https://titanrobotics.org")
+        self.assertEqual(cfg["portal_url"], "https://titanrobotics.momentumteam.app")
 
     def test_base_notification_template_renders_without_link_when_no_portal_url(self):
         cfg = {
@@ -295,8 +299,10 @@ class OrganizationEmailBrandingTests(TestCase):
         self.client.login(
             username="lead_mentor", password="testpassword123"
         )  # nosec B106
-        resp = self.client.get(reverse("portal_settings") + "?tab=email")
+        resp = self.client.get(reverse("portal_settings") + "?tab=branding")
         self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="branding-tab"')
+        self.assertContains(resp, 'id="branding"')
         self.assertContains(resp, "Email Branding &amp; Template Customization")
         self.assertContains(resp, "Primary Brand Color")
         self.assertContains(resp, "Organization Logo")
