@@ -156,7 +156,8 @@ class FeedListView(LeadMentorRequiredMixin, ListView):
 
 class FeedCreateView(LeadMentorRequiredMixin, View):
     def get(self, request):
-        form = CalendarFeedForm()
+        org = getattr(request, "organization", None)
+        form = CalendarFeedForm(organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(prefix="acls")
         return render(
             request,
@@ -166,7 +167,7 @@ class FeedCreateView(LeadMentorRequiredMixin, View):
 
     def post(self, request):
         org = getattr(request, "organization", None)
-        form = CalendarFeedForm(request.POST)
+        form = CalendarFeedForm(request.POST, organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(request.POST, prefix="acls")
 
         if form.is_valid() and acl_formset.is_valid():
@@ -198,7 +199,7 @@ class FeedUpdateView(LeadMentorRequiredMixin, View):
     def get(self, request, pk):
         org = getattr(request, "organization", None)
         feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=pk)
-        form = CalendarFeedForm(instance=feed)
+        form = CalendarFeedForm(instance=feed, organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(instance=feed, prefix="acls")
         return render(
             request,
@@ -209,7 +210,7 @@ class FeedUpdateView(LeadMentorRequiredMixin, View):
     def post(self, request, pk):
         org = getattr(request, "organization", None)
         feed = get_object_or_404(CalendarFeed.objects.for_organization(org), pk=pk)
-        form = CalendarFeedForm(request.POST, instance=feed)
+        form = CalendarFeedForm(request.POST, instance=feed, organization=org)
         acl_formset = CalendarFeedACLInlineFormSet(
             request.POST, instance=feed, prefix="acls"
         )

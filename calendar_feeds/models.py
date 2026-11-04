@@ -107,10 +107,15 @@ class CalendarFeed(models.Model):
 
         if not user.is_authenticated:
             return False
+        if not getattr(user, "is_active", False):
+            return False
+
+        if not self._has_active_organization_membership(user):
+            return False
 
         from programs.permission_views import get_user_role
 
-        role = get_user_role(user)
+        role = get_user_role(user, org=self.organization)
         if role == "LeadMentor":
             return True
 
@@ -134,10 +139,15 @@ class CalendarFeed(models.Model):
 
         if self.is_source_managed:
             return False
+        if not getattr(user, "is_active", False):
+            return False
+
+        if not self._has_active_organization_membership(user):
+            return False
 
         from programs.permission_views import get_user_role
 
-        role = get_user_role(user)
+        role = get_user_role(user, org=self.organization)
         if role == "LeadMentor":
             return True
 
@@ -145,6 +155,18 @@ class CalendarFeed(models.Model):
             return False
 
         return self.acls.filter(role=role, can_write=True).exists()
+
+    def _has_active_organization_membership(self, user):
+        if user.is_superuser:
+            return True
+        if self.organization_id is None:
+            return False
+
+        from organizations.models import UserOrganizationMembership
+
+        return UserOrganizationMembership.objects.filter(
+            user=user, organization_id=self.organization_id, is_active=True
+        ).exists()
 
     def get_events_for_date_range(self, start_date, end_date):
         """Return all active events in this feed for the given date range,

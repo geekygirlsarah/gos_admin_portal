@@ -12,25 +12,30 @@ from calendar_feeds.forms import (
 )
 from calendar_feeds.models import CalendarFeed, CalendarFeedACL
 from calendar_feeds.tests.factories import make_feed
+from organizations.models import Organization
 from programs.models import Program
 
 
 class CalendarFeedFormProgramGroupingTests(TestCase):
     def setUp(self):
         today = timezone.localdate()
+        self.organization = Organization.objects.get(slug="gos")
         self.active_prog = Program.objects.create(
+            organization=self.organization,
             name="Active FTC Season",
             active=True,
             start_date=today - timedelta(days=30),
             end_date=today + timedelta(days=60),
         )
         self.upcoming_prog = Program.objects.create(
+            organization=self.organization,
             name="Upcoming FRC Season",
             active=True,
             start_date=today + timedelta(days=90),
             end_date=today + timedelta(days=180),
         )
         self.past_prog = Program.objects.create(
+            organization=self.organization,
             name="Past FLL Season",
             active=False,
             start_date=today - timedelta(days=300),
@@ -38,7 +43,7 @@ class CalendarFeedFormProgramGroupingTests(TestCase):
         )
 
     def test_program_field_grouped_optgroups(self):
-        form = CalendarFeedForm()
+        form = CalendarFeedForm(organization=self.organization)
         rendered = str(form["program"])
 
         self.assertIn("Org-wide (no program)", rendered)
@@ -59,9 +64,11 @@ class CalendarFeedFormProgramGroupingTests(TestCase):
             "program": self.active_prog.pk,
             "is_active": True,
         }
-        form = CalendarFeedForm(data=data)
+        form = CalendarFeedForm(data=data, organization=self.organization)
         self.assertTrue(form.is_valid(), form.errors)
-        feed = form.save()
+        feed = form.save(commit=False)
+        feed.organization = self.organization
+        feed.save()
         self.assertEqual(feed.program, self.active_prog)
 
 

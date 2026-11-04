@@ -40,7 +40,16 @@ def expand_events_for_range(feed, start_date, end_date):
     range, including recurring event instances and excluding/moving dates per
     EventException rules.
     """
-    events = feed.events.order_by("start_datetime")
+    if feed.organization_id is None:
+        return []
+
+    from .models import CalendarEvent
+
+    events = (
+        CalendarEvent.objects.for_organization(feed.organization)
+        .filter(feed=feed)
+        .order_by("start_datetime")
+    )
 
     expanded = []
     for event in events:

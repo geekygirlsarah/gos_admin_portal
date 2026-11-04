@@ -36,10 +36,17 @@ DAY_CHOICES = [
 
 class CalendarFeedForm(forms.ModelForm):
     program = GroupedProgramChoiceField(
-        queryset=Program.objects.all(),
+        queryset=Program.objects.none(),
         required=False,
         empty_label="Org-wide (no program)",
     )
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if organization is not None:
+            self.fields["program"].queryset = Program.objects.for_organization(
+                organization
+            )
 
     class Meta:
         model = CalendarFeed

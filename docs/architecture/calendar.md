@@ -48,6 +48,10 @@ Multi-feed calendars are served at `/calendar/`:
 - **Aggregate Public Feed**: `/calendar/feed.ics` (all active `anonymous` feeds, covering -30 days to +1 year).
 - **Personal Unified Subscription**: `/calendar/my/<token>/feed.ics` (aggregates all feeds the user has permission to read).
 
+All public and tokenized ICS endpoints are scoped to the organization resolved from the request hostname. Feed slugs are resolved within that organization, and event expansion excludes events whose organization does not match their feed. Personal tokens require an active account with an active membership in the organization currently hosting the subscription (superusers retain their existing membership exception). A token does not grant access to feeds on another organization's host; public feeds remain anonymously readable on their own organization's host. Requests without an organization context are rejected.
+
+Calendar feed forms only offer programs belonging to the current organization and reject submitted program IDs from other organizations.
+
 ---
 
 ## Scheduled Reminders (`send_calendar_reminders`)
