@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, HttpResponseNotFound
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 
@@ -118,8 +118,7 @@ class LoginRequiredMiddleware:
 class OrganizationMiddleware:
     """Attach the active organization to every request as ``request.organization``.
 
-    Resolves the organization from HTTP headers (e.g. X-Organization), request
-    subdomain / hostname, or falls back to the default organization row.
+    Resolves the organization from the validated request hostname.
     """
 
     def __init__(self, get_response):
@@ -143,10 +142,8 @@ class RootDomainGuardMiddleware:
     """Keep tenant data unreachable when no organization is resolved.
 
     The root platform domain has no organization context: it serves the
-    marketing site, auth, and platform-admin tooling only. Every other path
-    holds org-owned data, so it redirects to the landing page rather than
-    letting a view run
-    with ``request.organization = None`` (which would skip tenant scoping).
+    marketing site, auth, and platform-admin tooling only. Unknown hosts are
+    rejected before views can run without tenant scoping.
     """
 
     ALLOWED_PREFIXES = (
@@ -164,12 +161,21 @@ class RootDomainGuardMiddleware:
 
     def __call__(self, request):
         path = request.path
+        is_static_or_media = (
+            settings.MEDIA_URL and path.startswith(settings.MEDIA_URL)
+        ) or (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+        if (
+            getattr(request, "organization", None) is None
+            and not getattr(request, "_is_platform_domain", False)
+            and not is_static_or_media
+        ):
+            return HttpResponseNotFound("Not Found")
+
         if (
             getattr(request, "organization", None) is None
             and path != "/"
             and not path.startswith(self.ALLOWED_PREFIXES)
-            and not (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL))
-            and not (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+            and not is_static_or_media
         ):
             return redirect("home")
         return self.get_response(request)

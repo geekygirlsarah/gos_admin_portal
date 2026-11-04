@@ -34,6 +34,7 @@ from programs.models import (
 
 
 @override_settings(
+    MOMENTUM_ROOT_DOMAIN="momentumteam.app",
     ALLOWED_HOSTS=[
         "localhost",
         ".localhost",
@@ -42,7 +43,7 @@ from programs.models import (
         "momentumteam.app",
         ".momentumteam.app",
         "portal.girlsofsteelrobotics.org",
-    ]
+    ],
 )
 class PlatformAdminAccessControlTests(TestCase):
     """Test superuser access restrictions across all platform admin endpoints."""
@@ -151,12 +152,12 @@ class PlatformAdminAccessControlTests(TestCase):
         )
         self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 
-    def test_platform_admin_denied_with_tenant_header(self):
-        """Platform admin views must raise Http404 when requested with tenant routing headers."""
+    def test_platform_admin_denied_with_tenant_host(self):
+        """Platform admin views must raise Http404 when requested through a tenant host."""
         factory = RequestFactory()
         request = factory.get(
             reverse("platform_admin:dashboard"),
-            HTTP_X_ORGANIZATION="steel-city",
+            HTTP_HOST="steel-city.momentumteam.app",
         )
         request.user = self.superuser
         request.organization = self.org
@@ -167,7 +168,7 @@ class PlatformAdminAccessControlTests(TestCase):
 
         response = self.client.get(
             reverse("platform_admin:dashboard"),
-            HTTP_X_ORGANIZATION="steel-city",
+            HTTP_HOST="steel-city.momentumteam.app",
         )
         self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 

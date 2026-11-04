@@ -76,14 +76,14 @@ All organization-owned models across apps (`programs`, `applications`, `attendan
 
 `OrganizationMiddleware` (`GoSAdminPortal/middleware.py`) attaches the resolved tenant to `request.organization` on every request.
 
-Resolution occurs in priority order:
-1. **HTTP Header**: `X-Organization`, `X-Org-Slug`, `X-Org-Subdomain` headers (used by API clients and integration tests).
-2. **Root Marketing Domain**: Host matches `MOMENTUM_ROOT_DOMAIN` (default `momentumteam.app`) or `www.momentumteam.app`. Sets `request.organization = None` and serves the public Momentum marketing homepage with team directory and login options.
-3. **Legacy / CNAME Aliases**: Host matches known CNAME aliases (such as `portal.girlsofsteelrobotics.org` or `gosadmin.com`), resolving directly to the `gos` organization.
-4. **Subdomain Routing**: `<subdomain>.momentumteam.app` or `<subdomain>.localhost`, resolving the organization by matching `subdomain` or `slug`.
-5. **Custom Domains**: Matches configured custom domain aliases from active organization settings.
-6. **Session**: User session preferences (`active_organization_id`).
-7. **Default Fallback**: In local/unadorned development environments (`localhost`, `127.0.0.1`, `testserver`), falls back to the default organization row (`gos`).
+Resolution uses the validated request hostname only; `HttpRequest.get_host()` enforces Django's `ALLOWED_HOSTS` before routing:
+1. **Root Marketing Domain**: The configured `MOMENTUM_ROOT_DOMAIN` (default `localhost` in settings) and its `www` host, plus the Momentum marketing root, have no organization context and serve the platform's public pages.
+2. **Legacy Aliases**: Known GoS hosts (such as `portal.girlsofsteelrobotics.org` and `gosadmin.com`) resolve to the active `gos` organization.
+3. **Custom Domains**: An exact hostname match against an active organization's configured domain resolves that tenant. The hostname must also pass `ALLOWED_HOSTS`; configure custom hosts there or through a trusted, validated ingress boundary.
+4. **Tenant Subdomains**: One tenant label beneath `MOMENTUM_ROOT_DOMAIN` or `.localhost` resolves by matching the organization's `subdomain` or `slug`.
+5. **No Match**: An unresolved host has no organization. Middleware returns a direct 404 for non-platform hosts rather than falling back to a session or `DEFAULT_ORGANIZATION_SLUG`. Static and media paths remain exempt; Django's synthetic `testserver` host uses the configured default organization only while tests run.
+
+Organization-routing headers are ignored. Do not rely on the hostname as a substitute for membership and object-level authorization; tenant views must still enforce their established access rules.
 
 ---
 

@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.cache import cache
@@ -131,187 +132,175 @@ def get_organization_url(organization: Optional[Organization] = None) -> str:
     return get_site_base_url()
 
 
+def _normalize_hostname(value: str) -> str:
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if "://" not in value:
+        value = f"//{value}"
+    try:
+        hostname = urlsplit(value).hostname
+    except ValueError:
+        return ""
+    return (hostname or "").rstrip(".").lower()
+
+
+def _organization_custom_hostname(organization: Organization) -> str:
+    org_settings = getattr(organization, "settings", {}) or {}
+    if not isinstance(org_settings, dict):
+        return ""
+
+    custom_domain = org_settings.get("custom_domain") or ""
+    if isinstance(custom_domain, dict):
+        custom_domain = custom_domain.get("domain") or ""
+    if not custom_domain:
+        custom_domain = org_settings.get("domain") or ""
+        if isinstance(custom_domain, dict):
+            custom_domain = custom_domain.get("domain") or ""
+    return _normalize_hostname(custom_domain)
+
+
+_RESERVED_SUBDOMAIN_LABELS = {
+    "www",
+    "api",
+    "app",
+    "admin",
+    "mail",
+    "portal",
+    "staging",
+    "dev",
+    "127",
+    "testserver",
+    "localhost",
+}
+
+
+def _organization_matches_hostname(
+    organization: Organization, host: str, root_domain: str
+) -> bool:
+    if (
+        host
+        in {
+            "portal.girlsofsteelrobotics.org",
+            "girlsofsteelrobotics.org",
+            "gosadmin.com",
+        }
+        and organization.slug == "gos"
+    ):
+        return True
+
+    if _organization_custom_hostname(organization) == host:
+        return True
+
+    for domain in {root_domain, "localhost"}:
+        if not domain or not host.endswith(f".{domain}"):
+            continue
+        candidate = host[: -(len(domain) + 1)]
+        if "." in candidate or candidate.lower() in _RESERVED_SUBDOMAIN_LABELS:
+            continue
+        if candidate.lower() in {
+            str(organization.subdomain or "").lower(),
+            str(organization.slug or "").lower(),
+        }:
+            return True
+    return False
+
+
 def resolve_organization_from_request(request) -> Optional[Organization]:
-    """Resolve the active Organization from request headers, host/subdomain, session, or default fallback."""
+    """Resolve an active organization from the validated request hostname only."""
     if request is None:
-        return get_default_organization()
+        return None
 
-    cached = getattr(request, "_cached_organization", None)
-    if cached is not None:
-        return cached
+    if hasattr(request, "_cached_organization"):
+        return request._cached_organization
 
-    meta = getattr(request, "META", {}) or {}
-
-    # 1. Check HTTP headers (e.g. X-Organization, X-Org-Slug, X-Org-Subdomain)
-    header_val = (
-        meta.get("HTTP_X_ORGANIZATION")
-        or meta.get("HTTP_X_ORG_SLUG")
-        or meta.get("HTTP_X_ORG_SUBDOMAIN")
-        or ""
+    # HttpRequest.get_host() enforces ALLOWED_HOSTS; do not trust raw Host metadata.
+    host = _normalize_hostname(request.get_host())
+    root_domain = _normalize_hostname(
+        getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app")
     )
-    if header_val:
-        header_val = str(header_val).strip()
-        cache_key = f"org_resolve:header:{header_val.lower()}"
-        cached_id = cache.get(cache_key)
-        if cached_id is not None:
-            org = (
-                Organization.objects.filter(pk=cached_id, is_active=True).first()
-                if cached_id
-                else None
-            )
-            request._cached_organization = org
-            return org
-
-        org = Organization.objects.filter(
-            models.Q(slug__iexact=header_val) | models.Q(subdomain__iexact=header_val),
-            is_active=True,
-        ).first()
-        cache.set(cache_key, org.pk if org else False, timeout=300)
-        if org:
-            request._cached_organization = org
-            return org
-
-    # 2. Check Host / Subdomain
-    host = meta.get("HTTP_HOST") or meta.get("SERVER_NAME") or ""
-    if not host:
-        try:
-            host = request.get_host()
-        except Exception:
-            host = ""
-    host = host.split(":")[0].strip().lower()
-
-    root_domain = getattr(settings, "MOMENTUM_ROOT_DOMAIN", "momentumteam.app").lower()
-    root_domains = {
+    platform_hosts = {
         root_domain,
-        f"www.{root_domain}",
+        f"www.{root_domain}" if root_domain else "",
         "momentumteam.app",
         "www.momentumteam.app",
+        "localhost",
+        "127.0.0.1",
     }
+    request._is_platform_domain = host in platform_hosts
 
-    # The root platform domain (momentumteam.app / www) serves the marketing site
-    # and has no organization context.
-    if host in root_domains:
+    # Keep Django's synthetic test host compatible with legacy tests only. It is
+    # never used as a fallback for a real hostname.
+    if host == "testserver" and getattr(settings, "TESTING", False):
+        organization = get_default_organization()
+        request._cached_organization = organization
+        request._is_platform_domain = organization is None
+        return organization
+
+    if request._is_platform_domain:
         request._cached_organization = None
         return None
 
-    # Check cache for host resolution
     host_cache_key = f"org_resolve:host:{host}"
     cached_host_org_id = cache.get(host_cache_key)
     if cached_host_org_id is not None:
-        org = (
-            Organization.objects.filter(pk=cached_host_org_id, is_active=True).first()
-            if cached_host_org_id
-            else None
-        )
-        if org or cached_host_org_id is False:
-            request._cached_organization = org
-            return org
+        if cached_host_org_id is False:
+            request._cached_organization = None
+            return None
+        organization = Organization.objects.filter(
+            pk=cached_host_org_id, is_active=True
+        ).first()
+        if organization and _organization_matches_hostname(
+            organization, host, root_domain
+        ):
+            request._cached_organization = organization
+            return organization
+        cache.delete(host_cache_key)
 
-    # Girls of Steel legacy domains / CNAME targets
-    gos_domains = {
+    # Girls of Steel legacy domains / CNAME targets.
+    if host in {
         "portal.girlsofsteelrobotics.org",
         "girlsofsteelrobotics.org",
         "gosadmin.com",
-    }
-    if host in gos_domains:
-        org = Organization.objects.filter(slug="gos", is_active=True).first()
-        cache.set(host_cache_key, org.pk if org else False, timeout=300)
-        if org:
-            request._cached_organization = org
-            return org
+    }:
+        organization = Organization.objects.filter(slug="gos", is_active=True).first()
+        cache.set(
+            host_cache_key, organization.pk if organization else False, timeout=300
+        )
+        request._cached_organization = organization
+        return organization
 
-    if host and host not in (
-        "testserver",
-        "localhost",
-        "127.0.0.1",
+    # Custom domains must match an active organization's configured hostname.
+    for organization in Organization.objects.filter(is_active=True).only(
+        "id", "slug", "subdomain", "settings"
     ):
-        # Check active organization custom domain settings
-        for active_org in Organization.objects.filter(is_active=True):
-            org_settings = getattr(active_org, "settings", {}) or {}
-            custom_domain_cfg = org_settings.get("custom_domain") or {}
-            custom_domain_val = ""
-            if isinstance(custom_domain_cfg, dict):
-                custom_domain_val = custom_domain_cfg.get("domain") or ""
-            elif isinstance(custom_domain_cfg, str):
-                custom_domain_val = custom_domain_cfg
-            if not custom_domain_val:
-                custom_domain_val = org_settings.get("domain") or ""
-            if custom_domain_val:
-                clean_custom = (
-                    custom_domain_val.replace("https://", "")
-                    .replace("http://", "")
-                    .split("/")[0]
-                    .split(":")[0]
-                    .strip()
-                    .lower()
-                )
-                if clean_custom and clean_custom == host:
-                    cache.set(host_cache_key, active_org.pk, timeout=300)
-                    request._cached_organization = active_org
-                    return active_org
+        if _organization_custom_hostname(organization) == host:
+            cache.set(host_cache_key, organization.pk, timeout=300)
+            request._cached_organization = organization
+            return organization
 
-        parts = host.split(".")
-        if len(parts) >= 2:
-            candidate = parts[0]
-            reserved = {
-                "www",
-                "api",
-                "app",
-                "admin",
-                "mail",
-                "portal",
-                "staging",
-                "dev",
-                "127",
-                "testserver",
-                "localhost",
-            }
-            if candidate not in reserved:
-                org = Organization.objects.filter(
-                    models.Q(subdomain__iexact=candidate)
-                    | models.Q(slug__iexact=candidate),
-                    is_active=True,
-                ).first()
-                if org:
-                    cache.set(host_cache_key, org.pk, timeout=300)
-                    request._cached_organization = org
-                    return org
-        else:
-            org = Organization.objects.filter(
-                models.Q(subdomain__iexact=host) | models.Q(slug__iexact=host),
-                is_active=True,
-            ).first()
-            if org:
-                cache.set(host_cache_key, org.pk, timeout=300)
-                request._cached_organization = org
-                return org
+    # Tenant subdomains are accepted only beneath the configured root or the
+    # local-development .localhost suffix, with exactly one tenant label.
+    for domain in {root_domain, "localhost"}:
+        if not domain or not host.endswith(f".{domain}"):
+            continue
+        candidate = host[: -(len(domain) + 1)]
+        if (
+            not candidate
+            or "." in candidate
+            or candidate.lower() in _RESERVED_SUBDOMAIN_LABELS
+        ):
+            continue
+        organization = Organization.objects.filter(
+            models.Q(subdomain__iexact=candidate) | models.Q(slug__iexact=candidate),
+            is_active=True,
+        ).first()
+        if organization:
+            cache.set(host_cache_key, organization.pk, timeout=300)
+            request._cached_organization = organization
+            return organization
 
-    # Cache negative host result (except for dev/test servers)
-    if host and host not in ("testserver", "localhost", "127.0.0.1"):
-        cache.set(host_cache_key, False, timeout=300)
-
-    # 3. Check session active organization
-    session = getattr(request, "session", None)
-    if session:
-        session_org_id = session.get("active_organization_id")
-        if session_org_id:
-            org = Organization.objects.filter(pk=session_org_id, is_active=True).first()
-            if org:
-                request._cached_organization = org
-                return org
-
-    # 4. Fallback: use the configured DEFAULT_ORGANIZATION_SLUG setting.
-    #    When set to "gos" (the default), behavior is backward-compatible:
-    #    the existing GoS organization is returned. When set to another value
-    #    or left unset, None is returned if no matching organization exists.
-    default_slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
-    org = Organization.objects.filter(slug__iexact=default_slug, is_active=True).first()
-    if org:
-        request._cached_organization = org
-        return org
-
-    # No matching organization found — return None instead of silently
-    # defaulting to GoS.
+    cache.set(host_cache_key, False, timeout=300)
     request._cached_organization = None
     return None
 

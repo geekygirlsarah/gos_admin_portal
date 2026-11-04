@@ -10,13 +10,13 @@ This document catalogues all environment variables supported by Momentum (Girls 
 |---|---|---|---|
 | `SECRET_KEY` | **Required in Prod** | Dev insecure key | Cryptographic signing key (sessions, tokens, cookies) |
 | `FILE_ENCRYPTION_KEY` | **Required in Prod** | None | Fernet symmetric key for at-rest encrypted fields |
-| `ALLOWED_HOSTS` | **Required in Prod** | `localhost`, `127.0.0.1`, `testserver`, `.momentumteam.app`, `.girlsofsteelrobotics.org`, `.gosadmin.com` | Permitted HTTP host/domain headers |
+| `ALLOWED_HOSTS` | **Required in Prod** | `localhost`, `.localhost`, `127.0.0.1` | Permitted HTTP host/domain headers |
 | `DATABASE_URL` | Optional (Prod standard) | SQLite (`db.sqlite3`) | Database connection URL |
 | `DEBUG` | Optional | `True` | Toggles development vs. production mode |
 | `EMAIL_HOST_USER` | **Required in Prod** | `""` | SMTP authentication username (required for OTP login) |
 | `EMAIL_HOST_PASSWORD` | **Required in Prod** | `""` | SMTP authentication password (required for OTP login) |
 | `TOSEND_API_KEY` | Optional | `""` | API key for toSend REST email backend |
-| `MOMENTUM_ROOT_DOMAIN` | Optional | `momentumteam.app` | Base domain for tenant subdomain routing |
+| `MOMENTUM_ROOT_DOMAIN` | Optional | `localhost` | Base domain for tenant subdomain routing |
 | `MENTOR_AGREEMENT_ENABLED` | Optional | `True` | Enforces mentor agreement signing before access |
 | `LOG_LEVEL` | Optional | `INFO` | Root logging level |
 
@@ -57,9 +57,10 @@ This document catalogues all environment variables supported by Momentum (Girls 
 
 ### `ALLOWED_HOSTS`
 - **Requirement**: **Required in production**.
-- **Default**: Includes `localhost`, `127.0.0.1`, `testserver`, `.momentumteam.app`, `.girlsofsteelrobotics.org`, `.gosadmin.com`.
-- **Format**: Comma-separated domain list, e.g., `portal.example.org,admin.example.org`.
+- **Default**: `localhost`, `.localhost`, and `127.0.0.1`; production must provide the accepted public hosts through the `ALLOWED_HOSTS` environment variable.
+- **Format**: Comma-separated domain list, e.g., `.momentumteam.app,portal.example.org`. A leading dot allows the domain and its subdomains.
 - **Purpose**: Protects against HTTP Host header attacks.
+- **Tenant routing**: A tenant subdomain must be beneath `MOMENTUM_ROOT_DOMAIN`. Custom domains are checked against active organization settings only after Django accepts the host, so each custom host must be included in `ALLOWED_HOSTS` or accepted by an explicitly trusted, validated ingress boundary. Do not use an unrestricted `*` to allow customer domains.
 
 ### Production SSL & Header Controls
 These settings take effect when `DEBUG=False`:
