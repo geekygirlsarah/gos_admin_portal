@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group, User
 from django.test import Client, TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -25,6 +26,7 @@ from programs.permission_views import (
     can_user_write,
     get_user_role,
     user_is_alumni,
+    user_is_lead_mentor,
     user_is_mentor,
     user_is_mentor_or_lead,
     user_is_parent,
@@ -210,22 +212,61 @@ class MultiRoleResolutionAndHelpersTests(TestCase):
         self.assertTrue(user_is_alumni(user))
 
     def test_lead_mentor_group_with_adult_profile(self):
-        """A user in the LeadMentor group with an adult profile resolves to LeadMentor."""
+        """An active lead with parent and mentor memberships retains all roles."""
         user = User.objects.create_user(
             username="lead_adult", password="password123"  # nosec B106
         )
         user.groups.add(self.lead_group)
-        Adult.objects.create(
+        adult = Adult.objects.create(
             user=user,
             legal_first_name="Lead",
             last_name="Parent",
             is_parent=True,
             is_mentor=True,
+            mentor_active=True,
+        )
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=adult.organization,
+            role="LeadMentor",
+            is_active=True,
         )
         self.assertEqual(get_user_role(user), "LeadMentor")
         self.assertTrue(user_is_mentor_or_lead(user))
         self.assertTrue(user_is_parent(user))
         self.assertTrue(user_is_mentor(user))
+        self.assertTrue(user_is_lead_mentor(user, org=adult.organization))
+
+    def test_legacy_lead_group_cannot_override_scoped_memberships(self):
+        user = User.objects.create_user(username="group_parent_mentor")
+        user.groups.add(self.lead_group)
+        adult = Adult.objects.create(
+            user=user,
+            legal_first_name="Parent",
+            last_name="Mentor",
+            is_parent=True,
+            is_mentor=True,
+            mentor_active=True,
+        )
+        org = adult.organization
+        other = Organization.objects.create(
+            name="Other Team", slug="other-team", subdomain="other-team"
+        )
+
+        self.assertEqual(get_user_role(user, org=org), "Mentor")
+        self.assertFalse(user_is_lead_mentor(user, org=org))
+        self.assertTrue(user_is_parent(user, org=org))
+        self.assertTrue(user_is_mentor(user, org=org))
+        self.assertIsNone(get_user_role(user, org=other))
+        self.assertFalse(user_is_lead_mentor(user, org=other))
+        self.assertFalse(user_is_parent(user, org=other))
+        self.assertFalse(user_is_mentor(user, org=other))
+
+        adult.mentor_active = False
+        adult.save()
+        self.assertEqual(get_user_role(user, org=org), "Parent")
+        self.assertFalse(user_is_mentor(user, org=org))
+        self.assertFalse(user_is_lead_mentor(user, org=org))
 
     def test_anonymous_and_none_user(self):
         self.assertIsNone(get_user_role(None))

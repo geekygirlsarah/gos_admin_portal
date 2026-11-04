@@ -14,6 +14,8 @@ from orders.tests.base import (
     make_program,
     make_student_user,
 )
+from organizations.models import UserOrganizationMembership
+from organizations.utils import get_default_organization
 from programs.models import RolePermission
 
 
@@ -30,6 +32,24 @@ class OrderAccessTests(TestCase):
 
     def login(self, user):
         self.client.force_login(user)
+
+    def test_user_fixtures_have_active_memberships_for_their_roles(self):
+        users = (
+            (make_lead_mentor_user(), "LeadMentor"),
+            (make_mentor_user(), "Mentor"),
+            (make_student_user(program=self.feature_program), "Student"),
+            (make_parent_user(), "Parent"),
+        )
+        for user, role in users:
+            with self.subTest(role=role):
+                self.assertTrue(
+                    UserOrganizationMembership.objects.filter(
+                        user=user,
+                        organization=get_default_organization(),
+                        role=role,
+                        is_active=True,
+                    ).exists()
+                )
 
     def test_student_can_view_when_program_has_feature(self):
         student = make_student_user(program=self.feature_program)

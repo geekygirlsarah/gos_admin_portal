@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -16,6 +17,7 @@ from calendar_feeds.tests.factories import (
     make_program,
     make_student_user,
 )
+from organizations.models import Organization, UserOrganizationMembership
 
 
 class CalendarViewTests(TestCase):
@@ -68,6 +70,34 @@ class CalendarViewTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.context["feeds"]), 0)
+
+    def test_legacy_group_only_lead_is_denied_tenant_access(self):
+        lead = User.objects.create_user(username="legacy-lead")
+        lead.groups.add(Group.objects.get(name="LeadMentor"))
+        self.client.force_login(lead)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_inactive_lead_membership_is_denied_tenant_access(self):
+        membership = UserOrganizationMembership.objects.get(
+            user=self.lead, organization__slug="gos", role="LeadMentor"
+        )
+        membership.is_active = False
+        membership.save(update_fields=["is_active"])
+        self.client.force_login(self.lead)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_lead_membership_in_another_organization_is_denied(self):
+        lead = User.objects.create_user(username="other-lead")
+        lead.groups.add(Group.objects.get(name="LeadMentor"))
+        other = Organization.objects.create(name="Other", slug="other")
+        UserOrganizationMembership.objects.create(
+            user=lead, organization=other, role="LeadMentor", is_active=True
+        )
+        self.client.force_login(lead)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
 
 class CalendarEventsAPITests(TestCase):

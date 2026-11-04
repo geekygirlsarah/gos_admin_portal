@@ -3,6 +3,7 @@ import datetime
 from django.test import TestCase
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.forms import BackgroundChecksForm
 from programs.models import Adult, BackgroundCheck, BackgroundCheckType, Student
 
@@ -110,6 +111,12 @@ class BackgroundChecksViewTests(TestCase):
         )
         self.group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.group)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="lead", password="pass12345")  # nosec B106
 
     def test_student_edit_saves_background_checks_for_lead_mentor(self):
@@ -255,6 +262,12 @@ class StudentDetailBackgroundCheckViewTests(TestCase):
         self.program = Program.objects.create(name="Test Program")
         self.program.features.add(feature)
         Enrollment.objects.create(student=self.student, program=self.program)
+        UserOrganizationMembership.objects.update_or_create(
+            user=self.student_user,
+            organization=self.student.organization,
+            role="Student",
+            defaults={"is_active": True},
+        )
         self.client.login(username="student", password="pass12345")  # nosec B106
 
     def test_not_required_shows_not_needed_message(self):

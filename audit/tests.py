@@ -15,6 +15,8 @@ from audit.logging_handlers import AuditStderrHandler, AuditStdoutHandler
 from audit.models import AuditLog
 from audit.service import log_deletion, log_event
 from orders.models import Order, OrderItem, Vendor
+from organizations.models import UserOrganizationMembership
+from organizations.utils import get_default_organization
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -27,6 +29,15 @@ from programs.models import (
 )
 
 User = get_user_model()
+
+
+def _add_membership(user, role):
+    UserOrganizationMembership.objects.get_or_create(
+        user=user,
+        organization=get_default_organization(),
+        role=role,
+        defaults={"is_active": True},
+    )
 
 
 class AuditLogTest(TestCase):
@@ -45,6 +56,7 @@ class AuditLogTest(TestCase):
         )  # nosec B106
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(self.lead_group)
+        _add_membership(self.lead_user, "LeadMentor")
 
         self.program = Program.objects.create(
             name="Test Program", start_date="2024-01-01", end_date="2024-12-31"
@@ -95,7 +107,8 @@ class AuditLogTest(TestCase):
         url = reverse(
             "application_review_approve", kwargs={"app_id": app.application_id}
         )
-        self.client.post(url)
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
 
         log = AuditLog.objects.filter(
             event=AuditEvent.ADMISSION_DECISION, resource_id=str(app.pk)
@@ -115,6 +128,7 @@ class AuditLogTest(TestCase):
         other_user = User.objects.create_user(
             username="other", email="other@example.com", is_staff=True
         )
+        _add_membership(other_user, "Staff")
         self.client.force_login(other_user)
         response = self.client.get(url)
         # Since it's admin, if they are staff but not permitted, they might get redirected or 403.
@@ -152,6 +166,7 @@ class AuthenticationAuditLogTest(TestCase):
         )  # nosec B106
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.mentor.groups.add(lm_group)
+        _add_membership(self.mentor, "LeadMentor")
 
         Adult.objects.create(
             user=self.mentor,
@@ -190,7 +205,8 @@ class AuthenticationAuditLogTest(TestCase):
     def test_mentor_view_student_detail(self):
         self.client.force_login(self.mentor)
         url = reverse("student_detail", kwargs={"pk": self.student.pk})
-        self.client.get(url, HTTP_REFERER="http://testserver/")
+        response = self.client.get(url, HTTP_REFERER="http://testserver/")
+        self.assertEqual(response.status_code, 200)
         log = AuditLog.objects.filter(
             event=AuditEvent.SENSITIVE_DATA_VIEW,
             actor=self.mentor,
@@ -209,7 +225,8 @@ class AuthenticationAuditLogTest(TestCase):
 
         self.client.force_login(self.mentor)
         url = reverse("adult_edit", kwargs={"pk": self.parent.pk})
-        self.client.get(url, HTTP_REFERER="http://testserver/")
+        response = self.client.get(url, HTTP_REFERER="http://testserver/")
+        self.assertEqual(response.status_code, 200)
         log = AuditLog.objects.filter(
             event=AuditEvent.SENSITIVE_DATA_VIEW,
             actor=self.mentor,
@@ -222,9 +239,18 @@ class AuthenticationAuditLogTest(TestCase):
         regular_user = User.objects.create_user(
             username="regular", email="reg@example.com"
         )
+        _add_membership(regular_user, "Parent")
+        Adult.objects.create(
+            user=regular_user,
+            legal_first_name="Regular",
+            last_name="User",
+            is_parent=True,
+        )
         self.client.force_login(regular_user)
         url = reverse("student_detail", kwargs={"pk": self.student.pk})
-        self.client.get(url)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
         log = AuditLog.objects.filter(
             event=AuditEvent.SENSITIVE_DATA_VIEW, actor=regular_user
         ).first()
@@ -371,6 +397,7 @@ class SensitiveDataViewProgramContextTest(TestCase):
         )
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.mentor_user.groups.add(lm_group)
+        _add_membership(self.mentor_user, "LeadMentor")
         self.mentor_adult = Adult.objects.create(
             user=self.mentor_user,
             legal_first_name="Mentor",
@@ -394,7 +421,8 @@ class SensitiveDataViewProgramContextTest(TestCase):
     def test_notes_include_student_programs(self):
         self.client.force_login(self.mentor_user)
         url = reverse("student_detail", kwargs={"pk": self.student.pk})
-        self.client.get(url)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
 
         log = AuditLog.objects.filter(
             event=AuditEvent.SENSITIVE_DATA_VIEW,
@@ -408,7 +436,8 @@ class SensitiveDataViewProgramContextTest(TestCase):
     def test_notes_include_scope_label(self):
         self.client.force_login(self.mentor_user)
         url = reverse("student_detail", kwargs={"pk": self.student.pk})
-        self.client.get(url)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
 
         log = AuditLog.objects.filter(
             event=AuditEvent.SENSITIVE_DATA_VIEW,
@@ -608,6 +637,7 @@ class AuditedDeleteMixinViewTests(TestCase):
         )
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead.groups.add(lm_group)
+        _add_membership(self.lead, "LeadMentor")
         self.client.force_login(self.lead)
 
     def test_vendor_delete_logs_record_deleted(self):
@@ -658,6 +688,7 @@ class DistrictDeleteAuditTests(TestCase):
         self.user = User.objects.create_user(
             username="district_admin", password="password123"  # nosec B106
         )
+        _add_membership(self.user, "Staff")
         _grant_permission(self.user, "delete_schooldistrict")
         self.client.force_login(self.user)
 
@@ -694,6 +725,7 @@ class SchoolMergeAuditTests(TestCase):
         self.user = User.objects.create_user(
             username="merge_admin", password="password123"  # nosec B106
         )
+        _add_membership(self.user, "Staff")
         _grant_permission(self.user, "change_school")
         self.client.force_login(self.user)
 
@@ -728,6 +760,7 @@ class EnrollmentToggleAuditTests(TestCase):
         self.user = User.objects.create_user(
             username="toggle_admin", password="password123"  # nosec B106
         )
+        _add_membership(self.user, "Staff")
         _grant_permission(self.user, "change_student")
         self.client.force_login(self.user)
         self.program = Program.objects.create(name="Toggle Program")
@@ -781,6 +814,7 @@ class ApplicationDeleteAuditTests(TestCase):
         self.user = User.objects.create_user(
             username="app_admin", password="password123"  # nosec B106
         )
+        _add_membership(self.user, "Staff")
         ct, _ = ContentType.objects.get_or_create(
             app_label="applications", model="application"
         )

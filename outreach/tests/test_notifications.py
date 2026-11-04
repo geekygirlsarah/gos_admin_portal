@@ -21,7 +21,7 @@ from outreach.services import (
     notify_outreach_event_deleted,
     notify_outreach_signup,
 )
-from outreach.tests.factories import create_outreach_event
+from outreach.tests.factories import add_gos_membership, create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -91,6 +91,7 @@ class OutreachNotificationsTest(TestCase):
             username="lead", email="lead@example.com", password="password"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_mentor_group)
+        add_gos_membership(self.lead_user, "LeadMentor")
         self.lead_adult = Adult.objects.create(
             user=self.lead_user,
             legal_first_name="Lead",

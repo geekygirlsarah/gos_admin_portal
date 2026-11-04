@@ -22,6 +22,7 @@ from django.urls import reverse
 from applications.models import Application
 from applications.rate_limiting import rate_limit_hit, rate_limited_response
 from GoSAdminPortal.middleware import ApplyRateLimitMiddleware
+from organizations.models import Organization
 
 LIMITS_ENABLED = {"TESTING": False, "APPLY_RATE_LIMIT_ENABLED": True}
 
@@ -89,10 +90,18 @@ class RateLimitedResponseTests(TestCase):
         self.assertContains(response, "about 59 minutes", status_code=429)
 
 
-@override_settings(**LIMITS_ENABLED)
-class ApplyIpRateLimitMiddlewareTests(TestCase):
+@override_settings(
+    ALLOWED_HOSTS=["gos.example.test"], MOMENTUM_ROOT_DOMAIN="example.test"
+)
+class TenantRateLimitTestCase(TestCase):
     def setUp(self):
         cache.clear()
+        self.organization = Organization.objects.get(slug="gos", is_active=True)
+        self.client.defaults["HTTP_HOST"] = "gos.example.test"
+
+
+@override_settings(**LIMITS_ENABLED)
+class ApplyIpRateLimitMiddlewareTests(TenantRateLimitTestCase):
 
     def test_post_limit_exceeded_returns_429(self):
         url = reverse("apply_start")
@@ -141,11 +150,8 @@ class ApplyIpRateLimitMiddlewareTests(TestCase):
                 self.assertIsNone(middleware(request))
 
 
-class ApplyRateLimitDisabledTests(TestCase):
+class ApplyRateLimitDisabledTests(TenantRateLimitTestCase):
     """With default test settings throttling is off entirely."""
-
-    def setUp(self):
-        cache.clear()
 
     def test_apply_posts_not_throttled_when_disabled(self):
         for _ in range(15):
@@ -154,13 +160,15 @@ class ApplyRateLimitDisabledTests(TestCase):
 
 
 @override_settings(**LIMITS_ENABLED)
-class OtpSendRateLimitTests(TestCase):
+class OtpSendRateLimitTests(TenantRateLimitTestCase):
     def setUp(self):
-        cache.clear()
+        super().setUp()
         mail.outbox = []
 
     def test_otp_send_limit_exceeded_returns_429(self):
-        app = Application.objects.create(email="kid@example.com")
+        app = Application.objects.create(
+            organization=self.organization, email="kid@example.com"
+        )
         url = reverse("apply_step3_resend", kwargs={"app_id": app.application_id})
         for _ in range(5):
             response = self.client.post(url)
@@ -171,8 +179,12 @@ class OtpSendRateLimitTests(TestCase):
         self.assertContains(response, "Just a moment", status_code=429)
 
     def test_otp_send_limit_is_independent_per_email(self):
-        app_one = Application.objects.create(email="one@example.com")
-        app_two = Application.objects.create(email="two@example.com")
+        app_one = Application.objects.create(
+            organization=self.organization, email="one@example.com"
+        )
+        app_two = Application.objects.create(
+            organization=self.organization, email="two@example.com"
+        )
         url_one = reverse(
             "apply_step3_resend", kwargs={"app_id": app_one.application_id}
         )
@@ -187,7 +199,7 @@ class OtpSendRateLimitTests(TestCase):
         self.assertEqual(self.client.post(url_one).status_code, 429)
 
     def test_step2_otp_issuance_counts_toward_send_limit(self):
-        app = Application.objects.create()
+        app = Application.objects.create(organization=self.organization)
         url = reverse("apply_step2", kwargs={"app_id": app.application_id})
         for _ in range(5):
             response = self.client.post(
@@ -206,6 +218,7 @@ class OtpSendRateLimitTests(TestCase):
 
     def test_step3_get_otp_issuance_counts_toward_send_limit(self):
         app = Application.objects.create(
+            organization=self.organization,
             applicant_type="parent",
             email="spam2@example.com",
             current_step=3,
@@ -223,12 +236,10 @@ class OtpSendRateLimitTests(TestCase):
 
 
 @override_settings(**LIMITS_ENABLED, APPLY_IP_POST_LIMIT=100)
-class OtpVerifyRateLimitTests(TestCase):
-    def setUp(self):
-        cache.clear()
-
+class OtpVerifyRateLimitTests(TenantRateLimitTestCase):
     def _app(self):
         app = Application.objects.create(
+            organization=self.organization,
             applicant_type="parent",
             email="parent@example.com",
             current_step=3,
@@ -260,14 +271,13 @@ class OtpVerifyRateLimitTests(TestCase):
 
 
 @override_settings(TESTING=False, APPLY_RATE_LIMIT_ENABLED=False)
-class OtpLimitDisabledTests(TestCase):
+class OtpLimitDisabledTests(TenantRateLimitTestCase):
     """Even outside the test suite, a disabled limiter must never trip."""
 
-    def setUp(self):
-        cache.clear()
-
     def test_otp_send_never_blocked_when_disabled(self):
-        app = Application.objects.create(email="kid@example.com")
+        app = Application.objects.create(
+            organization=self.organization, email="kid@example.com"
+        )
         url = reverse("apply_step3_resend", kwargs={"app_id": app.application_id})
         for _ in range(15):
             response = self.client.post(url)

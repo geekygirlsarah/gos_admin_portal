@@ -1,9 +1,11 @@
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession
+from organizations.models import Organization, UserOrganizationMembership
+from organizations.utils import get_default_organization
 from programs.models import (
     Adult,
     Enrollment,
@@ -12,9 +14,14 @@ from programs.models import (
     RolePermission,
     Student,
 )
-from programs.permission_views import can_user_delete, can_user_read, can_user_write
+from programs.permission_views import (
+    can_user_delete,
+    can_user_read,
+    can_user_write,
+    user_is_lead_mentor,
+)
 
-from .base import make_program
+from .base import make_lead_mentor_user, make_program
 
 
 def _make_program(name="Test Program", active=True):
@@ -224,11 +231,9 @@ class VisitorAttendancePermissionTests(TestCase):
 
 class LeadMentorAttendancePermissionTests(TestCase):
     def setUp(self):
-        self.lead_user = User.objects.create_user(
+        self.lead_user = make_lead_mentor_user(
             username="lead_att", password="password123"  # nosec B106
         )
-        lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
-        self.lead_user.groups.add(lm_group)
 
         self.student = Student.objects.create(
             preferred_first_name="Any", last_name="Student"
@@ -242,3 +247,28 @@ class LeadMentorAttendancePermissionTests(TestCase):
 
     def test_lead_mentor_can_delete_attendance(self):
         self.assertTrue(can_user_delete(self.lead_user, "attendance"))
+
+
+class LeadMentorFixtureTests(TestCase):
+    def test_lead_fixture_has_active_default_organization_membership(self):
+        lead = make_lead_mentor_user()
+        organization = get_default_organization()
+
+        self.assertIsNotNone(organization)
+        self.assertTrue(
+            UserOrganizationMembership.objects.filter(
+                user=lead,
+                organization=organization,
+                role="LeadMentor",
+                is_active=True,
+            ).exists()
+        )
+        self.assertTrue(user_is_lead_mentor(lead, org=organization))
+
+    def test_lead_fixture_does_not_grant_lead_role_in_another_organization(self):
+        lead = make_lead_mentor_user()
+        other = Organization.objects.create(
+            name="Other Organization", slug="other", subdomain="other"
+        )
+
+        self.assertFalse(user_is_lead_mentor(lead, org=other))

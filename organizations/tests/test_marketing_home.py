@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from organizations.models import Organization
+from organizations.models import Organization, UserOrganizationMembership
 from organizations.utils import get_organization_url
 
 
@@ -39,6 +39,9 @@ class MarketingHomePageTests(TestCase):
             username="student_user",
             email="student@example.com",
             password="password123",  # nosec B106
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.user, organization=self.gos, role="Student", is_active=True
         )
 
     @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")

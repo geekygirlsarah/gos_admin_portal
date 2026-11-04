@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import SlidingScale, Student
 
 User = get_user_model()
@@ -23,6 +24,12 @@ class SlidingScaleEnhancementsTests(TestCase):
             last_name="Lead",
         )
         self.lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.student1 = Student.objects.create(
             legal_first_name="Alice",

@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from outreach.forms import OutreachEventForm
 from outreach.models import OutreachEvent, OutreachLocation, OutreachShift
-from outreach.tests.factories import create_outreach_event
+from outreach.tests.factories import add_gos_membership, create_outreach_event
 from programs.models import Adult, Program, ProgramFeature, School, Student
 
 
@@ -62,6 +62,7 @@ class OutreachLocationViewTest(TestCase):
             username="outreach_lead", password="password"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_mentor_group)
+        add_gos_membership(self.lead_user, "LeadMentor")
         self.lead_adult = Adult.objects.create(
             user=self.lead_user, is_mentor=True, mentor_active=True
         )

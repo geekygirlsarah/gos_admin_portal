@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Crew,
     Enrollment,
@@ -13,6 +14,15 @@ from programs.models import (
     SubTeam,
     Team,
 )
+
+
+def _add_lead_mentor_membership(user):
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role="LeadMentor",
+        is_active=True,
+    )
 
 
 class TeamSettingsTests(TestCase):
@@ -123,6 +133,7 @@ class CrewTests(TestCase):
         )
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
+        _add_lead_mentor_membership(self.user)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
         self.student = Student.objects.create(
@@ -227,6 +238,7 @@ class SubTeamSettingsViewTests(TestCase):
         )
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
+        _add_lead_mentor_membership(self.user)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
 
@@ -283,6 +295,7 @@ class AssignmentTests(TestCase):
         )
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.user.groups.add(self.lead_group)
+        _add_lead_mentor_membership(self.user)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2025")
         self.student1 = Student.objects.create(

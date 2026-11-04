@@ -316,7 +316,7 @@ PENDING_STATUSES = (
 )
 
 
-def applications_for_user(user):
+def applications_for_user(user, organization=None):
     """Return the in-progress applications tied to a logged-in user.
 
     Matching is identity-based and mirrors ``find_student_by_email`` /
@@ -330,19 +330,24 @@ def applications_for_user(user):
       started themselves.
 
     Only non-terminal statuses (:data:`PENDING_STATUSES`) are returned,
-    newest first.
+    newest first. When an organization is supplied, both identity profiles
+    and applications must belong to it.
     """
     if not user.is_authenticated:
         return []
     match = Q()
     student = getattr(user, "student_profile", None)
-    if student is not None:
+    if student is not None and (
+        organization is None or student.organization_id == organization.pk
+    ):
         for email in {student.personal_email, student.org_email}:
             if email:
                 match |= Q(email__iexact=email)
 
     adult = getattr(user, "adult_profile", None)
-    if adult is not None:
+    if adult is not None and (
+        organization is None or adult.organization_id == organization.pk
+    ):
         for email in {adult.personal_email, adult.org_email}:
             if not email:
                 continue
@@ -353,11 +358,12 @@ def applications_for_user(user):
 
     if not match:
         return []
-    return list(
-        Application.objects.filter(match, status__in=PENDING_STATUSES)
-        .select_related("program")
-        .order_by("-created_at")
-    )
+    applications = Application.objects.filter(match, status__in=PENDING_STATUSES)
+    if organization is not None:
+        applications = applications.for_organization(organization).filter(
+            Q(program__isnull=True) | Q(program__organization=organization)
+        )
+    return list(applications.select_related("program").order_by("-created_at"))
 
 
 def students_for_adult(adult) -> List:

@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program, ProgramDocument
 
 User = get_user_model()
@@ -32,6 +33,12 @@ def _ensure_reviewer():
         password="password123",  # nosec B106
     )
     user.groups.add(group)
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role="LeadMentor",
+        is_active=True,
+    )
     return user
 
 

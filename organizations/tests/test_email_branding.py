@@ -9,7 +9,11 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
-from organizations.models import Organization, OrganizationSettings
+from organizations.models import (
+    Organization,
+    OrganizationSettings,
+    UserOrganizationMembership,
+)
 from organizations.utils import (
     get_organization_email_settings,
     update_organization_email_settings,
@@ -40,6 +44,12 @@ class OrganizationEmailBrandingTests(TestCase):
             legal_first_name="Lead",
             last_name="Mentor",
             personal_email="lead@girlsofsteelrobotics.org",
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.user,
+            organization=self.org,
+            role="LeadMentor",
+            defaults={"is_active": True},
         )
         self.url = reverse("portal_email_settings")
 

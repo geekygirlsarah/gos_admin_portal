@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from organizations.models import Organization, UserOrganizationMembership
 
 
 class StaleApplicationCleanupTests(TestCase):
@@ -17,6 +18,13 @@ class StaleApplicationCleanupTests(TestCase):
         # Assign review permission
         perm = Permission.objects.get(codename="review_application")
         self.user.user_permissions.add(perm)
+        self.organization = Organization.objects.get(slug="gos")
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="reviewer", password="password")  # nosec B106
 
         self.url = reverse("application_cleanup_stale")
@@ -52,7 +60,12 @@ class StaleApplicationCleanupTests(TestCase):
     def test_cleanup_requires_permission(self):
         self.client.logout()
         # Non-privileged user
-        User.objects.create_user(username="random", password="password")  # nosec B106
+        user = User.objects.create_user(
+            username="random", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.organization, role="Student", is_active=True
+        )
         self.client.login(username="random", password="password")  # nosec B106
 
         response = self.client.post(self.url)

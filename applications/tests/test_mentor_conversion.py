@@ -12,6 +12,7 @@ from applications.services import (
     ApplicationConversionError,
     convert_application_to_student,
 )
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult
 
 
@@ -147,11 +148,14 @@ def _ensure_review_permission():
 class MentorReviewToConversionStoryTest(TestCase):
     """End-to-end: submitted mentor application -> approve -> convert."""
 
-    def _reviewer(self):
+    def _reviewer(self, organization):
         user = User.objects.create_user(username="lead", email="lead@x.test")
         group, _ = Group.objects.get_or_create(name="LeadMentor")
         group.permissions.add(_ensure_review_permission())
         user.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=user, organization=organization, role="LeadMentor", is_active=True
+        )
         return user
 
     def _submitted_mentor_app(self):
@@ -179,7 +183,7 @@ class MentorReviewToConversionStoryTest(TestCase):
     def test_approve_then_convert_creates_mentor_adult(self):
         mail.outbox = []
         app = self._submitted_mentor_app()
-        self.client.force_login(self._reviewer())
+        self.client.force_login(self._reviewer(app.organization))
 
         approve = self.client.post(
             reverse("application_review_approve", kwargs={"app_id": app.application_id})
@@ -205,7 +209,7 @@ class MentorReviewToConversionStoryTest(TestCase):
 
     def test_convert_button_not_available_until_approved(self):
         app = self._submitted_mentor_app()
-        self.client.force_login(self._reviewer())
+        self.client.force_login(self._reviewer(app.organization))
         response = self.client.get(
             reverse("application_review_detail", kwargs={"app_id": app.application_id})
         )

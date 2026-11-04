@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Enrollment, Fee, Program, SlidingScale, Student
 from programs.utils.balances import get_student_balance_data
 
@@ -24,6 +25,12 @@ class OverlappingSlidingScaleUITests(TestCase):
             password="password",  # nosec B106
         )
         self.lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         # Create Program and Student
         self.program = Program.objects.create(

@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Fee, Program
 
 WARNING_TEXT = "No fees have been added to this program yet"
@@ -36,6 +37,12 @@ class ProgramNoFeesWarningTests(TestCase):
             active=True,
             start_date=today - timedelta(days=10),
             end_date=today + timedelta(days=10),
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
     def _get_program_detail(self, username):
@@ -75,6 +82,12 @@ class ProgramNoFeesWarningRenderingTests(TestCase):
             active=True,
             start_date=today - timedelta(days=10),
             end_date=today + timedelta(days=10),
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
     def test_warning_uses_bootstrap_alert_classes(self):

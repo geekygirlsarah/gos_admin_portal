@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -30,6 +31,12 @@ class ProgramEmergencyContactsTests(TestCase):
         )
 
         self.program = Program.objects.create(name="Test Program", active=True)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.active_student = Student.objects.create(
             preferred_first_name="Active",

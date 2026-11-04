@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult, AdultStudentRelationship, Student
 
 
@@ -22,6 +23,12 @@ class StudentParentLinksTest(TestCase):
             legal_first_name="Jane",
             last_name="Smith",
             date_of_birth=datetime.date(2010, 1, 1),
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.student.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
         # Create Adult (Parent)
@@ -68,6 +75,12 @@ class StudentParentLinksTest(TestCase):
             legal_first_name="Jane",
             last_name="Smith",
             date_of_birth=datetime.date(2010, 1, 1),
+        )
+        UserOrganizationMembership.objects.update_or_create(
+            user=student_user,
+            organization=student_profile.organization,
+            role="Student",
+            defaults={"is_active": True},
         )
         # Link Parent to this Student
         AdultStudentRelationship.objects.create(

@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import Enrollment, Program, Student
 
 
@@ -19,6 +20,12 @@ class ProgramStudentActiveToggleTests(TestCase):
         self.user.groups.add(self.lead_group)
         self.client.login(username="leadmentor", password=self.password)
         self.program = Program.objects.create(name="FLL 2026")
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         self.student = Student.objects.create(
             legal_first_name="Active", last_name="Student"
         )

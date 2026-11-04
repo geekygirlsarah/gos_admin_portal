@@ -85,6 +85,42 @@ Resolution uses the validated request hostname only; `HttpRequest.get_host()` en
 
 Organization-routing headers are ignored. Do not rely on the hostname as a substitute for membership and object-level authorization; tenant views must still enforce their established access rules.
 
+### Authenticated tenant membership guard
+
+After login enforcement and before mentor-agreement enforcement,
+`TenantMembershipGuardMiddleware` returns a direct 403 on a tenant host when an
+authenticated non-superuser has no active `UserOrganizationMembership` for the
+resolved organization. Any active role is sufficient; a membership in another
+organization, an inactive membership, or a legacy role group alone is not.
+Membership is checked on each request, so revocation takes effect on the next
+request. Platform superusers remain exempt; view permissions and object scoping
+still apply to everyone else.
+
+The guard permits the named login, logout, signup, email-confirmation and login
+recovery routes, invitation acceptance, the audited stop-impersonation route,
+and the toSend webhooks, which retain their existing signature-verification
+policy. It does not exempt mixed
+public/private prefixes such as `/apply/`, `/guest/`, or `/calendar/`:
+anonymous requests retain their existing handling, but authenticated nonmembers
+must sign out to use public tenant pages. Static, media and `/health` paths
+bypass the guard before session-user resolution; this does not change media
+serving or the health view's existing database check.
+Root and unknown hosts remain governed by the root-domain guard.
+
+This is a session-user guard, not a replacement for authentication and tenant
+authorization in endpoints using kiosk/sign-out cookies, tokens, or other
+credentials after middleware runs. Anonymous API requests still reach their
+existing endpoint checks; authenticated nonmember sessions are denied there
+(apart from the named webhooks). Review independent credential paths separately
+for organization isolation. In particular, kiosk and sign-out configuration
+lookups are not scoped to the host organization and their unlock cookies are
+plain values; calendar ICS feed lookups also include unscoped queries. These
+pre-existing paths need a separate security review. Before deployment, inventory
+and backfill missing or inactive memberships under the normal approved
+operational process: existing legacy-profile and group-only accounts without an
+active membership will lose tenant access, including during impersonation. No
+automatic backfill occurs.
+
 ---
 
 ## Views and Forms Conventions

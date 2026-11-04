@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult, Student
 from programs.validators import validate_andrew_id, validate_org_account_id
 
@@ -50,9 +51,21 @@ class OrgEmailManagementPermissionTests(TestCase):
         )
         Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(Group.objects.get(name="LeadMentor"))
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.regular_user = User.objects.create_user(
             username="regular", password=self.password
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.regular_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Mentor",
+            is_active=True,
         )
 
     def test_lead_mentor_can_access(self):
@@ -70,6 +83,7 @@ class OrgEmailManagementPermissionTests(TestCase):
         self.client.login(username="regular", password=self.password)
         response = self.client.get(reverse("org_email_management"))
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
 
     def test_anonymous_redirected(self):
         response = self.client.get(reverse("org_email_management"))
@@ -84,6 +98,12 @@ class OrgEmailManagementViewTests(TestCase):
         )
         Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(Group.objects.get(name="LeadMentor"))
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.client.login(username="lead", password=self.password)
 
         self.student = Student.objects.create(

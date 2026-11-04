@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from outreach.models import OutreachMentorSignup
-from outreach.tests.factories import create_outreach_event
+from outreach.tests.factories import add_gos_membership, create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
 
 
@@ -320,6 +320,7 @@ class MentorSignupOrderingTest(TestCase):
             username="lead", password="password"  # nosec B106
         )
         self.lead_user.groups.add(self.lead_group)
+        add_gos_membership(self.lead_user, "LeadMentor")
 
         self.student_user = User.objects.create_user(
             username="student", password="password"  # nosec B106

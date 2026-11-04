@@ -3,7 +3,7 @@ from django.db import IntegrityError, transaction
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from organizations.models import Organization
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import School, SchoolDistrict
 
 
@@ -36,6 +36,11 @@ class DistrictCrudTest(TestCase):
             username="admin",
             password="password",
         )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Mentor",
+        )
         for codename in (
             "add_schooldistrict",
             "change_schooldistrict",

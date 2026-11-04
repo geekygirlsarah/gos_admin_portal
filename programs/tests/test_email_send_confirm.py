@@ -11,6 +11,7 @@ from django.contrib.auth.models import ContentType, Group, Permission, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program
 
 MODAL_MARKERS = [
@@ -54,6 +55,12 @@ class EmailSendConfirmModalTests(TestCase):
             username="reviewer", password="password123"  # nosec B106
         )
         user.user_permissions.add(perm)
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=Organization.objects.get(slug="gos"),
+            role="Staff",
+            is_active=True,
+        )
         self.client.login(username="reviewer", password="password123")  # nosec B106
 
     def test_program_email_page_shows_confirm_modal(self):
@@ -63,6 +70,12 @@ class EmailSendConfirmModalTests(TestCase):
         )
         group, _ = Group.objects.get_or_create(name="Mentor")
         mentor.groups.add(group)
+        UserOrganizationMembership.objects.create(
+            user=mentor,
+            organization=Organization.objects.get(slug="gos"),
+            role="Mentor",
+            is_active=True,
+        )
         self.client.login(username="mentor_user", password="password123")  # nosec B106
         response = self.client.get(reverse("program_email", args=[program.pk]))
         self._assert_modal_present(response)

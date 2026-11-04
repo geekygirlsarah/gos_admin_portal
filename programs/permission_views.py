@@ -56,7 +56,7 @@ def _user_membership_state(user, org):
     roles_in_org = {
         role
         for row_org_id, role, is_active in rows
-        if is_active and row_org_id == org_id
+        if org_id is not None and is_active and row_org_id == org_id
     }
     return roles_in_org, bool(rows)
 
@@ -70,24 +70,18 @@ def get_user_role(user, org=None):
 
     Scoping rules:
 
-    - Superusers and members of the legacy ``LeadMentor`` group are lead
-      mentors everywhere (the group is org-agnostic by legacy design).
+    - Superusers are lead mentors everywhere.
     - Users with any ``UserOrganizationMembership`` rows are strictly scoped:
       when they hold no active membership in the target org, the role is None
       rather than falling through to global profile/group checks.
     - Users with no membership rows anywhere (accounts predating membership
-      sync) keep the legacy Adult/Student profile and group resolution so
-      existing logins are not locked out while memberships are backfilled.
+      sync) keep the legacy Adult/Student profile and group resolution,
+      including the org-agnostic LeadMentor group, pending backfill.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return None
 
     if user.is_superuser:
-        return "LeadMentor"
-
-    # Legacy LeadMentor group check runs first so group-based leads keep
-    # their access even when profile sync has created non-lead memberships.
-    if user.groups.filter(name="LeadMentor").exists():
         return "LeadMentor"
 
     if org is None:
@@ -98,25 +92,26 @@ def get_user_role(user, org=None):
         except Exception:
             org = None
 
-    if org is not None:
-        roles_in_org, has_rows = _user_membership_state(user, org)
-        if has_rows:
-            # The user belongs to at least one organization: resolve strictly
-            # within the target org and never fall back to global flags.
-            for role_candidate in (
-                "LeadMentor",
-                "Mentor",
-                "Parent",
-                "Alumni",
-                "Student",
-                "Staff",
-            ):
-                if role_candidate in roles_in_org:
-                    return role_candidate
-            return None
+    roles_in_org, has_rows = _user_membership_state(user, org)
+    if has_rows:
+        # The user belongs to at least one organization: resolve strictly
+        # within the target org and never fall back to global flags.
+        for role_candidate in (
+            "LeadMentor",
+            "Mentor",
+            "Parent",
+            "Alumni",
+            "Student",
+            "Staff",
+        ):
+            if role_candidate in roles_in_org:
+                return role_candidate
+        return None
 
     # Legacy fallback: no membership rows anywhere — resolve from the
     # Adult/Student profiles and role groups as the portal always has.
+    if user.groups.filter(name="LeadMentor").exists():
+        return "LeadMentor"
 
     # Check if the user is linked to an Adult profile
     try:
@@ -157,11 +152,11 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
     ``group_name`` group applies, or the user holds an active membership with
     ``role_name`` in ``org``.
 
-    When ``org`` is provided (or a default organization can be resolved) and
-    the user has any membership rows, only the target organization is
-    consulted: no active membership with ``role_name`` there returns ``False``
-    rather than falling through to global profile/group checks. Users with no
-    membership rows anywhere keep the legacy profile/group resolution.
+    When the user has any membership rows, only the target organization is
+    consulted: no active membership with ``role_name`` there, or an unresolved
+    default organization, returns ``False`` rather than falling through to
+    global profile/group checks. Users with no membership rows anywhere keep
+    the legacy profile/group resolution.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return False
@@ -174,7 +169,7 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
         except Exception:
             org = None
 
-    if org is not None and role_name:
+    if role_name:
         roles_in_org, has_rows = _user_membership_state(user, org)
         if has_rows:
             # Member of at least one organization — strictly org-scoped.
@@ -194,16 +189,12 @@ def _user_adult_flag(user, field, group_name, org=None, role_name=None):
 
 def user_is_lead_mentor(user, org=None):
     """True if the user is a Lead Mentor (superuser, active LeadMentor
-    UserOrganizationMembership in org, or legacy LeadMentor group)."""
+    UserOrganizationMembership in org, or legacy LeadMentor group for a user
+    with no membership rows)."""
 
     if user is None or not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser:
-        return True
-    # Legacy LeadMentor group is org-agnostic: checked before the membership
-    # gate so group-based leads keep access even when profile sync has
-    # created non-lead memberships for them.
-    if user.groups.filter(name="LeadMentor").exists():
         return True
     if org is None:
         try:
@@ -212,13 +203,12 @@ def user_is_lead_mentor(user, org=None):
             org = get_default_organization()
         except Exception:
             org = None
-    if org is not None:
-        roles_in_org, has_rows = _user_membership_state(user, org)
-        if has_rows:
-            # Member of at least one organization — lead only when an active
-            # LeadMentor membership exists in the target org.
-            return "LeadMentor" in roles_in_org
-    return False
+    roles_in_org, has_rows = _user_membership_state(user, org)
+    if has_rows:
+        # Member of at least one organization — lead only when an active
+        # LeadMentor membership exists in the target org.
+        return "LeadMentor" in roles_in_org
+    return user.groups.filter(name="LeadMentor").exists()
 
 
 def user_is_parent(user, org=None):
@@ -244,9 +234,9 @@ def user_is_alumni(user, org=None):
 
 def user_is_mentor_or_lead(user, org=None):
     """True if the user is a Lead Mentor (superuser, active LeadMentor
-    UserOrganizationMembership in org, or legacy LeadMentor group) or an
-    active mentor. Convenience helper for ``user_is_mentor(user) or
-    user_is_lead_mentor(user)`` checks."""
+    UserOrganizationMembership in org, or legacy LeadMentor group for a user
+    with no membership rows) or an active mentor. Convenience helper for
+    ``user_is_mentor(user) or user_is_lead_mentor(user)`` checks."""
     if user is None or not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser:
@@ -718,13 +708,12 @@ class TeamAssignmentPermissionMixin(UserPassesTestMixin):
             return False
         from programs.models import Program
 
+        org = getattr(self.request, "organization", None)
         try:
-            program = Program.objects.get(pk=pk)
+            program = Program.objects.for_organization(org).get(pk=pk)
         except Program.DoesNotExist:
             return False
-        org = getattr(self.request, "organization", None) or getattr(
-            program, "organization", None
-        )
+        org = org or getattr(program, "organization", None)
         return can_user_write(user, "team_assignments", program, org=org)
 
     def handle_no_permission(self):

@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from attendance.models import StudentPresence
 from orders.models import OrderItem
+from organizations.models import UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -74,6 +75,12 @@ class ProgramDetailKPITests(TestCase):
             active=True,
             start_date=today - datetime.timedelta(days=180),
             end_date=today + datetime.timedelta(days=180),
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
         )
         self.f_bg, _ = ProgramFeature.objects.get_or_create(
             key="background-checks", defaults={"name": "Background Checks"}

@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, Permission, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import Program, Student
 
 
@@ -24,6 +25,12 @@ class StudentEditRedirectBackTests(TestCase):
             legal_first_name="Jane",
             last_name="Smith",
             date_of_birth="2008-05-15",
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.student.organization,
+            role="LeadMentor",
+            is_active=True,
         )
 
     def _valid_data(self):

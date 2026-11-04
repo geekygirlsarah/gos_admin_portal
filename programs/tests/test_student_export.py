@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from openpyxl import load_workbook
 
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Enrollment, Fee, Payment, Program, Student
 
 
@@ -23,6 +24,12 @@ class ProgramStudentExportViewTests(TestCase):
         self.client.login(username="mentor_user", password="pass12345")  # nosec B106
 
         self.program = Program.objects.create(name="Robotics", active=True)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.program.organization,
+            role="Mentor",
+            is_active=True,
+        )
 
         self.student_a = Student.objects.create(
             legal_first_name="Alice", last_name="Smith", graduation_year=2029
@@ -70,6 +77,7 @@ class ProgramStudentExportViewTests(TestCase):
     def test_mentor_export_includes_only_active_enrolled_students(self):
         url = reverse("program_student_export", args=[self.program.pk])
         resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
         wb = load_workbook(BytesIO(resp.content))
         ws = wb.active
 
@@ -86,6 +94,7 @@ class ProgramStudentExportViewTests(TestCase):
     def test_export_includes_grade(self):
         url = reverse("program_student_export", args=[self.program.pk])
         resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
         wb = load_workbook(BytesIO(resp.content))
         ws = wb.active
 
@@ -100,6 +109,7 @@ class ProgramStudentExportViewTests(TestCase):
     def test_export_students_sorted_alphabetically(self):
         url = reverse("program_student_export", args=[self.program.pk])
         resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
         wb = load_workbook(BytesIO(resp.content))
         ws = wb.active
 
@@ -109,6 +119,7 @@ class ProgramStudentExportViewTests(TestCase):
     def test_export_filename_contains_program_name(self):
         url = reverse("program_student_export", args=[self.program.pk])
         resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
         self.assertIn("Robotics", resp["Content-Disposition"])
 
     def test_404_for_nonexistent_program(self):
@@ -129,6 +140,12 @@ class ProgramStudentExportExtendedTests(TestCase):
         self.client.login(username="leadmentor", password="pass12345")  # nosec B106
 
         self.program = Program.objects.create(name="Robotics", active=True)
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.program.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.student_a = Student.objects.create(
             legal_first_name="Alice",
@@ -168,6 +185,7 @@ class ProgramStudentExportExtendedTests(TestCase):
         return f"{base}?{query}" if query else base
 
     def _sheet(self, resp):
+        self.assertEqual(resp.status_code, 200)
         return load_workbook(BytesIO(resp.content)).active
 
     def test_default_lead_export_has_active_column_and_all_students(self):
@@ -276,6 +294,7 @@ class ProgramStudentExportExtendedTests(TestCase):
 
     def test_csv_format_returns_csv(self):
         resp = self.client.get(self._url("format=csv&groups=contact"))
+        self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp["Content-Type"], "text/csv")
         self.assertIn(".csv", resp["Content-Disposition"])
         rows = list(csv.reader(StringIO(resp.content.decode("utf-8"))))
@@ -290,6 +309,12 @@ class ProgramStudentExportExtendedTests(TestCase):
         )
         mentor_group, _ = Group.objects.get_or_create(name="Mentor")
         mentor.groups.add(mentor_group)
+        UserOrganizationMembership.objects.create(
+            user=mentor,
+            organization=self.program.organization,
+            role="Mentor",
+            is_active=True,
+        )
         self.client.login(username="mentor", password="pass12345")  # nosec B106
 
         ws = self._sheet(self.client.get(self._url("groups=contact,parents,balance")))

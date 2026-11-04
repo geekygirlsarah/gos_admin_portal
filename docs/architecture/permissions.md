@@ -6,13 +6,14 @@ This document defines the roles, dynamic permissions system, and access control 
 
 User roles are evaluated dynamically by `get_user_role(user)` in `programs/permission_views.py`. 
 
-The priority order is:
-1. **`LeadMentor`**: Evaluated if the user has an active `UserOrganizationMembership` with role `LeadMentor`, is a Django superuser, or belongs to the `LeadMentor` group. Lead Mentors serve as organization administrators.
-2. **`Mentor`**: An Adult record with `is_mentor=True` and active status.
-3. **`Parent`**: An Adult record linked to at least one student via `AdultStudentRelationship` or with `is_parent=True`.
-4. **`Alumni`**: An Adult record with `is_alumni=True`.
-5. **`Student`**: A linked `Student` record.
-6. **`Staff` / None**: Unassigned or base staff users.
+For accounts with memberships, the priority order of active roles in the
+requested organization is:
+1. **`LeadMentor`**: An active `LeadMentor` membership in the organization, or a Django superuser. The legacy group is used only when the user has no membership rows. Lead Mentors serve as organization administrators.
+2. **`Mentor`**: An active `Mentor` membership.
+3. **`Parent`**: An active `Parent` membership.
+4. **`Alumni`**: An active `Alumni` membership.
+5. **`Student`**: An active `Student` membership.
+6. **`Staff` / None**: Staff membership or no applicable role.
 
 ### Organization Scoping and the Transitional Legacy Fallback
 
@@ -22,18 +23,29 @@ organization (`DEFAULT_ORGANIZATION_SLUG`).
 
 Scoping rules:
 
-- **Superusers and the legacy `LeadMentor` group are checked first** and are
-  org-agnostic (the group is legacy by design and predates per-org roles).
+- **Superusers are org-agnostic.** The legacy `LeadMentor` group does not
+  override an existing membership or grant a role in another organization.
 - **Users with any `UserOrganizationMembership` rows are strictly scoped.**
   When they hold no active membership in the target organization, the role is
   `None` / the helper is `False` — never a fall-through to global profile or
   group flags. This is what enforces cross-organization isolation.
 - **Users with no membership rows anywhere** (accounts predating membership
   sync) fall back to the legacy Adult/Student profile and role-group
-  resolution so existing logins are not locked out while memberships are
-  backfilled. This fallback is **transitional**: once
-  `python manage.py backfill_profile_memberships` has covered every profile,
-  no-row users no longer exist and the fallback can be removed.
+  resolution in the helpers, including the legacy `LeadMentor` group. This
+  fallback does **not** grant authenticated
+  tenant-host access: the membership middleware requires an active membership
+  even for legacy profiles and `LeadMentor` group members. It is
+  **transitional**: once `python manage.py backfill_profile_memberships` has
+  covered every profile, no-row users no longer exist and the fallback can be
+  removed.
+
+The tenant request guard checks active membership independently of role
+resolution, after login enforcement and before mentor-agreement enforcement.
+It allows platform superusers and the narrowly scoped onboarding and webhook
+routes described in `docs/architecture/organizations.md`; it does not replace
+view, object, or independently authenticated API permission checks. Revoking
+the last active role immediately blocks subsequent tenant requests. Review
+legacy, inactive, and group-only accounts before rollout to avoid lockouts.
 
 ### Membership Sync
 

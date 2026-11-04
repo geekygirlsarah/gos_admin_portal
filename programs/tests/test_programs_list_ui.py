@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Enrollment, Program, ProgramFeature, Student
 
 
@@ -36,6 +37,12 @@ class ProgramListViewUITests(TestCase):
             end_date=today + timedelta(days=60),
             grade_range_start=9,
             grade_range_end=12,
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor_user,
+            organization=self.active_prog.organization,
+            role="LeadMentor",
+            is_active=True,
         )
         # Upcoming program
         self.upcoming_prog = Program.objects.create(

@@ -21,6 +21,7 @@ from attendance.models import (
 from audit.events import AuditEvent
 from audit.models import AuditLog
 from badges.models import Badge, StudentBadge
+from organizations.models import Organization, UserOrganizationMembership
 from outreach.models import OutreachEvent, OutreachShift, OutreachSignup
 from programs.models import (
     Adult,
@@ -53,6 +54,10 @@ class StudentMergeTest(TestCase):
             password="password",  # nosec B106
         )
         self.user.groups.add(self.group)
+        self.org = Organization.objects.get(slug="gos")
+        UserOrganizationMembership.objects.create(
+            user=self.user, organization=self.org, role="LeadMentor", is_active=True
+        )
         self.client = Client()
         self.client.force_login(self.user)
 
@@ -104,6 +109,12 @@ class StudentMergeTest(TestCase):
             username="mentor_only", password="password"  # nosec B106
         )
         Adult.objects.create(user=user, is_mentor=True)
+        UserOrganizationMembership.objects.update_or_create(
+            user=user,
+            organization=self.org,
+            role="Mentor",
+            defaults={"is_active": True},
+        )
         self.client.force_login(user)
         response = self.client.get(reverse("student_merge"))
         self.assertEqual(response.status_code, 302)
@@ -167,10 +178,11 @@ class StudentMergeTest(TestCase):
         keep = self._student("Jane", "Doe")
         source = self._student("Janet", "Doe")
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         audit = AuditLog.objects.filter(
             event=AuditEvent.RECORDS_MERGED,
@@ -196,10 +208,11 @@ class StudentMergeTest(TestCase):
             adult=p2, student=source, relationship_to_student="father"
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(
@@ -227,10 +240,11 @@ class StudentMergeTest(TestCase):
             specific_relationship="Biological Mother",
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(
@@ -255,10 +269,11 @@ class StudentMergeTest(TestCase):
         source.secondary_contact_relationship = rel2
         source.save()
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertIsNotNone(keep.primary_contact_relationship)
@@ -306,10 +321,11 @@ class StudentMergeTest(TestCase):
             andrew_id_expiration=datetime.date(2027, 8, 31),
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.preferred_first_name, "Janey")
@@ -350,10 +366,11 @@ class StudentMergeTest(TestCase):
             graduated=True,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertTrue(keep.can_receive_texts)
@@ -375,10 +392,11 @@ class StudentMergeTest(TestCase):
         )
         source = self._student("Janet", "Doe", photo=photo)
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertTrue(bool(keep.photo))
@@ -391,10 +409,11 @@ class StudentMergeTest(TestCase):
         source = self._student("Janet", "Doe")
         source.race_ethnicities.add(r2)
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.race_ethnicities.count(), 2)
@@ -417,10 +436,11 @@ class StudentMergeTest(TestCase):
             graduation_year=2028,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.personal_email, "keep@example.com")
@@ -457,10 +477,11 @@ class StudentMergeTest(TestCase):
         # Non-overlapping enrollment in p2
         Enrollment.objects.create(student=source, program=p2, active=True)
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(Enrollment.objects.filter(student=keep).count(), 2)
@@ -489,10 +510,11 @@ class StudentMergeTest(TestCase):
             check_number=1234,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         p.refresh_from_db()
         self.assertEqual(p.student, keep)
@@ -517,10 +539,11 @@ class StudentMergeTest(TestCase):
         # Non-overlapping assignment on fee2
         FeeAssignment.objects.create(fee=fee2, student=source, notes="Trip Assignment")
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(FeeAssignment.objects.filter(student=keep).count(), 2)
         fa1 = FeeAssignment.objects.get(fee=fee1, student=keep)
@@ -539,10 +562,11 @@ class StudentMergeTest(TestCase):
             status="approved",
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         scale.refresh_from_db()
         self.assertEqual(scale.student, keep)
@@ -566,10 +590,11 @@ class StudentMergeTest(TestCase):
             ),
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         doc.refresh_from_db()
         self.assertEqual(doc.student, keep)
@@ -609,10 +634,11 @@ class StudentMergeTest(TestCase):
             obtained_date=today,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(BackgroundCheck.objects.filter(student=keep).count(), 2)
         sp = BackgroundCheck.objects.get(student=keep, check_type=bct_sp)
@@ -627,10 +653,11 @@ class StudentMergeTest(TestCase):
         source = self._student("Janet", "Doe")
         RFIDCard.objects.create(student=source, uid="RFID-STUDENT-001")
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertTrue(
             RFIDCard.objects.filter(student=keep, uid="RFID-STUDENT-001").exists()
@@ -647,10 +674,11 @@ class StudentMergeTest(TestCase):
             program=self.program, student=source, event_type=AttendanceEvent.IN
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         session.refresh_from_db()
         event.refresh_from_db()
@@ -685,10 +713,11 @@ class StudentMergeTest(TestCase):
             status=StudentPresence.PRESENT,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(StudentPresence.objects.filter(student=keep).count(), 2)
         p_today = StudentPresence.objects.get(student=keep, date=today)
@@ -711,10 +740,11 @@ class StudentMergeTest(TestCase):
             signed_by_name="Mom Doe",
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         signout.refresh_from_db()
         self.assertEqual(signout.student, keep)
@@ -730,10 +760,11 @@ class StudentMergeTest(TestCase):
             converted_student=source,
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         app.refresh_from_db()
         self.assertEqual(app.converted_student, keep)
@@ -775,10 +806,11 @@ class StudentMergeTest(TestCase):
             shift=shift2, student=source, role=OutreachSignup.HELPER
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(OutreachSignup.objects.filter(student=keep).count(), 2)
         s1 = OutreachSignup.objects.get(shift=shift1, student=keep)
@@ -798,10 +830,11 @@ class StudentMergeTest(TestCase):
         StudentBadge.objects.create(student=source, badge=b1)  # Duplicate
         StudentBadge.objects.create(student=source, badge=b2)
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         self.assertEqual(StudentBadge.objects.filter(student=keep).count(), 2)
         self.assertTrue(StudentBadge.objects.filter(student=keep, badge=b1).exists())
@@ -814,10 +847,11 @@ class StudentMergeTest(TestCase):
             "Jane", "Doe", is_alumni=True, student_record=source
         )
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         alumni_adult.refresh_from_db()
         self.assertEqual(alumni_adult.student_record, keep)
@@ -829,10 +863,11 @@ class StudentMergeTest(TestCase):
         keep = self._student("Jane", "Doe")
         source = self._student("Janet", "Doe", user=source_user)
 
-        self.client.post(
+        response = self.client.post(
             reverse("student_merge"),
             {"keep": keep.pk, "source": source.pk},
         )
+        self.assertEqual(response.status_code, 302)
 
         keep.refresh_from_db()
         self.assertEqual(keep.user, source_user)
@@ -850,6 +885,12 @@ class StudentMergeTest(TestCase):
             username="regular_mentor", password="password"  # nosec B106
         )
         Adult.objects.create(user=user, is_mentor=True)
+        UserOrganizationMembership.objects.update_or_create(
+            user=user,
+            organization=self.org,
+            role="Mentor",
+            defaults={"is_active": True},
+        )
         self.client.force_login(user)
         response = self.client.get(reverse("student_list"))
         self.assertEqual(response.status_code, 200)

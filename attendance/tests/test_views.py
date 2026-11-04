@@ -6,6 +6,8 @@ from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 from django.utils import timezone
 
 from attendance.models import AttendanceSession, KioskConfig
+from organizations.models import UserOrganizationMembership
+from organizations.utils import get_default_organization
 from programs.models import Adult, Program, ProgramFeature, RolePermission, Student
 
 from .base import make_client, make_lead_mentor_user, make_program, make_student
@@ -13,18 +15,22 @@ from .base import make_client, make_lead_mentor_user, make_program, make_student
 
 class AllAttendanceEntriesTests(TestCase):
     def setUp(self):
-        self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         password = "password123"  # nosec B105
-        self.lead_mentor_user = User.objects.create_user(
+        self.lead_mentor_user = make_lead_mentor_user(
             username="lead_mentor", password=password
         )
-        self.lead_mentor_user.groups.add(self.lead_mentor_group)
 
         self.mentor_group, _ = Group.objects.get_or_create(name="Mentor")
         self.mentor_user = User.objects.create_user(
             username="mentor", password=password
         )
         self.mentor_user.groups.add(self.mentor_group)
+        UserOrganizationMembership.objects.create(
+            user=self.mentor_user,
+            organization=get_default_organization(),
+            role="Mentor",
+            is_active=True,
+        )
 
         self.program = make_program()
         self.student = make_student(preferred_first_name="Test", last_name="Student")

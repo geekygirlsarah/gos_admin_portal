@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from applications.views.review import ApplicationEmailForm
 from orders.forms import OrderForm
+from organizations.models import Organization, UserOrganizationMembership
 from programs.forms import ProgramEmailBalancesForm, ProgramEmailForm
 from programs.models import Program, ProgramFeature
 from programs.utils.programs import (
@@ -113,6 +114,19 @@ class ProgramGroupingFormAndViewsTests(TestCase):
             password="password",  # nosec B106
         )
         self.mentor_user.groups.add(self.mentor_group)
+        organization = Organization.objects.get(slug="gos")
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.mentor_user,
+            organization=organization,
+            role="Mentor",
+            is_active=True,
+        )
 
         self.prog_active = Program.objects.create(
             name="Active Program 2026",

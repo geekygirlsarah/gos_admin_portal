@@ -13,7 +13,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from organizations.models import Organization
+from organizations.models import Organization, UserOrganizationMembership
 from programs.forms import SlidingScaleForm
 from programs.models import (
     Adult,
@@ -54,9 +54,21 @@ class SlidingScaleApplicationTests(TestCase):
             username="lead", password="password", email="lead@example.com"
         )  # nosec B106
         self.lead_mentor_user.groups.add(Group.objects.get(name="LeadMentor"))
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor_user,
+            organization=_gos(),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.mentor_user = User.objects.create_user(
             username="mentor", password="password", email="mentor@example.com"
         )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.mentor_user,
+            organization=_gos(),
+            role="Mentor",
+            is_active=True,
+        )
         self.parent_adult = Adult.objects.create(
             legal_first_name="Parent",
             last_name="User",
@@ -583,6 +595,12 @@ class SlidingScaleReviewDatePreservationTests(TestCase):
             username="lead", password="password", email="lead@example.com"
         )  # nosec B106
         self.lead_mentor_user.groups.add(Group.objects.get(name="LeadMentor"))
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor_user,
+            organization=_gos(),
+            role="LeadMentor",
+            is_active=True,
+        )
         self.parent_adult = Adult.objects.create(
             legal_first_name="Parent",
             last_name="User",

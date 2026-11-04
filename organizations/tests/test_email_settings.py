@@ -5,7 +5,11 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from organizations.models import Organization, OrganizationSettings
+from organizations.models import (
+    Organization,
+    OrganizationSettings,
+    UserOrganizationMembership,
+)
 from organizations.utils import (
     get_organization_email_settings,
     get_sender_accounts,
@@ -160,6 +164,18 @@ class PortalEmailSettingsViewTests(TestCase):
 
         self.org, _ = Organization.objects.get_or_create(
             slug="gos", defaults={"name": "Girls of Steel"}
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.lead_user,
+            organization=self.org,
+            role="LeadMentor",
+            defaults={"is_active": True},
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.mentor_user,
+            organization=self.org,
+            role="Mentor",
+            defaults={"is_active": True},
         )
         self.org_settings, _ = OrganizationSettings.objects.get_or_create(
             organization=self.org

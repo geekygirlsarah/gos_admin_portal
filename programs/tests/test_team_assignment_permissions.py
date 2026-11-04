@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     Crew,
@@ -17,6 +18,163 @@ from programs.models import (
     SubTeam,
     Team,
 )
+
+
+class TeamAssignmentOrganizationIsolationTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.get(slug="gos")
+        self.other_organization = Organization.objects.create(
+            name="Other Organization", slug="other-assignments"
+        )
+        self.user = User.objects.create_user(username="org-lead")
+        UserOrganizationMembership.objects.create(
+            user=self.user, organization=self.organization, role="LeadMentor"
+        )
+        self.client.force_login(self.user)
+        self.program = Program.objects.create(
+            name="Our program", organization=self.organization
+        )
+        self.other_program = Program.objects.create(
+            name="Other program", organization=self.other_organization
+        )
+        self.student = Student.objects.create(
+            legal_first_name="Our", last_name="Student", organization=self.organization
+        )
+        self.other_student = Student.objects.create(
+            legal_first_name="Other",
+            last_name="Student",
+            organization=self.other_organization,
+        )
+        self.enrollment = Enrollment.objects.create(
+            student=self.student, program=self.program, organization=self.organization
+        )
+        self.other_enrollment = Enrollment.objects.create(
+            student=self.other_student,
+            program=self.other_program,
+            organization=self.other_organization,
+        )
+        self.team = Team.objects.create(
+            team_type="FRC", number=1, organization=self.organization
+        )
+        self.other_team = Team.objects.create(
+            team_type="FRC", number=2, organization=self.other_organization
+        )
+        self.other_crew = Crew.objects.create(
+            name="Other crew",
+            program=self.program,
+            organization=self.other_organization,
+        )
+        self.other_subteam = SubTeam.objects.create(
+            name="Other subteam",
+            program=self.program,
+            organization=self.other_organization,
+        )
+
+    def test_other_organization_program_cannot_be_accessed_or_changed(self):
+        assignment_url = reverse("program_assignment", args=[self.other_program.pk])
+        response = self.client.get(assignment_url)
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+
+        response = self.client.post(
+            reverse("program_enrollment_update", args=[self.other_program.pk]),
+            {"enrollment_id": self.other_enrollment.pk, "active": "false"},
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        self.other_enrollment.refresh_from_db()
+        self.assertTrue(self.other_enrollment.active)
+
+        response = self.client.post(
+            assignment_url,
+            {
+                "assignment_type": "team",
+                "target_id": self.team.pk,
+                "student_ids": [self.other_student.pk],
+            },
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        self.other_enrollment.refresh_from_db()
+        self.assertIsNone(self.other_enrollment.team)
+
+    def test_assignment_choices_do_not_include_other_organization_teams(self):
+        response = self.client.get(
+            reverse("program_assignment", args=[self.program.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.team, response.context["teams"])
+        self.assertNotIn(self.other_team, response.context["teams"])
+        self.assertNotIn(self.other_crew, response.context["crews"])
+        self.assertNotIn(self.other_subteam, response.context["subteams"])
+
+    def test_other_organization_team_cannot_be_assigned(self):
+        for url_name, payload in (
+            (
+                "program_enrollment_update",
+                {"enrollment_id": self.enrollment.pk, "team_id": self.other_team.pk},
+            ),
+            (
+                "program_assignment",
+                {
+                    "assignment_type": "team",
+                    "target_id": self.other_team.pk,
+                    "student_ids": [self.student.pk],
+                },
+            ),
+        ):
+            with self.subTest(url_name=url_name):
+                response = self.client.post(
+                    reverse(url_name, args=[self.program.pk]), payload
+                )
+                self.assertRedirects(
+                    response, reverse("home"), fetch_redirect_response=False
+                )
+                self.enrollment.refresh_from_db()
+                self.assertIsNone(self.enrollment.team)
+
+    def test_other_organization_crew_and_subteam_cannot_be_assigned(self):
+        for field, foreign in (
+            ("crew", self.other_crew),
+            ("subteam", self.other_subteam),
+        ):
+            for url_name, payload in (
+                (
+                    "program_enrollment_update",
+                    {"enrollment_id": self.enrollment.pk, f"{field}_id": foreign.pk},
+                ),
+                (
+                    "program_assignment",
+                    {
+                        "assignment_type": field,
+                        "target_id": foreign.pk,
+                        "student_ids": [self.student.pk],
+                    },
+                ),
+            ):
+                with self.subTest(field=field, url_name=url_name):
+                    response = self.client.post(
+                        reverse(url_name, args=[self.program.pk]), payload
+                    )
+                    self.assertRedirects(
+                        response, reverse("home"), fetch_redirect_response=False
+                    )
+                    self.enrollment.refresh_from_db()
+                    self.assertIsNone(getattr(self.enrollment, field))
+
+    def test_mismatched_student_enrollment_is_not_displayed_or_updated(self):
+        enrollment = Enrollment.objects.create(
+            student=self.other_student,
+            program=self.program,
+            organization=self.organization,
+        )
+        url = reverse("program_assignment", args=[self.program.pk])
+        response = self.client.get(url)
+        self.assertNotIn(enrollment, response.context["enrollments"])
+        response = self.client.post(
+            reverse("program_enrollment_update", args=[self.program.pk]),
+            {"enrollment_id": enrollment.pk, "active": "false"},
+        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        enrollment.refresh_from_db()
+        self.assertTrue(enrollment.active)
 
 
 class MentorTeamAssignmentPermissionTests(TestCase):
@@ -84,6 +242,11 @@ class MentorTeamAssignmentPermissionTests(TestCase):
         )  # nosec B106
         self.lead_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=self.active_program.organization,
+            role="LeadMentor",
+        )
 
         # Ensure RolePermission rows exist
         for role in ["Mentor", "Parent", "Student", "Alumni"]:

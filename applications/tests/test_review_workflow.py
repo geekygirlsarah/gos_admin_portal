@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program, ProgramDocument
 
 User = get_user_model()
@@ -72,9 +73,19 @@ def _ensure_lead_mentors_group():
     return group
 
 
+def _add_membership(user, role):
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role=role,
+        is_active=True,
+    )
+
+
 def _reviewer_user(username="lead"):
     user = User.objects.create_user(username=username, email=f"{username}@x.test")
     user.groups.add(_ensure_lead_mentors_group())
+    _add_membership(user, "LeadMentor")
     return user
 
 
@@ -108,6 +119,7 @@ class ReviewPermissionGatingTests(TestCase):
 
     def test_user_without_permission_forbidden(self):
         plain = User.objects.create_user(username="plain")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         response = self.client.get(self.list_url)
         self.assertIn(response.status_code, (302, 403))
@@ -467,6 +479,7 @@ class ConvertToStudentTests(TestCase):
         app = self._approved_signed_app()
         self.client.logout()
         plain = User.objects.create_user(username="plain")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         url = reverse(
             "application_review_convert", kwargs={"app_id": app.application_id}
@@ -504,6 +517,7 @@ class LeadMentorGroupMergeTests(TestCase):
     def test_lead_mentor_group_member_can_access_review_list(self):
         user = User.objects.create_user(username="lm_user", email="lm@x.test")
         user.groups.add(self.lead_mentor_group)
+        _add_membership(user, "LeadMentor")
         self.client.force_login(user)
         response = self.client.get(self.list_url)
         self.assertEqual(
@@ -516,6 +530,7 @@ class LeadMentorGroupMergeTests(TestCase):
     def test_lead_mentor_group_member_can_access_review_detail(self):
         user = User.objects.create_user(username="lm_user2", email="lm2@x.test")
         user.groups.add(self.lead_mentor_group)
+        _add_membership(user, "LeadMentor")
         self.client.force_login(user)
         response = self.client.get(self.detail_url)
         self.assertEqual(
@@ -534,6 +549,7 @@ class LeadMentorGroupMergeTests(TestCase):
 
     def test_user_without_group_cannot_access_review(self):
         plain = User.objects.create_user(username="plain_user", email="plain@x.test")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         response = self.client.get(self.list_url)
         self.assertIn(
@@ -779,6 +795,7 @@ class StaffDocumentUploadTests(TestCase):
     def test_upload_requires_review_permission(self):
         self.client.logout()
         plain = User.objects.create_user(username="plain_upload")
+        _add_membership(plain, "Student")
         self.client.force_login(plain)
         upload = SimpleUploadedFile(
             "signed_release.pdf", b"signed-content", content_type="application/pdf"

@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -10,14 +11,37 @@ from django.views import View
 from django.views.generic import TemplateView
 
 
+def _request_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
+
+
+def _organization_profile(user, name, organization):
+    profile = getattr(user, name, None)
+    if profile and profile.organization_id == organization.pk:
+        return profile
+    return None
+
+
+def _organization_enrollments(organization):
+    from programs.models import Enrollment
+
+    return Enrollment.objects.for_organization(organization).filter(
+        student__organization=organization, program__organization=organization
+    )
+
+
 class MyProfileView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         user = request.user
-        student = getattr(user, "student_profile", None)
+        org = _request_organization(request)
+        student = _organization_profile(user, "student_profile", org)
         if student:
             return redirect("student_detail", pk=student.pk)
 
-        adult = getattr(user, "adult_profile", None)
+        adult = _organization_profile(user, "adult_profile", org)
         if adult:
             return redirect("adult_detail", pk=adult.pk)
 
@@ -31,22 +55,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        org = _request_organization(self.request)
 
         # Pending (in-progress) applications tied to this user by email,
         # shown in the dashboard's "Pending Applications" box.
         from applications.services import applications_for_user
 
-        context["pending_applications"] = applications_for_user(user)
+        context["pending_applications"] = applications_for_user(user, organization=org)
 
         # ── Role detection & multi-role list ──────────────────────────────────
         from programs.permission_views import user_is_lead_mentor
 
-        org = getattr(self.request, "organization", None)
         is_lead_mentor = user_is_lead_mentor(user, org=org)
         context["is_lead_mentor"] = is_lead_mentor
 
-        student = getattr(user, "student_profile", None)
-        adult = getattr(user, "adult_profile", None)
+        student = _organization_profile(user, "student_profile", org)
+        adult = _organization_profile(user, "adult_profile", org)
 
         user_roles = []
         if is_lead_mentor:
@@ -114,7 +138,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from programs.models import EmailDeliveryEvent, Program, SlidingScale
             from programs.utils import students_in_running_programs
 
-            org = getattr(self.request, "organization", None)
             active_programs_count = (
                 Program.objects.for_organization(org).filter(active=True).count()
             )
@@ -124,19 +147,27 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 .filter(status=Application.Status.SUBMITTED)
                 .count()
             )
-            pending_orders_count = OrderItem.objects.filter(order__isnull=True).count()
+            pending_orders_count = (
+                OrderItem.objects.for_organization(org)
+                .filter(order__isnull=True)
+                .count()
+            )
             pending_sliding_count = (
                 SlidingScale.objects.for_organization(org)
                 .filter(status=SlidingScale.STATUS_PENDING)
                 .count()
             )
-            pending_email_issues_count = EmailDeliveryEvent.objects.filter(
-                resolved=False,
-                event_type__in=[
-                    EmailDeliveryEvent.EVENT_BOUNCED,
-                    EmailDeliveryEvent.EVENT_COMPLAINT,
-                ],
-            ).count()
+            pending_email_issues_count = (
+                EmailDeliveryEvent.objects.for_organization(org)
+                .filter(
+                    resolved=False,
+                    event_type__in=[
+                        EmailDeliveryEvent.EVENT_BOUNCED,
+                        EmailDeliveryEvent.EVENT_COMPLAINT,
+                    ],
+                )
+                .count()
+            )
 
             orders_program = (
                 Program.objects.for_organization(
@@ -164,10 +195,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # ── Student profile ──────────────────────────────────────────────────
         context["student"] = student
         if student:
-            from programs.models import Enrollment
-
             enrollments = (
-                Enrollment.objects.filter(student=student)
+                _organization_enrollments(org)
+                .filter(student=student)
                 .select_related("program", "team", "crew", "subteam")
                 .order_by("-program__start_date")
             )
@@ -208,7 +238,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["student_enrollments"] = enrollments  # Keep for compatibility
 
         # ── Adult profile (parent / mentor / alumni) ─────────────────────────
-        adult = getattr(user, "adult_profile", None)
         # ── Badges (student + parent visibility) ─────────────────────────────
         # Only show badges if the student has been enrolled in at least one
         # program with the badges feature enabled.
@@ -217,38 +246,61 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             from badges.models import StudentBadge
         except ImportError:
             StudentBadge = None
-        if StudentBadge:
-            from programs.models import Enrollment
+        linked_students = []
+        if adult and adult.is_parent:
+            from programs.models import AdultStudentRelationship
 
+            relationships = (
+                AdultStudentRelationship.objects.for_organization(org)
+                .filter(adult=adult, student__organization=org)
+                .select_related("student")
+                .order_by("student__last_name", "student__legal_first_name")
+            )
+            for relationship in relationships:
+                linked_student = relationship.student
+                linked_student.attached_rel = relationship.relationship_to_student
+                linked_students.append(linked_student)
+        if StudentBadge:
             if student:
-                has_badges_feature = Enrollment.objects.filter(
-                    student=student,
-                    active=True,
-                    program__features__key="badges",
-                ).exists()
+                has_badges_feature = (
+                    _organization_enrollments(org)
+                    .filter(
+                        student=student,
+                        active=True,
+                        program__features__key="badges",
+                        program__features__organization=org,
+                    )
+                    .exists()
+                )
                 context["has_badges"] = has_badges_feature
                 if has_badges_feature:
-                    context["badges_earned"] = StudentBadge.objects.filter(
-                        student=student
-                    ).select_related("badge", "awarded_by")
+                    context["badges_earned"] = (
+                        StudentBadge.objects.for_organization(org)
+                        .filter(student=student, badge__organization=org)
+                        .select_related("badge", "awarded_by")
+                    )
                     context["badges_count"] = context["badges_earned"].count()
             elif adult and getattr(adult, "is_parent", False):
-                linked = adult.all_students()
                 # Check if any linked student has badges enabled
-                parent_has_badges = Enrollment.objects.filter(
-                    student__in=linked,
-                    active=True,
-                    program__features__key="badges",
-                ).exists()
+                parent_has_badges = (
+                    _organization_enrollments(org)
+                    .filter(
+                        student__in=linked_students,
+                        active=True,
+                        program__features__key="badges",
+                        program__features__organization=org,
+                    )
+                    .exists()
+                )
                 context["has_badges"] = parent_has_badges
                 if parent_has_badges:
                     context["badges_by_student"] = {
                         s: list(
-                            StudentBadge.objects.filter(student=s).select_related(
-                                "badge", "awarded_by"
-                            )
+                            StudentBadge.objects.for_organization(org)
+                            .filter(student=s, badge__organization=org)
+                            .select_related("badge", "awarded_by")
                         )
-                        for s in linked
+                        for s in linked_students
                     }
         context["adult"] = adult
         if adult:
@@ -257,16 +309,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context["is_alumni"] = adult.is_alumni
 
             if adult.is_parent:
-                from programs.models import Enrollment
-
-                linked_students = adult.all_students()
                 # Attach per-program balance info to each student
                 parent_data = []
                 from attendance.services import get_student_attendance_stats
 
                 for s in linked_students:
                     enrollments = (
-                        Enrollment.objects.filter(student=s)
+                        _organization_enrollments(org)
+                        .filter(student=s)
                         .select_related("program", "team", "crew", "subteam")
                         .order_by("-program__start_date")
                     )
@@ -350,16 +400,21 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     badges_for_student = []
                     has_badges_for_student = False
                     if StudentBadge is not None:
-                        has_badges_for_student = Enrollment.objects.filter(
-                            student=s,
-                            active=True,
-                            program__features__key="badges",
-                        ).exists()
+                        has_badges_for_student = (
+                            _organization_enrollments(org)
+                            .filter(
+                                student=s,
+                                active=True,
+                                program__features__key="badges",
+                                program__features__organization=org,
+                            )
+                            .exists()
+                        )
                         if has_badges_for_student:
                             badges_for_student = list(
-                                StudentBadge.objects.filter(student=s).select_related(
-                                    "badge", "awarded_by"
-                                )
+                                StudentBadge.objects.for_organization(org)
+                                .filter(student=s, badge__organization=org)
+                                .select_related("badge", "awarded_by")
                             )
                     parent_data.append(
                         {
@@ -419,14 +474,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     context["mentor_travel_signups"] = get_mentor_travel_signups(adult)
 
             if adult.is_alumni:
-                from programs.models import Enrollment
-
-                context["student_record"] = adult.student_record
+                student_record = adult.student_record
+                if student_record and student_record.organization_id != org.pk:
+                    student_record = None
+                context["student_record"] = student_record
                 context["enrollments"] = []
-                if adult.student_record:
-                    context["enrollments"] = Enrollment.objects.filter(
-                        student=adult.student_record
-                    ).select_related("program", "team")
+                if student_record:
+                    context["enrollments"] = (
+                        _organization_enrollments(org)
+                        .filter(student=student_record)
+                        .select_related("program", "team")
+                    )
 
         elif is_lead_mentor:
             from programs.models import Program

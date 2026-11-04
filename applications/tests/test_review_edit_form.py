@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from applications.models import Application
+from organizations.models import Organization, UserOrganizationMembership
 
 User = get_user_model()
 
@@ -61,6 +62,12 @@ def _reviewer_user(username="lead"):
     group.permissions.add(perm)
     user = User.objects.create_user(username=username, email=f"{username}@x.test")
     user.groups.add(group)
+    UserOrganizationMembership.objects.create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role="LeadMentor",
+        is_active=True,
+    )
     return user
 
 

@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from orders.models import OrderItem
 from orders.tests.base import make_program, make_student_user
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import RolePermission
 
 
@@ -15,6 +16,12 @@ class OrdersPermissionsSettingsTests(TestCase):
         )
         self.lead_mentor_group, _ = Group.objects.get_or_create(name="LeadMentor")
         self.lead_mentor.groups.add(self.lead_mentor_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_mentor,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.program = make_program(with_orders_feature=True)
         self.student_user = make_student_user(

@@ -785,7 +785,12 @@ class ProgramEnrollmentUpdateView(
         crew_id = request.POST.get("crew_id")
         subteam_id = request.POST.get("subteam_id")
         active = request.POST.get("active")
-        enrollment = get_object_or_404(Enrollment, id=enrollment_id, program_id=pk)
+        enrollment = get_object_or_404(
+            Enrollment.objects.for_organization(request.organization),
+            id=enrollment_id,
+            program_id=pk,
+            student__organization=request.organization,
+        )
 
         updated_fields = []
         # Only LeadMentors may toggle active status; mentors limited to team/crew/subteam
@@ -802,7 +807,9 @@ class ProgramEnrollmentUpdateView(
 
         if team_id is not None:
             if team_id:
-                team = get_object_or_404(Team, id=team_id)
+                team = get_object_or_404(
+                    Team.objects.for_organization(request.organization), id=team_id
+                )
                 enrollment.team = team
             else:
                 enrollment.team = None
@@ -810,7 +817,11 @@ class ProgramEnrollmentUpdateView(
 
         if crew_id is not None:
             if crew_id:
-                crew = get_object_or_404(Crew, id=crew_id, program_id=pk)
+                crew = get_object_or_404(
+                    Crew.objects.for_organization(request.organization),
+                    id=crew_id,
+                    program_id=pk,
+                )
                 enrollment.crew = crew
             else:
                 enrollment.crew = None
@@ -818,7 +829,11 @@ class ProgramEnrollmentUpdateView(
 
         if subteam_id is not None:
             if subteam_id:
-                subteam = get_object_or_404(SubTeam, id=subteam_id, program_id=pk)
+                subteam = get_object_or_404(
+                    SubTeam.objects.for_organization(request.organization),
+                    id=subteam_id,
+                    program_id=pk,
+                )
                 enrollment.subteam = subteam
             else:
                 enrollment.subteam = None
@@ -901,9 +916,12 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
     template_name = "programs/assignment.html"
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = get_object_or_404(
+            Program.objects.for_organization(request.organization), pk=pk
+        )
         enrollments = (
-            Enrollment.objects.filter(program=program)
+            Enrollment.objects.for_organization(request.organization)
+            .filter(program=program, student__organization=request.organization)
             .select_related("student", "team", "crew", "subteam")
             .annotate(
                 sort_first=Lower(
@@ -915,9 +933,17 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                 sort_last=Lower("student__last_name"),
             )
         )
-        teams = Team.objects.all().order_by("number")
-        crews = Crew.objects.filter(program=program).order_by("name")
-        subteams = SubTeam.objects.filter(program=program).order_by("name")
+        teams = Team.objects.for_organization(request.organization).order_by("number")
+        crews = (
+            Crew.objects.for_organization(request.organization)
+            .filter(program=program)
+            .order_by("name")
+        )
+        subteams = (
+            SubTeam.objects.for_organization(request.organization)
+            .filter(program=program)
+            .order_by("name")
+        )
 
         # Separate inactive students (inactive enrollment or graduated) so they
         # don't get mixed in with the active ones being assigned.
@@ -959,13 +985,18 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
         )
 
     def post(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = get_object_or_404(
+            Program.objects.for_organization(request.organization), pk=pk
+        )
 
         # Single-student "Clear All Tags" button
         clear_enrollment_id = request.POST.get("clear_enrollment_id")
         if clear_enrollment_id:
             enrollment = get_object_or_404(
-                Enrollment, pk=clear_enrollment_id, program=program
+                Enrollment.objects.for_organization(request.organization),
+                pk=clear_enrollment_id,
+                program=program,
+                student__organization=request.organization,
             )
             cleared = []
             if enrollment.team_id:
@@ -997,8 +1028,10 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
             messages.warning(request, "No students selected.")
             return redirect("program_assignment", pk=pk)
 
-        enrollments = Enrollment.objects.filter(
-            program=program, student_id__in=student_ids
+        enrollments = Enrollment.objects.for_organization(request.organization).filter(
+            program=program,
+            student__organization=request.organization,
+            student_id__in=student_ids,
         )
 
         if not target_id:
@@ -1021,19 +1054,29 @@ class ProgramAssignmentView(LoginRequiredMixin, TeamAssignmentPermissionMixin, V
                     f"Unassigned subteam from {len(student_ids)} student(s).",
                 )
         elif assignment_type == "team":
-            team = get_object_or_404(Team, id=target_id)
+            team = get_object_or_404(
+                Team.objects.for_organization(request.organization), id=target_id
+            )
             enrollments.update(team=team)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to team {team}."
             )
         elif assignment_type == "crew":
-            crew = get_object_or_404(Crew, id=target_id, program=program)
+            crew = get_object_or_404(
+                Crew.objects.for_organization(request.organization),
+                id=target_id,
+                program=program,
+            )
             enrollments.update(crew=crew)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to crew {crew}."
             )
         elif assignment_type == "subteam":
-            subteam = get_object_or_404(SubTeam, id=target_id, program=program)
+            subteam = get_object_or_404(
+                SubTeam.objects.for_organization(request.organization),
+                id=target_id,
+                program=program,
+            )
             enrollments.update(subteam=subteam)
             messages.success(
                 request, f"Assigned {len(student_ids)} students to subteam {subteam}."

@@ -12,6 +12,7 @@ Two behaviors are covered here:
 """
 
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -21,6 +22,7 @@ from django.test import TestCase
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult, Student
 from programs.permission_views import (
+    can_user_delete,
     get_user_role,
     user_is_alumni,
     user_is_lead_mentor,
@@ -201,8 +203,7 @@ class ScopedFallbackTests(TestCase):
         self.assertFalse(user_is_mentor(user))
 
     def test_lead_mentor_group_wins_over_profile_memberships(self):
-        """A user in the legacy LeadMentor group is a lead even when the sync
-        signal has created profile-derived (non-lead) memberships for them."""
+        """Active lead memberships retain lead access alongside profile roles."""
         user = User.objects.create_user(
             username="group_lead_with_profile", password="password123"  # nosec B106
         )
@@ -215,6 +216,10 @@ class ScopedFallbackTests(TestCase):
         )
         lm_group, _ = Group.objects.get_or_create(name="LeadMentor")
         user.groups.add(lm_group)
+        for org in (self.gos, self.other_org):
+            UserOrganizationMembership.objects.create(
+                user=user, organization=org, role="LeadMentor", is_active=True
+            )
 
         self.assertEqual(get_user_role(user, org=self.gos), "LeadMentor")
         self.assertTrue(user_is_lead_mentor(user, org=self.gos))
@@ -234,6 +239,138 @@ class ScopedFallbackTests(TestCase):
         self.assertIsNone(get_user_role(user, org=self.gos))
         self.assertFalse(user_is_lead_mentor(user, org=self.gos))
         self.assertEqual(get_user_role(user, org=self.other_org), "LeadMentor")
+
+    def test_group_lead_with_lesser_memberships_keeps_only_active_roles(self):
+        user = User.objects.create_user(username="group_lead_lesser_roles")
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+        for role in ("Mentor", "Parent", "Alumni"):
+            UserOrganizationMembership.objects.create(
+                user=user, organization=self.gos, role=role, is_active=True
+            )
+
+        self.assertEqual(get_user_role(user, org=self.gos), "Mentor")
+        self.assertFalse(user_is_lead_mentor(user, org=self.gos))
+        self.assertTrue(user_is_mentor(user, org=self.gos))
+        self.assertTrue(user_is_parent(user, org=self.gos))
+        self.assertTrue(user_is_alumni(user, org=self.gos))
+        self.assertTrue(user_is_mentor_or_lead(user, org=self.gos))
+        self.assertFalse(can_user_delete(user, "attendance", org=self.gos))
+
+    def test_group_lead_boolean_helpers_require_active_scoped_membership(self):
+        user = User.objects.create_user(username="group_lead_boolean_helpers")
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="Parent", is_active=True
+        )
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="LeadMentor", is_active=False
+        )
+
+        for org in (self.gos, self.other_org):
+            for helper in (user_is_lead_mentor, user_is_mentor_or_lead):
+                with self.subTest(org=org, helper=helper.__name__):
+                    self.assertFalse(helper(user, org=org))
+
+    def test_group_lead_membership_does_not_grant_cross_org_access(self):
+        user = User.objects.create_user(username="group_lead_cross_org")
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="LeadMentor", is_active=True
+        )
+
+        self.assertEqual(get_user_role(user, org=self.gos), "LeadMentor")
+        self.assertTrue(user_is_lead_mentor(user, org=self.gos))
+        self.assertTrue(can_user_delete(user, "programs", org=self.gos))
+        self.assertIsNone(get_user_role(user, org=self.other_org))
+        self.assertFalse(user_is_lead_mentor(user, org=self.other_org))
+        self.assertFalse(user_is_mentor_or_lead(user, org=self.other_org))
+        self.assertFalse(can_user_delete(user, "programs", org=self.other_org))
+
+    def test_group_lead_with_inactive_lead_membership_is_not_lead(self):
+        user = User.objects.create_user(username="group_lead_inactive")
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="LeadMentor", is_active=False
+        )
+
+        self.assertIsNone(get_user_role(user, org=self.gos))
+        self.assertFalse(user_is_lead_mentor(user, org=self.gos))
+        self.assertFalse(user_is_mentor_or_lead(user, org=self.gos))
+        self.assertFalse(can_user_delete(user, "programs", org=self.gos))
+
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="Parent", is_active=True
+        )
+        self.assertEqual(get_user_role(user, org=self.gos), "Parent")
+        self.assertTrue(user_is_parent(user, org=self.gos))
+        self.assertFalse(user_is_lead_mentor(user, org=self.gos))
+
+    def test_group_lead_without_memberships_takes_precedence_over_profile(self):
+        user = User.objects.create_user(username="legacy_lead_with_profile")
+        Adult.objects.create(
+            user=user,
+            legal_first_name="Legacy",
+            last_name="Lead",
+            is_mentor=True,
+            organization=self.gos,
+        )
+        self._strip_memberships(user)
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+
+        self.assertEqual(get_user_role(user, org=self.other_org), "LeadMentor")
+        self.assertTrue(user_is_lead_mentor(user, org=self.other_org))
+
+    def test_superuser_retains_access_with_inactive_membership(self):
+        user = User.objects.create_superuser(username="superuser", password=None)
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="LeadMentor", is_active=False
+        )
+
+        for org in (self.gos, self.other_org):
+            with self.subTest(org=org):
+                self.assertEqual(get_user_role(user, org=org), "LeadMentor")
+                self.assertTrue(user_is_lead_mentor(user, org=org))
+                self.assertTrue(user_is_mentor_or_lead(user, org=org))
+                self.assertTrue(can_user_delete(user, "programs", org=org))
+
+    def test_missing_default_org_denies_membership_users_legacy_flags(self):
+        user = User.objects.create_user(username="missing_default_org")
+        Adult.objects.create(
+            user=user,
+            legal_first_name="Missing",
+            last_name="Default",
+            is_mentor=True,
+            is_parent=True,
+            is_alumni=True,
+            organization=self.gos,
+        )
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+
+        for outcome in (None, RuntimeError("no default organization")):
+            with self.subTest(outcome=outcome):
+                with patch(
+                    "organizations.utils.get_default_organization",
+                    side_effect=outcome if isinstance(outcome, Exception) else None,
+                    return_value=None,
+                ):
+                    self.assertIsNone(get_user_role(user))
+                    for helper in (
+                        user_is_lead_mentor,
+                        user_is_mentor,
+                        user_is_parent,
+                        user_is_alumni,
+                        user_is_mentor_or_lead,
+                    ):
+                        with self.subTest(helper=helper.__name__):
+                            self.assertFalse(helper(user))
+
+    def test_missing_default_org_keeps_no_row_legacy_fallback(self):
+        user = User.objects.create_user(username="missing_default_legacy")
+        user.groups.add(Group.objects.get_or_create(name="LeadMentor")[0])
+
+        with patch("organizations.utils.get_default_organization", return_value=None):
+            self.assertEqual(get_user_role(user), "LeadMentor")
+            self.assertTrue(user_is_lead_mentor(user))
 
 
 class ProfileMembershipSyncTests(TestCase):

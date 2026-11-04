@@ -1,6 +1,8 @@
 from django.contrib.auth.models import Group, User
 
 from orders.models import Order, OrderItem, ShippingCarrier, Vendor
+from organizations.models import UserOrganizationMembership
+from organizations.utils import get_default_organization
 from programs.models import (
     Adult,
     Enrollment,
@@ -9,6 +11,15 @@ from programs.models import (
     School,
     Student,
 )
+
+
+def _add_membership(user, role):
+    UserOrganizationMembership.objects.get_or_create(
+        user=user,
+        organization=get_default_organization(),
+        role=role,
+        defaults={"is_active": True},
+    )
 
 
 def make_program(name="Test Program", with_orders_feature=True):
@@ -25,11 +36,13 @@ def make_lead_mentor_user(username="lead_mentor", password="password123"):  # no
     user = User.objects.create_user(username=username, password=password)
     group, _ = Group.objects.get_or_create(name="LeadMentor")
     user.groups.add(group)
+    _add_membership(user, "LeadMentor")
     return user
 
 
 def make_mentor_user(username="mentor", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
+    _add_membership(user, "Mentor")
     Adult.objects.create(
         user=user,
         legal_first_name="Mentor",
@@ -45,6 +58,7 @@ def make_student_user(
 ):
     school = School.objects.get_or_create(name="Test School")[0]
     user = User.objects.create_user(username=username, password=password)
+    _add_membership(user, "Student")
     student = Student.objects.create(
         user=user,
         legal_first_name="Test",
@@ -59,6 +73,7 @@ def make_student_user(
 
 def make_parent_user(username="parent", password="password123"):  # nosec B107
     user = User.objects.create_user(username=username, password=password)
+    _add_membership(user, "Parent")
     Adult.objects.create(
         user=user, legal_first_name="Parent", last_name="User", is_parent=True
     )

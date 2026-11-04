@@ -6,10 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Portal settings now show each organization's Momentum address separately from email sender settings, and email branding has its own tab. Custom sending-domain preferences are clearly identified as requests that do not configure DNS or change delivery.
+- Authenticated tenant access now requires an active membership in that organization, except for platform superusers and limited sign-in, invitation, and integration routes. Legacy group-only accounts and suspended memberships must be reviewed before deployment.
 
 ### Fixed
 - Tenant routing now uses Django-validated hostnames, ignores organization-routing headers, constrains subdomains to the configured root or `.localhost`, and returns 404 for unresolved non-platform hosts instead of applying session/default organization fallbacks.
 - Cached host mappings are checked against the organization's current active state and domain configuration before reuse.
+- Scoped team assignments, school directories and merges, dashboard data, and navigation to the current organization. Global legacy lead groups no longer override existing organization memberships.
 
 ## 2026-11-03
 

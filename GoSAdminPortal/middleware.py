@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.http import Http404, HttpResponseNotFound
+from django.http import Http404, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 
@@ -113,6 +113,63 @@ class LoginRequiredMiddleware:
                 )
                 continue
         return False
+
+
+class TenantMembershipGuardMiddleware:
+    """Require active host-organization membership for authenticated users."""
+
+    EXEMPT_URL_NAMES = {
+        "account_login",
+        "account_logout",
+        "account_signup",
+        "account_confirm_email",
+        "account_email_verification_sent",
+        "account_request_login_code",
+        "account_confirm_login_code",
+        "account_reset_password",
+        "account_reset_password_done",
+        "account_reset_password_from_key",
+        "account_reset_password_from_key_done",
+        "account_confirm_password_reset_code",
+        "account_complete_password_reset",
+        "account_password_reset_completed",
+        "organizations:accept_invitation",
+        "platform_admin:impersonate_stop",
+        "tosend_webhook",
+        "api_tosend_webhook",
+    }
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path
+        if (
+            (settings.STATIC_URL and path.startswith(settings.STATIC_URL))
+            or (settings.MEDIA_URL and path.startswith(settings.MEDIA_URL))
+            or path in ("/health", "/health/")
+            or getattr(request, "organization", None) is None
+        ):
+            return self.get_response(request)
+
+        for candidate in (path, path + "/"):
+            try:
+                if resolve(candidate).view_name in self.EXEMPT_URL_NAMES:
+                    return self.get_response(request)
+            except Resolver404:
+                continue
+
+        user = request.user
+        if not user.is_authenticated or user.is_superuser:
+            return self.get_response(request)
+
+        from organizations.models import UserOrganizationMembership
+
+        if UserOrganizationMembership.objects.filter(
+            user=user, organization=request.organization, is_active=True
+        ).exists():
+            return self.get_response(request)
+        return HttpResponseForbidden("Forbidden")
 
 
 class OrganizationMiddleware:

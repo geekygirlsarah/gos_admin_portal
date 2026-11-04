@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from applications.models import Application
 from orders.models import OrderItem, Vendor
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -43,6 +44,12 @@ class Phase2DashboardViewTests(TestCase):
             username="lead_user", password="password123"  # nosec B106
         )
         lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         # Create student and application
         student = Student.objects.create(
@@ -86,6 +93,12 @@ class Phase2DashboardViewTests(TestCase):
             username="multi_user", password="password123"  # nosec B106
         )
         multi_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=multi_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         # Adult profile as Parent and Mentor
         adult = Adult.objects.create(

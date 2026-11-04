@@ -512,7 +512,9 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
         self.target_user = User.objects.create_user(
             username="janedoe", email="jane@example.com"
         )
-        self.org = Organization.objects.create(name="Team Alpha", slug="alpha")
+        self.org = Organization.objects.create(
+            name="Team Alpha", slug="alpha", subdomain="alpha"
+        )
         self.membership = UserOrganizationMembership.objects.create(
             user=self.target_user, organization=self.org, role="Mentor", is_active=True
         )
@@ -545,16 +547,23 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
         self.target_user.refresh_from_db()
         self.assertTrue(self.target_user.is_active)
 
+    @override_settings(
+        MOMENTUM_ROOT_DOMAIN="momentumteam.app",
+        ALLOWED_HOSTS=["momentumteam.app", ".momentumteam.app"],
+        SITE_URL="https://momentumteam.app",
+    )
     def test_impersonation_lifecycle(self):
         """Full impersonation lifecycle: start, session inspection, banner rendering, and exit."""
+        self.client.defaults["HTTP_HOST"] = "momentumteam.app"
         self.client.force_login(self.superuser)
 
         # 1. Start impersonation
         start_url = reverse(
             "platform_admin:impersonate_user", kwargs={"pk": self.target_user.pk}
         )
-        response = self.client.post(start_url)
-        self.assertRedirects(response, reverse("profile_dashboard"))
+        response = self.client.post(start_url, HTTP_HOST="momentumteam.app")
+        with self.subTest("start redirect reaches dashboard"):
+            self.assertRedirects(response, reverse("profile_dashboard"))
 
         # Verify session state
         session = self.client.session
@@ -562,7 +571,10 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
         self.assertEqual(session.get("active_organization_id"), self.org.pk)
 
         # Verify logged in as target user
-        home_resp = self.client.get(reverse("profile_dashboard"))
+        home_resp = self.client.get(
+            reverse("profile_dashboard"), HTTP_HOST="alpha.momentumteam.app"
+        )
+        self.assertEqual(home_resp.status_code, 200)
         self.assertEqual(home_resp.wsgi_request.user, self.target_user)
         self.assertTrue(home_resp.context.get("is_impersonating"))
 
@@ -580,11 +592,18 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
 
         # 2. Stop impersonation
         stop_url = reverse("platform_admin:impersonate_stop")
-        stop_resp = self.client.post(stop_url)
-        self.assertRedirects(stop_resp, reverse("platform_admin:dashboard"))
+        stop_resp = self.client.post(stop_url, HTTP_HOST="alpha.momentumteam.app")
+        self.client.extra["HTTP_HOST"] = "momentumteam.app"
+        self.assertRedirects(
+            stop_resp,
+            f"https://momentumteam.app{reverse('platform_admin:dashboard')}",
+        )
 
         # Verify session is restored to superuser and impersonator_id removed
-        dash_resp = self.client.get(reverse("platform_admin:dashboard"))
+        dash_resp = self.client.get(
+            reverse("platform_admin:dashboard"), HTTP_HOST="momentumteam.app"
+        )
+        self.assertEqual(dash_resp.status_code, 200)
         self.assertEqual(dash_resp.wsgi_request.user, self.superuser)
         self.assertNotIn("impersonator_id", self.client.session)
 

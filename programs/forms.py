@@ -587,7 +587,7 @@ class SlidingScaleApplicationForm(forms.Form):
     )
 
 
-class SchoolForm(forms.ModelForm):
+class SchoolForm(OrganizationFormMixin, forms.ModelForm):
     class Meta:
         model = School
         fields = ["name", "district", "street_address", "city", "state", "zip_code"]
@@ -599,7 +599,7 @@ class SchoolDistrictForm(forms.ModelForm):
         fields = ["name"]
 
 
-class SchoolMergeForm(forms.Form):
+class SchoolMergeForm(OrganizationFormMixin, forms.Form):
     """Merge one school into another.
 
     ``keep`` is the canonical school that survives. ``source`` is the school
@@ -622,6 +622,8 @@ class SchoolMergeForm(forms.Form):
         source = cleaned.get("source")
         if keep and source and keep.pk == source.pk:
             self.add_error("source", "Choose a different school to merge in.")
+        elif keep and source and keep.organization_id != source.organization_id:
+            self.add_error("source", "Choose schools from the same organization.")
         return cleaned
 
 

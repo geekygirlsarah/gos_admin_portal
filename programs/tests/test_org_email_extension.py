@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.forms import AdultForm, StudentForm
 from programs.models import Adult, Student
 from programs.views.org_emails import _get_adult_sponsor_choices
@@ -15,6 +16,12 @@ class OrgEmailExtensionTest(TestCase):
             username="leadmentor", password="password"
         )  # nosec B106
         self.lead_user.groups.add(self.lead_group)
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user,
+            organization=Organization.objects.get(slug="gos"),
+            role="LeadMentor",
+            is_active=True,
+        )
 
         # Create some adults
         # Mentors
@@ -89,6 +96,7 @@ class OrgEmailExtensionTest(TestCase):
             },
         )
 
+        self.assertEqual(response.status_code, 302)
         self.student.refresh_from_db()
         self.assertEqual(self.student.org_account_id, "stud123")
         self.assertEqual(self.student.andrew_id, "stud123")
@@ -110,6 +118,7 @@ class OrgEmailExtensionTest(TestCase):
             {"action": "clear", "person_type": "student", "person_id": self.student.id},
         )
 
+        self.assertEqual(response.status_code, 302)
         self.student.refresh_from_db()
         self.assertIsNone(self.student.org_account_id)
         self.assertIsNone(self.student.andrew_id)

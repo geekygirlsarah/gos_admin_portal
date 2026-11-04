@@ -4,7 +4,20 @@ from datetime import datetime
 
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from outreach.models import OutreachEvent, OutreachShift
+
+
+def add_gos_membership(user, role):
+    membership, _ = UserOrganizationMembership.objects.get_or_create(
+        user=user,
+        organization=Organization.objects.get(slug="gos"),
+        role=role,
+        defaults={"is_active": True},
+    )
+    if not membership.is_active:
+        raise AssertionError("Expected an active GoS membership")
+    return membership
 
 
 def create_outreach_event(*, start_date, start_time, end_time, end_date=None, **kwargs):

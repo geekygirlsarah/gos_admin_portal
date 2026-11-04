@@ -195,6 +195,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "GoSAdminPortal.middleware.LoginRequiredMiddleware",
+    "GoSAdminPortal.middleware.TenantMembershipGuardMiddleware",
     "GoSAdminPortal.middleware.MentorAgreementMiddleware",
     # Must come AFTER SessionMiddleware and AuthenticationMiddleware:
     "audit.middleware.AuditHistoryMiddleware",
