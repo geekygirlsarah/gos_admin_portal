@@ -253,6 +253,27 @@ class Phase2DashboardViewTests(TestCase):
         self.assertContains(resp, "My Program History")
         self.assertContains(resp, self.program.name)
 
+    def test_alumni_without_student_record_has_empty_enrollments(self):
+        alumni_user = User.objects.create_user(
+            username="alumni_without_student", password="password123"  # nosec B106
+        )
+        Adult.objects.create(
+            user=alumni_user,
+            legal_first_name="Former",
+            last_name="Student",
+            is_alumni=True,
+        )
+
+        self.client.login(
+            username="alumni_without_student", password="password123"  # nosec B106
+        )
+        response = self.client.get(reverse("profile_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["enrollments"], [])
+        self.assertContains(response, "Alumni Profile")
+        self.assertNotContains(response, "My Program History")
+
     def test_student_dashboard_role_badge(self):
         student_user = User.objects.create_user(
             username="student_dash", password="password123"  # nosec B106

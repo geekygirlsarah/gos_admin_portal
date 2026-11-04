@@ -422,6 +422,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 from programs.models import Enrollment
 
                 context["student_record"] = adult.student_record
+                context["enrollments"] = []
                 if adult.student_record:
                     context["enrollments"] = Enrollment.objects.filter(
                         student=adult.student_record

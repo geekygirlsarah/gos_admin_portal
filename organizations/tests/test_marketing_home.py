@@ -5,6 +5,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from organizations.models import Organization
+from organizations.utils import get_organization_url
 
 
 @override_settings(
@@ -16,6 +17,8 @@ from organizations.models import Organization
         "momentumteam.app",
         ".momentumteam.app",
         "portal.girlsofsteelrobotics.org",
+        "gos.example.org",
+        "robotigers.example.org",
     ]
 )
 class MarketingHomePageTests(TestCase):
@@ -33,6 +36,79 @@ class MarketingHomePageTests(TestCase):
             email="student@example.com",
             password="password123",  # nosec B106
         )
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_get_organization_url_uses_configured_domains_and_routable_fallbacks(self):
+        self.other_org.settings = {
+            "custom_domain": {
+                "enabled": True,
+                "domain": "robotigers.example.org",
+            }
+        }
+        self.assertEqual(
+            get_organization_url(self.other_org), "https://robotigers.example.org"
+        )
+
+        self.other_org.settings = {"custom_domain": "https://team.example.org"}
+        self.assertEqual(
+            get_organization_url(self.other_org), "https://team.example.org"
+        )
+
+        self.other_org.settings = {}
+        self.other_org.subdomain = "robotigers-team"
+        self.assertEqual(
+            get_organization_url(self.other_org),
+            "https://robotigers-team.momentumteam.app",
+        )
+
+        self.other_org.subdomain = ""
+        self.assertEqual(
+            get_organization_url(self.other_org),
+            "https://robotigers.momentumteam.app",
+        )
+
+    def test_marketing_team_links_use_active_organization_urls(self):
+        self.gos.settings = {"custom_domain": "gos.example.org"}
+        self.gos.save(update_fields=["settings"])
+        self.other_org.subdomain = "robotigers-team"
+        self.other_org.settings = {
+            "custom_domain": {
+                "enabled": True,
+                "domain": "robotigers.example.org",
+            }
+        }
+        self.other_org.save(update_fields=["subdomain", "settings"])
+        Organization.objects.create(
+            name="Inactive Team",
+            slug="inactive-team",
+            subdomain="inactive-team",
+            is_active=False,
+        )
+
+        for path in ("/", reverse("landing"), reverse("about")):
+            with self.subTest(path=path):
+                response = self.client.get(path, HTTP_HOST="momentumteam.app")
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'href="https://gos.example.org"')
+                self.assertContains(response, 'href="https://robotigers.example.org"')
+                self.assertContains(response, "gos.example.org")
+                self.assertContains(response, "robotigers.example.org")
+                self.assertContains(response, 'data-team-domain="robotigers.example.org"')
+                self.assertNotContains(response, "Inactive Team")
+
+    def test_custom_domain_host_resolves_to_its_organization(self):
+        self.other_org.settings = {
+            "custom_domain": {
+                "enabled": True,
+                "domain": "robotigers.example.org",
+            }
+        }
+        self.other_org.save(update_fields=["settings"])
+
+        response = self.client.get("/", HTTP_HOST="robotigers.example.org")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith("/accounts/login/"))
 
     def test_root_domain_anonymous_gets_marketing_page(self):
         """Anonymous request to root domain momentumteam.app renders marketing landing page."""

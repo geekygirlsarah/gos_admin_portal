@@ -92,6 +92,21 @@ def handler500(request):
     return HttpResponse(render_to_string("500.html"), status=500)
 
 
+def _active_organizations_with_portal_urls():
+    from urllib.parse import urlsplit
+
+    from organizations.models import Organization
+    from organizations.utils import get_organization_url
+
+    organizations = list(
+        Organization.objects.filter(is_active=True).order_by("name")
+    )
+    for organization in organizations:
+        organization.portal_url = get_organization_url(organization)
+        organization.portal_host = urlsplit(organization.portal_url).netloc
+    return organizations
+
+
 def home(request):
     """Root URL view handler.
 
@@ -106,9 +121,7 @@ def home(request):
             return redirect("profile_dashboard")
         return redirect(settings.LOGIN_URL + "?next=/profile/")
 
-    from organizations.models import Organization
-
-    active_orgs = Organization.objects.filter(is_active=True).order_by("name")
+    active_orgs = _active_organizations_with_portal_urls()
     return render(
         request,
         "marketing/landing.html",
@@ -121,9 +134,7 @@ def home(request):
 
 def landing(request):
     """Explicit marketing landing page for Momentum."""
-    from organizations.models import Organization
-
-    active_orgs = Organization.objects.filter(is_active=True).order_by("name")
+    active_orgs = _active_organizations_with_portal_urls()
     return render(
         request,
         "marketing/landing.html",

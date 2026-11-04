@@ -720,7 +720,7 @@ LOGGING = {
         "django": {
             "handlers": ["console"],
             "level": DJANGO_LOG_LEVEL,
-            "propagate": True,
+            "propagate": False,
         },
         # Server errors (HTTP 500 etc.) -> email admins and console
         "django.request": {

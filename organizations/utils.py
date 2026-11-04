@@ -106,9 +106,13 @@ def get_organization_url(organization: Optional[Organization] = None) -> str:
 
     org_settings = getattr(organization, "settings", {}) or {}
     if isinstance(org_settings, dict):
-        custom_domain = (
-            org_settings.get("custom_domain") or org_settings.get("domain") or ""
-        )
+        custom_domain = org_settings.get("custom_domain") or ""
+        if isinstance(custom_domain, dict):
+            custom_domain = custom_domain.get("domain") or ""
+        if not custom_domain:
+            custom_domain = org_settings.get("domain") or ""
+            if isinstance(custom_domain, dict):
+                custom_domain = custom_domain.get("domain") or ""
         if custom_domain:
             custom_domain = str(custom_domain).strip()
             return (

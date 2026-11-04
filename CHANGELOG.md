@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-03
+
+### Fixed
+- **Marketing portal links and dashboard logging**:
+  - Team directory links now use each active organization's configured custom domain or tenant subdomain, and the displayed/searchable destination matches the link.
+  - Alumni dashboards without a linked student record now receive an empty program history instead of resolving a missing template variable.
+  - Django template and other core Django log records no longer propagate to the root console handler and appear twice.
+
 ## 2026-11-02
 
 ### Fixed

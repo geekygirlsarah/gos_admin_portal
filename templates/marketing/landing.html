@@ -428,13 +428,14 @@
 
                     <div id="teamListContainer" class="list-group rounded-3 mb-2 team-list-scroll">
                         {% for org in active_organizations %}
-                        <a href="{{ org.get_absolute_url|default:'#' }}"
+                        <a href="{{ org.portal_url }}"
                            class="list-group-item list-group-item-action list-group-item-dark d-flex justify-content-between align-items-center py-3 px-4 border-secondary team-item"
                            data-team-name="{{ org.name|lower }}"
-                           data-team-slug="{{ org.slug|lower }}">
+                           data-team-slug="{{ org.slug|lower }}"
+                           data-team-domain="{{ org.portal_host|lower }}">
                             <div>
                                 <h6 class="mb-1 fw-bold text-white">{{ org.name }}</h6>
-                                <small class="text-light opacity-75">{{ org.slug }}.momentumteam.app</small>
+                                <small class="text-light opacity-75">{{ org.portal_host }}</small>
                             </div>
                             <span class="btn btn-sm btn-primary fw-semibold">
                                 Go to Portal <i class="bi bi-arrow-right ms-1"></i>
@@ -517,7 +518,8 @@ document.addEventListener('DOMContentLoaded', function() {
         teamItems.forEach(function(item) {
             var name = item.getAttribute('data-team-name') || '';
             var slug = item.getAttribute('data-team-slug') || '';
-            if (!query || name.indexOf(query) !== -1 || slug.indexOf(query) !== -1) {
+            var domain = item.getAttribute('data-team-domain') || '';
+            if (!query || name.indexOf(query) !== -1 || slug.indexOf(query) !== -1 || domain.indexOf(query) !== -1) {
                 item.classList.remove('d-none');
                 item.classList.add('d-flex');
                 visibleCount++;
