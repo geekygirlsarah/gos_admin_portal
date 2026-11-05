@@ -34,6 +34,12 @@ Bulk email views (`ProgramEmailView`, `ApplicationEmailView`, `ProgramEmailBalan
 - **Individual Dispatch**: Constructs individual messages per recipient instead of large BCC lists.
 - **Threaded Background Execution**: Uses `send_messages_in_background()` to dispatch batches asynchronously via an in-process thread pool.
 
+Program Messaging scopes program and subgroup choices, sender identities, enrolled students, mentors, and parent relationships to the request organization. Preview emails without a selected program use that organization's sender and branding. Other bulk email views require their own tenant-isolation review.
+
+Program Messaging offers the deployment-configured default sender and named identities saved by the current organization, not the legacy global named-account fallback. An organization's notification-from override replaces the default; otherwise `NOTIFICATION_FROM_EMAIL` or `DEFAULT_FROM_EMAIL` supplies it. Email Settings shows the saved override separately from the effective address and does not pin the fallback when saving other settings. Existing saved overrides are not changed automatically.
+
+The operator must configure a verified shared Momentum sender with the delivery provider and DNS before relying on it; changing an address here does not configure or verify delivery. Existing deployment defaults may still be GoS-specific and should be reviewed during that transition.
+
 ---
 
 ## Email Compose Pipeline & Tiptap Editor

@@ -18,6 +18,18 @@ def sync_outreach_shift(shift, feed):
     from calendar_feeds.models import CalendarEvent
 
     event = shift.event
+    if (
+        feed.source_type != "outreach"
+        or feed.organization_id != shift.organization_id
+        or event.organization_id != feed.organization_id
+        or feed.program_id != event.program_id
+        or (event.program_id and event.program.organization_id != feed.organization_id)
+    ):
+        logger.warning(
+            "Skipping outreach shift %s with mismatched organization or feed",
+            shift.pk,
+        )
+        return None
 
     start_dt = timezone.make_aware(
         datetime.combine(shift.date, shift.start_time or time.min)
@@ -36,17 +48,30 @@ def sync_outreach_shift(shift, feed):
 
     description = event.description or ""
 
+    source_id = str(shift.pk)
+    defaults = {
+        "title": title,
+        "description": description,
+        "start_datetime": start_dt,
+        "end_datetime": end_dt,
+        "all_day": False,
+        "location": location,
+    }
+    source_events = CalendarEvent.objects.filter(feed=feed, source_id=source_id)
+    if (
+        source_events.exists()
+        and not source_events.filter(organization_id=feed.organization_id).exists()
+    ):
+        logger.warning(
+            "Skipping outreach shift %s because its calendar row has a mismatched organization",
+            shift.pk,
+        )
+        return None
     cal_event, created = CalendarEvent.objects.update_or_create(
+        organization_id=feed.organization_id,
         feed=feed,
-        source_id=str(shift.pk),
-        defaults={
-            "title": title,
-            "description": description,
-            "start_datetime": start_dt,
-            "end_datetime": end_dt,
-            "all_day": False,
-            "location": location,
-        },
+        source_id=source_id,
+        defaults=defaults,
     )
 
     action = "created" if created else "updated"
@@ -58,7 +83,18 @@ def remove_outreach_shift(shift, feed):
     """Remove a CalendarEvent for a deleted OutreachShift."""
     from calendar_feeds.models import CalendarEvent
 
+    event = shift.event
+    if (
+        feed.source_type != "outreach"
+        or feed.organization_id != shift.organization_id
+        or event.organization_id != feed.organization_id
+        or feed.program_id != event.program_id
+        or (event.program_id and event.program.organization_id != feed.organization_id)
+    ):
+        return
+
     count, _ = CalendarEvent.objects.filter(
+        organization_id=feed.organization_id,
         feed=feed,
         source_id=str(shift.pk),
     ).delete()
@@ -79,17 +115,31 @@ def initial_sync(feed):
         logger.warning("outreach app not available; skipping initial sync")
         return 0
 
+    if feed.source_type != "outreach" or not feed.organization_id:
+        logger.warning("Skipping outreach sync for invalid feed '%s'", feed.name)
+        return 0
+
     if not feed.program:
         logger.warning("Outreach feed '%s' has no program; skipping sync", feed.name)
         return 0
 
+    if feed.program.organization_id != feed.organization_id:
+        logger.warning(
+            "Skipping outreach sync for cross-organization program feed '%s'",
+            feed.name,
+        )
+        return 0
+
     shifts = OutreachShift.objects.filter(
+        organization_id=feed.organization_id,
+        event__organization_id=feed.organization_id,
         event__program=feed.program,
+        event__program__organization_id=feed.organization_id,
     ).select_related("event")
 
     count = 0
     for shift in shifts:
-        sync_outreach_shift(shift, feed)
-        count += 1
+        if sync_outreach_shift(shift, feed) is not None:
+            count += 1
 
     return count

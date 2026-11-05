@@ -142,6 +142,14 @@ class OrganizationEmailBrandingTests(TestCase):
         self.assertEqual(cfg.get("logo_url"), "https://example.org/static/logo.png")
         self.assertEqual(cfg.get("portal_url"), "https://old.example.com")
 
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        }
+    )
     def test_portal_settings_upload_logo_file(self):
         self.client.login(
             username="lead_mentor", password="testpassword123"

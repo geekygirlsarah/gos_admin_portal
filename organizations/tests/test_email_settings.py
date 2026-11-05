@@ -221,6 +221,148 @@ class PortalEmailSettingsViewTests(TestCase):
         self.assertTrue(email_cfg["custom_domain"]["enabled"])
         self.assertEqual(email_cfg["custom_domain"]["domain"], "customdomain.org")
 
+    @override_settings(NOTIFICATION_FROM_EMAIL="notifications@momentum.example")
+    def test_sender_override_field_shows_stored_value_and_effective_sender(self):
+        self.org_settings.data = {"email_settings": {}}
+        self.org_settings.save()
+        self.client.force_login(self.lead_user)
+
+        response = self.client.get(reverse("portal_settings"), {"tab": "email"})
+
+        self.assertContains(
+            response, 'id="email_notification_from_email" class="form-control" value=""'
+        )
+        self.assertContains(
+            response, "Currently used sender: notifications@momentum.example"
+        )
+
+        self.org_settings.data = {
+            "email_settings": {"notification_from_email": "team@example.test"}
+        }
+        self.org_settings.save()
+        response = self.client.get(reverse("portal_settings"), {"tab": "email"})
+        self.assertContains(
+            response,
+            'id="email_notification_from_email" class="form-control" value="team@example.test"',
+        )
+        self.assertContains(response, "Currently used sender: team@example.test")
+
+    @override_settings(NOTIFICATION_FROM_EMAIL="initial@momentum.example")
+    def test_other_email_settings_do_not_pin_default_sender(self):
+        self.client.force_login(self.lead_user)
+        actions = (
+            {"action": "update_branding", "organization_name": "Test Team"},
+            {
+                "action": "add_sender_account",
+                "key": "team",
+                "display_name": "Team",
+                "email": "team@example.test",
+            },
+        )
+        for data in actions:
+            with self.subTest(action=data["action"]):
+                self.org_settings.data = {"email_settings": {}}
+                self.org_settings.save()
+                response = self.client.post(self.url, data)
+                self.assertEqual(response.status_code, 302)
+                self.org_settings.refresh_from_db()
+                self.assertFalse(
+                    self.org_settings.data["email_settings"].get(
+                        "notification_from_email"
+                    )
+                )
+                with override_settings(
+                    NOTIFICATION_FROM_EMAIL="later@momentum.example"
+                ):
+                    self.assertEqual(
+                        get_organization_email_settings(self.org)[
+                            "notification_from_email"
+                        ],
+                        "later@momentum.example",
+                    )
+
+    @override_settings(NOTIFICATION_FROM_EMAIL="initial@momentum.example")
+    def test_explicit_sender_override_survives_other_settings_changes(self):
+        self.org_settings.data = {
+            "email_settings": {"notification_from_email": "team@example.test"}
+        }
+        self.org_settings.save()
+        self.client.force_login(self.lead_user)
+        response = self.client.post(
+            self.url,
+            {
+                "action": "add_sender_account",
+                "key": "team",
+                "display_name": "Team",
+                "email": "team@example.test",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.org_settings.refresh_from_db()
+        self.assertEqual(
+            self.org_settings.data["email_settings"]["notification_from_email"],
+            "team@example.test",
+        )
+        with override_settings(NOTIFICATION_FROM_EMAIL="later@momentum.example"):
+            self.assertEqual(
+                get_organization_email_settings(self.org)["notification_from_email"],
+                "team@example.test",
+            )
+
+    @override_settings(NOTIFICATION_FROM_EMAIL="initial@momentum.example")
+    def test_clearing_sender_override_is_organization_scoped(self):
+        other = Organization.objects.create(
+            name="Other Team", slug="sender-other", subdomain="sender-other"
+        )
+        other_settings = OrganizationSettings.objects.create(
+            organization=other,
+            data={"email_settings": {"notification_from_email": "other@example.test"}},
+        )
+        self.org_settings.data = {
+            "email_settings": {"notification_from_email": "gos@example.test"}
+        }
+        self.org_settings.save()
+        UserOrganizationMembership.objects.create(
+            user=self.lead_user, organization=other, role="LeadMentor", is_active=True
+        )
+        self.client.force_login(self.lead_user)
+        host = "sender-other.localhost"
+
+        response = self.client.get(
+            reverse("portal_settings"), {"tab": "email"}, HTTP_HOST=host
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["notification_from_override"], "other@example.test"
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "action": "update_email_settings",
+                "sender_display_name": "Other Team",
+                "reply_to_email": "reply@example.test",
+                "notification_from_email": "",
+            },
+            HTTP_HOST=host,
+        )
+        self.assertEqual(response.status_code, 302)
+        other_settings.refresh_from_db()
+        self.org_settings.refresh_from_db()
+        self.assertEqual(
+            other_settings.data["email_settings"]["notification_from_email"], ""
+        )
+        self.assertEqual(
+            self.org_settings.data["email_settings"]["notification_from_email"],
+            "gos@example.test",
+        )
+        with override_settings(NOTIFICATION_FROM_EMAIL="later@momentum.example"):
+            self.assertEqual(
+                get_organization_email_settings(other)["notification_from_email"],
+                "later@momentum.example",
+            )
+
     def test_lead_mentor_crud_sender_accounts(self):
         self.client.login(username="lead_user", password=self.password)
 
@@ -347,7 +489,7 @@ class PortalEmailSettingsViewTests(TestCase):
 
         program = Program.objects.create(name="FRC 2026", active=True)
 
-        prog_form = ProgramEmailForm(program=program)
+        prog_form = ProgramEmailForm(program=program, organization=self.org)
         self.assertIn(
             "finance", [c[0] for c in prog_form.fields["from_account"].choices]
         )

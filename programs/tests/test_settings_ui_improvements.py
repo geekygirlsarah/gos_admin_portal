@@ -291,6 +291,14 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, "Pending Review")
         self.assertContains(response, "Active Sliding Scales")
 
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        }
+    )
     def test_portal_settings_branding_logo_upload_valid_and_path_traversal(self):
         """Uploading logo validates image format and rejects path traversal or invalid files."""
         self._login(self.lead_user)

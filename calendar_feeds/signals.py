@@ -3,8 +3,6 @@ import logging
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from .models import CalendarEvent
-
 logger = logging.getLogger(__name__)
 
 
@@ -21,10 +19,22 @@ def sync_outreach_shift_to_calendar(sender, instance, created, **kwargs):
 def remove_outreach_shift_from_calendar(sender, instance, **kwargs):
     """Remove the CalendarEvent when an OutreachShift is deleted."""
     try:
-        CalendarEvent.objects.filter(
-            source_id=str(instance.pk),
-            feed__source_type="outreach",
-        ).delete()
+        from .models import CalendarFeed
+        from .sources.outreach import remove_outreach_shift
+
+        event = instance.event
+        if instance.organization_id != event.organization_id or (
+            event.program_id and event.program.organization_id != event.organization_id
+        ):
+            return
+
+        feeds = CalendarFeed.objects.filter(
+            organization_id=instance.organization_id,
+            source_type="outreach",
+            program_id=event.program_id,
+        )
+        for feed in feeds:
+            remove_outreach_shift(instance, feed)
     except Exception:
         logger.debug("Failed to remove outreach shift calendar event", exc_info=True)
 
@@ -33,18 +43,9 @@ def remove_outreach_shift_from_calendar(sender, instance, **kwargs):
 def sync_travel_event_to_calendar(sender, instance, created, **kwargs):
     """Sync a TravelEvent to a CalendarEvent when the trip is saved."""
     try:
-        from .models import CalendarFeed
         from .sources.travel import sync_travel_event
 
-        feed = CalendarFeed.objects.filter(
-            source_type="travel",
-            program=instance.program,
-        ).first()
-        if not feed:
-            feed = CalendarFeed.objects.filter(
-                source_type="travel",
-                program__isnull=True,
-            ).first()
+        feed = _travel_feed_for_event(instance)
 
         if feed:
             sync_travel_event(instance, feed)
@@ -67,19 +68,12 @@ def remove_travel_event_from_calendar(sender, instance, **kwargs):
 def sync_travel_departure_to_calendar(sender, instance, created, **kwargs):
     """Update the parent TravelEvent's CalendarEvent when a departure is saved."""
     try:
-        from .models import CalendarFeed
         from .sources.travel import sync_travel_event
 
         event = instance.event
-        feed = CalendarFeed.objects.filter(
-            source_type="travel",
-            program=event.program,
-        ).first()
-        if not feed:
-            feed = CalendarFeed.objects.filter(
-                source_type="travel",
-                program__isnull=True,
-            ).first()
+        if instance.organization_id != event.organization_id:
+            return
+        feed = _travel_feed_for_event(event)
 
         if feed:
             sync_travel_event(event, feed)
@@ -91,19 +85,12 @@ def sync_travel_departure_to_calendar(sender, instance, created, **kwargs):
 def remove_travel_departure_from_calendar(sender, instance, **kwargs):
     """Update the parent TravelEvent's CalendarEvent when a departure is deleted."""
     try:
-        from .models import CalendarFeed
         from .sources.travel import sync_travel_event
 
         event = instance.event
-        feed = CalendarFeed.objects.filter(
-            source_type="travel",
-            program=event.program,
-        ).first()
-        if not feed:
-            feed = CalendarFeed.objects.filter(
-                source_type="travel",
-                program__isnull=True,
-            ).first()
+        if instance.organization_id != event.organization_id:
+            return
+        feed = _travel_feed_for_event(event)
 
         if feed:
             sync_travel_event(event, feed)
@@ -113,52 +100,42 @@ def remove_travel_departure_from_calendar(sender, instance, **kwargs):
 
 def _do_sync_outreach_shift(shift):
     """Create or update a CalendarEvent for an OutreachShift."""
-    from datetime import datetime, time
-
-    from django.utils import timezone
-
     from .models import CalendarFeed
+    from .sources.outreach import sync_outreach_shift
 
-    # Find or determine the feed
     event = shift.event
-    program = event.program if hasattr(event, "program") else None
+    if shift.organization_id != event.organization_id or (
+        event.program_id and event.program.organization_id != event.organization_id
+    ):
+        return
 
     feed = CalendarFeed.objects.filter(
+        organization_id=shift.organization_id,
         source_type="outreach",
-        program=program,
+        program_id=event.program_id,
     ).first()
 
     if not feed:
-        # No feed configured for outreach; nothing to sync
         return
 
-    # Build datetime from the shift's date + times
-    start_dt = timezone.make_aware(
-        datetime.combine(shift.date, shift.start_time or time.min)
-    )
-    end_dt = timezone.make_aware(
-        datetime.combine(shift.date, shift.end_time or time.max)
-    )
+    sync_outreach_shift(shift, feed)
 
-    title = event.name
-    location_parts = []
-    if event.location_name:
-        location_parts.append(event.location_name)
-    if event.location_address:
-        location_parts.append(event.location_address)
-    location = ", ".join(location_parts)
 
-    description = event.description or ""
+def _travel_feed_for_event(event):
+    """Return this event's organization-owned feed, preferring its program."""
+    from .models import CalendarFeed
 
-    cal_event, was_created = CalendarEvent.objects.update_or_create(
-        feed=feed,
-        source_id=str(shift.pk),
-        defaults={
-            "title": title,
-            "description": description,
-            "start_datetime": start_dt,
-            "end_datetime": end_dt,
-            "all_day": False,
-            "location": location,
-        },
+    if not event.organization_id:
+        return None
+    if event.program_id and event.program.organization_id != event.organization_id:
+        return None
+
+    feeds = CalendarFeed.objects.filter(
+        organization_id=event.organization_id,
+        source_type="travel",
     )
+    if event.program_id:
+        program_feed = feeds.filter(program_id=event.program_id).first()
+        if program_feed:
+            return program_feed
+    return feeds.filter(program__isnull=True).first()

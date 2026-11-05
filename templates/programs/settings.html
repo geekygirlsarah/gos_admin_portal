@@ -2014,8 +2014,8 @@
                             </div>
                             <div class="col-md-12">
                                 <label for="email_notification_from_email" class="form-label fw-semibold small">Notification From Address (Optional Override)</label>
-                                <input type="email" name="notification_from_email" id="email_notification_from_email" class="form-control" value="{{ email_settings.notification_from_email }}" placeholder="e.g. notifications@girlsofsteelrobotics.org">
-                                <div class="form-text">The email address notifications are sent from. Leave blank to use the system default email address.</div>
+                                <input type="email" name="notification_from_email" id="email_notification_from_email" class="form-control" value="{{ notification_from_override }}" placeholder="e.g. notifications@your-team.org">
+                                <div class="form-text">Leave blank to use the system default email address. Currently used sender: {{ email_settings.notification_from_email }}.</div>
                             </div>
 
                             <!-- Custom Domain Branding Section -->

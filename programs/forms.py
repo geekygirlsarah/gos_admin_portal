@@ -779,40 +779,58 @@ class ProgramEmailForm(forms.Form):
         # Allow passing a fixed program via kwarg program or filtering by user
         program = kwargs.pop("program", None)
         user = kwargs.pop("user", None)
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
+        programs = (
+            Program.objects.for_organization(organization)
+            if organization
+            else Program.objects.none()
+        )
 
         if user:
             from .permission_views import can_user_read, get_user_role
 
-            role = get_user_role(user)
+            role = get_user_role(user, org=organization) if organization else None
             if role == "LeadMentor":
-                self.fields["program"].queryset = Program.objects.all().order_by(
-                    "-active", "name"
-                )
+                self.fields["program"].queryset = programs.order_by("-active", "name")
             elif role == "Mentor":
                 accessible = [
                     p.pk
-                    for p in Program.objects.filter(active=True)
-                    if can_user_read(user, "programs", p)
+                    for p in programs.filter(active=True)
+                    if can_user_read(user, "programs", p, org=organization)
                 ]
-                self.fields["program"].queryset = Program.objects.filter(
+                self.fields["program"].queryset = programs.filter(
                     pk__in=accessible
                 ).order_by("name")
             else:
                 self.fields["program"].queryset = Program.objects.none()
         else:
-            self.fields["program"].queryset = Program.objects.all().order_by(
-                "-active", "name"
+            self.fields["program"].queryset = programs.order_by("-active", "name")
+
+        if organization:
+            self.fields["teams"].queryset = Team.objects.for_organization(
+                organization
+            ).order_by("team_type", "number")
+            self.fields["crews"].queryset = (
+                Crew.objects.for_organization(organization)
+                .filter(program__organization=organization)
+                .order_by("name")
             )
+            self.fields["subteams"].queryset = (
+                SubTeam.objects.for_organization(organization)
+                .filter(program__organization=organization)
+                .order_by("name")
+            )
+        else:
+            self.fields["teams"].queryset = Team.objects.none()
+            self.fields["crews"].queryset = Crew.objects.none()
+            self.fields["subteams"].queryset = SubTeam.objects.none()
 
         # Build sender choices from organization settings
-        from organizations.utils import (
-            get_organization_email_settings,
-            get_sender_accounts,
-        )
+        from organizations.utils import get_organization_email_settings
 
-        accounts = get_sender_accounts()
-        org_cfg = get_organization_email_settings()
+        org_cfg = get_organization_email_settings(organization) if organization else {}
+        accounts = org_cfg.get("sender_accounts") or []
         choices = []
         initial_value = None
         if accounts:
@@ -857,7 +875,10 @@ class ProgramEmailForm(forms.Form):
             label="Sender identity",
             help_text="Select the sender identity and reply-to address.",
         )
-        if program is not None:
+        if (
+            program is not None
+            and self.fields["program"].queryset.filter(pk=program.pk).exists()
+        ):
             self.fields["program"].initial = program
 
     def clean(self):

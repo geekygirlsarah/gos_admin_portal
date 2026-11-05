@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## 2026-11-05
 
 ### Fixed
+- Calendar source synchronization and reminder emails now respect organization ownership; reminders use each organization's branding and canonical calendar address.
+- Program Messaging now limits programs, sender choices, subgroups, and broadcast recipients to the current organization.
+- Email Settings now distinguishes an organization's sender override from the shared default, so unrelated settings saves do not pin the current default.
 - Attendance kiosks now isolate kiosk, person, RFID, and attendance data by organization. Unlocking requires an eligible active account, rate-limited one-use codes, and a signed tenant-bound cookie; previously unlocked kiosks must be unlocked again.
 - Digital sign-out stations now enforce organization ownership, require eligible accounts for rate-limited one-use unlock codes, and use signed station-bound cookies; previously unlocked stations must be unlocked again.
 

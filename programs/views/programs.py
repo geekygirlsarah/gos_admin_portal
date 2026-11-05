@@ -22,6 +22,7 @@ from ..forms import (
 )
 from ..models import (
     Adult,
+    AdultStudentRelationship,
     Crew,
     Enrollment,
     Program,
@@ -1098,7 +1099,11 @@ class ProgramEmailView(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            role = get_user_role(request.user, org=request.organization)
+            organization = getattr(request, "organization", None)
+            if organization is None:
+                raise Http404
+
+            role = get_user_role(request.user, org=organization)
             pk = (
                 kwargs.get("pk")
                 or request.GET.get("program")
@@ -1106,23 +1111,24 @@ class ProgramEmailView(LoginRequiredMixin, View):
             )
             if pk:
                 try:
-                    program = Program.objects.get(pk=pk)
+                    program = Program.objects.for_organization(organization).get(pk=pk)
                 except (Program.DoesNotExist, ValueError):
-                    program = None
-                if program:
-                    allowed = (role == "LeadMentor") or (
-                        role == "Mentor"
-                        and can_user_read(request.user, "programs", program)
+                    raise Http404
+                allowed = (role == "LeadMentor") or (
+                    role == "Mentor"
+                    and can_user_read(
+                        request.user, "programs", program, org=organization
                     )
-                else:
-                    allowed = role == "LeadMentor"
+                )
             else:
                 if role == "LeadMentor":
                     allowed = True
                 elif role == "Mentor":
                     allowed = any(
-                        can_user_read(request.user, "programs", p)
-                        for p in Program.objects.filter(active=True)
+                        can_user_read(request.user, "programs", p, org=organization)
+                        for p in Program.objects.for_organization(organization).filter(
+                            active=True
+                        )
                     )
                 else:
                     allowed = False
@@ -1133,36 +1139,46 @@ class ProgramEmailView(LoginRequiredMixin, View):
                 return redirect("home")
         return super().dispatch(request, *args, **kwargs)
 
-    def _get_accessible_programs(self, user):
-        role = get_user_role(user)
+    def _get_accessible_programs(self, user, organization):
+        if organization is None:
+            return Program.objects.none()
+
+        programs = Program.objects.for_organization(organization)
+        role = get_user_role(user, org=organization)
         if role == "LeadMentor":
-            return Program.objects.all().order_by("-active", "name")
+            return programs.order_by("-active", "name")
         elif role == "Mentor":
             return [
                 p
-                for p in Program.objects.filter(active=True).order_by("name")
-                if can_user_read(user, "programs", p)
+                for p in programs.filter(active=True).order_by("name")
+                if can_user_read(user, "programs", p, org=organization)
             ]
         return []
 
     def get(self, request, pk=None):
-        role = get_user_role(request.user, org=request.organization)
-        accessible_programs = self._get_accessible_programs(request.user)
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        role = get_user_role(request.user, org=organization)
+        accessible_programs = self._get_accessible_programs(request.user, organization)
 
         program_id = pk or request.GET.get("program") or request.GET.get("program_id")
         program = None
         if program_id:
             try:
-                program = Program.objects.get(pk=program_id)
+                program = Program.objects.for_organization(organization).get(
+                    pk=program_id
+                )
                 if role == "Mentor" and not can_user_read(
-                    request.user, "programs", program
+                    request.user, "programs", program, org=organization
                 ):
                     messages.error(
                         request, "You do not have permission to view that program."
                     )
                     return redirect("home")
             except (Program.DoesNotExist, ValueError):
-                program = None
+                raise Http404
 
         if not program and accessible_programs:
             program = (
@@ -1174,15 +1190,27 @@ class ProgramEmailView(LoginRequiredMixin, View):
         form = ProgramEmailForm(
             user=request.user,
             program=program,
+            organization=organization,
             initial={"program": program} if program else None,
         )
         return self._render(form, program, pk=pk)
 
     def post(self, request, pk=None):
-        role = get_user_role(request.user, org=request.organization)
-        program_from_url = get_object_or_404(Program, pk=pk) if pk else None
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        role = get_user_role(request.user, org=organization)
+        program_from_url = (
+            get_object_or_404(Program.objects.for_organization(organization), pk=pk)
+            if pk
+            else None
+        )
         form = ProgramEmailForm(
-            request.POST, user=request.user, program=program_from_url
+            request.POST,
+            user=request.user,
+            program=program_from_url,
+            organization=organization,
         )
         if form.is_valid():
             prog = form.cleaned_data.get("program")
@@ -1190,7 +1218,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
             if (
                 prog
                 and role == "Mentor"
-                and not can_user_read(request.user, "programs", prog)
+                and not can_user_read(request.user, "programs", prog, org=organization)
             ):
                 messages.error(
                     request, "You do not have permission to email that program."
@@ -1209,43 +1237,77 @@ class ProgramEmailView(LoginRequiredMixin, View):
             # extracts inline CID image attachments.
             inlined_html_body, text_body, inline_images = build_email_parts(
                 html_body,
-                organization=prog.organization if prog else None,
+                organization=prog.organization if prog else organization,
                 subject=subject,
             )
 
             if prog:
                 enrollments = Enrollment.objects.filter(
-                    program=prog, active=True, student__graduated=False
+                    organization=organization,
+                    program=prog,
+                    program__organization=organization,
+                    student__organization=organization,
+                    active=True,
+                    student__graduated=False,
                 )
                 if teams:
                     enrollments = enrollments.filter(team__in=teams)
                 if crews:
-                    enrollments = enrollments.filter(crew__in=crews)
+                    enrollments = enrollments.filter(
+                        crew__in=crews,
+                        crew__organization=organization,
+                        crew__program=prog,
+                    )
                 if subteams:
-                    enrollments = enrollments.filter(subteam__in=subteams)
+                    enrollments = enrollments.filter(
+                        subteam__in=subteams,
+                        subteam__organization=organization,
+                        subteam__program=prog,
+                    )
 
-                filtered_student_ids = enrollments.values_list("student_id", flat=True)
+                filtered_student_ids = enrollments.values_list(
+                    "student_id", flat=True
+                ).distinct()
             else:
                 filtered_student_ids = []
 
             recipients = set()
             if "students" in groups:
-                for s in Student.objects.filter(id__in=filtered_student_ids).distinct():
+                for s in (
+                    Student.objects.for_organization(organization)
+                    .filter(id__in=filtered_student_ids)
+                    .distinct()
+                ):
                     if s.personal_email:
                         recipients.add(s.personal_email)
                     elif s.org_email:
                         recipients.add(s.org_email)
             if "parents" in groups:
-                for parent in Adult.objects.filter(
-                    students__id__in=filtered_student_ids,
-                    email_updates=True,
-                    login_enabled=True,
-                ).distinct():
+                parent_ids = (
+                    AdultStudentRelationship.objects.for_organization(organization)
+                    .filter(
+                        student_id__in=filtered_student_ids,
+                        student__organization=organization,
+                        adult__organization=organization,
+                    )
+                    .values_list("adult_id", flat=True)
+                )
+                for parent in (
+                    Adult.objects.for_organization(organization)
+                    .filter(
+                        id__in=parent_ids,
+                        email_updates=True,
+                        login_enabled=True,
+                    )
+                    .distinct()
+                ):
                     e = parent.personal_email or parent.org_email
                     if e:
                         recipients.add(e)
             if "mentors" in groups:
-                for m in Adult.objects.filter(is_mentor=True, mentor_active=True):
+                for m in Adult.objects.for_organization(organization).filter(
+                    is_mentor=True, mentor_active=True
+                ):
                     e = m.personal_email or m.org_email
                     if e:
                         recipients.add(e)
@@ -1262,7 +1324,7 @@ class ProgramEmailView(LoginRequiredMixin, View):
             # Determine sender connection (selected sender account, or default)
             selected = form.cleaned_data.get("from_account")
             connection, from_email, reply_to = get_sender_connection(
-                selected, organization=prog.organization if prog else None
+                selected, organization=prog.organization if prog else organization
             )
 
             messages_to_send = []
@@ -1328,29 +1390,47 @@ class ProgramEmailView(LoginRequiredMixin, View):
             try:
                 prog_val = form.data.get("program")
                 if prog_val:
-                    prog = Program.objects.get(pk=prog_val)
-            except Exception:
+                    prog = Program.objects.for_organization(organization).get(
+                        pk=prog_val
+                    )
+            except (Program.DoesNotExist, ValueError):
                 prog = None
         return self._render(form, prog or program_from_url, pk=pk)
 
     def _render(self, form, program, pk=None):
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            raise Http404
         active_assignments = Enrollment.objects.filter(
-            active=True, student__graduated=False
+            organization=organization,
+            program__organization=organization,
+            student__organization=organization,
+            active=True,
+            student__graduated=False,
         )
         teams = (
-            Team.objects.filter(enrollments__in=active_assignments)
+            Team.objects.for_organization(organization)
+            .filter(enrollments__in=active_assignments)
             .distinct()
             .order_by("team_type", "number")
         )
         crews = (
-            Crew.objects.select_related("program")
-            .filter(enrollments__in=active_assignments)
+            Crew.objects.for_organization(organization)
+            .select_related("program")
+            .filter(
+                program__organization=organization,
+                enrollments__in=active_assignments,
+            )
             .distinct()
             .order_by("name")
         )
         subteams = (
-            SubTeam.objects.select_related("program")
-            .filter(enrollments__in=active_assignments)
+            SubTeam.objects.for_organization(organization)
+            .select_related("program")
+            .filter(
+                program__organization=organization,
+                enrollments__in=active_assignments,
+            )
             .distinct()
             .order_by("name")
         )

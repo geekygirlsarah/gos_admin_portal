@@ -38,6 +38,7 @@ Multi-feed calendars are served at `/calendar/`:
 - **Outreach Synchronization** (`signals.py` & `sources/outreach.py`): Synchronizes `OutreachShift` records into the program's linked outreach calendar feed.
 - **Travel Synchronization** (`signals.py` & `sources/travel.py`): Synchronizes `TravelEvent` and `TravelDeparture` dates into the program's travel calendar feed.
 - Creating or editing a feed triggers an initial automatic synchronization.
+- Source records, feeds, programs, and generated events must belong to the same organization; mismatched departures are omitted. Synchronization and deletion leave inconsistent cross-organization records untouched rather than cleaning up historical data.
 
 ---
 
@@ -56,7 +57,10 @@ Calendar feed forms only offer programs belonging to the current organization an
 
 ## Scheduled Reminders (`send_calendar_reminders`)
 
-Sends periodic personalized calendar digest emails to users for feeds they are authorized to read:
+Sends separate personalized digests per organization to active users with an active membership in that organization. Private feed ACLs still apply; public visibility alone does not enroll users from other organizations in reminders. Each email uses the organization's branding and canonical calendar address; the calendar link is omitted when no safe address is available.
+
+Reminders skip private feeds containing ACL rows owned by another organization and log the inconsistency. The shared feed permission checks still need a separate review of ACL ownership for calendar views and subscriptions.
+
 ```bash
 python manage.py send_calendar_reminders --days-ahead 3 [--dry-run]
 ```

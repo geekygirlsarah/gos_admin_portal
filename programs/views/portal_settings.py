@@ -18,7 +18,7 @@ from audit.service import log_deletion, log_event
 from organizations import domain_recovery
 from organizations.domain_forms import OrganizationDomainRequestForm
 from organizations.domain_verification import verify_domain_txt
-from organizations.models import Organization, OrganizationDomain
+from organizations.models import Organization, OrganizationDomain, OrganizationSettings
 from organizations.utils import (
     get_default_organization,
     get_organization_email_settings,
@@ -47,6 +47,21 @@ try:
     from attendance.models import KioskConfig
 except ImportError:
     KioskConfig = None
+
+
+def _stored_notification_sender(organization):
+    data = (
+        OrganizationSettings.objects.filter(organization=organization)
+        .values_list("data", flat=True)
+        .first()
+    )
+    email_settings = data.get("email_settings") if isinstance(data, dict) else None
+    value = (
+        email_settings.get("notification_from_email")
+        if isinstance(email_settings, dict)
+        else None
+    )
+    return value if isinstance(value, str) else ""
 
 
 class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
@@ -205,6 +220,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "organization_domains": organization_domains,
             "momentum_portal_url": get_organization_momentum_url(org),
             "email_settings": email_settings,
+            "notification_from_override": _stored_notification_sender(org),
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
             "active_tab": request.GET.get("tab", "permissions"),
             "sections": sections,
@@ -654,6 +670,7 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
 
         action = request.POST.get("action")
         email_cfg = get_organization_email_settings(org)
+        email_cfg["notification_from_email"] = _stored_notification_sender(org)
 
         if action == "update_branding":
             primary_color = (

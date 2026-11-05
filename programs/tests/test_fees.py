@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.core import mail
 from django.test import TestCase, override_settings
 
+from organizations.models import OrganizationSettings
 from programs.forms import PaymentForm, ProgramEmailForm, SlidingScaleForm
 from programs.models import Enrollment, Fee, Payment, Program, SlidingScale, Student
 from programs.views import compute_sliding_discount_rounded
@@ -303,26 +304,42 @@ class FormBehaviorTests(TestCase):
         EMAIL_SENDER_ACCOUNTS=[], DEFAULT_FROM_EMAIL="noreply@example.com"
     )
     def test_program_email_form_default_sender_without_accounts(self):
-        form = ProgramEmailForm()
+        form = ProgramEmailForm(organization=self.program.organization)
         choices = dict(form.fields["from_account"].choices)
         self.assertIn("DEFAULT", choices)
         self.assertIn("noreply@example.com", choices["DEFAULT"])
 
-    @override_settings(
-        EMAIL_SENDER_ACCOUNTS=[
-            {"key": "ops", "email": "ops@example.com", "display_name": "Ops Team"},
-            {"key": "info", "email": "info@example.com", "display_name": "Info Desk"},
-        ]
-    )
     def test_program_email_form_sender_accounts(self):
-        form = ProgramEmailForm()
+        OrganizationSettings.objects.update_or_create(
+            organization=self.program.organization,
+            defaults={
+                "data": {
+                    "email_settings": {
+                        "sender_accounts": [
+                            {
+                                "key": "ops",
+                                "email": "ops@example.com",
+                                "display_name": "Ops Team",
+                            },
+                            {
+                                "key": "info",
+                                "email": "info@example.com",
+                                "display_name": "Info Desk",
+                            },
+                        ]
+                    }
+                }
+            },
+        )
+        form = ProgramEmailForm(organization=self.program.organization)
         choices = dict(form.fields["from_account"].choices)
         self.assertIn("ops", choices)
         self.assertIn("info", choices)
         p = Program.objects.create(name="X")
-        form2 = ProgramEmailForm(program=p)
+        form2 = ProgramEmailForm(program=p, organization=p.organization)
         self.assertEqual(form2.fields["program"].initial, p)
         form_hidden_missing = ProgramEmailForm(
+            organization=p.organization,
             data={
                 "recipient_groups": ["students"],
                 "subject": "Hello",
@@ -334,6 +351,7 @@ class FormBehaviorTests(TestCase):
         self.assertIn("program", form_hidden_missing.errors)
         form_hidden_ok = ProgramEmailForm(
             program=p,
+            organization=p.organization,
             data={
                 "program": p.pk,
                 "recipient_groups": ["students"],
