@@ -186,6 +186,9 @@ Use the commands documented in `docs/operations.md`.
 - Security scan:
   `bandit -r . -x ./venv,./.venv`
 
+Please don't test without the parallel flag in order to help speed up the process. 
+There are over 3000 tests, and can take nearly 10 minutes to run without the flag.
+
 ### Required workflow
 
 For logic and behavior changes:
