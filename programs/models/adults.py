@@ -475,11 +475,15 @@ class Adult(models.Model):
         """Whether this adult has accepted all current active MentorAgreements."""
         from .agreements import MentorAgreement, MentorAgreementAcceptance
 
-        active = MentorAgreement.get_all_active()
+        if self.organization_id is None:
+            return False
+        active = MentorAgreement.objects.filter(
+            organization_id=self.organization_id, is_active=True
+        )
         if not active.exists():
             return True
         accepted_ids = MentorAgreementAcceptance.objects.filter(
-            adult=self, agreement__in=active
+            organization_id=self.organization_id, adult=self, agreement__in=active
         ).values_list("agreement_id", flat=True)
         return active.filter(id__in=accepted_ids).count() == active.count()
 

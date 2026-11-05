@@ -321,12 +321,15 @@ class MentorAgreementMiddleware:
         # Only apply to users who have a mentor role.
         from programs.permission_views import user_is_mentor
 
-        if not user_is_mentor(request.user, org=request.organization):
+        organization = getattr(request, "organization", None)
+        if organization is None or not user_is_mentor(request.user, org=organization):
             return self.get_response(request)
 
         from programs.models import MentorAgreementAcceptance
 
-        if MentorAgreementAcceptance.has_accepted_for_user(request.user):
+        if MentorAgreementAcceptance.has_accepted_for_user(
+            request.user, organization=organization
+        ):
             return self.get_response(request)
 
         # User has not accepted — redirect to the agreement page.

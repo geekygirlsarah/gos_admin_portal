@@ -53,6 +53,10 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/settings.html"
 
     def get(self, request):
+        agreement_org = getattr(request, "organization", None)
+        if agreement_org is None:
+            raise Http404
+        agreements = MentorAgreement.objects.for_organization(agreement_org)
         org = getattr(request, "organization", None) or get_default_organization()
         sections = RolePermission.SECTION_CHOICES
         roles = RolePermission.ROLE_CHOICES
@@ -189,8 +193,8 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "pending_sliding_scale_count": SlidingScale.objects.filter(
                 status=SlidingScale.STATUS_PENDING
             ).count(),
-            "mentor_agreements": MentorAgreement.objects.order_by("slug", "-version"),
-            "mentor_agreement_slugs": MentorAgreement.objects.values_list(
+            "mentor_agreements": agreements.order_by("slug", "-version"),
+            "mentor_agreement_slugs": agreements.values_list(
                 "slug", flat=True
             ).distinct(),
             "background_check_types": bg_types,
@@ -475,6 +479,10 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles create / update / toggle / delete actions for Mentor Agreements."""
 
     def post(self, request):
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+        agreements = MentorAgreement.objects.for_organization(org)
         action = request.POST.get("action")
 
         if action == "add_agreement":
@@ -482,13 +490,14 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if form.is_valid():
                 slug = form.cleaned_data["slug"]
                 version = (
-                    MentorAgreement.objects.filter(slug=slug)
+                    agreements.filter(slug=slug)
                     .order_by("-version")
                     .values_list("version", flat=True)
                     .first()
                 )
                 version = (version or 0) + 1
                 agreement = form.save(commit=False)
+                agreement.organization = org
                 agreement.version = version
                 if not agreement.effective_date:
                     agreement.effective_date = date.today()
@@ -504,7 +513,7 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "update_agreement":
             agreement_id = request.POST.get("agreement_id")
             try:
-                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement = agreements.get(pk=agreement_id)
             except MentorAgreement.DoesNotExist:
                 messages.error(request, "Agreement not found.")
                 return redirect("/programs/settings/?tab=agreements")
@@ -523,12 +532,13 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 if content_changed or doc_changed:
                     # Create new version
                     version = (
-                        MentorAgreement.objects.filter(slug=agreement.slug)
+                        agreements.filter(slug=agreement.slug)
                         .order_by("-version")
                         .values_list("version", flat=True)
                         .first()
                     )
                     new_agreement.version = (version or 0) + 1
+                    new_agreement.organization = org
                     new_agreement.pk = None
                     new_agreement.created_at = None
                     new_agreement.updated_at = None
@@ -553,7 +563,7 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "toggle_agreement":
             agreement_id = request.POST.get("agreement_id")
             try:
-                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement = agreements.get(pk=agreement_id)
                 agreement.is_active = not agreement.is_active
                 agreement.save(update_fields=["is_active"])
                 state = "activated" if agreement.is_active else "deactivated"
@@ -565,33 +575,60 @@ class PortalAgreementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_agreement":
             agreement_id = request.POST.get("agreement_id")
             try:
-                agreement = MentorAgreement.objects.get(pk=agreement_id)
+                agreement = agreements.get(pk=agreement_id)
                 title = agreement.title
-                from programs.models import MentorAgreementAcceptance
-
-                versions = MentorAgreement.objects.filter(slug=agreement.slug)
-                acceptance_count = MentorAgreementAcceptance.objects.filter(
-                    agreement__in=versions
-                ).count()
-                count = versions.count()
-                log_deletion(
-                    resource=agreement,
-                    request=request,
-                    before={
-                        "title": title,
-                        "slug": agreement.slug,
-                        "version_count": count,
-                        "acceptance_count": acceptance_count,
-                    },
-                    notes=(
-                        f"Mentor agreement '{title}' and {count} version(s) deleted "
-                        f"({acceptance_count} acceptance record(s) removed)."
-                    ),
+                from programs.models import (
+                    MentorAgreementAcceptance,
+                    MentorAgreementSubmission,
                 )
-                MentorAgreementAcceptance.objects.filter(
-                    agreement__in=versions
-                ).delete()
-                versions.delete()
+
+                with transaction.atomic():
+                    version_ids = list(
+                        agreements.select_for_update()
+                        .filter(slug=agreement.slug)
+                        .values_list("pk", flat=True)
+                    )
+                    if agreement.pk not in version_ids:
+                        raise MentorAgreement.DoesNotExist
+                    versions = agreements.filter(pk__in=version_ids)
+                    acceptances = MentorAgreementAcceptance.objects.filter(
+                        agreement__in=versions
+                    )
+                    submissions = MentorAgreementSubmission.objects.filter(
+                        agreement__in=versions
+                    )
+                    list(acceptances.select_for_update().values_list("pk", flat=True))
+                    list(submissions.select_for_update().values_list("pk", flat=True))
+                    if any(
+                        records.exclude(
+                            organization=org, adult__organization=org
+                        ).exists()
+                        for records in (acceptances, submissions)
+                    ):
+                        messages.error(
+                            request,
+                            "Agreement has inconsistent records and cannot be deleted. "
+                            "Contact a platform administrator for review.",
+                        )
+                        return redirect("/programs/settings/?tab=agreements")
+                    acceptance_count = acceptances.count()
+                    count = len(version_ids)
+                    log_deletion(
+                        resource=agreement,
+                        request=request,
+                        before={
+                            "title": title,
+                            "slug": agreement.slug,
+                            "version_count": count,
+                            "acceptance_count": acceptance_count,
+                        },
+                        notes=(
+                            f"Mentor agreement '{title}' and {count} version(s) deleted "
+                            f"({acceptance_count} acceptance record(s) removed)."
+                        ),
+                    )
+                    acceptances.delete()
+                    versions.delete()
                 messages.success(
                     request,
                     f"Agreement '{title}' and {count} version(s) deleted.",

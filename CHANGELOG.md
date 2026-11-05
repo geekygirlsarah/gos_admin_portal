@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Support impersonation now uses a one-use, five-minute tenant-host handoff with explicit organization selection and confirmation; platform superuser sessions are not transferred to tenant hosts.
 
 ### Fixed
+- Mentor agreement settings, acceptance, enforcement, and digest action items are scoped to the current organization; mismatched adult profiles cannot accept another organization's agreements.
 - Tenant routing now uses Django-validated hostnames, ignores organization-routing headers, constrains subdomains to the configured root or `.localhost`, and returns 404 for unresolved non-platform hosts instead of applying session/default organization fallbacks.
 - Cached host mappings are checked against the organization's current active state and domain configuration before reuse.
 - Scoped team assignments, school directories and merges, dashboard data, and navigation to the current organization. Global legacy lead groups no longer override existing organization memberships.
