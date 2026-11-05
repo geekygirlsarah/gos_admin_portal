@@ -16,6 +16,10 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from programs.services.balances_digest import get_monthly_balance_recipients
+from programs.utils.balance_email import (
+    get_balance_email_from_address,
+    get_balance_email_settings,
+)
 from programs.utils.notifications import send_templated_notification
 
 logger = logging.getLogger(__name__)
@@ -34,8 +38,8 @@ class Command(BaseCommand):
             "--all-balances",
             action="store_true",
             help=(
-                "Include students with zero/paid-in-full balances and older paid-off programs "
-                "(default: only students with positive balance > $0 or transactions within the past month)"
+                "Include zero/paid-in-full programs and older paid-off programs "
+                "(default: only programs with a positive balance or recent transactions)"
             ),
         )
         parser.add_argument(
@@ -85,12 +89,11 @@ class Command(BaseCommand):
         positive_only = not all_balances
         self.stdout.write(
             f"Collecting monthly balance statements (positive_only={positive_only}, "
-            f"student_id={student_id}, days_back={days_back}, as_of_date={target_date})..."
+            f"days_back={days_back}, as_of_date={target_date})..."
         )
         logger.info(
-            "Collecting monthly balance statements (positive_only=%s, student_id=%s, days_back=%s, as_of_date=%s, dry_run=%s)",
+            "Collecting monthly balance statements (positive_only=%s, days_back=%s, as_of_date=%s, dry_run=%s)",
             positive_only,
-            student_id,
             days_back,
             target_date,
             dry_run,
@@ -120,21 +123,24 @@ class Command(BaseCommand):
         month_year_str = statement_date.strftime("%B %Y")
 
         total_sent = 0
+        branding_by_org = {}
         for r in recipients:
             student = r["student"]
+            program = r["program"]
             adult = r["adult"]
             recip_email = r["email"]
             data = r["data"]
+            organization = student.organization
 
-            adult_user = getattr(adult, "user", None) if adult else None
-            username = adult_user.username if adult_user else "N/A"
-            adult_name = adult.display_name if adult else "N/A"
-
-            subject = f"Monthly Balance Statement for {student.display_name} - {month_year_str}"
+            subject = (
+                f"Monthly Balance Statement for {student.display_name} - "
+                f"{program.name} - {month_year_str}"
+            )
             template_name = "programs/emails/monthly_balance_update.html"
 
             context = {
                 "student": student,
+                "program": program,
                 "adult": adult,
                 "statement_date": statement_date,
                 "program_balances": data["program_balances"],
@@ -145,42 +151,30 @@ class Command(BaseCommand):
             }
 
             if dry_run:
-                self.stdout.write(
-                    f"  [DRY RUN] Would send balance statement for {student.display_name} "
-                    f"(balance: ${data['total_balance']}) to {recip_email}"
-                )
-                logger.info(
-                    "[DRY RUN] Would send monthly balance statement for student %s to adult %s (user: %s) <%s> (balance: $%s)",
-                    student.display_name,
-                    adult_name,
-                    username,
-                    recip_email,
-                    data["total_balance"],
-                )
+                self.stdout.write("  [DRY RUN] Would send a balance statement.")
+                logger.info("[DRY RUN] Would send a monthly balance statement.")
             else:
                 try:
+                    if organization.pk not in branding_by_org:
+                        branding_by_org[organization.pk] = get_balance_email_settings(
+                            organization
+                        )
+                    org_settings = branding_by_org[organization.pk]
+                    context["org_email_settings"] = org_settings
                     send_templated_notification(
                         subject=subject,
                         template_name=template_name,
                         context=context,
                         recipient_list=[recip_email],
+                        from_email=get_balance_email_from_address(org_settings),
+                        organization=organization,
                     )
                     total_sent += 1
-                    logger.info(
-                        "Sent monthly balance statement for student %s to adult %s (user: %s) <%s> (balance: $%s)",
-                        student.display_name,
-                        adult_name,
-                        username,
-                        recip_email,
-                        data["total_balance"],
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to send monthly balance email for student %s to adult %s (user: %s) <%s>",
-                        student.display_name,
-                        adult_name,
-                        username,
-                        recip_email,
+                    logger.info("Sent monthly balance statement.")
+                except Exception as exc:
+                    logger.error(
+                        "Failed to send monthly balance statement (error=%s).",
+                        type(exc).__name__,
                     )
 
         if dry_run:

@@ -3,6 +3,7 @@
 import datetime
 from decimal import Decimal
 from io import StringIO
+from unittest.mock import patch
 
 from django.core import mail
 from django.core.management import call_command
@@ -338,7 +339,9 @@ class SendMonthlyBalancesCommandTests(TestCase):
         logs = "\n".join(cm.output)
         self.assertIn("Dry run complete", output)
         self.assertIn("[DRY RUN]", logs)
-        self.assertIn("parent1@example.com", logs)
+        for sensitive in ("parent1@example.com", self.student1.display_name, "$150"):
+            self.assertNotIn(sensitive, logs)
+            self.assertNotIn(sensitive, output)
 
     def test_command_sends_to_positive_balances_and_recent_transactions_by_default(
         self,
@@ -354,9 +357,29 @@ class SendMonthlyBalancesCommandTests(TestCase):
         self.assertIn("parent2@example.com", recipients)
         self.assertNotIn("parent3@example.com", recipients)
         logs = "\n".join(cm.output)
-        self.assertIn("parent1@example.com", logs)
-        self.assertIn("parent2@example.com", logs)
-        self.assertIn(self.student1.display_name, logs)
+        self.assertIn("Sent monthly balance statement", logs)
+        self.assertNotIn("parent1@example.com", logs)
+        self.assertNotIn("parent2@example.com", logs)
+        self.assertNotIn(self.student1.display_name, logs)
+
+    def test_delivery_failure_log_omits_exception_details(self):
+        with (
+            patch(
+                "programs.management.commands.send_monthly_balances.send_templated_notification",
+                side_effect=ValueError("parent1@example.com balance $150"),
+            ),
+            self.assertLogs(
+                "programs.management.commands.send_monthly_balances", level="ERROR"
+            ) as captured,
+        ):
+            call_command(
+                "send_monthly_balances", student_id=self.student1.pk, stdout=self.out
+            )
+
+        logs = "\n".join(captured.output)
+        self.assertIn("ValueError", logs)
+        self.assertNotIn("parent1@example.com", logs)
+        self.assertNotIn("$150", logs)
 
     def test_command_all_balances_includes_old_paid_off(self):
         mail.outbox.clear()
@@ -411,7 +434,7 @@ class SendMonthlyBalancesCommandTests(TestCase):
         month_year = self.today.strftime("%B %Y")
         self.assertEqual(
             mail.outbox[0].subject,
-            f"Monthly Balance Statement for {self.student1.display_name} - {month_year}",
+            f"Monthly Balance Statement for {self.student1.display_name} - {self.program.name} - {month_year}",
         )
 
     def test_command_custom_date_and_days_back(self):
@@ -431,7 +454,7 @@ class SendMonthlyBalancesCommandTests(TestCase):
         month_year = target_date.strftime("%B %Y")
         self.assertEqual(
             mail.outbox[0].subject,
-            f"Monthly Balance Statement for {self.student1.display_name} - {month_year}",
+            f"Monthly Balance Statement for {self.student1.display_name} - {self.program.name} - {month_year}",
         )
 
     def test_command_invalid_date_format(self):

@@ -31,6 +31,12 @@ def _to_localtime(dt):
     return timezone.localtime(dt, timezone.get_current_timezone())
 
 
+def _event_owned_exceptions(event):
+    if event.organization_id != event.feed.organization_id:
+        return event.exceptions.none()
+    return event.exceptions.filter(organization_id=event.organization_id)
+
+
 def _dt_lines(start, end):
     tz_name = getattr(settings, "TIME_ZONE", "America/New_York")
     local_start = _to_localtime(start)
@@ -44,7 +50,7 @@ def _dt_lines(start, end):
 def _exdate_list(event):
     """EXDATEs from the event's exdate_ical plus deleted exceptions."""
     exdates = list(event.exdate_list)
-    for exc in event.exceptions.filter(change_type="deleted"):
+    for exc in _event_owned_exceptions(event).filter(change_type="deleted"):
         if exc.original_date not in exdates:
             exdates.append(exc.original_date)
     return sorted(exdates)
@@ -94,7 +100,7 @@ def _vevent_lines(event):
     if exdates:
         lines.append(f"EXDATE:{','.join(d.strftime('%Y%m%d') for d in exdates)}")
 
-    for exc in event.exceptions.all():
+    for exc in _event_owned_exceptions(event):
         if exc.change_type == exc.CHANGE_MOVED and exc.new_start_datetime:
             lines.extend(_exception_lines(event, exc))
 

@@ -53,7 +53,7 @@ All public and tokenized ICS endpoints are scoped to the organization resolved f
 
 Calendar feed forms only offer programs belonging to the current organization and reject submitted program IDs from other organizations.
 
-ACL editing is limited to rows owned by the feed organization, and newly saved rows inherit that organization. Feed deletion is blocked when it would cascade to ACLs, calendar events, or event exceptions owned by another organization. Calendar page, event API, and tenant-scoped management requests without a resolved organization are rejected; anonymous public access remains available on a resolved tenant host.
+ACL editing is limited to rows owned by the feed organization, and newly saved rows inherit that organization. Event and exception management validates the full organization → feed → event → exception ownership chain; recurrence expansion, exception lists, and iCalendar output ignore foreign-owned exceptions. Event or feed deletion is blocked when it would cascade to child records owned by another organization. Calendar page, event API, and tenant-scoped management requests without a resolved organization are rejected; anonymous public access remains available on a resolved tenant host.
 
 ---
 

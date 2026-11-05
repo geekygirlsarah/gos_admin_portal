@@ -903,20 +903,36 @@ class ProgramEmailForm(forms.Form):
 class StudentBalanceModelChoiceField(forms.ModelChoiceField):
     def __init__(self, *args, **kwargs):
         self.program = kwargs.pop("program", None)
+        self.statement_calculator = None
+        self.can_view_sliding = True
         super().__init__(*args, **kwargs)
 
     def label_from_instance(self, obj):
-        from .utils import get_student_program_balance
+        from .utils.balances import (
+            InconsistentBalanceStatementError,
+            TenantBalanceStatementCalculator,
+        )
 
         student = obj
         program = self.program
-        balance = get_student_program_balance(student, program)
-        return f"{student.preferred_first_name or student.legal_first_name} {student.last_name} (${balance:,.2f})"
+        name = f"{student.preferred_first_name or student.legal_first_name} {student.last_name}"
+        if program is None:
+            return f"{name} (balance unavailable)"
+        calculator = self.statement_calculator or TenantBalanceStatementCalculator(
+            program.organization, [student], [program]
+        )
+        try:
+            balance = calculator.get_balance_data(
+                student, program, can_view_sliding=self.can_view_sliding
+            )["balance"]
+        except InconsistentBalanceStatementError:
+            return f"{name} (balance unavailable)"
+        return f"{name} (${balance:,.2f})"
 
 
 class ProgramEmailBalancesForm(forms.Form):
     program = GroupedProgramChoiceField(
-        queryset=Program.objects.all(),
+        queryset=Program.objects.none(),
         required=False,
         empty_label="--- Select a Program ---",
     )
@@ -952,15 +968,21 @@ class ProgramEmailBalancesForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         program = kwargs.pop("program", None)
+        organization = kwargs.pop("organization", None)
+        can_view_sliding = kwargs.pop("can_view_sliding", True)
         super().__init__(*args, **kwargs)
+        self.organization = organization
+        self.statement_calculator = None
+        if organization is not None:
+            programs = Program.objects.for_organization(organization)
+            if program is not None:
+                programs = programs.filter(pk=program.pk)
+            self.fields["program"].queryset = programs
         # Sender choices from organization settings
-        from organizations.utils import (
-            get_organization_email_settings,
-            get_sender_accounts,
-        )
+        from .utils.balance_email import get_balance_email_settings
 
-        accounts = get_sender_accounts()
-        org_cfg = get_organization_email_settings()
+        org_cfg = get_balance_email_settings(organization) if organization else {}
+        accounts = org_cfg.get("sender_accounts") or []
         choices = []
         initial_value = None
         if accounts:
@@ -1009,25 +1031,52 @@ class ProgramEmailBalancesForm(forms.Form):
             self.fields["program"].initial = program
             self.fields["program"].widget = forms.HiddenInput()
             self.fields["program"].required = True
-            # Population and sorting for student field; only actively enrolled
-            # (non-graduated) students are selectable.
-            self.fields["student"].program = program
-            self.fields["student"].queryset = active_students_in_program(
-                program
-            ).order_by(
-                Lower(
-                    Coalesce(
-                        NullIf("preferred_first_name", Value("")), "legal_first_name"
-                    )
-                ),
-                Lower("last_name"),
+        if (
+            program is not None
+            and organization is not None
+            and program.organization_id == organization.pk
+        ):
+            from .utils.balances import TenantBalanceStatementCalculator
+
+            students = (
+                Student.objects.for_organization(organization)
+                .filter(
+                    enrollment__program=program,
+                    enrollment__organization=organization,
+                    enrollment__active=True,
+                    graduated=False,
+                )
+                .order_by(
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
+                )
             )
+            self.fields["student"].program = program
+            self.fields["student"].can_view_sliding = can_view_sliding
+            self.fields["student"].queryset = students
+            self.statement_calculator = TenantBalanceStatementCalculator(
+                organization, list(students), [program]
+            )
+            self.fields["student"].statement_calculator = self.statement_calculator
 
     def clean(self):
         cleaned = super().clean()
+        if self.organization is None:
+            raise forms.ValidationError("Organization context is required.")
         prog = cleaned.get("program")
         if self.fields["program"].widget.__class__ is forms.HiddenInput and not prog:
             raise forms.ValidationError("Program is required.")
+        if (
+            cleaned.get("recipient_filter") == "individual"
+            and not cleaned.get("student")
+            and "student" not in self.errors
+        ):
+            self.add_error("student", "Select a student for an individual statement.")
         return cleaned
 
 

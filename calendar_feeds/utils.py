@@ -48,6 +48,7 @@ def expand_events_for_range(feed, start_date, end_date):
     events = (
         CalendarEvent.objects.for_organization(feed.organization)
         .filter(feed=feed)
+        .select_related("feed")
         .order_by("start_datetime")
     )
 

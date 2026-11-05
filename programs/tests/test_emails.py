@@ -1,5 +1,6 @@
 """Email subsystem tests: balance emails, fee/payment/sliding scale notifications."""
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -125,6 +126,124 @@ class EmailBalancesTest(TestCase):
         self.assertContains(response, "Alice Alpha ($0.00)")
         self.assertContains(response, "Bob Beta ($100.00)")
         self.assertContains(response, "Charlie Gamma ($-50.00)")
+
+    def test_tenant_statement_calculation_matches_existing_local_balances(self):
+        from programs.utils.balances import (
+            TenantBalanceStatementCalculator,
+            get_student_balance_data,
+        )
+
+        SlidingScale.objects.create(
+            organization=self.program.organization,
+            student=self.s2,
+            status=SlidingScale.STATUS_APPROVED,
+            percent=Decimal("25.00"),
+            date=timezone.localdate(),
+        )
+        students = [self.s1, self.s2, self.s3]
+        calculator = TenantBalanceStatementCalculator(
+            self.program.organization, students, [self.program]
+        )
+
+        for student in students:
+            with self.subTest(student=student.pk):
+                self.assertEqual(
+                    calculator.get_balance_data(student, self.program),
+                    get_student_balance_data(student, self.program),
+                )
+
+    def test_balance_choice_labels_do_not_query_per_student(self):
+        from programs.forms import ProgramEmailBalancesForm
+
+        form = ProgramEmailBalancesForm(
+            program=self.program, organization=self.program.organization
+        )
+        with self.assertNumQueries(1):
+            labels = [label for _, label in form.fields["student"].choices]
+
+        self.assertIn("Bob Beta ($100.00)", labels)
+
+    def test_tenant_statement_calculation_matches_historical_fee_windows(self):
+        from programs.models import FeeAssignment
+        from programs.utils.balances import (
+            TenantBalanceStatementCalculator,
+            get_student_balance_data,
+        )
+
+        organization = self.program.organization
+        today = timezone.localdate()
+        program = Program.objects.create(
+            organization=organization,
+            name="Historical balance program",
+            start_date=today - timedelta(days=100),
+            end_date=today + timedelta(days=10),
+        )
+        for student in (self.s1, self.s2):
+            Enrollment.objects.create(
+                organization=organization, student=student, program=program
+            )
+        Fee.objects.create(
+            organization=organization,
+            program=program,
+            name="Early fee",
+            amount=Decimal("50.50"),
+            effective_date=today - timedelta(days=90),
+        )
+        assigned_fee = Fee.objects.create(
+            organization=organization,
+            program=program,
+            name="Assigned fee",
+            amount=Decimal("125.25"),
+            effective_date=today - timedelta(days=40),
+        )
+        FeeAssignment.objects.create(
+            organization=organization, fee=assigned_fee, student=self.s1
+        )
+        Fee.objects.create(
+            organization=organization,
+            program=program,
+            name="Recent fee",
+            amount=Decimal("30.00"),
+            effective_date=today - timedelta(days=5),
+        )
+        for start, end, percent in ((60, 10, "33.33"), (30, -5, "20.00")):
+            SlidingScale.objects.create(
+                organization=organization,
+                student=self.s2,
+                status=SlidingScale.STATUS_APPROVED,
+                percent=Decimal(percent),
+                date=today - timedelta(days=start),
+                expiration_date=today - timedelta(days=end),
+            )
+        Payment.objects.create(
+            organization=organization,
+            student=self.s2,
+            program=program,
+            amount=Decimal("12.50"),
+            paid_on=today - timedelta(days=2),
+            paid_via="check",
+            check_number=17,
+        )
+
+        calculator = TenantBalanceStatementCalculator(
+            organization, [self.s1, self.s2], [self.program, program]
+        )
+        for student in (self.s1, self.s2):
+            for selected_program in (self.program, program):
+                for can_view_sliding in (True, False):
+                    with self.subTest(
+                        student=student.pk,
+                        program=selected_program.pk,
+                        can_view_sliding=can_view_sliding,
+                    ):
+                        self.assertEqual(
+                            calculator.get_balance_data(
+                                student, selected_program, can_view_sliding
+                            ),
+                            get_student_balance_data(
+                                student, selected_program, can_view_sliding
+                            ),
+                        )
 
 
 @override_settings(FILE_ENCRYPTION_KEY="ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")

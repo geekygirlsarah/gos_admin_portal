@@ -341,11 +341,21 @@ class CalendarEvent(models.Model):
 
     def has_exception_on_date(self, target_date):
         """Check if this event has an exception (moved/deleted) on a specific date."""
-        return self.exceptions.filter(original_date=target_date).exists()
+        if self.organization_id != self.feed.organization_id:
+            return False
+        return self.exceptions.filter(
+            organization_id=self.organization_id,
+            original_date=target_date,
+        ).exists()
 
     def get_exception_on_date(self, target_date):
         """Get the exception for a specific date, or None."""
-        return self.exceptions.filter(original_date=target_date).first()
+        if self.organization_id != self.feed.organization_id:
+            return None
+        return self.exceptions.filter(
+            organization_id=self.organization_id,
+            original_date=target_date,
+        ).first()
 
     def clean(self):
         if self.end_datetime <= self.start_datetime and not self.all_day:

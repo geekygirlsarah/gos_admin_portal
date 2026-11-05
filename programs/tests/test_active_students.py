@@ -113,7 +113,9 @@ class ActiveStudentDropdownTests(TestCase):
         self.assertNotIn(self.graduated, qs)
 
     def test_email_balances_form_only_lists_active_enrolled(self):
-        form = ProgramEmailBalancesForm(program=self.program)
+        form = ProgramEmailBalancesForm(
+            program=self.program, organization=self.program.organization
+        )
         qs = list(form.fields["student"].queryset)
         self.assertIn(self.active, qs)
         self.assertNotIn(self.dropped, qs)

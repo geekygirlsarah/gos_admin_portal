@@ -7,6 +7,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from audit.events import AuditEvent
+from audit.models import AuditLog
 from calendar_feeds.models import (
     CalendarEvent,
     CalendarFeed,
@@ -459,6 +461,13 @@ class EventDeleteViewTests(TestCase):
         resp = self.client.post(self.url)
         self.assertRedirects(resp, self.calendar_url)
         self.assertFalse(CalendarEvent.objects.filter(pk=self.event.pk).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                event=AuditEvent.RECORD_DELETED,
+                resource_type="CalendarEvent",
+                resource_id=str(self.event.pk),
+            ).exists()
+        )
 
 
 class EventExceptionCreateViewTests(TestCase):

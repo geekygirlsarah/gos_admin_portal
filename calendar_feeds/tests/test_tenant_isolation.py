@@ -8,12 +8,15 @@ from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
+from audit.events import AuditEvent
+from audit.models import AuditLog
 from calendar_feeds.forms import CalendarFeedACLInlineFormSet, CalendarFeedForm
 from calendar_feeds.ics import FeedICSView, PersonalICSFeedView, PublicICSFeedView
 from calendar_feeds.models import (
     CalendarEvent,
     CalendarFeed,
     CalendarFeedACL,
+    EventException,
     UserCalendarToken,
 )
 from calendar_feeds.views import CalendarEventsAPIView, CalendarView, FeedACLUpdateView
@@ -314,6 +317,273 @@ class CalendarFeedTenantIsolationTests(TestCase):
 
         with self.assertRaises(Http404):
             FeedACLUpdateView.as_view()(request, pk=1)
+
+    def test_calendar_api_ignores_foreign_exception_on_local_event(self):
+        feed = self.make_feed(
+            self.other,
+            name="Exception Isolation Feed",
+            slug="exception-isolation-feed-test",
+            visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
+        )
+        event = self.make_event(feed, "Local recurring event")
+        event.rrule_ical = "FREQ=DAILY;COUNT=3"
+        event.save(update_fields=["rrule_ical"])
+        EventException.objects.create(
+            organization=self.gos,
+            event=event,
+            original_date=event.start_datetime.date(),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        EventException.objects.create(
+            organization=self.gos,
+            event=event,
+            original_date=event.start_datetime.date() + timedelta(days=1),
+            change_type=EventException.CHANGE_MOVED,
+            new_start_datetime=event.start_datetime + timedelta(days=1, hours=2),
+            new_end_datetime=event.end_datetime + timedelta(days=1, hours=2),
+            new_title="Foreign exception title",
+            new_location="Foreign exception location",
+        )
+
+        response = self.client.get(
+            "/calendar/api/events/",
+            {
+                "start": event.start_datetime.date().isoformat(),
+                "end": event.start_datetime.date().isoformat(),
+            },
+            HTTP_HOST=self.other_host,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            any(
+                item["extendedProps"]["event_pk"] == event.pk
+                for item in response.json()["events"]
+            )
+        )
+
+        ics_response = self.client.get(
+            f"/calendar/{feed.slug}/feed.ics", HTTP_HOST=self.other_host
+        )
+        self.assertEqual(ics_response.status_code, 200)
+        self.assertNotIn(
+            f"EXDATE:{event.start_datetime.date():%Y%m%d}",
+            ics_response.content.decode("utf-8"),
+        )
+        self.assertNotIn(
+            "Foreign exception title", ics_response.content.decode("utf-8")
+        )
+        self.assertNotIn(
+            "Foreign exception location", ics_response.content.decode("utf-8")
+        )
+
+    def test_calendar_expansion_loads_event_feeds_without_per_event_queries(self):
+        feed = self.make_feed(
+            self.other,
+            name="Efficient Event Feed",
+            slug="efficient-event-feed-test",
+            visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
+        )
+        first = self.make_event(feed, "First event")
+        second = self.make_event(feed, "Second event")
+        target_date = first.start_datetime.date()
+
+        with self.assertNumQueries(1):
+            instances = feed.get_events_for_date_range(target_date, target_date)
+
+        self.assertEqual(
+            {instance["pk"] for instance in instances}, {first.pk, second.pk}
+        )
+
+    def test_exception_list_excludes_foreign_owned_exceptions(self):
+        feed = self.make_feed(
+            self.other,
+            name="Exception List Feed",
+            slug="exception-list-feed-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+        )
+        event = self.make_event(feed, "Exception list event")
+        local_exception = EventException.objects.create(
+            organization=self.other,
+            event=event,
+            original_date=event.start_datetime.date() + timedelta(days=1),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        EventException.objects.create(
+            organization=self.gos,
+            event=event,
+            original_date=event.start_datetime.date() + timedelta(days=2),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        user = self.make_member("exception-list-lead", self.other, "LeadMentor")
+        self.client.force_login(user)
+
+        response = self.client.get(
+            f"/calendar/events/{event.pk}/exceptions/", HTTP_HOST=self.other_host
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [exception.pk for exception in response.context["exceptions"]],
+            [local_exception.pk],
+        )
+
+    def test_event_delete_refuses_foreign_owned_exception_cascade(self):
+        feed = self.make_feed(
+            self.other,
+            name="Event Delete Feed",
+            slug="event-delete-feed-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+        )
+        event = self.make_event(feed, "Event with foreign exception")
+        foreign_exception = EventException.objects.create(
+            organization=self.gos,
+            event=event,
+            original_date=event.start_datetime.date() + timedelta(days=1),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        user = self.make_member("event-delete-lead", self.other, "LeadMentor")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            f"/calendar/events/{event.pk}/delete/", HTTP_HOST=self.other_host
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(CalendarEvent.objects.filter(pk=event.pk).exists())
+        self.assertTrue(EventException.objects.filter(pk=foreign_exception.pk).exists())
+        self.assertFalse(
+            AuditLog.objects.filter(
+                event=AuditEvent.RECORD_DELETED,
+                resource_type="CalendarEvent",
+                resource_id=str(event.pk),
+            ).exists()
+        )
+
+    def test_event_with_foreign_feed_is_not_accessible_on_owner_host(self):
+        foreign_feed = self.make_feed(
+            self.gos,
+            name="Foreign Feed",
+            slug="foreign-event-feed-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+        )
+        start = timezone.now() + timedelta(days=7)
+        event = CalendarEvent.objects.create(
+            organization=self.other,
+            feed=foreign_feed,
+            title="Mismatched event",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=1),
+        )
+        user = self.make_member("mismatched-event-lead", self.other, "LeadMentor")
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.gos,
+            role="LeadMentor",
+            is_active=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(
+            f"/calendar/events/{event.pk}/edit/", HTTP_HOST=self.other_host
+        )
+
+        self.assertNotEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/calendar/events/{event.pk}/edit/",
+            {
+                "title": "Cross-tenant update",
+                "start_datetime": event.start_datetime.strftime("%Y-%m-%d %H:%M"),
+                "end_datetime": event.end_datetime.strftime("%Y-%m-%d %H:%M"),
+                "description": "",
+                "location": "",
+                "all_day": False,
+            },
+            HTTP_HOST=self.other_host,
+        )
+
+        self.assertNotEqual(response.status_code, 200)
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Mismatched event")
+
+    def test_exception_writes_reject_mismatched_event_or_feed_ownership(self):
+        user = self.make_member("exception-chain-lead", self.other, "LeadMentor")
+        UserOrganizationMembership.objects.create(
+            user=user, organization=self.gos, role="LeadMentor", is_active=True
+        )
+        self.client.force_login(user)
+
+        for index, (feed_owner, event_owner) in enumerate(
+            ((self.other, self.gos), (self.gos, self.other))
+        ):
+            with self.subTest(feed_owner=feed_owner.pk, event_owner=event_owner.pk):
+                feed = self.make_feed(
+                    feed_owner,
+                    name=f"Mismatched Exception Feed {index}",
+                    slug=f"mismatched-exception-feed-{index}",
+                    visibility=CalendarFeed.VISIBILITY_MEMBERS,
+                )
+                event = self.make_event(feed, "Mismatched exception event")
+                CalendarEvent.objects.filter(pk=event.pk).update(
+                    organization=event_owner
+                )
+                exception = EventException.objects.create(
+                    organization=self.other,
+                    event=event,
+                    original_date=event.start_datetime.date(),
+                    change_type=EventException.CHANGE_DELETED,
+                    note="Original note",
+                )
+                edit_url = f"/calendar/exceptions/{exception.pk}/edit/"
+
+                response = self.client.get(edit_url, HTTP_HOST=self.other_host)
+                self.assertNotEqual(response.status_code, 200)
+                self.client.post(
+                    edit_url,
+                    {
+                        "original_date": exception.original_date.isoformat(),
+                        "change_type": EventException.CHANGE_DELETED,
+                        "note": "Tampered note",
+                    },
+                    HTTP_HOST=self.other_host,
+                )
+                exception.refresh_from_db()
+                self.assertEqual(exception.note, "Original note")
+                self.client.post(
+                    f"/calendar/exceptions/{exception.pk}/delete/",
+                    HTTP_HOST=self.other_host,
+                )
+                self.assertTrue(EventException.objects.filter(pk=exception.pk).exists())
+
+    def test_local_exception_delete_preserves_audit(self):
+        feed = self.make_feed(
+            self.other,
+            name="Audited Exception Feed",
+            slug="audited-exception-feed-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+        )
+        event = self.make_event(feed, "Audited exception event")
+        exception = EventException.objects.create(
+            organization=self.other,
+            event=event,
+            original_date=event.start_datetime.date(),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        user = self.make_member("exception-audit-lead", self.other, "LeadMentor")
+        self.client.force_login(user)
+
+        self.client.post(
+            f"/calendar/exceptions/{exception.pk}/delete/", HTTP_HOST=self.other_host
+        )
+
+        self.assertFalse(EventException.objects.filter(pk=exception.pk).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                event=AuditEvent.RECORD_DELETED,
+                resource_type="EventException",
+                resource_id=str(exception.pk),
+            ).exists()
+        )
 
     def test_private_feed_and_write_require_active_membership_in_feed_organization(
         self,
