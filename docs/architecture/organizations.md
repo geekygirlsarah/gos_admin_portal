@@ -131,14 +131,19 @@ authorization in endpoints using kiosk/sign-out cookies, tokens, or other
 credentials after middleware runs. Anonymous API requests still reach their
 existing endpoint checks; authenticated nonmember sessions are denied there
 (apart from the named webhooks). Review independent credential paths separately
-for organization isolation. In particular, kiosk and sign-out configuration
-lookups are not scoped to the host organization and their unlock cookies are
-plain values; calendar ICS feed lookups also include unscoped queries. These
-pre-existing paths need a separate security review. Before deployment, inventory
-and backfill missing or inactive memberships under the normal approved
-operational process: existing legacy-profile and group-only accounts without an
-active membership will lose tenant access, including during impersonation. No
-automatic backfill occurs.
+for organization isolation. Kiosk routes independently require an active
+organization, scope kiosk/program/person/RFID/session records to that tenant,
+and use signed, expiring kiosk-and-organization-bound unlock cookies. OTP
+issuance and redemption require an eligible active account and use throttles in
+the shared cache; production multi-worker deployments must configure a shared
+cache backend with atomic `add` and `incr` operations and no premature eviction
+of unexpired keys. The default local-memory cache is not sufficient. Existing
+kiosk stations must be unlocked again after this change. Digital sign-out
+stations remain a separate access-control path and require their own review.
+Before deployment, inventory and backfill missing or inactive memberships under the normal
+approved operational process: existing legacy-profile and group-only accounts
+without an active membership will lose tenant access, including during
+impersonation. No automatic backfill occurs.
 
 ---
 

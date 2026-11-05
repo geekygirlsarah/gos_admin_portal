@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-05
+
+### Fixed
+- Attendance kiosks now isolate kiosk, person, RFID, and attendance data by organization. Unlocking requires an eligible active account, rate-limited one-use codes, and a signed tenant-bound cookie; previously unlocked kiosks must be unlocked again.
+
 ## 2026-11-04
 
 ### Changed

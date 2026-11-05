@@ -1,26 +1,55 @@
 import json
 import logging
+import secrets
 
-from django.contrib.auth import authenticate
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET, require_POST
 
 from attendance.kiosk_utils import (
+    _CODE_ATTEMPT_LIMIT,
+    _CODE_ATTEMPT_WINDOW,
     _CODE_EXPIRY,
-    _COOKIE_MAX_AGE,
+    _CODE_REQUEST_IP_LIMIT,
+    _CODE_REQUEST_LIMIT,
+    _CODE_REQUEST_WINDOW,
+    _acquire_redemption_lock,
     _cookie_name,
+    _get_eligible_unlock_user,
     _get_kiosk_or_404,
+    _increment_rate_limit,
     _is_unlocked,
+    _make_unlock_token,
+    _otp_cache_key,
+    _otp_ready_cache_key,
+    _rate_limit_cache_key,
+    _unlock_cookie_options,
 )
-from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
-from attendance.services import get_attendance_stats, record_tap
-from programs.models import Adult, Student
+from attendance.models import AttendanceEvent, RFIDCard
+from attendance.services import (
+    attendance_sessions_for_program,
+    get_attendance_stats,
+    record_tap,
+)
+from programs.models import Adult, Enrollment, Student
 from programs.utils import active_mentors, active_students_in_program
 
 logger = logging.getLogger(__name__)
+
+
+def _active_students_for_kiosk(config):
+    tenant_enrollment = Enrollment.objects.filter(
+        organization=config.organization,
+        program=config.program,
+        student_id=OuterRef("pk"),
+        active=True,
+    )
+    return (
+        active_students_in_program(config.program, organization=config.organization)
+        .filter(Exists(tenant_enrollment))
+        .distinct()
+    )
 
 
 def _person_first_name(student=None, adult=None):
@@ -52,7 +81,7 @@ def kiosk_ping(request, kiosk_id):
     """GET /api/v1/kiosk/<id>/ping/
     Lightweight health check. Verifies the kiosk config exists and the server is up.
     """
-    _get_kiosk_or_404(kiosk_id)
+    _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
     return JsonResponse({"ok": True})
 
 
@@ -62,7 +91,7 @@ def kiosk_request_code(request, kiosk_id):
     Accepts JSON {"email": "..."}.
     Generates a 6-digit code, stores it in cache, and sends it via email.
     """
-    _get_kiosk_or_404(kiosk_id)
+    kiosk = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
     try:
         body = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -74,12 +103,23 @@ def kiosk_request_code(request, kiosk_id):
             {"success": False, "error": "Email is required."}, status=400
         )
 
-    # Use the portal's provisioning logic to ensure the user exists if they are allowed
-    from allauth.account.adapter import get_adapter
+    remote_addr = request.META.get("REMOTE_ADDR", "")
+    ip_limit = _increment_rate_limit(
+        _rate_limit_cache_key("code_ip", kiosk, remote_addr),
+        _CODE_REQUEST_IP_LIMIT,
+        _CODE_REQUEST_WINDOW,
+    )
+    if ip_limit is None:
+        return JsonResponse(
+            {"success": False, "error": "Temporarily unavailable."}, status=503
+        )
+    if not ip_limit:
+        return JsonResponse(
+            {"success": False, "error": "Too many requests."}, status=429
+        )
 
-    from GoSAdminPortal.adapter import _find_or_provision_user_for_email
-
-    if not _find_or_provision_user_for_email(email):
+    user = _get_eligible_unlock_user(email, kiosk.organization)
+    if user is None:
         return JsonResponse(
             {
                 "success": False,
@@ -87,17 +127,45 @@ def kiosk_request_code(request, kiosk_id):
             },
             status=403,
         )
+    email = user.email.strip().lower()
+
+    email_limit = _increment_rate_limit(
+        _rate_limit_cache_key("code_request", kiosk, email),
+        _CODE_REQUEST_LIMIT,
+        _CODE_REQUEST_WINDOW,
+    )
+    if email_limit is None:
+        return JsonResponse(
+            {"success": False, "error": "Temporarily unavailable."}, status=503
+        )
+    if not email_limit:
+        return JsonResponse(
+            {"success": False, "error": "Too many requests."}, status=429
+        )
 
     # Generate a 6-digit code
+    from allauth.account.adapter import get_adapter
+
     adapter = get_adapter()
     code = adapter.generate_login_code()
 
-    # Store in cache
-    cache_key = f"kiosk_otp_{kiosk_id}_{email}"
-    cache.set(cache_key, code, _CODE_EXPIRY)
-
-    # Send the email
-    adapter.send_mail("account/email/login_code", email, {"code": code})
+    cache_key = _otp_cache_key(kiosk, email)
+    nonce = secrets.token_urlsafe(16)
+    record = {
+        "code": code,
+        "nonce": nonce,
+        "user_id": user.pk,
+    }
+    try:
+        cache.set(cache_key, record, _CODE_EXPIRY)
+        adapter.send_mail("account/email/login_code", user.email, {"code": code})
+        if not cache.add(_otp_ready_cache_key(kiosk, email, nonce), True, _CODE_EXPIRY):
+            raise RuntimeError("Unable to mark kiosk unlock code ready.")
+    except Exception:
+        logger.warning("Unable to send a kiosk unlock code.")
+        return JsonResponse(
+            {"success": False, "error": "Unable to send code."}, status=503
+        )
 
     return JsonResponse({"success": True})
 
@@ -108,7 +176,7 @@ def kiosk_unlock(request, kiosk_id):
     Accepts JSON {"email": "...", "code": "..."}.
     Verifies the code and sets a HttpOnly cookie to "unlock" the kiosk.
     """
-    _get_kiosk_or_404(kiosk_id)
+    kiosk = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
     try:
         body = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -122,25 +190,81 @@ def kiosk_unlock(request, kiosk_id):
             {"success": False, "error": "Email and code are required."}, status=400
         )
 
-    cache_key = f"kiosk_otp_{kiosk_id}_{email}"
-    stored_code = cache.get(cache_key)
-
-    if not stored_code or stored_code != code:
+    email = email.lower()
+    remote_addr = request.META.get("REMOTE_ADDR", "")
+    attempt_limits = (
+        _increment_rate_limit(
+            _rate_limit_cache_key("code_attempt_email", kiosk, email),
+            _CODE_ATTEMPT_LIMIT,
+            _CODE_ATTEMPT_WINDOW,
+        ),
+        _increment_rate_limit(
+            _rate_limit_cache_key("code_attempt_ip", kiosk, remote_addr),
+            _CODE_ATTEMPT_LIMIT * 5,
+            _CODE_ATTEMPT_WINDOW,
+        ),
+    )
+    if None in attempt_limits:
         return JsonResponse(
-            {"success": False, "error": "Invalid or expired code."}, status=403
+            {"success": False, "error": "Temporarily unavailable."}, status=503
+        )
+    if not all(attempt_limits):
+        return JsonResponse(
+            {"success": False, "error": "Too many attempts."}, status=429
         )
 
-    # Clear the code from cache
-    cache.delete(cache_key)
+    cache_key = _otp_cache_key(kiosk, email)
+    try:
+        record = cache.get(cache_key)
+        if (
+            not isinstance(record, dict)
+            or not isinstance(record.get("code"), str)
+            or not isinstance(record.get("nonce"), str)
+            or not code.isascii()
+            or not secrets.compare_digest(record["code"], code)
+        ):
+            return JsonResponse(
+                {"success": False, "error": "Invalid or expired code."}, status=403
+            )
+
+        readiness_key = _otp_ready_cache_key(kiosk, email, record["nonce"])
+        if cache.get(readiness_key) is not True:
+            return JsonResponse(
+                {"success": False, "error": "Invalid or expired code."}, status=403
+            )
+
+        lock = _acquire_redemption_lock(kiosk, email, record["nonce"])
+        if lock is None:
+            return JsonResponse(
+                {"success": False, "error": "Temporarily unavailable."}, status=503
+            )
+        if (
+            not lock
+            or cache.get(cache_key) != record
+            or cache.get(readiness_key) is not True
+        ):
+            return JsonResponse(
+                {"success": False, "error": "Invalid or expired code."}, status=403
+            )
+
+        user = _get_eligible_unlock_user(email, kiosk.organization)
+        if user is None or user.pk != record.get("user_id"):
+            return JsonResponse(
+                {"success": False, "error": "This account is not authorized."},
+                status=403,
+            )
+    except Exception:
+        logger.warning("Unable to verify a kiosk unlock code.")
+        return JsonResponse(
+            {"success": False, "error": "Temporarily unavailable."}, status=503
+        )
 
     # Set the unlock cookie
     response = JsonResponse({"success": True})
     response.set_cookie(
         _cookie_name(kiosk_id),
-        "1",
-        max_age=_COOKIE_MAX_AGE,
-        httponly=True,
-        samesite="Lax",
+        _make_unlock_token(kiosk),
+        **_unlock_cookie_options(),
     )
     return response
 
@@ -150,7 +274,7 @@ def kiosk_lock(request, kiosk_id):
     """POST /api/v1/kiosk/<id>/lock/
     Clears the unlock cookie.
     """
-    _get_kiosk_or_404(kiosk_id)
+    _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
     response = JsonResponse({"success": True})
     response.delete_cookie(_cookie_name(kiosk_id))
     return response
@@ -161,8 +285,8 @@ def kiosk_tap(request, kiosk_id):
     """POST /api/v1/kiosk/<id>/tap/
     Records an attendance tap. Requires the unlock cookie.
     """
-    config = _get_kiosk_or_404(kiosk_id)
-    if not _is_unlocked(request, kiosk_id):
+    config = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
+    if not _is_unlocked(request, config):
         return JsonResponse({"error": "Kiosk is locked."}, status=403)
 
     try:
@@ -181,12 +305,12 @@ def kiosk_tap(request, kiosk_id):
     adult = None
     if student_id:
         try:
-            student = active_students_in_program(config.program).get(pk=student_id)
+            student = _active_students_for_kiosk(config).get(pk=student_id)
         except Student.DoesNotExist:
             return JsonResponse({"error": "Student not found or inactive."}, status=404)
     if adult_id:
         try:
-            adult = active_mentors().get(pk=adult_id)
+            adult = active_mentors(organization=config.organization).get(pk=adult_id)
         except Adult.DoesNotExist:
             return JsonResponse({"error": "Adult not found or inactive."}, status=404)
 
@@ -196,19 +320,19 @@ def kiosk_tap(request, kiosk_id):
         if not (student or adult) and rfid_uid:
             from attendance.services import resolve_person_by_uid
 
-            person = resolve_person_by_uid(rfid_uid)
+            person = resolve_person_by_uid(rfid_uid, organization=config.organization)
             if isinstance(person, Student):
                 try:
-                    student = active_students_in_program(config.program).get(
-                        pk=person.pk
-                    )
+                    student = _active_students_for_kiosk(config).get(pk=person.pk)
                 except Student.DoesNotExist:
                     return JsonResponse(
                         {"error": "Student not found or inactive."}, status=404
                     )
             elif isinstance(person, Adult):
                 try:
-                    adult = active_mentors().get(pk=person.pk)
+                    adult = active_mentors(organization=config.organization).get(
+                        pk=person.pk
+                    )
                 except Adult.DoesNotExist:
                     return JsonResponse(
                         {"error": "Adult not found or inactive."}, status=404
@@ -253,7 +377,11 @@ def kiosk_tap(request, kiosk_id):
 
     if evt.event_type == AttendanceEvent.OUT:
         # Try to find the session that was just closed
-        session = AttendanceSession.objects.filter(closed_by_event=evt).first()
+        session = (
+            attendance_sessions_for_program(config.program)
+            .filter(closed_by_event=evt)
+            .first()
+        )
         if session:
             res_data["session_hours"] = round(session.duration_minutes / 60.0, 1)
 
@@ -279,8 +407,8 @@ def kiosk_lookup(request, kiosk_id):
     """GET /api/v1/kiosk/<id>/lookup/
     Student lookup by name or RFID. Requires the unlock cookie.
     """
-    config = _get_kiosk_or_404(kiosk_id)
-    if not _is_unlocked(request, kiosk_id):
+    config = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
+    if not _is_unlocked(request, config):
         return JsonResponse({"error": "Kiosk is locked."}, status=403)
 
     rfid = request.GET.get("rfid", "").strip()
@@ -290,11 +418,11 @@ def kiosk_lookup(request, kiosk_id):
     if rfid:
         from attendance.services import resolve_card_by_uid
 
-        card = resolve_card_by_uid(rfid)
+        card = resolve_card_by_uid(rfid, organization=config.organization)
         if card:
             if card.student:
                 if (
-                    active_students_in_program(config.program)
+                    _active_students_for_kiosk(config)
                     .filter(pk=card.student.pk)
                     .exists()
                 ):
@@ -306,7 +434,11 @@ def kiosk_lookup(request, kiosk_id):
                         }
                     ]
             elif card.adult:
-                if active_mentors().filter(pk=card.adult.pk).exists():
+                if (
+                    active_mentors(organization=config.organization)
+                    .filter(pk=card.adult.pk)
+                    .exists()
+                ):
                     results = [
                         {
                             "id": card.adult.pk,
@@ -317,7 +449,7 @@ def kiosk_lookup(request, kiosk_id):
     elif name:
         parts = name.split()
         # Search students
-        student_qs = active_students_in_program(config.program)
+        student_qs = _active_students_for_kiosk(config)
         for part in parts:
             student_qs = student_qs.filter(
                 Q(preferred_first_name__icontains=part)
@@ -334,7 +466,7 @@ def kiosk_lookup(request, kiosk_id):
             )
 
         # Search mentors/adults
-        adult_qs = active_mentors()
+        adult_qs = active_mentors(organization=config.organization)
         for part in parts:
             adult_qs = adult_qs.filter(
                 Q(legal_first_name__icontains=part)
@@ -358,13 +490,15 @@ def kiosk_who_is_here(request, kiosk_id):
     """GET /api/v1/kiosk/<id>/who-is-here/
     Returns list of people currently signed in. Requires the unlock cookie.
     """
-    config = _get_kiosk_or_404(kiosk_id)
-    if not _is_unlocked(request, kiosk_id):
+    config = _get_kiosk_or_404(kiosk_id, getattr(request, "organization", None))
+    if not _is_unlocked(request, config):
         return JsonResponse({"error": "Kiosk is locked."}, status=403)
 
-    sessions = AttendanceSession.objects.filter(
-        program=config.program, check_out__isnull=True
-    ).select_related("student", "adult")
+    sessions = (
+        attendance_sessions_for_program(config.program)
+        .filter(check_out__isnull=True)
+        .select_related("student", "adult")
+    )
 
     results = []
     for s in sessions:

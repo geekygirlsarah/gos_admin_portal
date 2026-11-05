@@ -1,16 +1,27 @@
 """Kiosk tests: config model, page views, unlock endpoint, OTP unlock, proxy tap/lookup."""
 
 import json
+import secrets
 
 from django.contrib.auth.models import Group
+from django.core import signing
 from django.core.cache import cache
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from attendance.kiosk_utils import _otp_cache_key, _otp_ready_cache_key
 from attendance.models import KioskConfig, RFIDCard
+from organizations.models import UserOrganizationMembership
 from programs.models import Adult, Enrollment, Program, ProgramFeature, Student
 
 from .base import make_client, make_program
+
+
+def _set_unlocked_cookie(client, kiosk):
+    client.cookies[f"kiosk_unlocked_{kiosk.pk}"] = signing.dumps(
+        {"kiosk_id": kiosk.pk, "organization_id": kiosk.organization_id},
+        salt="attendance.kiosk_unlock",
+    )
 
 
 class KioskConfigModelTests(TestCase):
@@ -79,8 +90,7 @@ class KioskPageViewTests(TestCase):
 
     def test_unlocked_kiosk_shows_signin_ui(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -88,8 +98,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_has_guest_section_when_unlocked(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -100,8 +109,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_toast_container_positioned_at_bottom(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -110,8 +118,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_reminds_students_to_use_member_section(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -120,8 +127,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_focuses_member_input_after_guest_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -129,8 +135,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_enter_key_wired_to_member_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -142,8 +147,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_enter_key_wired_to_guest_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -155,8 +159,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_enter_key_wired_to_guest_team_number_signin(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -168,8 +171,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_has_two_column_layout(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -179,8 +181,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_has_no_tabs(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -189,8 +190,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_has_flash_overlay(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -200,8 +200,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_has_rfid_detection_on_visitor_input(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -210,8 +209,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_detects_short_decimal_rfid_not_just_long_hex(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -220,8 +218,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_member_not_found_shows_red_flash(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -239,8 +236,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_has_show_flash_function(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -248,8 +244,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_member_column_has_rfid_hint(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -258,8 +253,7 @@ class KioskPageViewTests(TestCase):
 
     def test_kiosk_page_visitor_column_has_member_warning(self):
         url = reverse("kiosk_signin", args=[self.kiosk_config.pk])
-        cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
@@ -267,10 +261,19 @@ class KioskPageViewTests(TestCase):
         self.assertIn("Members side", content)
 
 
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "kiosk-unlock-tests",
+        }
+    }
+)
 class KioskUnlockEndpointTests(TestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
 
+        cache.clear()
         User = get_user_model()
         self.client = Client()
         self.program = make_program()
@@ -282,10 +285,38 @@ class KioskUnlockEndpointTests(TestCase):
             email="mentor@example.com",
             password="TestPass123!",  # nosec B106
         )
+        Adult.objects.create(
+            organization=self.kiosk_config.organization,
+            user=self.user,
+            legal_first_name="Mentor",
+            last_name="Test",
+            is_mentor=True,
+            mentor_active=True,
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.user,
+            organization=self.kiosk_config.organization,
+            role="Mentor",
+            defaults={"is_active": True},
+        )
 
     def test_unlock_with_valid_credentials_sets_cookie(self):
-        cache_key = f"kiosk_otp_{self.kiosk_config.pk}_mentor@example.com"
-        cache.set(cache_key, "654321", 600)
+        cache_key = _otp_cache_key(self.kiosk_config, "mentor@example.com")
+        nonce = secrets.token_urlsafe(16)
+        cache.set(
+            cache_key,
+            {
+                "code": "654321",
+                "nonce": nonce,
+                "user_id": self.user.pk,
+            },
+            600,
+        )
+        cache.set(
+            _otp_ready_cache_key(self.kiosk_config, "mentor@example.com", nonce),
+            True,
+            600,
+        )
         url = reverse("api_kiosk_unlock", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -311,7 +342,7 @@ class KioskUnlockEndpointTests(TestCase):
 
     def test_lock_clears_cookie(self):
         cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
-        self.client.cookies[cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lock", args=[self.kiosk_config.pk])
         response = self.client.post(url)
         self.assertEqual(response.status_code, 200)
@@ -352,16 +383,41 @@ class KioskIndexTests(TestCase):
         self.assertNotContains(response, "Ghost Kiosk")
 
 
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "kiosk-otp-tests",
+        }
+    }
+)
 class KioskOTPUntockTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = Client()
         self.program = make_program("OTP Program")
         self.kiosk = KioskConfig.objects.create(label="OTP Kiosk", program=self.program)
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="mentor@andrew.cmu.edu",
+            email="mentor@andrew.cmu.edu",
+        )
         self.mentor = Adult.objects.create(
+            organization=self.kiosk.organization,
+            user=self.user,
             legal_first_name="Mentor",
             last_name="Joe",
             andrew_email="mentor@andrew.cmu.edu",
             is_mentor=True,
+            mentor_active=True,
+        )
+        UserOrganizationMembership.objects.get_or_create(
+            user=self.user,
+            organization=self.kiosk.organization,
+            role="Mentor",
+            defaults={"is_active": True},
         )
 
     def test_kiosk_request_code_success(self):
@@ -373,7 +429,7 @@ class KioskOTPUntockTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
-        cache_key = f"kiosk_otp_{self.kiosk.id}_mentor@andrew.cmu.edu"
+        cache_key = _otp_cache_key(self.kiosk, "mentor@andrew.cmu.edu")
         self.assertIsNotNone(cache.get(cache_key))
 
     def test_kiosk_request_code_unauthorized_email(self):
@@ -387,8 +443,18 @@ class KioskOTPUntockTests(TestCase):
         self.assertFalse(response.json()["success"])
 
     def test_kiosk_unlock_success(self):
-        cache_key = f"kiosk_otp_{self.kiosk.id}_mentor@andrew.cmu.edu"
-        cache.set(cache_key, "123456", 600)
+        cache_key = _otp_cache_key(self.kiosk, "mentor@andrew.cmu.edu")
+        nonce = secrets.token_urlsafe(16)
+        cache.set(
+            cache_key,
+            {"code": "123456", "nonce": nonce, "user_id": self.user.pk},
+            600,
+        )
+        cache.set(
+            _otp_ready_cache_key(self.kiosk, "mentor@andrew.cmu.edu", nonce),
+            True,
+            600,
+        )
         url = reverse("api_kiosk_unlock", args=[self.kiosk.id])
         response = self.client.post(
             url,
@@ -398,12 +464,25 @@ class KioskOTPUntockTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
         cookie_name = f"kiosk_unlocked_{self.kiosk.id}"
-        self.assertEqual(response.cookies[cookie_name].value, "1")
-        self.assertIsNone(cache.get(cache_key))
+        payload = signing.loads(
+            response.cookies[cookie_name].value, salt="attendance.kiosk_unlock"
+        )
+        self.assertEqual(payload["kiosk_id"], self.kiosk.id)
+        self.assertEqual(payload["organization_id"], self.kiosk.organization_id)
+        self.assertIsNotNone(cache.get(f"{cache_key}_redeeming_{nonce}"))
 
     def test_kiosk_unlock_invalid_code(self):
-        cache_key = f"kiosk_otp_{self.kiosk.id}_mentor@andrew.cmu.edu"
-        cache.set(cache_key, "123456", 600)
+        cache_key = _otp_cache_key(self.kiosk, "mentor@andrew.cmu.edu")
+        cache.set(
+            cache_key,
+            {
+                "code": "123456",
+                "nonce": secrets.token_urlsafe(16),
+                "user_id": self.user.pk,
+                "ready": True,
+            },
+            600,
+        )
         url = reverse("api_kiosk_unlock", args=[self.kiosk.id])
         response = self.client.post(
             url,
@@ -421,7 +500,6 @@ class KioskProxyTapTests(TestCase):
         self.kiosk_config = KioskConfig.objects.create(
             label="Tap Test Kiosk", program=self.program
         )
-        self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
 
     def test_tap_without_cookie_returns_403(self):
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
@@ -433,7 +511,7 @@ class KioskProxyTapTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_tap_with_cookie_records_attendance(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -445,7 +523,7 @@ class KioskProxyTapTests(TestCase):
         self.assertIn("event_type", data)
 
     def test_tap_with_cookie_returns_event_type(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -464,7 +542,6 @@ class KioskProxyLookupTests(TestCase):
         self.kiosk_config = KioskConfig.objects.create(
             label="Lookup Test Kiosk", program=self.program
         )
-        self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
         self.student = Student.objects.create(legal_first_name="Bob", last_name="Jones")
         Enrollment.objects.create(
             student=self.student, program=self.program, active=True
@@ -477,7 +554,7 @@ class KioskProxyLookupTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_lookup_with_cookie_by_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Bob"})
         self.assertEqual(response.status_code, 200)
@@ -486,7 +563,7 @@ class KioskProxyLookupTests(TestCase):
         self.assertGreaterEqual(len(data["students"]), 1)
 
     def test_lookup_with_cookie_by_rfid(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"rfid": "RFID999"})
         self.assertEqual(response.status_code, 200)
@@ -496,7 +573,7 @@ class KioskProxyLookupTests(TestCase):
         self.assertEqual(data["students"][0]["id"], self.student.id)
 
     def test_lookup_no_params_returns_empty(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -508,7 +585,7 @@ class KioskProxyLookupTests(TestCase):
             legal_first_name="Barbara", preferred_first_name="Babs", last_name="Smith"
         )
         Enrollment.objects.create(student=student, program=self.program, active=True)
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Babs Smith"})
         self.assertEqual(response.status_code, 200)
@@ -521,7 +598,7 @@ class KioskProxyLookupTests(TestCase):
             legal_first_name="Barbara", preferred_first_name="Babs", last_name="Smith"
         )
         Enrollment.objects.create(student=student, program=self.program, active=True)
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Barbara Smith"})
         self.assertEqual(response.status_code, 200)
@@ -536,7 +613,7 @@ class KioskProxyLookupTests(TestCase):
             last_name="Martin",
             is_mentor=True,
         )
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Bobby Martin"})
         self.assertEqual(response.status_code, 200)
@@ -551,7 +628,7 @@ class KioskProxyLookupTests(TestCase):
             last_name="Martin",
             is_mentor=True,
         )
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Robert Martin"})
         self.assertEqual(response.status_code, 200)
@@ -634,7 +711,6 @@ class KioskFirstNameTests(TestCase):
         self.kiosk_config = KioskConfig.objects.create(
             label="Name Test Kiosk", program=self.program
         )
-        self.cookie_name = f"kiosk_unlocked_{self.kiosk_config.pk}"
 
         self.student = Student.objects.create(
             legal_first_name="Ada",
@@ -657,7 +733,7 @@ class KioskFirstNameTests(TestCase):
     # ── tap endpoint ───────────────────────────────────────────────────
 
     def test_tap_student_returns_first_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -671,7 +747,7 @@ class KioskFirstNameTests(TestCase):
     def test_tap_student_uses_first_name_over_legal(self):
         self.student.preferred_first_name = "Addy"
         self.student.save()
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -685,7 +761,7 @@ class KioskFirstNameTests(TestCase):
     def test_tap_student_without_first_name_uses_legal(self):
         self.student.preferred_first_name = None
         self.student.save()
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -697,7 +773,7 @@ class KioskFirstNameTests(TestCase):
         self.assertEqual(data["student"], "Ada")
 
     def test_tap_student_by_rfid_returns_first_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -709,7 +785,7 @@ class KioskFirstNameTests(TestCase):
         self.assertEqual(data["student"], "Ada")
 
     def test_tap_mentor_returns_preferred_first_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -723,7 +799,7 @@ class KioskFirstNameTests(TestCase):
     def test_tap_mentor_without_preferred_uses_first_name(self):
         self.mentor.preferred_first_name = None
         self.mentor.save()
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -735,7 +811,7 @@ class KioskFirstNameTests(TestCase):
         self.assertEqual(data["student"], "Robert")
 
     def test_tap_visitor_returns_full_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         response = self.client.post(
             url,
@@ -749,7 +825,7 @@ class KioskFirstNameTests(TestCase):
     # ── lookup endpoint ────────────────────────────────────────────────
 
     def test_lookup_student_returns_first_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Ada"})
         data = response.json()
@@ -758,14 +834,14 @@ class KioskFirstNameTests(TestCase):
         self.assertNotIn("Ada Lovelace", names)
 
     def test_lookup_student_by_rfid_returns_first_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"rfid": "RFID-STU-001"})
         data = response.json()
         self.assertEqual(data["students"][0]["name"], "Ada")
 
     def test_lookup_mentor_returns_preferred_first_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Bobby"})
         data = response.json()
@@ -776,7 +852,7 @@ class KioskFirstNameTests(TestCase):
     def test_lookup_mentor_without_preferred_returns_first_name(self):
         self.mentor.preferred_first_name = None
         self.mentor.save()
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         url = reverse("api_kiosk_lookup", args=[self.kiosk_config.pk])
         response = self.client.get(url, {"name": "Robert"})
         data = response.json()
@@ -786,7 +862,7 @@ class KioskFirstNameTests(TestCase):
     # ── who-is-here endpoint ───────────────────────────────────────────
 
     def test_who_is_here_student_returns_full_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         self.client.post(
             tap_url,
@@ -800,7 +876,7 @@ class KioskFirstNameTests(TestCase):
         self.assertIn("Ada Lovelace", names)
 
     def test_who_is_here_mentor_returns_full_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         self.client.post(
             tap_url,
@@ -814,7 +890,7 @@ class KioskFirstNameTests(TestCase):
         self.assertIn("Bobby Martin", names)
 
     def test_who_is_here_visitor_returns_full_name(self):
-        self.client.cookies[self.cookie_name] = "1"
+        _set_unlocked_cookie(self.client, self.kiosk_config)
         tap_url = reverse("api_kiosk_tap", args=[self.kiosk_config.pk])
         self.client.post(
             tap_url,

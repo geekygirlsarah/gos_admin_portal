@@ -1,24 +1,28 @@
 import datetime
 from typing import Optional, Tuple
 
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from .models import AttendanceEvent, AttendanceSession, RFIDCard
 
 
-def resolve_card_by_uid(uid: str) -> Optional[RFIDCard]:
-    try:
-        return RFIDCard.objects.select_related("student", "adult").get(
-            uid=uid, is_active=True
+def resolve_card_by_uid(uid: str, organization=None) -> Optional[RFIDCard]:
+    cards = RFIDCard.objects.all()
+    if organization is not None:
+        cards = cards.filter(organization=organization).filter(
+            Q(student__organization=organization) | Q(adult__organization=organization)
         )
+    try:
+        return cards.select_related("student", "adult").get(uid=uid, is_active=True)
     except RFIDCard.DoesNotExist:
         # Fallback: Check if we have a card stored without leading zeros
         stripped = uid.lstrip("0")
         if stripped and stripped != uid:
             try:
-                card = RFIDCard.objects.select_related("student", "adult").get(
+                card = cards.select_related("student", "adult").get(
                     uid=stripped, is_active=True
                 )
                 # Found it! Update to the full UID so it matches exactly next time.
@@ -57,8 +61,8 @@ def find_card_by_uid(uid: str) -> Optional[RFIDCard]:
     return None
 
 
-def resolve_person_by_uid(uid: str):
-    card = resolve_card_by_uid(uid)
+def resolve_person_by_uid(uid: str, organization=None):
+    card = resolve_card_by_uid(uid, organization=organization)
     if not card:
         return None
     person = card.student or card.adult
@@ -81,6 +85,19 @@ def resolve_student_by_uid(uid: str):
     return person if isinstance(person, Student) else None
 
 
+def attendance_sessions_for_program(program):
+    organization_id = program.organization_id
+    if organization_id is None:
+        return AttendanceSession.objects.none()
+    return AttendanceSession.objects.filter(
+        organization_id=organization_id, program=program
+    ).filter(
+        Q(student__isnull=True, adult__isnull=True)
+        | Q(student__organization_id=organization_id, adult__isnull=True)
+        | Q(student__isnull=True, adult__organization_id=organization_id)
+    )
+
+
 def auto_in_or_out(
     program,
     student=None,
@@ -98,8 +115,9 @@ def auto_in_or_out(
 
     # NEW: Close any stale sessions for this person first to keep the list clean
     # and provide realistic durations if they forgot to sign out.
-    stale_qs = AttendanceSession.objects.filter(
-        program=program, check_out__isnull=True, check_in__lt=today_start
+    stale_qs = attendance_sessions_for_program(program).filter(
+        check_out__isnull=True,
+        check_in__lt=today_start,
     )
     if student:
         stale_qs = stale_qs.filter(student=student)
@@ -114,8 +132,9 @@ def auto_in_or_out(
         stale.save(update_fields=["check_out", "duration_minutes", "updated_at"])
 
     # Find latest open session for today (local time)
-    open_qs = AttendanceSession.objects.filter(
-        program=program, check_out__isnull=True, check_in__gte=today_start
+    open_qs = attendance_sessions_for_program(program).filter(
+        check_out__isnull=True,
+        check_in__gte=today_start,
     )
     if student:
         open_qs = open_qs.filter(student=student)
@@ -134,6 +153,7 @@ def auto_in_or_out(
     else:
         # Open new one
         session = AttendanceSession.objects.create(
+            organization=program.organization,
             program=program,
             student=student,
             adult=adult,
@@ -152,7 +172,7 @@ def get_attendance_stats(program, student=None, adult=None, visitor_name=None):
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    qs = AttendanceSession.objects.filter(program=program)
+    qs = attendance_sessions_for_program(program)
     if student:
         qs = qs.filter(student=student)
     elif adult:
@@ -206,20 +226,34 @@ def record_tap(
         # If Program model lacks has_feature, default to allowed
         has_feature = True
     if not has_feature:
-        from django.core.exceptions import PermissionDenied
-
         raise PermissionDenied("Attendance is not enabled for this program.")
 
-    occurred_at = occurred_at or timezone.now()
+    if program.organization_id is None:
+        raise PermissionDenied("Attendance must belong to an organization.")
     if not (student or adult) and rfid_uid:
-        person = resolve_person_by_uid(rfid_uid)
+        person = resolve_person_by_uid(rfid_uid, organization=program.organization)
         from programs.models import Adult, Student
 
         student = person if isinstance(person, Student) else None
         adult = person if isinstance(person, Adult) else None
 
+    if student and student.organization_id != program.organization_id:
+        raise PermissionDenied(
+            "Student does not belong to this program's organization."
+        )
+    if adult and adult.organization_id != program.organization_id:
+        raise PermissionDenied("Adult does not belong to this program's organization.")
+    if kiosk and (
+        kiosk.organization_id != program.organization_id
+        or kiosk.program_id != program.pk
+    ):
+        raise PermissionDenied("Kiosk does not belong to this program.")
+
+    occurred_at = occurred_at or timezone.now()
+
     # Create event first (audit trail)
     evt = AttendanceEvent.objects.create(
+        organization=program.organization,
         program=program,
         student=student,
         adult=adult,
