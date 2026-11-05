@@ -2,7 +2,7 @@ import base64
 import binascii
 
 from django.core.exceptions import ValidationError
-from django.db.models import Value
+from django.db.models import Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import redirect, render
@@ -10,16 +10,22 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from programs.models import AdultStudentRelationship
 from programs.permission_views import can_user_read, get_user_role
 
 from .models import DigitalSignout, DigitalSignoutConfig, StudentPresence
 from .signout_utils import _clear_unlocked, _is_unlocked, _set_unlocked
 
 
-def _get_config_or_404(config_id):
+def _get_config_or_404(config_id, organization):
+    if organization is None or not organization.is_active:
+        raise Http404("Sign-out station not found or inactive.")
     try:
         return DigitalSignoutConfig.objects.select_related("program").get(
-            pk=config_id, is_active=True
+            pk=config_id,
+            is_active=True,
+            organization=organization,
+            program__organization=organization,
         )
     except DigitalSignoutConfig.DoesNotExist:
         raise Http404("Sign-out station not found or inactive.")
@@ -27,11 +33,25 @@ def _get_config_or_404(config_id):
 
 def _active_students(program):
     """Active (non-graduated) students with an active enrollment in `program`."""
+    organization = program.organization
     return (
         program.students.select_related("user")
-        .prefetch_related("adults")
+        .prefetch_related(
+            Prefetch(
+                "adultstudentrelationship_set",
+                queryset=AdultStudentRelationship.objects.filter(
+                    organization=organization,
+                    student__organization=organization,
+                    adult__organization=organization,
+                    adult__is_parent=True,
+                ).select_related("adult"),
+                to_attr="_signout_parent_relationships",
+            )
+        )
         .filter(
+            organization=organization,
             enrollment__program=program,
+            enrollment__organization=organization,
             enrollment__active=True,
             graduated=False,
         )
@@ -97,22 +117,26 @@ def digital_signout(request, config_id):
     already signed out today are shown dimmed and can be undone with an
     ``undo`` POST (with confirmation) so a mistake can be corrected.
     """
-    config = _get_config_or_404(config_id)
+    config = _get_config_or_404(config_id, getattr(request, "organization", None))
     program = config.program
     today = timezone.localdate()
     # Students default to absent: only those explicitly marked present today
     # appear on the picker so a parent can sign them out.
     today_present_ids = set(
         StudentPresence.objects.filter(
-            program=program, date=today, status=StudentPresence.PRESENT
+            organization=config.organization,
+            program=program,
+            student__organization=config.organization,
+            date=today,
+            status=StudentPresence.PRESENT,
         ).values_list("student_id", flat=True)
     )
     students = [s for s in _active_students(program) if s.pk in today_present_ids]
-    is_unlocked = _is_unlocked(request, config.pk)
+    is_unlocked = _is_unlocked(request, config)
 
     can_direct_unlock = False
     if request.user.is_authenticated:
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=config.organization)
         if role in ("LeadMentor", "Mentor") and can_user_read(
             request.user, "programs", program
         ):
@@ -122,11 +146,11 @@ def digital_signout(request, config_id):
         action = request.POST.get("action")
         if action == "direct_unlock" and can_direct_unlock:
             response = redirect(_station_url(config.pk))
-            _set_unlocked(response, config.pk)
+            _set_unlocked(response, config)
             return response
         if action == "lock":
             response = redirect(_station_url(config.pk))
-            _clear_unlocked(response, config.pk)
+            _clear_unlocked(response, config)
             return response
 
     if not is_unlocked:
@@ -146,7 +170,11 @@ def digital_signout(request, config_id):
     today_signouts = {
         so.student_id: so
         for so in DigitalSignout.objects.filter(
-            config=config, signed_at__date=today
+            organization=config.organization,
+            config=config,
+            program=program,
+            student__organization=config.organization,
+            signed_at__date=today,
         ).select_related("student")
     }
     for student in students:
@@ -155,7 +183,8 @@ def digital_signout(request, config_id):
     # Parent/guardian display names per student, so the form can offer a
     # dropdown of who is signing out (from the student's linked accounts).
     parents_by_student = {
-        s.pk: [a.display_name for a in s.adults.all() if a.is_parent] for s in students
+        s.pk: [rel.adult.display_name for rel in s._signout_parent_relationships]
+        for s in students
     }
 
     def form_context(**extra):
@@ -178,8 +207,19 @@ def digital_signout(request, config_id):
     confirmation = None
     if done:
         try:
-            confirmation = DigitalSignout.objects.select_related("student").get(
-                pk=int(done), config=config
+            confirmation = (
+                DigitalSignout.objects.select_related("student")
+                .filter(
+                    organization=config.organization,
+                    program=program,
+                    config=config,
+                    pk=int(done),
+                )
+                .filter(
+                    Q(student__isnull=True)
+                    | Q(student__organization=config.organization)
+                )
+                .get()
             )
         except (ValueError, DigitalSignout.DoesNotExist):
             confirmation = None
@@ -206,7 +246,11 @@ def _handle_undo(request, config, students, form_context):
     if signout_id:
         try:
             target = DigitalSignout.objects.filter(
-                config=config, signed_at__date=today
+                organization=config.organization,
+                config=config,
+                program=config.program,
+                student__organization=config.organization,
+                signed_at__date=today,
             ).get(pk=int(signout_id))
         except (ValueError, DigitalSignout.DoesNotExist):
             target = None
@@ -261,6 +305,7 @@ def _handle_signout_submit(request, config, students, form_context):
         )
 
     signout = DigitalSignout(
+        organization=config.organization,
         config=config,
         program=config.program,
         student=student,

@@ -45,8 +45,11 @@ The digital sign-out system allows parents/guardians to sign out students electr
 
 ### `DigitalSignoutConfig` & Public Station (`/signout/<config_id>/`)
 - Login-exempt public route (included in `EXEMPT_PATH_PREFIXES`).
-- Inactive configs trigger standard 404 behavior.
-- **Mentor Unlock**: Mentor unlocks station using a credentialed session; sets an 8-hour unlock cookie (`_COOKIE_MAX_AGE = 8 * 60 * 60` in `attendance/signout_utils.py`). Attendance kiosk cookies are separately signed and organization-bound.
+- Configurations are served only on their owning organization's host, and the linked program must have the same organization. Student, enrollment, presence, parent, and sign-out lookups are scoped to that organization; newly recorded sign-outs explicitly inherit it.
+- **Unlock**: An existing active mentor or lead mentor with active membership in the station's organization, or an active platform superuser, can request a one-time email code. Eligibility is rechecked at redemption; codes expire after ten minutes, have independent request and attempt limits, and fail closed on cache errors. Account provisioning from a submitted email is not allowed.
+- Successful unlocks set an eight-hour HTTP-only signed cookie bound to the station and organization (`attendance/signout_utils.py`). Its `Secure` attribute follows `SESSION_COOKIE_SECURE`; the cookie is host-only and uses a signing salt separate from attendance kiosk cookies.
+- Previously unlocked stations must be unlocked again; legacy plain-value cookies are rejected. Removing membership does not revoke an already issued sign-out cookie.
+- Production multi-worker deployments require a shared cache backend with atomic `add` and `incr` operations and no premature eviction of unexpired code, readiness, rate-limit, or one-use keys. Cache failures deny code issuance/redemption; the default local-memory cache is not suitable. Losing a one-use marker while its code remains cached can permit replay.
 - **Signature Capture**: Uses vendored `signature_pad` (v5.0.4). Resized dynamically via `fitCanvas` to maintain 1:1 stroke alignment on touch screens.
 - **PRG Pattern**: Submissions follow Post-Redirect-Get (`?done=<pk>`) to prevent duplicate records upon refresh.
 - **Undo Workflow**: Dimmed signed-out rows allow undoing sign-outs for the current day via `#undoForm` POST (`?notice=undone`).
@@ -59,7 +62,7 @@ The digital sign-out system allows parents/guardians to sign out students electr
 - Successful unlocks set an HTTP-only, signed cookie bound to the kiosk and organization, expiring after seven days. Its `Secure` attribute follows `SESSION_COOKIE_SECURE`; enable this for HTTPS deployments. Existing kiosks must be unlocked again; legacy plain-value cookies are rejected.
 - Removing the unlocking user's membership does not revoke an already-issued kiosk cookie. Locking clears only that browser's cookie; disabling the kiosk blocks all its cookies while it remains disabled.
 - Code issuance and verification attempts are independently rate-limited with atomic shared-cache counters. Each request stores the current code record before delivery; successful delivery adds a nonce-specific readiness key instead of rewriting that record, so a late email completion cannot restore a superseded code. Production multi-worker deployments must use a shared cache backend with atomic `add` and `incr` operations and no premature eviction of unexpired code, readiness, or one-use keys; the default local-memory cache is not suitable. Losing a one-use marker while its code remains cached can permit replay. Cache failures deny code issuance/redemption, and requesting a replacement code does not reset verification-attempt counters.
-- These kiosk controls do not apply to digital sign-out stations; that remains a separate access-control path.
+- Kiosk and digital sign-out station cookies, codes, rate limits, and cache keys are separate and cannot be interchanged.
 
 ### Daily Presence Tracking (`StudentPresence`)
 - Tracks per-day presence (`present` / `absent`) per program and student (`unique_together = ("program", "student", "date")`).

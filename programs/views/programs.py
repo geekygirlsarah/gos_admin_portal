@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import FileResponse, Http404
@@ -1503,6 +1504,17 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
         return render(request, self.template_name, ctx)
 
 
+def _signout_tenant_program_or_404(request, program_id):
+    organization = getattr(request, "organization", None)
+    if organization is None or not organization.is_active:
+        raise Http404("Program not found.")
+    return get_object_or_404(
+        Program.objects.select_related("organization"),
+        pk=program_id,
+        organization=organization,
+    )
+
+
 class ProgramDigitalSignoutView(LoginRequiredMixin, View):
     """Manage a program's digital sign-out station.
 
@@ -1516,7 +1528,7 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            program = get_object_or_404(Program, pk=kwargs.get("pk"))
+            program = _signout_tenant_program_or_404(request, kwargs.get("pk"))
             role = get_user_role(request.user, org=request.organization)
             if role not in ("LeadMentor", "Mentor") or not can_user_read(
                 request.user, "programs", program
@@ -1530,31 +1542,44 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
     def _ensure_config(self, program):
         config, _ = DigitalSignoutConfig.objects.get_or_create(
             program=program,
-            defaults={"label": f"Digital Sign-out — {program.name}"},
+            defaults={
+                "organization": program.organization,
+                "label": f"Digital Sign-out — {program.name}",
+            },
         )
+        if config.organization_id != program.organization_id:
+            raise Http404("Sign-out station not found.")
         return config
 
     def _recent_signouts(self, program):
         return (
-            DigitalSignout.objects.filter(program=program)
+            DigitalSignout.objects.filter(
+                organization=program.organization,
+                program=program,
+                config__organization=program.organization,
+                config__program=program,
+            )
+            .filter(
+                Q(student__isnull=True) | Q(student__organization=program.organization)
+            )
             .select_related("student", "config")
             .order_by("-signed_at")[:20]
         )
 
     def post(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = _signout_tenant_program_or_404(request, pk)
         config = self._ensure_config(program)
         action = request.POST.get("action")
 
         response = redirect(reverse("program_digital_signout", args=[program.pk]))
         if action == "unlock":
-            _set_unlocked(response, config.pk)
+            _set_unlocked(response, config)
             messages.success(
                 request,
                 "Sign-out unlocked. It will stay open on the tablet for 8 hours.",
             )
         elif action == "lock":
-            _clear_unlocked(response, config.pk)
+            _clear_unlocked(response, config)
             messages.success(request, "Sign-out station locked.")
         elif action in ("mark_present", "mark_absent"):
             self._mark_presence(request, program, action)
@@ -1576,12 +1601,26 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
             )
         if student is None:
             return
-        StudentPresence.objects.update_or_create(
-            program=program,
-            student=student,
-            date=timezone.localdate(),
-            defaults={"status": status, "marked_by": request.user},
-        )
+        today = timezone.localdate()
+        try:
+            with transaction.atomic():
+                StudentPresence.objects.update_or_create(
+                    organization=program.organization,
+                    program=program,
+                    student=student,
+                    date=today,
+                    defaults={"status": status, "marked_by": request.user},
+                )
+        except IntegrityError:
+            if (
+                StudentPresence.objects.filter(
+                    program=program, student=student, date=today
+                )
+                .exclude(organization=program.organization)
+                .exists()
+            ):
+                return
+            raise
         messages.success(
             request,
             "{} marked {}".format(
@@ -1590,26 +1629,58 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
         )
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        program = _signout_tenant_program_or_404(request, pk)
         config = self._ensure_config(program)
         public_url = reverse("digital_signout", args=[config.pk])
         today = timezone.localdate()
         today_presence = {
             p.student_id: p
             for p in StudentPresence.objects.filter(
-                program=program, date=today
+                organization=program.organization,
+                program=program,
+                student__organization=program.organization,
+                date=today,
             ).select_related("student")
         }
         presence_students = list(_active_students(program))
-        # Team/crew/subteam live on the program enrollment, so pull this
-        # program's enrollments in one query and hand each student theirs for
-        # the group badges next to their name.
-        enrollments_by_student = {
-            e.student_id: e
-            for e in Enrollment.objects.filter(
-                program=program, active=True
-            ).select_related("team", "crew", "subteam")
+        enrollments = list(
+            Enrollment.objects.filter(
+                organization=program.organization,
+                program=program,
+                student__organization=program.organization,
+                active=True,
+            )
+        )
+        teams = {
+            team.pk: team
+            for team in Team.objects.filter(
+                organization=program.organization,
+                pk__in=[e.team_id for e in enrollments if e.team_id],
+            )
         }
+        crews = {
+            crew.pk: crew
+            for crew in Crew.objects.filter(
+                organization=program.organization,
+                program=program,
+                pk__in=[e.crew_id for e in enrollments if e.crew_id],
+            )
+        }
+        subteams = {
+            subteam.pk: subteam
+            for subteam in SubTeam.objects.filter(
+                organization=program.organization,
+                program=program,
+                pk__in=[e.subteam_id for e in enrollments if e.subteam_id],
+            )
+        }
+        enrollments_by_student = {}
+        # These instances are only used for display; omit unsafe group references.
+        for enrollment in enrollments:
+            enrollment.team = teams.get(enrollment.team_id)
+            enrollment.crew = crews.get(enrollment.crew_id)
+            enrollment.subteam = subteams.get(enrollment.subteam_id)
+            enrollments_by_student[enrollment.student_id] = enrollment
         for student in presence_students:
             student.today_presence = today_presence.get(student.pk)
             student.program_enrollment = enrollments_by_student.get(student.pk)
@@ -1619,7 +1690,7 @@ class ProgramDigitalSignoutView(LoginRequiredMixin, View):
             {
                 "program": program,
                 "config": config,
-                "is_unlocked": _is_unlocked(request, config.pk),
+                "is_unlocked": _is_unlocked(request, config),
                 "public_url": public_url,
                 "recent_signouts": self._recent_signouts(program),
                 "presence_students": presence_students,
@@ -1632,7 +1703,7 @@ class ProgramDigitalSignoutSignatureView(LoginRequiredMixin, View):
     """Serve a decrypted signature PNG image for authorized staff."""
 
     def get(self, request, program_id, pk):
-        program = get_object_or_404(Program, pk=program_id)
+        program = _signout_tenant_program_or_404(request, program_id)
         role = get_user_role(request.user, org=request.organization)
         if role not in ("LeadMentor", "Mentor") or not can_user_read(
             request.user, "programs", program
@@ -1642,7 +1713,15 @@ class ProgramDigitalSignoutSignatureView(LoginRequiredMixin, View):
             )
             return redirect("home")
 
-        signout = get_object_or_404(DigitalSignout, pk=pk, program=program)
+        signout = get_object_or_404(
+            DigitalSignout,
+            pk=pk,
+            organization=program.organization,
+            program=program,
+            config__organization=program.organization,
+            config__program=program,
+            student__organization=program.organization,
+        )
         if not signout.signature:
             raise Http404("No signature image recorded.")
 
