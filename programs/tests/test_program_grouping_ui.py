@@ -204,7 +204,7 @@ class ProgramGroupingFormAndViewsTests(TestCase):
         self.assertIn("Past / Archived Programs", choice_labels)
 
     def test_application_email_form_grouped_choices(self):
-        form = ApplicationEmailForm()
+        form = ApplicationEmailForm(organization=self.prog_active.organization)
         choices = list(form.fields["program"].choices)
         choice_labels = [c[0] for c in choices if isinstance(c[1], (list, tuple))]
         self.assertIn("Active Programs", choice_labels)

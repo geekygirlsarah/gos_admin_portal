@@ -7,7 +7,12 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from calendar_feeds.models import CalendarEvent, CalendarFeed, EventException
+from calendar_feeds.models import (
+    CalendarEvent,
+    CalendarFeed,
+    CalendarFeedACL,
+    EventException,
+)
 from calendar_feeds.tests.factories import (
     make_event,
     make_feed,
@@ -317,6 +322,63 @@ class FeedDeleteViewTests(TestCase):
         resp = self.client.post(self.url)
         self.assertRedirects(resp, reverse("calendar_feeds:feed_list"))
         self.assertFalse(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+
+    def test_delete_feed_does_not_cascade_foreign_organization_acl(self):
+        other = Organization.objects.create(name="Other", slug="delete-acl-other")
+        foreign_acl = CalendarFeedACL.objects.create(
+            organization=other,
+            feed=self.feed,
+            role="Parent",
+            can_read=True,
+            can_write=False,
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(response, reverse("calendar_feeds:feed_list"))
+        self.assertTrue(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+        self.assertTrue(CalendarFeedACL.objects.filter(pk=foreign_acl.pk).exists())
+
+    def test_delete_feed_does_not_cascade_foreign_organization_event(self):
+        other = Organization.objects.create(name="Other", slug="delete-event-other")
+        foreign_event = CalendarEvent.objects.create(
+            organization=other,
+            feed=self.feed,
+            title="Foreign event",
+            start_datetime=timezone.now(),
+            end_datetime=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(response, reverse("calendar_feeds:feed_list"))
+        self.assertTrue(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+        self.assertTrue(CalendarEvent.objects.filter(pk=foreign_event.pk).exists())
+
+    def test_delete_feed_does_not_cascade_foreign_organization_exception(self):
+        other = Organization.objects.create(name="Other", slug="delete-exception-other")
+        event = CalendarEvent.objects.create(
+            organization=self.feed.organization,
+            feed=self.feed,
+            title="Local event",
+            start_datetime=timezone.now(),
+            end_datetime=timezone.now() + timedelta(hours=1),
+        )
+        foreign_exception = EventException.objects.create(
+            organization=other,
+            event=event,
+            original_date=timezone.localdate(),
+            change_type=EventException.CHANGE_DELETED,
+        )
+        self.client.force_login(self.lead)
+
+        response = self.client.post(self.url)
+
+        self.assertRedirects(response, reverse("calendar_feeds:feed_list"))
+        self.assertTrue(CalendarFeed.objects.filter(pk=self.feed.pk).exists())
+        self.assertTrue(EventException.objects.filter(pk=foreign_exception.pk).exists())
 
 
 class EventCreateViewTests(TestCase):

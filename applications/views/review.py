@@ -18,6 +18,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.core.exceptions import SuspiciousFileOperation
 from django.core.mail import EmailMultiAlternatives
 from django.db import models
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -502,47 +503,49 @@ class ApplicationEmailForm(forms.Form):
         widget=forms.Select(attrs={"class": "form-select"}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Build sender choices from organization settings
-        from organizations.utils import (
-            get_organization_email_settings,
-            get_sender_accounts,
+        self.fields["program"].queryset = (
+            Program.objects.for_organization(organization)
+            if organization is not None
+            else Program.objects.none()
         )
 
-        accounts = get_sender_accounts()
-        org_cfg = get_organization_email_settings()
-        choices = []
-        initial_value = None
-        if accounts:
-            choices.append(("DEFAULT", "Default configured sender"))
-            for acc in accounts:
-                email = acc.get("email") or ""
-                display = acc.get("display_name") or email or "Sender"
-                value = acc.get("key") or email
-                label = f"{display} <{email}>" if email else display
-                choices.append((value, label))
-            initial_value = "DEFAULT"
+        from organizations.utils import get_organization_email_settings
+
+        org_cfg = (
+            get_organization_email_settings(organization)
+            if organization is not None
+            else {}
+        )
+        accounts = org_cfg.get("sender_accounts", [])
+        default_email = (
+            org_cfg.get("notification_from_email")
+            or getattr(settings, "NOTIFICATION_FROM_EMAIL", None)
+            or getattr(settings, "DEFAULT_FROM_EMAIL", "")
+        )
+        default_name = org_cfg.get("sender_display_name") or getattr(
+            settings, "DEFAULT_FROM_NAME", None
+        )
+        if default_name and default_email:
+            default_label = f"Default ({default_name} <{default_email}>)"
+        elif default_name:
+            default_label = f"Default ({default_name})"
+        elif default_email:
+            default_label = f"Default ({default_email})"
         else:
-            default_email = org_cfg.get("notification_from_email") or getattr(
-                settings, "DEFAULT_FROM_EMAIL", ""
-            )
-            default_name = org_cfg.get("sender_display_name") or getattr(
-                settings, "DEFAULT_FROM_NAME", None
-            )
-            if default_name:
-                label = (
-                    f"Default ({default_name} <{default_email}>)"
-                    if default_email
-                    else f"Default ({default_name})"
-                )
-            else:
-                label = f"Default ({default_email})" if default_email else "Default"
-            choices = [("DEFAULT", label)]
-            initial_value = "DEFAULT"
+            default_label = "Default"
+
+        choices = [("DEFAULT", default_label)]
+        for account in accounts:
+            email = account.get("email") or ""
+            display = account.get("display_name") or email or "Sender"
+            value = account.get("key") or email
+            label = f"{display} <{email}>" if email else display
+            choices.append((value, label))
 
         self.fields["from_account"].choices = choices
-        self.fields["from_account"].initial = initial_value
+        self.fields["from_account"].initial = "DEFAULT"
 
 
 # ---------------------------------------------------------------------------
@@ -1263,11 +1266,17 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
     template_name = "applications/review/email_form.html"
 
     def get(self, request):
-        form = ApplicationEmailForm()
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        form = ApplicationEmailForm(organization=organization)
         return self._render(form)
 
     def post(self, request):
-        form = ApplicationEmailForm(request.POST)
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        form = ApplicationEmailForm(request.POST, organization=organization)
         if form.is_valid():
             prog = form.cleaned_data.get("program")
             statuses = form.cleaned_data["statuses"]
@@ -1278,14 +1287,21 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             # compose editor, with a readable plain-text alternative.
             inlined_html_body, text_body, inline_images = build_email_parts(
                 html_body,
-                organization=prog.organization if prog else None,
+                organization=organization,
                 subject=subject,
             )
             test_email = form.cleaned_data.get("test_email")
 
-            apps = Application.objects.filter(status__in=statuses)
+            apps = (
+                Application.objects.for_organization(organization)
+                .filter(status__in=statuses)
+                .filter(
+                    models.Q(program__isnull=True)
+                    | models.Q(program__organization=organization)
+                )
+            )
             if prog:
-                apps = apps.filter(program=prog)
+                apps = apps.filter(program=prog, program__organization=organization)
 
             recipients = set()
             for app in apps:
@@ -1303,7 +1319,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             # Determine sender account and SMTP connection
             selected = form.cleaned_data.get("from_account")
             connection, from_email, reply_to = get_sender_connection(
-                selected, organization=prog.organization if prog else None
+                selected, organization=organization
             )
 
             messages_to_send = []

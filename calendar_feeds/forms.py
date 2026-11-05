@@ -105,6 +105,12 @@ class BaseCalendarFeedACLInlineFormSet(forms.BaseInlineFormSet):
         else:
             self._missing_roles = []
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.instance or not self.instance.pk:
+            return queryset.none()
+        return queryset.filter(organization_id=self.instance.organization_id)
+
     def get_form_kwargs(self, index):
         kwargs = super().get_form_kwargs(index)
         if not self.is_bound and index is not None:
@@ -114,6 +120,13 @@ class BaseCalendarFeedACLInlineFormSet(forms.BaseInlineFormSet):
                 if extra_idx < len(self._missing_roles):
                     kwargs["initial"] = self._missing_roles[extra_idx]
         return kwargs
+
+    def save_new(self, form, commit=True):
+        acl = super().save_new(form, commit=False)
+        acl.organization_id = self.instance.organization_id
+        if commit:
+            acl.save()
+        return acl
 
 
 CalendarFeedACLInlineFormSet = forms.inlineformset_factory(

@@ -99,8 +99,8 @@ class CalendarFeed(models.Model):
 
         Public feeds (``visibility=anonymous``) require no login. All other
         feeds require login and are gated per-role by :class:`CalendarFeedACL`
-        — Lead Mentors always bypass the ACL. A role with no matching ACL row
-        (or a row with ``can_read=False``) cannot see the feed.
+        — Lead Mentors bypass same-organization ACL rules. A private feed with
+        a foreign-owned ACL is unavailable until its ownership is repaired.
         """
         if self.is_public:
             return True
@@ -116,23 +116,17 @@ class CalendarFeed(models.Model):
         from programs.permission_views import get_user_role
 
         role = get_user_role(user, org=self.organization)
-        if role == "LeadMentor":
-            return True
-
         if role is None:
             return False
 
-        if not self.acls.exists() and self.visibility == self.VISIBILITY_MEMBERS:
-            return True
-
-        return self.acls.filter(role=role, can_read=True).exists()
+        return self._acl_allows(role)
 
     def user_can_write(self, user):
         """Check if a user can create/edit events on this feed.
 
         Source-managed feeds (outreach/travel/etc.) are read-only everywhere —
-        edits happen in the originating app. Lead Mentors always get write.
-        Everyone else needs a matching ACL row with ``can_write=True``.
+        edits happen in the originating app. Lead Mentors bypass local ACL
+        rules, but foreign-owned ACLs deny writes for all roles.
         """
         if not user.is_authenticated:
             return False
@@ -148,13 +142,39 @@ class CalendarFeed(models.Model):
         from programs.permission_views import get_user_role
 
         role = get_user_role(user, org=self.organization)
-        if role == "LeadMentor":
-            return True
-
         if role is None:
             return False
 
-        return self.acls.filter(role=role, can_write=True).exists()
+        return self._acl_allows(role, write=True)
+
+    def _acl_allows(self, role, *, write=False):
+        acls = CalendarFeedACL.objects.filter(feed_id=models.OuterRef("pk"))
+        local_acls = acls.filter(organization_id=models.OuterRef("organization_id"))
+        foreign_acls = acls.exclude(organization_id=models.OuterRef("organization_id"))
+        feeds = (
+            CalendarFeed.objects.filter(
+                pk=self.pk, organization_id=self.organization_id
+            )
+            .annotate(_foreign_acl=models.Exists(foreign_acls))
+            .filter(_foreign_acl=False)
+        )
+        if role == "LeadMentor":
+            return feeds.exists()
+
+        field = "can_write" if write else "can_read"
+        allowed_acls = local_acls.filter(role=role, **{field: True})
+        feeds = feeds.annotate(_allowed_acl=models.Exists(allowed_acls))
+        if write:
+            return feeds.filter(_allowed_acl=True).exists()
+
+        return (
+            feeds.annotate(_local_acl=models.Exists(local_acls))
+            .filter(
+                models.Q(visibility=self.VISIBILITY_MEMBERS, _local_acl=False)
+                | models.Q(_allowed_acl=True)
+            )
+            .exists()
+        )
 
     def _has_active_organization_membership(self, user):
         if user.is_superuser:
@@ -167,6 +187,18 @@ class CalendarFeed(models.Model):
         return UserOrganizationMembership.objects.filter(
             user=user, organization_id=self.organization_id, is_active=True
         ).exists()
+
+    def has_foreign_acls(self):
+        return self.acls.exclude(organization_id=self.organization_id).exists()
+
+    def has_foreign_owned_children(self):
+        return (
+            self.has_foreign_acls()
+            or self.events.exclude(organization_id=self.organization_id).exists()
+            or EventException.objects.filter(event__feed_id=self.pk)
+            .exclude(organization_id=self.organization_id)
+            .exists()
+        )
 
     def get_events_for_date_range(self, start_date, end_date):
         """Return all active events in this feed for the given date range,

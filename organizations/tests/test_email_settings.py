@@ -501,7 +501,7 @@ class PortalEmailSettingsViewTests(TestCase):
         )
         self.assertEqual(balances_form.fields["from_account"].initial, "DEFAULT")
 
-        app_form = ApplicationEmailForm()
+        app_form = ApplicationEmailForm(organization=self.org)
         self.assertIn(
             "finance", [c[0] for c in app_form.fields["from_account"].choices]
         )

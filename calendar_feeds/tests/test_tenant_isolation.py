@@ -1,12 +1,14 @@
 """Tenant isolation regressions for calendar feeds and subscriptions."""
 
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser, User
+from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
-from calendar_feeds.forms import CalendarFeedForm
+from calendar_feeds.forms import CalendarFeedACLInlineFormSet, CalendarFeedForm
 from calendar_feeds.ics import FeedICSView, PersonalICSFeedView, PublicICSFeedView
 from calendar_feeds.models import (
     CalendarEvent,
@@ -14,6 +16,7 @@ from calendar_feeds.models import (
     CalendarFeedACL,
     UserCalendarToken,
 )
+from calendar_feeds.views import CalendarEventsAPIView, CalendarView, FeedACLUpdateView
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program
 
@@ -35,6 +38,7 @@ class CalendarFeedTenantIsolationTests(TestCase):
         )
         for role, (can_read, can_write) in (acls or {}).items():
             CalendarFeedACL.objects.create(
+                organization=organization,
                 feed=feed,
                 role=role,
                 can_read=can_read,
@@ -181,6 +185,135 @@ class CalendarFeedTenantIsolationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+    def test_foreign_acl_cannot_grant_private_feed_read_or_write(self):
+        feed = self.make_feed(
+            self.other,
+            name="Other Parent Foreign ACL Feed",
+            slug="other-parent-foreign-acl-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+        )
+        CalendarFeedACL.objects.create(
+            organization=self.other,
+            feed=feed,
+            role="Parent",
+            can_read=False,
+            can_write=False,
+        )
+        CalendarFeedACL.objects.create(
+            organization=self.gos,
+            feed=feed,
+            role="Parent",
+            can_read=True,
+            can_write=True,
+        )
+        parent = self.make_member("other-parent-foreign-acl", self.other, "Parent")
+
+        self.assertFalse(feed.user_can_read(parent))
+        self.assertFalse(feed.user_can_write(parent))
+
+        # Role authorization must not rely on a separate consistency precheck.
+        with patch.object(feed, "has_foreign_acls", side_effect=AssertionError):
+            self.assertFalse(feed.user_can_read(parent))
+            self.assertFalse(feed.user_can_write(parent))
+
+    def test_public_feed_remains_readable_with_foreign_acl(self):
+        feed = self.make_feed(
+            self.other,
+            name="Public Feed With Foreign ACL",
+            slug="public-foreign-acl-test",
+            visibility=CalendarFeed.VISIBILITY_ANONYMOUS,
+        )
+        CalendarFeedACL.objects.create(
+            organization=self.gos,
+            feed=feed,
+            role="Parent",
+            can_read=False,
+            can_write=False,
+        )
+
+        self.assertTrue(feed.user_can_read(AnonymousUser()))
+
+    def test_acl_consistency_and_role_checks_share_one_query(self):
+        feed = self.make_feed(
+            self.other,
+            name="Efficient ACL Feed",
+            slug="efficient-acl-tenant-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+            acls={"Parent": (True, True)},
+        )
+        parent = self.make_member("efficient-acl-parent", self.other, "Parent")
+
+        with self.assertNumQueries(3):
+            self.assertTrue(feed.user_can_read(parent))
+        with self.assertNumQueries(3):
+            self.assertTrue(feed.user_can_write(parent))
+
+    def test_acl_formset_does_not_include_foreign_owned_rows(self):
+        feed = self.make_feed(
+            self.other,
+            name="ACL Formset Feed",
+            slug="acl-formset-foreign-row-test",
+            visibility=CalendarFeed.VISIBILITY_MEMBERS,
+        )
+        foreign_acl = CalendarFeedACL.objects.create(
+            organization=self.gos,
+            feed=feed,
+            role="Parent",
+            can_read=True,
+            can_write=True,
+        )
+
+        formset = CalendarFeedACLInlineFormSet(instance=feed, prefix="acls")
+
+        self.assertNotIn(
+            foreign_acl.pk,
+            [form.instance.pk for form in formset.forms if form.instance.pk],
+        )
+
+        submitted_formset = CalendarFeedACLInlineFormSet(
+            data={
+                "acls-TOTAL_FORMS": "1",
+                "acls-INITIAL_FORMS": "1",
+                "acls-MIN_NUM_FORMS": "0",
+                "acls-MAX_NUM_FORMS": "1000",
+                "acls-0-id": str(foreign_acl.pk),
+                "acls-0-role": "Parent",
+                "acls-0-can_read": "",
+                "acls-0-can_write": "",
+            },
+            instance=feed,
+            prefix="acls",
+        )
+
+        self.assertTrue(submitted_formset.is_valid(), submitted_formset.errors)
+        submitted_formset.save()
+        foreign_acl.refresh_from_db()
+        self.assertTrue(foreign_acl.can_read)
+        self.assertTrue(foreign_acl.can_write)
+
+    def test_calendar_page_and_events_api_reject_missing_organization(self):
+        page_request = RequestFactory().get("/calendar/")
+        page_request.organization = None
+        page_request.user = AnonymousUser()
+        with self.assertRaises(Http404):
+            CalendarView.as_view()(page_request)
+
+        api_request = RequestFactory().get(
+            "/calendar/api/events/", {"start": "2026-01-01", "end": "2026-01-02"}
+        )
+        api_request.organization = None
+        api_request.user = AnonymousUser()
+        with self.assertRaises(Http404):
+            CalendarEventsAPIView.as_view()(api_request)
+
+    def test_calendar_acl_management_rejects_missing_organization(self):
+        request = RequestFactory().get("/calendar/feeds/1/acl/")
+        request.organization = None
+        request.user = AnonymousUser()
+
+        with self.assertRaises(Http404):
+            FeedACLUpdateView.as_view()(request, pk=1)
 
     def test_private_feed_and_write_require_active_membership_in_feed_organization(
         self,
