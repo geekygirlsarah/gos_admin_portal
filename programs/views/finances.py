@@ -49,7 +49,6 @@ from ..permission_views import (
 )
 from ..utils import (
     get_academic_year_ending,
-    get_student_balance_data,
     get_student_program_balance,
     redirect_back,
 )
@@ -57,7 +56,10 @@ from ..utils.balance_email import (
     get_balance_email_from_address,
     get_balance_email_settings,
 )
-from ..utils.balances import InconsistentBalanceStatementError
+from ..utils.balances import (
+    InconsistentBalanceStatementError,
+    TenantBalanceStatementCalculator,
+)
 from ..utils.email_async import send_messages_in_background
 from ..utils.email_html import extract_inline_images, html_to_text, normalize_email_html
 from ..utils.notifications import get_sender_connection
@@ -70,15 +72,58 @@ from .mixins import (
 )
 
 
+def _request_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
+
+
+def _tenant_program_student(request, program_id, student_id):
+    organization = _request_organization(request)
+    program = get_object_or_404(
+        Program.objects.for_organization(organization),
+        pk=program_id,
+        organization=organization,
+    )
+    student = get_object_or_404(
+        Student.objects.for_organization(organization),
+        pk=student_id,
+        organization=organization,
+    )
+    get_object_or_404(
+        Enrollment.objects.for_organization(organization).filter(
+            student__organization=organization,
+            program__organization=organization,
+        ),
+        student=student,
+        program=program,
+    )
+    return organization, program, student
+
+
 class ProgramFeeSelectView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/fee_select.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
-        fees = Fee.objects.filter(program=self.program).order_by("name")
+        organization = _request_organization(request)
+        fees = (
+            Fee.objects.for_organization(organization)
+            .filter(
+                program=self.program,
+                program__organization=organization,
+            )
+            .order_by("name")
+        )
         return render(
             request, self.template_name, {"program": self.program, "fees": fees}
         )
@@ -91,12 +136,25 @@ class ProgramFeeAssignmentEditView(
     section = "fees"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
-        self.fee = get_object_or_404(Fee, pk=kwargs["fee_id"], program=self.program)
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
+        self.fee = get_object_or_404(
+            Fee.objects.for_organization(organization).filter(
+                program__organization=organization
+            ),
+            pk=kwargs["fee_id"],
+            program=self.program,
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk, fee_id):
-        form = FeeAssignmentEditForm(program=self.program, fee=self.fee)
+        form = FeeAssignmentEditForm(
+            program=self.program, fee=self.fee, organization=request.organization
+        )
         return render(
             request,
             self.template_name,
@@ -104,7 +162,12 @@ class ProgramFeeAssignmentEditView(
         )
 
     def post(self, request, pk, fee_id):
-        form = FeeAssignmentEditForm(request.POST, program=self.program, fee=self.fee)
+        form = FeeAssignmentEditForm(
+            request.POST,
+            program=self.program,
+            fee=self.fee,
+            organization=request.organization,
+        )
         if form.is_valid():
             form.save()
             messages.success(request, "Fee applicability saved.")
@@ -132,7 +195,12 @@ class ProgramFeeCreateView(
     section = "fees"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -201,11 +269,23 @@ class ProgramFeeUpdateView(
     section = "fees"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        return get_object_or_404(Fee, pk=self.kwargs["fee_id"], program=self.program)
+        organization = _request_organization(self.request)
+        return get_object_or_404(
+            Fee.objects.for_organization(organization).filter(
+                program__organization=organization
+            ),
+            pk=self.kwargs["fee_id"],
+            program=self.program,
+        )
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -585,8 +665,12 @@ class SlidingScaleTaxFormDeleteView(
         return super().test_func()
 
     def post(self, request, sliding_id, form_id):
+        organization = _request_organization(request)
         tax_form = get_object_or_404(
-            TaxForm,
+            TaxForm.objects.for_organization(organization).filter(
+                sliding_scale__organization=organization,
+                sliding_scale__student__organization=organization,
+            ),
             pk=form_id,
             sliding_scale_id=sliding_id,
         )
@@ -617,7 +701,15 @@ class SlidingScaleTaxFormViewView(LoginRequiredMixin, LeadMentorRequiredMixin, V
         return super().test_func()
 
     def get(self, request, sliding_id, form_id):
-        tax_form = get_object_or_404(TaxForm, pk=form_id, sliding_scale_id=sliding_id)
+        organization = _request_organization(request)
+        tax_form = get_object_or_404(
+            TaxForm.objects.for_organization(organization).filter(
+                sliding_scale__organization=organization,
+                sliding_scale__student__organization=organization,
+            ),
+            pk=form_id,
+            sliding_scale_id=sliding_id,
+        )
         filename = os.path.basename(tax_form.file.name)
         content_type, _ = mimetypes.guess_type(filename)
         content_type = content_type or "application/octet-stream"
@@ -937,14 +1029,26 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
     section = "payments"
 
     def get(self, request, pk, student_id):
-        program = get_object_or_404(Program, pk=pk)
-        student = get_object_or_404(Student, pk=student_id)
+        organization, program, student = _tenant_program_student(
+            request, pk, student_id
+        )
 
         # Object level check for Parents (including parents who also mentor)
-        if user_is_parent(request.user, org=request.organization):
+        if user_is_parent(request.user, org=organization):
             try:
                 adult = request.user.adult_profile
-                if student not in adult.students.all():
+                has_local_relationship = (
+                    adult.organization_id == organization.pk
+                    and AdultStudentRelationship.objects.for_organization(organization)
+                    .filter(
+                        adult=adult,
+                        student=student,
+                        adult__organization=organization,
+                        student__organization=organization,
+                    )
+                    .exists()
+                )
+                if not has_local_relationship:
                     messages.error(
                         request,
                         "You do not have permission to view this balance sheet.",
@@ -955,15 +1059,18 @@ class ProgramStudentBalanceView(LoginRequiredMixin, DynamicReadPermissionMixin, 
                     request, "You do not have permission to view this balance sheet."
                 )
                 return redirect("home")
-        # Ensure enrollment
-        if not Enrollment.objects.filter(student=student, program=program).exists():
-            messages.error(request, f"{student} is not enrolled in {program}.")
-            return redirect("program_detail", pk=program.pk)
-
-        can_view_sliding = can_user_read(request.user, "sliding_scale")
-        balance_data = get_student_balance_data(
-            student, program, can_view_sliding=can_view_sliding
+        can_view_sliding = can_user_read(
+            request.user, "sliding_scale", org=organization
         )
+        calculator = TenantBalanceStatementCalculator(
+            organization, [student], [program]
+        )
+        try:
+            balance_data = calculator.get_balance_data(
+                student, program, can_view_sliding=can_view_sliding
+            )
+        except InconsistentBalanceStatementError as exc:
+            raise Http404("Balance data is unavailable for review.") from exc
 
         return render(
             request,
@@ -991,17 +1098,34 @@ class ProgramStudentBalancePrintView(
     section = "payments"
 
     def get_object(self):
-        return get_object_or_404(Student, pk=self.kwargs["student_id"])
+        organization = _request_organization(self.request)
+        return get_object_or_404(
+            Student.objects.for_organization(organization),
+            pk=self.kwargs["student_id"],
+            organization=organization,
+        )
 
     def get(self, request, pk, student_id):
-        program = get_object_or_404(Program, pk=pk)
-        student = get_object_or_404(Student, pk=student_id)
+        organization, program, student = _tenant_program_student(
+            request, pk, student_id
+        )
 
         # Object level check for Parents (including parents who also mentor)
-        if user_is_parent(request.user, org=request.organization):
+        if user_is_parent(request.user, org=organization):
             try:
                 adult = request.user.adult_profile
-                if student not in adult.students.all():
+                has_local_relationship = (
+                    adult.organization_id == organization.pk
+                    and AdultStudentRelationship.objects.for_organization(organization)
+                    .filter(
+                        adult=adult,
+                        student=student,
+                        adult__organization=organization,
+                        student__organization=organization,
+                    )
+                    .exists()
+                )
+                if not has_local_relationship:
                     messages.error(
                         request,
                         "You do not have permission to view this balance sheet.",
@@ -1012,15 +1136,18 @@ class ProgramStudentBalancePrintView(
                     request, "You do not have permission to view this balance sheet."
                 )
                 return redirect("home")
-        # Ensure enrollment
-        if not Enrollment.objects.filter(student=student, program=program).exists():
-            messages.error(request, f"{student} is not enrolled in {program}.")
-            return redirect("program_detail", pk=program.pk)
-
-        can_view_sliding = can_user_read(request.user, "sliding_scale")
-        balance_data = get_student_balance_data(
-            student, program, can_view_sliding=can_view_sliding
+        can_view_sliding = can_user_read(
+            request.user, "sliding_scale", org=organization
         )
+        calculator = TenantBalanceStatementCalculator(
+            organization, [student], [program]
+        )
+        try:
+            balance_data = calculator.get_balance_data(
+                student, program, can_view_sliding=can_view_sliding
+            )
+        except InconsistentBalanceStatementError as exc:
+            raise Http404("Balance data is unavailable for review.") from exc
 
         return render(
             request,
@@ -1289,19 +1416,38 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/dues_owed.html"
     section = "programs"
 
-    def _program_balance_data_for_student(self, student, program):
-        can_view_sliding = can_user_read(self.request.user, "sliding_scale")
-        return get_student_balance_data(
-            student,
-            program,
-            can_view_sliding=can_view_sliding,
+    def _program_balance_data_for_student(self, student, program, calculator):
+        organization = _request_organization(self.request)
+        can_view_sliding = can_user_read(
+            self.request.user, "sliding_scale", org=organization
+        )
+        return calculator.get_balance_data(
+            student, program, can_view_sliding=can_view_sliding
         )
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        organization = _request_organization(request)
+        program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=pk,
+            organization=organization,
+        )
+        has_mismatched_enrollments = (
+            Enrollment.objects.filter(program=program)
+            .exclude(
+                organization=organization,
+                student__organization=organization,
+            )
+            .exists()
+        )
         # Fetch all enrollments for this program.
         enrollments = (
-            Enrollment.objects.filter(program=program)
+            Enrollment.objects.for_organization(organization)
+            .filter(
+                program=program,
+                student__organization=organization,
+                program__organization=organization,
+            )
             .select_related("student", "student__school")
             .order_by(
                 Lower(
@@ -1313,15 +1459,30 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 Lower("student__last_name"),
             )
         )
+        calculator = TenantBalanceStatementCalculator(
+            organization, [enrollment.student for enrollment in enrollments], [program]
+        )
 
         active_rows = []
         inactive_rows = []
         total_dues = Decimal("0.00")
         total_balance = Decimal("0.00")
+        unavailable_count = int(has_mismatched_enrollments)
         filter_owed = request.GET.get("filter") == "owed"
         for e in enrollments:
             s = e.student
-            balance_data = self._program_balance_data_for_student(s, program)
+            try:
+                balance_data = self._program_balance_data_for_student(
+                    s, program, calculator
+                )
+            except InconsistentBalanceStatementError:
+                unavailable_count += 1
+                row = {"student": s, "balance_unavailable": True}
+                if not e.active or s.graduated:
+                    inactive_rows.append(row)
+                else:
+                    active_rows.append(row)
+                continue
             dues = balance_data["total_fees"] - balance_data["total_sliding"]
             balance = balance_data["balance"]
             if filter_owed and balance <= 0:
@@ -1355,6 +1516,8 @@ class ProgramDuesOwedView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 "total_dues": total_dues,
                 "total_balance": total_balance,
                 "grand_total": total_balance,
+                "unavailable_count": unavailable_count,
+                "totals_unavailable": unavailable_count > 0,
                 "filter_owed": filter_owed,
             },
         )

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django import forms
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 
@@ -24,6 +25,7 @@ from .models import (
     BackgroundCheckType,
     Crew,
     Fee,
+    FeeAssignment,
     Payment,
     Program,
     School,
@@ -1089,16 +1091,38 @@ def _save_fee_assignments(fee, students_queryset, selected_students):
     set (e.g. graduated/dropped ones) are preserved. An empty selection means
     the fee applies to everyone, so all assignments are cleared.
     """
-    from .models import FeeAssignment
+    organization_id = fee.organization_id
+    if not organization_id or fee.program.organization_id != organization_id:
+        raise ValidationError("Fee ownership does not match its program.")
 
     selectable_ids = list(students_queryset.values_list("id", flat=True))
-    # Delete assignments not in selection
-    FeeAssignment.objects.filter(fee=fee, student_id__in=selectable_ids).exclude(
-        student__in=selected_students
-    ).delete()
-    # Ensure assignments exist for selected
-    for s in selected_students:
-        FeeAssignment.objects.get_or_create(fee=fee, student=s)
+    if any(
+        student.organization_id != organization_id or student.pk not in selectable_ids
+        for student in selected_students
+    ):
+        raise ValidationError(
+            "Selected students must belong to this program's organization."
+        )
+
+    assignments = FeeAssignment.objects.filter(fee=fee)
+    if assignments.exclude(
+        organization_id=organization_id,
+        student__organization_id=organization_id,
+    ).exists():
+        raise ValidationError("Fee assignments need review before they can be changed.")
+
+    FeeAssignment.objects.filter(
+        fee=fee,
+        organization_id=organization_id,
+        student__organization_id=organization_id,
+        student_id__in=selectable_ids,
+    ).exclude(student__in=selected_students).delete()
+    for student in selected_students:
+        FeeAssignment.objects.get_or_create(
+            fee=fee,
+            student=student,
+            defaults={"organization_id": organization_id},
+        )
     return fee
 
 
@@ -1110,25 +1134,67 @@ class FeeAssignmentEditForm(forms.Form):
         widget=forms.SelectMultiple(attrs={"size": 15}),
     )
 
-    def __init__(self, *args, program: Program, fee: Fee, **kwargs):
+    def __init__(self, *args, program: Program, fee: Fee, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.program = program
         self.fee = fee
+        self.organization = organization or getattr(program, "organization", None)
         # Limit to actively enrolled students in the program, sorted by display
         # name then last name (case-insensitive; uses legal_first_name as
         # fallback). Inactive (graduated/dropped) students are excluded.
         self.fields["students"].queryset = self._students_queryset()
         # Preselect currently assigned students (if any)
-        self.fields["students"].initial = fee.assignments.values_list(
-            "student_id", flat=True
-        )
+        if self.organization and fee.organization_id == self.organization.pk:
+            self.fields["students"].initial = FeeAssignment.objects.filter(
+                fee=fee,
+                organization=self.organization,
+                student__organization=self.organization,
+            ).values_list("student_id", flat=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        if (
+            not self.organization
+            or self.program.organization_id != self.organization.pk
+            or self.fee.organization_id != self.organization.pk
+            or self.fee.program_id != self.program.pk
+        ):
+            raise forms.ValidationError("Organization context is required.")
+        if (
+            FeeAssignment.objects.filter(fee=self.fee)
+            .exclude(
+                organization=self.organization,
+                student__organization=self.organization,
+            )
+            .exists()
+        ):
+            raise forms.ValidationError(
+                "Fee assignments need review before they can be changed."
+            )
+        return cleaned
 
     def _students_queryset(self):
-        return active_students_in_program(self.program).order_by(
-            Lower(
-                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
-            ),
-            Lower("last_name"),
+        if (
+            not self.organization
+            or self.program.organization_id != self.organization.pk
+            or self.fee.organization_id != self.organization.pk
+        ):
+            return Student.objects.none()
+        return (
+            active_students_in_program(self.program, organization=self.organization)
+            .filter(
+                enrollment__organization=self.organization,
+                enrollment__program__organization=self.organization,
+            )
+            .distinct()
+            .order_by(
+                Lower(
+                    Coalesce(
+                        NullIf("preferred_first_name", Value("")), "legal_first_name"
+                    )
+                ),
+                Lower("last_name"),
+            )
         )
 
     def save(self):
@@ -1170,20 +1236,49 @@ class FeeForm(forms.ModelForm):
             self.fields["program"].required = True
         prog = self.instance.program if self.instance and self.instance.pk else program
         if prog is not None:
-            self.fields["students"].queryset = active_students_in_program(
-                prog
-            ).order_by(
-                Lower(
-                    Coalesce(
-                        NullIf("preferred_first_name", Value("")), "legal_first_name"
-                    )
-                ),
-                Lower("last_name"),
+            self.fields["program"].queryset = Program.objects.for_organization(
+                prog.organization
+            ).filter(pk=prog.pk)
+            self.fields["students"].queryset = (
+                active_students_in_program(prog, organization=prog.organization)
+                .filter(
+                    enrollment__organization=prog.organization,
+                    enrollment__program__organization=prog.organization,
+                )
+                .distinct()
+                .order_by(
+                    Lower(
+                        Coalesce(
+                            NullIf("preferred_first_name", Value("")),
+                            "legal_first_name",
+                        )
+                    ),
+                    Lower("last_name"),
+                )
             )
             if self.instance and self.instance.pk:
-                self.fields["students"].initial = self.instance.assignments.values_list(
-                    "student_id", flat=True
+                self.fields["students"].initial = FeeAssignment.objects.filter(
+                    fee=self.instance,
+                    organization=prog.organization,
+                    student__organization=prog.organization,
+                ).values_list("student_id", flat=True)
+
+    def clean(self):
+        cleaned = super().clean()
+        program = cleaned.get("program")
+        if self.instance and self.instance.pk and program:
+            if (
+                FeeAssignment.objects.filter(fee=self.instance)
+                .exclude(
+                    organization=program.organization,
+                    student__organization=program.organization,
                 )
+                .exists()
+            ):
+                raise forms.ValidationError(
+                    "Fee assignments need review before they can be changed."
+                )
+        return cleaned
 
     def _save_m2m(self):
         selected_students = list(self.cleaned_data.get("students", []))

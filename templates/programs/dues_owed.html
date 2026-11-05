@@ -23,6 +23,11 @@
   </div>
 
   {% if active_rows or inactive_rows %}
+    {% if unavailable_count %}
+      <div class="alert alert-warning">
+        Some rows or balances are unavailable because related records need review.
+      </div>
+    {% endif %}
     <div class="table-responsive">
       <table class="table table-hover align-middle">
         <thead>
@@ -43,16 +48,25 @@
                 <a class="text-decoration-none" href="{% url 'program_student_balance' program.id r.student.pk %}">{{ r.student.display_name }}</a>
               </td>
               <td>{{ r.student.school|default:'' }}</td>
-              <td class="text-end">${{ r.dues|floatformat:2 }}</td>
-              <td class="text-end">${{ r.balance|floatformat:2 }}</td>
+              {% if r.balance_unavailable %}
+                <td class="text-end text-muted">Unavailable</td>
+                <td class="text-end text-muted">Unavailable</td>
+              {% else %}
+                <td class="text-end">${{ r.dues|floatformat:2 }}</td>
+                <td class="text-end">${{ r.balance|floatformat:2 }}</td>
+              {% endif %}
             </tr>
           {% endfor %}
 
           {% if active_rows %}
             <tr class="table-light fw-bold border-top">
               <th colspan="2" class="text-end">Total</th>
-              <th class="text-end">${{ total_dues|floatformat:2 }}</th>
-              <th class="text-end">${{ total_balance|floatformat:2 }}</th>
+              {% if totals_unavailable %}
+                <th colspan="2" class="text-end text-muted">Unavailable pending review</th>
+              {% else %}
+                <th class="text-end">${{ total_dues|floatformat:2 }}</th>
+                <th class="text-end">${{ total_balance|floatformat:2 }}</th>
+              {% endif %}
             </tr>
           {% endif %}
 
@@ -71,8 +85,13 @@
                   <a class="text-muted text-decoration-none" href="{% url 'program_student_balance' program.id r.student.pk %}">{{ r.student.display_name }}</a>
                 </td>
                 <td>{{ r.student.school|default:'' }}</td>
-                <td class="text-end">${{ r.dues|floatformat:2 }}</td>
-                <td class="text-end">${{ r.balance|floatformat:2 }}</td>
+                {% if r.balance_unavailable %}
+                  <td class="text-end text-muted">Unavailable</td>
+                  <td class="text-end text-muted">Unavailable</td>
+                {% else %}
+                  <td class="text-end">${{ r.dues|floatformat:2 }}</td>
+                  <td class="text-end">${{ r.balance|floatformat:2 }}</td>
+                {% endif %}
               </tr>
             {% endfor %}
           {% endif %}
