@@ -16,6 +16,18 @@ To eliminate accidental emails to real parents and students in non-production en
 
 ---
 
+## Portal Addresses in Email
+
+Login branding and application links use the organization's canonical portal
+address: an active, unambiguously routed custom domain, otherwise an
+unambiguous Momentum subdomain. Legacy email portal URL overrides remain in
+storage but are not used. If no safe organization address is available,
+application resume links are omitted instead of using another tenant's host.
+Portal hostnames are separate from email sending domains and do not configure
+the sending provider, DNS, or HTTPS.
+
+---
+
 ## Bulk Email Pipeline & Background Dispatch
 
 Bulk email views (`ProgramEmailView`, `ApplicationEmailView`, `ProgramEmailBalancesView`) avoid request timeouts and spam filter penalties:

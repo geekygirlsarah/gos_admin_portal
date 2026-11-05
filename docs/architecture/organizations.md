@@ -46,6 +46,25 @@ Manages onboarding workflows for new members:
 - Uses secure, tokenized invitation links.
 - Associates invited users with the appropriate organization and role upon acceptance.
 
+### `OrganizationDomain`
+Stores custom portal hostnames separately from free-form organization settings:
+- Hostnames are normalized and unique across organizations.
+- New requests begin in `pending_verification`; the organization proves DNS control with the displayed TXT challenge.
+- DNS proof moves a domain to `dns_verified`, but only an operator may activate it after confirming DNS routing, HTTPS, and trusted host admission.
+- Only active registry records are used for newly registered custom-domain routing and canonical portal links. Disabling an active record takes effect on the next request, including requests that have a cached hostname mapping.
+- Existing GoS aliases and previously configured free-form custom domains remain as temporary compatibility routes; they are not automatically copied into or marked active in the registry. A pending registry request does not interrupt an existing legacy route, but disabling its registry record blocks that route. Inventory, verify, and transition these hosts before removing the compatibility paths.
+- Requests reserve their hostname even before DNS verification and after disablement. There is no automatic expiry. Do not treat an unverified reservation as proof of ownership.
+- A domain record's hostname and organization are immutable through ordinary model saves. The only approved identity change is the locked, audited recovery transition below; bulk database updates outside that service bypass validation and must not change those fields.
+
+### Recovery of an unverified reservation
+
+1. A lead mentor on the requesting tenant's portal requests recovery of the reserved hostname. Only another tenant's never-verified, never-activated pending reservation is eligible; verified, active, disabled and legacy alias claims are not transferred. Existing free-form custom-domain claims also block recovery.
+2. The requesting tenant publishes its independent TXT challenge and checks it in portal settings. Challenges and recovery records are scoped to that tenant. A revoked request cannot be approved; a new request gets a new challenge. Competing tenants may each request recovery, but cannot reuse one another's proof.
+3. A root-domain platform superuser reviews the request on the requesting organization's platform detail page. Approval rechecks the reservation identity, status, legacy claims, and the fresh TXT proof while holding the registry lock. Failure or a DNS error leaves ownership unchanged. A competing claim, changed original token, or original verification makes older requests ineligible; revoke and request again if appropriate.
+4. Successful approval records the old and new organization IDs in the audit log and retains recovery history and original reservation attribution. The registry row becomes DNS-verified but **not active**. The operator must separately confirm routing, HTTPS, and trusted host admission, and activate it using the existing activation workflow. Until then the recovered domain does not route to the new tenant.
+
+Recovery actions roll back if their audit event cannot be written. Registry transitions lock the hostname row; the database enforces at most one pending recovery per tenant and hostname. SQLite has database-level rather than row-level locking and bounded approval retries. On PostgreSQL, approval takes a share lock on the organization table as well as row locks so legacy settings cannot be inserted or changed during its check; this can briefly delay organization writes while DNS is queried. Other database backends fail closed for recovery approval. Legacy settings remain outside the registry, so routing and activation must continue to reject conflicting claims introduced after approval.
+
 ---
 
 ## Model Multi-Tenancy & Query Scoping
@@ -79,11 +98,11 @@ All organization-owned models across apps (`programs`, `applications`, `attendan
 Resolution uses the validated request hostname only; `HttpRequest.get_host()` enforces Django's `ALLOWED_HOSTS` before routing:
 1. **Root Marketing Domain**: The configured `MOMENTUM_ROOT_DOMAIN` (default `localhost` in settings) and its `www` host, plus the Momentum marketing root, have no organization context and serve the platform's public pages.
 2. **Legacy Aliases**: Known GoS hosts (such as `portal.girlsofsteelrobotics.org` and `gosadmin.com`) resolve to the active `gos` organization.
-3. **Custom Domains**: An exact hostname match against an active organization's configured domain resolves that tenant. The hostname must also pass `ALLOWED_HOSTS`; configure custom hosts there or through a trusted, validated ingress boundary.
+3. **Registered Custom Domains**: An exact hostname match against an active `OrganizationDomain` record in the `active` state resolves that tenant. New records require an exact DNS TXT challenge and explicit operator activation after HTTPS and host admission are ready. The hostname must also pass Django `ALLOWED_HOSTS` or a trusted, validated ingress boundary.
 4. **Tenant Subdomains**: One tenant label beneath `MOMENTUM_ROOT_DOMAIN` or `.localhost` resolves by matching the organization's `subdomain` or `slug`.
 5. **No Match**: An unresolved host has no organization. Middleware returns a direct 404 for non-platform hosts rather than falling back to a session or `DEFAULT_ORGANIZATION_SLUG`. Static and media paths remain exempt; Django's synthetic `testserver` host uses the configured default organization only while tests run.
 
-Organization-routing headers are ignored. Do not rely on the hostname as a substitute for membership and object-level authorization; tenant views must still enforce their established access rules.
+Existing free-form custom-domain settings and GoS aliases remain temporary compatibility routes during transition; they are not treated as verified registry records. Do not migrate them into the registry as active without inventory and verification. Organization-routing headers are ignored. Do not rely on the hostname as a substitute for membership and object-level authorization; tenant views must still enforce their established access rules.
 
 ### Authenticated tenant membership guard
 
@@ -148,7 +167,7 @@ Dedicated platform administration endpoints (`/platform-admin/`) are strictly re
 - **Platform Usage Metrics (`/platform-admin/metrics/`)**: Multi-tenant metrics for attendance sessions/hours, application pipeline status, purchase orders, outreach, and role distribution.
 - **System & Isolation Diagnostics (`/platform-admin/health/`)**: Scans database tables across all domain apps to detect unscoped (`organization__isnull=True`) records, verify database connectivity, and report compliance bottlenecks.
 - **User Support Directory (`/platform-admin/users/`)**: Global search across all tenants by name, username, email, phone, or Andrew ID, with account status toggling.
-- **Support Impersonation (`/platform-admin/impersonate/<id>/`)**: Enables superusers to log into any regular user account for troubleshooting without knowing their credentials. Safeguards prevent impersonating other superusers, record audit events (`USER_IMPERSONATED` and `IMPERSONATION_ENDED`), display persistent warning banners, and support one-click termination (`/platform-admin/impersonate/stop/`).
+- **Support Impersonation (`/platform-admin/impersonate/<id>/`)**: Active platform superusers select a specific active organization membership. The platform creates a five-minute, one-use POST handoff to that tenant's canonical HTTPS host. A narrowly CSRF-exempt, read-only bootstrap validates the high-entropy token issued only after a CSRF-protected platform request; a same-origin, CSRF-protected POST then consumes it and binds it to the existing tenant session. The browser returns to the platform, where the original superuser session is rechecked and issues a second one-use proof; a CSRF-protected tenant POST accepts that proof only in the bound tenant session. These steps preserve existing tenant cookies even for custom domains on another site. A separate CSRF-protected confirmation is required before replacing any existing tenant login. The platform session remains a superuser session only on the platform host; the tenant session authenticates as the selected member and cannot elevate to superuser. Every stage rechecks the selected host, account states, and membership; audit failure blocks starting access. Abandoned pending handoffs are closed when replaced. The tenant displays an impersonation banner and ends the tenant session on exit, while the separate platform session remains intact. Audit events record start and end (`USER_IMPERSONATED` and `IMPERSONATION_ENDED`).
 - **Cross-Tenant Audit Log Explorer (`/platform-admin/audit/`)**: Searchable and filterable history of security events, administrative updates, and access records.
 
 ---

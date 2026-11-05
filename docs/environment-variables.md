@@ -60,7 +60,7 @@ This document catalogues all environment variables supported by Momentum (Girls 
 - **Default**: `localhost`, `.localhost`, and `127.0.0.1`; production must provide the accepted public hosts through the `ALLOWED_HOSTS` environment variable.
 - **Format**: Comma-separated domain list, e.g., `.momentumteam.app,portal.example.org`. A leading dot allows the domain and its subdomains.
 - **Purpose**: Protects against HTTP Host header attacks.
-- **Tenant routing**: A tenant subdomain must be beneath `MOMENTUM_ROOT_DOMAIN`. Custom domains are checked against active organization settings only after Django accepts the host, so each custom host must be included in `ALLOWED_HOSTS` or accepted by an explicitly trusted, validated ingress boundary. Do not use an unrestricted `*` to allow customer domains.
+- **Tenant routing**: A tenant subdomain must be beneath `MOMENTUM_ROOT_DOMAIN`. New custom domains must have an active verified registry record and must also pass Django `ALLOWED_HOSTS` or an explicitly trusted, validated ingress boundary. A DNS TXT check alone does not configure CNAME routing, HTTPS, or host admission; a platform operator confirms those before activation. Do not use an unrestricted `*` to allow customer domains. Existing configured custom-domain routes remain temporarily for transition and are not automatically promoted into the verified registry.
 
 ### Production SSL & Header Controls
 These settings take effect when `DEBUG=False`:

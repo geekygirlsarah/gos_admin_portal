@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
-from organizations.models import Organization
+from organizations.models import Organization, OrganizationDomain
 from programs.models import (
     Adult,
     Crew,
@@ -136,6 +136,10 @@ class SettingsUIImprovementsTests(TestCase):
         )
         org.subdomain = "gos"
         org.save(update_fields=["subdomain"])
+        OrganizationDomain.objects.create(
+            organization=org,
+            hostname="gos-portal.example.org",
+        )
         self._login(self.lead_user)
 
         response = self.client.get(reverse("portal_settings") + "?tab=portal_address")
@@ -145,9 +149,10 @@ class SettingsUIImprovementsTests(TestCase):
         self.assertContains(response, 'href="https://gos.momentumteam.app"')
         self.assertContains(
             response,
-            "Connecting a domain you own requires administrator setup; "
-            "please contact your Momentum administrator before changing DNS.",
+            "Your Momentum address keeps working after you connect a domain.",
         )
+        self.assertContains(response, "Request a domain you own")
+        self.assertContains(response, "Check TXT record")
         self.assertContains(
             response,
             "Your portal address and your email sending domain are configured separately.",

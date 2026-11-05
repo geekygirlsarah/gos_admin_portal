@@ -18,8 +18,8 @@
 </div>
 <p>This code expires in 15 minutes.</p>
 <p>You can also resume your application any time using:<br>
-    &nbsp;&nbsp;Application ID: <strong>{{ application.application_id }}</strong><br>
-    &nbsp;&nbsp;Resume link: <a href="{{ resume_url }}">{{ resume_url }}</a>
+    &nbsp;&nbsp;Application ID: <strong>{{ application.application_id }}</strong>
+    {% if resume_url %}<br>&nbsp;&nbsp;Resume link: <a href="{{ resume_url }}">{{ resume_url }}</a>{% endif %}
 </p>
 <p style="font-size: 13px; color: #6c757d;">If you did not start an application with {{ org_email_settings.organization_name|default:"Girls of Steel" }}, you can safely ignore this email.</p>
 {% else %}

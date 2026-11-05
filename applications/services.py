@@ -82,9 +82,16 @@ def _build_app_email_ctx(
 def _absolute_apply_url(request, application: Application) -> str:
     """Build an absolute URL the applicant can use to resume."""
     path = reverse("apply_resume_link", kwargs={"app_id": application.application_id})
-    if request is not None:
-        return request.build_absolute_uri(path)
-    return path
+    return _application_email_url(application, path)
+
+
+def _application_email_url(application: Application, path: str) -> str:
+    from organizations.utils import get_organization_url
+
+    if not application.organization_id:
+        return ""
+    base_url = get_organization_url(application.organization)
+    return f"{base_url}{path}" if base_url else ""
 
 
 def _should_send_async() -> bool:
@@ -509,7 +516,7 @@ def send_parent_handoff_email(
             "apply_resume_link",
             kwargs={"app_id": application.application_id},
         )
-    resume_url = request.build_absolute_uri(path) if request is not None else path
+    resume_url = _application_email_url(application, path)
 
     ctx = _build_app_email_ctx(
         application,
@@ -633,8 +640,7 @@ def send_application_approved_email(application: Application, request=None) -> N
     # Link the applicant straight into Step 9 via the resume link, which
     # will redirect to /apply/<id>/step9/ for APPROVED applications.
 
-    path = reverse("apply_resume_link", kwargs={"app_id": application.application_id})
-    documents_url = request.build_absolute_uri(path) if request is not None else path
+    documents_url = _absolute_apply_url(request, application)
     ctx = _build_app_email_ctx(
         application,
         {

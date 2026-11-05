@@ -1880,11 +1880,98 @@
                 <div class="card-body p-4">
                     <div class="mb-4">
                         <div class="form-label fw-semibold small">Your team's Momentum address</div>
+                        {% if momentum_portal_url %}
                         <a class="fs-5" href="{{ momentum_portal_url }}">{{ momentum_portal_url }}</a>
+                        {% else %}
+                        <span class="text-danger">Address unavailable. Contact your Momentum administrator.</span>
+                        {% endif %}
                     </div>
                     <div class="alert alert-info mb-3" role="alert">
-                        Connecting a domain you own requires administrator setup; please contact your Momentum administrator before changing DNS.
+                        Your Momentum address keeps working after you connect a domain. New custom addresses need DNS, HTTPS, and host routing checked by a Momentum administrator; existing legacy addresses may already work during the transition.
                     </div>
+                    <form method="post" action="{% url 'portal_domains' %}" class="border rounded-3 p-3 mb-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="request">
+                        <label for="portal_domain_hostname" class="form-label fw-semibold">Request a domain you own</label>
+                        <div class="input-group">
+                            <input type="text" name="hostname" id="portal_domain_hostname" class="form-control" maxlength="253" placeholder="portal.example.org" required>
+                            <button type="submit" class="btn btn-outline-primary">Add domain</button>
+                        </div>
+                        <div class="form-text">Enter only the hostname, not a URL. You can request more than one address; each must be verified and enabled separately.</div>
+                    </form>
+
+                    <form method="post" action="{% url 'portal_domains' %}" class="border rounded-3 p-3 mb-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="request_recovery">
+                        <label for="recovery_hostname" class="form-label fw-semibold">Recover a reserved domain you own</label>
+                        <div class="input-group">
+                            <input type="text" name="hostname" id="recovery_hostname" class="form-control" maxlength="253" placeholder="portal.example.org" required>
+                            <button type="submit" class="btn btn-outline-primary">Request recovery</button>
+                        </div>
+                        <div class="form-text">Only unverified reservations may be reviewed. You must prove ownership with a new TXT record; Momentum support must approve the recovery and activate the domain separately.</div>
+                    </form>
+                    {% for recovery in organization.domain_recoveries.all %}
+                    {% if recovery.status == 'pending' %}
+                    <div class="border rounded-3 p-3 mb-3">
+                        <div class="fw-semibold">Recovery request: {{ recovery.hostname }}</div>
+                        {% if recovery.dns_verified_at %}<div class="small text-muted">DNS proof checked; waiting for operator review.</div>{% endif %}
+                        <div class="small mt-2">Name: <code>{{ recovery.verification_txt_name }}</code></div>
+                        <div class="small">Value: <code>{{ recovery.verification_txt_value }}</code></div>
+                        <form method="post" action="{% url 'portal_domains' %}" class="d-inline-block mt-2">
+                            {% csrf_token %}<input type="hidden" name="action" value="verify_recovery"><input type="hidden" name="recovery_id" value="{{ recovery.pk }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Check TXT record</button>
+                        </form>
+                        <form method="post" action="{% url 'portal_domains' %}" class="d-inline-block mt-2">
+                            {% csrf_token %}<input type="hidden" name="action" value="revoke_recovery"><input type="hidden" name="recovery_id" value="{{ recovery.pk }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Revoke request</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+
+                    {% if organization_domains %}
+                    <h6 class="fw-bold mb-3">Requested domains</h6>
+                    <div class="list-group mb-4">
+                        {% for domain in organization_domains %}
+                        <div class="list-group-item py-3">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    {% if domain.status == 'active' %}
+                                    <a class="fw-semibold" href="https://{{ domain.hostname }}">{{ domain.hostname }}</a>
+                                    {% else %}
+                                    <span class="fw-semibold">{{ domain.hostname }}</span>
+                                    {% endif %}
+                                    <div class="small text-muted">{{ domain.get_status_display }}</div>
+                                </div>
+                                {% if domain.status == 'active' %}
+                                <span class="badge text-bg-success">Ready</span>
+                                {% elif domain.status == 'dns_verified' %}
+                                <span class="badge text-bg-info">Waiting for setup</span>
+                                {% elif domain.status == 'disabled' %}
+                                <span class="badge text-bg-secondary">Disabled</span>
+                                {% else %}
+                                <span class="badge text-bg-warning">DNS check needed</span>
+                                {% endif %}
+                            </div>
+                            {% if domain.status != 'active' %}
+                            <div class="mt-3 small">
+                                <div class="fw-semibold">DNS ownership check</div>
+                                <p class="mb-2">Add a TXT record with this name and value at your DNS provider, wait for it to update, then select “Check TXT record.”</p>
+                                <div class="mb-1">Name: <code>{{ domain.verification_txt_name }}</code></div>
+                                <div>Value: <code>{{ domain.verification_txt_value }}</code></div>
+                                <p class="text-muted mt-2 mb-2">This proves you control the domain. It does not configure the CNAME, HTTPS, or activate the portal. Contact your Momentum administrator for the CNAME target and final setup.</p>
+                                <form method="post" action="{% url 'portal_domains' %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="verify">
+                                    <input type="hidden" name="domain_id" value="{{ domain.pk }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Check TXT record</button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                     <p class="text-muted small mb-0">Your portal address and your email sending domain are configured separately.</p>
                 </div>
             </div>

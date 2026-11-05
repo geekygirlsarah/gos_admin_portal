@@ -18,9 +18,9 @@
     <strong>Application ID:</strong> <code>{{ application.application_id }}</code>
 </p>
 <p>
-    Our lead mentors have been notified and will review your application.
+    Our lead mentors have been notified and will review your application.{% if resume_url %}
     You can check back at any time using
-    <a href="{{ resume_url }}">your application link</a>.
+    <a href="{{ resume_url }}">your application link</a>.{% endif %}
 </p>
 <p style="color:#666;font-size:0.9em">
     Questions? Email

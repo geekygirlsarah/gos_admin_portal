@@ -10,7 +10,8 @@ This code expires in 15 minutes.
 
 You can also resume your application any time using:
   Application ID: {{ application.application_id }}
-  Resume link:    {{ resume_url }}
+{% if resume_url %}  Resume link:    {{ resume_url }}
+{% endif %}
 
 If you did not start an application with Girls of Steel, you can safely ignore this email.
 {% else %}You (or someone else) requested a login code for the Girls of Steel Portal.

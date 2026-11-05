@@ -95,7 +95,7 @@ class TenantMembershipGuardTests(TestCase):
             reverse("platform_admin:impersonate_stop"), HTTP_HOST=self.host
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(int(self.client.session["_auth_user_id"]), admin.pk)
+        self.assertNotIn("_auth_user_id", self.client.session)
         self.assertTrue(
             AuditLog.objects.filter(
                 event=AuditEvent.IMPERSONATION_ENDED, actor=admin

@@ -95,13 +95,32 @@ def handler500(request):
 def _active_organizations_with_portal_urls():
     from urllib.parse import urlsplit
 
-    from organizations.models import Organization
-    from organizations.utils import get_organization_url
-
-    organizations = list(
-        Organization.objects.filter(is_active=True).order_by("name")
+    from organizations.models import Organization, OrganizationDomain
+    from organizations.utils import (
+        build_organization_routing_snapshot,
+        get_organization_url,
     )
+
+    organizations = list(Organization.objects.filter(is_active=True).order_by("name"))
+    registered_domains = list(
+        OrganizationDomain.objects.select_related("organization").order_by(
+            "created_at", "pk"
+        )
+    )
+    routing_snapshot = build_organization_routing_snapshot(
+        organizations, registered_domains
+    )
+    active_domains_by_organization = {}
+    for domain in registered_domains:
+        if domain.status == OrganizationDomain.STATUS_ACTIVE:
+            active_domains_by_organization.setdefault(
+                domain.organization_id, []
+            ).append(domain)
     for organization in organizations:
+        organization._active_portal_domains = active_domains_by_organization.get(
+            organization.pk, []
+        )
+        organization._routing_snapshot = routing_snapshot
         organization.portal_url = get_organization_url(organization)
         organization.portal_host = urlsplit(organization.portal_url).netloc
     return organizations

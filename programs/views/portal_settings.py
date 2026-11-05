@@ -5,13 +5,20 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
-from django.shortcuts import redirect, render
+from django.db import IntegrityError, transaction
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 
-from audit.service import log_deletion
-from organizations.models import Organization
+from audit.events import AuditEvent
+from audit.service import log_deletion, log_event
+from organizations import domain_recovery
+from organizations.domain_forms import OrganizationDomainRequestForm
+from organizations.domain_verification import verify_domain_txt
+from organizations.models import Organization, OrganizationDomain
 from organizations.utils import (
     get_default_organization,
     get_organization_email_settings,
@@ -159,6 +166,14 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             .order_by("-created_at")
         )
 
+        organization_domains = (
+            OrganizationDomain.objects.for_organization(org).order_by(
+                "-created_at", "hostname"
+            )
+            if org
+            else OrganizationDomain.objects.none()
+        )
+
         context = {
             "grouped_permissions": grouped_permissions,
             "teams": teams,
@@ -183,6 +198,7 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             "eligible_lead_mentor_users": eligible_lead_mentor_users,
             "pending_lead_mentor_invitations": pending_lead_mentor_invitations,
             "organization": org,
+            "organization_domains": organization_domains,
             "momentum_portal_url": get_organization_momentum_url(org),
             "email_settings": email_settings,
             "role": "LeadMentor",  # Required for base.html to show Nav correctly
@@ -628,9 +644,6 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             footer_text = request.POST.get("footer_text", "").strip()
             contact_name = request.POST.get("contact_name", "").strip()
             contact_email = request.POST.get("contact_email", "").strip()
-            portal_url = request.POST.get("portal_url", "").strip()
-            if portal_url and not portal_url.startswith(("http://", "https://")):
-                portal_url = f"https://{portal_url}"
 
             logo_url = request.POST.get("logo_url", "").strip()
             remove_logo = request.POST.get("remove_logo") in (
@@ -689,7 +702,6 @@ class PortalEmailSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View)
             email_cfg["address_line1"] = address_line1
             email_cfg["address_line2"] = address_line2
             email_cfg["footer_text"] = footer_text
-            email_cfg["portal_url"] = portal_url
             email_cfg["contact_name"] = contact_name
             email_cfg["contact_email"] = contact_email
             email_cfg["logo_url"] = logo_url
@@ -1160,6 +1172,22 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         org = getattr(request, "organization", None) or get_default_organization()
         action = request.POST.get("action")
 
+        def report_failed_invitation(invitation, change):
+            log_event(
+                request=request,
+                event=AuditEvent.ROLE_CHANGED,
+                resource=invitation,
+                notes=(
+                    f"{change} Lead Mentor invitation to {invitation.email} for "
+                    f"organization '{org.name}'; email not sent."
+                ),
+            )
+            messages.error(
+                request,
+                f"The invitation for {invitation.email} was saved but could not be sent. "
+                "Check the portal address and email settings, then retry the invitation.",
+            )
+
         if action == "add_lead_mentor":
             user_id = request.POST.get("user_id")
             if not user_id:
@@ -1221,7 +1249,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 existing_invite.expires_at = timezone.now() + timedelta(days=14)
                 existing_invite.invited_by = request.user
                 existing_invite.save(update_fields=["expires_at", "invited_by"])
-                send_invitation_email(existing_invite, request=request)
+                if not send_invitation_email(existing_invite, request=request):
+                    report_failed_invitation(existing_invite, "Refreshed")
+                    return redirect("/programs/settings/?tab=lead_mentors")
                 log_event(
                     request=request,
                     event=AuditEvent.ROLE_CHANGED,
@@ -1241,7 +1271,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 invited_by=request.user,
                 expires_at=timezone.now() + timedelta(days=14),
             )
-            send_invitation_email(invitation, request=request)
+            if not send_invitation_email(invitation, request=request):
+                report_failed_invitation(invitation, "Created")
+                return redirect("/programs/settings/?tab=lead_mentors")
             log_event(
                 request=request,
                 event=AuditEvent.ROLE_CHANGED,
@@ -1350,7 +1382,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 existing_invite.expires_at = timezone.now() + timedelta(days=14)
                 existing_invite.invited_by = request.user
                 existing_invite.save(update_fields=["expires_at", "invited_by"])
-                send_invitation_email(existing_invite, request=request)
+                if not send_invitation_email(existing_invite, request=request):
+                    report_failed_invitation(existing_invite, "Refreshed")
+                    return redirect("/programs/settings/?tab=lead_mentors")
                 log_event(
                     request=request,
                     event=AuditEvent.ROLE_CHANGED,
@@ -1370,7 +1404,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 invited_by=request.user,
                 expires_at=timezone.now() + timedelta(days=14),
             )
-            send_invitation_email(invitation, request=request)
+            if not send_invitation_email(invitation, request=request):
+                report_failed_invitation(invitation, "Created")
+                return redirect("/programs/settings/?tab=lead_mentors")
             log_event(
                 request=request,
                 event=AuditEvent.ROLE_CHANGED,
@@ -1401,7 +1437,9 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
             invitation.expires_at = timezone.now() + timedelta(days=14)
             invitation.save(update_fields=["expires_at"])
-            send_invitation_email(invitation, request=request)
+            if not send_invitation_email(invitation, request=request):
+                report_failed_invitation(invitation, "Refreshed")
+                return redirect("/programs/settings/?tab=lead_mentors")
             messages.success(
                 request,
                 f"Resent Lead Mentor invitation to {invitation.email}.",
@@ -1440,3 +1478,145 @@ class PortalLeadMentorView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
         messages.error(request, "Unknown action.")
         return redirect("/programs/settings/?tab=lead_mentors")
+
+
+class PortalDomainView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
+    """Manage custom portal-domain requests for the current organization."""
+
+    redirect_url = "/programs/settings/?tab=portal_address"
+
+    def post(self, request):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+
+        action = request.POST.get("action")
+        if action in ("request_recovery", "verify_recovery", "revoke_recovery"):
+            try:
+                if action == "request_recovery":
+                    domain_recovery.request_recovery(
+                        request, organization, request.POST.get("hostname", "")
+                    )
+                    message = (
+                        "Recovery requested. Publish the separate TXT challenge below."
+                    )
+                elif action == "verify_recovery":
+                    domain_recovery.verify_recovery(
+                        request, organization, request.POST.get("recovery_id")
+                    )
+                    message = (
+                        "DNS proof verified. Momentum support must review the recovery."
+                    )
+                else:
+                    domain_recovery.revoke_recovery(
+                        request, organization, request.POST.get("recovery_id")
+                    )
+                    message = "Recovery request revoked."
+            except (domain_recovery.RecoveryError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, message)
+            return redirect(self.redirect_url)
+
+        if action == "request":
+            form = OrganizationDomainRequestForm(
+                request.POST, organization=organization
+            )
+            if not form.is_valid():
+                messages.error(
+                    request,
+                    "; ".join(form.errors.get("hostname", ["Enter a valid hostname."])),
+                )
+                return redirect(self.redirect_url)
+
+            domain = OrganizationDomain(
+                organization=organization,
+                hostname=form.cleaned_data["hostname"],
+                created_by=request.user,
+            )
+            try:
+                domain.save()
+            except IntegrityError:
+                messages.error(
+                    request,
+                    "That hostname is already registered. Contact Momentum support if you believe this is an error.",
+                )
+                return redirect(self.redirect_url)
+
+            log_event(
+                request=request,
+                event=AuditEvent.ORGANIZATION_UPDATED,
+                resource=organization,
+                notes=f"Requested portal hostname {domain.hostname}.",
+            )
+            messages.success(
+                request,
+                f"Added {domain.hostname}. Add the TXT record shown below, then check it here. "
+                "New addresses need Momentum support to complete setup and activate them; existing "
+                "legacy addresses can continue working during the transition.",
+            )
+            return redirect(self.redirect_url)
+
+        if action == "verify":
+            domain = get_object_or_404(
+                OrganizationDomain.objects.for_organization(organization),
+                pk=request.POST.get("domain_id"),
+            )
+            if domain.status == OrganizationDomain.STATUS_ACTIVE:
+                messages.info(request, "This domain is already active.")
+                return redirect(self.redirect_url)
+
+            if not verify_domain_txt(domain):
+                messages.error(
+                    request,
+                    "We could not find the matching TXT record. Check the record name and value, allow time "
+                    "for DNS to update, then try again.",
+                )
+                return redirect(self.redirect_url)
+
+            with transaction.atomic():
+                current = get_object_or_404(
+                    OrganizationDomain.objects.for_organization(
+                        organization
+                    ).select_for_update(),
+                    pk=domain.pk,
+                )
+                if (
+                    current.hostname != domain.hostname
+                    or current.verification_token != domain.verification_token
+                ):
+                    messages.error(
+                        request, "The domain changed during verification. Try again."
+                    )
+                    return redirect(self.redirect_url)
+                if current.status == OrganizationDomain.STATUS_ACTIVE:
+                    messages.info(request, "This domain is already active.")
+                    return redirect(self.redirect_url)
+
+                current.dns_verified_at = timezone.now()
+                if current.status != OrganizationDomain.STATUS_DISABLED:
+                    current.status = OrganizationDomain.STATUS_DNS_VERIFIED
+                current.save(update_fields=["dns_verified_at", "status", "updated_at"])
+                log_event(
+                    request=request,
+                    event=AuditEvent.ORGANIZATION_UPDATED,
+                    resource=organization,
+                    notes=f"Verified DNS ownership for portal hostname {current.hostname}.",
+                )
+
+            if current.status == OrganizationDomain.STATUS_DISABLED:
+                messages.success(
+                    request,
+                    f"DNS ownership for {current.hostname} is verified. The domain remains disabled "
+                    "until a Momentum administrator activates it.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"DNS ownership for {current.hostname} is verified. Registry activation still requires "
+                    "Momentum support to confirm HTTPS and host routing; existing legacy routes may remain available.",
+                )
+            return redirect(self.redirect_url)
+
+        messages.error(request, "Unknown domain action.")
+        return redirect(self.redirect_url)

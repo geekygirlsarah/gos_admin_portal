@@ -4,10 +4,11 @@ from datetime import date, time, timedelta
 
 from django.contrib.auth.models import Group, User
 from django.core import mail
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization, OrganizationDomain, OrganizationSettings
 from organizations.utils import get_organization_email_settings
 from outreach.models import (
     OutreachEvent,
@@ -17,9 +18,13 @@ from outreach.models import (
 )
 from outreach.services import (
     generate_shift_ics,
+    notify_mentor_event_deleted,
+    notify_mentor_outreach_reminder,
     notify_mentor_outreach_signup,
     notify_outreach_event_deleted,
+    notify_outreach_reminder,
     notify_outreach_signup,
+    notify_student_event_deleted,
 )
 from outreach.tests.factories import add_gos_membership, create_outreach_event
 from programs.models import Adult, Enrollment, Program, ProgramFeature, School, Student
@@ -291,11 +296,10 @@ class OutreachNotificationsTest(TestCase):
         self.assertEqual(email.to, ["mentor@example.com"])
         self.assertIn("Mentor", email.subject)
 
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
     def test_notification_with_custom_organization_domain(self):
-        from organizations.models import Organization, OrganizationSettings
-
         org = Organization.objects.create(name="Custom Org", slug="custom")
-        org_settings = OrganizationSettings.objects.create(
+        OrganizationSettings.objects.create(
             organization=org,
             data={
                 "email_settings": {
@@ -319,12 +323,136 @@ class OutreachNotificationsTest(TestCase):
         self.assertIn("Log in to the Custom Robotics Org Portal", email.body)
         html_body, _ = email.alternatives[0]
         expected_url = (
-            f"https://robotics.example.com/programs/{self.program.id}/outreach/"
+            f"https://custom.momentumteam.app/programs/{self.program.id}/outreach/"
         )
         self.assertIn(expected_url, html_body)
         self.assertIn(
-            'Log in to the <a href="https://robotics.example.com/programs/', html_body
+            'Log in to the <a href="https://custom.momentumteam.app/programs/',
+            html_body,
         )
+        self.assertNotIn("robotics.example.com", html_body)
+
+    def _send_all_outreach_notifications(self):
+        signup = OutreachSignup.objects.create(
+            student=self.student1, shift=self.shift, role=OutreachSignup.CHAMPION
+        )
+        mentor_signup = OutreachMentorSignup.objects.create(
+            adult=self.mentor_adult, shift=self.shift
+        )
+        for notify, recipient in (
+            (notify_outreach_signup, signup),
+            (notify_outreach_reminder, signup),
+            (notify_student_event_deleted, signup),
+            (notify_mentor_outreach_signup, mentor_signup),
+            (notify_mentor_outreach_reminder, mentor_signup),
+            (notify_mentor_event_deleted, mentor_signup),
+        ):
+            self.assertTrue(notify(recipient))
+        self.assertEqual(len(mail.outbox), 6)
+        return mail.outbox
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_all_notifications_use_active_tenant_domain_not_overrides(self):
+        org = Organization.objects.create(name="Tenant A", slug="tenant-a")
+        other = Organization.objects.create(name="Tenant B", slug="tenant-b")
+        now = timezone.now()
+        for owner, hostname in (
+            (org, "tenant-a.example.com"),
+            (other, "tenant-b.example.com"),
+        ):
+            OrganizationDomain.objects.create(
+                organization=owner,
+                hostname=hostname,
+                status=OrganizationDomain.STATUS_ACTIVE,
+                dns_verified_at=now,
+                activated_at=now,
+                activated_by=self.lead_user,
+            )
+        OrganizationSettings.objects.create(
+            organization=org,
+            data={"email_settings": {"portal_url": "https://tenant-b.example.com"}},
+        )
+        self.program.organization = org
+        self.program.save(update_fields=["organization"])
+        self.event.organization = org
+        self.event.save(update_fields=["organization"])
+
+        for email in self._send_all_outreach_notifications():
+            html_body, _ = email.alternatives[0]
+            self.assertIn(
+                f'href="https://tenant-a.example.com/programs/{self.program.id}/outreach/"',
+                html_body,
+            )
+            self.assertNotIn("tenant-b.example.com", html_body)
+            self.assertNotIn("tenant-b.momentumteam.app", html_body)
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_unverified_domain_and_malicious_override_use_tenant_subdomain(self):
+        org = Organization.objects.create(name="Tenant A", slug="tenant-a")
+        OrganizationDomain.objects.create(
+            organization=org, hostname="pending.example.com"
+        )
+        OrganizationSettings.objects.create(
+            organization=org,
+            data={"email_settings": {"portal_url": "https://evil.example.com"}},
+        )
+        self.program.organization = org
+        self.program.save(update_fields=["organization"])
+        self.event.organization = org
+        self.event.save(update_fields=["organization"])
+
+        for email in self._send_all_outreach_notifications():
+            html_body, _ = email.alternatives[0]
+            self.assertIn(
+                f'href="https://tenant-a.momentumteam.app/programs/{self.program.id}/outreach/"',
+                html_body,
+            )
+            self.assertNotIn("evil.example.com", html_body)
+            self.assertNotIn("pending.example.com", html_body)
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="")
+    def test_all_notifications_omit_links_without_safe_host(self):
+        org = Organization.objects.create(name="Tenant A", slug="tenant-a")
+        OrganizationSettings.objects.create(
+            organization=org,
+            data={"email_settings": {"portal_url": "https://evil.example.com"}},
+        )
+        self.program.organization = org
+        self.program.save(update_fields=["organization"])
+        self.event.organization = org
+        self.event.save(update_fields=["organization"])
+
+        for email in self._send_all_outreach_notifications():
+            html_body, _ = email.alternatives[0]
+            self.assertIn("Robotics Workshop", email.body)
+            self.assertNotIn("Log in to the", email.body)
+            self.assertNotIn(f"/programs/{self.program.id}/outreach/", html_body)
+            self.assertNotIn("evil.example.com", html_body)
+            self.assertNotIn("momentumteam.app", html_body)
+            self.assertNotIn('href=""', html_body)
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_all_notifications_omit_outreach_link_without_program(self):
+        self.event.program = None
+        self.event.save(update_fields=["program"])
+
+        for email in self._send_all_outreach_notifications():
+            html_body, _ = email.alternatives[0]
+            self.assertIn("Robotics Workshop", email.body)
+            self.assertNotIn("Log in to the", email.body)
+            self.assertNotIn("/outreach/", html_body)
+
+    @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+    def test_all_notifications_omit_outreach_link_for_other_tenants_program(self):
+        other = Organization.objects.create(name="Tenant B", slug="tenant-b")
+        self.program.organization = other
+        self.program.save(update_fields=["organization"])
+
+        for email in self._send_all_outreach_notifications():
+            html_body, _ = email.alternatives[0]
+            self.assertNotIn("Log in to the", email.body)
+            self.assertNotIn(f"/programs/{self.program.id}/outreach/", html_body)
+            self.assertNotIn("tenant-b.momentumteam.app", html_body)
 
     def test_event_deletion_notifies_champions_helpers_and_mentors(self):
         # Setup champion, helper, and mentor

@@ -11,10 +11,14 @@ from datetime import date
 
 from django.contrib.auth.models import User
 from django.db import connection
-from django.test import Client, TestCase
+from django.template.loader import render_to_string
+from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
+from organizations.models import Organization, OrganizationDomain
+from organizations.utils import get_organization_email_settings
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -33,6 +37,81 @@ def _count_queries(func):
     with CaptureQueriesContext(connection) as ctx:
         func()
     return len(ctx.captured_queries)
+
+
+@override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
+class EmailSettingsQueryOptimizationTest(TestCase):
+    def setUp(self):
+        self.first = Organization.objects.create(
+            name="Alpha", slug="alpha", subdomain="alpha"
+        )
+        self.second = Organization.objects.create(
+            name="Beta", slug="beta", subdomain="beta"
+        )
+        operator = User.objects.create_user(username="domain_operator")
+        self.domain = OrganizationDomain.objects.create(
+            organization=self.first,
+            hostname="alpha.example.org",
+            status=OrganizationDomain.STATUS_ACTIVE,
+            dns_verified_at=timezone.now(),
+            activated_at=timezone.now(),
+            activated_by=operator,
+        )
+
+    def test_contact_settings_do_not_resolve_unused_portal_url(self):
+        with self.assertNumQueries(1):
+            config = get_organization_email_settings(self.first)
+            self.assertTrue(config["contact_email"])
+
+    def test_portal_url_stays_fresh_and_fails_closed_for_conflicting_claims(self):
+        first_url = get_organization_email_settings(self.first)["portal_url"]
+        second_url = get_organization_email_settings(self.second)["portal_url"]
+        self.assertEqual(str(first_url), "https://alpha.example.org")
+        self.assertEqual(str(second_url), "https://beta.momentumteam.app")
+
+        self.domain.status = OrganizationDomain.STATUS_DISABLED
+        self.domain.save(update_fields=["status"])
+        self.assertEqual(str(first_url), "https://alpha.momentumteam.app")
+
+        self.domain.status = OrganizationDomain.STATUS_ACTIVE
+        self.domain.save(update_fields=["status"])
+        self.second.settings = {"custom_domain": "alpha.example.org"}
+        self.second.save(update_fields=["settings"])
+        self.assertEqual(str(first_url), "https://alpha.momentumteam.app")
+        self.assertEqual(str(second_url), "https://beta.momentumteam.app")
+
+        self.domain.status = OrganizationDomain.STATUS_DISABLED
+        self.domain.save(update_fields=["status"])
+        self.second.settings = {"custom_domain": "alpha.momentumteam.app"}
+        self.second.save(update_fields=["settings"])
+        self.assertEqual(str(first_url), "")
+        self.assertEqual(str(second_url), "https://beta.momentumteam.app")
+        rendered = render_to_string(
+            "programs/emails/base_notification.html",
+            {
+                "org_email_settings": {
+                    "organization_name": "Alpha",
+                    "portal_url": first_url,
+                }
+            },
+        )
+        self.assertNotIn('href="https://alpha', rendered)
+
+    def test_email_template_renders_each_organizations_canonical_url(self):
+        for organization, expected_url in (
+            (self.first, "https://alpha.example.org"),
+            (self.second, "https://beta.momentumteam.app"),
+        ):
+            with self.subTest(organization=organization.slug):
+                rendered = render_to_string(
+                    "programs/emails/base_notification.html",
+                    {
+                        "org_email_settings": get_organization_email_settings(
+                            organization
+                        )
+                    },
+                )
+                self.assertIn(f'href="{expected_url}"', rendered)
 
 
 class ListViewQueryOptimizationTest(TestCase):

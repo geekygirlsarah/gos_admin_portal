@@ -353,19 +353,14 @@ def impersonation_context(request):
     if impersonator_id:
         from django.contrib.auth.models import User
 
+        impersonator = None
         try:
-            impersonator = User.objects.filter(
-                pk=impersonator_id, is_superuser=True
-            ).first()
-            if impersonator:
-                return {
-                    "is_impersonating": True,
-                    "impersonator": impersonator,
-                }
+            impersonator = User.objects.filter(pk=impersonator_id).first()
         except Exception as e:
             logger.debug(
                 "Failed to resolve impersonator user %s: %s", impersonator_id, e
             )
+        return {"is_impersonating": True, "impersonator": impersonator}
     return {"is_impersonating": False, "impersonator": None}
 
 

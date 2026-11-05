@@ -18,17 +18,19 @@ def send_invitation_email(invitation: OrganizationInvitation, request=None) -> b
     """Send an invitation email to the recipient with an acceptance link and expiration notice."""
     try:
         org = invitation.organization
-        org_cfg = get_organization_email_settings(org)
-
-        # Resolve base URL and accept link
         base_url = get_organization_url(org)
-        if not base_url and request:
-            base_url = request.build_absolute_uri("/")[:-1]
+        if not base_url:
+            logger.error(
+                "Cannot send invitation: no canonical portal URL for organization %s",
+                org.pk,
+            )
+            return False
 
+        org_cfg = get_organization_email_settings(org)
         path = reverse(
             "organizations:accept_invitation", kwargs={"token": invitation.token}
         )
-        invitation_url = f"{base_url.rstrip('/')}{path}" if base_url else path
+        invitation_url = f"{base_url.rstrip('/')}{path}"
 
         inviter_name = ""
         if invitation.invited_by:

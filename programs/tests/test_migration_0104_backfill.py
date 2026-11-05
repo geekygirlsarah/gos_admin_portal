@@ -1,7 +1,9 @@
 from django.core.management import call_command
 from django.db import connection
+from django.db.migrations.recorder import MigrationRecorder
 from django.test import TransactionTestCase
 
+from organizations.models import Organization
 from programs.models import School, SchoolDistrict
 
 
@@ -20,6 +22,15 @@ class SchoolDistrictBackfillMigrationTest(TransactionTestCase):
                 "INSERT INTO programs_school (name, district) VALUES (%s, %s)",
                 [name, district],
             )
+
+    def test_backfill_after_flush(self):
+        call_command("flush", interactive=False, verbosity=0)
+        self.assertFalse(Organization.objects.filter(slug="gos").exists())
+        self.assertIn(
+            ("organizations", "0002_seed_gos_organization"),
+            MigrationRecorder(connection).applied_migrations(),
+        )
+        self.test_backfill_creates_districts_and_links_schools()
 
     def test_backfill_creates_districts_and_links_schools(self):
         call_command("migrate", "programs", "0103", verbosity=0)

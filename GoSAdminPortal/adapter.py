@@ -276,6 +276,16 @@ class AccountAdapter(DefaultAccountAdapter):
         elif (settings.DEBUG or is_staging) and code:
             logging.info(f"DEBUG/STAGING: Login code for {email} is {code}")
 
+        context = dict(context)
+        if "organization" not in context:
+            from allauth.core import context as allauth_context
+
+            request = getattr(allauth_context, "request", None) or getattr(
+                self, "request", None
+            )
+            if request and getattr(request, "organization", None):
+                context["organization"] = request.organization
+
         def _send(close_connections: bool = False):
             from django.db import close_old_connections
 
@@ -305,12 +315,19 @@ class AccountAdapter(DefaultAccountAdapter):
             ).start()
 
     def render_mail(self, template_prefix, email, context, headers=None):
+        from allauth.core import context as allauth_context
+
         from organizations.utils import (
             get_default_organization,
             get_organization_email_settings,
         )
 
-        org = get_default_organization()
+        org = context.get("organization")
+        if "organization" not in context:
+            request = getattr(allauth_context, "request", None) or getattr(
+                self, "request", None
+            )
+            org = getattr(request, "organization", None) or get_default_organization()
         if "organization" not in context:
             context["organization"] = org
         if "org_email_settings" not in context:

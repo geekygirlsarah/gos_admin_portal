@@ -35,6 +35,16 @@ urlpatterns = [
         name="organization_toggle_status",
     ),
     path(
+        "organizations/<int:pk>/domains/<int:domain_pk>/",
+        views.PlatformOrganizationDomainActionView.as_view(),
+        name="organization_domain_action",
+    ),
+    path(
+        "organizations/<int:pk>/domain-recoveries/<int:recovery_pk>/",
+        views.PlatformOrganizationDomainRecoveryActionView.as_view(),
+        name="organization_domain_recovery_action",
+    ),
+    path(
         "organizations/<int:pk>/members/add/",
         views.PlatformOrganizationMemberAddView.as_view(),
         name="organization_member_add",
@@ -69,6 +79,11 @@ urlpatterns = [
         "impersonate/stop/",
         views.PlatformStopImpersonationView.as_view(),
         name="impersonate_stop",
+    ),
+    path(
+        "impersonate/authorize/<uuid:handoff_id>/",
+        views.PlatformImpersonationAuthorizeView.as_view(),
+        name="impersonation_authorize",
     ),
     path(
         "impersonate/<int:pk>/",

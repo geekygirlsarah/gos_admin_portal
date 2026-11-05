@@ -44,11 +44,11 @@
     <li><strong>Program:</strong> {{ application.program|default:"(not specified)" }}</li>
 </ul>
 
-<p>Use the link below to access the documents:</p>
+{% if documents_url %}<p>Use the link below to access the documents:</p>
 
 <p>
     <a href="{{ documents_url }}">{{ documents_url }}</a>
-</p>
+</p>{% endif %}
 {% endif %}
 
 <p>If you have any questions, just reply to this email.</p>

@@ -90,12 +90,21 @@
                     <td class="text-end">
                         <div class="btn-group btn-group-sm">
                             {% if not u.is_superuser %}
-                            <form method="post" action="{% url 'platform_admin:impersonate_user' u.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-warning btn-sm fw-semibold" title="Impersonate this user for troubleshooting">
-                                    <i class="bi bi-incognito"></i> Impersonate
-                                </button>
-                            </form>
+                            {% if u.is_active %}
+                            <div class="d-flex flex-column align-items-end gap-1">
+                                {% for organization in u.support_organizations %}
+                                <form method="post" action="{% url 'platform_admin:impersonate_user' u.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="organization_id" value="{{ organization.pk }}">
+                                    <button type="submit" class="btn btn-warning btn-sm fw-semibold" title="Open {{ organization.name }} as this user">
+                                        <i class="bi bi-incognito"></i> {{ organization.name }}
+                                    </button>
+                                </form>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="small text-muted">Inactive account</span>
+                            {% endif %}
                             <form method="post" action="{% url 'platform_admin:user_toggle_status' u.pk %}" class="d-inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">

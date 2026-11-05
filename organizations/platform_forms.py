@@ -10,6 +10,7 @@ from organizations.models import (
     OrganizationSettings,
     UserOrganizationMembership,
 )
+from organizations.utils import is_valid_tenant_label
 from programs.models import ProgramFeature
 
 
@@ -147,22 +148,46 @@ class PlatformOrganizationForm(forms.ModelForm):
         slug = (self.cleaned_data.get("slug") or "").strip().lower()
         if not slug:
             raise ValidationError("Organization slug is required.")
-        qs = Organization.objects.filter(slug=slug)
+        if not is_valid_tenant_label(slug) and not (
+            self.instance.pk and slug == str(self.instance.slug or "").lower()
+        ):
+            raise ValidationError(
+                "Use an unreserved DNS label for the organization slug."
+            )
+        qs = Organization.objects.filter(slug__iexact=slug)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
             raise ValidationError("An organization with this slug already exists.")
+        qs = Organization.objects.filter(subdomain__iexact=slug)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError(
+                "This slug conflicts with another organization's subdomain."
+            )
         return slug
 
     def clean_subdomain(self):
         subdomain = (self.cleaned_data.get("subdomain") or "").strip().lower()
         if not subdomain:
             return None
-        qs = Organization.objects.filter(subdomain=subdomain)
+        if not is_valid_tenant_label(subdomain) and not (
+            self.instance.pk and subdomain == str(self.instance.subdomain or "").lower()
+        ):
+            raise ValidationError("Use an unreserved DNS label for the subdomain.")
+        qs = Organization.objects.filter(subdomain__iexact=subdomain)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
             raise ValidationError("An organization with this subdomain already exists.")
+        qs = Organization.objects.filter(slug__iexact=subdomain)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError(
+                "This subdomain conflicts with another organization's slug."
+            )
         return subdomain
 
     def save(self, commit=True):

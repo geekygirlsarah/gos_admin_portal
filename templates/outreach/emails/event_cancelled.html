@@ -44,5 +44,5 @@
         </table>
     </div>
 </div>
-<p class="small text-muted">Log in to the <a href="{{ outreach_link|default:org_email_settings.portal_url }}">{{ org_email_settings.organization_name|default:"Girls of Steel" }} Portal</a> to view upcoming outreach events.</p>
+{% if outreach_link %}<p class="small text-muted">Log in to the <a href="{{ outreach_link }}">{{ org_email_settings.organization_name|default:"Girls of Steel" }} Portal</a> to view upcoming outreach events.</p>{% endif %}
 {% endblock %}

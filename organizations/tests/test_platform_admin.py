@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.http import Http404
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -553,7 +553,7 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
         SITE_URL="https://momentumteam.app",
     )
     def test_impersonation_lifecycle(self):
-        """Full impersonation lifecycle: start, session inspection, banner rendering, and exit."""
+        """Support access uses a separate tenant session and never elevates there."""
         self.client.defaults["HTTP_HOST"] = "momentumteam.app"
         self.client.force_login(self.superuser)
 
@@ -561,17 +561,79 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
         start_url = reverse(
             "platform_admin:impersonate_user", kwargs={"pk": self.target_user.pk}
         )
-        response = self.client.post(start_url, HTTP_HOST="momentumteam.app")
-        with self.subTest("start redirect reaches dashboard"):
-            self.assertRedirects(response, reverse("profile_dashboard"))
+        response = self.client.post(
+            start_url,
+            {"organization_id": self.org.pk},
+            HTTP_HOST="momentumteam.app",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.superuser.pk)
 
-        # Verify session state
-        session = self.client.session
-        self.assertEqual(session.get("impersonator_id"), self.superuser.pk)
-        self.assertEqual(session.get("active_organization_id"), self.org.pk)
+        tenant_client = Client()
+        prepared = tenant_client.post(
+            reverse("organizations:support_impersonation_handoff"),
+            {
+                "handoff_id": str(response.context["handoff_id"]),
+                "handoff_token": response.context["handoff_token"],
+            },
+            HTTP_HOST="alpha.momentumteam.app",
+        )
+        self.assertEqual(prepared.status_code, 200)
+        tenant_stage = tenant_client.post(
+            reverse("organizations:support_impersonation_redeem"),
+            {
+                "handoff_id": str(prepared.context["handoff_id"]),
+                "handoff_token": prepared.context["handoff_token"],
+                "csrfmiddlewaretoken": str(prepared.context["csrf_token"]),
+            },
+            HTTP_HOST="alpha.momentumteam.app",
+        )
+        self.assertEqual(tenant_stage.status_code, 200)
+        authorize_url = reverse(
+            "platform_admin:impersonation_authorize",
+            kwargs={"handoff_id": prepared.context["handoff_id"]},
+        )
+        self.assertEqual(
+            self.client.get(authorize_url, HTTP_HOST="momentumteam.app").status_code,
+            200,
+        )
+        platform_return = self.client.post(authorize_url, HTTP_HOST="momentumteam.app")
+        self.assertEqual(platform_return.status_code, 200)
+        return_prepared = tenant_client.post(
+            reverse("organizations:support_impersonation_handoff"),
+            {
+                "stage": "platform_return",
+                "handoff_id": str(prepared.context["handoff_id"]),
+                "handoff_token": platform_return.context["handoff_token"],
+            },
+            HTTP_HOST="alpha.momentumteam.app",
+        )
+        self.assertEqual(return_prepared.status_code, 200)
+        tenant_client.post(
+            reverse("organizations:support_impersonation_resume"),
+            {
+                "handoff_id": str(return_prepared.context["handoff_id"]),
+                "handoff_token": return_prepared.context["handoff_token"],
+                "csrfmiddlewaretoken": str(return_prepared.context["csrf_token"]),
+            },
+            HTTP_HOST="alpha.momentumteam.app",
+        )
+        confirmation = tenant_client.get(
+            reverse("organizations:support_impersonation_confirm"),
+            HTTP_HOST="alpha.momentumteam.app",
+        )
+        self.assertEqual(confirmation.status_code, 200)
+        confirm_resp = tenant_client.post(
+            reverse("organizations:support_impersonation_confirm"),
+            HTTP_HOST="alpha.momentumteam.app",
+        )
+        self.assertRedirects(
+            confirm_resp,
+            reverse("profile_dashboard"),
+            fetch_redirect_response=False,
+        )
 
-        # Verify logged in as target user
-        home_resp = self.client.get(
+        home_resp = tenant_client.get(
             reverse("profile_dashboard"), HTTP_HOST="alpha.momentumteam.app"
         )
         self.assertEqual(home_resp.status_code, 200)
@@ -592,20 +654,20 @@ class PlatformUserSupportAndImpersonationTests(TestCase):
 
         # 2. Stop impersonation
         stop_url = reverse("platform_admin:impersonate_stop")
-        stop_resp = self.client.post(stop_url, HTTP_HOST="alpha.momentumteam.app")
-        self.client.extra["HTTP_HOST"] = "momentumteam.app"
+        stop_resp = tenant_client.post(stop_url, HTTP_HOST="alpha.momentumteam.app")
         self.assertRedirects(
             stop_resp,
             f"https://momentumteam.app{reverse('platform_admin:dashboard')}",
+            fetch_redirect_response=False,
         )
 
-        # Verify session is restored to superuser and impersonator_id removed
+        # Stopping clears only the tenant session; the platform session is untouched.
         dash_resp = self.client.get(
             reverse("platform_admin:dashboard"), HTTP_HOST="momentumteam.app"
         )
         self.assertEqual(dash_resp.status_code, 200)
         self.assertEqual(dash_resp.wsgi_request.user, self.superuser)
-        self.assertNotIn("impersonator_id", self.client.session)
+        self.assertNotIn("_auth_user_id", tenant_client.session)
 
         # Verify stop audit log recorded
         self.assertTrue(

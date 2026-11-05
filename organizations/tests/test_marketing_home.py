@@ -4,8 +4,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
-from organizations.models import Organization, UserOrganizationMembership
+from organizations.models import (
+    Organization,
+    OrganizationDomain,
+    UserOrganizationMembership,
+)
 from organizations.utils import get_organization_url
 
 
@@ -45,7 +50,7 @@ class MarketingHomePageTests(TestCase):
         )
 
     @override_settings(MOMENTUM_ROOT_DOMAIN="momentumteam.app")
-    def test_get_organization_url_uses_configured_domains_and_routable_fallbacks(self):
+    def test_get_organization_url_uses_only_active_registry_domains(self):
         self.other_org.settings = {
             "custom_domain": {
                 "enabled": True,
@@ -53,22 +58,35 @@ class MarketingHomePageTests(TestCase):
             }
         }
         self.assertEqual(
-            get_organization_url(self.other_org), "https://robotigers.example.org"
+            get_organization_url(self.other_org), "https://robotigers.momentumteam.app"
         )
 
-        self.other_org.settings = {"custom_domain": "https://team.example.org"}
+        now = timezone.now()
+        OrganizationDomain.objects.create(
+            organization=self.other_org,
+            hostname="team.example.org",
+            status=OrganizationDomain.STATUS_ACTIVE,
+            dns_verified_at=now,
+            activated_at=now,
+            activated_by=self.user,
+        )
         self.assertEqual(
             get_organization_url(self.other_org), "https://team.example.org"
         )
 
         self.other_org.settings = {}
         self.other_org.subdomain = "robotigers-team"
+        self.other_org.save(update_fields=["subdomain"])
+        OrganizationDomain.objects.filter(organization=self.other_org).update(
+            status=OrganizationDomain.STATUS_DISABLED
+        )
         self.assertEqual(
             get_organization_url(self.other_org),
             "https://robotigers-team.momentumteam.app",
         )
 
         self.other_org.subdomain = ""
+        self.other_org.save(update_fields=["subdomain"])
         self.assertEqual(
             get_organization_url(self.other_org),
             "https://robotigers.momentumteam.app",
@@ -85,6 +103,19 @@ class MarketingHomePageTests(TestCase):
             }
         }
         self.other_org.save(update_fields=["subdomain", "settings"])
+        now = timezone.now()
+        for org, hostname in (
+            (self.gos, "gos.example.org"),
+            (self.other_org, "robotigers.example.org"),
+        ):
+            OrganizationDomain.objects.create(
+                organization=org,
+                hostname=hostname,
+                status=OrganizationDomain.STATUS_ACTIVE,
+                dns_verified_at=now,
+                activated_at=now,
+                activated_by=self.user,
+            )
         Organization.objects.create(
             name="Inactive Team",
             slug="inactive-team",

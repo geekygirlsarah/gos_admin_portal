@@ -27,6 +27,7 @@ from .views import (
     PortalAgreementView,
     PortalBackgroundCheckTypeView,
     PortalCrewView,
+    PortalDomainView,
     PortalEmailSettingsView,
     PortalKioskView,
     PortalLeadMentorView,
@@ -698,6 +699,11 @@ urlpatterns = [
         "settings/email/",
         PortalEmailSettingsView.as_view(),
         name="portal_email_settings",
+    ),
+    path(
+        "settings/domains/",
+        PortalDomainView.as_view(),
+        name="portal_domains",
     ),
     path(
         "settings/org-accounts/",

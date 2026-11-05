@@ -20,9 +20,10 @@ as possible.
 Student:        {{ application.student_name|default:"(not specified)" }}
 Program:        {{ application.program|default:"(not specified)" }}
 
-Use the link below to access the documents:
+{% if documents_url %}Use the link below to access the documents:
 
   {{ documents_url }}
+{% endif %}
 {% endif %}
 Application ID: {{ application.application_id }}
 

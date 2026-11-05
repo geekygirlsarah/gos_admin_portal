@@ -41,6 +41,10 @@ EXEMPT_URL_NAMES = {
     "api_tosend_webhook",
     "landing",
     "about",
+    "organizations:support_impersonation_handoff",
+    "organizations:support_impersonation_redeem",
+    "organizations:support_impersonation_resume",
+    "organizations:support_impersonation_confirm",
 }
 
 EXEMPT_PATH_PREFIXES = (
@@ -134,6 +138,10 @@ class TenantMembershipGuardMiddleware:
         "account_complete_password_reset",
         "account_password_reset_completed",
         "organizations:accept_invitation",
+        "organizations:support_impersonation_handoff",
+        "organizations:support_impersonation_redeem",
+        "organizations:support_impersonation_resume",
+        "organizations:support_impersonation_confirm",
         "platform_admin:impersonate_stop",
         "tosend_webhook",
         "api_tosend_webhook",
@@ -293,6 +301,17 @@ class MentorAgreementMiddleware:
         for prefix in EXEMPT_PATH_PREFIXES:
             if prefix and request.path.startswith(prefix):
                 return self.get_response(request)
+        if request.path.startswith("/organizations/support-impersonation/"):
+            try:
+                if resolve(request.path).view_name in {
+                    "organizations:support_impersonation_handoff",
+                    "organizations:support_impersonation_redeem",
+                    "organizations:support_impersonation_resume",
+                    "organizations:support_impersonation_confirm",
+                }:
+                    return self.get_response(request)
+            except Resolver404:
+                pass
         if not request.user.is_authenticated:
             return self.get_response(request)
         # Don't redirect away from the agreement page itself.
