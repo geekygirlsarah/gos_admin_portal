@@ -32,6 +32,8 @@ Student-Adult relationships are stored in the through-model `AdultStudentRelatio
   - `Student.primary_contact`, `Student.secondary_contact`, `Student.primary_contact_id`, and `Student.secondary_contact_id` are **compatibility properties with setters** that synchronize the through-record pointers.
   - **Query Invariant**: When filtering querysets by primary/secondary guardian, always filter via the relationship FK (e.g. `primary_contact_relationship__adult=...`), never the compat property name.
 
+Student and adult detail/edit views must scope the profile lookup, relationship choices, and related enrollments, documents, and background checks to the request organization. Relationship writes must validate that both endpoints and the relationship row belong to that organization; inconsistent foreign-owned rows are not exposed or modified. A missing organization fails closed.
+
 ---
 
 ## Active vs. Inactive Students Scoping

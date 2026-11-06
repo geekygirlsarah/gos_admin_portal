@@ -8,6 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -30,6 +31,7 @@ from programs.forms import MentorAgreementForm
 from programs.models import (
     BackgroundCheckType,
     Crew,
+    Enrollment,
     MentorAgreement,
     Program,
     RolePermission,
@@ -64,15 +66,34 @@ def _stored_notification_sender(organization):
     return value if isinstance(value, str) else ""
 
 
+def _request_organization(request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        raise Http404
+    return organization
+
+
+def _has_foreign_enrollments(field_name, resource, organization, program=None):
+    ownership = {
+        "organization": organization,
+        "student__organization": organization,
+        "program__organization": organization,
+    }
+    if program is not None:
+        ownership["program"] = program
+    return (
+        Enrollment.objects.filter(**{field_name: resource})
+        .exclude(**ownership)
+        .exists()
+    )
+
+
 class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     template_name = "programs/settings.html"
 
     def get(self, request):
-        agreement_org = getattr(request, "organization", None)
-        if agreement_org is None:
-            raise Http404
-        agreements = MentorAgreement.objects.for_organization(agreement_org)
-        org = getattr(request, "organization", None) or get_default_organization()
+        org = _request_organization(request)
+        agreements = MentorAgreement.objects.for_organization(org)
         sections = RolePermission.SECTION_CHOICES
         roles = RolePermission.ROLE_CHOICES
 
@@ -122,22 +143,46 @@ class PortalSettingsView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 }
             )
 
-        teams = Team.objects.all()
+        teams = Team.objects.for_organization(org)
         team_types = TEAM_TYPES
-        crews = Crew.objects.select_related("program").all()
-        subteams = SubTeam.objects.select_related("program").all()
+        crews = (
+            Crew.objects.for_organization(org)
+            .filter(program__organization=org)
+            .select_related("program")
+        )
+        subteams = (
+            SubTeam.objects.for_organization(org)
+            .filter(program__organization=org)
+            .select_related("program")
+        )
         programs = (
-            Program.objects.prefetch_related("crews", "subteams")
-            .all()
+            Program.objects.for_organization(org)
+            .prefetch_related(
+                Prefetch(
+                    "crews",
+                    queryset=Crew.objects.for_organization(org).filter(
+                        program__organization=org
+                    ),
+                ),
+                Prefetch(
+                    "subteams",
+                    queryset=SubTeam.objects.for_organization(org).filter(
+                        program__organization=org
+                    ),
+                ),
+            )
             .order_by("-active", "name")
         )
         attendance_programs = [p for p in programs if p.has_feature("attendance")]
 
         kiosk_configs = None
         if KioskConfig:
-            kiosk_configs = KioskConfig.objects.select_related("program").all()
+            kiosk_configs = (
+                KioskConfig.objects.for_organization(org)
+                .filter(program__organization=org)
+                .select_related("program")
+            )
 
-        org = getattr(request, "organization", None) or get_default_organization()
         email_settings = get_organization_email_settings(org)
 
         bg_types = BackgroundCheckType.objects.for_organization(org).order_by(
@@ -287,6 +332,7 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/update actions for Teams from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_team":
@@ -296,7 +342,11 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             color = request.POST.get("color")
             if team_type and number:
                 Team.objects.create(
-                    team_type=team_type, number=number, name=name, color=color
+                    organization=organization,
+                    team_type=team_type,
+                    number=number,
+                    name=name,
+                    color=color,
                 )
                 messages.success(request, f"Team {team_type} {number} added.")
             return redirect("/programs/settings/?tab=teams")
@@ -304,8 +354,18 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "delete_team":
             team_id = request.POST.get("team_id")
             if team_id:
-                team = Team.objects.filter(id=team_id).first()
+                team = (
+                    Team.objects.for_organization(organization)
+                    .filter(id=team_id)
+                    .first()
+                )
                 if team:
+                    if _has_foreign_enrollments("team", team, organization):
+                        messages.error(
+                            request,
+                            "This team cannot be deleted while it is linked to records owned by another organization.",
+                        )
+                        return redirect("/programs/settings/?tab=teams")
                     log_deletion(
                         resource=team,
                         request=request,
@@ -328,7 +388,11 @@ class PortalTeamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if team_id:
-                team = Team.objects.filter(id=team_id).first()
+                team = (
+                    Team.objects.for_organization(organization)
+                    .filter(id=team_id)
+                    .first()
+                )
                 if team:
                     team.team_type = team_type
                     team.number = number
@@ -345,6 +409,7 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/update actions for Crews from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_crew":
@@ -352,15 +417,38 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if program_id and name:
-                Crew.objects.create(program_id=program_id, name=name, color=color)
-                messages.success(request, f"Crew {name} added.")
+                program = (
+                    Program.objects.for_organization(organization)
+                    .filter(pk=program_id)
+                    .first()
+                )
+                if program is not None:
+                    Crew.objects.create(
+                        organization=organization,
+                        program=program,
+                        name=name,
+                        color=color,
+                    )
+                    messages.success(request, f"Crew {name} added.")
             return redirect("/programs/settings/?tab=crews")
 
         elif action == "delete_crew":
             crew_id = request.POST.get("crew_id")
             if crew_id:
-                crew = Crew.objects.filter(id=crew_id).first()
+                crew = (
+                    Crew.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=crew_id)
+                    .first()
+                )
                 if crew:
+                    if _has_foreign_enrollments(
+                        "crew", crew, organization, program=crew.program
+                    ):
+                        messages.error(
+                            request,
+                            "This crew cannot be deleted while it is linked to records owned by another organization.",
+                        )
+                        return redirect("/programs/settings/?tab=crews")
                     log_deletion(
                         resource=crew,
                         request=request,
@@ -380,7 +468,11 @@ class PortalCrewView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if crew_id:
-                crew = Crew.objects.filter(id=crew_id).first()
+                crew = (
+                    Crew.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=crew_id)
+                    .first()
+                )
                 if crew:
                     crew.name = name
                     crew.color = color
@@ -395,6 +487,7 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/update actions for SubTeams from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_subteam":
@@ -402,15 +495,38 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if program_id and name:
-                SubTeam.objects.create(program_id=program_id, name=name, color=color)
-                messages.success(request, f"SubTeam {name} added.")
+                program = (
+                    Program.objects.for_organization(organization)
+                    .filter(pk=program_id)
+                    .first()
+                )
+                if program is not None:
+                    SubTeam.objects.create(
+                        organization=organization,
+                        program=program,
+                        name=name,
+                        color=color,
+                    )
+                    messages.success(request, f"SubTeam {name} added.")
             return redirect("/programs/settings/?tab=subteams")
 
         elif action == "delete_subteam":
             subteam_id = request.POST.get("subteam_id")
             if subteam_id:
-                subteam = SubTeam.objects.filter(id=subteam_id).first()
+                subteam = (
+                    SubTeam.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=subteam_id)
+                    .first()
+                )
                 if subteam:
+                    if _has_foreign_enrollments(
+                        "subteam", subteam, organization, program=subteam.program
+                    ):
+                        messages.error(
+                            request,
+                            "This subteam cannot be deleted while it is linked to records owned by another organization.",
+                        )
+                        return redirect("/programs/settings/?tab=subteams")
                     log_deletion(
                         resource=subteam,
                         request=request,
@@ -430,7 +546,11 @@ class PortalSubteamView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             name = request.POST.get("name")
             color = request.POST.get("color")
             if subteam_id:
-                subteam = SubTeam.objects.filter(id=subteam_id).first()
+                subteam = (
+                    SubTeam.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=subteam_id)
+                    .first()
+                )
                 if subteam:
                     subteam.name = name
                     subteam.color = color
@@ -445,23 +565,35 @@ class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     """Handles add/delete/toggle actions for Kiosks from the settings page."""
 
     def post(self, request):
+        organization = _request_organization(request)
         action = request.POST.get("action")
 
         if action == "add_kiosk_config" and KioskConfig:
             label = request.POST.get("label", "").strip()
             program_id = request.POST.get("program_id")
             if label and program_id:
-                KioskConfig.objects.create(
-                    label=label,
-                    program_id=program_id,
+                program = (
+                    Program.objects.for_organization(organization)
+                    .filter(pk=program_id)
+                    .first()
                 )
-                messages.success(request, f"Kiosk '{label}' added.")
+                if program is not None:
+                    KioskConfig.objects.create(
+                        organization=organization,
+                        label=label,
+                        program=program,
+                    )
+                    messages.success(request, f"Kiosk '{label}' added.")
             return redirect("/programs/settings/?tab=kiosk_configs")
 
         elif action == "delete_kiosk_config" and KioskConfig:
             kiosk_config_id = request.POST.get("kiosk_config_id")
             if kiosk_config_id:
-                kiosk = KioskConfig.objects.filter(id=kiosk_config_id).first()
+                kiosk = (
+                    KioskConfig.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=kiosk_config_id)
+                    .first()
+                )
                 if kiosk:
                     log_deletion(
                         resource=kiosk,
@@ -480,7 +612,11 @@ class PortalKioskView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         elif action == "toggle_kiosk_config" and KioskConfig:
             kiosk_config_id = request.POST.get("kiosk_config_id")
             if kiosk_config_id:
-                kiosk = KioskConfig.objects.filter(id=kiosk_config_id).first()
+                kiosk = (
+                    KioskConfig.objects.for_organization(organization)
+                    .filter(program__organization=organization, id=kiosk_config_id)
+                    .first()
+                )
                 if kiosk:
                     kiosk.is_active = not kiosk.is_active
                     kiosk.save(update_fields=["is_active"])

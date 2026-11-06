@@ -59,6 +59,33 @@ logger = logging.getLogger(__name__)
 REVIEW_PERM = "applications.review_application"
 
 
+def _tenant_applications(organization):
+    if organization is None:
+        raise Http404
+    return Application.objects.for_organization(organization).filter(
+        models.Q(program__isnull=True) | models.Q(program__organization=organization)
+    )
+
+
+def _get_tenant_application(request, app_id):
+    organization = getattr(request, "organization", None)
+    return get_object_or_404(
+        _tenant_applications(organization),
+        application_id=(app_id or "").upper(),
+    )
+
+
+def _has_foreign_document_submissions(application, organization):
+    return (
+        ApplicationDocumentSubmission.objects.filter(application=application)
+        .exclude(
+            organization=organization,
+            document__program__organization=organization,
+        )
+        .exists()
+    )
+
+
 # ---------------------------------------------------------------------------
 # Forms
 # ---------------------------------------------------------------------------
@@ -472,7 +499,7 @@ class ApplicationDataEditForm(forms.Form):
 
 class ApplicationEmailForm(forms.Form):
     program = GroupedProgramChoiceField(
-        queryset=Program.objects.all(),
+        queryset=Program.objects.none(),
         required=False,
         empty_label="All programs",
         widget=forms.Select(attrs={"class": "form-select"}),
@@ -568,7 +595,7 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
 
     def get(self, request):
         org = getattr(request, "organization", None)
-        qs = Application.objects.for_organization(org).select_related("program")
+        qs = _tenant_applications(org).select_related("program")
         status = (request.GET.get("status") or "").strip()
         applicant_type = (request.GET.get("type") or "").strip()
         program_id = (request.GET.get("program") or "").strip()
@@ -708,7 +735,7 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
             grouped = [g for g in grouped if g["apps"]]
 
         # KPI summary metrics across applications (or filtered program)
-        kpi_base = Application.objects.for_organization(org)
+        kpi_base = _tenant_applications(org)
         if program_id.isdigit():
             kpi_base = kpi_base.filter(program_id=int(program_id))
 
@@ -732,7 +759,9 @@ class ApplicationReviewListView(_ReviewerRequiredMixin, View):
                 "grouped_applications": grouped,
                 "status_choices": Application.Status.choices,
                 "type_choices": Application.Type.choices,
-                "programs": Program.objects.all().order_by("-active", "name"),
+                "programs": Program.objects.for_organization(org).order_by(
+                    "-active", "name"
+                ),
                 "current_status": status,
                 "current_type": applicant_type,
                 "filter_program_id": program_id,
@@ -753,9 +782,7 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
     template_name = "applications/review/detail.html"
 
     def get(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         # Merge any legacy step keys now so legacy applications (which may
         # hold both the old and current key for the same step) render each
         # section once, and the migration is persisted.
@@ -768,11 +795,20 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
             from programs.models import ProgramDocument
 
             program_docs = ProgramDocument.objects.filter(
-                program_id=application.program_id, is_active=True
+                program_id=application.program_id,
+                program__organization=application.organization,
+                is_active=True,
             ).order_by("display_order", "name")
             submissions = {
                 s.document_id: s
-                for s in application.document_submissions.select_related("document")
+                for s in ApplicationDocumentSubmission.objects.for_organization(
+                    application.organization
+                )
+                .filter(
+                    application=application,
+                    document__program__organization=application.organization,
+                )
+                .select_related("document")
             }
             for doc in program_docs:
                 any_documents = True
@@ -815,9 +851,7 @@ class ApplicationApproveView(_ReviewerRequiredMixin, View):
     """POST: mark an application APPROVED and email the applicant."""
 
     def post(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         if application.status in (
             Application.Status.APPROVED,
             Application.Status.APPROVED_SIGNED,
@@ -896,9 +930,7 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
         return False
 
     def get(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         if self._check_already_declined(request, application):
             return redirect(
                 "application_review_detail", app_id=application.application_id
@@ -910,9 +942,7 @@ class ApplicationDeclineView(_ReviewerRequiredMixin, View):
         )
 
     def post(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         if self._check_already_declined(request, application):
             return redirect(
                 "application_review_detail", app_id=application.application_id
@@ -1012,9 +1042,7 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         )
 
     def get(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         # Persist any legacy step-key migration up front so the form (and any
         # subsequent save) always operate on the current key names.
         application.normalize_step_data(save=True)
@@ -1025,9 +1053,7 @@ class ApplicationEditView(_ReviewerRequiredMixin, View):
         return self._render(request, application, form)
 
     def post(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         application.normalize_step_data(save=True)
         form = ApplicationDataEditForm(
             request.POST, sections=_sections_for(application)
@@ -1067,15 +1093,19 @@ class ApplicationDeleteView(_ReviewerRequiredMixin, View):
     template_name = "applications/review/delete.html"
 
     def get(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         return render(request, self.template_name, {"application": application})
 
     def post(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
+        if _has_foreign_document_submissions(application, application.organization):
+            messages.error(
+                request,
+                "This application cannot be deleted while it has records owned by another organization.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
         app_str = application.application_id
         log_event(
             event=AuditEvent.RECORD_DELETED,
@@ -1097,8 +1127,17 @@ class ApplicationCleanupView(_ReviewerRequiredMixin, View):
     """POST: Delete all applications older than 30 days."""
 
     def post(self, request):
+        organization = getattr(request, "organization", None)
         cutoff = timezone.now() - timezone.timedelta(days=30)
-        stale_apps = Application.objects.filter(created_at__lt=cutoff)
+        foreign_submission_app_ids = ApplicationDocumentSubmission.objects.exclude(
+            organization=organization,
+            document__program__organization=organization,
+        ).values_list("application_id", flat=True)
+        stale_apps = (
+            _tenant_applications(organization)
+            .filter(created_at__lt=cutoff)
+            .exclude(pk__in=foreign_submission_app_ids)
+        )
         count = stale_apps.count()
         sample = stale_apps.first()
         if sample is not None:
@@ -1133,9 +1172,7 @@ class ApplicationResendEmailView(_ReviewerRequiredMixin, View):
     """POST: resend various system emails (OTP, handoff, etc.)"""
 
     def post(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         email_type = request.POST.get("type")
 
         try:
@@ -1215,9 +1252,7 @@ class ApplicationConvertView(_ReviewerRequiredMixin, View):
     """
 
     def post(self, request, app_id: str):
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
         if application.status == Application.Status.CONVERTED:
             messages.info(
                 request,
@@ -1292,14 +1327,7 @@ class ApplicationEmailView(_ReviewerRequiredMixin, View):
             )
             test_email = form.cleaned_data.get("test_email")
 
-            apps = (
-                Application.objects.for_organization(organization)
-                .filter(status__in=statuses)
-                .filter(
-                    models.Q(program__isnull=True)
-                    | models.Q(program__organization=organization)
-                )
-            )
+            apps = _tenant_applications(organization).filter(status__in=statuses)
             if prog:
                 apps = apps.filter(program=prog, program__organization=organization)
 
@@ -1366,9 +1394,8 @@ class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
     def post(self, request, app_id: str):
         from programs.models import ProgramDocument
 
-        application = get_object_or_404(
-            Application, application_id=(app_id or "").upper()
-        )
+        application = _get_tenant_application(request, app_id)
+        organization = application.organization
         form = StaffDocumentUploadForm(
             request.POST, request.FILES, program=application.program
         )
@@ -1382,9 +1409,22 @@ class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
             )
 
         document = form.cleaned_data["document"]
-        submission, _created = ApplicationDocumentSubmission.objects.get_or_create(
-            application=application, document=document
+        submission, created = ApplicationDocumentSubmission.objects.get_or_create(
+            application=application,
+            document=document,
+            defaults={"organization": organization},
         )
+        if not created and (
+            submission.organization_id != organization.pk
+            or document.program.organization_id != organization.pk
+        ):
+            messages.error(
+                request,
+                "This document submission has inconsistent organization ownership and cannot be changed.",
+            )
+            return redirect(
+                "application_review_detail", app_id=application.application_id
+            )
         submission.file = form.cleaned_data["file"]
         try:
             submission.save()
@@ -1412,8 +1452,10 @@ class ApplicationStaffDocumentUploadView(_ReviewerRequiredMixin, View):
             if required_doc_ids:
                 uploaded_doc_ids = set(
                     ApplicationDocumentSubmission.objects.filter(
+                        organization=organization,
                         application=application,
                         document_id__in=required_doc_ids,
+                        document__program__organization=organization,
                     ).values_list("document_id", flat=True)
                 )
                 if required_doc_ids.issubset(uploaded_doc_ids):

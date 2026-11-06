@@ -852,6 +852,10 @@ class StaffDocumentUploadTests(TestCase):
                 application=self.app, document=self.doc
             ).exists()
         )
+        submission = ApplicationDocumentSubmission.objects.get(
+            application=self.app, document=self.doc
+        )
+        self.assertEqual(submission.organization_id, self.app.organization_id)
 
     def test_upload_promotes_approved_to_approved_signed(self):
         from applications.models import ApplicationDocumentSubmission

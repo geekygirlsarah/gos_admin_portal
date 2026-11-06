@@ -34,3 +34,9 @@ Staff manage applications via `/applications/review/`:
   - Creates the program `Enrollment` record.
   - Links application documents (`ApplicationDocumentSubmission`) into `StudentDocument` records.
   - Logs `AuditEvent.APPLICATION_CONVERTED`.
+
+### Tenant isolation
+
+Reviewer lists, filters, details, decisions, edits, conversions, uploads, and deletes require the resolved organization and only load applications owned by it. Applications linked to a program owned by another organization are treated as inconsistent and are not available in review. Program choices and application KPIs are tenant-scoped.
+
+Stale cleanup only considers applications belonging to the current organization. Review pages read document submissions only when both the submission and its program are owned by that organization; individual deletes and cleanup leave applications with foreign-owned or mismatched document submissions untouched. Staff uploads explicitly assign the current organization and do not overwrite an inconsistently owned submission.

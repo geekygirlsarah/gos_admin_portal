@@ -14,8 +14,9 @@ from ..models import (
     Adult,
     AdultStudentRelationship,
     Program,
+    Student,
 )
-from ..models.adults import get_active_background_check_types
+from ..models.adults import BackgroundCheck, get_active_background_check_types
 from ..permission_views import (
     LeadMentorRequiredMixin,
     PassUserToFormMixin,
@@ -41,6 +42,13 @@ from .mixins import (
     LogFormSaveMixin,
     SortableListViewMixin,
 )
+
+
+def _for_request_organization(model, request):
+    organization = getattr(request, "organization", None)
+    if organization is None:
+        return model.objects.none()
+    return model.objects.for_organization(organization)
 
 
 class AdultsListView(
@@ -105,7 +113,9 @@ class AdultsListView(
         ctx["role"] = get_user_role(self.request.user, org=self.request.organization)
         program_id = self.kwargs.get("program_id")
         if program_id:
-            ctx["program"] = get_object_or_404(Program, pk=program_id)
+            ctx["program"] = get_object_or_404(
+                _for_request_organization(Program, self.request), pk=program_id
+            )
 
         adults = list(ctx.get("adults") or ctx.get("object_list") or [])
         ctx["total_adults_count"] = len(adults)
@@ -165,7 +175,9 @@ class ParentListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         program_id = self.kwargs.get("program_id")
         if program_id:
-            ctx["program"] = get_object_or_404(Program, pk=program_id)
+            ctx["program"] = get_object_or_404(
+                _for_request_organization(Program, self.request), pk=program_id
+            )
         parents = list(ctx.get("parents") or ctx.get("object_list") or [])
         ctx["total_parents_count"] = len(parents)
         ctx["email_updates_count"] = sum(1 for p in parents if p.email_updates)
@@ -215,7 +227,9 @@ class MentorListView(LoginRequiredMixin, SortableListViewMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         program_id = self.kwargs.get("program_id")
         if program_id:
-            ctx["program"] = get_object_or_404(Program, pk=program_id)
+            ctx["program"] = get_object_or_404(
+                _for_request_organization(Program, self.request), pk=program_id
+            )
         # Split the already-evaluated (and prefetched) list in Python.
         # Calling .filter() here would re-execute the whole list query and
         # its prefetches once per section.
@@ -282,15 +296,35 @@ class AdultDetailView(
     section = "adult_info"
 
     def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .prefetch_related(
+        from django.db.models import Prefetch
+
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            return Adult.objects.none()
+        return Adult.objects.for_organization(organization).prefetch_related(
+            Prefetch(
                 "students",
+                queryset=Student.objects.for_organization(organization),
+            ),
+            Prefetch(
                 "adultstudentrelationship_set",
-                "background_checks__check_type",
-                "email_delivery_events",
-            )
+                queryset=AdultStudentRelationship.objects.for_organization(
+                    organization
+                ).filter(
+                    adult__organization=organization,
+                    student__organization=organization,
+                ),
+            ),
+            Prefetch(
+                "background_checks",
+                queryset=BackgroundCheck.objects.for_organization(organization)
+                .filter(
+                    adult__organization=organization,
+                    check_type__organization=organization,
+                )
+                .select_related("check_type"),
+            ),
+            "email_delivery_events",
         )
 
     def get_object(self, queryset=None):
@@ -361,6 +395,9 @@ class ParentUpdateView(
     section = "adult_info"
     background_checks_kwarg = "adult"
 
+    def get_queryset(self):
+        return _for_request_organization(Adult, self.request)
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
@@ -420,6 +457,9 @@ class AdultUpdateView(
     section = "adult_info"
     background_checks_kwarg = "adult"
 
+    def get_queryset(self):
+        return _for_request_organization(Adult, self.request)
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
@@ -428,9 +468,11 @@ class AdultUpdateView(
         if adult and adult.pk:
             rels = {
                 r.student_id: (r.relationship_to_student, r.specific_relationship or "")
-                for r in adult.adultstudentrelationship_set.select_related(
-                    "student"
-                ).all()
+                for r in AdultStudentRelationship.objects.for_organization(
+                    self.request.organization
+                )
+                .filter(adult=adult, student__organization=self.request.organization)
+                .select_related("student")
             }
             ctx["linked_students"] = [
                 {
@@ -438,9 +480,10 @@ class AdultUpdateView(
                     "rel": rels.get(s.pk, ("", ""))[0],
                     "specific_rel": rels.get(s.pk, ("", ""))[1],
                 }
-                for s in adult.students.select_related("school").order_by(
-                    "last_name", "preferred_first_name"
-                )
+                for s in Student.objects.for_organization(self.request.organization)
+                .filter(adults=adult)
+                .select_related("school")
+                .order_by("last_name", "preferred_first_name")
             ]
         return ctx
 
@@ -457,6 +500,7 @@ class AdultUpdateView(
             if k.startswith("student_specific_rel_")
         }
         valid_keys = set(k for k, _ in RELATIONSHIP_CHOICES)
+        organization = getattr(self.request, "organization", None)
         for sid_str, rel in rel_map.items():
             try:
                 sid = int(sid_str)
@@ -468,10 +512,14 @@ class AdultUpdateView(
             specific = specific_map.get(sid_str, "")
             if specific:
                 defaults["specific_relationship"] = specific
-            if defaults:
+            student = (
+                Student.objects.for_organization(organization).filter(pk=sid).first()
+            )
+            if defaults and student is not None:
                 AdultStudentRelationship.objects.update_or_create(
+                    organization=organization,
                     adult=self.object,
-                    student_id=sid,
+                    student=student,
                     defaults=defaults,
                 )
         messages.success(self.request, "Adult record saved successfully.")
@@ -530,6 +578,9 @@ class MentorUpdateView(
     permission_required = "programs.change_adult"
     section = "adult_info"
     background_checks_kwarg = "adult"
+
+    def get_queryset(self):
+        return _for_request_organization(Adult, self.request)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

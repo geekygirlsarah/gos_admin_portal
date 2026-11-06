@@ -115,6 +115,7 @@ Do **not** use raw Django `has_perm()` checks or decorator checks. Use the stand
 ## Object-Level Access Rules
 
 When checking access for a specific instance, **always pass `obj`** to `can_user_read` and `can_user_write`.
+If an explicit request organization is supplied, the object must belong to that same organization; mismatches are denied before role permissions are evaluated.
 
 ### Students
 - Read-only access to their own profile, attendance, enrollments, and balances.

@@ -159,6 +159,8 @@ Forms dealing with organization-scoped selections:
 - Inherit `OrganizationFormMixin` (from `organizations.forms` or `programs.forms`).
 - Or explicitly limit choice querysets using `limit_choices_to_organization(form, request.organization)`.
 
+Portal Settings team, crew, subteam, and kiosk configuration lists and mutations are scoped to the resolved organization. Crew, subteam, and kiosk creation only accepts programs owned by that organization. Deleting a team, crew, or subteam is blocked if it would change an enrollment owned by another organization; settings actions fail closed without tenant context.
+
 ---
 
 ## Platform Administration & Superuser Tools (`organizations/platform_views.py`)

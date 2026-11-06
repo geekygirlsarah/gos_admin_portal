@@ -246,7 +246,34 @@ def user_is_mentor_or_lead(user, org=None):
     return user_is_mentor(user, org=org)
 
 
+def _object_organization_id(obj):
+    if obj is None:
+        return None
+    organization_id = getattr(obj, "organization_id", None)
+    if organization_id is not None:
+        return organization_id
+    organization = getattr(obj, "organization", None)
+    if organization is not None:
+        return getattr(organization, "pk", None)
+    for relation in ("program", "student", "adult"):
+        related = getattr(obj, relation, None)
+        if related is not None:
+            organization_id = _object_organization_id(related)
+            if organization_id is not None:
+                return organization_id
+    return None
+
+
+def _object_matches_organization(obj, org):
+    if obj is None or org is None:
+        return True
+    object_org_id = _object_organization_id(obj)
+    return object_org_id is None or object_org_id == getattr(org, "pk", org)
+
+
 def can_user_read(user, section, obj=None, org=None):
+    if not _object_matches_organization(obj, org):
+        return False
     if org is None and obj is not None:
         org = getattr(obj, "organization", None)
         if org is None and hasattr(obj, "program"):
@@ -428,6 +455,8 @@ def can_user_read(user, section, obj=None, org=None):
 
 
 def can_user_write(user, section, obj=None, org=None):
+    if not _object_matches_organization(obj, org):
+        return False
     if org is None and obj is not None:
         org = getattr(obj, "organization", None)
         if org is None and hasattr(obj, "program"):
@@ -650,6 +679,8 @@ def can_user_delete(user, section, obj=None, org=None):
     - All other roles follow the same object-level write restrictions but
       deletion is denied if the role cannot write to the section at all.
     """
+    if not _object_matches_organization(obj, org):
+        return False
     if org is None and obj is not None:
         org = getattr(obj, "organization", None)
         if org is None and hasattr(obj, "program"):
@@ -748,6 +779,7 @@ class PassUserToFormMixin:
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["user"] = self.request.user
+        kwargs["organization"] = getattr(self.request, "organization", None)
         return kwargs
 
 

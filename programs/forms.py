@@ -41,7 +41,7 @@ from .widgets import DualListboxWidget
 class StudentForm(forms.ModelForm):
     # Expose reverse M2M to Adults so edits on Student reflect on Adult.students
     parents = forms.ModelMultipleChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         required=False,
         help_text="Select the parents/guardians for this student.",
         widget=DualListboxWidget(
@@ -53,13 +53,13 @@ class StudentForm(forms.ModelForm):
     # model; expose them as Adult pickers for backwards compatibility. The
     # model's property setters keep the through row and pointer in sync.
     primary_contact = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         required=False,
         label="Primary contact",
         help_text="Primary parent/guardian, e.g. the one to contact first.",
     )
     secondary_contact = forms.ModelChoiceField(
-        queryset=Adult.objects.filter(is_parent=True),
+        queryset=Adult.objects.none(),
         required=False,
         label="Secondary contact",
         help_text="Secondary parent/guardian.",
@@ -100,6 +100,7 @@ class StudentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         include_user = kwargs.pop("include_user", False)
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
 
         # Protect parents and primary/secondary contacts from being edited/removed
@@ -108,7 +109,7 @@ class StudentForm(forms.ModelForm):
         if user is not None:
             from .permission_views import user_is_lead_mentor
 
-            is_privileged = user_is_lead_mentor(user)
+            is_privileged = user_is_lead_mentor(user, org=organization)
             if not is_privileged:
                 for field in ["parents", "primary_contact", "secondary_contact"]:
                     if field in self.fields:
@@ -124,7 +125,12 @@ class StudentForm(forms.ModelForm):
             del self.fields["user"]
 
         # Ensure sorted dropdowns for adult-related fields; limit to Adults marked as parents
-        qs_adults = Adult.objects.filter(is_parent=True).order_by(
+        qs_adults = Adult.objects.none()
+        if organization is not None:
+            qs_adults = Adult.objects.for_organization(organization).filter(
+                is_parent=True
+            )
+        qs_adults = qs_adults.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),
@@ -142,9 +148,12 @@ class StudentForm(forms.ModelForm):
         # Sort Org Email / Andrew ID sponsor by first name (Preferred, then legal if no preferred),
         # and limit to Mentors only.
         if "org_email_sponsor" in self.fields:
-            self.fields["org_email_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsor_qs = Adult.objects.none()
+            if organization is not None:
+                sponsor_qs = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["org_email_sponsor"].queryset = sponsor_qs.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -153,9 +162,12 @@ class StudentForm(forms.ModelForm):
                 Lower("last_name"),
             )
         elif "andrew_id_sponsor" in self.fields:
-            self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsor_qs = Adult.objects.none()
+            if organization is not None:
+                sponsor_qs = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["andrew_id_sponsor"].queryset = sponsor_qs.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -316,6 +328,7 @@ class QuickCreateStudentForm(forms.ModelForm):
 class AdultForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
 
         # role has a model-level default so it should not be required in the form
@@ -327,7 +340,7 @@ class AdultForm(forms.ModelForm):
         if user is not None:
             from .permission_views import user_is_lead_mentor
 
-            is_privileged = user_is_lead_mentor(user)
+            is_privileged = user_is_lead_mentor(user, org=organization)
 
             if not is_privileged:
                 protected_fields = [
@@ -345,7 +358,12 @@ class AdultForm(forms.ModelForm):
         # Sort students by first name (Preferred, then legal if no preferred),
         # and exclude inactive (graduated) students.
         if "students" in self.fields:
-            self.fields["students"].queryset = active_students().order_by(
+            students = Student.objects.none()
+            if organization is not None:
+                students = Student.objects.for_organization(organization).filter(
+                    graduated=False
+                )
+            self.fields["students"].queryset = students.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -357,9 +375,12 @@ class AdultForm(forms.ModelForm):
         # Sort Org Email / Andrew ID sponsor by first name (Preferred, then legal if no preferred),
         # and limit to Mentors only.
         if "org_email_sponsor" in self.fields:
-            self.fields["org_email_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsors = Adult.objects.none()
+            if organization is not None:
+                sponsors = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["org_email_sponsor"].queryset = sponsors.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -368,9 +389,12 @@ class AdultForm(forms.ModelForm):
                 Lower("last_name"),
             )
         elif "andrew_id_sponsor" in self.fields:
-            self.fields["andrew_id_sponsor"].queryset = Adult.objects.filter(
-                is_mentor=True
-            ).order_by(
+            sponsors = Adult.objects.none()
+            if organization is not None:
+                sponsors = Adult.objects.for_organization(organization).filter(
+                    is_mentor=True
+                )
+            self.fields["andrew_id_sponsor"].queryset = sponsors.order_by(
                 Lower(
                     Coalesce(
                         NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -1517,9 +1541,15 @@ class BackgroundChecksForm(forms.Form):
         ]
 
     def _existing_rows(self, student, adult):
+        holder = student or adult
+        organization = getattr(holder, "organization", None)
+        if organization is None:
+            return {}
         return {
             bc.check_type_id: bc
             for bc in BackgroundCheck.objects.filter(
+                organization=organization,
+                check_type__organization=organization,
                 student=student if student else None,
                 adult=adult if adult else None,
             ).select_related("check_type")

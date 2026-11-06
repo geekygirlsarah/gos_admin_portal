@@ -127,7 +127,11 @@ class BackgroundChecksInlineMixin:
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         if getattr(self, "object", None) and self.object.pk:
-            bg_form = BackgroundChecksForm()
+            organization = getattr(self.request, "organization", None)
+            bg_form = BackgroundChecksForm(
+                organization=organization,
+                holder=self.object,
+            )
             bg_form.initial_from_holder(**self._bg_holder())
             ctx["bg_checks_form"] = bg_form
             ctx["can_edit_bg"] = self._can_edit_bg()
@@ -138,7 +142,11 @@ class BackgroundChecksInlineMixin:
             return
         if not self._can_edit_bg():
             return
-        bg_form = BackgroundChecksForm(self.request.POST)
+        bg_form = BackgroundChecksForm(
+            self.request.POST,
+            organization=getattr(self.request, "organization", None),
+            holder=self.object,
+        )
         bg_form.initial_from_holder(**self._bg_holder())
         if bg_form.is_valid():
             bg_form.save(**self._bg_holder())

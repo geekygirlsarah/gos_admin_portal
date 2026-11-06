@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - Program Messaging now limits programs, sender choices, subgroups, and broadcast recipients to the current organization.
 - Applicant bulk messaging now scopes program choices, sender identities, branding, and recipients to the request organization, including all-program sends.
 - Manual and monthly balance statements use tenant-scoped selections, contacts, sender settings and validated financial records; inconsistent program statements are not sent, and the fixed debugging BCC has been removed.
+- Application review actions and stale cleanup now scope applications and program choices to the request organization; inconsistent foreign-owned document submissions are not exposed, overwritten, or cascaded away.
+- Student/adult profile details, edits, linked relationships, and sensitive background-check/document paths now enforce the request organization's ownership; mismatched objects are denied before role permissions are evaluated.
+- Portal Settings now scopes team, crew, subteam, program, and kiosk configuration data to the current organization; new child configurations require a local program, and deletes preserve foreign-owned enrollments.
 - Email Settings now distinguishes an organization's sender override from the shared default, so unrelated settings saves do not pin the current default.
 - Attendance kiosks now isolate kiosk, person, RFID, and attendance data by organization. Unlocking requires an eligible active account, rate-limited one-use codes, and a signed tenant-bound cookie; previously unlocked kiosks must be unlocked again.
 - Digital sign-out stations now enforce organization ownership, require eligible accounts for rate-limited one-use unlock codes, and use signed station-bound cookies; previously unlocked stations must be unlocked again.
