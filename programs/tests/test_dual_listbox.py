@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 
+from organizations.models import UserOrganizationMembership
 from programs.forms import AdultForm, StudentForm
 from programs.models import Adult, Student
 
@@ -26,12 +27,19 @@ class DualListboxRenderingTest(TestCase):
         self.s3 = Student.objects.create(
             preferred_first_name="Charlie", last_name="Charlie"
         )
+        self.organization = self.s1.organization
+        UserOrganizationMembership.objects.create(
+            user=self.user,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
 
     def test_adult_form_students_field_rendering(self):
         """
         Test that the students field in AdultForm is now rendered as a dual listbox.
         """
-        form = AdultForm(user=self.user)
+        form = AdultForm(user=self.user, organization=self.organization)
         html = form.as_p()
 
         # Should have the dual-listbox class
@@ -57,7 +65,7 @@ class DualListboxRenderingTest(TestCase):
         """
         Test that the parents field in StudentForm is now rendered as a dual listbox.
         """
-        form = StudentForm(user=self.user)
+        form = StudentForm(user=self.user, organization=self.organization)
         html = form.as_p()
 
         # Should have the dual-listbox class

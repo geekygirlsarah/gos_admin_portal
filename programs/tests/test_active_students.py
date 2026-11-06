@@ -81,7 +81,7 @@ class ActiveStudentDropdownTests(TestCase):
             role="LeadMentor",
             is_active=True,
         )
-        form = AdultForm(user=user)
+        form = AdultForm(user=user, organization=self.program.organization)
         qs = form.fields["students"].queryset
         self.assertIn(self.active, qs)
         self.assertNotIn(self.graduated, qs)

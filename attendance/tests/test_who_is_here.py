@@ -4,6 +4,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from attendance.kiosk_utils import _cookie_name, _make_unlock_token
 from attendance.models import AttendanceEvent, AttendanceSession, KioskConfig
 from programs.models import Program, ProgramFeature, Student
 
@@ -17,11 +18,17 @@ class KioskWhoIsHereTests(TestCase):
         self.kiosk = KioskConfig.objects.create(
             label="Who's Here Test Kiosk",
             program=self.program,
+            organization=self.program.organization,
         )
         self.student = make_student(
-            preferred_first_name="Jane", last_name="Doe", graduation_year=2025
+            preferred_first_name="Jane",
+            last_name="Doe",
+            graduation_year=2025,
+            organization=self.program.organization,
         )
-        self.client.cookies[f"kiosk_unlocked_{self.kiosk.pk}"] = "1"
+        self.client.cookies[_cookie_name(self.kiosk.pk)] = _make_unlock_token(
+            self.kiosk
+        )
 
     def test_who_is_here_api_locked(self):
         self.client.cookies.clear()
@@ -38,19 +45,27 @@ class KioskWhoIsHereTests(TestCase):
 
     def test_who_is_here_api_with_data(self):
         AttendanceSession.objects.create(
-            program=self.program, student=self.student, check_in=timezone.now()
+            program=self.program,
+            student=self.student,
+            check_in=timezone.now(),
+            organization=self.program.organization,
         )
         AttendanceSession.objects.create(
             program=self.program,
+            organization=self.program.organization,
             visitor_name="John Visitor",
             visitor_team_number=1234,
             check_in=timezone.now(),
         )
         closed_student = make_student(
-            preferred_first_name="Closed", last_name="Student", graduation_year=2025
+            preferred_first_name="Closed",
+            last_name="Student",
+            graduation_year=2025,
+            organization=self.program.organization,
         )
         AttendanceSession.objects.create(
             program=self.program,
+            organization=self.program.organization,
             student=closed_student,
             check_in=timezone.now() - timezone.timedelta(hours=2),
             check_out=timezone.now() - timezone.timedelta(hours=1),

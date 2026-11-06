@@ -632,7 +632,7 @@ class MediaRequestDbFreeTests(TestCase):
     photo grid exhausted Postgres connection slots.
     """
 
-    MEDIA_REL = os.path.join("photos", "students", "_db_free_probe.jpg")
+    MEDIA_REL = os.path.join("public", "_db_free_probe.jpg")
 
     def setUp(self):
         full_path = os.path.join(settings.MEDIA_ROOT, self.MEDIA_REL)
@@ -660,6 +660,15 @@ class MediaRequestDbFreeTests(TestCase):
             # Exhausting the streaming iterator fires response.close(),
             # releasing the file handle before cleanup deletes it.
             b"".join(response.streaming_content)
+
+    def test_sensitive_media_is_blocked_without_database_queries(self):
+        for path in (
+            "/media/photos/students/_db_free_probe.jpg",
+            "/media/application_documents/_db_free_probe.pdf",
+            "/media/private/_db_free_probe.jpg",
+        ):
+            with self.subTest(path=path), self.assertNumQueries(0):
+                self.assertEqual(self.client.get(path).status_code, 404)
 
 
 class Handler500RenderTests(TestCase):

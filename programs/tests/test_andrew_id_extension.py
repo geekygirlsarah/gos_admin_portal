@@ -47,7 +47,7 @@ class AndrewIdExtensionTest(TestCase):
         self.student = Student.objects.create(legal_first_name="Stu", last_name="Dent")
 
     def test_student_form_andrew_id_sponsor_queryset(self):
-        form = StudentForm()
+        form = StudentForm(organization=self.student.organization)
         queryset = form.fields["org_email_sponsor"].queryset
 
         # Filter by mentors only

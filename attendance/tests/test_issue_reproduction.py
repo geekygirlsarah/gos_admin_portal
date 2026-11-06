@@ -3,7 +3,7 @@ import json
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from attendance.kiosk_utils import _cookie_name
+from attendance.kiosk_utils import _cookie_name, _make_unlock_token
 from attendance.models import KioskConfig, RFIDCard
 from attendance.tests.base import make_program
 from programs.models import Enrollment, Program, Student
@@ -16,24 +16,29 @@ class KioskProgramBoundingReproductionTests(TestCase):
         self.program_past = make_program(name="Past Program 2024")
 
         self.kiosk = KioskConfig.objects.create(
-            label="Current Kiosk", program=self.program_current
+            label="Current Kiosk",
+            program=self.program_current,
+            organization=self.program_current.organization,
         )
         self.cookie_name = _cookie_name(self.kiosk.pk)
-        self.client.cookies[self.cookie_name] = "1"
+        self.client.cookies[self.cookie_name] = _make_unlock_token(self.kiosk)
 
         # Past student: not enrolled in current program (only in past program), not graduated
         self.past_zoey = Student.objects.create(
+            organization=self.program_current.organization,
             legal_first_name="Zoey",
             preferred_first_name="Zoey",
             last_name="Oldstudent",
             graduated=False,
         )
         Enrollment.objects.create(
+            organization=self.program_past.organization,
             student=self.past_zoey,
             program=self.program_past,
             active=True,
         )
         self.past_zoey_rfid = RFIDCard.objects.create(
+            organization=self.program_current.organization,
             uid="RFID-PAST-ZOEY",
             student=self.past_zoey,
             is_active=True,
@@ -41,17 +46,20 @@ class KioskProgramBoundingReproductionTests(TestCase):
 
         # Current student: enrolled in current program
         self.current_zoey = Student.objects.create(
+            organization=self.program_current.organization,
             legal_first_name="Zoey",
             preferred_first_name="Zoey",
             last_name="Newstudent",
             graduated=False,
         )
         Enrollment.objects.create(
+            organization=self.program_current.organization,
             student=self.current_zoey,
             program=self.program_current,
             active=True,
         )
         self.current_zoey_rfid = RFIDCard.objects.create(
+            organization=self.program_current.organization,
             uid="RFID-CURRENT-ZOEY",
             student=self.current_zoey,
             is_active=True,

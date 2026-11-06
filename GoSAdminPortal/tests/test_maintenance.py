@@ -30,7 +30,7 @@ class MaintenanceModeTests(TestCase):
                 if method != "head":
                     self.assertContains(
                         response,
-                        "The server is temporarily undergoing maintenance. Please check back in shortly.",
+                        "The server is temporarily down in order to do some maintenance. The site will be back up within a few minutes.",
                         status_code=503,
                     )
 
@@ -54,7 +54,7 @@ class MaintenanceModeTests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertContains(
             response,
-            "The server is temporarily undergoing maintenance. Please check back in shortly.",
+            "The server is temporarily down in order to do some maintenance. The site will be back up within a few minutes.",
             status_code=503,
         )
 
@@ -79,7 +79,7 @@ class MaintenanceModeTests(TestCase):
 
         self.assertIn(response.status_code, (200, 503))
         self.assertIn("db", response.json())
-        self.assertNotIn(b"temporarily undergoing maintenance", response.content)
+        self.assertNotIn(b"Portal maintenance in progress", response.content)
 
     @override_settings(MAINTENANCE_MODE=True)
     def test_static_assets_remain_available(self):
@@ -96,7 +96,7 @@ class MaintenanceModeTests(TestCase):
         self.assertEqual(login_response.status_code, 200)
         self.assertNotContains(
             login_response,
-            "The server is temporarily undergoing maintenance. Please check back in shortly.",
+            "The server is temporarily down in order to do some maintenance. The site will be back up within a few minutes.",
             status_code=200,
         )
         self.assertIn(health_response.status_code, (200, 503))

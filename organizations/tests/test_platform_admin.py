@@ -291,6 +291,7 @@ class PlatformDashboardAndHealthTests(TestCase):
             version=1,
             is_active=True,
             effective_date=timezone.now().date(),
+            organization=self.org1,
         )
 
         # Before acceptance: missing agreements issue flagged
@@ -306,7 +307,7 @@ class PlatformDashboardAndHealthTests(TestCase):
 
         # Accept agreement for lead mentor
         MentorAgreementAcceptance.objects.create(
-            adult=self.lead_adult, agreement=agreement
+            adult=self.lead_adult, agreement=agreement, organization=self.org1
         )
 
         # Add background check for mentor
