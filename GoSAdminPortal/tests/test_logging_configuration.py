@@ -23,9 +23,7 @@ class LoggingConfigurationTests(SimpleTestCase):
 
         audit_config = settings.LOGGING["loggers"]["audit"]
         expected_audit_handlers = (
-            ["audit_null"]
-            if settings.TESTING
-            else ["audit_stdout", "audit_stderr"]
+            ["audit_null"] if settings.TESTING else ["audit_stdout", "audit_stderr"]
         )
         self.assertEqual(audit_config["handlers"], expected_audit_handlers)
         self.assertEqual(audit_config["propagate"], not settings.TESTING)

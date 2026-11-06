@@ -336,7 +336,7 @@ class Command(BaseCommand):
             else ()
         )
         with transaction.atomic():
-            queryset = model._base_manager.select_for_update()
+            queryset = model._base_manager.select_for_update(of=("self",))
             if ownership_relations:
                 queryset = queryset.select_related(*ownership_relations)
             locked = queryset.get(pk=record.pk)

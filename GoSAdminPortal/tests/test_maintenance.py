@@ -1,3 +1,5 @@
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -83,10 +85,33 @@ class MaintenanceModeTests(TestCase):
 
     @override_settings(MAINTENANCE_MODE=True)
     def test_static_assets_remain_available(self):
-        response = self.client.get("/static/admin/css/base.css", HTTP_HOST="testserver")
+        with tempfile.TemporaryDirectory() as static_root:
+            asset = Path(static_root) / "maintenance-probe.css"
+            asset.write_text("body { color: black; }", encoding="utf-8")
+            with override_settings(
+                STATIC_ROOT=static_root,
+                SECURE_SSL_REDIRECT=True,
+            ):
+                http_response = self.client.get(
+                    "/static/maintenance-probe.css", HTTP_HOST="testserver"
+                )
+                self.assertEqual(http_response.status_code, 301)
+                self.assertEqual(
+                    http_response.headers["Location"],
+                    "https://testserver/static/maintenance-probe.css",
+                )
+
+                response = self.client.get(
+                    "/static/maintenance-probe.css",
+                    secure=True,
+                    HTTP_HOST="testserver",
+                )
+                response_content = b"".join(response.streaming_content)
+                response.close()
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/css", response.headers.get("Content-Type", ""))
+        self.assertIn(b"color: black", response_content)
 
     @override_settings(MAINTENANCE_MODE=False)
     def test_disabled_mode_restores_normal_application_and_health_endpoints(self):

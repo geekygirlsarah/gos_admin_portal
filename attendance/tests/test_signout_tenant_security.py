@@ -1,7 +1,9 @@
+import base64
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from cryptography.fernet import Fernet
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.http import Http404, HttpResponse
@@ -34,10 +36,13 @@ from programs.models import (
     Team,
 )
 
+TEST_FILE_ENCRYPTION_KEY = Fernet.generate_key().decode()
+
 
 @override_settings(
     ALLOWED_HOSTS=[".momentumteam.app", "testserver"],
     MOMENTUM_ROOT_DOMAIN="momentumteam.app",
+    FILE_ENCRYPTION_KEY=TEST_FILE_ENCRYPTION_KEY,
     CACHES={
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -646,15 +651,16 @@ class SignoutTenantSecurityTests(TestCase):
 
     def test_signout_record_is_owned_by_program_organization(self):
         self.unlock_station(self.alpha_config)
+        signature = (
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+            "CAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+        )
         response = self.client.post(
             reverse("digital_signout", args=[self.alpha_config.pk]),
             {
                 "student_id": self.student.pk,
                 "signed_by_name": "Parent",
-                "signature": (
-                    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
-                    "CAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-                ),
+                "signature": signature,
             },
             HTTP_HOST=self.alpha_host,
         )
@@ -663,3 +669,10 @@ class SignoutTenantSecurityTests(TestCase):
         self.assertEqual(signout.organization, self.alpha)
         self.assertEqual(signout.config, self.alpha_config)
         self.assertEqual(signout.program, self.alpha_program)
+        encrypted_signature = signout.signature.storage.open(
+            signout.signature.name
+        ).read()
+        self.assertEqual(
+            Fernet(TEST_FILE_ENCRYPTION_KEY.encode()).decrypt(encrypted_signature),
+            base64.b64decode(signature.split(",", 1)[1]),
+        )
