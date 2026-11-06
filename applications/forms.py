@@ -48,6 +48,10 @@ class ResumeApplicationForm(forms.Form):
         ),
     )
 
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.organization = organization
+
     def clean_application_id(self):
         raw = (self.cleaned_data["application_id"] or "").strip().upper()
         if len(raw) != APP_ID_LENGTH:
@@ -61,7 +65,12 @@ class ResumeApplicationForm(forms.Form):
                 "(no 0, O, 1, I or L). "
                 f"Unexpected characters: {''.join(sorted(set(invalid)))}"
             )
-        if not Application.objects.filter(application_id=raw).exists():
+        if (
+            self.organization is None
+            or not Application.objects.for_organization(self.organization)
+            .filter(application_id=raw)
+            .exists()
+        ):
             raise forms.ValidationError(
                 "We couldn't find an application with that ID. "
                 "Please double-check, or start a new application."

@@ -7,7 +7,7 @@ after the single-file ``views.py`` was split into submodules.
 
 from __future__ import annotations
 
-from .documents import Step10DocumentsView
+from .documents import Step10DocumentDownloadView, Step10DocumentsView
 from .review import (
     REVIEW_PERM,
     ApplicationApproveView,
@@ -113,6 +113,7 @@ __all__ = [
     "Step9ConfirmView",
     "SwapParentsView",
     # documents
+    "Step10DocumentDownloadView",
     "Step10DocumentsView",
     # steps_mentor
     "MentorBlockedView",

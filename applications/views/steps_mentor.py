@@ -45,7 +45,9 @@ def _require_mentor_verified(application: Application):
     if not application.email_is_verified:
         return redirect("apply_step3", app_id=application.application_id)
     # Block existing-mentor applicants from continuing past OTP.
-    if find_existing_mentor_by_email(application.email):
+    if find_existing_mentor_by_email(
+        application.email, organization=application.organization
+    ):
         return redirect("apply_mentor_blocked", app_id=application.application_id)
     return None
 
@@ -57,7 +59,7 @@ class MentorBlockedView(View):
     template_name = "applications/mentor_blocked.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         if not _is_mentor(application):
             return _redirect_to_current_step(application)
         return render(
@@ -76,7 +78,7 @@ class MentorInfoView(View):
     template_name = "applications/mentor_info.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
@@ -84,7 +86,7 @@ class MentorInfoView(View):
         return self._render(request, application, MentorInfoForm(initial=initial))
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
@@ -119,7 +121,7 @@ class MentorClearanceInterestView(View):
     template_name = "applications/mentor_clearance_interest.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
@@ -129,7 +131,7 @@ class MentorClearanceInterestView(View):
         )
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
@@ -175,7 +177,7 @@ class MentorClearanceDetailView(View):
     template_name = "applications/mentor_clearance_detail.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
@@ -192,7 +194,7 @@ class MentorClearanceDetailView(View):
         )
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
@@ -228,14 +230,14 @@ class MentorConfirmView(View):
     template_name = "applications/mentor_confirm.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard
         return self._render(request, application, ConfirmSubmitForm())
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         guard = _require_mentor_verified(application)
         if guard is not None:
             return guard

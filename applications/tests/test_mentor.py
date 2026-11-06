@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
 from applications.models import Application
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Adult
 
 
@@ -14,7 +16,9 @@ def _make_verified_mentor_app(email: str = "newmentor@example.com") -> Applicati
     """Helper: an Application with applicant_type=MENTOR and verified email."""
     from django.utils import timezone
 
+    organization = Organization.objects.get(slug="gos")
     app = Application.objects.create(
+        organization=organization,
         applicant_type=Application.Type.MENTOR,
         email=email,
         email_verified_at=timezone.now(),
@@ -277,6 +281,16 @@ class MentorFlowTests(TestCase):
 
     def test_mentor_confirm_submission_sets_status_and_emails(self):
         app = _make_verified_mentor_app()
+        lead = get_user_model().objects.create_user(
+            username="mentor-flow-lead",
+            email="mentor-flow-lead@example.test",
+        )
+        UserOrganizationMembership.objects.create(
+            user=lead,
+            organization=app.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
         app.data = {
             "mentor_info": {
                 "legal_first_name": "Alex",
@@ -301,9 +315,9 @@ class MentorFlowTests(TestCase):
         # Confirmation to applicant + lead-mentor notification.
         recipients = [r for m in mail.outbox for r in m.to]
         self.assertIn("newmentor@example.com", recipients)
-        # Lead mentor email exists in outbox.
+        # A lead mentor in this organization's active membership receives the notice.
         self.assertTrue(
-            any("leads@girlsofsteelrobotics.org" in m.to for m in mail.outbox)
+            any("mentor-flow-lead@example.test" in m.to for m in mail.outbox)
         )
 
     def test_mentor_submitted_page_renders(self):

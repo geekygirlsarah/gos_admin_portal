@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import mimetypes
+import os
+
 from django.contrib import messages
 from django.core.exceptions import SuspiciousFileOperation
-from django.shortcuts import redirect, render
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -18,6 +22,7 @@ from .utils import (
     _get_application_or_404,
     _is_mentor,
     _redirect_to_current_step,
+    _require_organization,
 )
 
 
@@ -26,14 +31,20 @@ class Step10DocumentsView(View):
     template_name = "applications/step10_documents.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        organization = _require_organization(request)
+        application = _get_application_or_404(app_id, organization)
+        if not application.program_id:
+            raise Http404
         guard = self._gate(application)
         if guard is not None:
             return guard
         return self._render(request, application, DocumentSubmissionForm())
 
     def post(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        organization = _require_organization(request)
+        application = _get_application_or_404(app_id, organization)
+        if not application.program_id:
+            raise Http404
         guard = self._gate(application)
         if guard is not None:
             return guard
@@ -45,6 +56,7 @@ class Step10DocumentsView(View):
             ProgramDocument.objects.filter(
                 pk=doc_id,
                 program=application.program,
+                program__organization=organization,
                 is_active=True,
             ).first()
             if doc_id
@@ -58,9 +70,17 @@ class Step10DocumentsView(View):
         if not form.is_valid():
             return self._render(request, application, form, focus_doc_id=document.pk)
 
-        submission, _created = ApplicationDocumentSubmission.objects.get_or_create(
-            application=application, document=document
+        submission, created = ApplicationDocumentSubmission.objects.get_or_create(
+            application=application,
+            document=document,
+            defaults={"organization": organization},
         )
+        if not created and submission.organization_id != organization.pk:
+            messages.error(
+                request,
+                "This document submission has inconsistent organization ownership and cannot be changed.",
+            )
+            return redirect("apply_step10", app_id=application.application_id)
         submission.file = form.cleaned_data["file"]
         try:
             submission.save()
@@ -79,16 +99,20 @@ class Step10DocumentsView(View):
             required_doc_ids = set(
                 ProgramDocument.objects.filter(
                     program=application.program,
+                    program__organization=organization,
                     is_active=True,
                     is_required=True,
                 ).values_list("pk", flat=True)
             )
             if required_doc_ids:
                 uploaded_doc_ids = set(
-                    ApplicationDocumentSubmission.objects.filter(
+                    ApplicationDocumentSubmission.objects.for_organization(organization)
+                    .filter(
                         application=application,
                         document_id__in=required_doc_ids,
-                    ).values_list("document_id", flat=True)
+                        document__program__organization=organization,
+                    )
+                    .values_list("document_id", flat=True)
                 )
                 if required_doc_ids.issubset(uploaded_doc_ids):
                     application.status = Application.Status.APPROVED_SIGNED
@@ -112,16 +136,25 @@ class Step10DocumentsView(View):
         return None
 
     def _render(self, request, application, form, focus_doc_id=None):
+        organization = _require_organization(request)
         documents = list(
             ProgramDocument.objects.filter(
-                program=application.program, is_active=True
+                program=application.program,
+                program__organization=organization,
+                is_active=True,
             ).order_by("display_order", "name")
         )
         submissions_by_doc = {
             s.document_id: s
-            for s in ApplicationDocumentSubmission.objects.filter(
-                application=application
-            ).select_related("document")
+            for s in ApplicationDocumentSubmission.objects.for_organization(
+                organization
+            )
+            .filter(
+                application=application,
+                document__program=application.program,
+                document__program__organization=organization,
+            )
+            .select_related("document")
         }
         rows = []
         all_required_done = True
@@ -143,3 +176,43 @@ class Step10DocumentsView(View):
                 "total_steps": TOTAL_STEPS,
             },
         )
+
+
+@method_decorator(never_cache, name="dispatch")
+class Step10DocumentDownloadView(View):
+    def get(self, request, app_id: str, document_id: int):
+        organization = _require_organization(request)
+        application = _get_application_or_404(app_id, organization)
+        if not application.program_id or application.status not in (
+            Application.Status.APPROVED,
+            Application.Status.APPROVED_SIGNED,
+        ):
+            raise Http404
+
+        document = get_object_or_404(
+            ProgramDocument.objects.filter(
+                program=application.program,
+                program__organization=organization,
+                is_active=True,
+            ),
+            pk=document_id,
+        )
+        submission = get_object_or_404(
+            ApplicationDocumentSubmission.objects.for_organization(organization).filter(
+                application=application,
+                document=document,
+                document__program__organization=organization,
+            )
+        )
+        if not submission.file:
+            raise Http404
+
+        filename = os.path.basename(submission.file.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        response = FileResponse(
+            submission.file.open("rb"),
+            content_type=content_type or "application/octet-stream",
+        )
+        disposition = "attachment" if request.GET.get("download") else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response

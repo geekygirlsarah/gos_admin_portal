@@ -16,13 +16,17 @@ from django.utils import timezone
 
 from audit.events import AuditEvent
 from audit.service import log_event
-from programs.models import Adult, Enrollment, Program, Student
+from programs.models import (
+    Adult,
+    AdultStudentRelationship,
+    Enrollment,
+    Program,
+    Student,
+)
 
 from .models import Application, normalize_step_keys
 
 logger = logging.getLogger(__name__)
-
-LEAD_MENTOR_EMAIL = "leads@girlsofsteelrobotics.org"
 
 
 def normalize_email(email: str) -> str:
@@ -48,10 +52,6 @@ def _from_email(organization=None) -> str:
     if name and "<" not in email:
         return f'"{name}" <{email}>'
     return email
-
-
-def _lead_mentor_email() -> str:
-    return getattr(settings, "LEAD_MENTOR_NOTIFICATION_EMAIL", LEAD_MENTOR_EMAIL)
 
 
 def _build_app_email_ctx(
@@ -190,7 +190,7 @@ def send_otp_email(application: Application, code: str, request=None) -> None:
     )
 
 
-def get_program_buckets():
+def get_program_buckets(organization=None):
     """Return (future, current, past) program querysets for the wizard.
 
     - future: applications open based on applications_open/close dates,
@@ -200,7 +200,9 @@ def get_program_buckets():
     """
 
     today = timezone.localdate()
-    active_programs = Program.objects.filter(active=True)
+    if organization is None:
+        return Program.objects.none(), Program.objects.none(), Program.objects.none()
+    active_programs = Program.objects.for_organization(organization).filter(active=True)
 
     # Applications are open if:
     # 1. Any application date is set AND today is within the range.
@@ -228,7 +230,11 @@ def get_program_buckets():
         .order_by("-end_date", "name")
     )
 
-    past = Program.objects.filter(end_date__lt=today).order_by("-end_date", "name")
+    past = (
+        Program.objects.for_organization(organization)
+        .filter(end_date__lt=today)
+        .order_by("-end_date", "name")
+    )
     return future, current, past
 
 
@@ -265,37 +271,40 @@ def get_student_emails(application: Application) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-def find_student_by_email(email: str):
+def find_student_by_email(email: str, organization=None):
     """Find a Student whose personal_email or org_email matches.
 
     Case-insensitive. Returns the first match or ``None``.
     """
-    if not email:
+    if not email or organization is None:
         return None
-    return Student.objects.filter(
-        Q(personal_email__iexact=email) | Q(org_email__iexact=email)
-    ).first()
+    return (
+        Student.objects.for_organization(organization)
+        .filter(Q(personal_email__iexact=email) | Q(org_email__iexact=email))
+        .first()
+    )
 
 
-def find_adult_by_email(email: str):
+def find_adult_by_email(email: str, organization=None):
     """Find an Adult whose personal_email or org_email matches.
 
     When multiple Adults share the same email (e.g. a mother and father), prefer
     the one who is already a primary_contact for at least one student, since the
     person filling out the application is most likely the primary contact.
     """
-    if not email:
+    if not email or organization is None:
         return None
     from django.db.models import Exists, OuterRef
 
     from programs.models import Student
 
-    qs = Adult.objects.filter(
+    qs = Adult.objects.for_organization(organization).filter(
         Q(personal_email__iexact=email) | Q(org_email__iexact=email)
     )
     # Prefer primary contacts over secondary/unlinked adults.
-    is_primary_for = Student.objects.filter(
-        primary_contact_relationship__adult=OuterRef("pk")
+    is_primary_for = Student.objects.for_organization(organization).filter(
+        primary_contact_relationship__adult=OuterRef("pk"),
+        primary_contact_relationship__organization=organization,
     )
     primary = qs.filter(Exists(is_primary_for)).first()
     if primary is not None:
@@ -303,11 +312,11 @@ def find_adult_by_email(email: str):
     return qs.first()
 
 
-def find_existing_mentor_by_email(email: str):
+def find_existing_mentor_by_email(email: str, organization=None):
     """Return an existing Adult flagged as a mentor matching this email,
     or ``None``. Used to block re-applications by people we already know.
     """
-    adult = find_adult_by_email(email)
+    adult = find_adult_by_email(email, organization=organization)
     if adult is not None and getattr(adult, "is_mentor", False):
         return adult
     return None
@@ -373,15 +382,25 @@ def applications_for_user(user, organization=None):
     return list(applications.select_related("program").order_by("-created_at"))
 
 
-def students_for_adult(adult) -> List:
+def students_for_adult(adult, organization=None) -> List:
     """Return the unique students this adult is connected to (primary,
     secondary, or any M2M relation)."""
     if adult is None:
         return []
-    seen = {}
-    for s in adult.students.all():
-        seen.setdefault(s.pk, s)
-    return list(seen.values())
+    organization = organization or getattr(adult, "organization", None)
+    if organization is None or adult.organization_id != organization.pk:
+        return []
+    relationships = (
+        AdultStudentRelationship.objects.for_organization(organization)
+        .filter(adult=adult, student__organization=organization)
+        .select_related("student")
+    )
+    return list(
+        {
+            relationship.student_id: relationship.student
+            for relationship in relationships
+        }.values()
+    )
 
 
 def latest_program_for_student(student) -> Optional[Program]:
@@ -390,8 +409,12 @@ def latest_program_for_student(student) -> Optional[Program]:
     """
     if student is None:
         return None
+    organization = getattr(student, "organization", None)
+    if organization is None:
+        return None
     enrollment = (
-        Enrollment.objects.filter(student=student)
+        Enrollment.objects.for_organization(organization)
+        .filter(student=student, program__organization=organization)
         .select_related("program")
         .order_by(
             "-program__start_date",
@@ -410,9 +433,13 @@ def latest_program_for_adult(adult) -> Optional[Program]:
     """
     if adult is None:
         return None
-    students = students_for_adult(adult)
+    organization = getattr(adult, "organization", None)
+    if organization is None:
+        return None
+    students = students_for_adult(adult, organization=organization)
     enrollment = (
-        Enrollment.objects.filter(student__in=students)
+        Enrollment.objects.for_organization(organization)
+        .filter(student__in=students, program__organization=organization)
         .select_related("program")
         .order_by(
             "-program__start_date",
@@ -986,7 +1013,9 @@ def convert_application_to_student(application: Application, request=None):
         application.applicant_type == Application.Type.MENTOR
         and application.status == Application.Status.CONVERTED
     ):
-        return find_existing_mentor_by_email(application.email)
+        return find_existing_mentor_by_email(
+            application.email, organization=application.organization
+        )
 
     if application.status not in (
         Application.Status.APPROVED,
@@ -1179,8 +1208,26 @@ def convert_application_to_student(application: Application, request=None):
 
 def send_lead_notification_email(application: Application, request=None) -> None:
     """Notify lead mentors that a new application was submitted."""
-    recipient = _lead_mentor_email()
-    if not recipient:
+    if not application.organization_id:
+        return
+    from organizations.models import UserOrganizationMembership
+
+    recipients = sorted(
+        {
+            email.strip()
+            for email in UserOrganizationMembership.objects.filter(
+                organization=application.organization,
+                role="LeadMentor",
+                is_active=True,
+                user__is_active=True,
+            )
+            .exclude(user__email__isnull=True)
+            .exclude(user__email="")
+            .values_list("user__email", flat=True)
+            if email and email.strip()
+        }
+    )
+    if not recipients:
         return
     ctx = _build_app_email_ctx(
         application,
@@ -1194,6 +1241,6 @@ def send_lead_notification_email(application: Application, request=None) -> None
         subject=f"New application: {application.application_id}",
         text_body=text_body,
         html_body=html_body,
-        recipients=[recipient],
+        recipients=recipients,
         organization=application.organization,
     )

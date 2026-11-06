@@ -22,6 +22,7 @@ from .utils import (
     _is_mentor,
     _mentor_progress,
     _redirect_to_current_step,
+    _require_organization,
     _require_verified_email,
 )
 
@@ -33,12 +34,13 @@ class WelcomeView(View):
     template_name = "applications/step1_welcome.html"
 
     def get(self, request):
-        future_programs, _, _ = get_program_buckets()
+        organization = _require_organization(request)
+        future_programs, _, _ = get_program_buckets(organization)
         return render(
             request,
             self.template_name,
             {
-                "resume_form": ResumeApplicationForm(),
+                "resume_form": ResumeApplicationForm(organization=organization),
                 "future_programs": future_programs,
                 "current_step": 1,
                 "total_steps": TOTAL_STEPS,
@@ -48,7 +50,8 @@ class WelcomeView(View):
 
     def post(self, request):
         # POST on Step 1 means "start a new application".
-        application = Application.objects.create()
+        organization = _require_organization(request)
+        application = Application.objects.create(organization=organization)
         return redirect("apply_step2", app_id=application.application_id)
 
 
@@ -59,9 +62,10 @@ class ResumeView(View):
     template_name = "applications/step1_welcome.html"
 
     def post(self, request):
-        form = ResumeApplicationForm(request.POST)
+        organization = _require_organization(request)
+        form = ResumeApplicationForm(request.POST, organization=organization)
         if not form.is_valid():
-            future_programs, _, _ = get_program_buckets()
+            future_programs, _, _ = get_program_buckets(organization)
             return render(
                 request,
                 self.template_name,
@@ -74,8 +78,8 @@ class ResumeView(View):
                     "application": None,
                 },
             )
-        application = Application.objects.get(
-            application_id=form.cleaned_data["application_id"]
+        application = _get_application_or_404(
+            form.cleaned_data["application_id"], organization
         )
         messages.info(
             request,
@@ -89,7 +93,7 @@ class ResumeLinkView(View):
     """Direct link from the welcome email — drop straight into the wizard."""
 
     def get(self, request, app_id: str, token: str = None):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         if token and application.handoff_token and token == application.handoff_token:
             # Store the token in the session to authorize access to handed-off steps.
             request.session[f"handoff_token_{application.application_id}"] = token
@@ -99,7 +103,7 @@ class ResumeLinkView(View):
 @method_decorator(never_cache, name="dispatch")
 class ContinueView(View):
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         # Let a logged-in parent whose email matches the handoff recipient
         # resume an AWAITING_PARENT application from their dashboard.
         _auto_authorize_handoff(request, application)
@@ -126,17 +130,29 @@ class ApplicationWithdrawView(LoginRequiredMixin, View):
     template_name = "applications/withdraw.html"
 
     def _get_application(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        organization = _require_organization(request)
+        application = _get_application_or_404(app_id, organization)
         if application.status not in PENDING_STATUSES:
             messages.error(
                 request,
                 "That application can no longer be withdrawn.",
             )
             return None
-        if application not in applications_for_user(request.user):
+        if application not in applications_for_user(
+            request.user, organization=organization
+        ):
             messages.error(
                 request,
                 "You are not allowed to withdraw that application.",
+            )
+            return None
+        if application.document_submissions.exclude(
+            organization_id=organization.pk,
+            document__program__organization=organization,
+        ).exists():
+            messages.error(
+                request,
+                "This application has an inconsistent document record and cannot be withdrawn.",
             )
             return None
         return application
@@ -173,7 +189,7 @@ class SubmittedView(View):
     template_name = "applications/submitted.html"
 
     def get(self, request, app_id: str):
-        application = _get_application_or_404(app_id)
+        application = _get_application_or_404(app_id, request.organization)
         # Approved student/parent applicants belong on the documents page.
         # Mentors have no Step 10 documents flow.
         if not _is_mentor(application) and application.status in (

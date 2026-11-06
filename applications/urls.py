@@ -158,6 +158,11 @@ urlpatterns = [
     # Only reachable once the application has been APPROVED by a lead
     # mentor; otherwise the view redirects to the applicant's current step.
     path(
+        "<str:app_id>/documents/<int:document_id>/download/",
+        views.Step10DocumentDownloadView.as_view(),
+        name="apply_step10_document_download",
+    ),
+    path(
         "<str:app_id>/step10/",
         views.Step10DocumentsView.as_view(),
         name="apply_step10",

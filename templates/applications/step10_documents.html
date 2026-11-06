@@ -50,7 +50,7 @@
                                         ✓ Signed copy uploaded
                                     </span>
                                     <div class="small">
-                                        <a href="{{ submission.file.url }}"
+                                        <a href="{% url 'apply_step10_document_download' app_id=application.application_id document_id=doc.pk %}"
                                            target="_blank"
                                            rel="noopener">
                                             View your upload
