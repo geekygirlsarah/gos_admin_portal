@@ -7,8 +7,9 @@ and related entity reassignments into reusable, atomic services.
 from __future__ import annotations
 
 import datetime
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, cast
 
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from .accounts import transfer_user_account
@@ -102,6 +103,394 @@ def perform_school_merge(keep: Any, source: Any) -> dict[str, Any]:
 # -----------------------------------------------------------------------------
 # Parent / Adult Merge
 # -----------------------------------------------------------------------------
+
+
+def _validate_merge_roots(keep: Any, source: Any, record_type: str) -> int:
+    organization_id = getattr(keep, "organization_id", None)
+    if (
+        not getattr(keep, "pk", None)
+        or not getattr(source, "pk", None)
+        or keep.pk == source.pk
+        or organization_id is None
+        or organization_id != getattr(source, "organization_id", None)
+    ):
+        raise ValidationError(
+            f"Cannot merge {record_type} records with different or missing organizations."
+        )
+    return cast(int, organization_id)
+
+
+def _validate_related_organization(
+    queryset: models.QuerySet,
+    organization_id: int,
+    organization_paths: Sequence[str],
+    optional_paths: Sequence[str] = (),
+) -> None:
+    """Reject and lock related rows whose ownership chain leaves the tenant."""
+    list(queryset.select_for_update().values_list("pk", flat=True))
+    for path in organization_paths:
+        if queryset.exclude(**{path: organization_id}).exists():
+            raise ValidationError(
+                "Merge blocked because related records have inconsistent organization ownership."
+            )
+    for path in optional_paths:
+        if (
+            queryset.filter(**{f"{path}__isnull": False})
+            .exclude(**{path: organization_id})
+            .exists()
+        ):
+            raise ValidationError(
+                "Merge blocked because related records have inconsistent organization ownership."
+            )
+
+
+def _validate_parent_merge_ownership(keep: Any, source: Any) -> None:
+    from attendance.models import AttendanceEvent, AttendanceSession, RFIDCard
+    from outreach.models import OutreachMentorSignup
+    from programs.models import (
+        Adult,
+        AdultStudentRelationship,
+        BackgroundCheck,
+        MentorAgreementAcceptance,
+        MentorAgreementSubmission,
+        SlidingScale,
+        Student,
+    )
+    from travel.models import TravelMentorSignup, TravelParentChaperoneSignup
+
+    organization_id = _validate_merge_roots(keep, source, "adult")
+    adult_ids = (keep.pk, source.pk)
+
+    relationships = AdultStudentRelationship.objects.filter(adult_id__in=adult_ids)
+    _validate_related_organization(
+        relationships,
+        organization_id,
+        ("organization_id", "adult__organization_id", "student__organization_id"),
+    )
+    for field in ("primary_contact_relationship", "secondary_contact_relationship"):
+        contact_students = Student.objects.filter(
+            **{f"{field}__adult_id__in": adult_ids}
+        )
+        _validate_related_organization(
+            contact_students,
+            organization_id,
+            (
+                "organization_id",
+                f"{field}__organization_id",
+                f"{field}__adult__organization_id",
+                f"{field}__student__organization_id",
+            ),
+        )
+        for student in contact_students.select_related(field):
+            if (
+                getattr(student, f"{field}_id")
+                and getattr(student, field).student_id != student.pk
+            ):
+                raise ValidationError(
+                    "Merge blocked because a contact relationship is inconsistent."
+                )
+
+    linked_student_ids = [
+        student_id
+        for student_id in (keep.student_record_id, source.student_record_id)
+        if student_id is not None
+    ]
+    _validate_related_organization(
+        Student.objects.filter(pk__in=linked_student_ids),
+        organization_id,
+        ("organization_id",),
+    )
+
+    for model, paths, optional in (
+        (
+            BackgroundCheck.objects.filter(adult_id__in=adult_ids),
+            (
+                "organization_id",
+                "adult__organization_id",
+                "check_type__organization_id",
+            ),
+            (),
+        ),
+        (
+            MentorAgreementAcceptance.objects.filter(adult_id__in=adult_ids),
+            ("organization_id", "adult__organization_id", "agreement__organization_id"),
+            (),
+        ),
+        (
+            MentorAgreementSubmission.objects.filter(adult_id__in=adult_ids),
+            ("organization_id", "adult__organization_id", "agreement__organization_id"),
+            (),
+        ),
+        (
+            OutreachMentorSignup.objects.filter(adult_id__in=adult_ids),
+            (
+                "organization_id",
+                "adult__organization_id",
+                "shift__event__organization_id",
+                "shift__event__program__organization_id",
+            ),
+            (),
+        ),
+        (
+            TravelMentorSignup.objects.filter(adult_id__in=adult_ids),
+            (
+                "organization_id",
+                "adult__organization_id",
+                "event__organization_id",
+            ),
+            (
+                "event__program__organization_id",
+                "departure__organization_id",
+                "departure__event__organization_id",
+            ),
+        ),
+        (
+            TravelParentChaperoneSignup.objects.filter(adult_id__in=adult_ids),
+            (
+                "organization_id",
+                "adult__organization_id",
+                "event__organization_id",
+            ),
+            (
+                "event__program__organization_id",
+                "departure__organization_id",
+                "departure__event__organization_id",
+            ),
+        ),
+        (
+            RFIDCard.objects.filter(adult_id__in=adult_ids),
+            ("organization_id", "adult__organization_id"),
+            (),
+        ),
+        (
+            SlidingScale.objects.filter(applied_by_id__in=adult_ids),
+            (
+                "organization_id",
+                "student__organization_id",
+                "applied_by__organization_id",
+            ),
+            (),
+        ),
+        (
+            AttendanceSession.objects.filter(adult_id__in=adult_ids),
+            ("organization_id", "program__organization_id", "adult__organization_id"),
+            ("student__organization_id",),
+        ),
+        (
+            AttendanceEvent.objects.filter(adult_id__in=adult_ids),
+            ("organization_id", "program__organization_id", "adult__organization_id"),
+            (
+                "student__organization_id",
+                "kiosk__organization_id",
+                "kiosk__program__organization_id",
+            ),
+        ),
+        (
+            Adult.objects.filter(org_email_sponsor_id__in=adult_ids),
+            ("organization_id", "org_email_sponsor__organization_id"),
+            (),
+        ),
+        (
+            Student.objects.filter(org_email_sponsor_id__in=adult_ids),
+            ("organization_id", "org_email_sponsor__organization_id"),
+            (),
+        ),
+    ):
+        _validate_related_organization(model, organization_id, paths, optional)
+
+
+def _validate_student_merge_ownership(keep: Any, source: Any) -> None:
+    from applications.models import Application
+    from attendance.models import (
+        AttendanceEvent,
+        AttendanceSession,
+        DigitalSignout,
+        RFIDCard,
+        StudentPresence,
+    )
+    from badges.models import StudentBadge
+    from outreach.models import OutreachSignup
+    from programs.models import (
+        Adult,
+        AdultStudentRelationship,
+        BackgroundCheck,
+        Enrollment,
+        FeeAssignment,
+        Payment,
+        RaceEthnicity,
+        SlidingScale,
+        Student,
+        StudentDocument,
+        TaxForm,
+    )
+    from travel.models import TravelSignup
+
+    organization_id = _validate_merge_roots(keep, source, "student")
+    student_ids = (keep.pk, source.pk)
+
+    relationships = AdultStudentRelationship.objects.filter(student_id__in=student_ids)
+    _validate_related_organization(
+        relationships,
+        organization_id,
+        ("organization_id", "adult__organization_id", "student__organization_id"),
+    )
+    for student in (keep, source):
+        for field in ("primary_contact_relationship", "secondary_contact_relationship"):
+            relationship_id = getattr(student, f"{field}_id")
+            if relationship_id is None:
+                continue
+            relationship = (
+                AdultStudentRelationship.objects.select_for_update()
+                .filter(pk=relationship_id)
+                .select_related("adult", "student")
+                .first()
+            )
+            if (
+                relationship is None
+                or relationship.organization_id != organization_id
+                or relationship.adult.organization_id != organization_id
+                or relationship.student_id != student.pk
+                or relationship.student.organization_id != organization_id
+            ):
+                raise ValidationError(
+                    "Merge blocked because a contact relationship is inconsistent."
+                )
+
+    _validate_related_organization(
+        Enrollment.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id", "program__organization_id"),
+        ("team__organization_id", "crew__organization_id", "subteam__organization_id"),
+    )
+    _validate_related_organization(
+        Payment.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id", "program__organization_id"),
+    )
+    _validate_related_organization(
+        FeeAssignment.objects.filter(student_id__in=student_ids),
+        organization_id,
+        (
+            "organization_id",
+            "student__organization_id",
+            "fee__organization_id",
+            "fee__program__organization_id",
+        ),
+    )
+    _validate_related_organization(
+        SlidingScale.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id"),
+        ("applied_by__organization_id",),
+    )
+    _validate_related_organization(
+        TaxForm.objects.filter(sliding_scale__student_id__in=student_ids),
+        organization_id,
+        (
+            "organization_id",
+            "sliding_scale__organization_id",
+            "sliding_scale__student__organization_id",
+        ),
+    )
+    _validate_related_organization(
+        StudentDocument.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("student__organization_id", "program_document__program__organization_id"),
+    )
+    _validate_related_organization(
+        BackgroundCheck.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id", "check_type__organization_id"),
+    )
+    _validate_related_organization(
+        RFIDCard.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id"),
+        ("adult__organization_id",),
+    )
+    for model in (AttendanceSession, AttendanceEvent):
+        optional_paths = ["adult__organization_id"]
+        if model is AttendanceEvent:
+            optional_paths.extend(
+                ["kiosk__organization_id", "kiosk__program__organization_id"]
+            )
+        _validate_related_organization(
+            model.objects.filter(student_id__in=student_ids),
+            organization_id,
+            ("organization_id", "student__organization_id", "program__organization_id"),
+            optional_paths,
+        )
+    _validate_related_organization(
+        StudentPresence.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id", "program__organization_id"),
+    )
+    _validate_related_organization(
+        DigitalSignout.objects.filter(student_id__in=student_ids),
+        organization_id,
+        (
+            "organization_id",
+            "student__organization_id",
+            "program__organization_id",
+            "config__organization_id",
+            "config__program__organization_id",
+        ),
+    )
+    _validate_related_organization(
+        Application.objects.filter(converted_student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "converted_student__organization_id"),
+        ("program__organization_id",),
+    )
+    _validate_related_organization(
+        OutreachSignup.objects.filter(student_id__in=student_ids),
+        organization_id,
+        (
+            "organization_id",
+            "student__organization_id",
+            "shift__event__organization_id",
+            "shift__event__program__organization_id",
+        ),
+    )
+    _validate_related_organization(
+        TravelSignup.objects.filter(student_id__in=student_ids),
+        organization_id,
+        (
+            "organization_id",
+            "student__organization_id",
+            "event__organization_id",
+        ),
+        (
+            "event__program__organization_id",
+            "departure__organization_id",
+            "departure__event__organization_id",
+        ),
+    )
+    _validate_related_organization(
+        StudentBadge.objects.filter(student_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student__organization_id", "badge__organization_id"),
+    )
+    _validate_related_organization(
+        Adult.objects.filter(student_record_id__in=student_ids),
+        organization_id,
+        ("organization_id", "student_record__organization_id"),
+    )
+    _validate_related_organization(
+        Student.objects.filter(pk__in=student_ids),
+        organization_id,
+        ("organization_id",),
+        (
+            "school__organization_id",
+            "school__district__organization_id",
+            "org_email_sponsor__organization_id",
+        ),
+    )
+    _validate_related_organization(
+        RaceEthnicity.objects.filter(students__in=student_ids),
+        organization_id,
+        ("organization_id",),
+    )
 
 
 def _transfer_parent_relationships(keep: Any, source: Any) -> None:
@@ -297,12 +686,17 @@ def _merge_parent_role_flags(keep: Any, source: Any) -> bool:
 
 def perform_parent_merge(keep: Any, source: Any) -> dict[str, Any]:
     """Merge ``source`` Adult/Parent into ``keep`` Adult/Parent atomically."""
-    source_pk = source.pk
-    source_name = getattr(source, "display_name", str(source))
+    _validate_merge_roots(keep, source, "adult")
+    model = type(keep)
     keep_pk = keep.pk
-    keep_name = getattr(keep, "display_name", str(keep))
+    source_pk = source.pk
 
     with transaction.atomic():
+        keep = model.objects.select_for_update().get(pk=keep_pk)
+        source = model.objects.select_for_update().get(pk=source_pk)
+        _validate_parent_merge_ownership(keep, source)
+        source_name = getattr(source, "display_name", str(source))
+        keep_name = getattr(keep, "display_name", str(keep))
         _transfer_parent_relationships(keep, source)
         _transfer_parent_related_records(keep, source)
         changed = _carry_over_missing_parent_fields(keep, source)
@@ -638,12 +1032,17 @@ def _carry_over_missing_student_fields(keep: Any, source: Any) -> bool:
 
 def perform_student_merge(keep: Any, source: Any) -> dict[str, Any]:
     """Merge ``source`` Student into ``keep`` Student atomically."""
-    source_pk = source.pk
-    source_name = getattr(source, "display_name", str(source))
+    _validate_merge_roots(keep, source, "student")
+    model = type(keep)
     keep_pk = keep.pk
-    keep_name = getattr(keep, "display_name", str(keep))
+    source_pk = source.pk
 
     with transaction.atomic():
+        keep = model.objects.select_for_update().get(pk=keep_pk)
+        source = model.objects.select_for_update().get(pk=source_pk)
+        _validate_student_merge_ownership(keep, source)
+        source_name = getattr(source, "display_name", str(source))
+        keep_name = getattr(keep, "display_name", str(keep))
         changed = _transfer_student_relationships(keep, source)
         _transfer_student_related_records(keep, source)
         changed = _carry_over_missing_student_fields(keep, source) or changed

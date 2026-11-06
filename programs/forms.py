@@ -670,8 +670,14 @@ class ParentMergeForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
-        qs_adults = Adult.objects.filter(is_parent=True).order_by(
+        qs_adults = Adult.objects.none()
+        if organization is not None:
+            qs_adults = Adult.objects.for_organization(organization).filter(
+                is_parent=True
+            )
+        qs_adults = qs_adults.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),
@@ -706,8 +712,12 @@ class StudentMergeForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        organization = kwargs.pop("organization", None)
         super().__init__(*args, **kwargs)
-        qs_students = Student.objects.all().order_by(
+        qs_students = Student.objects.none()
+        if organization is not None:
+            qs_students = Student.objects.for_organization(organization)
+        qs_students = qs_students.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
             ),

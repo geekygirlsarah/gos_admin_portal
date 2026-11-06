@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
 from ..models import Adult
 
 
@@ -16,10 +19,20 @@ def find_matching_alumni_adult(student):
       4. First/last name match with ``is_alumni=True``.
     Returns None if no match is found.
     """
+    organization_id = getattr(student, "organization_id", None)
+    if organization_id is None:
+        raise ValidationError("A student organization is required for alumni matching.")
+
+    adults = Adult.objects.for_organization(organization_id)
+
     # 1. Direct link
     if student.pk:
         a = Adult.objects.filter(student_record=student).first()
         if a:
+            if a.organization_id != organization_id:
+                raise ValidationError(
+                    "The linked alumni adult belongs to another organization."
+                )
             return a
 
     first = (
@@ -38,7 +51,7 @@ def find_matching_alumni_adult(student):
         if e:
             # personal_email match with name check to avoid false parent matches
             if first and last:
-                a = Adult.objects.filter(
+                a = adults.filter(
                     personal_email__iexact=e,
                     legal_first_name__iexact=first,
                     last_name__iexact=last,
@@ -46,18 +59,19 @@ def find_matching_alumni_adult(student):
                 if a:
                     return a
             # Org / Andrew email match
-            a = Adult.objects.filter(org_email__iexact=e).first()
+            a = adults.filter(org_email__iexact=e).first()
             if a:
                 return a
 
     # 3. Name match if already flagged as alumni
     if first and last:
-        return Adult.objects.filter(
+        return adults.filter(
             legal_first_name__iexact=first, last_name__iexact=last, is_alumni=True
         ).first()
     return None
 
 
+@transaction.atomic
 def convert_student_to_alumni(student):
     """Idempotently convert a Student into an alumni Adult record.
 
@@ -71,10 +85,23 @@ def convert_student_to_alumni(student):
 
     Returns a tuple ``(adult, created, marked_graduated)``.
     """
+    if not getattr(student, "pk", None):
+        raise ValidationError("A saved student is required for alumni conversion.")
+    student = type(student).objects.select_for_update().get(pk=student.pk)
+    if student.organization_id is None:
+        raise ValidationError(
+            "A student organization is required for alumni conversion."
+        )
+
     adult = find_matching_alumni_adult(student)
+    if adult is not None and adult.student_record_id not in (None, student.pk):
+        raise ValidationError(
+            "The matching adult is already linked to another student record."
+        )
     created = False
     if adult is None:
         adult = Adult.objects.create(
+            organization=student.organization,
             legal_first_name=student.legal_first_name or "",
             preferred_first_name=student.preferred_first_name,
             last_name=student.last_name or "",

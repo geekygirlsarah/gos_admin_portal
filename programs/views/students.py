@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
@@ -705,8 +706,20 @@ class StudentConvertToAlumniView(LoginRequiredMixin, PermissionRequiredMixin, Vi
     def post(self, request, pk):
         from ..utils import convert_student_to_alumni
 
-        student = get_object_or_404(Student, pk=pk)
-        _adult, created, _marked = convert_student_to_alumni(student)
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        student = get_object_or_404(
+            Student.objects.for_organization(organization), pk=pk
+        )
+        try:
+            _adult, created, _marked = convert_student_to_alumni(student)
+        except ValidationError:
+            messages.error(
+                request,
+                "This student has inconsistent organization data and could not be converted.",
+            )
+            return redirect_back(request, "student_list")
         if created:
             messages.success(
                 request,
@@ -724,6 +737,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
     template_name = "students/convert_to_alumni.html"
 
     def get(self, request):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
         year = request.GET.get("year")
         try:
             year = int(year) if year else timezone.now().year
@@ -731,7 +747,8 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
             year = timezone.now().year
         # Default to seniors: graduation_year equals the selected year, and active (non-graduated)
         students = (
-            Student.objects.filter(graduation_year=year, graduated=False)
+            Student.objects.for_organization(organization)
+            .filter(graduation_year=year, graduated=False)
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -751,6 +768,9 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
     def post(self, request):
         from ..utils import convert_student_to_alumni, find_matching_alumni_adult
 
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
         action = request.POST.get("action", "convert")
         ids = request.POST.getlist("student_ids")
         year = request.POST.get("year")
@@ -771,20 +791,31 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
                 return HttpResponseRedirect(f"{base_url}?{query.urlencode()}")
             return redirect("student_bulk_convert_select")
 
-        qs = Student.objects.filter(pk__in=ids).order_by(
-            "last_name", "preferred_first_name"
+        qs = (
+            Student.objects.for_organization(organization)
+            .filter(pk__in=ids)
+            .order_by("last_name", "preferred_first_name")
         )
 
         if action == "preview":
             # Build preview info without writing changes against Adults flagged as alumni
             will_create = []
             already_alumni = []
+            blocked = []
             for s in qs:
-                if find_matching_alumni_adult(s):
-                    already_alumni.append(s)
-                else:
-                    will_create.append(s)
+                try:
+                    if find_matching_alumni_adult(s):
+                        already_alumni.append(s)
+                    else:
+                        will_create.append(s)
+                except ValidationError:
+                    blocked.append(s)
             will_mark_graduated = [s for s in qs if not s.graduated]
+            if blocked:
+                messages.error(
+                    request,
+                    f"{len(blocked)} selected student(s) have inconsistent organization data and cannot be converted.",
+                )
             return render(
                 request,
                 "students/convert_to_alumni_preview.html",
@@ -794,6 +825,7 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
                     "will_create": will_create,
                     "already_alumni": already_alumni,
                     "will_mark_graduated": will_mark_graduated,
+                    "blocked": blocked,
                     "ids": ids,
                 },
             )
@@ -803,14 +835,22 @@ class StudentBulkConvertToAlumniView(LoginRequiredMixin, LeadMentorRequiredMixin
         existed = 0
         marked_graduated = 0
 
-        for student in qs:
-            _adult, was_created, was_marked = convert_student_to_alumni(student)
-            if was_created:
-                created += 1
-            else:
-                existed += 1
-            if was_marked:
-                marked_graduated += 1
+        try:
+            with transaction.atomic():
+                for student in qs:
+                    _adult, was_created, was_marked = convert_student_to_alumni(student)
+                    if was_created:
+                        created += 1
+                    else:
+                        existed += 1
+                    if was_marked:
+                        marked_graduated += 1
+        except ValidationError:
+            messages.error(
+                request,
+                "One or more selected students have inconsistent organization data. No conversions were made.",
+            )
+            return redirect("student_bulk_convert_select")
         messages.success(
             request,
             f"Converted {created} new alumni (Adults), {existed} already existed/updated. "
@@ -824,19 +864,46 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
     form_class = StudentMergeForm
     success_url = reverse_lazy("student_list")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from django.db.models import Prefetch
+
+        organization = getattr(self.request, "organization", None)
+        students = _tenant_student_queryset(organization)
+        if organization is None:
+            enrollments = Enrollment.objects.none()
+            relationships = AdultStudentRelationship.objects.none()
+        else:
+            enrollments = (
+                Enrollment.objects.for_organization(organization)
+                .filter(
+                    student__organization=organization,
+                    program__organization=organization,
+                )
+                .select_related("program")
+            )
+            relationships = (
+                AdultStudentRelationship.objects.for_organization(organization)
+                .filter(
+                    adult__organization=organization,
+                    student__organization=organization,
+                )
+                .select_related("adult")
+            )
         context["students"] = list(
-            Student.objects.all()
-            .select_related(
+            students.select_related(
                 "school",
                 "primary_contact_relationship__adult",
                 "secondary_contact_relationship__adult",
             )
             .prefetch_related(
-                "adults",
-                "enrollment_set__program",
-                "adultstudentrelationship_set__adult",
+                Prefetch("enrollment_set", queryset=enrollments),
+                Prefetch("adultstudentrelationship_set", queryset=relationships),
             )
             .annotate(
                 sort_first=Coalesce(
@@ -854,7 +921,14 @@ class StudentMergeView(LoginRequiredMixin, LeadMentorRequiredMixin, FormView):
         keep = form.cleaned_data["keep"]
         source = form.cleaned_data["source"]
 
-        meta = perform_student_merge(keep, source)
+        try:
+            meta = perform_student_merge(keep, source)
+        except ValidationError:
+            form.add_error(
+                None,
+                "These records have inconsistent organization data and cannot be merged.",
+            )
+            return self.form_invalid(form)
 
         log_event(
             request=self.request,

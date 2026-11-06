@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db.models import Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404
@@ -13,6 +14,7 @@ from ..forms import AdultForm, ParentMergeForm
 from ..models import (
     Adult,
     AdultStudentRelationship,
+    Enrollment,
     Program,
     Student,
 )
@@ -658,20 +660,55 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
     template_name = "parents/merge.html"
     success_url = reverse_lazy("parent_list")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = getattr(self.request, "organization", None)
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from django.db.models import Prefetch
+
+        organization = getattr(self.request, "organization", None)
+        if organization is None:
+            parents = Adult.objects.none()
+            students = Student.objects.none()
+            relationships = AdultStudentRelationship.objects.none()
+        else:
+            parents = active_parents(organization)
+            enrollments = (
+                Enrollment.objects.for_organization(organization)
+                .filter(
+                    student__organization=organization,
+                    program__organization=organization,
+                )
+                .select_related("program")
+            )
+            students = (
+                Student.objects.for_organization(organization)
+                .filter(
+                    adultstudentrelationship__organization=organization,
+                    adultstudentrelationship__adult__organization=organization,
+                )
+                .distinct()
+                .prefetch_related(Prefetch("enrollment_set", queryset=enrollments))
+            )
+            relationships = AdultStudentRelationship.objects.for_organization(
+                organization
+            ).filter(
+                adult__organization=organization,
+                student__organization=organization,
+            )
         context["parents"] = list(
-            active_parents()
-            .annotate(
+            parents.annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
                 )
             )
             .order_by(Lower("sort_first"), Lower("last_name"))
             .prefetch_related(
-                "students__school",
-                "students__enrollment_set__program",
-                "adultstudentrelationship_set",
+                Prefetch("students", queryset=students.select_related("school")),
+                Prefetch("adultstudentrelationship_set", queryset=relationships),
             )
         )
         return context
@@ -680,7 +717,14 @@ class ParentMergeView(LeadMentorRequiredMixin, FormView):
         keep = form.cleaned_data["keep"]
         source = form.cleaned_data["source"]
 
-        meta = perform_parent_merge(keep, source)
+        try:
+            meta = perform_parent_merge(keep, source)
+        except ValidationError:
+            form.add_error(
+                None,
+                "These records have inconsistent organization data and cannot be merged.",
+            )
+            return self.form_invalid(form)
 
         from audit.events import AuditEvent
         from audit.service import log_event
