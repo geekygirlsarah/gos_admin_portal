@@ -1,8 +1,14 @@
 import logging
 
 from django.conf import settings
-from django.http import Http404, HttpResponseForbidden, HttpResponseNotFound
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseForbidden,
+    HttpResponseNotFound,
+)
 from django.shortcuts import redirect
+from django.template.loader import render_to_string
 from django.urls import Resolver404, resolve, reverse
 
 from applications.rate_limiting import (
@@ -25,6 +31,34 @@ def _default_organization():
 
     slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", "gos")
     return Organization.objects.filter(slug=slug).first()
+
+
+class MaintenanceModeMiddleware:
+    """Show a standalone maintenance page before session or tenant access."""
+
+    HEALTH_PATHS = frozenset({"/health", "/health/"})
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            not getattr(settings, "MAINTENANCE_MODE", False)
+            or request.path in self.HEALTH_PATHS
+            or (settings.STATIC_URL and request.path.startswith(settings.STATIC_URL))
+        ):
+            return self.get_response(request)
+
+        response = HttpResponse(
+            render_to_string("maintenance.html"),
+            status=503,
+        )
+        response["Cache-Control"] = (
+            "private, no-store, no-cache, max-age=0, must-revalidate"
+        )
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
+        return response
 
 
 EXEMPT_URL_NAMES = {

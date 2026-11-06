@@ -22,6 +22,23 @@ Never run development seed commands or test-data anonymization against productio
 data. Do not use `--fix`, `--execute`, or `--force` until the proposed changes
 have been reviewed.
 
+## Temporary Maintenance Mode
+
+Set `MAINTENANCE_MODE=true` on each web service instance and restart or redeploy
+the processes to return a non-cacheable `503 Service Unavailable` page for
+application requests. All visitors, including signed-in users and platform
+superusers, see the same page. Set the variable to `false` or remove it, then
+restart or redeploy the processes to restore normal access.
+
+Static assets served by WhiteNoise and the real `/health` endpoint remain
+available; health probes continue to report actual database and email status.
+APIs and webhooks routed through Django also receive `503`; confirm that their
+callers retry as appropriate or pause external delivery. Maintenance middleware
+runs only for web requests, so it does not stop background workers, scheduled
+jobs, or other external services. It also cannot help if the application fails
+before it can start. Confirm the deployment platform's health-check and restart
+behavior before relying on this switch during an incident.
+
 ## Protected Media Files
 
 Student photos and signed application submissions are stored beneath the

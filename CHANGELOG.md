@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-11-06
 
+### Added
+- Added an opt-in `MAINTENANCE_MODE` environment variable that serves a non-cacheable `503` page for application requests while preserving static assets and the real health check.
+
 ### Fixed
 - Student and parent merges and alumni conversion now stay within the current organization; inconsistent cross-organization relationships block changes before records are transferred or deleted.
 

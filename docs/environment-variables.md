@@ -18,6 +18,7 @@ This document catalogues all environment variables supported by Momentum (Girls 
 | `TOSEND_API_KEY` | Optional | `""` | API key for toSend REST email backend |
 | `MOMENTUM_ROOT_DOMAIN` | Optional | `localhost` | Base domain for tenant subdomain routing |
 | `MENTOR_AGREEMENT_ENABLED` | Optional | `True` | Enforces mentor agreement signing before access |
+| `MAINTENANCE_MODE` | Optional | `False` | Returns a temporary `503` page for application requests |
 | `LOG_LEVEL` | Optional | `INFO` | Root logging level |
 
 ---
@@ -213,6 +214,13 @@ These settings take effect when `DEBUG=False`:
 ### `MENTOR_AGREEMENT_ENABLED`
 - **Default**: `True` (auto-disabled during test suite runs).
 - **Purpose**: Enforces that users with `is_mentor=True` or `LeadMentor` roles sign the active `MentorAgreement` before accessing portal features.
+
+### `MAINTENANCE_MODE`
+- **Default**: `False`.
+- **Values**: `1`, `true`, or `yes` (case-insensitive) enables maintenance mode; other values disable it.
+- **Purpose**: Returns a non-cacheable `503 Service Unavailable` page for application, API, and webhook requests before sessions, tenant routing, or views run. Authenticated users, including superusers, receive the same page.
+- **Exceptions**: WhiteNoise-served static assets and `/health` remain available. The health endpoint continues to report the real database and email status; it does not report healthy merely because maintenance mode is enabled.
+- **Operations**: Set this variable on every web service instance and restart/redeploy those processes. Set it to `false` (or remove it) and restart/redeploy to restore the application. Confirm API clients and webhook senders retry `503` responses as needed. This does not stop background workers, scheduled jobs, or external services, and it cannot serve a page if the application process fails to start.
 
 ### `PRINT_LOGIN_CODE_ALWAYS`
 - **Default**: `False`
