@@ -104,6 +104,13 @@ application uploads use organization-scoped random storage paths under the
 existing `MEDIA_ROOT`; these paths are not authorization tokens. Existing files
 are not moved automatically, and their direct legacy URLs remain blocked.
 
+The opt-in `transition_private_media` management command can copy existing
+student photos and signed application submissions into those private paths. It
+defaults to a read-only inventory, checks tenant ownership and verifies each
+copy before updating its record, and retains every original. Random filenames
+and organization directories are organizational safeguards only; authorized
+delivery checks remain mandatory before and after a transition.
+
 Applicant access to Step 10 requires a fresh email OTP. Successful verification
 is bound to the tenant, application, current email, browser session, and OTP
 expiry; requesting and verifying codes use the existing rate limits. Staff

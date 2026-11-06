@@ -46,6 +46,41 @@ and document endpoints still work, and foreign-tenant requests are denied.
 Perform these checks through the actual proxy/CDN path as well as Django when
 those services can serve files independently.
 
+### Transitioning existing uploads
+
+`programs.management.commands.transition_private_media` inventories legacy
+student photos and signed application submissions. It is read-only by default:
+
+```bash
+python manage.py transition_private_media
+```
+
+Review the aggregate counts and any manual-review reasons before an approved
+execution:
+
+```bash
+python manage.py transition_private_media --execute
+```
+
+The command only accepts the known `photos/students/` and
+`application_documents/` source prefixes and the filesystem storage rooted at
+`MEDIA_ROOT`. It checks tenant ownership, copies each eligible file to its
+model-generated random private path, verifies the copied bytes with SHA-256,
+and updates the reference in a per-record transaction only if the stored path
+is unchanged. Already-private files are validated and skipped. A nonzero result
+means at least one record needs manual review; successful records from that run
+may already have been committed, so inspect the summary and rerun after review.
+
+Before any real execution, make and verify a coordinated database and complete
+`MEDIA_ROOT` backup, confirm `MEDIA_ROOT` is on the persistent disk, and ensure
+the Django server and any proxy, CDN, or storage origin deny direct access to
+the sensitive legacy paths. The command never deletes or overwrites source
+files. A rollback may restore a database reference to its retained source only
+while that source remains present; new private copies left behind by a failed
+or rolled-back attempt are orphans and must be inventoried separately, not
+automatically deleted. Keep legacy originals until a separate reviewed cleanup
+and approval; a successful transition does not purge previously cached copies.
+
 ## Local Development Commands
 
 | Task                     | Command                                                                      | Scope / safety                                                |
