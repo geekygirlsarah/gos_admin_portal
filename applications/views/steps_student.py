@@ -52,6 +52,7 @@ from .utils import (
     _is_handoff_authorized,
     _is_mentor,
     _issue_and_send,
+    _locked_application_redirect,
     _mentor_progress,
     _redirect_after_email_verified,
     _redirect_to_current_step,
@@ -72,6 +73,9 @@ class Step2ApplicantTypeView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         form = ApplicantTypeForm(
             initial={
                 "applicant_type": application.applicant_type or None,
@@ -82,6 +86,9 @@ class Step2ApplicantTypeView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         form = ApplicantTypeForm(request.POST)
         if not form.is_valid():
             return self._render(request, application, form)
@@ -154,6 +161,9 @@ class Step4ProgramView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
         future, current, past = get_program_buckets(request.organization)
         form = ProgramSelectForm(
             future_programs=future,
@@ -165,6 +175,9 @@ class Step4ProgramView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
         future, current, past = get_program_buckets(request.organization)
         form = ProgramSelectForm(request.POST, future_programs=future)
         if not form.is_valid():
@@ -204,6 +217,9 @@ class Step3VerifyEmailView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         if application.email_is_verified:
             # Mentors skip program selection — send them back into the mentor
             # wizard; everyone else continues to Step 4 (program selection).
@@ -232,6 +248,9 @@ class Step3VerifyEmailView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         rate_limited = check_otp_verify_limit(request, application.application_id)
         if rate_limited is not None:
             return rate_limited
@@ -305,6 +324,9 @@ class Step3DuplicateFoundView(View):
 
     def get(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
         # Find other applications with the same email that are in progress
         existing = (
             Application.objects.for_organization(application.organization)
@@ -341,6 +363,9 @@ class Step3DuplicateFoundView(View):
 
     def post(self, request, app_id: str):
         application = _get_application_or_404(app_id, request.organization)
+        guard = _require_verified_email(application)
+        if guard is not None:
+            return guard
         action = request.POST.get("action")
 
         existing_query = (
@@ -440,6 +465,9 @@ class Step3ResendCodeView(View):
         from .. import services as _services
 
         application = _get_application_or_404(app_id, request.organization)
+        locked_redirect = _locked_application_redirect(application)
+        if locked_redirect is not None:
+            return locked_redirect
         if not application.email:
             return redirect("apply_step2", app_id=application.application_id)
         rate_limited = check_otp_send_limit(request, application.email)

@@ -146,8 +146,28 @@ def _redirect_after_email_verified(application: Application):
 
 
 def _require_verified_email(application: Application):
+    locked_redirect = _locked_application_redirect(application)
+    if locked_redirect is not None:
+        return locked_redirect
     if not application.email_is_verified:
         return redirect("apply_step3", app_id=application.application_id)
+    return None
+
+
+def _locked_application_redirect(application: Application):
+    if application.status in (
+        Application.Status.APPROVED,
+        Application.Status.APPROVED_SIGNED,
+    ):
+        if _is_mentor(application):
+            return redirect("apply_submitted", app_id=application.application_id)
+        return redirect("apply_step10", app_id=application.application_id)
+    if application.status in (
+        Application.Status.SUBMITTED,
+        Application.Status.CONVERTED,
+        Application.Status.DECLINED,
+    ):
+        return redirect("apply_submitted", app_id=application.application_id)
     return None
 
 
@@ -291,6 +311,9 @@ def _require_mentor(application: Application):
 
 def _require_mentor_verified(application: Application):
     """Mentor pages past OTP require a verified email + mentor type."""
+    locked_redirect = _locked_application_redirect(application)
+    if locked_redirect is not None:
+        return locked_redirect
     guard = _require_mentor(application)
     if guard is not None:
         return guard

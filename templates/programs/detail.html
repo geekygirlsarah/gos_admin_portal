@@ -398,10 +398,10 @@
                 <div class="d-flex align-items-center flex-wrap gap-2">
                   {% if s.photo %}
                     {% if role == 'Student' %}
-                      <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle"/>
+                      <img src="{% url 'student_photo' s.pk %}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle"/>
                     {% else %}
                       <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
-                        <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle"/>
+                        <img src="{% url 'student_photo' s.pk %}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle"/>
                       </a>
                     {% endif %}
                   {% endif %}
@@ -469,7 +469,7 @@
                 <div class="d-flex align-items-center flex-wrap gap-2 text-muted">
                   {% if s.photo %}
                     <a class="text-decoration-none" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">
-                      <img src="{{ s.photo.url }}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle opacity-75"/>
+                      <img src="{% url 'student_photo' s.pk %}" alt="{{ s.display_name }}" class="avatar avatar-32 rounded-circle opacity-75"/>
                     </a>
                   {% endif %}
                   <a class="text-decoration-none text-muted fw-semibold" href="{% url 'student_detail' s.id %}?next={% url 'program_detail' program.id %}">{{ s.display_name }}</a>{% if s.grade_display %} <small>({{ s.grade_display }})</small>{% endif %}

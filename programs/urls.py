@@ -98,6 +98,7 @@ from .views import (
     StudentListView,
     StudentMergeView,
     StudentPhotoListView,
+    StudentPhotoView,
     StudentsByGradeView,
     StudentsBySchoolView,
     StudentUpdateView,
@@ -256,6 +257,11 @@ urlpatterns = [
         name="attendance_sample_csv",
     ),
     path("students/", login_required(StudentListView.as_view()), name="student_list"),
+    path(
+        "students/<int:pk>/photo/",
+        login_required(StudentPhotoView.as_view()),
+        name="student_photo",
+    ),
     path(
         "students/emergency-contacts/",
         login_required(StudentEmergencyContactsView.as_view()),

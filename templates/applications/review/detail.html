@@ -206,7 +206,7 @@
                           </a>
                         {% endif %}
                         {% if row.submission and row.submission.file %}
-                          <a class="btn btn-sm btn-outline-primary" href="{{ row.submission.file.url }}" target="_blank" rel="noopener">
+                          <a class="btn btn-sm btn-outline-primary" href="{% url 'application_review_document_download' app_id=application.application_id submission_id=row.submission.pk %}" target="_blank" rel="noopener">
                             <i class="bi bi-file-earmark-check me-1"></i>Signed
                           </a>
                         {% endif %}

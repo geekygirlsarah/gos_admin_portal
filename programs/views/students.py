@@ -12,6 +12,7 @@ from django.http import FileResponse, Http404, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.generic import (
     CreateView,
     DetailView,
@@ -1010,4 +1011,55 @@ class StudentDocumentDownloadView(LoginRequiredMixin, View):
         response = FileResponse(student_doc.file.open("rb"), content_type=content_type)
         disposition = "attachment" if request.GET.get("download") else "inline"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
+
+class StudentPhotoView(LoginRequiredMixin, View):
+    """Serve a student's photo only to a user allowed to view that student."""
+
+    def get(self, request, pk):
+        organization = getattr(request, "organization", None)
+        if organization is None:
+            raise Http404
+        student = get_object_or_404(
+            _tenant_student_queryset(organization).exclude(photo=""), pk=pk
+        )
+        role = get_user_role(request.user, org=organization)
+        if role == "Parent":
+            try:
+                adult = request.user.adult_profile
+            except (Adult.DoesNotExist, AttributeError):
+                raise Http404
+            if (
+                adult.organization_id != organization.pk
+                or not AdultStudentRelationship.objects.for_organization(organization)
+                .filter(
+                    adult=adult,
+                    student=student,
+                    adult__organization=organization,
+                    student__organization=organization,
+                )
+                .exists()
+            ):
+                raise Http404
+        if not can_user_read(request.user, "student_info", student, org=organization):
+            raise Http404
+
+        filename = os.path.basename(student.photo.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        if content_type not in {
+            "image/bmp",
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            "image/webp",
+        }:
+            content_type = "application/octet-stream"
+        response = FileResponse(student.photo.open("rb"), content_type=content_type)
+        response["Content-Disposition"] = content_disposition_header(
+            content_type.startswith("image/"), filename
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
         return response

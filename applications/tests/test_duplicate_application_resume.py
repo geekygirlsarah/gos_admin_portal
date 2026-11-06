@@ -74,7 +74,9 @@ class DuplicateApplicationTests(TestCase):
         )
 
         # 2. New application
-        app = Application.objects.create(email="test2@example.com")
+        app = Application.objects.create(
+            email="test2@example.com", email_verified_at=timezone.now()
+        )
 
         # 3. Choose "start over"
         response = self.client.post(
@@ -108,7 +110,9 @@ class DuplicateApplicationTests(TestCase):
 
         # 2. New application
         new_app = Application.objects.create(
-            email="mentor@example.com", applicant_type=Application.Type.MENTOR
+            email="mentor@example.com",
+            applicant_type=Application.Type.MENTOR,
+            email_verified_at=timezone.now(),
         )
 
         # 3. Resume
@@ -127,7 +131,9 @@ class DuplicateApplicationTests(TestCase):
     def test_mentor_start_over_redirects_to_mentor_info(self):
         # 1. New mentor application
         app = Application.objects.create(
-            email="mentor2@example.com", applicant_type=Application.Type.MENTOR
+            email="mentor2@example.com",
+            applicant_type=Application.Type.MENTOR,
+            email_verified_at=timezone.now(),
         )
         # Existing one
         Application.objects.create(

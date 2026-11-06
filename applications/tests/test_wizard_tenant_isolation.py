@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from applications.models import Application, ApplicationDocumentSubmission
 from applications.services import send_lead_notification_email
+from applications.tests.access_helpers import grant_applicant_document_access
 from applications.views.documents import Step10DocumentsView
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
@@ -388,6 +389,7 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             file="application-tenant-tests/private-beta-signed.pdf",
         )
         url = reverse("apply_step10", kwargs={"app_id": application.application_id})
+        grant_applicant_document_access(self.client, application)
 
         response = self.tenant_get(url)
         self.assertEqual(response.status_code, 200)
@@ -428,6 +430,7 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             document=document,
         )
         submission.file.save("signed-consent.pdf", ContentFile(b"private signed file"))
+        grant_applicant_document_access(self.client, application)
         url = reverse(
             "apply_step10_document_download",
             kwargs={"app_id": application.application_id, "document_id": document.pk},
@@ -448,6 +451,7 @@ class ApplicationWizardTenantIsolationTests(TestCase):
             status=Application.Status.APPROVED,
             current_step=10,
         )
+        grant_applicant_document_access(self.client, application)
         document = ProgramDocument.objects.create(
             program=self.alpha_program,
             name="Alpha Consent",

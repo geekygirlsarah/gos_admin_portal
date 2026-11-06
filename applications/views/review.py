@@ -53,6 +53,7 @@ from ..services import (
     send_otp_email,
     send_parent_handoff_email,
 )
+from .documents import application_document_file_response
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,6 @@ _CLEARANCE_STATUS = [
     ("have", "I already have this clearance."),
     ("need", "I don't have this yet — I'll need to get it."),
 ]
-
 
 _STUDENT_FIELDS = [
     {"name": "legal_first_name", "label": "Legal first name", "kind": "text"},
@@ -845,6 +845,23 @@ class ApplicationReviewDetailView(_ReviewerRequiredMixin, View):
                 "can_convert": can_convert,
             },
         )
+
+
+class ApplicationReviewDocumentDownloadView(_ReviewerRequiredMixin, View):
+    """Stream a signed application document to an authorized tenant reviewer."""
+
+    def get(self, request, app_id: str, submission_id: int):
+        application = _get_tenant_application(request, app_id)
+        organization = application.organization
+        submission = get_object_or_404(
+            ApplicationDocumentSubmission.objects.for_organization(organization).filter(
+                application=application,
+                document__program=application.program,
+                document__program__organization=organization,
+            ),
+            pk=submission_id,
+        )
+        return application_document_file_response(submission)
 
 
 class ApplicationApproveView(_ReviewerRequiredMixin, View):

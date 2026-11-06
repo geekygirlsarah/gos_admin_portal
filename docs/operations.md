@@ -22,6 +22,30 @@ Never run development seed commands or test-data anonymization against productio
 data. Do not use `--fix`, `--execute`, or `--force` until the proposed changes
 have been reviewed.
 
+## Protected Media Files
+
+Student photos and signed application submissions are stored beneath the
+existing `MEDIA_ROOT`, in organization-scoped random paths under `private/`.
+The application denies direct `/media/` requests for those paths and for the
+legacy `photos/students/` and `application_documents/` directories; authorized
+student-photo, applicant, and staff endpoints stream the file from its stored
+path. Existing uploads are not moved or deleted automatically.
+
+The current application setting uses the relative path `media/`. Before a
+deployment, confirm that this resolves inside the existing persistent Render
+disk mount and is not an ephemeral service-filesystem location. Do not change
+the mount or bulk-move files as part of this application change. Any future
+copy or cleanup requires a separately reviewed backup, inventory, validation,
+and approval plan. A proxy, CDN, or storage origin that bypasses Django must
+also deny the sensitive legacy and `private/` prefixes; review any cached
+copies of previously public URLs separately.
+
+After deploying the protection, verify that anonymous direct requests to both
+legacy and new sensitive media paths are denied, authorized same-tenant photo
+and document endpoints still work, and foreign-tenant requests are denied.
+Perform these checks through the actual proxy/CDN path as well as Django when
+those services can serve files independently.
+
 ## Local Development Commands
 
 | Task                     | Command                                                                      | Scope / safety                                                |
