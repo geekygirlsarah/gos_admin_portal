@@ -7,6 +7,8 @@ from programs.permission_views import get_user_role
 
 def _item_export_row(item):
     order = item.order
+    if order is not None and order.organization_id != item.organization_id:
+        return None
     return {
         "program": item.program.name if item.program else "",
         "item_name": item.item_name,
@@ -59,6 +61,8 @@ _ORDER_ITEMS_EXPORT_HEADERS = [
 
 def _order_item_export_values(item):
     row = _item_export_row(item)
+    if row is None:
+        return None
     return [
         row["program"],
         row["item_name"],
@@ -83,7 +87,11 @@ def _order_item_export_values(item):
 def _export_items_csv(items):
     from programs.utils.spreadsheets import export_csv_response
 
-    rows = (_order_item_export_values(item) for item in items.iterator(chunk_size=500))
+    rows = (
+        values
+        for item in items.iterator(chunk_size=500)
+        if (values := _order_item_export_values(item)) is not None
+    )
     return export_csv_response(
         filename="order_requests.csv",
         headers=_ORDER_ITEMS_EXPORT_HEADERS,
@@ -96,7 +104,11 @@ def _export_items_xlsx(items):
 
     from programs.utils.spreadsheets import export_xlsx_response
 
-    rows = (_order_item_export_values(item) for item in items.iterator(chunk_size=500))
+    rows = (
+        values
+        for item in items.iterator(chunk_size=500)
+        if (values := _order_item_export_values(item)) is not None
+    )
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(
         start_color="333333", end_color="333333", fill_type="solid"

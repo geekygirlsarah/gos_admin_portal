@@ -163,7 +163,7 @@
         </div>
     </div>
 
-    {% if order.status == "ordered" or order.status == "shipped" or order.shipping_carrier or order.tracking_number or order.shipping_cost or order.tax %}
+    {% if order.status == "ordered" or order.status == "shipped" or order.organization_shipping_carrier or order.tracking_number or order.shipping_cost or order.tax %}
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
             <h2 class="h5 mb-0 fw-bold"><i class="bi bi-truck me-2 text-primary"></i>Shipping &amp; Cost Details</h2>
@@ -194,7 +194,7 @@
             {% else %}
             <dl class="row mb-0">
                 <dt class="col-sm-3 text-muted">Carrier</dt>
-                <dd class="col-sm-9 fw-semibold">{{ order.shipping_carrier|default:"—" }}</dd>
+                <dd class="col-sm-9 fw-semibold">{{ order.organization_shipping_carrier|default:"—" }}</dd>
                 <dt class="col-sm-3 text-muted">Tracking</dt>
                 <dd class="col-sm-9">
                     {% if order.tracking_url %}

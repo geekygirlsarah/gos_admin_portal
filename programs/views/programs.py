@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Value
+from django.db.models import Count, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -28,6 +28,7 @@ from ..models import (
     Program,
     ProgramDocument,
     Student,
+    StudentDocument,
     SubTeam,
     Team,
 )
@@ -290,10 +291,24 @@ class ProgramEmergencyContactsView(
         Falls back to the first/second parents on file when the
         primary_contact/secondary_contact fields aren't set.
         """
-        parents = student.all_parents
-        primary = student.primary_contact or (parents[0] if parents else None)
+        relationships = student.organization_guardian_relationships
+        parents = []
+        parents_by_relationship = {}
+        for relationship in relationships:
+            adult = relationship.adult
+            adult.attached_rel = relationship.relationship_to_student
+            adult.specific_rel = relationship.specific_relationship or ""
+            parents.append(adult)
+            parents_by_relationship[relationship.pk] = adult
+
+        primary = parents_by_relationship.get(student.primary_contact_relationship_id)
+        primary = primary or (parents[0] if parents else None)
         remaining = [p for p in parents if p.pk != getattr(primary, "pk", None)]
-        secondary = student.secondary_contact or (remaining[0] if remaining else None)
+        secondary = parents_by_relationship.get(
+            student.secondary_contact_relationship_id
+        )
+        if secondary is None or secondary.pk == getattr(primary, "pk", None):
+            secondary = remaining[0] if remaining else None
         others = [p for p in remaining if p.pk != getattr(secondary, "pk", None)]
         return primary, secondary, others
 
@@ -302,14 +317,27 @@ class ProgramEmergencyContactsView(
         program = get_object_or_404(
             Program.objects.for_organization(org), pk=program_id
         )
-        students = (
-            active_students_in_program(program, organization=org)
-            .select_related(
-                "primary_contact_relationship__adult",
-                "secondary_contact_relationship__adult",
-                "school",
+        guardian_relationships = AdultStudentRelationship.objects.for_organization(org)
+        if org is not None:
+            guardian_relationships = guardian_relationships.filter(
+                adult__organization=org
             )
-            .prefetch_related("adults", "adultstudentrelationship_set")
+        guardian_relationships = guardian_relationships.select_related(
+            "adult"
+        ).order_by("pk")
+
+        students = active_students_in_program(program, organization=org)
+        if org is not None:
+            students = students.filter(enrollment__organization=org)
+        students = (
+            students.select_related("school")
+            .prefetch_related(
+                Prefetch(
+                    "adultstudentrelationship_set",
+                    queryset=guardian_relationships,
+                    to_attr="organization_guardian_relationships",
+                )
+            )
             .annotate(
                 sort_first=Coalesce(
                     NullIf("preferred_first_name", Value("")), "legal_first_name"
@@ -692,9 +720,15 @@ class ProgramStudentDocumentsView(
     context_object_name = "program"
     section = "student_documents"
 
+    def get_queryset(self):
+        return Program.objects.for_organization(
+            getattr(self.request, "organization", None)
+        )
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         program = self.object
+        org = getattr(self.request, "organization", None)
 
         # Get all required documents for this program
         docs = program.documents.all().order_by("display_order", "name")
@@ -702,9 +736,20 @@ class ProgramStudentDocumentsView(
 
         # Get all students enrolled in this program
         enrollments = (
-            Enrollment.objects.filter(program=program)
+            Enrollment.objects.for_organization(org)
+            .filter(
+                program=program,
+                student__in=Student.objects.for_organization(org),
+            )
             .select_related("student")
-            .prefetch_related("student__signed_documents")
+            .prefetch_related(
+                Prefetch(
+                    "student__signed_documents",
+                    queryset=StudentDocument.objects.filter(
+                        program_document__program=program
+                    ),
+                )
+            )
             .annotate(
                 sort_first=Lower(
                     Coalesce(
