@@ -122,30 +122,40 @@ def get_student_outreach_stats(student, program):
     return compute_outreach_stats(signups)
 
 
-def can_view_checkin(user, shift):
+def can_view_checkin(user, shift, organization=None):
     """Who may open (even read-only) the check-in page for ``shift``.
 
     Mentors/Lead Mentors always; a student only if they champion the shift.
     """
-    from programs.permission_views import can_user_write, user_is_mentor
+    from programs.permission_views import can_user_write, user_is_mentor_or_lead
 
-    if user_is_mentor(user):
+    organization = (
+        organization
+        or getattr(shift, "organization", None)
+        or shift.event.program.organization
+    )
+    if user_is_mentor_or_lead(user, org=organization):
         return True
-    return can_user_write(user, "outreach", shift)
+    return can_user_write(user, "outreach", shift, org=organization)
 
 
-def can_operate_checkin(user, shift):
+def can_operate_checkin(user, shift, organization=None):
     """Who may tap students in/out on the check-in page for ``shift``.
 
     Mentors/Lead Mentors always. A shift's champion may operate it until
     *every* signup has both a check-in and check-out, or until the grace
     window after the shift ends — whichever comes first.
     """
-    from programs.permission_views import can_user_write, user_is_mentor
+    from programs.permission_views import can_user_write, user_is_mentor_or_lead
 
-    if user_is_mentor(user):
+    organization = (
+        organization
+        or getattr(shift, "organization", None)
+        or shift.event.program.organization
+    )
+    if user_is_mentor_or_lead(user, org=organization):
         return True
-    if not can_user_write(user, "outreach", shift):
+    if not can_user_write(user, "outreach", shift, org=organization):
         return False
     if timezone.now() > shift_end_datetime(shift) + CHECKIN_GRACE:
         return False

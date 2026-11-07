@@ -2,12 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-07
+
+### Fixed
+- Program photo, map, sign-out, and school rosters now restrict students and programs to the current organization; travel self-signup requires an active enrollment in that tenant's program, and order shipping choices accept only carriers owned by the current organization.
+- The program detail page no longer uses another organization's team records to decide whether to show team-assignment controls.
+- Travel trip creation and inline departures/costs now inherit the program organization, travel mentor and parent signups persist their organization, and the dashboard displays the travel event's actual location.
+
 ## 2026-11-06
 
 ### Added
 - Added an opt-in `MAINTENANCE_MODE` environment variable that serves a non-cacheable `503` page for application requests while preserving static assets and the real health check.
 
 ### Fixed
+- Organization-scoped non-superuser Lead Mentors can manage local program, student, financial, school, attendance, outreach, badge, order, and organization-account records, and review applications and guest forms. Related object lookups now enforce tenant boundaries; import access remains unchanged until those paths are safely scoped.
 - Student and parent merges and alumni conversion now stay within the current organization; inconsistent cross-organization relationships block changes before records are transferred or deleted.
 - Non-superuser Lead Mentors can manage travel trips and signups using their organization-scoped role; travel program lookups are tenant-scoped, and calendar event forms show the Feeds breadcrumb to authorized Lead Mentors.
 - Support impersonation continuation pages now preserve same-origin metadata needed for HTTPS CSRF validation while withholding referrers from cross-origin requests.

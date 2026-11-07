@@ -13,8 +13,10 @@ from ..models import AttendanceEvent, AttendanceSession
 
 class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
     def get(self, request):
+        org = getattr(request, "organization", None)
         visitors = (
-            AttendanceSession.objects.filter(student__isnull=True, adult__isnull=True)
+            AttendanceSession.objects.for_organization(org)
+            .filter(student__isnull=True, adult__isnull=True)
             .exclude(visitor_name="")
             .values("visitor_name")
             .annotate(session_count=Count("id"))
@@ -30,6 +32,7 @@ class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         )
 
     def post(self, request):
+        org = getattr(request, "organization", None)
         action = request.POST.get("action")
         if action == "merge":
             selected_names = request.POST.getlist("selected_names")
@@ -43,16 +46,20 @@ class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 from programs.utils.merges import perform_visitor_merge
 
                 sample = (
-                    AttendanceSession.objects.filter(
+                    AttendanceSession.objects.for_organization(org)
+                    .filter(
                         student__isnull=True,
                         adult__isnull=True,
                         visitor_name__in=selected_names,
-                    ).first()
-                    or AttendanceEvent.objects.filter(
+                    )
+                    .first()
+                    or AttendanceEvent.objects.for_organization(org)
+                    .filter(
                         student__isnull=True,
                         adult__isnull=True,
                         visitor_name__in=selected_names,
-                    ).first()
+                    )
+                    .first()
                 )
                 if sample is not None:
                     log_event(
@@ -66,7 +73,7 @@ class VisitorManagementView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                             f"'{target_name}'."
                         ),
                     )
-                perform_visitor_merge(selected_names, target_name)
+                perform_visitor_merge(selected_names, target_name, organization=org)
 
                 messages.success(
                     request,

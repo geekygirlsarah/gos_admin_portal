@@ -2,7 +2,8 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import F, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -61,10 +62,22 @@ class OrderListView(
     context_object_name = "items"
     section = "orders-view"
 
-    def get_export_items(self):
+    def get_queryset(self):
+        org = getattr(self.request, "organization", None)
         return (
-            OrderItem.objects.for_organization(
-                getattr(self.request, "organization", None)
+            OrderItem.objects.for_organization(org)
+            .filter(
+                Q(order__isnull=True) | Q(order__organization_id=F("organization_id"))
+            )
+            .select_related("program", "vendor", "team", "crew", "subteam")
+        )
+
+    def get_export_items(self):
+        org = getattr(self.request, "organization", None)
+        return (
+            OrderItem.objects.for_organization(org)
+            .filter(
+                Q(order__isnull=True) | Q(order__organization_id=F("organization_id"))
             )
             .filter(Q(order__isnull=True) | ~Q(order__status=Order.STATUS_RECEIVED))
             .select_related(
@@ -97,7 +110,14 @@ class OrderListView(
             Order.objects.for_organization(org)
             .exclude(status=Order.STATUS_RECEIVED)
             .select_related("program", "vendor", "shipping_carrier", "created_by")
-            .prefetch_related("items__team", "items__crew", "items__subteam")
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=OrderItem.objects.for_organization(org).select_related(
+                        "team", "crew", "subteam"
+                    ),
+                )
+            )
             .order_by("-created_at")
         )
         item_groups = _group_by_vendor(pool_items)
@@ -126,12 +146,14 @@ class OrderListView(
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
         context["can_request_item"] = can_user_write(
-            self.request.user, "orders-request"
+            self.request.user, "orders-request", org=org
         )
         context["can_place_order"] = user_is_mentor_or_lead(
-            self.request.user
-        ) and can_user_write(self.request.user, "orders-manage")
-        context["can_manage_items"] = can_user_write(self.request.user, "orders-manage")
+            self.request.user, org=org
+        ) and can_user_write(self.request.user, "orders-manage", org=org)
+        context["can_manage_items"] = can_user_write(
+            self.request.user, "orders-manage", org=org
+        )
         context["page_title"] = "Order Requests"
         return context
 
@@ -158,7 +180,14 @@ class OrderArchiveView(
             .select_related(
                 "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
             )
-            .prefetch_related("items__team", "items__crew", "items__subteam")
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=OrderItem.objects.for_organization(org).select_related(
+                        "team", "crew", "subteam"
+                    ),
+                )
+            )
             .order_by("-ordered_at", "-created_at")
         )
 
@@ -166,7 +195,10 @@ class OrderArchiveView(
         org = getattr(self.request, "organization", None)
         return (
             OrderItem.objects.for_organization(org)
-            .filter(order__status=Order.STATUS_RECEIVED)
+            .filter(
+                order__status=Order.STATUS_RECEIVED,
+                order__organization_id=F("organization_id"),
+            )
             .select_related(
                 "program",
                 "vendor",
@@ -184,6 +216,7 @@ class OrderArchiveView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
+        org = getattr(self.request, "organization", None)
         orders = list(context["orders"])
         for order in orders:
             order.ordered_by_name = user_display_name(order.ordered_by)
@@ -195,11 +228,11 @@ class OrderArchiveView(
         context["is_lead"] = role == "LeadMentor"
         context["is_staff"] = role in ("Mentor", "LeadMentor")
         context["can_request_item"] = can_user_write(
-            self.request.user, "orders-request"
+            self.request.user, "orders-request", org=org
         )
         context["can_place_order"] = user_is_mentor_or_lead(
-            self.request.user
-        ) and can_user_write(self.request.user, "orders-manage")
+            self.request.user, org=org
+        ) and can_user_write(self.request.user, "orders-manage", org=org)
         context["page_title"] = "Order Archive"
         return context
 
@@ -225,17 +258,32 @@ class OrderDetailView(
 
     def get_queryset(self):
         org = getattr(self.request, "organization", None)
-        return Order.objects.for_organization(org).select_related(
-            "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
+        return (
+            Order.objects.for_organization(org)
+            .select_related(
+                "program", "vendor", "shipping_carrier", "created_by", "ordered_by"
+            )
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=OrderItem.objects.for_organization(org).select_related(
+                        "program",
+                        "vendor",
+                        "team",
+                        "crew",
+                        "subteam",
+                        "requested_by",
+                        "order",
+                    ),
+                )
+            )
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         role = context["user_role"]
         org = getattr(self.request, "organization", None)
-        context["items"] = self.object.items.select_related(
-            "program", "vendor", "team", "crew", "subteam", "requested_by", "order"
-        ).all()
+        context["items"] = self.object.organization_items
         context["available_items"] = (
             OrderItem.objects.for_organization(org)
             .filter(order__isnull=True)
@@ -246,12 +294,14 @@ class OrderDetailView(
         )
         context["is_lead"] = role == "LeadMentor"
         context["can_manage_items"] = can_user_write(
-            self.request.user, "orders-manage", self.object
+            self.request.user, "orders-manage", self.object, org=org
         )
         context["can_edit_shipping"] = can_user_write(
-            self.request.user, "orders-shipping", self.object
+            self.request.user, "orders-shipping", self.object, org=org
         )
-        context["shipping_form"] = ShippingInfoForm(instance=self.object)
+        context["shipping_form"] = ShippingInfoForm(
+            instance=self.object, organization=org
+        )
         context["not_listed_vendor"] = NOT_LISTED_VENDOR
         context["page_title"] = f"Order #{self.object.pk}"
         return context
@@ -359,7 +409,10 @@ class OrderDeleteView(
         return Order.objects.for_organization(org)
 
     def dispatch(self, request, *args, **kwargs):
-        if not can_user_delete(request.user, "orders-manage", self.get_object()):
+        org = getattr(request, "organization", None)
+        if not can_user_delete(
+            request.user, "orders-manage", self.get_object(), org=org
+        ):
             messages.error(request, "You do not have permission to delete that order.")
             return redirect("orders:order_list", program_id=kwargs.get("program_id"))
         return super().dispatch(request, *args, **kwargs)
@@ -372,9 +425,35 @@ class OrderDeleteView(
             "item_count": obj.item_count,
         }
 
+    @transaction.atomic
     def form_valid(self, form):
-        # Return grouped items to the request pool rather than deleting them.
-        self.object.items.update(order=None)
+        org = getattr(self.request, "organization", None)
+        self.object = get_object_or_404(
+            Order.objects.for_organization(org).select_for_update(),
+            pk=self.object.pk,
+        )
+        linked_items = list(
+            OrderItem.objects.select_for_update()
+            .filter(order=self.object)
+            .order_by("pk")
+        )
+        if any(
+            item.organization_id != self.object.organization_id for item in linked_items
+        ):
+            messages.error(
+                self.request,
+                "This order cannot be deleted because related records need review.",
+            )
+            return redirect(
+                "orders:order_detail",
+                program_id=self.program.pk,
+                pk=self.object.pk,
+            )
+
+        # Return same-organization items to the request pool rather than deleting them.
+        self.object.items.filter(organization_id=self.object.organization_id).update(
+            order=None
+        )
         if self.object.vendor_name:
             messages.success(
                 self.request,
@@ -551,7 +630,7 @@ class OrderShippingUpdateView(
                 program_id=self.program.id,
                 pk=order.pk,
             )
-        form = ShippingInfoForm(request.POST, instance=order)
+        form = ShippingInfoForm(request.POST, instance=order, organization=org)
         if form.is_valid():
             form.save()
             messages.success(request, "Shipping details updated.")

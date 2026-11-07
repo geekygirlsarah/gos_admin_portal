@@ -306,7 +306,7 @@ class AddExistingStudentToProgramForm(forms.Form):
         # (graduated) students out of the dropdown.
         # Also sort by first name (coalescing legal name) then last name
         self.fields["student"].queryset = (
-            active_students()
+            active_students(program.organization)
             .exclude(id__in=program.students.values_list("id", flat=True))
             .order_by(
                 Lower(
@@ -487,12 +487,14 @@ class PaymentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Restrict student choices to those actively enrolled in this program
         # (excludes inactive enrollments and graduated students)
-        qs = active_students_in_program(program)
+        qs = active_students_in_program(program, organization=program.organization)
         if self.instance and self.instance.pk and self.instance.student_id:
             student_ids = list(qs.values_list("pk", flat=True))
             if self.instance.student_id not in student_ids:
                 student_ids.append(self.instance.student_id)
-            qs = Student.objects.filter(pk__in=student_ids)
+            qs = Student.objects.for_organization(program.organization).filter(
+                pk__in=student_ids
+            )
         self.fields["student"].queryset = qs.order_by(
             Lower(
                 Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")

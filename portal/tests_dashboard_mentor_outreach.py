@@ -7,6 +7,7 @@ from django.urls import reverse
 from outreach.models import OutreachMentorSignup
 from outreach.tests.factories import create_outreach_event
 from programs.models import Adult, Program, ProgramFeature
+from travel.models import TravelEvent, TravelMentorSignup
 
 
 class MentorDashboardOutreachTests(TestCase):
@@ -53,6 +54,24 @@ class MentorDashboardOutreachTests(TestCase):
         return OutreachMentorSignup.objects.create(
             adult=self.mentor, shift=event.shifts.first()
         )
+
+    def _travel_dashboard(self, location_name):
+        start_date = datetime.date.today() + datetime.timedelta(days=14)
+        event = TravelEvent.objects.create(
+            organization=self.program.organization,
+            program=self.program,
+            name="Future Travel Event",
+            start_date=start_date,
+            end_date=start_date + datetime.timedelta(days=2),
+            location_name=location_name,
+        )
+        TravelMentorSignup.objects.create(
+            organization=self.program.organization,
+            adult=self.mentor,
+            event=event,
+        )
+        self.client.login(username="mentor", password="password")  # nosec B106
+        return self.client.get(reverse("profile_dashboard"))
 
     def test_shows_upcoming_support_signups(self):
         signup = self._signup(self.upcoming_event)
@@ -123,3 +142,16 @@ class MentorDashboardOutreachTests(TestCase):
         # Sanity-check the fixtures actually differ in date so the assertion
         # above is meaningful.
         self.assertNotEqual(first_signup.shift.date, second_signup.shift.date)
+
+    def test_travel_signup_shows_location_name(self):
+        response = self._travel_dashboard("Robotics Center")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Robotics Center")
+        self.assertNotContains(response, "Location TBD")
+
+    def test_travel_signup_uses_fallback_when_location_is_blank(self):
+        response = self._travel_dashboard("")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Location TBD")

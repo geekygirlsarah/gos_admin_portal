@@ -43,6 +43,7 @@ from .mixins import (
     DynamicWritePermissionMixin,
     LogFormSaveMixin,
     SortableListViewMixin,
+    TenantLeadMentorPermissionRequiredMixin,
 )
 
 
@@ -347,7 +348,7 @@ class ParentCreateView(
     PassUserToFormMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     CreateView,
 ):
     model = Adult
@@ -365,6 +366,7 @@ class ParentCreateView(
         return ctx
 
     def form_valid(self, form):
+        form.instance.organization = getattr(self.request, "organization", None)
         # Ensure adults created via this view are flagged as parents if the field was hidden
         if "is_parent" not in form.fields:
             form.instance.is_parent = True
@@ -417,7 +419,7 @@ class AdultCreateView(
     PassUserToFormMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     CreateView,
 ):
     model = Adult
@@ -431,6 +433,7 @@ class AdultCreateView(
         return ctx
 
     def form_valid(self, form):
+        form.instance.organization = getattr(self.request, "organization", None)
         response = super().form_valid(form)
         messages.success(self.request, "Adult added successfully.")
         return response
@@ -539,7 +542,7 @@ class MentorCreateView(
     PassUserToFormMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     CreateView,
 ):
     model = Adult
@@ -551,7 +554,13 @@ class MentorCreateView(
         ini = super().get_initial()
         return ini
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.request.META.get("HTTP_REFERER", "/")
+        return ctx
+
     def form_valid(self, form):
+        form.instance.organization = getattr(self.request, "organization", None)
         # Ensure adults created via this view are flagged as mentors if the field was hidden
         if "is_mentor" not in form.fields:
             form.instance.is_mentor = True

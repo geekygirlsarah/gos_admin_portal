@@ -67,6 +67,7 @@ from .mixins import (
     DynamicReadPermissionMixin,
     DynamicWritePermissionMixin,
     LogFormSaveMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     forms_logger,
     logger,
 )
@@ -130,10 +131,14 @@ class ProgramFeeSelectView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
 
 class ProgramFeeAssignmentEditView(
-    LoginRequiredMixin, DynamicWritePermissionMixin, View
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    DynamicWritePermissionMixin,
+    View,
 ):
     template_name = "programs/fee_assignment_form.html"
     section = "fees"
+    permission_required = "programs.change_fee"
 
     def dispatch(self, request, *args, **kwargs):
         organization = _request_organization(request)
@@ -184,7 +189,7 @@ class ProgramFeeAssignmentEditView(
 class ProgramFeeCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     DynamicWritePermissionMixin,
     CreateView,
 ):
@@ -217,6 +222,8 @@ class ProgramFeeCreateView(
         return ctx
 
     def form_valid(self, form):
+        form.instance.organization = self.program.organization
+        form.instance.program = self.program
         # Save the fee and its student assignments without letting the Fee
         # post_save or FeeAssignment post_save signals email parents before
         # the assignments are in place (that would email everyone, then each
@@ -257,7 +264,7 @@ class ProgramFeeCreateView(
 class ProgramFeeUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     DynamicWritePermissionMixin,
     UpdateView,
 ):
@@ -299,6 +306,8 @@ class ProgramFeeUpdateView(
         return ctx
 
     def form_valid(self, form):
+        form.instance.organization = self.program.organization
+        form.instance.program = self.program
         messages.success(self.request, "Fee updated.")
         return super().form_valid(form)
 
@@ -309,16 +318,23 @@ class ProgramFeeUpdateView(
 class ProgramPaymentCreateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     DynamicWritePermissionMixin,
     CreateView,
 ):
+    permission_required = "programs.add_payment"
     model = Payment
     form_class = PaymentForm
     template_name = "programs/payment_form.html"
     section = "payments"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -335,6 +351,7 @@ class ProgramPaymentCreateView(
         obj = form.save(commit=False)
         # Ensure program is set from the URL context
         obj.program = self.program
+        obj.organization = self.program.organization
         obj.save()
         # Log creation with a concise summary and field values
         user = getattr(self.request, "user", None)
@@ -360,21 +377,34 @@ class ProgramPaymentCreateView(
 class ProgramPaymentUpdateView(
     LogFormSaveMixin,
     LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     DynamicWritePermissionMixin,
     UpdateView,
 ):
+    permission_required = "programs.change_payment"
     model = Payment
     form_class = PaymentForm
     template_name = "programs/payment_form.html"
     section = "payments"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
+        organization = _request_organization(self.request)
         return get_object_or_404(
-            Payment, pk=self.kwargs["payment_id"], program=self.program
+            Payment.objects.for_organization(organization).filter(
+                program__organization=organization,
+                student__organization=organization,
+            ),
+            pk=self.kwargs["payment_id"],
+            program=self.program,
         )
 
     def get_form_kwargs(self):
@@ -390,11 +420,14 @@ class ProgramPaymentUpdateView(
 
     def form_valid(self, form):
         try:
-            before = Payment.objects.get(pk=self.object.pk)
+            before = Payment.objects.for_organization(
+                _request_organization(self.request)
+            ).get(pk=self.object.pk)
         except Payment.DoesNotExist:
             before = None
         obj = form.save(commit=False)
         obj.program = self.program
+        obj.organization = self.program.organization
         obj.save()
         user = getattr(self.request, "user", None)
         user_repr = (
@@ -421,18 +454,25 @@ class ProgramPaymentUpdateView(
 
 class ProgramPaymentDeleteView(
     LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     DynamicWritePermissionMixin,
     AuditedDeleteMixin,
     DeleteView,
 ):
     model = Payment
     template_name = "programs/payment_confirm_delete.html"
+    permission_required = "programs.delete_payment"
     section = "payments"
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs["pk"])
+        organization = _request_organization(request)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(organization),
+            pk=kwargs["pk"],
+            organization=organization,
+        )
         obj = self.get_object()
-        if not can_user_delete(request.user, "payments", obj):
+        if not can_user_delete(request.user, "payments", obj, org=organization):
             messages.error(
                 request, "You do not have permission to delete this payment."
             )
@@ -444,8 +484,14 @@ class ProgramPaymentDeleteView(
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
+        organization = _request_organization(self.request)
         return get_object_or_404(
-            Payment, pk=self.kwargs["payment_id"], program=self.program
+            Payment.objects.for_organization(organization).filter(
+                program__organization=organization,
+                student__organization=organization,
+            ),
+            pk=self.kwargs["payment_id"],
+            program=self.program,
         )
 
     def audit_snapshot(self, obj):

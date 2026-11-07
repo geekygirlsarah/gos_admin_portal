@@ -50,6 +50,7 @@ from ..permission_views import (
     can_user_read,
     can_user_write,
     get_user_role,
+    user_is_lead_mentor,
 )
 from ..utils import get_safe_url, redirect_back
 
@@ -102,6 +103,16 @@ class DynamicReadPermissionMixin(DynamicPermissionMixin):
 
 class DynamicWritePermissionMixin(DynamicPermissionMixin):
     permission_type = "write"
+
+
+class TenantLeadMentorPermissionRequiredMixin(PermissionRequiredMixin):
+    """Allow the configured Django permission or a Lead Mentor in this tenant."""
+
+    def has_permission(self):
+        return super().has_permission() or user_is_lead_mentor(
+            self.request.user,
+            org=getattr(self.request, "organization", None),
+        )
 
 
 class BackgroundChecksInlineMixin:

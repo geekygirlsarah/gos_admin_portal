@@ -53,7 +53,8 @@
             <span class="fw-bold"><i class="bi bi-rocket-takeoff me-2 text-primary"></i>Momentum</span>
             {% endif %}
         </a>
-        {% if user.is_authenticated %}
+{% if user.is_authenticated %}
+            {% user_role user as current_navbar_user_role %}
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-xl-0">
                     {% if is_platform_admin %}
@@ -286,7 +287,7 @@
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="applicationsAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Applications</a>
                             <ul class="dropdown-menu" aria-labelledby="applicationsAdminDropdown">
-                                {% if perms.applications.review_application %}
+                                {% if perms.applications.review_application or current_navbar_user_role == 'LeadMentor' %}
                                     <li><a class="dropdown-item" href="{% url 'application_review_list' %}">Program/Mentor Applications</a></li>
                                 {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'sliding_scale_review_list' %}">Sliding Scale Applications</a></li>
@@ -295,7 +296,9 @@
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="manageDataAdminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">Manage Data</a>
                             <ul class="dropdown-menu" aria-labelledby="manageDataAdminDropdown">
-                                <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Manage Guest Forms</a></li>
+                                {% if perms.guest_forms.review_guestform or current_navbar_user_role == 'LeadMentor' %}
+                                    <li><a class="dropdown-item" href="{% url 'guest_form_manage_list' %}">Manage Guest Forms</a></li>
+                                {% endif %}
                                 {% if org_account_enabled %}
                                 <li><a class="dropdown-item" href="{% url 'org_email_management' %}">Manage {{ org_account_name|default:"Andrew ID" }}s</a></li>
                                 {% endif %}

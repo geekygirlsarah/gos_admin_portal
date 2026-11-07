@@ -281,7 +281,7 @@
                         </td>
                         <td>
                             <div>
-                                {% for it in order.items.all %}
+                                {% for it in order.organization_items %}
                                 <span class="text-dark">{{ it.item_name }}</span>{% if it.quantity_normalized != "1" %} <span class="text-muted small">(x{{ it.quantity_normalized }})</span>{% endif %}{% if it.team %} <span class="badge rounded-pill team-badge" data-color="{{ it.team.color }}" style="background-color: {{ it.team.color }}; color: {{ it.team.color|contrast_color }};">{{ it.team.team_type }} {{ it.team.number }}{% if it.team.name %} {{ it.team.name }}{% endif %}</span>{% endif %}{% if it.crew %} <span class="badge rounded-pill crew-badge" data-color="{{ it.crew.color }}" style="background-color: {{ it.crew.color }}; color: {{ it.crew.color|contrast_color }};">{{ it.crew.name }}</span>{% endif %}{% if it.subteam %} <span class="badge rounded-pill subteam-badge" data-color="{{ it.subteam.color }}" style="background-color: {{ it.subteam.color }}; color: {{ it.subteam.color|contrast_color }};">{{ it.subteam.name }}</span>{% endif %}{% if not forloop.last %}, {% endif %}
                                 {% empty %}
                                 <span class="text-muted small">No items grouped yet</span>
@@ -290,7 +290,7 @@
                             {% if order.tracking_number and order.status == "shipped" %}
                             <div class="text-muted small mt-1">
                                 <i class="bi bi-truck text-primary me-1"></i>
-                                {% if order.shipping_carrier %}{{ order.shipping_carrier }}: {% endif %}
+                                {% if order.organization_shipping_carrier %}{{ order.organization_shipping_carrier }}: {% endif %}
                                 {% if order.tracking_url %}
                                 <a href="{{ order.tracking_url }}" target="_blank" rel="noopener noreferrer">{{ order.tracking_number }} <i class="bi bi-box-arrow-up-right small"></i></a>
                                 {% else %}

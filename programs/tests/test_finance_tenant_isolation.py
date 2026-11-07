@@ -1,4 +1,5 @@
 import tempfile
+from datetime import date
 from decimal import Decimal
 
 from cryptography.fernet import Fernet
@@ -14,6 +15,7 @@ from programs.models import (
     Enrollment,
     Fee,
     FeeAssignment,
+    Payment,
     Program,
     SlidingScale,
     Student,
@@ -376,3 +378,38 @@ class FinanceTenantIsolationTests(TestCase):
 
         with self.assertRaises(Http404):
             ProgramDuesOwedView.as_view()(request, pk=self.program.pk)
+
+    def test_membership_only_lead_can_open_local_fee_and_payment_forms(self):
+        self.user.user_permissions.clear()
+        urls = (
+            reverse("program_fee_create", args=[self.program.pk]),
+            reverse("program_fee_edit", args=[self.program.pk, self.fee.pk]),
+            reverse("program_fee_assignments", args=[self.program.pk, self.fee.pk]),
+            reverse("program_payment_create", args=[self.program.pk]),
+        )
+
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.tenant_get(url)
+                self.assertEqual(response.status_code, 200)
+
+    def test_membership_only_lead_cannot_delete_foreign_payment(self):
+        self.user.user_permissions.clear()
+        foreign_payment = Payment.objects.create(
+            organization=self.beta,
+            program=self.foreign_program,
+            student=self.foreign_student,
+            amount=Decimal("20.00"),
+            paid_on=date(2026, 1, 1),
+        )
+
+        response = self.client.post(
+            reverse(
+                "program_payment_delete",
+                args=[self.program.pk, foreign_payment.pk],
+            ),
+            HTTP_HOST=self.alpha_host,
+        )
+
+        self.assertNotEqual(response.status_code, 200)
+        self.assertTrue(Payment.objects.filter(pk=foreign_payment.pk).exists())

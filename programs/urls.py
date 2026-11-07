@@ -118,7 +118,7 @@ urlpatterns = [
     path("", login_required(ProgramListView.as_view()), name="program_list"),
     path(
         "new/",
-        permission_required("programs.add_program")(ProgramCreateView.as_view()),
+        ProgramCreateView.as_view(),
         name="program_create",
     ),
     path(
@@ -126,7 +126,7 @@ urlpatterns = [
     ),
     path(
         "<int:pk>/edit/",
-        permission_required("programs.change_program")(ProgramUpdateView.as_view()),
+        ProgramUpdateView.as_view(),
         name="program_edit",
     ),
     path(
@@ -289,7 +289,7 @@ urlpatterns = [
     ),
     path(
         "students/new/",
-        permission_required("programs.add_student")(StudentCreateView.as_view()),
+        StudentCreateView.as_view(),
         name="student_create",
     ),
     path(
@@ -341,7 +341,7 @@ urlpatterns = [
     path("adults/", login_required(AdultsListView.as_view()), name="adult_list"),
     path(
         "adults/new/",
-        permission_required("programs.add_adult")(AdultCreateView.as_view()),
+        AdultCreateView.as_view(),
         name="adult_create",
     ),
     path(
@@ -366,7 +366,7 @@ urlpatterns = [
     ),
     path(
         "mentors/new/",
-        permission_required("programs.add_adult")(MentorCreateView.as_view()),
+        MentorCreateView.as_view(),
         name="mentor_create",
     ),
     path(
@@ -414,14 +414,12 @@ urlpatterns = [
     # Program-specific student management
     path(
         "<int:pk>/students/add/",
-        permission_required("programs.change_student")(ProgramStudentAddView.as_view()),
+        ProgramStudentAddView.as_view(),
         name="program_student_add",
     ),
     path(
         "<int:pk>/students/quick-create/",
-        permission_required("programs.add_student")(
-            ProgramStudentQuickCreateView.as_view()
-        ),
+        ProgramStudentQuickCreateView.as_view(),
         name="program_student_quick_create",
     ),
     path(
@@ -436,16 +434,12 @@ urlpatterns = [
     ),
     path(
         "<int:pk>/students/<int:student_id>/deactivate/",
-        permission_required("programs.change_student")(
-            ProgramStudentDeactivateView.as_view()
-        ),
+        ProgramStudentDeactivateView.as_view(),
         name="program_student_deactivate",
     ),
     path(
         "<int:pk>/students/<int:student_id>/activate/",
-        permission_required("programs.change_student")(
-            ProgramStudentActivateView.as_view()
-        ),
+        ProgramStudentActivateView.as_view(),
         name="program_student_activate",
     ),
     path(
@@ -461,7 +455,7 @@ urlpatterns = [
     # Payments
     path(
         "<int:pk>/payments/new/",
-        permission_required("programs.add_payment")(ProgramPaymentCreateView.as_view()),
+        ProgramPaymentCreateView.as_view(),
         name="program_payment_create",
     ),
     path(
@@ -471,16 +465,12 @@ urlpatterns = [
     ),
     path(
         "<int:pk>/payments/<int:payment_id>/edit/",
-        permission_required("programs.change_payment")(
-            ProgramPaymentUpdateView.as_view()
-        ),
+        ProgramPaymentUpdateView.as_view(),
         name="program_payment_edit",
     ),
     path(
         "<int:pk>/payments/<int:payment_id>/delete/",
-        permission_required("programs.delete_payment")(
-            ProgramPaymentDeleteView.as_view()
-        ),
+        ProgramPaymentDeleteView.as_view(),
         name="program_payment_delete",
     ),
     path(
@@ -536,46 +526,38 @@ urlpatterns = [
     # Fee management
     path(
         "<int:pk>/fees/manage/",
-        permission_required("programs.change_fee")(ProgramFeeSelectView.as_view()),
+        ProgramFeeSelectView.as_view(),
         name="program_fee_select",
     ),
     path(
         "<int:pk>/fees/new/",
-        permission_required("programs.add_fee")(ProgramFeeCreateView.as_view()),
+        ProgramFeeCreateView.as_view(),
         name="program_fee_create",
     ),
     path(
         "<int:pk>/fees/<int:fee_id>/edit/",
-        permission_required("programs.change_fee")(ProgramFeeUpdateView.as_view()),
+        ProgramFeeUpdateView.as_view(),
         name="program_fee_edit",
     ),
     path(
         "<int:pk>/fees/<int:fee_id>/assignments/",
-        permission_required("programs.change_fee")(
-            ProgramFeeAssignmentEditView.as_view()
-        ),
+        ProgramFeeAssignmentEditView.as_view(),
         name="program_fee_assignments",
     ),
     # Program documents (Step 9 blank forms)
     path(
         "<int:pk>/documents/new/",
-        permission_required("programs.change_program")(
-            ProgramDocumentCreateView.as_view()
-        ),
+        ProgramDocumentCreateView.as_view(),
         name="program_document_create",
     ),
     path(
         "<int:pk>/documents/<int:doc_id>/edit/",
-        permission_required("programs.change_program")(
-            ProgramDocumentUpdateView.as_view()
-        ),
+        ProgramDocumentUpdateView.as_view(),
         name="program_document_edit",
     ),
     path(
         "<int:pk>/documents/<int:doc_id>/delete/",
-        permission_required("programs.change_program")(
-            ProgramDocumentDeleteView.as_view()
-        ),
+        ProgramDocumentDeleteView.as_view(),
         name="program_document_delete",
     ),
     # Student edit
@@ -594,7 +576,7 @@ urlpatterns = [
     # Parent add/edit
     path(
         "parents/new/",
-        permission_required("programs.add_adult")(ParentCreateView.as_view()),
+        ParentCreateView.as_view(),
         name="parent_create",
     ),
     path(
@@ -605,17 +587,17 @@ urlpatterns = [
     # School add/edit
     path(
         "schools/new/",
-        permission_required("programs.add_school")(SchoolCreateView.as_view()),
+        SchoolCreateView.as_view(),
         name="school_create",
     ),
     path(
         "schools/<int:pk>/edit/",
-        permission_required("programs.change_school")(SchoolUpdateView.as_view()),
+        SchoolUpdateView.as_view(),
         name="school_edit",
     ),
     path(
         "schools/merge/",
-        permission_required("programs.change_school")(SchoolMergeView.as_view()),
+        SchoolMergeView.as_view(),
         name="school_merge",
     ),
     # School district management
@@ -626,23 +608,17 @@ urlpatterns = [
     ),
     path(
         "districts/new/",
-        permission_required("programs.add_schooldistrict")(
-            DistrictCreateView.as_view()
-        ),
+        DistrictCreateView.as_view(),
         name="school_district_create",
     ),
     path(
         "districts/<int:pk>/edit/",
-        permission_required("programs.change_schooldistrict")(
-            DistrictUpdateView.as_view()
-        ),
+        DistrictUpdateView.as_view(),
         name="school_district_edit",
     ),
     path(
         "districts/<int:pk>/delete/",
-        permission_required("programs.delete_schooldistrict")(
-            DistrictDeleteView.as_view()
-        ),
+        DistrictDeleteView.as_view(),
         name="school_district_delete",
     ),
     # Settings

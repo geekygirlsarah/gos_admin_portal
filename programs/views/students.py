@@ -58,6 +58,7 @@ from .mixins import (
     LogFormSaveMixin,
     SortableListViewMixin,
     StudentQuerysetRoleMixin,
+    TenantLeadMentorPermissionRequiredMixin,
 )
 
 
@@ -657,7 +658,7 @@ class StudentCreateView(
     PassUserToFormMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     DynamicWritePermissionMixin,
     CreateView,
 ):
@@ -675,6 +676,8 @@ class StudentCreateView(
         return ctx
 
     def form_valid(self, form):
+        organization = getattr(self.request, "organization", None)
+        form.instance.organization = organization
         response = super().form_valid(form)
         # Persist relationship selections for each selected parent
         rel_map = {
@@ -689,11 +692,18 @@ class StudentCreateView(
             except (TypeError, ValueError):
                 continue
             if rel in valid_keys:
-                AdultStudentRelationship.objects.update_or_create(
-                    adult_id=pid,
-                    student=self.object,
-                    defaults={"relationship_to_student": rel},
+                adult = (
+                    Adult.objects.for_organization(organization)
+                    .filter(pk=pid, is_parent=True)
+                    .first()
                 )
+                if adult is not None:
+                    AdultStudentRelationship.objects.update_or_create(
+                        organization=organization,
+                        adult=adult,
+                        student=self.object,
+                        defaults={"relationship_to_student": rel},
+                    )
         return response
 
     def get_success_url(self):

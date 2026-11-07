@@ -16,10 +16,16 @@ def _person_sort_key(person):
     return (person.full_name or "").lower()
 
 
-def _get_adult_sponsor_choices():
-    return Adult.objects.filter(is_mentor=True).order_by(
-        Lower(Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")),
-        Lower("last_name"),
+def _get_adult_sponsor_choices(organization=None):
+    return (
+        Adult.objects.for_organization(organization)
+        .filter(is_mentor=True)
+        .order_by(
+            Lower(
+                Coalesce(NullIf("preferred_first_name", Value("")), "legal_first_name")
+            ),
+            Lower("last_name"),
+        )
     )
 
 
@@ -51,7 +57,7 @@ def org_email_management_view(request):
     assigned_people = []
 
     if search_query:
-        student_qs = Student.objects.filter(
+        student_qs = Student.objects.for_organization(org).filter(
             Q(preferred_first_name__icontains=search_query)
             | Q(last_name__icontains=search_query)
             | Q(legal_first_name__icontains=search_query)
@@ -64,7 +70,7 @@ def org_email_management_view(request):
                 }
             )
 
-        adult_qs = Adult.objects.filter(
+        adult_qs = Adult.objects.for_organization(org).filter(
             Q(preferred_first_name__icontains=search_query)
             | Q(legal_first_name__icontains=search_query)
             | Q(last_name__icontains=search_query)
@@ -79,12 +85,14 @@ def org_email_management_view(request):
 
         results.sort(key=lambda r: _person_sort_key(r["person"]))
     else:
-        assigned_people_qs = Student.objects.filter(
-            Q(org_account_id__isnull=False) & ~Q(org_account_id="")
-        ) | Student.objects.filter(Q(org_email__isnull=False) & ~Q(org_email=""))
-        adult_assigned = Adult.objects.filter(
-            Q(org_account_id__isnull=False) & ~Q(org_account_id="")
-        ) | Adult.objects.filter(Q(org_email__isnull=False) & ~Q(org_email=""))
+        assigned_people_qs = Student.objects.for_organization(org).filter(
+            (Q(org_account_id__isnull=False) & ~Q(org_account_id=""))
+            | (Q(org_email__isnull=False) & ~Q(org_email=""))
+        )
+        adult_assigned = Adult.objects.for_organization(org).filter(
+            (Q(org_account_id__isnull=False) & ~Q(org_account_id=""))
+            | (Q(org_email__isnull=False) & ~Q(org_email=""))
+        )
 
         assigned_people = []
         for s in assigned_people_qs:
@@ -94,7 +102,7 @@ def org_email_management_view(request):
 
         assigned_people.sort(key=lambda r: _person_sort_key(r["person"]))
 
-    sponsor_choices = _get_adult_sponsor_choices()
+    sponsor_choices = _get_adult_sponsor_choices(org)
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -123,9 +131,16 @@ def org_email_management_view(request):
                 return _redirect_back(search_query)
 
             if person_type == "student":
-                person = get_object_or_404(Student, pk=person_id)
+                person = get_object_or_404(
+                    Student.objects.for_organization(org), pk=person_id
+                )
+            elif person_type == "adult":
+                person = get_object_or_404(
+                    Adult.objects.for_organization(org), pk=person_id
+                )
             else:
-                person = get_object_or_404(Adult, pk=person_id)
+                messages.error(request, "Invalid account holder type.")
+                return _redirect_back(search_query)
 
             person_org = (
                 getattr(person, "organization", None)
@@ -140,7 +155,9 @@ def org_email_management_view(request):
                 else org_account_name
             )
 
-            existing_student = Student.objects.filter(org_account_id__iexact=raw_id)
+            existing_student = Student.objects.for_organization(org).filter(
+                org_account_id__iexact=raw_id
+            )
             if person_type == "student":
                 existing_student = existing_student.exclude(pk=person.pk)
             if existing_student.exists():
@@ -151,7 +168,9 @@ def org_email_management_view(request):
                 )
                 return _redirect_back(search_query)
 
-            existing_adult = Adult.objects.filter(org_account_id__iexact=raw_id)
+            existing_adult = Adult.objects.for_organization(org).filter(
+                org_account_id__iexact=raw_id
+            )
             if person_type == "adult":
                 existing_adult = existing_adult.exclude(pk=person.pk)
             if existing_adult.exists():
@@ -192,7 +211,9 @@ def org_email_management_view(request):
             else:
                 person.org_email_expiration = None
             if sponsor_id:
-                person.org_email_sponsor = get_object_or_404(Adult, pk=sponsor_id)
+                person.org_email_sponsor = get_object_or_404(
+                    Adult.objects.for_organization(org), pk=sponsor_id
+                )
             else:
                 person.org_email_sponsor = None
 
@@ -215,9 +236,16 @@ def org_email_management_view(request):
 
         elif action == "clear":
             if person_type == "student":
-                person = get_object_or_404(Student, pk=person_id)
+                person = get_object_or_404(
+                    Student.objects.for_organization(org), pk=person_id
+                )
+            elif person_type == "adult":
+                person = get_object_or_404(
+                    Adult.objects.for_organization(org), pk=person_id
+                )
             else:
-                person = get_object_or_404(Adult, pk=person_id)
+                messages.error(request, "Invalid account holder type.")
+                return _redirect_back(search_query)
 
             person_org = (
                 getattr(person, "organization", None)

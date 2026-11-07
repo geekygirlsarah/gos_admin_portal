@@ -335,11 +335,15 @@ class ShippingInfoForm(forms.ModelForm):
             "tax": "Sales tax charged, added to the order total.",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["shipping_carrier"].queryset = ShippingCarrier.objects.order_by(
-            "name"
-        )
+        if organization is None:
+            carriers = ShippingCarrier.objects.none()
+        else:
+            carriers = ShippingCarrier.objects.for_organization(organization).order_by(
+                "name"
+            )
+        self.fields["shipping_carrier"].queryset = carriers
 
 
 class VendorForm(forms.ModelForm):

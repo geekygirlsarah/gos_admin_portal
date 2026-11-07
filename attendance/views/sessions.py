@@ -36,20 +36,25 @@ def _week_bounds(now=None):
 @login_required
 @require_http_methods(["GET", "POST"])
 def student_attendance_view(request, pk):
-    student = get_object_or_404(Student, pk=pk)
+    org = getattr(request, "organization", None)
+    student = get_object_or_404(Student.objects.for_organization(org), pk=pk)
 
-    if not can_user_read(request.user, "attendance", obj=student):
+    if not can_user_read(request.user, "attendance", obj=student, org=org):
         messages.error(request, "You do not have permission to view attendance.")
         return redirect("home")
 
     # Optional program filter
     program_id = request.GET.get("program_id") or request.POST.get("program_id")
-    program = Program.objects.filter(id=program_id).first() if program_id else None
+    program = (
+        Program.objects.for_organization(org).filter(id=program_id).first()
+        if program_id
+        else None
+    )
 
     # Handle create/update/delete
     if request.method == "POST":
         action = request.POST.get("action")
-        if not can_user_write(request.user, "attendance"):
+        if not can_user_write(request.user, "attendance", obj=student, org=org):
             return render(
                 request,
                 "students/attendance.html",
@@ -77,7 +82,7 @@ def student_attendance_view(request, pk):
                     },
                     status=400,
                 )
-            prog = get_object_or_404(Program, id=prog_id)
+            prog = get_object_or_404(Program.objects.for_organization(org), id=prog_id)
             if not prog.has_feature("attendance"):
                 return render(
                     request,
@@ -89,7 +94,11 @@ def student_attendance_view(request, pk):
                     status=400,
                 )
             session = AttendanceSession(
-                program=prog, student=student, check_in=check_in, check_out=check_out
+                organization=org,
+                program=prog,
+                student=student,
+                check_in=check_in,
+                check_out=check_out,
             )
             ci = parse_datetime(str(check_in))
             co = parse_datetime(str(check_out)) if check_out else None
@@ -105,7 +114,9 @@ def student_attendance_view(request, pk):
         elif action == "update":
             session_id = request.POST.get("session_id")
             session = get_object_or_404(
-                AttendanceSession, id=session_id, student=student
+                AttendanceSession.objects.for_organization(org),
+                id=session_id,
+                student=student,
             )
             ci = parse_datetime(request.POST.get("check_in"))
             co_raw = request.POST.get("check_out")
@@ -120,7 +131,7 @@ def student_attendance_view(request, pk):
             session.save()
             return redirect("student_attendance", pk=student.pk)
         elif action == "delete":
-            if not can_user_delete(request.user, "attendance"):
+            if not can_user_delete(request.user, "attendance", obj=student, org=org):
                 return render(
                     request,
                     "students/attendance.html",
@@ -132,7 +143,9 @@ def student_attendance_view(request, pk):
                 )
             session_id = request.POST.get("session_id")
             session = get_object_or_404(
-                AttendanceSession, id=session_id, student=student
+                AttendanceSession.objects.for_organization(org),
+                id=session_id,
+                student=student,
             )
             log_deletion(
                 resource=session,
@@ -149,11 +162,10 @@ def student_attendance_view(request, pk):
             return redirect("student_attendance", pk=student.pk)
 
     # GET rendering
-    sessions = (
-        AttendanceSession.objects.filter(student=student)
-        .select_related("program")
-        .order_by("-check_in")
-    )
+    sessions = AttendanceSession.objects.for_organization(org).filter(student=student)
+    if org is not None:
+        sessions = sessions.filter(program__organization=org)
+    sessions = sessions.select_related("program").order_by("-check_in")
 
     week_start, week_end = _week_bounds()
     week_sessions = sessions.filter(check_in__lt=week_end).filter(
@@ -169,9 +181,11 @@ def student_attendance_view(request, pk):
             total_hours += (co - ci).total_seconds() / 3600.0
 
     # Programs the student is/was enrolled in (attendance-enabled only for creation UI)
-    enrolled_programs = Program.objects.filter(
-        enrollment__student=student, features__key="attendance"
-    ).distinct()
+    enrolled_programs = (
+        Program.objects.for_organization(org)
+        .filter(enrollment__student=student, features__key="attendance")
+        .distinct()
+    )
 
     # Overall totals since program start
     overall_start_date = None
@@ -248,22 +262,23 @@ def student_attendance_view(request, pk):
             "overall_total_hours": round(overall_total_hours, 2),
             "overall_avg_hours_per_week": round(overall_avg_hours_per_week, 2),
             "role": role,
-            "can_write_attendance": can_user_write(request.user, "attendance"),
+            "can_write_attendance": can_user_write(
+                request.user, "attendance", obj=student, org=org
+            ),
         },
     )
 
 
 @login_required
 def who_is_here_view(request):
-    if not can_user_read(request.user, "attendance"):
+    org = getattr(request, "organization", None)
+    if not can_user_read(request.user, "attendance", org=org):
         messages.error(request, "You do not have permission to view attendance.")
         return redirect("home")
 
     # Filter by program if provided
     program_id = request.GET.get("program_id")
-    active_sessions = AttendanceSession.objects.filter(
-        check_out__isnull=True
-    ).select_related("student", "adult", "program")
+    active_sessions = _organization_scoped_sessions(org).filter(check_out__isnull=True)
     if program_id and program_id.isdigit():
         active_sessions = active_sessions.filter(program_id=program_id)
 
@@ -279,7 +294,11 @@ def who_is_here_view(request):
         student__isnull=True, adult__isnull=True
     ).count()
 
-    programs = Program.objects.filter(features__key="attendance").distinct()
+    programs = (
+        Program.objects.for_organization(org)
+        .filter(features__key="attendance")
+        .distinct()
+    )
 
     return render(
         request,
@@ -303,11 +322,12 @@ def who_is_here_view(request):
 @login_required
 @require_http_methods(["POST"])
 def close_attendance_session(request, pk):
-    if not can_user_write(request.user, "attendance"):
+    org = getattr(request, "organization", None)
+    if not can_user_write(request.user, "attendance", org=org):
         messages.error(request, "You do not have permission to modify attendance.")
         return redirect("attendance_active")
 
-    session = get_object_or_404(AttendanceSession, pk=pk)
+    session = get_object_or_404(_organization_scoped_sessions(org), pk=pk)
     if not session.check_out:
         now = timezone.now()
         local_now = timezone.localtime(now)
@@ -339,14 +359,15 @@ def close_attendance_session(request, pk):
 @login_required
 @require_http_methods(["POST"])
 def close_stale_attendance_sessions(request):
-    if not can_user_write(request.user, "attendance"):
+    org = getattr(request, "organization", None)
+    if not can_user_write(request.user, "attendance", org=org):
         messages.error(request, "You do not have permission to modify attendance.")
         return redirect("attendance_active")
 
     now = timezone.localtime()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    stale_sessions = AttendanceSession.objects.filter(
+    stale_sessions = _organization_scoped_sessions(org).filter(
         check_out__isnull=True, check_in__lt=today_start
     )
 
@@ -444,9 +465,7 @@ def _filter_attendance_sessions(params, organization=None):
     Returns (sessions, range_start, range_end) where range_start/range_end are
     the inclusive/exclusive datetime bounds used (None when no date filter).
     """
-    sessions = AttendanceSession.objects.for_organization(organization).select_related(
-        "student", "adult", "program"
-    )
+    sessions = _organization_scoped_sessions(organization)
 
     program_id = params.get("program_id")
     if program_id and program_id.isdigit():
@@ -471,6 +490,19 @@ def _filter_attendance_sessions(params, organization=None):
         sessions = sessions.filter(check_in__gte=range_start, check_in__lt=range_end)
 
     return sessions, range_start, range_end
+
+
+def _organization_scoped_sessions(organization):
+    sessions = AttendanceSession.objects.for_organization(organization).select_related(
+        "student", "adult", "program"
+    )
+    if organization is not None:
+        sessions = (
+            sessions.filter(program__organization=organization)
+            .filter(Q(student__isnull=True) | Q(student__organization=organization))
+            .filter(Q(adult__isnull=True) | Q(adult__organization=organization))
+        )
+    return sessions
 
 
 def _session_person_label(session):
@@ -612,7 +644,12 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
         )
         unique_attendees = unique_students + unique_mentors + unique_visitors
 
-        programs = Program.objects.filter(features__key="attendance").distinct()
+        org = getattr(request, "organization", None)
+        programs = (
+            Program.objects.for_organization(org)
+            .filter(features__key="attendance")
+            .distinct()
+        )
 
         return render(
             request,
@@ -620,7 +657,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             {
                 "sessions": sessions[:500],
                 "programs": programs,
-                "students": active_students().order_by(
+                "students": active_students(org).order_by(
                     Lower(
                         Coalesce(
                             NullIf("preferred_first_name", Value("")),
@@ -629,7 +666,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     ),
                     Lower("last_name"),
                 ),
-                "mentors": Adult.objects.filter(is_mentor=True).order_by(
+                "mentors": Adult.objects.for_organization(org)
+                .filter(is_mentor=True)
+                .order_by(
                     Lower(
                         Coalesce(
                             NullIf("preferred_first_name", Value("")),
@@ -663,6 +702,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
 
     def post(self, request):
         action = request.POST.get("action")
+        org = getattr(request, "organization", None)
 
         if action == "add":
             person_type = request.POST.get("person_type")
@@ -673,9 +713,13 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if not ci_raw:
                 messages.error(request, "Check-in time is required.")
                 return redirect_back(request, "all_attendance")
-            if not program_id and person_type != "mentor":
+            if not program_id:
                 messages.error(request, "Program is required.")
                 return redirect_back(request, "all_attendance")
+
+            program = get_object_or_404(
+                Program.objects.for_organization(org), pk=program_id
+            )
 
             ci = parse_datetime(ci_raw)
             co = parse_datetime(co_raw) if co_raw else None
@@ -686,7 +730,8 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 co = timezone.make_aware(co, timezone.get_current_timezone())
 
             new_session = AttendanceSession(
-                program_id=int(program_id) if program_id else None,
+                organization=org or program.organization,
+                program=program,
                 check_in=ci,
                 check_out=co,
             )
@@ -694,11 +739,18 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             if person_type == "student":
                 student_id = request.POST.get("student_id")
                 if student_id and student_id.isdigit():
-                    new_session.student_id = int(student_id)
+                    new_session.student = get_object_or_404(
+                        active_students(org or program.organization), pk=student_id
+                    )
             elif person_type == "mentor":
                 adult_id = request.POST.get("adult_id")
                 if adult_id and adult_id.isdigit():
-                    new_session.adult_id = int(adult_id)
+                    new_session.adult = get_object_or_404(
+                        Adult.objects.for_organization(
+                            org or program.organization
+                        ).filter(is_mentor=True),
+                        pk=adult_id,
+                    )
             elif person_type == "visitor":
                 new_session.visitor_name = request.POST.get("visitor_name", "").strip()
                 team_raw = request.POST.get("visitor_team_number")
@@ -711,7 +763,7 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             return redirect_back(request, "all_attendance")
 
         session_id = request.POST.get("session_id")
-        session = get_object_or_404(AttendanceSession, id=session_id)
+        session = get_object_or_404(_organization_scoped_sessions(org), id=session_id)
 
         if action == "update":
             ci_raw = request.POST.get("check_in")
@@ -733,7 +785,10 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
             session.check_out = co
 
             if program_id and program_id.isdigit():
-                session.program_id = int(program_id)
+                session.program = get_object_or_404(
+                    Program.objects.for_organization(org or session.organization),
+                    pk=program_id,
+                )
 
             if visitor_name is not None and not session.student and not session.adult:
                 new_name = visitor_name.strip()
@@ -741,6 +796,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 # Keep linked events in sync if they exist
                 if (
                     session.opened_by_event
+                    and (
+                        org is None or session.opened_by_event.organization_id == org.pk
+                    )
                     and not session.opened_by_event.student
                     and not session.opened_by_event.adult
                 ):
@@ -748,6 +806,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     session.opened_by_event.save(update_fields=["visitor_name"])
                 if (
                     session.closed_by_event
+                    and (
+                        org is None or session.closed_by_event.organization_id == org.pk
+                    )
                     and not session.closed_by_event.student
                     and not session.closed_by_event.adult
                 ):
@@ -763,6 +824,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                 # Keep linked events in sync if they exist
                 if (
                     session.opened_by_event
+                    and (
+                        org is None or session.opened_by_event.organization_id == org.pk
+                    )
                     and not session.opened_by_event.student
                     and not session.opened_by_event.adult
                 ):
@@ -770,6 +834,9 @@ class AllAttendanceView(LoginRequiredMixin, LeadMentorRequiredMixin, View):
                     session.opened_by_event.save(update_fields=["visitor_team_number"])
                 if (
                     session.closed_by_event
+                    and (
+                        org is None or session.closed_by_event.organization_id == org.pk
+                    )
                     and not session.closed_by_event.student
                     and not session.closed_by_event.adult
                 ):

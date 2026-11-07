@@ -65,19 +65,29 @@ class OutreachEvent(models.Model):
 
     @property
     def champions(self):
-        return OutreachSignup.objects.filter(
-            shift__event=self, role=OutreachSignup.CHAMPION
+        return OutreachSignup.objects.for_organization(self.organization).filter(
+            shift__organization=self.organization,
+            shift__event=self,
+            student__organization=self.organization,
+            role=OutreachSignup.CHAMPION,
         )
 
     @property
     def helpers(self):
-        return OutreachSignup.objects.filter(
-            shift__event=self, role=OutreachSignup.HELPER
+        return OutreachSignup.objects.for_organization(self.organization).filter(
+            shift__organization=self.organization,
+            shift__event=self,
+            student__organization=self.organization,
+            role=OutreachSignup.HELPER,
         )
 
     @property
     def mentors(self):
-        return OutreachMentorSignup.objects.filter(shift__event=self)
+        return OutreachMentorSignup.objects.for_organization(self.organization).filter(
+            shift__organization=self.organization,
+            shift__event=self,
+            adult__organization=self.organization,
+        )
 
     @property
     def ordered_shifts(self):
@@ -86,7 +96,9 @@ class OutreachEvent(models.Model):
         Relies on ``OutreachShift.Meta.ordering`` and works with
         ``prefetch_related("shifts")`` to avoid extra queries.
         """
-        return list(self.shifts.all())
+        if "shifts" in getattr(self, "_prefetched_objects_cache", {}):
+            return list(self.shifts.all())
+        return list(self.shifts.filter(organization=self.organization))
 
     @property
     def first_shift(self):
@@ -170,11 +182,19 @@ class OutreachShift(models.Model):
 
     @property
     def champions(self):
-        return self.signups.filter(role=OutreachSignup.CHAMPION)
+        return OutreachSignup.objects.for_organization(self.organization).filter(
+            shift=self,
+            student__organization=self.organization,
+            role=OutreachSignup.CHAMPION,
+        )
 
     @property
     def helpers(self):
-        return self.signups.filter(role=OutreachSignup.HELPER)
+        return OutreachSignup.objects.for_organization(self.organization).filter(
+            shift=self,
+            student__organization=self.organization,
+            role=OutreachSignup.HELPER,
+        )
 
     @property
     def is_past(self):

@@ -232,7 +232,20 @@ class Order(models.Model):
 
     @property
     def item_count(self):
-        return self.items.count()
+        items = self.organization_items
+        return len(items) if isinstance(items, list) else items.count()
+
+    @property
+    def organization_items(self):
+        """Items owned by the same organization as this order."""
+        prefetched_items = getattr(self, "_prefetched_objects_cache", {}).get("items")
+        if prefetched_items is not None:
+            return [
+                item
+                for item in prefetched_items
+                if item.organization_id == self.organization_id
+            ]
+        return self.items.filter(organization_id=self.organization_id)
 
     @property
     def total(self):
@@ -242,7 +255,9 @@ class Order(models.Model):
         are posted (so "estimated total" can stay blank on pending orders).
         Coerces strings so the property is safe on freshly constructed
         instances too."""
-        totals = [item.total for item in self.items.all() if item.total is not None]
+        totals = [
+            item.total for item in self.organization_items if item.total is not None
+        ]
         extras = Decimal("0")
         if self.shipping_cost:
             extras += Decimal(str(self.shipping_cost))
@@ -256,9 +271,20 @@ class Order(models.Model):
     def tracking_url(self):
         """Tracking URL derived from the carrier's template, or ``None`` when
         there's no template or no tracking number."""
-        if not self.tracking_number or not self.shipping_carrier_id:
+        carrier = self.organization_shipping_carrier
+        if not self.tracking_number or carrier is None:
             return None
-        return self.shipping_carrier.format_tracking_url(self.tracking_number)
+        return carrier.format_tracking_url(self.tracking_number)
+
+    @property
+    def organization_shipping_carrier(self):
+        """Carrier only when it belongs to the same organization as this order."""
+        if not self.shipping_carrier_id:
+            return None
+        carrier = self.shipping_carrier
+        if carrier.organization_id != self.organization_id:
+            return None
+        return carrier
 
 
 class OrderItem(models.Model):

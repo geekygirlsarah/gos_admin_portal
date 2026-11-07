@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.core import mail
+from django.db.models.signals import post_init
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -307,6 +308,73 @@ class TravelViewTest(TestCase):
             subjects,
         )
         self.assertIn("Travel: You signed up for Competition Trip", subjects)
+
+    def test_student_with_foreign_profile_cannot_sign_up(self):
+        other_org = Organization.objects.create(
+            name="Other Organization", slug="other-travel", subdomain="other-travel"
+        )
+        user = User.objects.create_user(
+            username="foreign-profile-student", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.organization,
+            role="Student",
+            is_active=True,
+        )
+        student = Student.objects.create(
+            organization=other_org,
+            user=user,
+            legal_first_name="Foreign",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        Enrollment.objects.create(
+            organization=self.organization,
+            student=student,
+            program=self.program,
+            active=True,
+        )
+
+        self.client.force_login(user)
+        self.client.post(
+            reverse("travel:signup", args=[self.program.id, self.event.id]),
+            {"departure": self.departure.id},
+        )
+
+        self.assertFalse(
+            TravelSignup.objects.filter(student=student, event=self.event).exists()
+        )
+
+    def test_student_without_active_enrollment_cannot_sign_up(self):
+        user = User.objects.create_user(
+            username="unenrolled-student", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.organization,
+            role="Student",
+            is_active=True,
+        )
+        student = Student.objects.create(
+            organization=self.organization,
+            user=user,
+            legal_first_name="Unenrolled",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+
+        self.client.force_login(user)
+        self.client.post(
+            reverse("travel:signup", args=[self.program.id, self.event.id]),
+            {"departure": self.departure.id},
+        )
+
+        self.assertFalse(
+            TravelSignup.objects.filter(student=student, event=self.event).exists()
+        )
 
     def test_lead_can_add_student_still_needs_approval(self):
         self.client.login(username="lead", password="password")  # nosec B106
@@ -931,4 +999,255 @@ class TravelViewTest(TestCase):
         self.assertEqual(
             child_names,
             ["Aaron Smith", "Alice Brown", "Bob Jones", "Test Student"],
+        )
+
+
+class TravelOrganizationCreationTests(TestCase):
+    organization_owned_models = (
+        TravelEvent,
+        TravelDeparture,
+        TravelCostOption,
+        TravelMentorSignup,
+        TravelParentChaperoneSignup,
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._default_org_hook_models = []
+        for model in cls.organization_owned_models:
+            if post_init.disconnect(
+                dispatch_uid=f"default-test-org-{model._meta.label}", sender=model
+            ):
+                cls._default_org_hook_models.append(model)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            if cls._default_org_hook_models:
+                from GoSAdminPortal.test_runner import install_default_test_org_hook
+
+                install_default_test_org_hook()
+        finally:
+            super().tearDownClass()
+
+    def setUp(self):
+        self.organization = Organization.objects.create(
+            name="Travel Ownership Org",
+            slug="travel-ownership",
+            subdomain="travel-ownership",
+        )
+        self.host = "travel-ownership.localhost"
+        self.feature, _ = ProgramFeature.objects.get_or_create(
+            key="travel", defaults={"name": "Travel"}
+        )
+        self.program = Program.objects.create(
+            organization=self.organization, name="Travel Ownership Program"
+        )
+        self.program.features.add(self.feature)
+        self.lead = User.objects.create_user(
+            username="travel-ownership-lead", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.lead,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
+        Adult.objects.create(
+            organization=self.organization,
+            user=self.lead,
+            legal_first_name="Taylor",
+            last_name="Mentor",
+            is_mentor=True,
+        )
+        self.parent_user = User.objects.create_user(
+            username="travel-ownership-parent", password="password"
+        )  # nosec B106
+        self.parent = Adult.objects.create(
+            organization=self.organization,
+            user=self.parent_user,
+            legal_first_name="Parker",
+            last_name="Parent",
+            is_parent=True,
+        )
+        self.school = School.objects.create(name="Travel Ownership School")
+        self.student = Student.objects.create(
+            organization=self.organization,
+            legal_first_name="Sam",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        Enrollment.objects.create(
+            organization=self.organization,
+            student=self.student,
+            program=self.program,
+            active=True,
+        )
+        AdultStudentRelationship.objects.create(
+            organization=self.organization,
+            adult=self.parent,
+            student=self.student,
+        )
+        self.start_date = timezone.localdate() + timedelta(days=30)
+        self.event = TravelEvent.objects.create(
+            organization=self.organization,
+            program=self.program,
+            name="Existing Ownership Trip",
+            start_date=self.start_date,
+            end_date=self.start_date + timedelta(days=2),
+        )
+        self.departure = TravelDeparture.objects.create(
+            organization=self.organization,
+            event=self.event,
+            label="Existing Bus",
+            leave_date=self.start_date,
+        )
+        self.cost_option = TravelCostOption.objects.create(
+            organization=self.organization,
+            event=self.event,
+            name="Existing Hotel",
+            amount="100.00",
+        )
+
+    def tenant_post(self, url, data=None, user=None):
+        self.client.force_login(user or self.lead)
+        return self.client.post(url, data=data or {}, HTTP_HOST=self.host)
+
+    def test_lead_creates_trip_departures_and_costs_with_tenant_ownership(self):
+        payload = {
+            "name": "New Ownership Trip",
+            "start_date": self.start_date.isoformat(),
+            "end_date": (self.start_date + timedelta(days=2)).isoformat(),
+            "location_name": "Local Venue",
+            "location_address": "1 Local Street",
+            "description": "",
+            "departures-TOTAL_FORMS": "1",
+            "departures-INITIAL_FORMS": "0",
+            "departures-MIN_NUM_FORMS": "0",
+            "departures-MAX_NUM_FORMS": "1000",
+            "departures-0-label": "New Bus",
+            "departures-0-leave_date": self.start_date.isoformat(),
+            "departures-0-leave_time": "",
+            "departures-0-meeting_location": "School",
+            "departures-0-notes": "",
+            "costs-TOTAL_FORMS": "1",
+            "costs-INITIAL_FORMS": "0",
+            "costs-MIN_NUM_FORMS": "0",
+            "costs-MAX_NUM_FORMS": "1000",
+            "costs-0-name": "New Hotel",
+            "costs-0-amount": "125.00",
+            "costs-0-unit_label": "per person",
+            "costs-0-notes": "",
+            "costs-0-sort_order": "0",
+        }
+
+        response = self.tenant_post(
+            reverse("travel:event_create", args=[self.program.pk]), payload
+        )
+
+        self.assertEqual(response.status_code, 302)
+        event = TravelEvent.objects.for_organization(self.organization).get(
+            name="New Ownership Trip"
+        )
+        self.assertEqual(event.program, self.program)
+        self.assertEqual(
+            event.departures.get(label="New Bus").organization, self.organization
+        )
+        self.assertEqual(
+            event.cost_options.get(name="New Hotel").organization, self.organization
+        )
+
+    def test_event_update_assigns_organization_only_to_new_inline_rows(self):
+        payload = {
+            "name": self.event.name,
+            "start_date": self.start_date.isoformat(),
+            "end_date": (self.start_date + timedelta(days=2)).isoformat(),
+            "location_name": "",
+            "location_address": "",
+            "description": "",
+            "departures-TOTAL_FORMS": "2",
+            "departures-INITIAL_FORMS": "1",
+            "departures-MIN_NUM_FORMS": "0",
+            "departures-MAX_NUM_FORMS": "1000",
+            "departures-0-id": str(self.departure.pk),
+            "departures-0-label": "Existing Bus Updated",
+            "departures-0-leave_date": self.start_date.isoformat(),
+            "departures-0-leave_time": "",
+            "departures-0-meeting_location": "School",
+            "departures-0-notes": "",
+            "departures-1-label": "Added Bus",
+            "departures-1-leave_date": self.start_date.isoformat(),
+            "departures-1-leave_time": "",
+            "departures-1-meeting_location": "Other Location",
+            "departures-1-notes": "",
+            "costs-TOTAL_FORMS": "2",
+            "costs-INITIAL_FORMS": "1",
+            "costs-MIN_NUM_FORMS": "0",
+            "costs-MAX_NUM_FORMS": "1000",
+            "costs-0-id": str(self.cost_option.pk),
+            "costs-0-name": "Existing Hotel Updated",
+            "costs-0-amount": "100.00",
+            "costs-0-unit_label": "per person",
+            "costs-0-notes": "",
+            "costs-0-sort_order": "0",
+            "costs-1-name": "Added Cost",
+            "costs-1-amount": "25.00",
+            "costs-1-unit_label": "per person",
+            "costs-1-notes": "",
+            "costs-1-sort_order": "1",
+        }
+
+        response = self.tenant_post(
+            reverse("travel:event_edit", args=[self.program.pk, self.event.pk]),
+            payload,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.departure.refresh_from_db()
+        self.cost_option.refresh_from_db()
+        self.assertEqual(self.departure.organization, self.organization)
+        self.assertEqual(self.cost_option.organization, self.organization)
+        self.assertEqual(
+            self.event.departures.get(label="Added Bus").organization,
+            self.organization,
+        )
+        self.assertEqual(
+            self.event.cost_options.get(name="Added Cost").organization,
+            self.organization,
+        )
+
+    def test_mentor_and_parent_signup_creation_is_tenant_owned_and_idempotent(self):
+        mentor_url = reverse(
+            "travel:mentor_signup", args=[self.program.pk, self.event.pk]
+        )
+        parent_url = reverse(
+            "travel:chaperone_signup", args=[self.program.pk, self.event.pk]
+        )
+
+        self.tenant_post(mentor_url)
+        self.tenant_post(mentor_url)
+        self.tenant_post(parent_url, user=self.parent_user)
+        self.tenant_post(parent_url, user=self.parent_user)
+
+        mentor_signup = TravelMentorSignup.objects.for_organization(
+            self.organization
+        ).get(event=self.event, adult__user=self.lead)
+        parent_signup = TravelParentChaperoneSignup.objects.for_organization(
+            self.organization
+        ).get(event=self.event, adult=self.parent)
+        self.assertEqual(mentor_signup.organization, self.organization)
+        self.assertEqual(parent_signup.organization, self.organization)
+        self.assertEqual(
+            TravelMentorSignup.objects.for_organization(self.organization)
+            .filter(event=self.event)
+            .count(),
+            1,
+        )
+        self.assertEqual(
+            TravelParentChaperoneSignup.objects.for_organization(self.organization)
+            .filter(event=self.event)
+            .count(),
+            1,
         )

@@ -12,7 +12,11 @@ from organizations.mixins import OrganizationScopeMixin
 from ..forms import SchoolDistrictForm, SchoolForm, SchoolMergeForm
 from ..models import School, SchoolDistrict
 from ..utils import get_safe_url
-from .mixins import LogFormSaveMixin, SortableListViewMixin
+from .mixins import (
+    LogFormSaveMixin,
+    SortableListViewMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+)
 
 
 class SchoolListView(LoginRequiredMixin, SortableListViewMixin, ListView):
@@ -68,7 +72,7 @@ class SchoolCreateView(
     OrganizationScopeMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     CreateView,
 ):
     model = School
@@ -91,7 +95,7 @@ class SchoolUpdateView(
     OrganizationScopeMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     UpdateView,
 ):
     model = School
@@ -115,7 +119,10 @@ class SchoolUpdateView(
 
 
 class SchoolMergeView(
-    OrganizationScopeMixin, LoginRequiredMixin, PermissionRequiredMixin, FormView
+    OrganizationScopeMixin,
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    FormView,
 ):
     """Merge one school into another, reassigning students and preserving
     contact data.
@@ -245,7 +252,7 @@ class DistrictCreateView(
     OrganizationScopeMixin,
     LogFormSaveMixin,
     LoginRequiredMixin,
-    PermissionRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
     CreateView,
 ):
     model = SchoolDistrict
@@ -264,7 +271,10 @@ class DistrictCreateView(
 
 
 class DistrictUpdateView(
-    LogFormSaveMixin, LoginRequiredMixin, PermissionRequiredMixin, UpdateView
+    LogFormSaveMixin,
+    LoginRequiredMixin,
+    TenantLeadMentorPermissionRequiredMixin,
+    UpdateView,
 ):
     model = SchoolDistrict
     form_class = SchoolDistrictForm
@@ -282,7 +292,9 @@ class DistrictUpdateView(
         return reverse("school_district_list")
 
 
-class DistrictDeleteView(LoginRequiredMixin, PermissionRequiredMixin, View):
+class DistrictDeleteView(
+    LoginRequiredMixin, TenantLeadMentorPermissionRequiredMixin, View
+):
     """Delete a district. Schools linked to it are detached (district set
     to null) but never deleted.
     """
