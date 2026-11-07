@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from orders.models import OrderItem
+from orders.models import Order, OrderItem, ShippingCarrier
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Program, ProgramFeature
 
@@ -70,3 +70,56 @@ class OrderTenantIsolationTests(TestCase):
                 response = self.tenant_get(path)
                 self.assertNotEqual(response.status_code, 200)
                 self.assertNotIn(b"Beta private order request", response.content)
+
+    def test_shipping_carriers_are_scoped_for_display_and_post(self):
+        order = Order.objects.create(
+            organization=self.alpha,
+            program=self.alpha_program,
+            status=Order.STATUS_ORDERED,
+            created_by=self.user,
+        )
+        local_carrier = ShippingCarrier.objects.create(
+            organization=self.alpha,
+            name="Alpha Carrier",
+            tracking_url_template="https://alpha.example/{number}",
+        )
+        foreign_carrier = ShippingCarrier.objects.create(
+            organization=self.beta,
+            name="Beta Carrier",
+            tracking_url_template="https://beta.example/{number}",
+        )
+        detail_url = reverse(
+            "orders:order_detail", args=[self.alpha_program.pk, order.pk]
+        )
+        response = self.client.get(detail_url, HTTP_HOST=self.alpha_host)
+
+        self.assertEqual(response.status_code, 200)
+        carrier_ids = list(
+            response.context["shipping_form"]
+            .fields["shipping_carrier"]
+            .queryset.values_list("pk", flat=True)
+        )
+        self.assertEqual(carrier_ids, [local_carrier.pk])
+        self.assertContains(response, "Alpha Carrier")
+        self.assertNotContains(response, "Beta Carrier")
+
+        update_url = reverse(
+            "orders:order_update_shipping", args=[self.alpha_program.pk, order.pk]
+        )
+        self.client.post(
+            update_url,
+            {"shipping_carrier": str(foreign_carrier.pk), "tracking_number": "123"},
+            HTTP_HOST=self.alpha_host,
+        )
+        order.refresh_from_db()
+        self.assertIsNone(order.shipping_carrier_id)
+        self.assertEqual(order.tracking_number, "")
+
+        self.client.post(
+            update_url,
+            {"shipping_carrier": str(local_carrier.pk), "tracking_number": "456"},
+            HTTP_HOST=self.alpha_host,
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_carrier, local_carrier)
+        self.assertEqual(order.tracking_number, "456")

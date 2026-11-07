@@ -202,12 +202,20 @@ class ProgramStudentPhotoListView(
     paginate_by = 48
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs.get("pk"))
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("pk")
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        qs = Enrollment.objects.filter(program=self.program).select_related(
-            "student", "team", "crew", "subteam"
+        org = getattr(self.request, "organization", None)
+        qs = (
+            Enrollment.objects.for_organization(org)
+            .filter(program=self.program, student__organization=org)
+            .select_related("student", "team", "crew", "subteam")
         )
 
         role = get_user_role(self.request.user, org=self.request.organization)
@@ -216,9 +224,13 @@ class ProgramStudentPhotoListView(
                 student = self.request.user.student_profile
                 # Students may view the photo grid for programs they are enrolled in,
                 # seeing all active peers (like ProgramDetailView). Hide other programs.
-                if not Enrollment.objects.filter(
-                    program=self.program, student=student
-                ).exists():
+                if (
+                    not Enrollment.objects.for_organization(org)
+                    .filter(
+                        program=self.program, student=student, student__organization=org
+                    )
+                    .exists()
+                ):
                     return Enrollment.objects.none()
             except (Student.DoesNotExist, AttributeError):
                 return Enrollment.objects.none()
@@ -574,7 +586,7 @@ class ProgramDetailView(LoginRequiredMixin, DynamicReadPermissionMixin, DetailVi
             ctx["active_teams_count"] > 0
             or program.crews.exists()
             or program.subteams.exists()
-            or Team.objects.exists()
+            or Team.objects.for_organization(program.organization).exists()
         )
 
         # Attendance / Sign-out Status
@@ -1543,13 +1555,19 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
     template_name = "programs/map.html"
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+        program = get_object_or_404(Program.objects.for_organization(org), pk=pk)
         role = get_user_role(request.user, org=request.organization)
         # Active (non-graduated) students enrolled in this program with some
         # address info. Parents and students get the "carpool map" view, so
         # only include students who have consented to directory sharing.
-        qs = Student.objects.filter(
-            enrollment__program=program, enrollment__active=True, graduated=False
+        qs = Student.objects.for_organization(org).filter(
+            enrollment__organization=org,
+            enrollment__program=program,
+            enrollment__active=True,
+            graduated=False,
         )
         if role in ("Parent", "Student"):
             qs = qs.filter(directory_consent=True)
@@ -1607,7 +1625,9 @@ class ProgramStudentMapView(LoginRequiredMixin, View):
         unlisted = []
         if role in ("Parent", "Student"):
             unlisted_qs = (
-                Student.objects.filter(
+                Student.objects.for_organization(org)
+                .filter(
+                    enrollment__organization=org,
                     enrollment__program=program,
                     enrollment__active=True,
                     graduated=False,
@@ -1650,11 +1670,15 @@ class ProgramSignoutSheetView(LoginRequiredMixin, DynamicReadPermissionMixin, Vi
     section = "programs"
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+        program = get_object_or_404(Program.objects.for_organization(org), pk=pk)
         # Fetch students enrolled in the program, active first, then inactive
         base_qs = (
-            program.students.select_related("user")
-            .all()
+            Student.objects.for_organization(org)
+            .filter(enrollment__organization=org, enrollment__program=program)
+            .select_related("user")
             .annotate(
                 sort_first=Lower(
                     Coalesce(
@@ -1911,11 +1935,18 @@ class ProgramSchoolsView(LoginRequiredMixin, DynamicReadPermissionMixin, View):
     section = "programs"
 
     def get(self, request, pk):
-        program = get_object_or_404(Program, pk=pk)
+        org = getattr(request, "organization", None)
+        if org is None:
+            raise Http404
+        program = get_object_or_404(Program.objects.for_organization(org), pk=pk)
         # Active (non-graduated) students enrolled in this program, grouped by school
         students = (
-            Student.objects.filter(
-                enrollment__program=program, enrollment__active=True, graduated=False
+            Student.objects.for_organization(org)
+            .filter(
+                enrollment__organization=org,
+                enrollment__program=program,
+                enrollment__active=True,
+                graduated=False,
             )
             .distinct()
             .select_related("school")

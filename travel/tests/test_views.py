@@ -308,6 +308,73 @@ class TravelViewTest(TestCase):
         )
         self.assertIn("Travel: You signed up for Competition Trip", subjects)
 
+    def test_student_with_foreign_profile_cannot_sign_up(self):
+        other_org = Organization.objects.create(
+            name="Other Organization", slug="other-travel", subdomain="other-travel"
+        )
+        user = User.objects.create_user(
+            username="foreign-profile-student", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.organization,
+            role="Student",
+            is_active=True,
+        )
+        student = Student.objects.create(
+            organization=other_org,
+            user=user,
+            legal_first_name="Foreign",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+        Enrollment.objects.create(
+            organization=self.organization,
+            student=student,
+            program=self.program,
+            active=True,
+        )
+
+        self.client.force_login(user)
+        self.client.post(
+            reverse("travel:signup", args=[self.program.id, self.event.id]),
+            {"departure": self.departure.id},
+        )
+
+        self.assertFalse(
+            TravelSignup.objects.filter(student=student, event=self.event).exists()
+        )
+
+    def test_student_without_active_enrollment_cannot_sign_up(self):
+        user = User.objects.create_user(
+            username="unenrolled-student", password="password"
+        )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=user,
+            organization=self.organization,
+            role="Student",
+            is_active=True,
+        )
+        student = Student.objects.create(
+            organization=self.organization,
+            user=user,
+            legal_first_name="Unenrolled",
+            last_name="Student",
+            school=self.school,
+            graduation_year=2027,
+        )
+
+        self.client.force_login(user)
+        self.client.post(
+            reverse("travel:signup", args=[self.program.id, self.event.id]),
+            {"departure": self.departure.id},
+        )
+
+        self.assertFalse(
+            TravelSignup.objects.filter(student=student, event=self.event).exists()
+        )
+
     def test_lead_can_add_student_still_needs_approval(self):
         self.client.login(username="lead", password="password")  # nosec B106
         url = reverse("travel:signup", args=[self.program.id, self.event.id])

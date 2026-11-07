@@ -81,9 +81,10 @@ These settings take effect when `DEBUG=False`:
 ## 2. Multi-Tenancy & Domains
 
 ### `MOMENTUM_ROOT_DOMAIN`
-- **Requirement**: Optional.
-- **Default**: `"momentumteam.app"`
-- **Purpose**: The base root domain used by `OrganizationMiddleware` to extract tenant subdomains (e.g. `gos.momentumteam.app` resolves tenant slug `"gos"`).
+- **Requirement**: Set this to the public base domain in production.
+- **Default**: `localhost` (development).
+- **Purpose**: The platform root itself is not a tenant; a tenant subdomain directly beneath it (for example, `gos.momentumteam.app`) resolves to that organization. The application uses the validated request host for each request, so the root and separate tenant subdomains do not share an organization context.
+- **Configuration**: Set the hostname only, without a scheme or path, and include the root domain and tenant subdomains in `ALLOWED_HOSTS`. DNS, ingress routing, and HTTPS certificates must also cover the configured hosts.
 
 ### `SITE_URL` / `BASE_URL` / `CANONICAL_DOMAIN`
 - **Requirement**: Optional.

@@ -258,7 +258,9 @@ class OrderDetailView(
         context["can_edit_shipping"] = can_user_write(
             self.request.user, "orders-shipping", self.object, org=org
         )
-        context["shipping_form"] = ShippingInfoForm(instance=self.object)
+        context["shipping_form"] = ShippingInfoForm(
+            instance=self.object, organization=org
+        )
         context["not_listed_vendor"] = NOT_LISTED_VENDOR
         context["page_title"] = f"Order #{self.object.pk}"
         return context
@@ -561,7 +563,7 @@ class OrderShippingUpdateView(
                 program_id=self.program.id,
                 pk=order.pk,
             )
-        form = ShippingInfoForm(request.POST, instance=order)
+        form = ShippingInfoForm(request.POST, instance=order, organization=org)
         if form.is_valid():
             form.save()
             messages.success(request, "Shipping details updated.")

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-07
+
+### Fixed
+- Program photo, map, sign-out, and school rosters now restrict students and programs to the current organization; travel self-signup requires an active enrollment in that tenant's program, and order shipping choices accept only carriers owned by the current organization.
+- The program detail page no longer uses another organization's team records to decide whether to show team-assignment controls.
+
 ## 2026-11-06
 
 ### Added

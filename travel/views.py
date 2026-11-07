@@ -476,7 +476,9 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
             if not student_id:
                 return None
             student = (
-                active_students_in_program(self.program).filter(pk=student_id).first()
+                active_students_in_program(self.program, organization=org)
+                .filter(pk=student_id)
+                .first()
             )
             if student is None:
                 messages.error(
@@ -484,12 +486,16 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
                     "That student is not an active student of this program.",
                 )
             return student
-        try:
-            student = request.user.student_profile
-        except Student.DoesNotExist:
-            student = None
+        student = (
+            active_students_in_program(self.program, organization=org)
+            .filter(user=request.user)
+            .first()
+        )
         if student is None:
-            messages.error(request, "Only students can sign up for trips.")
+            messages.error(
+                request,
+                "Only active students in this program can sign up for trips.",
+            )
         return student
 
     def _validated_choices(self, event, post):
