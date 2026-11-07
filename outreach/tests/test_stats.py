@@ -1,7 +1,9 @@
 from datetime import date, datetime, time, timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -271,6 +273,131 @@ class OutreachStatsTest(TestCase):
 
     def at_time(self, hour, minute=0):
         return timezone.make_aware(datetime(2026, 8, 1, hour, minute))
+
+    def test_overlap_cache_reuses_calculation_and_refreshes_after_bulk_update(self):
+        cache.clear()
+        attendance_program = Program.objects.create(
+            name="Attendance Program", organization=self.program.organization
+        )
+        session = AttendanceSession.objects.create(
+            program=attendance_program,
+            student=self.student,
+            organization=self.program.organization,
+            check_in=self.at_time(10, 30),
+            check_out=self.at_time(11, 30),
+        )
+
+        with patch.object(
+            outreach_utils,
+            "compute_attendance_overlap_hours",
+            wraps=outreach_utils.compute_attendance_overlap_hours,
+        ) as calculate:
+            overlap = outreach_utils.get_attendance_overlap_hours_by_student(
+                [self.student.pk], self.program, self.program.organization
+            )
+            cached_overlap = outreach_utils.get_attendance_overlap_hours_by_student(
+                [self.student.pk], self.program, self.program.organization
+            )
+
+            self.assertEqual(overlap[self.student.pk], 1.0)
+            self.assertEqual(cached_overlap[self.student.pk], 1.0)
+            self.assertEqual(calculate.call_count, 1)
+
+            AttendanceSession.objects.filter(pk=session.pk).update(
+                check_in=self.at_time(10, 30), check_out=self.at_time(11)
+            )
+            updated_overlap = outreach_utils.get_attendance_overlap_hours_by_student(
+                [self.student.pk], self.program, self.program.organization
+            )
+
+        self.assertEqual(updated_overlap[self.student.pk], 0.5)
+        self.assertEqual(calculate.call_count, 2)
+
+    def test_open_attendance_overlap_is_recalculated_at_each_time(self):
+        attendance_program = Program.objects.create(
+            name="Attendance Program", organization=self.program.organization
+        )
+        AttendanceSession.objects.create(
+            program=attendance_program,
+            student=self.student,
+            organization=self.program.organization,
+            check_in=self.at_time(10, 30),
+        )
+        AttendanceSession.objects.create(
+            program=attendance_program,
+            student=self.student,
+            organization=self.program.organization,
+            check_in=self.at_time(10, 30),
+            check_out=self.at_time(11),
+        )
+
+        with patch.object(
+            outreach_utils,
+            "compute_attendance_overlap_hours",
+            wraps=outreach_utils.compute_attendance_overlap_hours,
+        ) as calculate:
+            first_overlap = outreach_utils.get_attendance_overlap_hours_by_student(
+                [self.student.pk],
+                self.program,
+                self.program.organization,
+                now=self.at_time(11),
+            )
+            later_overlap = outreach_utils.get_attendance_overlap_hours_by_student(
+                [self.student.pk],
+                self.program,
+                self.program.organization,
+                now=self.at_time(11, 30),
+            )
+
+        self.assertEqual(first_overlap[self.student.pk], 0.5)
+        self.assertEqual(later_overlap[self.student.pk], 1.0)
+        self.assertEqual(calculate.call_count, 2)
+
+    def test_overlap_recalculates_when_shift_becomes_finalized(self):
+        event_date = timezone.localdate() + timedelta(days=1)
+        event = create_outreach_event(
+            program=self.program,
+            organization=self.program.organization,
+            name="Future Event",
+            location_name="Loc F",
+            location_address="Addr F",
+            start_date=event_date,
+            start_time=time(10),
+            end_time=time(12),
+        )
+        shift = event.shifts.first()
+        check_in = timezone.make_aware(datetime.combine(event_date, time(10)))
+        check_out = timezone.make_aware(datetime.combine(event_date, time(11)))
+        OutreachSignup.objects.create(
+            organization=self.program.organization,
+            student=self.student,
+            shift=shift,
+            role=OutreachSignup.HELPER,
+            checked_in_at=check_in,
+            checked_out_at=check_out,
+        )
+        attendance_program = Program.objects.create(
+            name="Attendance Program", organization=self.program.organization
+        )
+        AttendanceSession.objects.create(
+            program=attendance_program,
+            student=self.student,
+            organization=self.program.organization,
+            check_in=check_in,
+            check_out=check_out,
+        )
+
+        not_finalized = outreach_utils.get_attendance_overlap_hours_by_student(
+            [self.student.pk], self.program, self.program.organization
+        )
+        shift.date = timezone.localdate() - timedelta(days=1)
+        shift.save(update_fields=["date"])
+        finalized = outreach_utils.get_attendance_overlap_hours_by_student(
+            [self.student.pk], self.program, self.program.organization
+        )
+
+        self.assertEqual(not_finalized[self.student.pk], 0.0)
+        self.assertEqual(finalized[self.student.pk], 1.0)
 
 
 class OutreachStatsUpcomingAndPendingHoursTests(TestCase):

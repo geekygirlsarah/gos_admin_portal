@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from outreach.utils import get_attendance_overlap_hours_by_student
 from programs.models import Program, Student
 from programs.permission_views import can_user_read
 from programs.utils import active_students, active_students_in_program
@@ -435,6 +436,24 @@ def attendance_hours_chart_view(request):
                 }
             )
 
+    show_outreach_overlap = bool(
+        selected_program
+        and can_user_read(
+            request.user,
+            "outreach",
+            obj=selected_program,
+            org=org or selected_program.organization,
+        )
+    )
+    if show_outreach_overlap and student_list:
+        overlap_hours_by_student = get_attendance_overlap_hours_by_student(
+            [student["id"] for student in student_list],
+            selected_program,
+            org or selected_program.organization,
+        )
+        for student in student_list:
+            student["overlap_hours"] = overlap_hours_by_student.get(student["id"], 0.0)
+
     total_hours_all = round(total_hours_all, 1)
     student_count = len(student_list)
     avg_hours_per_week = (
@@ -528,6 +547,7 @@ def attendance_hours_chart_view(request):
         {
             "programs": programs,
             "selected_program": selected_program,
+            "show_outreach_overlap": show_outreach_overlap,
             "date_from": date_from_str,
             "date_to": date_to_str,
             "avg_lines": avg_lines,

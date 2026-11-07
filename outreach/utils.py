@@ -1,8 +1,13 @@
 """Shared helpers for computing outreach stats and check-in access."""
 
+import hashlib
+import json
+from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
+from django.core.cache import cache
+from django.db.models import Q
 from django.utils import timezone
 
 from outreach.models import OutreachSignup
@@ -109,6 +114,148 @@ def compute_attendance_overlap_hours(signups, attendance_sessions, now=None):
             attendance_index += 1
 
     return overlap_seconds / 3600.0
+
+
+def get_attendance_overlap_hours_by_student(
+    student_ids, program, organization, signups_by_student=None, now=None
+):
+    """Return career-to-date outreach/attendance overlap for selected students.
+
+    Attendance timestamps are loaded in one organization-scoped query and
+    restricted to the finalized outreach time range. Closed-session results
+    are cached by a fingerprint of the signup and attendance intervals, so
+    direct or bulk edits naturally select a new cache entry. Open attendance
+    sessions are recalculated on every request because their end time changes.
+    """
+    from attendance.models import AttendanceSession
+
+    organization = organization or getattr(program, "organization", None)
+    student_ids = sorted(set(student_ids))
+    if not student_ids:
+        return {}
+    if organization is None or program.organization_id != organization.pk:
+        return {student_id: 0.0 for student_id in student_ids}
+
+    signups_by_student = signups_by_student or defaultdict(list)
+    if not signups_by_student:
+        signups = (
+            OutreachSignup.objects.for_organization(organization)
+            .filter(
+                organization=organization,
+                student_id__in=student_ids,
+                student__organization=organization,
+                shift__organization=organization,
+                shift__event__organization=organization,
+                shift__event__program=program,
+            )
+            .select_related("shift", "shift__event")
+        )
+        for signup in signups:
+            signups_by_student[signup.student_id].append(signup)
+
+    scoped_signups = defaultdict(list)
+    for student_id in student_ids:
+        for signup in signups_by_student.get(student_id, ()):
+            if (
+                signup.organization_id == organization.pk
+                and signup.student_id == student_id
+                and signup.shift.organization_id == organization.pk
+                and signup.shift.event.organization_id == organization.pk
+                and signup.shift.event.program_id == program.pk
+            ):
+                scoped_signups[student_id].append(signup)
+
+    def timestamp(value):
+        return value.isoformat() if value else None
+
+    finalized_signups = {}
+    signup_fingerprints = {}
+    interval_bounds = []
+    for student_id in student_ids:
+        student_signups = scoped_signups[student_id]
+        signup_fingerprints[student_id] = sorted(
+            (
+                signup.pk,
+                timestamp(signup.checked_in_at),
+                timestamp(signup.checked_out_at),
+                bool(signup.is_finalized),
+            )
+            for signup in student_signups
+        )
+        finalized = [
+            signup
+            for signup in student_signups
+            if signup.is_finalized
+            and signup.checked_in_at
+            and signup.checked_out_at
+            and signup.checked_out_at > signup.checked_in_at
+        ]
+        finalized_signups[student_id] = finalized
+        interval_bounds.extend(
+            (signup.checked_in_at, signup.checked_out_at) for signup in finalized
+        )
+
+    results = {student_id: 0.0 for student_id in student_ids}
+    if not interval_bounds:
+        return results
+
+    window_start = min(start for start, _ in interval_bounds)
+    window_end = max(end for _, end in interval_bounds)
+    attendance_by_student = defaultdict(list)
+    attendance_sessions = (
+        AttendanceSession.objects.for_organization(organization)
+        .filter(
+            student_id__in=[
+                student_id
+                for student_id, signups in finalized_signups.items()
+                if signups
+            ],
+            student__organization=organization,
+            program__organization=organization,
+            check_in__lt=window_end,
+        )
+        .filter(Q(check_out__isnull=True) | Q(check_out__gt=window_start))
+        .only("student_id", "check_in", "check_out")
+    )
+    for session in attendance_sessions:
+        attendance_by_student[session.student_id].append(session)
+
+    missing = object()
+    for student_id, signups in finalized_signups.items():
+        if not signups:
+            continue
+        student_sessions = attendance_by_student[student_id]
+        payload = json.dumps(
+            {
+                "signups": signup_fingerprints[student_id],
+                "attendance": sorted(
+                    (
+                        timestamp(session.check_in) or "",
+                        timestamp(session.check_out) or "",
+                    )
+                    for session in student_sessions
+                ),
+            },
+            separators=(",", ":"),
+        )
+        fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        key = (
+            f"outreach-attendance-overlap:v1:{organization.pk}:"
+            f"{program.pk}:{student_id}:{fingerprint}"
+        )
+        cached_value = cache.get(key, missing)
+        if cached_value is not missing:
+            results[student_id] = cached_value
+            continue
+
+        overlap_hours = compute_attendance_overlap_hours(
+            signups, student_sessions, now=now
+        )
+        results[student_id] = overlap_hours
+        if not any(session.check_out is None for session in student_sessions):
+            cache.set(key, overlap_hours, timeout=60 * 60 * 24)
+
+    return results
 
 
 def get_student_outreach_stats(student, program):

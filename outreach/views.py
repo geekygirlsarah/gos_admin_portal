@@ -1,4 +1,3 @@
-from collections import defaultdict
 from datetime import date, time
 
 from django.contrib import messages
@@ -13,7 +12,6 @@ from django.utils import timezone
 from django.utils.formats import localize
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
-from attendance.models import AttendanceSession
 from audit.mixins import AuditedDeleteMixin
 from audit.service import log_deletion
 from outreach.forms import (
@@ -34,8 +32,8 @@ from outreach.models import (
 from outreach.utils import (
     can_operate_checkin,
     can_view_checkin,
-    compute_attendance_overlap_hours,
     compute_outreach_stats,
+    get_attendance_overlap_hours_by_student,
 )
 from programs.models import Program
 from programs.permission_views import (
@@ -881,19 +879,16 @@ class OutreachStudentStatsView(
         )
 
         students = list(students)
-        attendance_by_student = defaultdict(list)
         student_ids = [student.pk for student in students]
-        if student_ids:
-            attendance_sessions = AttendanceSession.objects.for_organization(
-                organization
-            ).filter(
-                student_id__in=student_ids,
-                program__organization=organization,
-            )
-            for session in attendance_sessions:
-                attendance_by_student[session.student_id].append(session)
-
-        now = timezone.now()
+        signups_by_student = {
+            student.pk: student.program_signups for student in students
+        }
+        overlap_hours_by_student = get_attendance_overlap_hours_by_student(
+            student_ids,
+            self.program,
+            organization,
+            signups_by_student=signups_by_student,
+        )
         student_stats = []
         for student in students:
             signups = student.program_signups
@@ -905,11 +900,7 @@ class OutreachStudentStatsView(
                     "hours": stats["total_outreach_hours"],
                     "pending_hours": stats["pending_outreach_hours"],
                     "unconfirmed_count": stats["unconfirmed_count"],
-                    "overlap_hours": compute_attendance_overlap_hours(
-                        signups,
-                        attendance_by_student[student.pk],
-                        now=now,
-                    ),
+                    "overlap_hours": overlap_hours_by_student.get(student.pk, 0.0),
                 }
             )
 

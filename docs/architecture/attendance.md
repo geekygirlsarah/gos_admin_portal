@@ -28,6 +28,7 @@ Visualizes attended hours per student in a program using Chart.js:
 - **Axis Layout**: Defaults to horizontal bars (`indexAxis: 'y'`) so 50+ student rosters remain readable. Supports dynamic vertical orientation via `axis=horizontal|vertical` query parameters (preserved in sort links).
 - **Expand Layout**: In vertical mode, an expand button (`#expandChartBtn`) applies a per-student `min-width` (`chart_min_width_px`) inside an `overflow-x: auto` wrapper (`#chartScrollWrap`).
 - **Attended Days Count**: Calculates distinct attended days via `Count("check_in__date", distinct=True)`, matching active date-range and day-of-week filters (0 for unlogged students).
+- **Outreach Overlap**: When the viewer can read outreach, the student table includes the career-to-date overlap of finalized outreach check-ins and attendance sessions, independent of the chart's date/day filters. The shared calculation is organization-scoped and caches closed-session results by interval fingerprint; open-session results are recalculated.
 - **Average Lines & Tooltips**: Dynamically aligns annotation reference lines and tooltip parsing based on active orientation (`xMin`/`xMax` vs `yMin`/`yMax`).
 - **Legacy URL**: `/attendance/program-hours/<id>/` permanently redirects to `attendance_hours_chart_view` with `program_id` pre-selected.
 

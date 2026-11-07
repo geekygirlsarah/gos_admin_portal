@@ -28,7 +28,8 @@ Outreach events manage volunteer community opportunities where students particip
 - `compute_outreach_stats` in `outreach/utils.py` tracks:
   - **Completed Hours**: Finalized signups with both `checked_in_at` and `checked_out_at` on past shifts.
   - **Pending Hours**: Upcoming signups + past signups not yet finalized.
-- The student stats modal also reports **Overlap Hours**: the union of finalized outreach check-in intervals that intersect kiosk attendance sessions from any program in the same organization. Overlap is informational, does not reduce credited hours, and an open kiosk session is counted through the current time.
+- The student stats modal also reports **Overlap Hours**: the union of finalized outreach check-in intervals that intersect kiosk attendance sessions from any program in the same organization. The attendance hours chart shows the same career-to-date value when the viewer can read outreach. Overlap is informational, does not reduce credited hours, and an open kiosk session is counted through the current time.
+- Closed-session overlap calculations are cached per organization, program, and student using fingerprints of the signup and attendance timestamps plus signup finalization state. The interval rows are re-read in bulk to detect corrections and bulk edits; open-session results are not cached because the overlap changes with the current time.
 
 ---
 
