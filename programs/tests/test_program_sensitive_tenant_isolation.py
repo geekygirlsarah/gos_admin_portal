@@ -1,14 +1,18 @@
 from io import BytesIO
 
+from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from openpyxl import load_workbook
 
 from organizations.models import Organization, UserOrganizationMembership
 from programs.models import Enrollment, Program, Student
 
+TEST_FILE_KEY = Fernet.generate_key().decode()
 
+
+@override_settings(FILE_ENCRYPTION_KEY=TEST_FILE_KEY)
 class ProgramSensitiveTenantIsolationTests(TestCase):
     def setUp(self):
         self.alpha = Organization.objects.create(
