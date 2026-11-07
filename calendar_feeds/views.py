@@ -10,7 +10,7 @@ from django.views import View
 from django.views.generic import ListView
 
 from audit.service import log_deletion
-from programs.permission_views import LeadMentorRequiredMixin
+from programs.permission_views import LeadMentorRequiredMixin, user_is_lead_mentor
 
 from .forms import (
     CalendarEventForm,
@@ -33,6 +33,13 @@ def _tenant_event_exceptions(organization):
         event__organization=organization,
         event__feed__organization=organization,
     )
+
+
+def _event_form_context(request, **context):
+    context["can_manage_feeds"] = user_is_lead_mentor(
+        request.user, org=getattr(request, "organization", None)
+    )
+    return context
 
 
 class CalendarView(View):
@@ -342,7 +349,7 @@ class EventCreateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
         return render(
             request,
             "calendar_feeds/event_form.html",
-            {"form": form, "feed": feed, "creating": True},
+            _event_form_context(request, form=form, feed=feed, creating=True),
         )
 
     def post(self, request, feed_pk):
@@ -367,7 +374,7 @@ class EventCreateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
         return render(
             request,
             "calendar_feeds/event_form.html",
-            {"form": form, "feed": feed, "creating": True},
+            _event_form_context(request, form=form, feed=feed, creating=True),
         )
 
 
@@ -383,12 +390,13 @@ class EventUpdateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
         return render(
             request,
             "calendar_feeds/event_form.html",
-            {
-                "form": form,
-                "feed": event.feed,
-                "event": event,
-                "creating": False,
-            },
+            _event_form_context(
+                request,
+                form=form,
+                feed=event.feed,
+                event=event,
+                creating=False,
+            ),
         )
 
     def post(self, request, pk):
@@ -407,12 +415,13 @@ class EventUpdateView(OrganizationRequiredMixin, LoginRequiredMixin, View):
         return render(
             request,
             "calendar_feeds/event_form.html",
-            {
-                "form": form,
-                "feed": event.feed,
-                "event": event,
-                "creating": False,
-            },
+            _event_form_context(
+                request,
+                form=form,
+                feed=event.feed,
+                event=event,
+                creating=False,
+            ),
         )
 
 

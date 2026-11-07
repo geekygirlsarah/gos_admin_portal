@@ -104,6 +104,16 @@ application uploads use organization-scoped random storage paths under the
 existing `MEDIA_ROOT`; these paths are not authorization tokens. Existing files
 are not moved automatically, and their direct legacy URLs remain blocked.
 
+Replaced private student-photo files are not deleted during upload. The
+`cleanup_student_photos` operator command tracks unreferenced private student
+photos for at least 90 days from their first explicit inventory, verifies file
+identity, and rechecks current file-field references and student/adult history
+before deletion. History paths remain available for auditing but do not by
+themselves keep a file active. The command does not touch legacy photo paths,
+signed application documents, or backup copies; backups follow their separately
+approved retention schedule. Destructive execution requires verified database
+and media backups and paused writers.
+
 The opt-in `transition_private_media` management command can copy existing
 student photos and signed application submissions into those private paths. It
 defaults to a read-only inventory, checks tenant ownership and verifies each

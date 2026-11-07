@@ -1,5 +1,6 @@
 """Shared helpers for computing outreach stats and check-in access."""
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 
 from django.utils import timezone
@@ -52,6 +53,62 @@ def compute_outreach_stats(signups):
         "pending_outreach_hours": pending_hours,
         "unconfirmed_count": unconfirmed_count,
     }
+
+
+def _merge_intervals(
+    intervals: Iterable[tuple[datetime | None, datetime | None]],
+) -> list[tuple[datetime, datetime]]:
+    valid_intervals: list[tuple[datetime, datetime]] = []
+    for start, end in intervals:
+        if start is None or end is None or end <= start:
+            continue
+        valid_intervals.append((start, end))
+    valid_intervals.sort()
+    merged: list[tuple[datetime, datetime]] = []
+    for start, end in valid_intervals:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def compute_attendance_overlap_hours(signups, attendance_sessions, now=None):
+    """Return finalized outreach time that overlaps kiosk attendance time.
+
+    Overlapping intervals on either side are merged before calculating the
+    intersection, so the same elapsed time is only counted once. Open kiosk
+    sessions are treated as ending at ``now`` (or the current time).
+    """
+    now = now or timezone.now()
+    outreach_intervals = _merge_intervals(
+        (signup.checked_in_at, signup.checked_out_at)
+        for signup in signups
+        if signup.is_finalized
+    )
+    attendance_intervals = _merge_intervals(
+        (session.check_in, session.check_out or now) for session in attendance_sessions
+    )
+
+    outreach_index = 0
+    attendance_index = 0
+    overlap_seconds = 0
+    while outreach_index < len(outreach_intervals) and attendance_index < len(
+        attendance_intervals
+    ):
+        outreach_start, outreach_end = outreach_intervals[outreach_index]
+        attendance_start, attendance_end = attendance_intervals[attendance_index]
+        overlap = min(outreach_end, attendance_end) - max(
+            outreach_start, attendance_start
+        )
+        overlap_seconds += max(0, overlap.total_seconds())
+
+        if outreach_end <= attendance_end:
+            outreach_index += 1
+        if attendance_end <= outreach_end:
+            attendance_index += 1
+
+    return overlap_seconds / 3600.0
 
 
 def get_student_outreach_stats(student, program):

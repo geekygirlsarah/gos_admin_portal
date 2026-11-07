@@ -397,6 +397,13 @@ class EventCreateViewTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
 
+    def test_lead_can_return_to_feed_list_from_event_form(self):
+        self.client.login(username="lead", password="password123")  # nosec B106
+        resp = self.client.get(self.url)
+
+        breadcrumb = f'href="{reverse("calendar_feeds:feed_list")}">Feeds</a>'
+        self.assertContains(resp, breadcrumb)
+
     def test_readonly_acl_parent_cannot_create(self):
         self.client.login(username="parent", password="password123")  # nosec B106
         resp = self.client.get(self.url)

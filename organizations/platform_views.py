@@ -1333,7 +1333,7 @@ class SupportImpersonationHandoffView(View):
             },
         )
         response["Cache-Control"] = "no-store"
-        response["Referrer-Policy"] = "no-referrer"
+        response["Referrer-Policy"] = "same-origin"
         return response
 
 

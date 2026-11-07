@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from organizations.models import Organization, UserOrganizationMembership
 from programs.models import (
     Adult,
     AdultStudentRelationship,
@@ -39,9 +40,16 @@ class TravelViewTest(TestCase):
         self.program.features.add(self.feature)
         self.other_program = Program.objects.create(name="No Travel Program")
 
-        self.lead = User.objects.create_superuser(
+        self.organization = Organization.objects.get(slug="gos")
+        self.lead = User.objects.create_user(
             username="lead", email="lead@example.com", password="password"
         )  # nosec B106
+        UserOrganizationMembership.objects.create(
+            user=self.lead,
+            organization=self.organization,
+            role="LeadMentor",
+            is_active=True,
+        )
 
         self.mentor_user = User.objects.create_user(
             username="mentor", password="password"
@@ -146,12 +154,87 @@ class TravelViewTest(TestCase):
         self.assertNotIn(">Delete</a>", html)
         self.assertNotIn("Add Trip", html)
 
+    def test_membership_lead_sees_trip_management_controls(self):
+        self.client.login(username="lead", password="password")  # nosec B106
+        url = reverse("travel:event_list", args=[self.program.id])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context["can_manage"])
+        self.assertTrue(resp.context["can_add"])
+        html = resp.content.decode()
+        self.assertIn("Add Trip", html)
+        self.assertIn(">Edit</a>", html)
+        self.assertIn(">Delete</a>", html)
+
     def test_list_view_accessible_to_all_roles(self):
         for username in ("student", "parent", "mentor", "lead"):
             self.client.login(username=username, password="password")  # nosec B106
             url = reverse("travel:event_list", args=[self.program.id])
             resp = self.client.get(url)
             self.assertEqual(resp.status_code, 200, msg=username)
+
+    def test_lead_role_is_scoped_to_the_current_organization(self):
+        other = Organization.objects.create(
+            name="Other Organization", slug="other", subdomain="other"
+        )
+        UserOrganizationMembership.objects.create(
+            user=self.lead,
+            organization=other,
+            role="Mentor",
+            is_active=True,
+        )
+        program = Program.objects.create(name="Other Program", organization=other)
+        program.features.add(self.feature)
+        event = TravelEvent.objects.create(
+            organization=other,
+            program=program,
+            name="Other Trip",
+            start_date=timezone.now().date() + timedelta(days=30),
+            end_date=timezone.now().date() + timedelta(days=34),
+        )
+        student = Student.objects.create(
+            organization=other,
+            legal_first_name="Other",
+            last_name="Student",
+            school=School.objects.create(
+                organization=other, name="Other Organization School"
+            ),
+            graduation_year=2027,
+        )
+        Enrollment.objects.create(
+            organization=other, student=student, program=program, active=True
+        )
+        self.client.force_login(self.lead)
+
+        list_url = reverse("travel:event_list", args=[program.id])
+        response = self.client.get(list_url, HTTP_HOST="other.localhost")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_manage"])
+        self.assertFalse(response.context["can_add"])
+        self.assertNotContains(response, "Add Trip")
+        self.assertNotContains(response, ">Edit</a>")
+
+        signup_url = reverse("travel:signup", args=[program.id, event.id])
+        self.client.post(
+            signup_url,
+            {"student": student.pk},
+            HTTP_HOST="other.localhost",
+        )
+        self.assertFalse(
+            TravelSignup.objects.filter(student=student, event=event).exists()
+        )
+
+    def test_foreign_organization_program_is_not_accessible(self):
+        other = Organization.objects.create(name="Other", slug="other")
+        program = Program.objects.create(name="Foreign Program", organization=other)
+        program.features.add(self.feature)
+        self.client.force_login(self.lead)
+
+        response = self.client.get(
+            reverse("travel:event_list", args=[program.id]), HTTP_HOST="testserver"
+        )
+
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 
     # ── Create / edit (lead only) ─────────────────────────────────────────
 

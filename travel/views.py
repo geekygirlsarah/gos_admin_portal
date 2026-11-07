@@ -17,6 +17,7 @@ from programs.permission_views import (
     LeadMentorRequiredMixin,
     can_user_delete,
     get_user_role,
+    user_is_lead_mentor,
     user_is_mentor_or_lead,
 )
 from programs.utils import active_students_in_program
@@ -59,8 +60,11 @@ class TravelProgramMixin:
     """
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
-        is_mentor = user_is_mentor_or_lead(request.user, org=request.organization)
+        org = getattr(request, "organization", None)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("program_id")
+        )
+        is_mentor = user_is_mentor_or_lead(request.user, org=org)
         if not self.program.features.filter(key="travel").exists() and not is_mentor:
             raise Http404("Travel is not enabled for this program.")
         return super().dispatch(request, *args, **kwargs)
@@ -196,7 +200,8 @@ class TravelEventListView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        role = get_user_role(user)
+        org = getattr(self.request, "organization", None)
+        role = get_user_role(user, org=org)
         context["user_role"] = role
 
         events = [e for e in self.get_queryset() if e.start_date is not None]
@@ -208,10 +213,10 @@ class TravelEventListView(
         context["upcoming_events"] = upcoming_events
         context["past_events"] = past_events
         context["can_manage"] = False
-        context["viewer_is_mentor"] = user_is_mentor_or_lead(user)
+        context["viewer_is_mentor"] = user_is_mentor_or_lead(user, org=org)
 
         # Lead mentors manage trips; only they add/edit/delete or mark drivers.
-        is_lead = user.is_superuser or user.groups.filter(name="LeadMentor").exists()
+        is_lead = user_is_lead_mentor(user, org=org)
         context["is_lead"] = is_lead
         context["can_manage"] = is_lead
         context["can_add"] = is_lead
@@ -285,8 +290,7 @@ class TravelEventListView(
             context["parent_has_pending"] = any(r["pending"] for r in parent_rows)
 
         # ── Mentor / lead mentor view ────────────────────────────────────────
-        if user_is_mentor_or_lead(user) and adult is not None:
-            org = getattr(self.request, "organization", None)
+        if user_is_mentor_or_lead(user, org=org) and adult is not None:
             mentor_signups = list(
                 TravelMentorSignup.objects.for_organization(org)
                 .filter(adult=adult, event__program=self.program)
@@ -388,11 +392,14 @@ class TravelEventDeleteView(
         }
 
     def dispatch(self, request, *args, **kwargs):
-        self.program = get_object_or_404(Program, pk=kwargs.get("program_id"))
+        org = getattr(request, "organization", None)
+        self.program = get_object_or_404(
+            Program.objects.for_organization(org), pk=kwargs.get("program_id")
+        )
         if not self.program.features.filter(key="travel").exists():
             raise Http404("Travel is not enabled for this program.")
         obj = self.get_object()
-        if not can_user_delete(request.user, "travel", obj):
+        if not can_user_delete(request.user, "travel", obj, org=org):
             messages.error(request, "You do not have permission to delete this trip.")
             return redirect("travel:event_list", program_id=self.program.id)
         return super(TravelProgramMixin, self).dispatch(request, *args, **kwargs)
@@ -463,7 +470,8 @@ class TravelSignupView(LoginRequiredMixin, TravelProgramMixin, View):
         """Return the Student this request signs up. None means the request was
         rejected (an error message was already added). Lead Mentors add any
         active student by id; students sign up for themselves."""
-        if get_user_role(request.user) == "LeadMentor":
+        org = getattr(request, "organization", None)
+        if get_user_role(request.user, org=org) == "LeadMentor":
             student_id = request.POST.get("student")
             if not student_id:
                 return None
@@ -508,7 +516,7 @@ class TravelSignupRejoinView(LoginRequiredMixin, TravelProgramMixin, View):
             pk=pk,
             event__program=self.program,
         )
-        if not self._may_act(request.user, signup):
+        if not self._may_act(request.user, signup, org=org):
             messages.error(request, "You do not have permission to do that.")
             return redirect("travel:event_list", program_id=self.program.id)
         if not signup.can_be_signed_up_again:
@@ -522,8 +530,8 @@ class TravelSignupRejoinView(LoginRequiredMixin, TravelProgramMixin, View):
         )
         return redirect("travel:event_list", program_id=self.program.id)
 
-    def _may_act(self, user, signup):
-        role = get_user_role(user)
+    def _may_act(self, user, signup, org=None):
+        role = get_user_role(user, org=org)
         if role == "LeadMentor":
             return True
         try:
@@ -543,7 +551,7 @@ class TravelSignupWithdrawView(LoginRequiredMixin, TravelProgramMixin, View):
             pk=pk,
             event__program=self.program,
         )
-        if not self._may_act(request.user, signup):
+        if not self._may_act(request.user, signup, org=org):
             messages.error(request, "You do not have permission to do that.")
             return redirect("travel:event_list", program_id=self.program.id)
         if not signup.can_be_withdrawn:
@@ -561,8 +569,8 @@ class TravelSignupWithdrawView(LoginRequiredMixin, TravelProgramMixin, View):
         )
         return redirect("travel:event_list", program_id=self.program.id)
 
-    def _may_act(self, user, signup):
-        role = get_user_role(user)
+    def _may_act(self, user, signup, org=None):
+        role = get_user_role(user, org=org)
         if role == "LeadMentor":
             return True
         try:
@@ -846,7 +854,7 @@ class TravelParentChaperoneSignupView(LoginRequiredMixin, TravelProgramMixin, Vi
         """Return the Adult being signed up, or None (an error message was
         added). Lead Mentors pick any eligible parent; other users sign up as
         themselves and must be eligible."""
-        role = get_user_role(request.user)
+        role = get_user_role(request.user, org=getattr(request, "organization", None))
         if role == "LeadMentor":
             adult = (
                 TravelParentChaperoneSignup.eligible_adults(self.program)

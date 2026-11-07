@@ -41,6 +41,9 @@ behavior before relying on this switch during an incident.
 
 ## Protected Media Files
 
+For a directory-by-directory map and a safe review process for older uploads,
+see [`media-directory.md`](./media-directory.md).
+
 Student photos and signed application submissions are stored beneath the
 existing `MEDIA_ROOT`, in organization-scoped random paths under `private/`.
 The application denies direct `/media/` requests for those paths and for the
@@ -97,6 +100,41 @@ while that source remains present; new private copies left behind by a failed
 or rolled-back attempt are orphans and must be inventoried separately, not
 automatically deleted. Keep legacy originals until a separate reviewed cleanup
 and approval; a successful transition does not purge previously cached copies.
+
+### Retaining replaced private student photos
+
+Replacing a student's photo does not immediately delete the previous file. Its
+historical path remains in the tracked student record, and the old private file
+can be retained for a 90-day recovery window before an operator removes it. Use
+the photo-only `cleanup_student_photos` command:
+
+```bash
+python manage.py cleanup_student_photos
+python manage.py cleanup_student_photos --inventory
+python manage.py cleanup_student_photos --execute --confirm-no-writers --confirm-backup
+```
+
+The default is a read-only preview. `--inventory` records the first observed
+time, file size, and SHA-256 identity of each unreferenced file and does not
+delete files. The 90 days begin at that inventory time; an orphan first
+discovered later receives a new 90-day window. If file contents change or
+student/adult history shows the path was reused after inventory, run inventory
+again to restart its retention clock. Current references in any file field,
+including references in another organization, prevent deletion. Historical
+paths alone are not active references and remain in history after the physical
+file is removed.
+
+Before `--execute`, make and verify database and complete `MEDIA_ROOT` backups,
+pause web and background writers, review a fresh preview, and supply both
+confirmation flags. The command rechecks references, history, and file identity
+before removing eligible files; if a run reports an error, some earlier eligible
+files may already have been deleted. Restore, if needed, from the verified
+backup; there is no in-app rollback action. Backup snapshots may retain photo
+copies according to their own retention schedule.
+
+This command only scans `private/student_photos/`. It does not remove legacy
+`photos/students/` files, signed application documents, or other media. Review
+those separately; do not broaden this command's scope as part of a routine run.
 
 ## Local Development Commands
 
