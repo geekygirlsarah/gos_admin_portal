@@ -7,7 +7,7 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'calendar_feeds:calendar_view' %}">Calendar</a></li>
-            {% if user.is_staff or user.is_superuser %}
+            {% if can_manage_feeds %}
             <li class="breadcrumb-item"><a href="{% url 'calendar_feeds:feed_list' %}">Feeds</a></li>
             {% endif %}
             <li class="breadcrumb-item active" aria-current="page">{% if creating %}Create Event{% else %}Edit: {{ event.title }}{% endif %}</li>
